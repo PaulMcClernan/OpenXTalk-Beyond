@@ -36,3 +36,31 @@ on TestMatchTextMultipleMatches
 
    TestAssert "check that tFound is empty", tFound is 0
 end TestMatchTextMultipleMatches
+
+-- The pattern always matches case, whatever the caseSensitive, as in
+-- LiveCode and as the dictionary says; "(?i)" makes it ignore case.
+on TestMatchTextIgnoresCaseSensitive
+   set the caseSensitive to false
+   TestAssert "matchText matches case when the caseSensitive is false", \
+         not matchText("Hello", "hello")
+   TestAssert "matchText with (?i) ignores case", \
+         matchText("Hello", "(?i)hello")
+
+   set the caseSensitive to true
+   TestAssert "matchText matches case when the caseSensitive is true", \
+         not matchText("Hello", "hello")
+   TestAssert "matchText with (?i) ignores case when the caseSensitive is true", \
+         matchText("Hello", "(?i)hello")
+end TestMatchTextIgnoresCaseSensitive
+
+on TestReplaceTextIgnoresCaseSensitive
+   set the caseSensitive to false
+   TestAssert "replaceText matches case when the caseSensitive is false", \
+         replaceText("Hello hello", "hello", "x") is "Hello x"
+   TestAssert "replaceText with (?i) ignores case", \
+         replaceText("Hello hello", "(?i)hello", "x") is "x x"
+
+   set the caseSensitive to true
+   TestAssert "replaceText matches case when the caseSensitive is true", \
+         replaceText("Hello hello", "hello", "x") is "Hello x"
+end TestReplaceTextIgnoresCaseSensitive

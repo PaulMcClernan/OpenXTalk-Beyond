@@ -47,19 +47,20 @@ clone at the new one.
 
 ## Status
 
-OXT-Beyond 0.2.3 "Frankenstein" is an early release of a young project,
-for Windows, macOS and Linux (see what 0.2.1 adds, what 0.2.2 fixes and
-what 0.2.3 adds, under [The IDE](#the-ide)). Please read this before you
-download it. 0.2.4-rc.7 is a test release (a pre-release) of the fixes
-made since 0.2.3, with a package for 64-bit ARM Linux (new in
-0.2.4-rc.2). It goes back to Tom Perry's dark mode, with his macOS work
-added (see [0.2.4-rc.4](#024-rc4-tom-perrys-dark-mode-and-macos-work)),
-brings back LiveCode's Dictionary (see
-[0.2.4-rc.5](#024-rc5-livecodes-dictionary)), and fixes bugs that notes
-in the inherited code pointed to (see
+OXT-Beyond 0.2.4 "Frankenstein" is an early release of a young project,
+for Windows, macOS and Linux (see what 0.2.1 adds, what 0.2.2 fixes,
+what 0.2.3 adds and what 0.2.4 changes, under [The IDE](#the-ide)).
+Please read this before you download it. 0.2.4 adds a package for 64-bit
+ARM Linux (new in 0.2.4-rc.2). It goes back to Tom Perry's dark mode,
+with his macOS work added (see
+[0.2.4-rc.4](#024-rc4-tom-perrys-dark-mode-and-macos-work)), brings back
+LiveCode's Dictionary (see [0.2.4-rc.5](#024-rc5-livecodes-dictionary)),
+and fixes bugs that notes in the inherited code pointed to (see
 [0.2.4-rc.6](#024-rc6-fixes-from-the-inherited-notes)) and more found
-since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)); 0.2.3
-stays the main download until it has held up.
+since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)). Two of
+those fixes change what existing scripts see: an error in a `try`
+statement's `catch` part is now reported, and serial ports on macOS and
+Linux are in raw mode.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -805,6 +806,10 @@ also fixes *Preferences > Appearance*, where the appearance menus and
 their note covered the window's bottom row and part of the Reset button
 ([#51](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/issues/51)).
 
+OXT-Beyond 0.2.4 is what its seven release candidates, 0.2.4-rc.1 to
+0.2.4-rc.7, were; nothing in the program changed after 0.2.4-rc.7. What
+each of them changed follows, in order.
+
 OXT-Beyond 0.2.4-rc.1, a test release, fixes bugs reported on 0.2.3:
 
 - macOS: a script that changes what is on screen at every statement (a
@@ -1127,8 +1132,12 @@ copies change the same engine file differently, the file holds both, in
 Windows lines.
 
 **Regular expressions** (`matchText`, `matchChunk`, `replaceText`)
-follow the `caseSensitive` on every platform, as his shipped 1.15 engines
-do.
+always match case, whatever the `caseSensitive`, as in LiveCode and as
+the dictionary says; `(?i)` at the start of the pattern ignores case.
+From 0.2.4-rc.4 to 0.2.4 they followed the `caseSensitive`, as his
+shipped 1.15 engines do; that broke scripts written for LiveCode, whose
+patterns stopped matching case while the `caseSensitive` was false (its
+default), so it was reverted.
 
 Changes made in this repository to build it: the `thirdparty` and `ide`
 submodules are ordinary folders in the repository, the prebuilt

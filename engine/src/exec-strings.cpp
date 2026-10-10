@@ -739,7 +739,9 @@ void MCStringsEvalMatchText(MCExecContext& ctxt, MCStringRef p_string, MCStringR
 {
     regexp* t_compiled = nil;
 
-    if (!MCStringsCompilePattern(p_pattern, t_compiled, ctxt.GetCaseSensitive()))
+    // The pattern always matches case, whatever the caseSensitive, as in
+    // LiveCode and as the dictionary says: "(?i)" makes it ignore case.
+    if (!MCStringsCompilePattern(p_pattern, t_compiled, true /* casesensitive */))
     {
         ctxt.LegacyThrow(EE_MATCH_BADPATTERN);
         return;
@@ -782,7 +784,9 @@ void MCStringsEvalMatchChunk(MCExecContext& ctxt, MCStringRef p_string, MCString
 {
     regexp* t_compiled = nil;
     
-    if (!MCStringsCompilePattern(p_pattern, t_compiled, ctxt.GetCaseSensitive()))
+    // The pattern always matches case, whatever the caseSensitive, as in
+    // LiveCode and as the dictionary says: "(?i)" makes it ignore case.
+    if (!MCStringsCompilePattern(p_pattern, t_compiled, true /* casesensitive */))
     {
         ctxt.LegacyThrow(EE_MATCH_BADPATTERN);
         return;
@@ -839,7 +843,9 @@ void MCStringsEvalReplaceText(MCExecContext& ctxt, MCStringRef p_string, MCStrin
 {
     regexp* t_compiled = nil;
 
-    if (!MCStringsCompilePattern(p_pattern, t_compiled, ctxt.GetCaseSensitive()))
+    // The pattern always matches case, whatever the caseSensitive, as in
+    // LiveCode and as the dictionary says: "(?i)" makes it ignore case.
+    if (!MCStringsCompilePattern(p_pattern, t_compiled, true /* casesensitive */))
     {
         ctxt.LegacyThrow(EE_REPLACETEXT_BADPATTERN);
         return;
