@@ -27,3 +27,20 @@ on TestMatchChunkWithSurrogates
                   tStart is 2 and \
                   tEnd is 3
 end TestMatchChunkWithSurrogates
+
+-- The pattern always matches case, whatever the caseSensitive, as in
+-- LiveCode and as the dictionary says; "(?i)" makes it ignore case.
+on TestMatchChunkIgnoresCaseSensitive
+   local tStart, tEnd
+   set the caseSensitive to false
+   get matchChunk("Hello hello", "(hello)", tStart, tEnd)
+   TestAssert "matchChunk matches case when the caseSensitive is false", \
+         tStart is 7 and tEnd is 11
+   get matchChunk("Hello hello", "(?i)(hello)", tStart, tEnd)
+   TestAssert "matchChunk with (?i) ignores case", tStart is 1 and tEnd is 5
+
+   set the caseSensitive to true
+   get matchChunk("Hello hello", "(hello)", tStart, tEnd)
+   TestAssert "matchChunk matches case when the caseSensitive is true", \
+         tStart is 7 and tEnd is 11
+end TestMatchChunkIgnoresCaseSensitive

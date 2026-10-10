@@ -1131,8 +1131,12 @@ copies change the same engine file differently, the file holds both, in
 Windows lines.
 
 **Regular expressions** (`matchText`, `matchChunk`, `replaceText`)
-follow the `caseSensitive` on every platform, as his shipped 1.15 engines
-do.
+always match case, whatever the `caseSensitive`, as in LiveCode and as
+the dictionary says; `(?i)` at the start of the pattern ignores case.
+From 0.2.4-rc.4 to 0.2.4 they followed the `caseSensitive`, as his
+shipped 1.15 engines do; that broke scripts written for LiveCode, whose
+patterns stopped matching case while the `caseSensitive` was false (its
+default), so it was reverted.
 
 Changes made in this repository to build it: the `thirdparty` and `ide`
 submodules are ordinary folders in the repository, the prebuilt
