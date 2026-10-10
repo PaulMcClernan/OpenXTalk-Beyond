@@ -154,12 +154,8 @@ class XMLDocumentList
 		VXMLDocList::iterator theIterator;
 		for (theIterator = doclist.begin(); theIterator != doclist.end(); theIterator++){
 			CXMLDocument *curobject = (CXMLDocument *)(*theIterator);
-			// MDW-2013-07-09: [[ RevXmlXPath ]]
-			if (NULL != curobject->GetXPathContext())
-				xmlXPathFreeContext(curobject->GetXPathContext());
-			// MDW-2013-09-04: [[ RevXmlXslt ]]
-			if (NULL != curobject->GetXsltContext())
-				xsltFreeStylesheet(curobject->GetXsltContext());
+			// Deleting the object frees its XPath context and stylesheet
+			//   (CXMLDocument::Free) as well as its document.
 			delete curobject;
 		}
 		doclist.clear();
@@ -298,6 +294,18 @@ void CB_elementData(const char *data, int length)
 static Bool REVXMLinited = False;
 
 #define simpleparse(a,b,c) (((b > a) | (c < a))?True:False)
+
+// The path of a file for libxml2 or libxslt to open, in UTF-8, in a new
+//   buffer. The engine passes revXML's arguments in the native encoding
+//   (Windows-1252 on Windows, ISO-8859-1 on Linux), and libxml2 2.15 opens
+//   files on Windows only through UTF-8: its 2.9 build fell back to the
+//   native encoding. So convert the path, as revdb does for SQLite (bug
+//   6429). On Linux that also opens files with accented names, which the
+//   engine names in UTF-8; on macOS the path was already UTF-8.
+static char *revxml_path_for_libxml(const char *p_path)
+{
+	return os_path_to_native_utf8(p_path);
+}
 
 
 #ifndef REVDB
@@ -554,7 +562,7 @@ void XML_NewDocumentFromFile(char *args[], int nargs, char **retstring,
 
 		// OK-2007-12-18 : Bug 4905. New path_to_native function declared which allocates a new path buffer.
 		char *t_native_path;
-		t_native_path = os_path_to_native(t_resolved_path);
+		t_native_path = revxml_path_for_libxml(t_resolved_path);
 
 		if (newdoc->ReadFile(t_native_path, wellformed))
 		{
@@ -2259,8 +2267,10 @@ xpathNodeGetContent(xmlNodePtr cur, char *pCharDelimiter)
                 if (buffer == NULL)
                     return (NULL);
 		xpathNodeBufGetContent(buffer, cur, pCharDelimiter);
-                ret = buffer->content;
-                buffer->content = NULL;
+                // xmlBufferDetach, not taking buffer->content: in libxml2
+                //   2.15 a buffer's memory starts at contentIO, which
+                //   xmlBufferFree frees whatever content says.
+                ret = xmlBufferDetach(buffer);
                 xmlBufferFree(buffer);
                 return (ret);
             }
@@ -2295,8 +2305,7 @@ xpathNodeGetContent(xmlNodePtr cur, char *pCharDelimiter)
 
                 xpathNodeBufGetContent(buffer, cur, pCharDelimiter);
 
-                ret = buffer->content;
-                buffer->content = NULL;
+                ret = xmlBufferDetach(buffer);
                 xmlBufferFree(buffer);
                 return (ret);
             }
@@ -2321,8 +2330,7 @@ xpathNodeGetContent(xmlNodePtr cur, char *pCharDelimiter)
 
 	    xpathNodeBufGetContent(buffer, (xmlNodePtr) cur, pCharDelimiter);
 
-	    ret = buffer->content;
-	    buffer->content = NULL;
+	    ret = xmlBufferDetach(buffer);
 	    xmlBufferFree(buffer);
 	    return (ret);
 	}
@@ -2748,9 +2756,11 @@ void XML_xsltLoadStylesheet(char *args[], int nargs, char **retstring, Bool *pas
 			if (NULL != xmlDoc)
 			{
 				// The stylesheet owns the document it is made from and frees it
-				//   with itself, so give it a copy: the tree stays the caller's,
-				//   and deleting both (or revXMLDeleteAllTrees, or quitting) no
-				//   longer frees the same document twice.
+				//   with itself, so give it a copy: the tree stays the caller's
+				//   and can be deleted first, without leaving the stylesheet
+				//   pointing at a freed document, which revXMLDeleteAllTrees
+				//   (or quitting) then freed a second time. revXMLDeleteTree on
+				//   the stylesheet's id frees the stylesheet and its copy.
 				xmlDocPtr t_copy = xmlCopyDoc(xmlDoc, 1);
 				if (NULL != t_copy)
 				{
@@ -2812,7 +2822,7 @@ void XML_xsltLoadStylesheetFromFile(char *args[], int nargs, char **retstring, B
 		char *t_resolved_path;
 		t_resolved_path = os_path_resolve(args[0]);
 		char *t_native_path;
-		t_native_path = os_path_to_native(t_resolved_path);
+		t_native_path = revxml_path_for_libxml(t_resolved_path);
 		
 		cur = xsltParseStylesheetFile((const xmlChar *)t_native_path);
 		if (NULL != cur)
@@ -2866,7 +2876,9 @@ void XML_xsltFreeStylesheet(char *args[], int nargs, char **retstring, Bool *pas
 			cur = xsltDocument->GetXsltContext();
 			if (NULL != cur)
 			{
-				xsltFreeStylesheet(cur);
+				// Deleting the object frees the stylesheet; freeing it here
+				//   as well would free it twice.
+				doclist.erase(docID);
 				*retstring = (char *)calloc(1,1);
 			}
 			else
@@ -2939,9 +2951,15 @@ void XML_xsltApplyStylesheet(char *args[], int nargs, char **retstring, Bool *pa
 					}
 					res = xsltApplyStylesheet(cur, xmlDoc, params);
 
-					xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
+					doc_txt_ptr = NULL;
+					if (res != NULL)
+						xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
 
-					*retstring = istrdup((char *)doc_txt_ptr);
+					// libxslt leaves doc_txt_ptr NULL when the transform failed
+					//   or made nothing, and the text is the caller's to free.
+					*retstring = istrdup(doc_txt_ptr != NULL ? (char *)doc_txt_ptr : "");
+					if (doc_txt_ptr != NULL)
+						xmlFree(doc_txt_ptr);
 
 					// free the xml document - we're done with it
 					xmlFreeDoc(res);
@@ -2996,7 +3014,7 @@ void XML_xsltApplyStylesheetFile(char *args[], int nargs, char **retstring, Bool
 				char *t_resolved_path;
 				t_resolved_path = os_path_resolve(args[1]);
 				char *t_native_path;
-				t_native_path = os_path_to_native(t_resolved_path);
+				t_native_path = revxml_path_for_libxml(t_resolved_path);
 				
 				cur = xsltParseStylesheetFile((const xmlChar *)t_native_path);
 				if (NULL != cur)
@@ -3012,9 +3030,15 @@ void XML_xsltApplyStylesheetFile(char *args[], int nargs, char **retstring, Bool
 					}
 					res = xsltApplyStylesheet(cur, xmlDoc, params);
 
-					xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
+					doc_txt_ptr = NULL;
+					if (res != NULL)
+						xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
 
-					*retstring = istrdup((char *)doc_txt_ptr);
+					// libxslt leaves doc_txt_ptr NULL when the transform failed
+					//   or made nothing, and the text is the caller's to free.
+					*retstring = istrdup(doc_txt_ptr != NULL ? (char *)doc_txt_ptr : "");
+					if (doc_txt_ptr != NULL)
+						xmlFree(doc_txt_ptr);
 
 					// free the xsltStylesheetPtr we just created
 					xsltFreeStylesheet(cur);

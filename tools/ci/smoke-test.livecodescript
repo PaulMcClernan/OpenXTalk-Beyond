@@ -219,6 +219,11 @@ on startup
       -- one too: revXML has always done that
       put revXMLEvaluateXPath(tTree, "/list/n[2]") into tPath
       check "revXML XPath", tPath is "/list/n[2]" & return, tPath
+      -- Each node's text is followed by the element delimiter, then the line
+      -- delimiter; libxml2 2.15 builds node text in a buffer that revXML must
+      -- detach before freeing it (see revxml/src/revxml.cpp)
+      put revXMLDataFromXPathQuery(tTree, "/list/n", ",", "|") into tData
+      check "revXML XPath data", tData is "b,|a,|c,|", tData
       put "<xsl:stylesheet version=" & quote & "1.0" & quote & " xmlns:xsl=" & quote & "http://www.w3.org/1999/XSL/Transform" & quote & ">" & \
             "<xsl:output method=" & quote & "text" & quote & "/><xsl:template match=" & quote & "/" & quote & ">" & \
             "<xsl:for-each select=" & quote & "//n" & quote & "><xsl:sort select=" & quote & "." & quote & "/><xsl:value-of select=" & quote & "." & quote & "/>" & \
@@ -229,6 +234,29 @@ on startup
       check "XSLT (libxslt) sorts and transforms", tResult is "abc", tResult
       if tXSLTree is an integer then revXMLDeleteTree tXSLTree
       if tTree is an integer then revXMLDeleteTree tTree
+      -- Files: a gzip-compressed one (libxml2 2.15 reads those only when
+      -- revXML asks it to, XML_PARSE_UNZIP), and one whose name is not ASCII
+      -- (revXML gets the name in the platform's native encoding, and libxml2
+      -- 2.15 opens files on Windows only through UTF-8)
+      put tTemp & "/oxt_smoke_test.xml.gz" into tXMLFile
+      put compress("<root><z>gz</z></root>") into URL ("binfile:" & tXMLFile)
+      put revXMLCreateTreeFromFile(tXMLFile, false, true, false) into tTree
+      check "revXML reads a gzip file", tTree is an integer and revXMLNodeContents(tTree, "/root/z") is "gz", tTree
+      if tTree is an integer then revXMLDeleteTree tTree
+      if there is a file tXMLFile then delete file tXMLFile
+      -- On Linux the engine names files in the locale's character set, so
+      -- under the C locale (the build containers) it cannot make this one
+      put tTemp & "/oxt_smoke_test_caf" & numToChar(233) & ".xml" into tXMLFile
+      put "<root><z>accent</z></root>" into URL ("binfile:" & tXMLFile)
+      put the result into tWriteResult
+      if there is a file tXMLFile then
+         put revXMLCreateTreeFromFile(tXMLFile, false, true, false) into tTree
+         check "revXML reads a file with an accented name", tTree is an integer and revXMLNodeContents(tTree, "/root/z") is "accent", tTree
+         if tTree is an integer then revXMLDeleteTree tTree
+         delete file tXMLFile
+      else
+         write "INFO revXML accented file name not checked: the engine could not create the file (" & tWriteResult & ")" & return to stdout
+      end if
    catch tError
       check "no script error (revXML checks)", false, tError
    end try
@@ -285,10 +313,31 @@ on startup
       check "revZip attributes", revZipGetItemAttributes(tZip, "stored.txt") is "3,1234", revZipGetItemAttributes(tZip, "stored.txt")
       put tTemp & "/oxt_smoke_test_out.txt" into tOutFile
       revZipExtractItemToFile tZip, "renamed.txt", tOutFile
-      check "revZip extracts to a file", URL ("binfile:" & tOutFile) is URL ("binfile:" & tFile), the result
+      put the result into tExtractResult
+      check "revZip extracts to a file", tExtractResult is empty and URL ("binfile:" & tOutFile) is URL ("binfile:" & tFile), tExtractResult
       revZipCloseArchive tZip
       check "revZip has no archives open", revZipOpenArchives() is empty, revZipOpenArchives()
       if there is a file tOutFile then delete file tOutFile
+      if there is a file tZip then delete file tZip
+      -- An item added and deleted before the archive is closed is not
+      -- listed (libzip 1.12 answers ZIP_ER_INVAL for it, not
+      -- ZIP_ER_DELETED); a file added to an archive is read when it is
+      -- closed, so what was written to it in between is stored too
+      put "first line" & return into URL ("binfile:" & tFile)
+      revZipOpenArchive tZip, "write"
+      revZipAddItemWithData tZip, "one.txt", "tZipData"
+      revZipAddItemWithData tZip, "two.txt", "tZipData"
+      revZipDeleteItem tZip, "one.txt"
+      put revZipEnumerateItems(tZip) into tItems
+      check "revZip forgets an item added then deleted", tItems is ("two.txt" & return), tItems
+      revZipAddItemWithFile tZip, "grow.txt", tFile
+      put "second line" & return after URL ("binfile:" & tFile)
+      revZipCloseArchive tZip
+      check "revZip writes after a delete", the result is empty, the result
+      revZipOpenArchive tZip, "read"
+      revZipExtractItemToVariable tZip, "grow.txt", "tUnzipped"
+      check "revZip stores what was written to a file before close", tUnzipped is ("first line" & return & "second line" & return), tUnzipped
+      revZipCloseArchive tZip
       if there is a file tFile then delete file tFile
       if there is a file tZip then delete file tZip
    catch tError

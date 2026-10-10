@@ -7,10 +7,14 @@
    libzip's CMake build generates this file from config.h.in by probing
    the system; gyp runs no configure step, so this copy answers the same
    questions for Windows (MSVC), macOS, Linux and Android. What is left
-   undefined is either absent there or an option that is off: bzip2, xz
-   and zstd compression, and the crypto libraries that WinZip AES
-   encryption needs (as before, revZip reads and writes Deflate and
-   stored entries; traditional PKWARE encryption is built in).
+   undefined is absent there, an option that is off, or something libzip
+   has a plain fallback for. The options that are off: bzip2, xz and zstd
+   compression, the crypto libraries that WinZip AES encryption needs (as
+   before, revZip reads and writes Deflate and stored entries; traditional
+   PKWARE encryption is built in), and zip_fdopen on Windows (ENABLE_FDOPEN,
+   which revZip does not use). The fallbacks: libzip clears passwords
+   itself rather than with explicit_bzero, and copies files the ordinary
+   way rather than with clonefile or FICLONERANGE.
  */
 
 #ifndef _HAD_ZIPCONF_H

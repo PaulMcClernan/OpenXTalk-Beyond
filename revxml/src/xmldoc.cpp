@@ -250,10 +250,20 @@ xmlDocPtr CXMLDocument::Parse(const char *data, unsigned long tlength, const cha
 	//   does it with libxml2's own API. XML_PARSE_NOBLANKS keeps what
 	//   xmlKeepBlanksDefault(0) did before: the options of a context
 	//   replace libxml2's global defaults.
+	// libxml2 2.15 keeps two limits even with XML_PARSE_HUGE, where 2.9 had
+	//   none: elements nest at most 2048 deep, and a text node, attribute
+	//   value or name holds at most 1,000,000,000 bytes. A deeper document
+	//   is refused ("Excessive depth in document"), or, when bad data is
+	//   parsed (XML_PARSE_RECOVER), cut off at that depth.
 	int options;
 	options = XML_PARSE_HUGE | XML_PARSE_NOBLANKS;
 	if (!wellformed)
 		options |= XML_PARSE_RECOVER;
+	// A gzip-compressed file is read uncompressed, as libxml2 2.9 did for
+	//   every file on macOS, Linux and the mobile platforms; since 2.14 that
+	//   takes XML_PARSE_UNZIP. Data in memory never was uncompressed.
+	if (data == NULL)
+		options |= XML_PARSE_UNZIP;
 
 	xmlParserCtxtPtr ctxt;
 	ctxt = xmlNewSAXParserCtxt(&SAXHandlerTable, NULL);
@@ -389,9 +399,10 @@ void CXMLDocument::Write(char **data,int *tlength,Bool isformatted)
 /*Free - frees xml document*/
 void CXMLDocument::Free()
 {
-	if (!isinited()) return;
-	xmlFreeDoc(doc);
-	doc = NULL;
+	// The XPath context and the stylesheet first: a stylesheet's object has
+	//   no document of its own (the stylesheet owns its copy and frees it),
+	//   so returning when doc is NULL left revXMLDeleteTree on a stylesheet
+	//   freeing nothing.
 	if (NULL != xpathContext)
 		xmlXPathFreeContext(xpathContext);
 	xpathContext = NULL;
@@ -399,6 +410,9 @@ void CXMLDocument::Free()
 	if (NULL != xsltID)
 		xsltFreeStylesheet(xsltID);
 	xsltID = NULL;
+	if (!isinited()) return;
+	xmlFreeDoc(doc);
+	doc = NULL;
 }
 
 /*CopyDocument - copies xml tree of other CXMLDocument

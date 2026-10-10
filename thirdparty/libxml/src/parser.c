@@ -9871,7 +9871,8 @@ xmlParseElementEnd(xmlParserCtxtPtr ctxt) {
     }
 #ifdef LIBXML_SAX1_ENABLED
     else
-	xmlParseEndTag1(ctxt, 0);
+	/* OXT-Beyond: the start tag's line, as libxml2 2.9 gave, not 0 */
+	xmlParseEndTag1(ctxt, ctxt->pushTab[ctxt->nameNr - 1].line);
 #endif /* LIBXML_SAX1_ENABLED */
 
     /*
@@ -11130,7 +11131,8 @@ xmlParseTryOrFinish(xmlParserCtxtPtr ctxt, int terminate) {
 		}
 #ifdef LIBXML_SAX1_ENABLED
 		  else
-		    xmlParseEndTag1(ctxt, 0);
+		    /* OXT-Beyond: the start tag's line, as libxml2 2.9 gave */
+		    xmlParseEndTag1(ctxt, ctxt->pushTab[ctxt->nameNr - 1].line);
 #endif /* LIBXML_SAX1_ENABLED */
 		if (ctxt->nameNr == 0) {
 		    ctxt->instate = XML_PARSER_EPILOG;

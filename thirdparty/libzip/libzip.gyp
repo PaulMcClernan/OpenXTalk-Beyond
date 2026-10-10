@@ -174,7 +174,10 @@
 								'OS == "win"',
 								{
 									# Win32 file I/O (UTF-8 paths become UTF-16) and
-									# CryptGenRandom for the temporary file's name.
+									# CryptGenRandom, which seeds the key of every
+									# archive's name table and makes PKWARE
+									# encryption headers. Temporary file names come
+									# from GetTickCount.
 									'sources':
 									[
 										'src/zip_random_win32.c',

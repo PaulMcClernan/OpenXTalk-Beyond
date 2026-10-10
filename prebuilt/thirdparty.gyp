@@ -1701,8 +1701,10 @@
 					[
 						'toolset_os == "win"',
 						{							
-							# libzip 1.12 names its temporary files with
-							# CryptGenRandom (advapi32).
+							# libzip 1.12 needs advapi32: CryptGenRandom seeds
+							# the key of every archive it opens or makes, and
+							# GetSecurityInfo copies permissions to the
+							# temporary file zip_close writes.
 							'libraries':
 							[
 								'-llibzip',

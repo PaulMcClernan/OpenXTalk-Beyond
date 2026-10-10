@@ -142,7 +142,7 @@ versions LiveCode Community last shipped):
 | libjpeg (IJG) | 9f (January 2024) | Current. Earlier releases had 9b (2016). |
 | libxml2 | 2.15.4 | Current. Used by revXML. Earlier releases had 2.9.4 (2016). |
 | libxslt | 1.1.45 (November 2025) | Current. Used by revXML for XSLT. Earlier releases had 1.1.28 (2012). |
-| libzip | 1.12 (October 2026) | Current. Used by revZip. Earlier releases had a modified libzip 0.8 (about 2008). |
+| libzip | 1.12 (October 2026) | Current. Used by revZip. Earlier releases had a modified libzip 0.6.1 (July 2005). |
 | PCRE | 8.45 (June 2021) | The last release of PCRE 1, which is no longer maintained (its successor, PCRE2, has another interface); it has the fixes for the published vulnerabilities of PCRE 1. Earlier releases had 8.39 (2016). |
 
 These are still old and have publicly known vulnerabilities:
