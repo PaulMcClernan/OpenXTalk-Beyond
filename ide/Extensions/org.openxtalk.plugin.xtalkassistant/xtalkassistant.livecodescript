@@ -108,10 +108,10 @@ command xtalkAssistantMenuPick
       revIDESetPreference kPrefEnabled, true
       xtaOpenWindow
       -- Just turned on: ask for the key now, so the user sees where it goes
-      -- (More > Set API Key... in the window, later)
-      if xtaKey(xtaProvider()) is empty then
-         get xtaAskForKey()
-      end if
+      -- (More > Set API Key... in the window, later). Not for a base URL of
+      -- the user's own, which is kept when it is turned off and may need no
+      -- key, as Send and Models do.
+      get xtaEnsureKey(xtaProvider())
       exit xtalkAssistantMenuPick
    end if
    xtaOpenWindow
