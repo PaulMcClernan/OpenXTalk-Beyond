@@ -64,6 +64,7 @@ void revxml_sax_end_element(void *p_context, const xmlChar *p_name);
 void revxml_parse_note_position(void *p_context);
 bool revxml_parse_char_ref(void *p_context, const xmlChar **x_text, int *x_length);
 void revxml_parse_note_error(void *p_context);
+bool revxml_network_url(const char *p_filename);
 
 extern void CB_startDocument();
 extern void CB_endDocument();

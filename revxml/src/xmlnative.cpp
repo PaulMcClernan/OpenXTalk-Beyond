@@ -679,9 +679,10 @@ static void revxml_head(const unsigned char *p_text, size_t p_length, RevXMLHead
 }
 
 // Whether p_filename is an http:// or ftp:// URL, or on Windows the path
-//   form of one ("http:\\host\doc.xml") that revXML passes there and
-//   libxml2 turns back into a URL (xmlNewInputFromUrl).
-static bool revxml_network_url(const char *p_filename)
+//   form that the engine makes of one ("http:\\host\doc.xml"), which
+//   revXML (revxml_url_for_libxml) and libxml2 (xmlNewInputFromUrl) turn
+//   back into a URL.
+bool revxml_network_url(const char *p_filename)
 {
 	size_t t_length;
 	if (xmlStrncasecmp((const xmlChar *)p_filename, (const xmlChar *)"http:", 5) == 0)

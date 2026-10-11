@@ -2451,6 +2451,17 @@ UTF8ToLatin1(void *vctxt ATTRIBUTE_UNUSED,
         if (c < 0x80) {
             *out++ = c;
         } else if ((c >= 0xC2) && (c <= 0xC3)) {
+            /*
+             * OXT-Beyond: a lead byte not followed by a continuation byte
+             * is a byte of native text (ISO-8859-1, Windows-1252) that
+             * revXML keeps in its trees. It is an input error, which
+             * xmlCharEncOutput writes as a character reference, instead
+             * of being read with the byte after it as one character.
+             */
+            if ((inend - in >= 2) && ((in[1] & 0xC0) != 0x80)) {
+                ret = XML_ENC_ERR_INPUT;
+                goto done;
+            }
             if (inend - in < 2)
                 break;
             in++;
@@ -2499,7 +2510,7 @@ static xmlCharEncError
 UTF16LEToUTF8(void *vctxt ATTRIBUTE_UNUSED,
               unsigned char *out, int *outlen,
               const unsigned char *in, int *inlen,
-              int flush ATTRIBUTE_UNUSED) {
+              int flush) {
     const unsigned char *instart = in;
     const unsigned char *inend = in + (*inlen & ~1);
     unsigned char *outstart = out;
@@ -2555,6 +2566,14 @@ UTF16LEToUTF8(void *vctxt ATTRIBUTE_UNUSED,
             out += 4;
         }
     }
+
+    /*
+     * OXT-Beyond: an odd byte at the end of the input (a script that
+     * wrote UTF-16 text and a return, for example) is dropped, as
+     * libxml2 2.9 did, instead of making the document an encoding error.
+     */
+    if ((flush) && (in == inend) && (*inlen & 1))
+        in += 1;
 
     ret = out - outstart;
 
@@ -2696,7 +2715,7 @@ static xmlCharEncError
 UTF16BEToUTF8(void *vctxt ATTRIBUTE_UNUSED,
               unsigned char *out, int *outlen,
               const unsigned char *in, int *inlen,
-              int flush ATTRIBUTE_UNUSED) {
+              int flush) {
     const unsigned char *instart = in;
     const unsigned char *inend = in + (*inlen & ~1);
     unsigned char *outstart = out;
@@ -2752,6 +2771,14 @@ UTF16BEToUTF8(void *vctxt ATTRIBUTE_UNUSED,
             out += 4;
         }
     }
+
+    /*
+     * OXT-Beyond: an odd byte at the end of the input (a script that
+     * wrote UTF-16 text and a return, for example) is dropped, as
+     * libxml2 2.9 did, instead of making the document an encoding error.
+     */
+    if ((flush) && (in == inend) && (*inlen & 1))
+        in += 1;
 
     ret = out - outstart;
 
@@ -2908,6 +2935,16 @@ Utf8ToEightBit(void *vctxt,
         } else if (d < 0xE0) {
             unsigned c;
 
+            /*
+             * OXT-Beyond: as in UTF8ToLatin1, a byte that does not start a
+             * UTF-8 character (a continuation byte, an overlong lead, a
+             * lead not followed by continuation bytes) is native text and
+             * an input error, not read with the bytes after it.
+             */
+            if ((d < 0xC2) || ((inend - in >= 2) && ((in[1] & 0xC0) != 0x80))) {
+                ret = XML_ENC_ERR_INPUT;
+                goto done;
+            }
             if (inend - in < 2)
                 break;
             c = in[1] & 0x3F;
@@ -2925,6 +2962,13 @@ Utf8ToEightBit(void *vctxt,
             unsigned c1;
             unsigned c2;
 
+            /* OXT-Beyond: as above, and no overlong form. */
+            if (((inend - in >= 2) && (((in[1] & 0xC0) != 0x80) ||
+                                       ((d == 0xE0) && (in[1] < 0xA0)))) ||
+                ((inend - in >= 3) && ((in[2] & 0xC0) != 0x80))) {
+                ret = XML_ENC_ERR_INPUT;
+                goto done;
+            }
             if (inend - in < 3)
                 break;
             c1 = in[1] & 0x3F;

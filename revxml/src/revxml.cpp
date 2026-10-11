@@ -24,6 +24,8 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include <revolution/support.h>
 #include <libxml/xpath.h>
 #include <libxml/parserInternals.h>
+#include <libxml/pattern.h>
+#include <libxml/uri.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
 
@@ -319,9 +321,82 @@ static bool revxml_path_opens(const char *p_path)
 	return true;
 }
 
+// A URL on the network (http:// or ftp://) as libxml2 2.9 passed it on
+//   (its xmlCanonicPath): as it is when it is a URI, else with what a URI
+//   may not hold escaped ("sp ace.xml" is "sp%20ace.xml"), native text
+//   byte by byte ("caf%E9"). A URL is not a file name, so it is not
+//   converted to UTF-8. libxml2 2.15 escapes URLs too, but not those that
+//   revXML loads itself (revxml_load_url), and in another way.
+static char *revxml_url_for_libxml(const char *p_url)
+{
+	xmlURIPtr t_uri;
+	xmlChar *t_escaped;
+	char *t_url;
+	t_url = istrdup(p_url);
+	if (t_url == NULL)
+		return NULL;
+#ifdef _WIN32
+	// On Windows the URL comes in the path form that os_path_resolve made of
+	//   it ("http:\\host\doc.xml"), which would be escaped as "http:%5C%5C...":
+	//   its '\' are made '/' again first, as libxml2 does with a URL that is
+	//   still in that form (xmlNewInputFromUrl).
+	for (char *t_char = t_url; *t_char != '\0'; t_char++)
+		if (*t_char == '\\')
+			*t_char = '/';
+#endif
+	t_uri = xmlParseURI(t_url);
+	if (t_uri != NULL)
+	{
+		xmlFreeURI(t_uri);
+		return t_url;
+	}
+	t_escaped = xmlURIEscapeStr((const xmlChar *)t_url, (const xmlChar *)":/?_.#&;=");
+	if (t_escaped != NULL)
+	{
+		t_uri = xmlParseURI((const char *)t_escaped);
+		if (t_uri != NULL)
+		{
+			char *t_result;
+			xmlFreeURI(t_uri);
+			t_result = istrdup((const char *)t_escaped);
+			if (t_result != NULL)
+			{
+				free(t_url);
+				t_url = t_result;
+			}
+		}
+		xmlFree(t_escaped);
+	}
+	return t_url;
+}
+
+// The path of the file: URL p_url as it is written, not unescaped, or NULL
+//   when p_url is not a file: URL (the forms libxml2 2.9's xmlFileOpen
+//   took).
+static const char *revxml_file_url_path(const char *p_url)
+{
+	const char *t_path;
+	if (xmlStrncasecmp((const xmlChar *)p_url, (const xmlChar *)"file://localhost/", 17) == 0)
+		t_path = p_url + 16;
+	else if (xmlStrncasecmp((const xmlChar *)p_url, (const xmlChar *)"file:///", 8) == 0)
+		t_path = p_url + 7;
+	else if (xmlStrncasecmp((const xmlChar *)p_url, (const xmlChar *)"file:/", 6) == 0)
+		t_path = p_url + 5;
+	else
+		return NULL;
+#ifdef _WIN32
+	// "file:///C:/dir/doc.xml"
+	t_path += 1;
+#endif
+	return t_path;
+}
+
 static char *revxml_path_for_libxml(const char *p_path)
 {
 	char *t_path;
+	const char *t_literal;
+	if (revxml_network_url(p_path))
+		return revxml_url_for_libxml(p_path);
 	t_path = os_path_to_native_utf8(p_path);
 	if (t_path != NULL && strcmp(t_path, p_path) != 0 &&
 		!revxml_path_opens(t_path) && revxml_path_opens(p_path))
@@ -332,6 +407,22 @@ static char *revxml_path_for_libxml(const char *p_path)
 		{
 			free(t_path);
 			t_path = t_given;
+		}
+	}
+	// A file: URL with a '%' in its path that names a file as it is written
+	//   ("file:/dir/a%41.xml" when there is an a%41.xml) is that file, as
+	//   2.9 read it: its xmlFileOpen tried the path as written before it
+	//   unescaped it. 2.15 always unescapes it (aA.xml), so the path is
+	//   passed instead of the URL.
+	t_literal = t_path != NULL ? revxml_file_url_path(t_path) : NULL;
+	if (t_literal != NULL && strchr(t_literal, '%') != NULL && revxml_path_opens(t_literal))
+	{
+		char *t_file;
+		t_file = istrdup(t_literal);
+		if (t_file != NULL)
+		{
+			free(t_path);
+			t_path = t_file;
 		}
 	}
 	return t_path;
@@ -2751,6 +2842,36 @@ static char *XML_ObjectPtr_to_Data(xmlXPathObjectPtr pObject, char *pElementDeli
 }
 
 /**
+ * xpathContextAs29
+ *
+ * Makes ctx evaluate pExpression as libxml2 2.9 did where revXML's results
+ * differ. 2.9 gave a location step from an empty node-set no node-set at
+ * all, which revXML reports as "can't resolve xpath" (/r/nosuch/text(),
+ * /r/a[@k='none']/b), unless it evaluated the expression as a stream
+ * (xmlXPathTryStreamCompile): a path of names, '*', '.', '/' and '//' with
+ * no predicate, function, attribute or prefix, which matched nothing as an
+ * empty node-set (/r/nosuch/b). 2.15 always gives an empty node-set.
+ */
+static void xpathContextAs29(xmlXPathContextPtr ctx, const xmlChar *pExpression)
+{
+	bool tStreamed = false;
+	if (xmlStrchr(pExpression, '[') == NULL && xmlStrchr(pExpression, '(') == NULL &&
+		xmlStrchr(pExpression, '@') == NULL && xmlStrchr(pExpression, ':') == NULL)
+	{
+		xmlPatternPtr tPattern = xmlPatterncompile(pExpression, NULL, XML_PATTERN_XPATH, NULL);
+		if (tPattern != NULL)
+		{
+			// The checks xmlXPathRunStreamEval made before it evaluated.
+			tStreamed = xmlPatternStreamable(tPattern) == 1 && xmlPatternMaxDepth(tPattern) != -1 &&
+				xmlPatternMinDepth(tPattern) != -1 && xmlPatternFromRoot(tPattern) >= 0;
+			xmlFreePattern(tPattern);
+		}
+	}
+	if (!tStreamed)
+		ctx->flags |= XML_XPATH_EMPTY_STEP_NULL;
+}
+
+/**
  * XML_EvalXPath
  * @pDocID : xml tree id
  * @pExpression : xpath to evaluate
@@ -2788,6 +2909,7 @@ void XML_EvalXPath(char *args[], int nargs, char **retstring, Bool *pass, Bool *
 			{
 				xmlChar *str = (xmlChar *)args[1];
 
+				xpathContextAs29(ctx, str);
 				xmlXPathObjectPtr result = xmlXPathEvalExpression(str, ctx);
 				if (NULL != result)
 				{
@@ -2858,6 +2980,7 @@ void XML_XPathDataFromQuery(char *args[], int nargs, char **retstring, Bool *pas
 			{
 				xmlChar *str = (xmlChar *)args[1];
 
+				xpathContextAs29(ctx, str);
 				xmlXPathObjectPtr result = xmlXPathEvalExpression(str, ctx);
 				if (NULL != result)
 				{

@@ -2538,12 +2538,14 @@ xmlCheckHTTPInput(xmlParserCtxt *ctxt, xmlParserInput *ret) {
 
 #ifdef _WIN32
 /*
- * OXT-Beyond: on Windows revXML hands libxml2 a URL in path form, with
- * every '/' made a '\' ("http:\\host\doc.xml"); 2.9's xmlCanonicPath made
- * them '/' again, but 2.15's leaves a string without "://" alone, so the
- * restored clients would never see the URL. Undo it for an http or ftp
- * URL that starts so. The result is also the input's file name, the base
- * URI that document() and relative entities resolve against.
+ * OXT-Beyond: on Windows a URL can reach libxml2 in the path form that the
+ * engine makes of it, with every '/' made a '\' ("http:\\host\doc.xml");
+ * 2.9's xmlCanonicPath made them '/' again, but 2.15's leaves a string
+ * without "://" alone, so the restored clients would never see the URL.
+ * Undo it for an http or ftp URL that starts so. The result is also the
+ * input's file name, the base URI that document() and relative entities
+ * resolve against. (revXML turns the URLs it is given back itself, so
+ * that it can escape them: revxml_url_for_libxml in revxml/src/revxml.cpp.)
  *
  * Returns XML_ERR_OK, setting *out to a new string or to NULL when the
  * URL is not one of these, or XML_ERR_NO_MEMORY.

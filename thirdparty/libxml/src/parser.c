@@ -2986,6 +2986,14 @@ xmlIsNameStartCharNew(int c) {
      * Use the new checks of production [4] [4a] amd [5] of the
      * Update 5 of XML-1.0
      */
+    /*
+     * OXT-Beyond: U+DFF80 to U+DFFFF are the markers that revXML reads a
+     * byte that is not UTF-8 as (revxml/src/xmlnative.cpp). libxml2 2.9
+     * read such a byte as the ISO-8859-1 character it is, so a marker is
+     * a name character only when that character is one.
+     */
+    if ((c >= 0xDFF80) && (c <= 0xDFFFF))
+        c -= 0xDFF00;
     if ((c != ' ') && (c != '>') && (c != '/') && /* accelerators */
         (((c >= 'a') && (c <= 'z')) ||
          ((c >= 'A') && (c <= 'Z')) ||
@@ -3012,6 +3020,9 @@ xmlIsNameCharNew(int c) {
      * Use the new checks of production [4] [4a] amd [5] of the
      * Update 5 of XML-1.0
      */
+    /* OXT-Beyond: a marker, as in xmlIsNameStartCharNew. */
+    if ((c >= 0xDFF80) && (c <= 0xDFFFF))
+        c -= 0xDFF00;
     if ((c != ' ') && (c != '>') && (c != '/') && /* accelerators */
         (((c >= 'a') && (c <= 'z')) ||
          ((c >= 'A') && (c <= 'Z')) ||
@@ -4064,6 +4075,7 @@ xmlParseAttValueInternal(xmlParserCtxtPtr ctxt, int *attlen, int *outFlags,
     int replaceEntities;
     int normalize = (special & XML_SPECIAL_TYPE_MASK) > XML_ATTRIBUTE_CDATA;
     int attvalFlags = 0;
+    int atEnd = 0;
 
     /* Always expand namespace URIs */
     replaceEntities = (ctxt->replaceEntities) || (isNamespace);
@@ -4094,6 +4106,16 @@ xmlParseAttValueInternal(xmlParserCtxtPtr ctxt, int *attlen, int *outFlags,
         if (CUR_PTR >= ctxt->input->end) {
             xmlFatalErrMsg(ctxt, XML_ERR_ATTRIBUTE_NOT_FINISHED,
                            "AttValue: ' expected\n");
+            /*
+             * OXT-Beyond: when recovering, a value that the end of the
+             * input cuts off (a document cut short, or a byte the
+             * declared encoding cannot read) keeps what was read, as in
+             * libxml2 2.9, instead of the attribute being lost.
+             */
+            if (ctxt->recovery) {
+                atEnd = 1;
+                break;
+            }
             goto error;
         }
 
@@ -4284,7 +4306,8 @@ xmlParseAttValueInternal(xmlParserCtxtPtr ctxt, int *attlen, int *outFlags,
     if (outFlags != NULL)
         *outFlags = attvalFlags;
 
-    NEXTL(1);
+    if (!atEnd)
+        NEXTL(1);
 
     return(ret);
 

@@ -319,6 +319,32 @@ on startup
       put revXMLNodeContents(tTree, "/root/z") into tContents
       check "revXML stores a control character", tContents is ("a" & numToChar(1) & "b"), the number of chars in tContents & " chars"
       if tTree is an integer then revXMLDeleteTree tTree
+      -- A location step taken from an empty node-set is "can't resolve
+      -- xpath", unless the path is a plain one that libxml2 2.9 evaluated
+      -- as a stream, which matched nothing (2.15 gave nothing for both)
+      put revXMLCreateTree("<root><z/></root>", false, true, false) into tTree
+      put revXMLDataFromXPathQuery(tTree, "/root/x/text()", ",", "|") & "/" & revXMLDataFromXPathQuery(tTree, "/root/x/y", ",", "|") into tData
+      check "revXML XPath step from an empty node-set", tData is "xmlerr, can't resolve xpath/", tData
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- A native byte written in an 8-bit encoding is a character reference,
+      -- not read with the letter after it as one character (2.15 wrote the
+      -- byte and the "O" as one letter); an attribute value in native text
+      -- labels the document ISO-8859-1, as 2.9 did
+      put revXMLCreateTree("<?xml version=" & quote & "1.0" & quote & " encoding=" & quote & "ISO-8859-1" & quote & "?><root><z/></root>", false, true, false) into tTree
+      revXMLPutIntoNode tTree, "/root/z", "S" & numToChar(195) & "O"
+      put revXMLText(tTree) into tText
+      check "revXML writes a native byte in ISO-8859-1", tText contains "<z>S&#195;O</z>" or tText contains ("<z>S" & numToChar(195) & "O</z>"), oneLine(tText)
+      if tTree is an integer then revXMLDeleteTree tTree
+      put revXMLCreateTree("<root><z/></root>", false, true, false) into tTree
+      revXMLSetAttribute tTree, "/root/z", "a", tAccented
+      put revXMLText(tTree) into tText
+      check "revXML labels native text in an attribute", tText begins with ("<?xml version=" & quote & "1.0" & quote & " encoding=" & quote & "ISO-8859-1" & quote & "?>"), oneLine(tText)
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- An attribute value that the end of the document cuts off keeps what
+      -- was read (2.15 lost the attribute)
+      put revXMLCreateTree("<root><z a='cut", false, true, false) into tTree
+      check "revXML keeps a cut-off attribute value", tTree is an integer and revXMLAttribute(tTree, "/root/z", "a") is "cut", line 1 to 2 of tTree
+      if tTree is an integer then revXMLDeleteTree tTree
       -- A declared entity reused far past 5 times the document's size parses
       -- (2.15 refused it even with XML_PARSE_HUGE); nested entities that
       -- expand without bound ("billion laughs") are still refused
@@ -355,6 +381,17 @@ on startup
       put revXMLCreateTree("<root/>", false, true, false) into tTree
       put xsltApplyStylesheet(tTree, xsltLoadStylesheet(tXSLTree)) into tResult
       check "XSLT returns the output of a terminated transform", tResult is "before", tResult
+      if tXSLTree is an integer then revXMLDeleteTree tXSLTree
+      -- translate() over native text: libxml2 2.9 stopped the translation at
+      -- a byte that is not UTF-8 (2.15 stopped the whole transform)
+      put "<xsl:stylesheet version=" & quote & "1.0" & quote & " xmlns:xsl=" & quote & "http://www.w3.org/1999/XSL/Transform" & quote & ">" & \
+            "<xsl:output method=" & quote & "text" & quote & "/><xsl:template match=" & quote & "/" & quote & ">" & \
+            "[<xsl:value-of select=" & quote & "translate(/p,'ab','AB')" & quote & "/>]after</xsl:template></xsl:stylesheet>" into tXSL
+      put revXMLCreateTree(tXSL, false, true, false) into tXSLTree
+      put revXMLCreateTree("<p>abc caf" & numToChar(233) & "</p>", false, true, false) into tDoc
+      put xsltApplyStylesheet(tDoc, xsltLoadStylesheet(tXSLTree)) into tResult
+      check "XSLT translate() over native text", tResult is ("[ABc cAf" & numToChar(233) & "]after"), tResult
+      if tDoc is an integer then revXMLDeleteTree tDoc
       if tXSLTree is an integer then revXMLDeleteTree tXSLTree
       -- HTML output names its encoding in a meta http-equiv element, as
       -- libxml2 2.9 wrote it (2.15 writes <meta charset>)

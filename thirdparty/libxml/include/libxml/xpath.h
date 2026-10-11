@@ -239,6 +239,13 @@ typedef xmlXPathFunction (*xmlXPathFuncLookupFunc) (void *ctxt,
  * forbid variables in expression
  */
 #define XML_XPATH_NOVAR	  (1<<1)
+/**
+ * OXT-Beyond: a location step taken from an empty node-set gives a
+ * node-set object without a node-set (nodesetval NULL), as libxml2 2.9's
+ * did, instead of an empty node-set. revXML reports such a result as
+ * "can't resolve xpath", as it did with 2.9.
+ */
+#define XML_XPATH_EMPTY_STEP_NULL (1<<2)
 
 /**
  * Expression evaluation occurs with respect to a context.

@@ -88,8 +88,40 @@ Local changes, marked "OXT-Beyond" in the sources:
   one makes 2.15 ignore the XML declaration's, which 2.9 still honoured
   when it was not UTF-8) or unknown, and a redirect's target is the
   input's file name, the base URI. On Windows, xmlNewInputFromUrl turns
-  "http:\\host\doc.xml", the path form of a URL that revXML passes there,
+  "http:\\host\doc.xml", the path form that the engine makes of a URL,
   back into "http://host/doc.xml", as 2.9's xmlCanonicPath did.
+- In src/encoding.c, the 8-bit output encoders (UTF8ToLatin1 for
+  ISO-8859-1, Utf8ToEightBit for the others) take a byte that does not
+  start a UTF-8 character, or a lead byte that no continuation byte
+  follows, as an input error, as 2.9's did, which xmlCharEncOutput writes
+  as a character reference (above). 2.15 read such a native byte with the
+  byte after it as one character, so "S\xC3O" was written "S\xCF".
+- In src/encoding.c, UTF16LEToUTF8 and UTF16BEToUTF8 drop an odd byte at
+  the end of the input, as 2.9 did, where 2.15 made it an encoding error.
+- In src/nanohttp.c, xmlNanoHTTPScanAnswer stops the HTTP version and the
+  status code from growing past six digits, so that a hostile status line
+  does not overflow an int (it is still an error status).
+- In include/libxml/xpath.h and src/xpath.c, a context flag,
+  XML_XPATH_EMPTY_STEP_NULL: with it, xmlXPathNodeCollectAndTest gives a
+  location step from an empty node-set a node-set object with no node-set
+  (nodesetval NULL), as 2.9 did. revXML sets it for the expressions that
+  2.9 did not evaluate as streams (revxml/src/revxml.cpp), and reports
+  such a result as "can't resolve xpath", as it did with 2.9.
+- In src/xpath.c, translate() stops at a byte that is not UTF-8 with what
+  it has, as 2.9 did, instead of raising an XPath error that stopped the
+  whole XSLT transform.
+- In src/tree.c, xmlNewPropInternal labels the document ISO-8859-1 when it
+  is given an attribute value that is not UTF-8 (native text), as 2.9
+  did, so that the document, and an XSLT result that copies the
+  attribute, are written with that encoding declared.
+- In src/parser.c, xmlIsNameStartCharNew and xmlIsNameCharNew take the
+  code points U+DFF80 to U+DFFFF, which revXML reads a byte that is not
+  UTF-8 as (revxml/src/xmlnative.cpp), as the ISO-8859-1 character that
+  byte is, so that a native byte is a name character where 2.9 read it as
+  one.
+- In src/parser.c, xmlParseAttValueInternal keeps the part of an
+  attribute value that the end of the input cuts off when the parser is
+  recovering, as 2.9 did, where 2.15 dropped the attribute.
 
 LiveCode's other changes to 2.9.4 are not needed: revXML now parses
 through a SAX parser context with xmlCtxtReadDoc, xmlCtxtReadMemory and

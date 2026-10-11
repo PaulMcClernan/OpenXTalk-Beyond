@@ -7818,16 +7818,21 @@ xmlXPathTranslateFunction(xmlXPathParserContext *ctxt, int nargs) {
 
         /* Step to next character in input */
         cptr++;
+        /*
+         * OXT-Beyond: at a byte that is not UTF-8, which is native text
+         * that revXML keeps in its trees, the translation stops with what
+         * it has, as in libxml2 2.9 ("not asserting an XPath error is
+         * probably better"), instead of raising an error that stops the
+         * whole XSLT transform.
+         */
         if ( ch & 0x80 ) {
             /* if not simple ascii, verify proper format */
             if ( (ch & 0xc0) != 0xc0 ) {
-                xmlXPathErr(ctxt, XPATH_INVALID_CHAR_ERROR);
                 break;
             }
             /* then skip over remaining bytes for this char */
             while ( (ch <<= 1) & 0x80 )
                 if ( (*cptr++ & 0xc0) != 0x80 ) {
-                    xmlXPathErr(ctxt, XPATH_INVALID_CHAR_ERROR);
                     break;
                 }
             if (ch & 0x80) /* must have had error encountered */
@@ -9965,6 +9970,16 @@ xmlXPathNodeCollectAndTest(xmlXPathParserContextPtr ctxt,
     }
     contextSeq = obj->nodesetval;
     if ((contextSeq == NULL) || (contextSeq->nodeNr <= 0)) {
+        /*
+         * OXT-Beyond: with XML_XPATH_EMPTY_STEP_NULL, a step from an
+         * empty node-set gives no node-set, as in libxml2 2.9.
+         */
+        if ((contextSeq != NULL) &&
+            (xpctxt->flags & XML_XPATH_EMPTY_STEP_NULL)) {
+            xmlXPathReleaseObject(xpctxt, obj);
+            xmlXPathValuePush(ctxt, xmlXPathCacheWrapNodeSet(ctxt, NULL));
+            return(0);
+        }
         xmlXPathValuePush(ctxt, obj);
         return(0);
     }

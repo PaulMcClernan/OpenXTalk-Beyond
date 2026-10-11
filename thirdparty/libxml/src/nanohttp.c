@@ -673,9 +673,17 @@ xmlNanoHTTPScanAnswer(xmlNanoHTTPCtxtPtr ctxt, const char *line) {
 	int ret = 0;
 
 	cur += 5;
+	/*
+	 * OXT-Beyond: the version and the status stop growing at six
+	 * digits, so that a hostile status line ("HTTP/99999999999 ...")
+	 * does not overflow an int. A status that long is still an error
+	 * status (400 and above).
+	 */
 	while ((*cur >= '0') && (*cur <= '9')) {
-	    version *= 10;
-	    version += *cur - '0';
+	    if (version < 100000) {
+	        version *= 10;
+	        version += *cur - '0';
+	    }
 	    cur++;
 	}
 	if (*cur == '.') {
@@ -693,8 +701,10 @@ xmlNanoHTTPScanAnswer(xmlNanoHTTPCtxtPtr ctxt, const char *line) {
 	while ((*cur == ' ') || (*cur == '\t')) cur++;
 	if ((*cur < '0') || (*cur > '9')) return;
 	while ((*cur >= '0') && (*cur <= '9')) {
-	    ret *= 10;
-	    ret += *cur - '0';
+	    if (ret < 100000) {
+	        ret *= 10;
+	        ret += *cur - '0';
+	    }
 	    cur++;
 	}
 	if ((*cur != 0) && (*cur != ' ') && (*cur != '\t')) return;

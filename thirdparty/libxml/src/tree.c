@@ -1479,6 +1479,22 @@ xmlNewPropInternal(xmlNodePtr node, xmlNsPtr ns,
     if (value != NULL) {
         xmlNodePtr tmp;
 
+        /*
+         * OXT-Beyond: a value that is not UTF-8 is native text (revXML
+         * keeps native text in its trees as it is). As libxml2 2.9 did,
+         * the document is then labelled ISO-8859-1, so that it, and an
+         * XSLT result that copies the attribute, are written with that
+         * encoding declared.
+         */
+        if ((doc != NULL) && (!xmlCheckUTF8(value))) {
+            xmlChar *encoding = xmlStrdup(BAD_CAST "ISO-8859-1");
+
+            if (encoding != NULL) {
+                xmlFree((xmlChar *) doc->encoding);
+                doc->encoding = encoding;
+            }
+        }
+
         cur->children = xmlNewDocText(doc, value);
         if (cur->children == NULL)
             goto error;
