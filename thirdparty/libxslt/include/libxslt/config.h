@@ -31,7 +31,9 @@
 
 /* Language-aware sorting (xsl:sort lang="...") with strxfrm_l(): glibc
    and macOS have it, macOS in <xlocale.h>. Elsewhere (Android,
-   Emscripten) xsl:sort compares the strings as they are. */
+   Emscripten) xsl:sort compares the strings as they are. src/xsltlocale.c
+   does not use it (OXT-Beyond): xsl:sort compares the strings as they
+   are everywhere, as the 1.1.28 that revXML had did. */
 #if defined(__APPLE__)
 #define HAVE_STRXFRM_L 1
 #define HAVE_XLOCALE_H 1

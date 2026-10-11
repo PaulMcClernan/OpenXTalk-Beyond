@@ -1799,6 +1799,15 @@ struct _xsltTransformContext {
     xsltNewLocaleFunc newLocale;
     xsltFreeLocaleFunc freeLocale;
     xsltGenSortKeyFunc genSortKey;
+
+    /*
+     * OXT-Beyond: the lowest address the transformation may take the C
+     * stack down to, or NULL when the stack's bounds are not known, and
+     * whether it has been looked for yet. See xsltStackLimit() in
+     * transform.c.
+     */
+    void *stackLimit;
+    int stackLimitSet;
 };
 
 /**

@@ -15,7 +15,7 @@ LiveCode's 2.9.4 build had, less HTTP, FTP and modules (removed or off);
 src/config.h is written for OXT-Beyond's build (gyp runs no configure
 step).
 
-Two local changes, marked "OXT-Beyond" in the sources:
+Four local changes, marked "OXT-Beyond" in the sources:
 
 - From LiveCode (bug 7586): xmlSAX2StartElementNoNS in src/SAX2.c
   (declared in include/libxml/SAX2.h), used by revXML when namespace
@@ -24,6 +24,21 @@ Two local changes, marked "OXT-Beyond" in the sources:
 - In src/parser.c, a parser with a SAX1 handler (revXML's) passes the
   start tag's line to xmlParseEndTag1, so "Opening and ending tag
   mismatch: b line 2 and c" names the line, as 2.9 did, not line 0.
+- In src/HTMLtree.c, the HTML output that revXML's XSLT functions return
+  is 2.9's again. htmlSetMetaEncoding, which libxslt's html and xhtml
+  output methods call, follows 2.9's rules: the head's first <meta
+  http-equiv="Content-Type" content="..."> gets "text/html; charset=..."
+  unless it names the encoding already, a <meta charset="..."> is left as
+  it is, and where there is no such meta it adds <meta
+  http-equiv="Content-Type" content="text/html; charset=...">, not
+  HTML5's <meta charset="..."> (as does the serializer, when it adds one).
+  And an attribute value holding a double quote and no single quote is
+  written in single quotes, alt='x"y', not as alt="x&quot;y".
+- In src/dict.c, xmlInitRandom falls back to its seed from the time and
+  some addresses when getentropy fails with an error other than EINTR (a
+  sandbox that refuses the getrandom system call fails it with EPERM) or
+  BCryptGenRandom fails, where 2.15 aborts the process. The seed only
+  spreads the hash tables.
 
 LiveCode's other changes to 2.9.4 are not needed: revXML now parses
 through a SAX parser context with xmlCtxtReadMemory and xmlCtxtReadFile

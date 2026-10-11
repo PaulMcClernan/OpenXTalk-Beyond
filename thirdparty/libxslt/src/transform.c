@@ -57,6 +57,14 @@
 #include "preproc.h"
 #include "security.h"
 
+/* OXT-Beyond: for the C stack guard (xsltStackLimit) */
+#include <stdint.h>
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__APPLE__) || defined(__linux__)
+#include <pthread.h>
+#endif
+
 #ifdef WITH_XSLT_DEBUG
 #define WITH_XSLT_DEBUG_EXTRA
 #define WITH_XSLT_DEBUG_PROCESS
@@ -71,6 +79,115 @@ static int xsltGetHTMLIDs(const xmlChar *version, const xmlChar **publicID,
 
 int xsltMaxDepth = 3000;
 int xsltMaxVars = 15000;
+
+/*
+ * OXT-Beyond: the C stack guard.
+ *
+ * libxslt 1.1.28, which revXML had, stopped a transformation when template
+ * calls were nested more than maxTemplateDepth (3000) deep: it counted
+ * ctxt->templNr. 1.1.45 counts nested sequence constructors instead
+ * (ctxt->depth): a template's body, but also the content of each xsl:if,
+ * xsl:when, xsl:for-each... it runs. A recursive named template nests two
+ * of those per level, its body and the xsl:if or xsl:when around the call,
+ * so the same 3000 stopped such a recursion at about 1,500 levels, where
+ * 1.1.28 went to 3,000. It is the count, not the C stack: both versions
+ * use about the same stack per level (gcc -O2, x86_64: 560 bytes for that
+ * recursion, 830 through xsl:apply-templates, 1,200 with two more nested
+ * instructions per level).
+ *
+ * Both counts stand in for the C stack. So maxTemplateDepth counts
+ * template calls again, as in 1.1.28 (see xsltApplyXSLTTemplate), and a
+ * transformation may nest sequence constructors past 1.1.45's count only
+ * while the C stack has room for it: where the bounds of the thread's
+ * stack are known, it keeps XSLT_STACK_RESERVE bytes for the work done
+ * below the last check (an instruction's own work, such as document()
+ * parsing a file, xsl:sort or an error report, took under 30 KB in the
+ * same build; the rest is margin for other compilers and for the pages
+ * Windows keeps at a stack's end). That gives back 1.1.28's depth where
+ * the stack has room for it (the desktop engines run scripts on 8 MB) and
+ * never takes a transformation further than 1.1.45 would where it has not
+ * (the 1 MB of the Windows server engine and of Android, iOS' 512 KB).
+ * Within 1.1.45's count nothing changes, so a small stack that ran out
+ * there before (as it did with 1.1.28) still does: checking the stack
+ * there too would turn those crashes into errors, but would also stop
+ * transformations that 1.1.28 and 1.1.45 finished in the last
+ * XSLT_STACK_RESERVE bytes. Where the bounds are not known, 1.1.45's
+ * count stays the limit.
+ *
+ * Finding the bounds is cheap but on Linux's main thread, where glibc
+ * reads /proc/self/maps for them (about 0.2 ms, ten times what a small
+ * transformation takes), so a transformation looks for them once, and
+ * only when it gets halfway to 1.1.45's count, while the stack still has
+ * room for the lookup itself.
+ */
+#define XSLT_STACK_RESERVE (96 * 1024)
+
+/*
+ * Returns the lowest address the calling thread's C stack may be taken
+ * down to, XSLT_STACK_RESERVE bytes above its end, or NULL when its
+ * bounds are not known. The stack grows down on every platform the engine
+ * is built for.
+ */
+static void *
+xsltStackLimit(void) {
+    char here;
+    char *base = NULL;
+#if defined(_WIN32)
+    MEMORY_BASIC_INFORMATION info;
+
+    /* The reservation that holds this thread's (or fiber's) stack */
+    if (VirtualQuery(&here, &info, sizeof(info)) != 0)
+        base = (char *) info.AllocationBase;
+#elif defined(__APPLE__)
+    pthread_t self = pthread_self();
+
+    /* The address it gives is the top of the stack */
+    base = (char *) pthread_get_stackaddr_np(self) -
+           pthread_get_stacksize_np(self);
+#elif defined(__linux__)
+    /* glibc and Android's bionic */
+    pthread_attr_t attr;
+    void *addr;
+    size_t size;
+
+    if (pthread_getattr_np(pthread_self(), &attr) == 0) {
+        if (pthread_attr_getstack(&attr, &addr, &size) == 0)
+            base = (char *) addr;
+        pthread_attr_destroy(&attr);
+    }
+#endif
+
+    if ((base == NULL) || ((uintptr_t) base >= (uintptr_t) &here))
+        return(NULL);
+    return(base + XSLT_STACK_RESERVE);
+}
+
+/*
+ * Whether the transformation has nested as deep as it may: past
+ * maxTemplateDepth sequence constructors (1.1.45's check), when the C
+ * stack's limit is not known or has been reached.
+ */
+static int
+xsltDepthExceeded(xsltTransformContextPtr ctxt) {
+    char here;
+
+    if (ctxt->depth < ctxt->maxTemplateDepth / 2)
+        return(0);
+    if (!ctxt->stackLimitSet) {
+        ctxt->stackLimit = xsltStackLimit();
+        ctxt->stackLimitSet = 1;
+    }
+    if (ctxt->depth < ctxt->maxTemplateDepth)
+        return(0);
+    if (ctxt->stackLimit == NULL)
+        return(1);
+    if ((uintptr_t) &here >= (uintptr_t) ctxt->stackLimit)
+        return(0);
+    xsltTransformError(ctxt, NULL, NULL,
+        "Less than %d KB of the C stack is left.\n",
+        XSLT_STACK_RESERVE / 1024);
+    return(1);
+}
 
 /*
  * Useful macros
@@ -1994,7 +2111,8 @@ xsltDefaultProcessOneNode(xsltTransformContextPtr ctxt, xmlNodePtr node,
 		ctxt->xpathCtxt->contextSize = nbchild;
 		ctxt->xpathCtxt->proximityPosition = childno;
 
-                if (ctxt->depth >= ctxt->maxTemplateDepth) {
+                /* OXT-Beyond: was ctxt->depth >= ctxt->maxTemplateDepth */
+                if (xsltDepthExceeded(ctxt)) {
                     xsltTransformError(ctxt, NULL, cur,
                         "xsltDefaultProcessOneNode: Maximum template depth "
                         "exceeded.\n"
@@ -2354,8 +2472,11 @@ xsltApplySequenceConstructor(xsltTransformContextPtr ctxt,
     /*
     * Check for infinite recursion: stop if the maximum of nested templates
     * is excceeded. Adjust xsltMaxDepth if you need more.
+    *
+    * OXT-Beyond: past that count, only while the C stack has room (see
+    * the C stack guard), as the count stands in for it.
     */
-    if (ctxt->depth >= ctxt->maxTemplateDepth) {
+    if (xsltDepthExceeded(ctxt)) {
         xsltTransformError(ctxt, NULL, list,
 	    "xsltApplySequenceConstructor: A potential infinite template "
             "recursion was detected.\n"
@@ -3107,6 +3228,27 @@ xsltApplyXSLTTemplate(xsltTransformContextPtr ctxt,
     if (list == NULL)
         return;
     CHECK_STOPPED;
+
+    /*
+    * OXT-Beyond: 1.1.28's check, back (see the C stack guard): stop if
+    * the maximum of nested templates is exceeded. 1.1.28 only reported
+    * it and carried on with the transformation, which then failed (and
+    * revXML crashed on its empty result); like 1.1.45's own checks, this
+    * stops the transformation, which returns what it made so far.
+    */
+    if (ctxt->templNr >= ctxt->maxTemplateDepth)
+    {
+        xsltTransformError(ctxt, NULL, list,
+	    "xsltApplyXSLTTemplate: A potential infinite template recursion "
+	    "was detected.\n"
+	    "You can adjust xsltMaxDepth (--maxdepth) in order to "
+	    "raise the maximum number of nested template calls and "
+	    "variables/params (currently set to %d).\n",
+	    ctxt->maxTemplateDepth);
+        xsltDebug(ctxt, contextNode, list, NULL);
+	ctxt->state = XSLT_STATE_STOPPED;
+        return;
+    }
 
     if (ctxt->varsNr >= ctxt->maxTemplateVars)
 	{
@@ -6167,8 +6309,13 @@ xsltApplyStylesheetInternal(xsltStylesheetPtr style, xmlDocPtr doc,
 
     /*
      * Be pedantic.
+     *
+     * OXT-Beyond: as libxslt 1.1.28 did, a transformation that stopped
+     * (xsl:message terminate="yes", or a runtime error that ends it)
+     * keeps what it made until then; only one that failed returns
+     * nothing. revXML's scripts rely on that partial result.
      */
-    if ((ctxt != NULL) && (ctxt->state != XSLT_STATE_OK)) {
+    if ((ctxt != NULL) && (ctxt->state == XSLT_STATE_ERROR)) {
 	xmlFreeDoc(res);
 	res = NULL;
     }

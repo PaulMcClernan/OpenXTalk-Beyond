@@ -20,7 +20,14 @@
 #include "xsltlocale.h"
 #include "xsltutils.h"
 
-#ifdef HAVE_STRXFRM_L
+/*
+ * OXT-Beyond: xsl:sort with lang="..." orders strings as xsl:sort without
+ * it does, by their UTF-8 bytes, on every platform. That is how the libxslt
+ * 1.1.28 that revXML had sorted: its xsltconfig.h chose neither xlocale nor
+ * the Windows API (XSLT_LOCALE_NONE), and scripts got that order. So the
+ * two branches that pick strxfrm_l() and LCMapStringW() are off.
+ */
+#if 0 /* OXT-Beyond: was #ifdef HAVE_STRXFRM_L */
 
   #define XSLT_LOCALE_POSIX
 
@@ -31,7 +38,7 @@
     #include <xlocale.h>
   #endif
 
-#elif defined(_WIN32)
+#elif 0 /* OXT-Beyond: was #elif defined(_WIN32) */
 
   #define XSLT_LOCALE_WINAPI
 
