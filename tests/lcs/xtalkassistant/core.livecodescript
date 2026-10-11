@@ -157,6 +157,44 @@ on TestRequestBodyOpenAI
    TestAssert "no system member", xtaJsonType(xtaJsonMember(tDoc, "system")) is "missing"
 end TestRequestBodyOpenAI
 
+-- The guide is marked for Anthropic's cache, and the notes after it are not
+private function TestSystemParts
+   local tSystem
+   put "The guide." into tSystem[1]["text"]
+   put true into tSystem[1]["cache"]
+   put "The notes." into tSystem[2]["text"]
+   put false into tSystem[2]["cache"]
+   put empty into tSystem[3]["text"]
+   return tSystem
+end TestSystemParts
+
+on TestRequestBodySystemParts
+   local tBody, tDoc, tSystem
+   put xtaRequestBody("anthropic", "m", TestSystemParts(), TestTurns(), empty) into tBody
+   TestDiagnostic tBody
+   put xtaJsonParse(tBody) into tDoc
+   put xtaJsonMember(tDoc, "system") into tSystem
+   TestAssert "anthropic: the system is two blocks (the empty part is left out)", \
+         xtaJsonType(tSystem) is "array" and xtaJsonCount(tSystem) is 2
+   TestAssert "anthropic: the guide first, as text", xtaJsonText(xtaJsonGet(tSystem, "1/type")) is "text" \
+         and xtaJsonText(xtaJsonGet(tSystem, "1/text")) is "The guide."
+   TestAssert "anthropic: the guide is marked for the cache", xtaJsonText(xtaJsonGet(tSystem, "1/cache_control/type")) is "ephemeral"
+   TestAssert "anthropic: the notes are not", xtaJsonText(xtaJsonGet(tSystem, "2/text")) is "The notes." \
+         and xtaJsonType(xtaJsonGet(tSystem, "2/cache_control")) is "missing"
+
+   put xtaRequestBody("openai", "m", TestSystemParts(), TestTurns(), empty) into tBody
+   put xtaJsonParse(tBody) into tDoc
+   TestAssert "openai: one system message, the parts joined in order", \
+         xtaJsonText(xtaJsonGet(tDoc, "messages/1/content")) is ("The guide." & return & return & "The notes.")
+   TestAssert "openai: no cache marks", not (tBody contains "cache_control")
+
+   -- One part that is not to be cached goes as the plain string it always was
+   put empty into tSystem
+   put "Be brief." into tSystem[1]["text"]
+   TestAssert "one part, not cached: as a text", \
+         xtaRequestBody("anthropic", "m", tSystem, TestTurns(), empty) is xtaRequestBody("anthropic", "m", "Be brief.", TestTurns(), empty)
+end TestRequestBodySystemParts
+
 on TestRequestBodyNeedsModel
    local tError
    try
@@ -229,6 +267,20 @@ on TestParseReplyAnthropic
    TestAssert "no answer", tReply["ok"] is false and tReply["error"] is not empty
 end TestParseReplyAnthropic
 
+on TestParseReplyCachedTokens
+   local tBody, tReply
+   put "{" & TestQ("content") & ":[{" & TestQ("type") & ":" & TestQ("text") & "," & TestQ("text") & ":" & TestQ("x") & "}]," & \
+         TestQ("usage") & ":{" & TestQ("input_tokens") & ":12," & TestQ("cache_read_input_tokens") & ":3000," & \
+         TestQ("output_tokens") & ":34}}" into tBody
+   put xtaParseReply("anthropic", 200, tBody) into tReply
+   TestAssert "anthropic: read from the cache", tReply["cachedTokens"] is 3000 and tReply["inputTokens"] is 12
+   put "{" & TestQ("choices") & ":[{" & TestQ("message") & ":{" & TestQ("content") & ":" & TestQ("x") & "}}]," & \
+         TestQ("usage") & ":{" & TestQ("prompt_tokens") & ":2000," & TestQ("completion_tokens") & ":7," & \
+         TestQ("prompt_tokens_details") & ":{" & TestQ("cached_tokens") & ":1024}}}" into tBody
+   put xtaParseReply("openai", 200, tBody) into tReply
+   TestAssert "openai: read from the cache", tReply["cachedTokens"] is 1024 and tReply["inputTokens"] is 2000
+end TestParseReplyCachedTokens
+
 on TestParseReplyOpenAI
    local tBody, tReply
    put "{" & TestQ("choices") & ":[{" & TestQ("index") & ":0," & TestQ("message") & ":{" & TestQ("role") & ":" & TestQ("assistant") & "," & \
@@ -270,6 +322,242 @@ on TestCodeBlocks
    TestAssert "no language", tBlocks[2]["lang"] is empty and tBlocks[2]["code"] is "put 1"
    TestAssert "an unclosed block", tBlocks[3]["lang"] is "lcs" and tBlocks[3]["code"] is "unclosed"
 end TestCodeBlocks
+
+on TestXTalkBlocks
+   local tBlocks, tXTalk
+   put "livecodescript" into tBlocks[1]["lang"]
+   put "on a" & return & "end a" into tBlocks[1]["code"]
+   put "python" into tBlocks[2]["lang"]
+   put "print(1)" into tBlocks[2]["code"]
+   put empty into tBlocks[3]["lang"]
+   put "put 1" into tBlocks[3]["code"]
+   put "memory" into tBlocks[4]["lang"]
+   put "you: x" into tBlocks[4]["code"]
+   put "LiveCode" into tBlocks[5]["lang"]
+   put "beep" into tBlocks[5]["code"]
+   put "lcs" into tBlocks[6]["lang"]
+   put "  " into tBlocks[6]["code"]
+   put xtaXTalkBlocks(tBlocks) into tXTalk
+   TestAssert "three xTalk blocks", the number of elements of tXTalk is 3
+   TestAssert "in their order", tXTalk[1]["code"] is ("on a" & return & "end a") and tXTalk[2]["code"] is "put 1" \
+         and tXTalk[3]["code"] is "beep"
+   TestAssert "LiveCode Builder is not xTalk", not xtaIsXTalkLang("livecodebuilder")
+   TestAssert "nor a shell", not xtaIsXTalkLang("sh")
+   TestAssert "a block with no language is", xtaIsXTalkLang(empty)
+end TestXTalkBlocks
+
+--------------------------------------------------------------------------------
+-- Checking code
+
+on TestCheckScriptCompiles
+   local tCheck
+   put xtaCheckScript("local sCount" & return & "-- counts" & return & "on mouseUp pButton" & return & \
+         "   local tName" & return & "   put pButton into tName" & return & "   add 1 to sCount" & return & \
+         "   repeat with i = 1 to 3" & return & "   end repeat" & return & "end mouseUp", empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "whole handlers that compile", tCheck["ok"] is true and tCheck["issues"] is empty
+   put xtaCheckScript("put 1 into tX" & return & "answer tX", empty) into tCheck
+   TestAssert "statements for the Message Box", tCheck["ok"] is true
+   put xtaCheckScript("script " & quote & "MyLib" & quote & return & "on a" & return & "end a", empty) into tCheck
+   TestAssert "a script-only stack's first line", tCheck["ok"] is true
+   put xtaCheckScript("on a" & return & "   local tX" & return & "   put " & quote & "-- # // not comments" & quote & " into tX" & return & "end a", empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "comment marks inside a string", tCheck["ok"] is true
+end TestCheckScriptCompiles
+
+on TestCheckScriptCompileErrors
+   local tCheck
+   put xtaCheckScript("on mouseUp" & return & "   put 1 inot tX" & return & "end mouseUp", empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "a compile error", tCheck["ok"] is false
+   TestAssert "with its line and column", line 1 of tCheck["issues"] begins with "line 2, column 8:"
+   TestAssert "and what is wrong (the message, or in a standalone its number)", line 1 of tCheck["issues"] contains "302"
+   TestAssert "near what", line 1 of tCheck["issues"] contains (quote & "inot" & quote)
+   put xtaCheckScript("beep" & return & "put 1 inot tX", empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "the line of a statement, counted in the block", line 1 of tCheck["issues"] begins with "line 2,"
+   put xtaCheckScript("on a" & return & "   refreshList()" & return & "end a", empty) into tCheck
+   TestAssert "a command called with brackets (engine note 3.3)", tCheck["ok"] is false
+   put xtaCheckScript("function a" & return & "   return 1" & return & "end b", empty) into tCheck
+   TestAssert "an end that does not match", tCheck["ok"] is false
+end TestCheckScriptCompileErrors
+
+on TestCheckScriptWhatTheEngineDoesNotSay
+   local tCheck
+   put xtaCheckScript("on a" & return & "end a" & return & "put 1 into tX" & return & "on b" & return & "end b", empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "a line outside any handler", tCheck["ok"] is false and tCheck["issues"] contains "line 3: this line is outside any handler"
+   put xtaCheckScript("on a" & return & "end a" & return & "command a" & return & "end a" & return & "function a" & return & "end a", empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "a handler defined twice", tCheck["ok"] is false and tCheck["issues"] contains "line 3: the command handler a is defined twice (also at line 1)"
+   TestAssert "a function of the same name is not a duplicate", the number of lines of tCheck["issues"] is 1
+   put xtaCheckScript("on a" & return & "   answer " & numToCodepoint(8220) & "hi" & numToCodepoint(8221) & return & "end a", empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "curly quotes (engine note 1.4)", tCheck["ok"] is false and tCheck["issues"] contains "line 2: curly quotes"
+   put xtaCheckScript("on a" & return & "/* on b" & return & "end b */" & return & "end a" & return & "on b" & return & "end b", empty) into tCheck
+   TestAssert "a handler in a comment is not a handler", tCheck["ok"] is true
+end TestCheckScriptWhatTheEngineDoesNotSay
+
+on TestCheckScriptUndeclared
+   local tCheck, tScript
+   put "on a" & return & "   put sTotal + 1 into tSum" & return & "end a" into tScript
+   put xtaCheckScript(tScript, empty) into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "a name that is not declared (engine note 2.1)", tCheck["ok"] is false and tCheck["issues"] contains "explicitVariables"
+   TestAssert "on its line", line 1 of tCheck["issues"] begins with "line 2"
+   put xtaCheckScript("local tSum" & return & tScript, "sTotal") into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "names the user's script declares count", tCheck["ok"] is true
+   put xtaCheckScript("on a" & return & "   set the style of button 1 to checkbox" & return & "end a", empty) into tCheck
+   TestAssert "a literal that is not quoted", tCheck["ok"] is false
+   put xtaCheckScript("local sTotal" & return & "on a" & return & "   local tSum" & return & "   put sTotal into tSum" & return & "end a", "sTotal" & return & "tSum") into tCheck
+   TestDiagnostic tCheck["issues"]
+   TestAssert "a name both declare is not declared twice", tCheck["ok"] is true
+   put xtaCheckScript("put tNever into tX", empty) into tCheck
+   TestAssert "statements for the Message Box need no declarations", tCheck["ok"] is true
+end TestCheckScriptUndeclared
+
+on TestCheckLeavesNothingBehind
+   local tOld, tTop, tDefault
+   put the explicitVariables into tOld
+   put the long id of the topStack into tTop
+   put the defaultStack into tDefault
+   get xtaCheckScript("on a" & return & "   put x into y" & return & "end a", empty)
+   TestAssert "the explicitVariables are put back", the explicitVariables is tOld
+   TestAssert "the scratch button keeps no script", the script of button "Check" of stack "revXTalkAssistantCheck" is empty
+   TestAssert "its stack is hidden", not the visible of stack "revXTalkAssistantCheck"
+   -- Open, even hidden, it became the topStack, which the IDE takes for
+   -- the user's stack
+   TestAssert "and not open", "revXTalkAssistantCheck" is not among the lines of the openStacks
+   TestAssert "the topStack is the same", the long id of the topStack is tTop
+   TestAssert "and the defaultStack", the defaultStack is tDefault
+   xtaCheckCleanup
+   TestAssert "and deleted when the assistant is done", there is not a stack "revXTalkAssistantCheck"
+   get xtaCheckScript("on a" & return & "end a", empty)
+   TestAssert "made again when needed", there is a stack "revXTalkAssistantCheck"
+   xtaCheckCleanup
+end TestCheckLeavesNothingBehind
+
+on TestCheckBlocks
+   local tBlocks, tCheck
+   put "on a" & return & "end a" into tBlocks[1]["code"]
+   put "on b" & return & "   put 1 inot x" & return & "end b" into tBlocks[2]["code"]
+   put xtaCheckBlocks(tBlocks, empty) into tCheck
+   TestDiagnostic tCheck["report"]
+   TestAssert "one of two fails", tCheck["ok"] is false and tCheck["blocks"] is 2 and tCheck["failed"] is 1
+   TestAssert "the report names the block and the line", line 1 of tCheck["report"] begins with "Compile check:" \
+         and line 2 of tCheck["report"] is "In livecodescript block 2:" and line 3 of tCheck["report"] begins with "- line 2,"
+   TestAssert "and asks for every block again", the last line of tCheck["report"] contains "every block again"
+   TestAssert "the summary says which", tCheck["summary"] contains "block 2"
+   TestAssert "the code, to tell a correction from a repeat", tCheck["code"] contains "inot"
+   delete variable tBlocks[2]
+   put xtaCheckBlocks(tBlocks, empty) into tCheck
+   TestAssert "one block that compiles", tCheck["ok"] is true and tCheck["summary"] is "Compile check: the code compiles." \
+         and tCheck["report"] is empty
+end TestCheckBlocks
+
+on TestDeclaredNames
+   local tNames
+   put xtaDeclaredNames("local sA, sB = 5" & return & "global gPrefs" & return & "constant kMax = " & quote & "a,b" & quote & ", kMin = 1" & return & \
+         "on a pX" & return & "   local tInside" & return & "end a" & return & "local sAfter") into tNames
+   TestDiagnostic tNames
+   TestAssert "the script's declarations", tNames is ("sA" & return & "sB" & return & "gPrefs" & return & "kMax" & return & "kMin" & return & "sAfter" & return)
+end TestDeclaredNames
+
+--------------------------------------------------------------------------------
+-- Memory
+
+private function TestMemoryText
+   return "# a comment" & return & "[you]" & return & "- Builds for Windows and Linux only." & return & "- Names globals with g." & return & \
+         "not a note" & return & "[stack /home/ann/My Stack [1].livecode]" & return & "- The log is in field " & quote & "Log" & quote & "." & return & \
+         "[something else]" & return & "- ignored"
+end TestMemoryText
+
+on TestMemoryParseAndFormat
+   local tMemory, tAgain
+   put xtaMemoryParse(TestMemoryText()) into tMemory
+   TestAssert "notes about the user", tMemory["you"] is ("Builds for Windows and Linux only." & return & "Names globals with g.")
+   TestAssert "notes about a stack, by its path", tMemory["stacks"]["/home/ann/My Stack [1].livecode"] is ("The log is in field " & quote & "Log" & quote & ".")
+   TestAssert "nothing else", the number of elements of tMemory["stacks"] is 1
+   put xtaMemoryParse(xtaMemoryFormat(tMemory)) into tAgain
+   TestAssert "a round trip", tAgain["you"] is tMemory["you"] and tAgain["stacks"]["/home/ann/My Stack [1].livecode"] is tMemory["stacks"]["/home/ann/My Stack [1].livecode"]
+   TestAssert "notes about one stack", xtaMemoryNotes(tMemory, "stack", "/home/ann/My Stack [1].livecode") contains "Log"
+   TestAssert "no path, no stack notes", xtaMemoryNotes(tMemory, "stack", empty) is empty
+end TestMemoryParseAndFormat
+
+on TestMemoryFile
+   local tPath, tMemory, tAgain
+   put specialFolderPath("temporary") & "/xta-test-memory.txt" into tPath
+   if there is a file tPath then
+      delete file tPath
+   end if
+   TestAssert "no file, no notes", xtaMemoryLoad(tPath) is empty
+   put xtaMemoryParse(TestMemoryText()) into tMemory
+   put "caf" & numToCodepoint(233) into line 3 of tMemory["you"]
+   xtaMemorySave tPath, tMemory
+   TestAssert "saved", the result is empty and there is a file tPath
+   put xtaMemoryLoad(tPath) into tAgain
+   TestAssert "read back, in UTF-8", tAgain["you"] is tMemory["you"]
+   put empty into tMemory
+   xtaMemorySave tPath, tMemory
+   TestAssert "no notes, no file", there is not a file tPath
+end TestMemoryFile
+
+on TestMemoryNotes
+   local tMemory, tLong
+   xtaMemorySetNotes tMemory, "you", empty, "  first  " & return & return & "second" & tab & "note"
+   TestAssert "notes set, trimmed, without empty lines", the result is empty and tMemory["you"] is ("first" & return & "second note")
+   xtaMemoryAdd tMemory, "you", empty, "first"
+   TestAssert "a note that is there already is not added again", tMemory["you"] is ("first" & return & "second note")
+   xtaMemoryAdd tMemory, "stack", "/a/b.livecode", "about b"
+   TestAssert "a note about a stack", tMemory["stacks"]["/a/b.livecode"] is "about b"
+   xtaMemoryAdd tMemory, "stack", empty, "about nothing"
+   TestAssert "a stack never saved has no notes", the result is not empty
+   xtaMemoryAdd tMemory, "you", empty, "My key is sk-ant-api03-abcdefghijklmnop"
+   TestAssert "a key is refused", the result contains "key" and not (tMemory["you"] contains "sk-ant")
+   TestAssert "a password too", xtaMemoryNoteProblem("password: hunter2") is not empty
+   TestAssert "a long run of letters and digits too", xtaMemoryNoteProblem("token 3f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e") is not empty
+   TestAssert "a long name is not a key", xtaMemoryNoteProblem("Calls inventoryRefreshEverythingOnTheMainCard first") is empty
+   TestAssert "a path is not a key", xtaMemoryNoteProblem("Data is in /Users/ann/Documents/Inventory2024/items.csv") is empty
+   repeat 31
+      put "0123456789" after tLong
+   end repeat
+   TestAssert "a long note is refused", xtaMemoryNoteProblem("a " & tLong) is not empty
+   repeat 12
+      xtaMemoryAdd tMemory, "you", empty, "note" && the number of lines of tMemory["you"] && char 1 to 250 of ("x x " & tLong)
+   end repeat
+   TestAssert "the notes about the user are kept short", the number of chars of tMemory["you"] <= 3000
+end TestMemoryNotes
+
+on TestMemoryPrompt
+   local tMemory, tPrompt
+   TestAssert "no notes, nothing to say", xtaMemoryPrompt(tMemory, empty, empty) is empty
+   put xtaMemoryParse(TestMemoryText()) into tMemory
+   put xtaMemoryPrompt(tMemory, "/home/ann/My Stack [1].livecode", "My Stack") into tPrompt
+   TestDiagnostic tPrompt
+   TestAssert "a heading the guide names", line 1 of tPrompt is "## Notes to keep in mind"
+   TestAssert "about the user", tPrompt contains ("About the user:" & return & "- Builds for Windows and Linux only.")
+   TestAssert "about the stack, by its name", tPrompt contains ("About the stack " & quote & "My Stack" & quote)
+   TestAssert "not its path", not (tPrompt contains "/home/ann")
+   put xtaMemoryPrompt(tMemory, "/other.livecode", "Other") into tPrompt
+   TestAssert "another stack's notes are not sent", not (tPrompt contains "Log")
+end TestMemoryPrompt
+
+on TestMemoryProposals
+   local tText, tNotes, tShown
+   put "Done." & return & "```livecodescript" & return & "on a" & return & "end a" & return & "```" & return & \
+         "```memory" & return & "you: Builds for Windows only." & return & "- stack: Log goes to field " & quote & "Log" & quote & "." & return & \
+         return & "Prefers short answers." & return & "```" into tText
+   put xtaMemoryProposals(tText) into tNotes
+   TestAssert "three notes proposed", the number of elements of tNotes is 3
+   TestAssert "about the user", tNotes[1]["scope"] is "you" and tNotes[1]["note"] is "Builds for Windows only."
+   TestAssert "about the stack", tNotes[2]["scope"] is "stack" and tNotes[2]["note"] is ("Log goes to field " & quote & "Log" & quote & ".")
+   TestAssert "no scope, about the user", tNotes[3]["scope"] is "you" and tNotes[3]["note"] is "Prefers short answers."
+   put xtaWithoutMemoryBlocks(tText) into tShown
+   TestDiagnostic tShown
+   TestAssert "the memory block is not shown", not (tShown contains "Builds for") and not (tShown contains "```memory")
+   TestAssert "the rest is", tShown is ("Done." & return & "```livecodescript" & return & "on a" & return & "end a" & return & "```")
+end TestMemoryProposals
 
 on TestSystemPrompt
    local tPrompt

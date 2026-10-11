@@ -63,7 +63,8 @@ on mouseUp pButton
    end if
    switch the short name of the target
       case "Send"
-         dispatch "xtaSendPrompt" to stack kMain
+         -- Stop, while a question is being answered
+         dispatch "xtaSendOrStop" to stack kMain
          break
       case "Insert"
          dispatch "xtaInsertCode" to stack kMain
@@ -97,6 +98,15 @@ on menuPick pItem
          pass menuPick
    end switch
 end menuPick
+
+-- Remember or Dismiss, under a note an answer proposes to remember
+on linkClicked pLink
+   if the short name of the target is "Conversation" then
+      dispatch "xtaNoteClicked" to stack kMain with pLink
+   else
+      pass linkClicked
+   end if
+end linkClicked
 
 -- A model name typed into the combo box
 on closeField
