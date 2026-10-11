@@ -910,8 +910,9 @@ xmlDictQLookup(xmlDict *dict, const xmlChar *prefix, const xmlChar *name) {
     /* Older platforms */
     #include <sys/random.h>
   #endif
-  #include <time.h>
 #endif
+/* OXT-Beyond: for the fallback seed, which Windows uses too */
+#include <time.h>
 
 static xmlMutex xmlRngMutex;
 
@@ -927,6 +928,7 @@ xmlInitRandom(void) {
     xmlInitMutex(&xmlRngMutex);
 
     {
+        int var;
 #ifdef _WIN32
         NTSTATUS status;
 
@@ -940,12 +942,15 @@ xmlInitRandom(void) {
         status = BCryptGenRandom(NULL, (unsigned char *) globalRngState,
                                  sizeof(globalRngState),
                                  BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-        if (!BCRYPT_SUCCESS(status))
-            xmlAbort("libxml2: BCryptGenRandom failed with error code %lu\n",
-                     GetLastError());
+        /*
+         * OXT-Beyond: when that fails (a sandbox that denies the
+         * process the system's generator), fall back to the seed
+         * below instead of aborting, as for getentropy. The seed only
+         * spreads the hash tables; libxml2 2.9 took it from the time.
+         */
+        if (BCRYPT_SUCCESS(status))
+            return;
 #else
-        int var;
-
 #if HAVE_DECL_GETENTROPY
         while (1) {
             if (getentropy(globalRngState, sizeof(globalRngState)) == 0)
@@ -961,14 +966,16 @@ xmlInitRandom(void) {
                 break;
 
             /*
-             * We really don't want to fallback to the unsafe PRNG
-             * for possibly accidental reasons, so we abort on any
-             * unknown error.
+             * OXT-Beyond: libxml2 aborts the process here, on any other
+             * error. A sandbox that refuses the getrandom system call
+             * fails it with EPERM (seccomp's usual answer), and the
+             * abort took the engine down at its first XML parse. Use the
+             * fallback seed below instead.
              */
             if (errno != EINTR)
-                xmlAbort("libxml2: getentropy failed with error code %d\n",
-                         errno);
+                break;
         }
+#endif
 #endif
 
         /*
@@ -980,7 +987,6 @@ xmlInitRandom(void) {
         globalRngState[1] =
                 HASH_ROL((unsigned) ((size_t) &xmlRngMutex & 0xFFFFFFFF), 16) ^
                 HASH_ROL((unsigned) ((size_t) &var & 0xFFFFFFFF), 24);
-#endif
     }
 }
 

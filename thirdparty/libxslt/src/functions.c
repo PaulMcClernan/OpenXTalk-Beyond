@@ -334,6 +334,18 @@ xsltDocumentFunction(xmlXPathParserContextPtr ctxt, int nargs)
         }
 
         URI = xmlBuildURI(url, base);
+        /*
+         * OXT-Beyond: libxml2 2.9's xmlBuildURI returned NULL for an
+         * empty reference with no base, so that document('') in a
+         * stylesheet parsed from memory (no URL, no base) selected the
+         * stylesheet itself, below. 2.15's returns "", which no document
+         * loads from.
+         */
+        if ((URI != NULL) && (URI[0] == 0) && (base == NULL) &&
+            (fragment == NULL)) {
+            xmlFree(URI);
+            URI = NULL;
+        }
         if (base != NULL)
             xmlFree(base);
         if (URI == NULL) {

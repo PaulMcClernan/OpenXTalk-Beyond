@@ -221,6 +221,7 @@ htmlParseMetaEncoding(htmlNodePtr elem, htmlMetaEncoding *menc) {
     return(0);
 }
 
+#if 0 /* OXT-Beyond: unused, as htmlSetMetaEncoding follows 2.9's rules */
 static xmlChar *
 htmlUpdateMetaEncoding(htmlMetaEncoding *menc, const char *encoding) {
     xmlChar *newVal, *p;
@@ -249,6 +250,7 @@ htmlUpdateMetaEncoding(htmlMetaEncoding *menc, const char *encoding) {
 
     return(newVal);
 }
+#endif
 
 /**
  * Look up and encoding declaration in the meta tags.
@@ -298,7 +300,7 @@ htmlGetMetaEncoding(xmlDoc *doc) {
 int
 htmlSetMetaEncoding(xmlDoc *doc, const xmlChar *encoding) {
     htmlNodePtr head, meta;
-    int found = 0;
+    xmlChar *content;
 
     if (encoding == NULL)
         return(1);
@@ -307,38 +309,75 @@ htmlSetMetaEncoding(xmlDoc *doc, const xmlChar *encoding) {
     if (head == NULL)
         return(1);
 
+    /*
+     * OXT-Beyond: libxml2 2.9's rules, which revXML's xsltApplyStylesheet
+     * followed for the html and xhtml output methods (libxslt calls this
+     * before it writes the result). The head's first <meta
+     * http-equiv="Content-Type" content="..."> gets "text/html;
+     * charset=<encoding>" for its content, unless that content names the
+     * encoding already (in any case); a <meta charset="..."> is left as
+     * it is, as 2.9 did not know that form; and with no such meta, one is
+     * made in front of the head's first child, in the HTML 4 form. 2.15
+     * changed the charset of every meta that had one, wrote HTML5's <meta
+     * charset="...">, and added one in front of a Content-Type meta that
+     * named no charset.
+     */
     for (meta = head->children; meta != NULL; meta = meta->next) {
-        htmlMetaEncoding menc;
+        xmlAttrPtr attr, contentAttr = NULL;
+        int http = 0;
 
-        if (htmlParseMetaEncoding(meta, &menc)) {
-            xmlChar *newVal;
-            int ret;
+        if ((meta->type != XML_ELEMENT_NODE) ||
+            (xmlStrcasecmp(meta->name, BAD_CAST "meta") != 0))
+            continue;
 
-            found = 1;
+        for (attr = meta->properties; attr != NULL; attr = attr->next) {
+            const xmlChar *value;
 
-            newVal = htmlUpdateMetaEncoding(&menc, (char *) encoding);
-            if (newVal == NULL)
-                return(-1);
-            xmlNodeSetContent((xmlNodePtr) menc.attr, NULL);
-            ret = xmlNodeAddContent((xmlNodePtr) menc.attr, newVal);
-            xmlFree(newVal);
-
-            if (ret < 0)
-                return(-1);
+            if ((attr->children == NULL) ||
+                (attr->children->type != XML_TEXT_NODE) ||
+                (attr->children->next != NULL) ||
+                (attr->children->content == NULL))
+                continue;
+            value = attr->children->content;
+            if ((xmlStrcasecmp(attr->name, BAD_CAST "http-equiv") == 0) &&
+                (xmlStrcasecmp(value, BAD_CAST "Content-Type") == 0))
+                http = 1;
+            else if (xmlStrcasecmp(attr->name, BAD_CAST "content") == 0)
+                contentAttr = attr;
+            if ((http) && (contentAttr != NULL))
+                break;
         }
-    }
+        if ((!http) || (contentAttr == NULL))
+            continue;
 
-    if (found)
+        if (xmlStrcasestr(contentAttr->children->content, encoding) != NULL)
+            return(0);
+        content = xmlStrncatNew(BAD_CAST "text/html; charset=", encoding, -1);
+        if (content == NULL)
+            return(-1);
+        xmlNodeSetContent((xmlNodePtr) contentAttr, NULL);
+        if (xmlNodeAddContent((xmlNodePtr) contentAttr, content) < 0) {
+            xmlFree(content);
+            return(-1);
+        }
+        xmlFree(content);
         return(0);
+    }
 
     meta = xmlNewDocNode(head->doc, NULL, BAD_CAST "meta", NULL);
     if (meta == NULL)
         return(-1);
 
-    if (xmlNewProp(meta, BAD_CAST "charset", encoding) == NULL) {
+    content = xmlStrncatNew(BAD_CAST "text/html; charset=", encoding, -1);
+    if ((content == NULL) ||
+        (xmlNewProp(meta, BAD_CAST "http-equiv",
+                    BAD_CAST "Content-Type") == NULL) ||
+        (xmlNewProp(meta, BAD_CAST "content", content) == NULL)) {
+        xmlFree(content);
         xmlFreeNode(meta);
         return(-1);
     }
+    xmlFree(content);
 
     if (head->children == NULL)
         xmlAddChild(head, meta);
@@ -753,6 +792,29 @@ htmlSerializeUri(xmlOutputBufferPtr buf, const xmlChar *content) {
     }
 }
 
+/*
+ * OXT-Beyond: libxml2 2.9 wrote an attribute value that holds a double
+ * quote and no single quote in single quotes, with its double quotes as
+ * they are (alt='x"y'), where 2.15 writes alt="x&quot;y". revXML's
+ * xsltApplyStylesheet returned the 2.9 form for the html output method.
+ */
+static int
+htmlAttrUseSingleQuotes(xmlAttrPtr cur) {
+    xmlNodePtr child;
+    int dquote = 0;
+
+    for (child = cur->children; child != NULL; child = child->next) {
+        if ((child->type != XML_TEXT_NODE) || (child->content == NULL))
+            continue;
+        if (xmlStrchr(child->content, '\'') != NULL)
+            return(0);
+        if (xmlStrchr(child->content, '"') != NULL)
+            dquote = 1;
+    }
+
+    return(dquote);
+}
+
 /**
  * Serialize an HTML attribute.
  *
@@ -777,8 +839,7 @@ htmlAttrDumpOutput(xmlOutputBufferPtr buf, xmlAttrPtr cur) {
     if ((cur->children != NULL) && (!htmlIsBooleanAttr(cur->name))) {
         xmlNodePtr child;
         int isUri;
-
-        xmlOutputBufferWrite(buf, 2, "=\"");
+        int squote;
 
         /*
          * Special handling of URIs doesn't conform to HTML5 and
@@ -792,6 +853,13 @@ htmlAttrDumpOutput(xmlOutputBufferPtr buf, xmlAttrPtr cur) {
                  ((!xmlStrcasecmp(cur->name, BAD_CAST "name")) &&
                   (!xmlStrcasecmp(cur->parent->name, BAD_CAST "a"))));
 
+        /* OXT-Beyond: 2.9's choice of quotes (htmlAttrUseSingleQuotes) */
+        squote = (!isUri) && (htmlAttrUseSingleQuotes(cur));
+        if (squote)
+            xmlOutputBufferWrite(buf, 2, "='");
+        else
+            xmlOutputBufferWrite(buf, 2, "=\"");
+
         for (child = cur->children; child != NULL; child = child->next) {
             if (child->type == XML_TEXT_NODE) {
                 const xmlChar *content = child->content;
@@ -801,6 +869,10 @@ htmlAttrDumpOutput(xmlOutputBufferPtr buf, xmlAttrPtr cur) {
 
                 if (isUri) {
                     htmlSerializeUri(buf, content);
+                } else if (squote) {
+                    /* As XML_ESCAPE_ATTR, but leaves '"' as it is */
+                    xmlSerializeText(buf, content, SIZE_MAX,
+                                     XML_ESCAPE_HTML);
                 } else {
                     xmlSerializeText(buf, content, SIZE_MAX,
                                      XML_ESCAPE_HTML | XML_ESCAPE_ATTR);
@@ -813,7 +885,10 @@ htmlAttrDumpOutput(xmlOutputBufferPtr buf, xmlAttrPtr cur) {
             }
         }
 
-        xmlOutputBufferWrite(buf, 1, "\"");
+        if (squote)
+            xmlOutputBufferWrite(buf, 1, "'");
+        else
+            xmlOutputBufferWrite(buf, 1, "\"");
     }
 }
 
@@ -950,7 +1025,9 @@ htmlNodeDumpInternal(xmlOutputBuffer *buf, xmlNode *cur,
                 xmlOutputBufferWrite(buf, 1, ">");
             } else if (cur->children == NULL) {
                 if (addMeta) {
-                    xmlOutputBufferWrite(buf, 16, "><meta charset=\"");
+                    /* OXT-Beyond: 2.9's form, as htmlSetMetaEncoding */
+                    xmlOutputBufferWriteString(buf, "><meta http-equiv="
+                        "\"Content-Type\" content=\"text/html; charset=");
                     xmlSerializeText(buf, BAD_CAST encoding, SIZE_MAX,
                                      XML_ESCAPE_HTML | XML_ESCAPE_ATTR);
                     xmlOutputBufferWrite(buf, 4, "\"></");
@@ -976,7 +1053,9 @@ htmlNodeDumpInternal(xmlOutputBuffer *buf, xmlNode *cur,
                       (cur->name[0] != 'p')))) /* p, pre, param */
                     xmlOutputBufferWrite(buf, 1, "\n");
                 if (addMeta) {
-                    xmlOutputBufferWrite(buf, 15, "<meta charset=\"");
+                    /* OXT-Beyond: 2.9's form, as htmlSetMetaEncoding */
+                    xmlOutputBufferWriteString(buf, "<meta http-equiv="
+                        "\"Content-Type\" content=\"text/html; charset=");
                     xmlSerializeText(buf, BAD_CAST encoding, SIZE_MAX,
                                      XML_ESCAPE_HTML | XML_ESCAPE_ATTR);
                     xmlOutputBufferWrite(buf, 2, "\">");
