@@ -14,6 +14,12 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.5-rc.3 (2026-10-11, pre-release)
+
+- xTalk Assistant: show the window when it opens, and ask for the key when turned on (#90)
+- xTalk Assistant: no key prompt on Turn On for a base URL of the user's own (#90)
+- Version 0.2.5-rc.3, with its changelog (#91)
+
 ## 0.2.5-rc.2 (2026-10-11, pre-release)
 
 - Snapshot: throw instead of crashing on a bitmap over 4 GiB (#85)
