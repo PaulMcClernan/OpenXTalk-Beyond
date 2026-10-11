@@ -23,6 +23,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include <revolution/external.h>
 #include <revolution/support.h>
 #include <libxml/xpath.h>
+#include <libxml/parserInternals.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
 
@@ -302,9 +303,38 @@ static Bool REVXMLinited = False;
 //   native encoding. So convert the path, as revdb does for SQLite (bug
 //   6429). On Linux that also opens files with accented names, which the
 //   engine names in UTF-8; on macOS the path was already UTF-8.
+// A script that worked around the old build on Linux passes a path that
+//   is UTF-8 already, which the conversion encodes a second time: when the
+//   converted path opens nothing and the path as given opens a file, the
+//   path as given is used (it is UTF-8, as libxml2 needs).
+static bool revxml_path_opens(const char *p_path)
+{
+	// libxml2's own open (on Windows, the path is UTF-8 there too);
+	//   xmlCheckFilename is deprecated.
+	xmlParserInputPtr t_input;
+	t_input = NULL;
+	if (xmlNewInputFromUrl(p_path, (xmlParserInputFlags)0, &t_input) != XML_ERR_OK || t_input == NULL)
+		return false;
+	xmlFreeInputStream(t_input);
+	return true;
+}
+
 static char *revxml_path_for_libxml(const char *p_path)
 {
-	return os_path_to_native_utf8(p_path);
+	char *t_path;
+	t_path = os_path_to_native_utf8(p_path);
+	if (t_path != NULL && strcmp(t_path, p_path) != 0 &&
+		!revxml_path_opens(t_path) && revxml_path_opens(p_path))
+	{
+		char *t_given;
+		t_given = istrdup(p_path);
+		if (t_given != NULL)
+		{
+			free(t_path);
+			t_path = t_given;
+		}
+	}
+	return t_path;
 }
 
 

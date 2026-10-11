@@ -375,7 +375,13 @@ xmlSerializeText(xmlOutputBuffer *buf, const xmlChar *string, size_t maxSize,
 
             val = xmlGetUTF8Char(cur, &len);
             if (val < 0) {
-                val = 0xFFFD;
+                /*
+                 * OXT-Beyond: a byte that is not UTF-8 is native text
+                 * (Windows-1252, ISO-8859-1) that revXML keeps in its
+                 * trees as it is. It is written as a reference to the
+                 * ISO-8859-1 character it is, not to U+FFFD.
+                 */
+                val = *cur;
                 cur += 1;
             } else {
                 if ((val == 0xFFFE) || (val == 0xFFFF))

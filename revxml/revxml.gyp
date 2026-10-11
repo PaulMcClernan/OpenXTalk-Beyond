@@ -14,6 +14,7 @@
 			'src/xmlattribute.cpp',
 			'src/xmldoc.cpp',
 			'src/xmlelement.cpp',
+			'src/xmlnative.cpp',
 		],
 	},
 	
