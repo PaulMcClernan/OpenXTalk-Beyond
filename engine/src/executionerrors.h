@@ -2781,7 +2781,10 @@ enum Exec_errors
     EE_PROPERTY_NOTADATA,
     
     // {EE-0911} macSetIcon: error in parameter expression
-    EE_MACSETICON_BADPARAM
+    EE_MACSETICON_BADPARAM,
+
+    // {EE-0912} snapshot: the image is too big to make
+    EE_SNAPSHOT_TOOBIG
     
 };
 

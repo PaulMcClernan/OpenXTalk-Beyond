@@ -3648,13 +3648,14 @@ void MCInterfaceExecImportSnapshotOfObject(MCExecContext& ctxt, MCObject *p_targ
 	}
     
 	MCImageBitmap *t_bitmap = nil;
-	t_bitmap = p_target -> snapshot(p_region, p_at_size, 1.0f, p_with_effects);
+	bool t_failed = false;
+	t_bitmap = p_target -> snapshot(p_region, p_at_size, 1.0f, p_with_effects, &t_failed);
 	
 	// OK-2007-04-24: If the import rect doesn't intersect with the object, MCobject::snapshot
 	// may return null. In this case, return an error.
 	if (t_bitmap == nil)
 	{
-		ctxt . LegacyThrow(EE_IMPORT_EMPTYRECT);
+		ctxt . LegacyThrow(t_failed ? EE_SNAPSHOT_TOOBIG : EE_IMPORT_EMPTYRECT);
 		return;
 	}
 	
@@ -4038,11 +4039,12 @@ void MCInterfaceExecExportSnapshotOfStackToFile(MCExecContext& ctxt, MCStringRef
 MCImageBitmap *MCInterfaceGetSnapshotOfObjectBitmap(MCExecContext &ctxt, MCObject *p_target, MCRectangle *p_region, bool p_with_effects, MCPoint *p_at_size)
 {
 	MCImageBitmap *t_bitmap = nil;
-	/* UNCHECKED */ t_bitmap = p_target -> snapshot(p_region, p_at_size, 1.0, p_with_effects);
+	bool t_failed = false;
+	t_bitmap = p_target -> snapshot(p_region, p_at_size, 1.0, p_with_effects, &t_failed);
     
     if (t_bitmap == nil)
     {
-        ctxt . LegacyThrow(EE_EXPORT_EMPTYRECT);
+        ctxt . LegacyThrow(t_failed ? EE_SNAPSHOT_TOOBIG : EE_EXPORT_EMPTYRECT);
         return nil;
     }
     

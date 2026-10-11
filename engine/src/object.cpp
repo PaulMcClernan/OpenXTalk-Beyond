@@ -3233,8 +3233,11 @@ void MCObject::alloccolors()
 	}
 }
 
-MCImageBitmap *MCObject::snapshot(const MCRectangle *p_clip, const MCPoint *p_size, MCGFloat p_scale_factor, bool p_with_effects)
+MCImageBitmap *MCObject::snapshot(const MCRectangle *p_clip, const MCPoint *p_size, MCGFloat p_scale_factor, bool p_with_effects, bool *r_failed)
 {
+	if (r_failed != nullptr)
+		*r_failed = false;
+
 	Chunk_term t_type;
 	t_type = gettype();
 
@@ -3274,12 +3277,26 @@ MCImageBitmap *MCObject::snapshot(const MCRectangle *p_clip, const MCPoint *p_si
 		t_context_height = p_size->y;
 	}
 
+	// A bitmap too big to make (more than 4 GiB, or more than there is
+	// memory for) used to be used regardless, and the engine crashed
+	// drawing into it; now the snapshot fails and the caller throws.
 	MCImageBitmap *t_bitmap = nil;
-	/* UNCHECKED */ MCImageBitmapCreate(ceil(t_context_width * p_scale_factor), ceil(t_context_height * p_scale_factor), t_bitmap);
+	if (!MCImageBitmapCreate(ceil(t_context_width * p_scale_factor), ceil(t_context_height * p_scale_factor), t_bitmap))
+	{
+		if (r_failed != nullptr)
+			*r_failed = true;
+		return NULL;
+	}
 	MCImageBitmapClear(t_bitmap);
 
 	MCGContextRef t_gcontext = nil;
-	/* UNCHECKED */ MCGContextCreateWithPixels(t_bitmap->width, t_bitmap->height, t_bitmap->stride, t_bitmap->data, true, t_gcontext);
+	if (!MCGContextCreateWithPixels(t_bitmap->width, t_bitmap->height, t_bitmap->stride, t_bitmap->data, true, t_gcontext))
+	{
+		MCImageFreeBitmap(t_bitmap);
+		if (r_failed != nullptr)
+			*r_failed = true;
+		return NULL;
+	}
 
 	// IM-2013-07-24: [[ ResIndependence ]] take snapshot at specified scale, rather than device scale
 	MCGContextScaleCTM(t_gcontext, p_scale_factor, p_scale_factor);
@@ -3293,6 +3310,14 @@ MCImageBitmap *MCObject::snapshot(const MCRectangle *p_clip, const MCPoint *p_si
 	// MW-2014-01-07: [[ bug 11632 ]] Use the offscreen variant of the context so its
 	//   type field is appropriate for use by the player.
 	MCContext *t_context = new (nothrow) MCOffscreenGraphicsContext(t_gcontext);
+	if (t_context == nil)
+	{
+		MCGContextRelease(t_gcontext);
+		MCImageFreeBitmap(t_bitmap);
+		if (r_failed != nullptr)
+			*r_failed = true;
+		return NULL;
+	}
 	t_context -> setclip(r);
 
 	// MW-2011-01-29: [[ Bug 9355 ]] Make sure we only open a control if it needs it!

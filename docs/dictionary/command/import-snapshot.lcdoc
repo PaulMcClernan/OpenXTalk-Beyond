@@ -144,6 +144,13 @@ To import a snapshot of the screen in iOS use the form:
 > includes part of the screen where the status bar is, it will be
 > clipped out.
 
+>*Note:* A snapshot of an object is made as an image of 4 bytes a
+> pixel, which can be no larger than 4 GiB (about 32,000 pixels
+> square). For an object larger than that, or when there is not
+> enough memory for the image, the <import snapshot> command throws
+> "snapshot: the image is too big to make". A group's size includes
+> every control in it, including those outside the card.
+
 Changes: The `at size` variant, which allows resizing of the imported 
 snapshot to specified dimensions, was added in version 6.0.
 

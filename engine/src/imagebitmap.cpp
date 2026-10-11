@@ -66,8 +66,19 @@ bool MCImageBitmapCreate(uindex_t p_width, uindex_t p_height, MCImageBitmap *&r_
 	t_bitmap->has_alpha = false;
 	t_bitmap->has_transparency = false;
 
-	t_bitmap->stride = p_width * 4;
-	uindex_t t_data_size = t_bitmap->stride * p_height;
+	// The stride and the size are 32-bit, so a bitmap of more than 4 GiB
+	// (a snapshot of a group about 33,000 pixels square, say) used to wrap
+	// round to a small buffer that drawing then wrote far past. Refuse it.
+	uint64_t t_stride = uint64_t(p_width) * 4;
+	uint64_t t_size = t_stride * p_height;
+	if (t_stride > UINT32_MAX || t_size > UINT32_MAX)
+	{
+		MCMemoryDelete(t_bitmap);
+		return false;
+	}
+
+	t_bitmap->stride = uint32_t(t_stride);
+	uindex_t t_data_size = uindex_t(t_size);
 
 	if (!MCMemoryAllocate(t_data_size, t_bitmap->data))
 	{

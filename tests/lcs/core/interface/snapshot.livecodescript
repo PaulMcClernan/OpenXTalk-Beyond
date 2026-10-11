@@ -72,3 +72,37 @@ on TestImportSnapshotFromRectOfObject
    TestAssert "long id of image is it", it is the long id of the last image
 end TestImportSnapshotFromRectOfObject
 
+
+-- A group whose snapshot would take more than 4 GiB (here about 40,000
+-- pixels square) used to crash the engine: the bitmap's size wrapped round
+-- to a small buffer that drawing then wrote far past. Now the export and
+-- the import throw instead.
+private command _TestMakeHugeGroup
+   create image "huge 1"
+   set the rect of image "huge 1" to -20000,-20000,-19900,-19900
+   create image "huge 2"
+   set the rect of image "huge 2" to 19900,19900,20000,20000
+   select image "huge 1" and image "huge 2"
+   group
+   select empty
+   set the name of the last group to "huge"
+end _TestMakeHugeGroup
+
+on _TestExportHugeGroupHandler
+   local tData
+   export snapshot from group "huge" to tData as PNG
+end _TestExportHugeGroupHandler
+
+on _TestImportHugeGroupHandler
+   import snapshot from group "huge"
+end _TestImportHugeGroupHandler
+
+on TestSnapshotOfHugeGroup
+   _TestMakeHugeGroup
+   TestAssert "the group is too big for a 4 GiB bitmap", \
+         the width of group "huge" * the height of group "huge" > 2 ^ 30
+   TestAssertThrow "export snapshot of a huge group throws", \
+         "_TestExportHugeGroupHandler", the long id of me, "EE_SNAPSHOT_TOOBIG"
+   TestAssertThrow "import snapshot of a huge group throws", \
+         "_TestImportHugeGroupHandler", the long id of me, "EE_SNAPSHOT_TOOBIG"
+end TestSnapshotOfHugeGroup

@@ -1078,7 +1078,9 @@ public:
 	Exec_stat handleparent(Handler_type type, MCNameRef message, MCParameter* parameters);
 
 	// IM-2013-07-24: [[ ResIndependence ]] Add scale factor to allow taking high-res snapshots
-	MCImageBitmap *snapshot(const MCRectangle *rect, const MCPoint *size, MCGFloat p_scale_factor, bool with_effects);
+	// When there is no bitmap because it could not be made (too big, or out
+	// of memory) rather than because the area is empty, r_failed is true.
+	MCImageBitmap *snapshot(const MCRectangle *rect, const MCPoint *size, MCGFloat p_scale_factor, bool with_effects, bool *r_failed = nullptr);
 
 	// MW-2011-09-20: [[ Collision ]] Check to see if the two objects touch (exactly).
 	bool intersects(MCObject *other, uint32_t threshold);
