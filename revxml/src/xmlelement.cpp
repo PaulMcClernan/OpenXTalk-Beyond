@@ -99,8 +99,9 @@ MyxmlNodeGetContent(xmlNodePtr cur) {
 				}
 			} while (tmp != NULL);
 		}
-		ret = buffer->content;
-		buffer->content = NULL;
+		// xmlBufferDetach, not taking buffer->content: in libxml2 2.15
+		//   xmlBufferFree frees the buffer's memory through contentIO.
+		ret = xmlBufferDetach(buffer);
 		xmlBufferFree(buffer);
 		return(ret);
 						   }

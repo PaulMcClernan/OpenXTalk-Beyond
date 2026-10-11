@@ -53,6 +53,19 @@ int util_strncmp(const char *s1, const char *s2, int n);
 void util_concatstring(const char *s, int slen, char *&d, int &dlen, int &dalloc);
 const char *util_strchr(const char *sptr, char target, int l);
 
+//xmlnative.cpp: native text and encodings, as libxml2 2.9 read them
+xmlDocPtr revxml_parse(xmlParserCtxtPtr p_ctxt, const char *p_data, unsigned long p_length, const char *p_filename,
+					   int p_options, bool p_strict, bool p_messages, char *r_error, size_t p_error_size);
+bool revxml_sax_sending(void *p_context);
+void revxml_sax_flush(void *p_context);
+void revxml_sax_text(void *p_context, const xmlChar *p_text, int p_length, bool p_cdata);
+void revxml_sax_start_element(void *p_context, const xmlChar *p_name, const xmlChar **p_attributes);
+void revxml_sax_end_element(void *p_context, const xmlChar *p_name);
+void revxml_parse_note_position(void *p_context);
+bool revxml_parse_char_ref(void *p_context, const xmlChar **x_text, int *x_length);
+void revxml_parse_note_error(void *p_context);
+bool revxml_network_url(const char *p_filename);
+
 extern void CB_startDocument();
 extern void CB_endDocument();
 extern void CB_startElement(const char *name, const char **atts);
@@ -89,6 +102,7 @@ static Bool buildtree;
 static Bool allowcallbacks;
 protected:
 void Free();
+static xmlDocPtr Parse(const char *data, unsigned long tlength, const char *filename, Bool wellformed);
 static void warningCallback(void *ctx, const char *msg, ...);
 static void errorCallback(void *ctx, const char *msg, ...);
 static void fatalCallback(void *ctx, const char *msg, ...);
