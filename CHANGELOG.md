@@ -40,6 +40,7 @@ words, is in the [README](README.md#the-ide) and on the
 - CI smoke test and docs for the restored revXML, XSLT and revZip behaviour (#81)
 - revXML: 8-bit output, empty XPath steps, translate(), URLs and recovery (#81)
 - Version 0.2.5-rc.1, with its changelog (#84)
+- Runtimes: oxt-runtimes-0.2.5-rc.1, built from the merge of #81 (#84)
 
 ## 0.2.4 (2026-10-10)
 
