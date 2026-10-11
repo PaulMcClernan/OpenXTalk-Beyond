@@ -239,3 +239,27 @@ on TestExportSnapshotOfGroupWithEffectsAtSize
    export snapshot from rect 0,0,100,100 of group "mixed" to tData as PNG
    TestAssert "a rect of the group makes an image of that size", _TestImageSize(tData) is "100,100"
 end TestExportSnapshotOfGroupWithEffectsAtSize
+
+-- Without "snapshot", export takes an image. A group there (as in
+-- 'export group "x" to file "x.png" as PNG') was treated as an image and
+-- crashed the engine; now it throws "selected object is not an image".
+on _TestExportGroupAsImageToVariableHandler
+   local tData
+   export group "mixed" to tData as PNG
+end _TestExportGroupAsImageToVariableHandler
+
+on _TestExportGroupAsImageToFileHandler
+   export group "mixed" to file (the tempName) as PNG
+end _TestExportGroupAsImageToFileHandler
+
+on TestExportGroupWithoutSnapshot
+   local tData
+   _TestMakeImageGroup
+   TestAssertThrow "export of a group to a variable throws", \
+         "_TestExportGroupAsImageToVariableHandler", the long id of me, "EE_EXPORT_NOTANIMAGE"
+   TestAssertThrow "export of a group to a file throws", \
+         "_TestExportGroupAsImageToFileHandler", the long id of me, "EE_EXPORT_NOTANIMAGE"
+
+   export image "red" to tData as PNG
+   TestAssert "export of an image still works", _TestImageSize(tData) is "100,100"
+end TestExportGroupWithoutSnapshot

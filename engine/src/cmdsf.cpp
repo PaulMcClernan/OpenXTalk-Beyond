@@ -742,6 +742,15 @@ void MCExport::exec_ctxt(MCExecContext &ctxt)
         }
 	}
 
+	// Without "snapshot" the object is exported as an image, so it must be
+	// one: 'export group "x" to file "x.png" as PNG' used to treat the group
+	// as an image and crash the engine.
+	if (sformat != EX_SNAPSHOT && optr != NULL && optr -> gettype() != CT_IMAGE)
+	{
+		ctxt . LegacyThrow(EE_EXPORT_NOTANIMAGE);
+		return;
+	}
+
 	MCInterfaceImagePaletteSettings t_settings;
 	MCInterfaceImagePaletteSettings *t_settings_ptr = nil;
 
