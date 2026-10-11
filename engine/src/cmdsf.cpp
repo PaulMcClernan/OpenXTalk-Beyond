@@ -681,6 +681,11 @@ Parse_stat MCExport::parse(MCScriptPoint &sp)
 
 void MCExport::exec_ctxt(MCExecContext &ctxt)
 {
+    // Export can set the result (an object that is not an image, below), so
+    // start each export from an empty one: otherwise a successful export
+    // straight after a failed one would still report the failure.
+    ctxt . SetTheResultToEmpty();
+
     if (sformat == EX_OBJECT)
     {
         if (image == nil)
@@ -740,6 +745,18 @@ void MCExport::exec_ctxt(MCExecContext &ctxt)
             ctxt . LegacyThrow(EE_EXPORT_NOSELECTED);
             return;
         }
+	}
+
+	// Without "snapshot" the object is exported as an image, so it must be
+	// one: 'export group "x" to file "x.png" as PNG' used to treat the group
+	// as an image and crash the engine. Another object exports nothing and
+	// says why in the result, rather than throwing, because a field (which
+	// did not crash) used to export nothing without an error, and scripts
+	// that relied on that must run as before.
+	if (sformat != EX_SNAPSHOT && optr != NULL && optr -> gettype() != CT_IMAGE)
+	{
+		ctxt . SetTheResultToStaticCString("export: selected object is not an image");
+		return;
 	}
 
 	MCInterfaceImagePaletteSettings t_settings;

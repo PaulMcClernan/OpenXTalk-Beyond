@@ -76,6 +76,14 @@ export PNG form exports as a PNG file and the export BMP form exports as
 a BMP. If you don't specify a <format>, the file is exported as <PBM>,
 PGM, or <PPM>.
 
+The object must be an <image>. For any other object, such as a group,
+<export> exports nothing, leaves the <container> or <file> alone and
+sets <the result> to "export: selected object is not an image". After
+an export that works, <the result> is empty. To make an image of a group
+or another control, use <export snapshot>:
+
+    export snapshot from group "Collage" to file "collage.png" as PNG
+
 References: export (command), export snapshot (command), import (command),
 JPEG (glossary), GIF (glossary), export (glossary), PBM (glossary),
 container (glossary), PPM (glossary), PNG (glossary), BMP (glossary),
