@@ -78,14 +78,13 @@ end TestImportSnapshotFromRectOfObject
 -- to a small buffer that drawing then wrote far past. Now the export and
 -- the import throw instead.
 private command _TestMakeHugeGroup
-   create image "huge 1"
+   -- The test stack is not open, so the images are made in the group
+   -- rather than selected and grouped.
+   create group "huge"
+   create image "huge 1" in group "huge"
    set the rect of image "huge 1" to -20000,-20000,-19900,-19900
-   create image "huge 2"
+   create image "huge 2" in group "huge"
    set the rect of image "huge 2" to 19900,19900,20000,20000
-   select image "huge 1" and image "huge 2"
-   group
-   select empty
-   set the name of the last group to "huge"
 end _TestMakeHugeGroup
 
 on _TestExportHugeGroupHandler
