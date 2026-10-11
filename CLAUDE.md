@@ -2,8 +2,10 @@
 
 The first rule for every change here: **no breaking changes.** Legacy
 stacks must keep opening and old syntax must keep giving the results it
-gave before. When a change could alter what a script sees, compare the
-results on the released engine before and after it, and list any
+gave before. When a change could alter what a script sees, run the
+scripts it touches before and after it and compare the results: the
+released build against the changed one, or for an external alone, the
+released engine with the old and then the new external. List any
 difference that remains in the pull request and the release notes.
 "Keeping old stacks working" in [CONTRIBUTING.md](CONTRIBUTING.md) says
 how, and when to ask first.
