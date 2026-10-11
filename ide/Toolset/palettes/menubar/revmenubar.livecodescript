@@ -1768,6 +1768,13 @@ private function revMenubarDevelopmentMenu pContext
    put "Image Library" & return after tDevelopment
    put "Plugins" & return after tDevelopment
    if sPluginMenuText is not empty then put sPluginMenuText & return after tDevelopment
+   -- OXT-Beyond: the xTalk Assistant plugin is an extension, not a stack of
+   -- the Plugins folder, so it is not in the list above. Its entry is here
+   -- whenever its extension is loaded; the assistant itself stays off until
+   -- the user turns it on from this entry.
+   if there is a stack "org.openxtalk.plugin.xtalkassistant" then
+      put tab & "xTalk Assistant" & return after tDevelopment
+   end if
    put tab & "-" & return after tDevelopment
    put tab & "Plugin Settings" & return after tDevelopment
    put "-" & return after tDevelopment
@@ -2852,6 +2859,12 @@ on revMenubarDevelopmentMenuPick pWhich
          switch tPicked
             case "Plugin Settings"
                revIDEOpenPalette "plugin preferences"
+               break
+            case "xTalk Assistant"
+               -- OXT-Beyond: see revMenubarDevelopmentMenu
+               if there is a stack "org.openxtalk.plugin.xtalkassistant" then
+                  dispatch "xtalkAssistantMenuPick" to stack "org.openxtalk.plugin.xtalkassistant"
+               end if
                break
             default  --plugin selected
                revIDEOpenPlugin tPicked

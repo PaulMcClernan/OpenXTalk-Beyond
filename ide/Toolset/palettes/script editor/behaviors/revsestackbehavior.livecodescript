@@ -2921,6 +2921,16 @@ on revSESetScript pScript
    dispatch "textSetScript" to field "Script" of me with pScript
 end revSESetScript
 
+-- OXT-Beyond: puts pText where the caret last was in the script being
+-- edited, in place of the text that was selected there, as one step of the
+-- editor's undo, as Paste does but without the clipboard. The xTalk
+-- Assistant plugin (ide/Extensions/org.openxtalk.plugin.xtalkassistant)
+-- inserts the code it was given with this, while its own window has the
+-- focus.
+on revSEInsertText pText
+   dispatch "textInsertAtLastSelection" to field "Script" of me with pText
+end revSEInsertText
+
 function revSEGetScript pScript
    dispatch function "textGetScript" to field "Script" of me
    return the result
