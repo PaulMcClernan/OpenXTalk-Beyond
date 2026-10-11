@@ -21,13 +21,29 @@ and Android) and src/zip_err_str.c (CMake makes it from zip.h's error
 codes; the messages are libzip's). libzip.gyp builds the Win32 file and
 random sources on Windows and the stdio and /dev/urandom (or arc4random)
 ones elsewhere. Windows links advapi32: CryptGenRandom seeds the key of
-every archive's name table (so even reading an archive needs it) and makes
-PKWARE encryption headers, and GetSecurityInfo copies the original file's
-permissions to the temporary file that zip_close writes.
+every archive's name table and makes PKWARE encryption headers, and
+GetSecurityInfo copies the original file's permissions to the temporary
+file that zip_close writes.
 
-Nothing in libzip is modified. The old copy (libzip 0.6.1, July 2005) was
-modified for LiveCode: a progress callback inside zip_fread and zip_close,
-made-by and external-attribute setters, and Windows wide-character paths.
+Two local changes, marked "OXT-Beyond" in the sources:
+
+- In src/zip_dirent.c, _zip_dirent_read keeps a name (or comment) whose
+  entry is flagged UTF-8 but is not valid UTF-8 as the bytes it is, unless
+  the archive is opened with ZIP_CHECKCONS, rather than refusing the whole
+  archive as inconsistent. Some writers flag names in their own code page;
+  the old copy read every name as it was, so such archives opened, and
+  still do.
+- In src/zip_hash.c, _zip_hash_new seeds the name table's key from
+  zip_random_uint32 when zip_secure_random fails, rather than failing.
+  Every zip_open makes a name table, so without /dev/urandom (a chroot or
+  a sandbox) or a working CryptGenRandom no archive could be opened or
+  made at all; the key only guards lookups against names made to collide,
+  and zip_random_uint32 is what libzip itself falls back to for temporary
+  file names.
+
+The old copy (libzip 0.6.1, July 2005) was modified for LiveCode: a
+progress callback inside zip_fread and zip_close, made-by and
+external-attribute setters, and Windows wide-character paths.
 libzip 1.12 has the last two itself (zip_file_set_external_attributes;
 UTF-8 paths become UTF-16 on Windows), and revzip/src/revzip.cpp now
 reports the same progress messages from its own read loops and from a

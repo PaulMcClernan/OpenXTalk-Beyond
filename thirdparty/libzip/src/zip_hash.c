@@ -155,9 +155,17 @@ zip_hash_t *_zip_hash_new(zip_error_t *error) {
     hash->nentries = 0;
     hash->table = NULL;
     if (!zip_secure_random(hash->hash_key, sizeof(hash->hash_key))) {
-        free(hash);
-        zip_error_set(error, ZIP_ER_INTERNAL, 0);
-        return NULL;
+        /* OXT-Beyond: the key only makes the hash of a name unpredictable,
+           so that an archive cannot be made whose names all collide and
+           slow every lookup down. Where there is no secure random source
+           (no /dev/urandom in a chroot or a sandbox, or CryptGenRandom
+           failing), libzip refused to open or create any archive; fall back
+           to zip_random_uint32, as libzip does for temporary file names. */
+        zip_uint32_t i;
+        for (i = 0; i < sizeof(hash->hash_key); i += sizeof(zip_uint32_t)) {
+            zip_uint32_t value = zip_random_uint32();
+            (void)memcpy_s(hash->hash_key + i, sizeof(hash->hash_key) - i, &value, sizeof(value));
+        }
     }
 
     return hash;
