@@ -47,19 +47,24 @@ clone at the new one.
 
 ## Status
 
-OXT-Beyond 0.2.3 "Frankenstein" is an early release of a young project,
-for Windows, macOS and Linux (see what 0.2.1 adds, what 0.2.2 fixes and
-what 0.2.3 adds, under [The IDE](#the-ide)). Please read this before you
-download it. 0.2.4-rc.7 is a test release (a pre-release) of the fixes
-made since 0.2.3, with a package for 64-bit ARM Linux (new in
-0.2.4-rc.2). It goes back to Tom Perry's dark mode, with his macOS work
-added (see [0.2.4-rc.4](#024-rc4-tom-perrys-dark-mode-and-macos-work)),
-brings back LiveCode's Dictionary (see
-[0.2.4-rc.5](#024-rc5-livecodes-dictionary)), and fixes bugs that notes
-in the inherited code pointed to (see
+OXT-Beyond 0.2.4 "Frankenstein" is an early release of a young project,
+for Windows, macOS and Linux (see what 0.2.1 adds, what 0.2.2 fixes,
+what 0.2.3 adds and what 0.2.4 changes, under [The IDE](#the-ide)).
+Please read this before you download it. 0.2.4 adds a package for 64-bit
+ARM Linux (new in 0.2.4-rc.2). It goes back to Tom Perry's dark mode,
+with his macOS work added (see
+[0.2.4-rc.4](#024-rc4-tom-perrys-dark-mode-and-macos-work)), brings back
+LiveCode's Dictionary (see [0.2.4-rc.5](#024-rc5-livecodes-dictionary)),
+and fixes bugs that notes in the inherited code pointed to (see
 [0.2.4-rc.6](#024-rc6-fixes-from-the-inherited-notes)) and more found
-since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)); 0.2.3
-stays the main download until it has held up.
+since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)). Two of
+those fixes change what existing scripts see: an error in a `try`
+statement's `catch` part is now reported, and serial ports on macOS and
+Linux are in raw mode. 0.2.5-rc.1 is a test release (a pre-release) of
+newer XML and zip libraries for revXML and revZip, and of regular
+expressions that match case again (see
+[0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)); 0.2.4 stays the
+main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -75,7 +80,7 @@ stays the main download until it has held up.
   x86-64, macOS for Apple Silicon and Intel, Linux x86-64), and so are
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
-  engines for them, and a release asset (`oxt-runtimes-0.2.4-rc.7.zip`)
+  engines for them, and a release asset (`oxt-runtimes-0.2.5-rc.1.zip`)
   brings each platform's runtimes into the other packages. The Android
   runtime, though, is still OpenXTalk Lite 1.15's (stock LiveCode 9.6.3
   builds as Tom Perry shipped them), carried over unchanged in that
@@ -92,10 +97,11 @@ stays the main download until it has held up.
   support release), curl (8.22.0) and ICU (78.3) are current, built from
   source for every platform, and so are the image and pattern libraries
   the engine compiles in (zlib 1.3.2, libpng 1.6.59, giflib 5.2.2,
-  libjpeg 9f, and PCRE 8.45, the last release of PCRE 1). The browser
+  libjpeg 9f, and PCRE 8.45, the last release of PCRE 1), and revXML's
+  libxml2 2.15.4 and libxslt 1.1.45, and revZip's libzip 1.12. The browser
   widget and revBrowser still use
   CEF 74 (Chromium 74, from 2019), and several libraries in
-  `thirdparty/` (libxml2, libxslt, libzip, cairo and the database client
+  `thirdparty/` (cairo and the database client
   libraries among them) are years old; they
   have known vulnerabilities, and upgrading them is planned. See
   [SECURITY.md](SECURITY.md).
@@ -202,7 +208,7 @@ OpenSSL 3 (DataChannelXT); see [macOS](#macos) and
 requirements too.
 
 Releases whose tags do not start with `v`, such as `prebuilts-v1`,
-`runtimes-1.15` and `runtimes-0.2.4-rc.7`, are not programs. They hold
+`runtimes-1.15` and `runtimes-0.2.5-rc.1`, are not programs. They hold
 files that the build and the packager download: the prebuilt
 third-party libraries of earlier versions and the standalone runtimes
 for other platforms.
@@ -804,6 +810,10 @@ also fixes *Preferences > Appearance*, where the appearance menus and
 their note covered the window's bottom row and part of the Reset button
 ([#51](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/issues/51)).
 
+OXT-Beyond 0.2.4 is what its seven release candidates, 0.2.4-rc.1 to
+0.2.4-rc.7, were; nothing in the program changed after 0.2.4-rc.7. What
+each of them changed follows, in order.
+
 OXT-Beyond 0.2.4-rc.1, a test release, fixes bugs reported on 0.2.3:
 
 - macOS: a script that changes what is on screen at every statement (a
@@ -1029,6 +1039,50 @@ The standalone runtimes for the other platforms in each package are
 built again for this release, so standalones for Windows and Linux get
 these fixes too.
 
+#### 0.2.5-rc.1: newer XML and zip libraries
+
+OXT-Beyond 0.2.5-rc.1, a test release, replaces the libraries under
+revXML and revZip, which had published vulnerabilities: libxml2 2.9.4
+(2016) with 2.15.4, libxslt 1.1.28 (2012) with 1.1.45, and revZip's
+libzip 0.8 (about 2008) with 1.12. Old stacks and old revXML and revZip
+scripts are meant to work as they did. Each script was run on 0.2.4's
+engine with the old and the new externals and the results compared:
+about 1,800 scripts in all, covering every revXML, XSLT and revZip call,
+the IDE's own uses (extension manifests, XML-RPC, the drawing library's
+SVGs, the mobile and HTML5 builders) and every stack in the repository.
+
+- Kept as in 0.2.4: accented text in a document that declares no
+  encoding, `&nbsp;` and other undefined entities in a recovered
+  document, adjacent CDATA sections, SAX text in one `revStartXMLData`
+  message, http:// and ftp:// URLs in `revXMLCreateTreeFromFile`, the
+  XSLT file functions and `document()`, the partial result of a
+  transform that stops, XSLT recursion depth, and revZip's progress
+  messages and cancel.
+- Crashes and memory errors of 0.2.4 are gone, among them a stylesheet
+  made from a tree freeing that tree, `revXMLAppend` with a UTF-16
+  fragment, XPath results longer than revXML's buffer, extracting a
+  replaced item, and changing an archive from its own progress handler
+  (now "ziperr,archive busy").
+- Differences a script can still see: error messages name the first
+  error in a document, not the last; documents nested more than 2048
+  deep and entity bombs are refused; encodings 0.2.4 did not know
+  (windows-1252 and others) now parse; `revXMLText` writes well-formed
+  XML where 0.2.4 dropped text or wrote raw control characters; and
+  revZip reads names not marked UTF-8 as code page 437, records Unix
+  file permissions in new items, and opens Zip64 archives. Pull request
+  [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
+  lists every difference.
+
+Regular expressions (`matchText`, `matchChunk`, `replaceText`) match
+case again, whatever the `caseSensitive`, as in LiveCode and as the
+dictionary says (see [The engine](#the-engine)); `(?i)` at the start
+of a pattern ignores case. From 0.2.4-rc.4 to 0.2.4 they followed the
+`caseSensitive`.
+
+The standalone runtimes for the other platforms in each package are
+built again for this release, so standalones for Windows and Linux get
+these changes too.
+
 ### xTalk Suite extensions
 
 OXT-Beyond ships the extensions of the
@@ -1126,8 +1180,12 @@ copies change the same engine file differently, the file holds both, in
 Windows lines.
 
 **Regular expressions** (`matchText`, `matchChunk`, `replaceText`)
-follow the `caseSensitive` on every platform, as his shipped 1.15 engines
-do.
+always match case, whatever the `caseSensitive`, as in LiveCode and as
+the dictionary says; `(?i)` at the start of the pattern ignores case.
+From 0.2.4-rc.4 to 0.2.4 they followed the `caseSensitive`, as his
+shipped 1.15 engines do; that broke scripts written for LiveCode, whose
+patterns stopped matching case while the `caseSensitive` was false (its
+default), so it was reverted.
 
 Changes made in this repository to build it: the `thirdparty` and `ide`
 submodules are ordinary folders in the repository, the prebuilt

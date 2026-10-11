@@ -1,0 +1,34 @@
+Files in this folder are based on libxslt 1.1.45 (30 November 2025).
+
+Original source: https://gitlab.gnome.org/GNOME/libxslt, tag v1.1.45.
+
+Only the libxslt library is kept: libxslt/*.c in src/, its headers in
+include/libxslt/, and Copyright and README.md in docs/, renamed COPYING
+and README. libexslt, xsltproc, the Python bindings, the tests and the
+build files are left out. include/libxslt/xsltconfig.h is made from
+xsltconfig.h.in, and include/libxslt/config.h is written for OXT-Beyond's
+build (gyp runs no configure step); include/libxslt/win32config.h is
+libxslt's own.
+
+Local changes, marked "OXT-Beyond" in the sources, keep what revXML's
+scripts saw with libxslt 1.1.28 and libxml2 2.9:
+
+- In src/transform.c, a transformation that stops (xsl:message
+  terminate="yes", or a runtime error that ends it) returns what it made
+  until then, as 1.1.28 did; only one that failed returns nothing.
+- In src/transform.c (with stackLimit and stackLimitSet at the end of
+  struct _xsltTransformContext in include/libxslt/xsltInternals.h),
+  xsltMaxDepth (3000) limits nested template calls again, as in 1.1.28.
+  1.1.45 counts nested sequence constructors against it instead, which
+  stops a recursive template at about 1,500 levels. A transformation goes
+  past that count only while 96 KB of its thread's C stack are left (the
+  bounds come from VirtualQuery, pthread_get_stackaddr_np or
+  pthread_getattr_np); where they are not known, the count stays the
+  limit.
+- In src/functions.c, document('') in a stylesheet that has no URL (one
+  parsed from memory) selects the stylesheet again: libxml2 2.15's
+  xmlBuildURI returns "" for it, where 2.9's returned NULL.
+- In src/xsltlocale.c (noted in include/libxslt/config.h), xsl:sort with
+  lang="..." sorts as it does without it, by the strings' UTF-8 bytes, as
+  revXML's 1.1.28 build (XSLT_LOCALE_NONE) did, not by the language with
+  strxfrm_l or LCMapStringW.

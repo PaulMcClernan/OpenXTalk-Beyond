@@ -1126,6 +1126,12 @@
 				[
 					'../thirdparty/libxml/include',
 				],
+
+				# The archive holds a static library: no dllimport on Windows.
+				'defines':
+				[
+					'LIBXML_STATIC=1',
+				],
 			},
 
 			'link_settings':
@@ -1192,10 +1198,17 @@
 					],
 					[
 						'toolset_os == "win"',
-						{							
+						{
+							# libxml2 seeds its hash tables with
+							# BCryptGenRandom (since 2.12); its HTTP
+							# and FTP clients (nanohttp.c, nanoftp.c)
+							# use Windows sockets, which 2.9 got from a
+							# #pragma in libxslt 1.1.28's xsltutils.c
 							'libraries':
 							[
 								'-llibxml',
+								'-lbcrypt',
+								'-lws2_32',
 							],
 						},
 					],
@@ -1227,6 +1240,14 @@
 				'include_dirs':
 				[
 					'../thirdparty/libxslt/include',
+				],
+
+				# The archive holds a static library: no dllimport on Windows.
+				'defines':
+				[
+					'LIBXML_STATIC=1',
+					'LIBXSLT_STATIC=1',
+					'LIBEXSLT_STATIC=1',
 				],
 			},
 
@@ -1684,9 +1705,14 @@
 					[
 						'toolset_os == "win"',
 						{							
+							# libzip 1.12 needs advapi32: CryptGenRandom seeds
+							# the key of every archive it opens or makes, and
+							# GetSecurityInfo copies permissions to the
+							# temporary file zip_close writes.
 							'libraries':
 							[
 								'-llibzip',
+								'-ladvapi32',
 							],
 						},
 					],
