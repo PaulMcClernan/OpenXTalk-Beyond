@@ -23,6 +23,8 @@ Merged since 0.2.5-rc.1; the next release's section takes these lines.
 - Tests: export snapshot of a group of images, in each format (#85)
 - Docs: changelog and LEGACY-TODO.md for the snapshot fix (#85)
 - Docs: the Unreleased section of CHANGELOG.md, for the snapshot fix (#85)
+- Docs: no breaking changes, in CONTRIBUTING.md and a new CLAUDE.md (#88)
+- Docs: an engine change compares the release with the changed build (#88)
 
 ## 0.2.5-rc.1 (2026-10-11, pre-release)
 
