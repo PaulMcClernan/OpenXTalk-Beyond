@@ -106,6 +106,13 @@ command xtalkAssistantMenuPick
          exit xtalkAssistantMenuPick
       end if
       revIDESetPreference kPrefEnabled, true
+      xtaOpenWindow
+      -- Just turned on: ask for the key now, so the user sees where it goes
+      -- (More > Set API Key... in the window, later)
+      if xtaKey(xtaProvider()) is empty then
+         get xtaAskForKey()
+      end if
+      exit xtalkAssistantMenuPick
    end if
    xtaOpenWindow
 end xtalkAssistantMenuPick
@@ -171,12 +178,24 @@ end xtaLoadParts
 -- The window
 
 private command xtaOpenWindow
+   local tBuilt
    xtaLoadParts
    if there is not a stack kWindow then
       xtaBuildWindow
+      put true into tBuilt
    end if
    xtaRefreshWindow
+   -- The window is built invisible, and palette keeps a stack's visible as
+   -- it is, so it must be shown: without this the window opened hidden and
+   -- turning the assistant on seemed to do nothing. A new window opens in
+   -- the middle of the screen; one the user has moved stays where it is.
+   lock screen
+   if tBuilt is true then
+      set the loc of stack kWindow to the screenLoc
+   end if
    palette stack kWindow
+   set the visible of stack kWindow to true
+   unlock screen
    focus on field "Prompt" of stack kWindow
 end xtaOpenWindow
 
@@ -326,7 +345,7 @@ private function xtaSettingsLine
    put xtaProvider() into tProvider
    put xtaProviderName(tProvider) into tLine
    if xtaKey(tProvider) is empty then
-      put " - no API key yet" after tLine
+      put " - no API key yet (More > Set API Key...)" after tLine
    else if sKeys[tProvider] is empty then
       put " - API key from the environment" after tLine
    end if

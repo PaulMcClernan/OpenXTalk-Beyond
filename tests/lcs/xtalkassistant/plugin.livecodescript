@@ -61,6 +61,12 @@ end TestOffByDefault
 on TestOpenWindow
    TestOpenTheWindow "http://127.0.0.1:1"
    TestAssert "the window is built", there is a stack kWindow
+   -- It is built invisible, so it must be shown when it opens (0.2.5-rc.2
+   -- left it hidden, and turning the assistant on seemed to do nothing)
+   TestAssert "the window is shown", the visible of stack kWindow
+   TestAssert "the window is a palette", the mode of stack kWindow is 4
+   TestDiagnostic the rect of stack kWindow && "/" && the screenRect
+   TestAssert "the window is in the middle of the screen", the loc of stack kWindow is the screenLoc
    TestAssert "the core is in use", kCore is among the lines of the stacksInUse
    TestAssert "the provider is shown", the label of button "Provider" of stack kWindow is "Anthropic"
    TestAssert "the model is shown", the label of button "Model" of stack kWindow is "test-model"
