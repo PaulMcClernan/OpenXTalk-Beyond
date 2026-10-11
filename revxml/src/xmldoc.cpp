@@ -97,6 +97,150 @@ Bool CXMLDocument::buildtree = True;
 Bool CXMLDocument::allowcallbacks = False;
 char CXMLDocument::errorbuf[256] = "";
 
+// A reference to an entity that is not declared. libxml2 2.9 made a
+//   reference node for one only when the entity might be declared where it
+//   was not read (an external subset or a parameter entity, and the
+//   document not standalone); otherwise it reported the error and dropped
+//   the reference, so in a parse of bad data (recover mode) "x &nbsp; y"
+//   stayed one text node "x  y". 2.15 makes a reference node for every
+//   undeclared entity, which ended revXMLNodeContents and
+//   revXMLChildContents at the reference, split revXMLDataFromXPathQuery
+//   results, and put "&nbsp;" into revXMLText. A declared entity is still
+//   a reference node, as it was in 2.9.
+static void referenceCallback(void *ctx, const xmlChar *name)
+{
+	xmlParserCtxtPtr t_ctxt = (xmlParserCtxtPtr)ctx;
+	if (t_ctxt != NULL &&
+		(t_ctxt -> standalone == 1 || (t_ctxt -> hasExternalSubset == 0 && t_ctxt -> hasPErefs == 0)) &&
+		(t_ctxt -> myDoc == NULL || xmlGetDocEntity(t_ctxt -> myDoc, name) == NULL))
+		return;
+	xmlSAX2Reference(ctx, name);
+}
+
+// A CDATA section that follows another directly. libxml2 2.9 added it to
+//   that section's node, so "<a><![CDATA[x]]><![CDATA[y]]></a>" was one node
+//   "xy" (the usual way to write "]]>" in CDATA is to split the section
+//   there). 2.15 makes a node for each section, and revXMLNodeContents,
+//   which reads the first text or CDATA child, returned only "x".
+static void appendCDataBlock(void *ctx, const xmlChar *ch, int len)
+{
+	xmlParserCtxtPtr t_ctxt = (xmlParserCtxtPtr)ctx;
+	if (t_ctxt != NULL && t_ctxt -> node != NULL && t_ctxt -> node -> last != NULL &&
+		t_ctxt -> node -> last -> type == XML_CDATA_SECTION_NODE)
+	{
+		xmlTextConcat(t_ctxt -> node -> last, ch, len);
+		return;
+	}
+	xmlSAX2CDataBlock(ctx, ch, len);
+}
+
+// The declaration of attribute p_name of element p_element in the internal
+//   or the external subset, as libxml2 2.9 looked it up to normalize the
+//   attribute's value: by the element's qualified name, then, when names are
+//   split at their prefix, by its local name.
+static xmlAttributePtr getAttributeDecl(xmlDocPtr p_doc, const xmlChar *p_element, const xmlChar *p_name, bool p_namespaces)
+{
+	xmlAttributePtr t_decl;
+	t_decl = xmlGetDtdAttrDesc(p_doc -> intSubset, p_element, p_name);
+	if (t_decl == NULL)
+		t_decl = xmlGetDtdAttrDesc(p_doc -> extSubset, p_element, p_name);
+	if (t_decl == NULL && p_namespaces)
+	{
+		int t_prefix_length;
+		const xmlChar *t_local;
+		t_local = xmlSplitQName3(p_element, &t_prefix_length);
+		if (t_local != NULL && *t_local != '\0')
+		{
+			t_decl = xmlGetDtdAttrDesc(p_doc -> intSubset, t_local, p_name);
+			if (t_decl == NULL)
+				t_decl = xmlGetDtdAttrDesc(p_doc -> extSubset, t_local, p_name);
+		}
+	}
+	return t_decl;
+}
+
+// The attributes of a start tag, with the value of each one that the DTD
+//   declares with a type other than CDATA (ID, IDREF, NMTOKENS, an
+//   enumeration...) normalized: no leading or trailing spaces, and each run
+//   of spaces made one. libxml2 2.9 did this as it built the tree, whether
+//   it validated or not; 2.15 does it only when it validates, so
+//   id=" a1 " stayed " a1 " in revXMLAttribute and revXMLAttributes, and
+//   id('a1') in XPath and revXMLMatchingNode did not find it. Returns
+//   p_atts itself when no value changes, else a copy that
+//   freeNormalizedAttributes frees. The SAX messages get the values as
+//   parsed, as they did with 2.9.
+static const xmlChar **normalizeDeclaredAttributes(void *ctx, const xmlChar *p_element, const xmlChar **p_atts, bool p_namespaces)
+{
+	xmlParserCtxtPtr t_ctxt = (xmlParserCtxtPtr)ctx;
+	if (p_atts == NULL || t_ctxt == NULL || t_ctxt -> myDoc == NULL ||
+		(t_ctxt -> myDoc -> intSubset == NULL && t_ctxt -> myDoc -> extSubset == NULL))
+		return p_atts;
+
+	const xmlChar **t_atts = NULL;
+	for (size_t i = 0; p_atts[i] != NULL && p_atts[i + 1] != NULL; i += 2)
+	{
+		xmlAttributePtr t_decl;
+		t_decl = getAttributeDecl(t_ctxt -> myDoc, p_element, p_atts[i], p_namespaces);
+		if (t_decl == NULL || t_decl -> atype == XML_ATTRIBUTE_CDATA)
+			continue;
+
+		xmlChar *t_value = xmlStrdup(p_atts[i + 1]);
+		if (t_value == NULL)
+			continue;
+		const xmlChar *t_src = t_value;
+		xmlChar *t_dst = t_value;
+		while (*t_src == 0x20)
+			t_src++;
+		while (*t_src != 0)
+		{
+			if (*t_src == 0x20)
+			{
+				while (*t_src == 0x20)
+					t_src++;
+				if (*t_src != 0)
+					*t_dst++ = 0x20;
+			}
+			else
+				*t_dst++ = *t_src++;
+		}
+		*t_dst = 0;
+		if (xmlStrEqual(t_value, p_atts[i + 1]))
+		{
+			xmlFree(t_value);
+			continue;
+		}
+
+		if (t_atts == NULL)
+		{
+			// The copy ends with two NULLs, as libxml2's own list does.
+			size_t t_count = i;
+			while (p_atts[t_count] != NULL && p_atts[t_count + 1] != NULL)
+				t_count += 2;
+			t_atts = (const xmlChar **)xmlMalloc((t_count + 2) * sizeof(xmlChar *));
+			if (t_atts == NULL)
+			{
+				xmlFree(t_value);
+				return p_atts;
+			}
+			memcpy(t_atts, p_atts, t_count * sizeof(xmlChar *));
+			t_atts[t_count] = NULL;
+			t_atts[t_count + 1] = NULL;
+		}
+		t_atts[i + 1] = t_value;
+	}
+	return t_atts != NULL ? t_atts : p_atts;
+}
+
+static void freeNormalizedAttributes(const xmlChar **p_atts, const xmlChar **p_normalized)
+{
+	if (p_normalized == p_atts)
+		return;
+	for (size_t i = 0; p_normalized[i] != NULL; i += 2)
+		if (p_normalized[i + 1] != p_atts[i + 1])
+			xmlFree((xmlChar *)p_normalized[i + 1]);
+	xmlFree((void *)p_normalized);
+}
+
 //lists of callbacks - used to establish custom callbacks for parse errors, other callbacks in future
 // A SAX1 handler (initialized is 1, not XML_SAX2_MAGIC), so that libxml2
 // calls startElement and endElement with whole names. libxml2 2.14 removed
@@ -119,7 +263,7 @@ xmlSAXHandler CXMLDocument::SAXHandlerTable = {
     endDocumentCallback,//endDocument
     startElementCallback,//startElement
     endElementCallback,//endElement
-    xmlSAX2Reference,
+    referenceCallback,
 	elementDataCallback, //characters,
     xmlSAX2IgnorableWhitespace,
     xmlSAX2ProcessingInstruction,
@@ -160,15 +304,19 @@ void CXMLDocument::startElementCallback(void *ctx,
 		CB_startElement((const char *)fullname,(const char **)atts);
 	if (buildtree)
     {
+		// The tree gets the attribute values normalized as libxml2 2.9 did
+		//   (see normalizeDeclaredAttributes).
+		const xmlChar **t_atts = normalizeDeclaredAttributes(ctx, fullname, atts, XML_ProcessNameSpaces == True);
         //HS-2010-10-11: [[ Bug 7586 ]] Reinstate libxml2 to create name spaces. Implement new liveCode commands to suppress name space creation.
         if (XML_ProcessNameSpaces)
         {
-		    xmlSAX2StartElement(ctx,fullname,atts);
+		    xmlSAX2StartElement(ctx,fullname,t_atts);
         }
         else
         {
-            xmlSAX2StartElementNoNS(ctx,fullname,atts);
+            xmlSAX2StartElementNoNS(ctx,fullname,t_atts);
         }
+		freeNormalizedAttributes(atts, t_atts);
     }
 }
 
@@ -187,7 +335,7 @@ void CXMLDocument::elementCDataCallback(void *ctx,const xmlChar *ch,int len)
 	if (allowcallbacks)
 		CB_elementData((const char *)ch,len);
 	if (buildtree)
-		xmlSAX2CDataBlock(ctx,ch,len);
+		appendCDataBlock(ctx,ch,len);
 }
 
 
@@ -269,6 +417,22 @@ xmlDocPtr CXMLDocument::Parse(const char *data, unsigned long tlength, const cha
 	ctxt = xmlNewSAXParserCtxt(&SAXHandlerTable, NULL);
 	if (ctxt == NULL)
 		return NULL;
+
+	// libxml2 2.9 made no entity checks under XML_PARSE_HUGE: entities
+	//   expanded without limit, so a small "billion laughs" document (an
+	//   entity referring ten times to one referring ten times to...) made
+	//   gigabytes. 2.15 keeps a check even with XML_PARSE_HUGE: past the
+	//   first 1,000,000 bytes, entity text may expand to at most 5 times
+	//   the document read so far ("Maximum entity amplification factor
+	//   exceeded"), which an ordinary document reaches by using a declared
+	//   entity in many places (a 2,000-byte entity in 600 elements of a
+	//   27,000-byte file is about 50 times). Reuse expands at most by the
+	//   ratio of an entity's size to that of a reference to it, so allow
+	//   1000 times: a document would need an entity of many kilobytes,
+	//   referred to back to back thousands of times, to reach it, while
+	//   nested entities, which grow exponentially, are still refused at
+	//   a size bounded by 1000 times the document.
+	xmlCtxtSetMaxAmplification(ctxt, 1000);
 
 	xmlDocPtr result;
 	if (data != NULL)
