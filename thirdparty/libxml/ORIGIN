@@ -15,7 +15,7 @@ LiveCode's 2.9.4 build had, less HTTP, FTP and modules (removed or off);
 src/config.h is written for OXT-Beyond's build (gyp runs no configure
 step).
 
-Five local changes, marked "OXT-Beyond" in the sources:
+Six local changes, marked "OXT-Beyond" in the sources:
 
 - From LiveCode (bug 7586): xmlSAX2StartElementNoNS in src/SAX2.c
   (declared in include/libxml/SAX2.h), used by revXML when namespace
@@ -34,6 +34,11 @@ Five local changes, marked "OXT-Beyond" in the sources:
   to the ISO-8859-1 character it is ("&#xE9;"), where 2.15 wrote
   "&#xFFFD;" or ended the output. Such bytes are native text that
   revXML keeps in its trees.
+- In xmlSetDeclaredEncoding in src/parserInternals.c, a document that
+  declares UTF-16 but reaches its declaration in 8-bit characters (no
+  byte order mark) is an error, "Document labelled UTF-16 but has UTF-8
+  content", and is read on as UTF-8, as 2.9 did. 2.15 switched to UTF-16
+  there and read the rest as garbage, which left revXML an empty tree.
 
 LiveCode's other changes to 2.9.4 are not needed: revXML now parses
 through a SAX parser context with xmlCtxtReadMemory and xmlCtxtReadFile

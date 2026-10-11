@@ -1630,6 +1630,31 @@ xmlDetectEncoding(xmlParserCtxt *ctxt) {
  */
 void
 xmlSetDeclaredEncoding(xmlParserCtxt *ctxt, xmlChar *encoding) {
+    /*
+     * OXT-Beyond: as libxml2 2.9 did, a document that declares UTF-16 but
+     * reached its declaration with no switch to UTF-16 (no byte order mark,
+     * and "<?xml" in 8-bit characters) is an error, "Document labelled
+     * UTF-16 but has UTF-8 content", and is read on as UTF-8, which a parse
+     * in recovery mode completes. 2.15 switched to UTF-16 here and read the
+     * rest as garbage: such files are common (.NET writes them), and an
+     * empty tree, or a crash in revXMLAppend, followed. The declared name
+     * stays the document's encoding, as in 2.9.
+     */
+    if (((ctxt->input->flags & XML_INPUT_HAS_ENCODING) == 0) &&
+        ((ctxt->options & XML_PARSE_IGNORE_ENC) == 0) &&
+        (!ctxt->html) &&
+        ((xmlStrcasecmp(encoding, BAD_CAST "UTF-16") == 0) ||
+         (xmlStrcasecmp(encoding, BAD_CAST "UTF16") == 0))) {
+        xmlCtxtErr(ctxt, NULL, XML_FROM_PARSER, XML_ERR_INVALID_ENCODING,
+                   XML_ERR_FATAL, NULL, NULL, NULL, 0,
+                   "Document labelled UTF-16 but has UTF-8 content\n");
+        ctxt->input->flags |= XML_INPUT_USES_ENC_DECL;
+        if (ctxt->encoding != NULL)
+            xmlFree(ctxt->encoding);
+        ctxt->encoding = encoding;
+        return;
+    }
+
     if (((ctxt->input->flags & XML_INPUT_HAS_ENCODING) == 0) &&
         ((ctxt->options & XML_PARSE_IGNORE_ENC) == 0)) {
         xmlCharEncodingHandlerPtr handler;
