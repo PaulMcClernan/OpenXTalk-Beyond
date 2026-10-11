@@ -92,10 +92,11 @@ Local changes, marked "OXT-Beyond" in the sources:
   back into "http://host/doc.xml", as 2.9's xmlCanonicPath did.
 
 LiveCode's other changes to 2.9.4 are not needed: revXML now parses
-through a SAX parser context with xmlCtxtReadMemory and xmlCtxtReadFile
-instead of the two parse functions LiveCode added, and the rest were
-fixes for old compilers. The parse is not quite the same as 2.9's: with
-XML_PARSE_HUGE, 2.15 still refuses elements nested more than 2048 deep and
-text nodes, attribute values or names over 1,000,000,000 bytes, where 2.9
-had no limit, and it reads a gzip-compressed file only with
-XML_PARSE_UNZIP, which revXML passes for files.
+through a SAX parser context with xmlCtxtReadDoc, xmlCtxtReadMemory and
+xmlCtxtReadFile (revxml/src/xmlnative.cpp) instead of the two parse
+functions LiveCode added, and the rest were fixes for old compilers. The
+parse is not quite the same as 2.9's: with XML_PARSE_HUGE, 2.15 still
+refuses elements nested more than 2048 deep and text nodes, attribute
+values or names over 1,000,000,000 bytes, where 2.9 had no limit, and it
+reads a gzip-compressed file only with XML_PARSE_UNZIP, which revXML
+passes for files.

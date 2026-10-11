@@ -257,6 +257,126 @@ on startup
       else
          write "INFO revXML accented file name not checked: the engine could not create the file (" & tWriteResult & ")" & return to stdout
       end if
+      -- What 0.2.4 (libxml2 2.9.4, libxslt 1.1.28) gave scripts and libxml2
+      -- 2.15 alone changed; revXML and the two libraries keep it (see
+      -- revxml/src/xmlnative.cpp and the ORIGIN files of thirdparty/libxml
+      -- and thirdparty/libxslt).
+      -- An entity that no DTD declares, in a document parsed with bad data
+      -- allowed, drops out and leaves the text around it as one text node;
+      -- 2.15 made a reference node of it, so the contents ended at "x "
+      put revXMLCreateTree("<root><item>x &nbsp; y</item></root>", false, true, false) into tTree
+      put revXMLNodeContents(tTree, "/root/item") into tContents
+      check "revXML keeps the text around an undefined entity", tContents is "x  y", tContents
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- Adjacent CDATA sections are one node, so the contents are all of them
+      put revXMLCreateTree("<root><item><![CDATA[one]]><![CDATA[<two>]]></item></root>", false, true, false) into tTree
+      put revXMLNodeContents(tTree, "/root/item") into tContents
+      check "revXML merges adjacent CDATA sections", tContents is "one<two>", tContents
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- Accented text in the native encoding (revXML is a v0 external) in a
+      -- document that declares no encoding: libxml2 reads UTF-8, and revXML
+      -- has it keep each byte that is not UTF-8, so the text, the attributes,
+      -- XPath literals and the element's text come back as they went in
+      -- (2.15 alone made them U+FFFD). With dontParseBadData the document is
+      -- refused, as libxml2 2.9 refused it.
+      put "caf" & numToChar(233) into tAccented
+      put "<root><item name=" & quote & tAccented & quote & ">" & tAccented & "</item></root>" into tXML
+      put revXMLCreateTree(tXML, false, true, false) into tTree
+      put revXMLNodeContents(tTree, "/root/item") into tContents
+      put revXMLAttribute(tTree, "/root/item", "name") into tAttribute
+      check "revXML keeps native text", tContents is tAccented and tAttribute is tAccented, tContents && tAttribute
+      put revXMLEvaluateXPath(tTree, "/root/item[.='" & tAccented & "']") into tPath
+      check "revXML XPath literal with native text", tPath is ("/root/item" & return), tPath
+      put revXMLText(tTree, "/root/item") into tText
+      check "revXML writes native text back", tText is ("<item name=" & quote & tAccented & quote & ">" & tAccented & "</item>"), tText
+      if tTree is an integer then revXMLDeleteTree tTree
+      put revXMLCreateTree(tXML, true, true, false) into tTree
+      check "revXML refuses native text when not parsing bad data", tTree begins with "xmlerr" and tTree contains "Input is not proper UTF-8", line 1 to 2 of tTree
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- Attributes a DTD declares with a type other than CDATA are
+      -- normalized, as 2.9 did, so id() finds an ID written with spaces
+      -- around it, and one in native text
+      put "<!DOCTYPE root [<!ATTLIST item id ID #IMPLIED>]><root><item id=" & quote & "  a1  " & quote & ">one</item>" & \
+            "<item id=" & quote & tAccented & quote & ">two</item></root>" into tXML
+      put revXMLCreateTree(tXML, false, true, false) into tTree
+      put revXMLDataFromXPathQuery(tTree, "id('a1')", ",", "|") & revXMLDataFromXPathQuery(tTree, "id('" & tAccented & "')", ",", "|") into tData
+      check "revXML normalizes declared IDs", revXMLAttribute(tTree, "/root/item[1]", "id") is "a1" and tData is "one,|two,|", revXMLAttribute(tTree, "/root/item[1]", "id") && tData
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- 8-bit text labelled UTF-16 is read as UTF-8, as 2.9 read it (2.15
+      -- made an empty tree of it); an encoding 2.9 could not read is refused
+      -- by name before the parse (2.15 read some as UTF-16 or UCS-4 garbage)
+      put revXMLCreateTree("<?xml version=" & quote & "1.0" & quote & " encoding=" & quote & "UTF-16" & quote & "?><root><z>abc</z></root>", false, true, false) into tTree
+      put revXMLNodeContents(tTree, "/root/z") into tContents
+      check "revXML reads 8-bit text labelled UTF-16", tContents is "abc", tContents
+      if tTree is an integer then revXMLDeleteTree tTree
+      put revXMLCreateTree("<?xml version=" & quote & "1.0" & quote & " encoding=" & quote & "UCS-4" & quote & "?><root/>", false, true, false) into tTree
+      check "revXML refuses an encoding 0.2.4 could not read", tTree is ("xmlerr, can't parse xml" & return & "Unsupported encoding UCS-4" & return), tTree
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- A control character put into a node reads back as itself (2.15 gave
+      -- U+FFFD)
+      put revXMLCreateTree("<root><z/></root>", false, true, false) into tTree
+      revXMLPutIntoNode tTree, "/root/z", "a" & numToChar(1) & "b"
+      put revXMLNodeContents(tTree, "/root/z") into tContents
+      check "revXML stores a control character", tContents is ("a" & numToChar(1) & "b"), the number of chars in tContents & " chars"
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- A declared entity reused far past 5 times the document's size parses
+      -- (2.15 refused it even with XML_PARSE_HUGE); nested entities that
+      -- expand without bound ("billion laughs") are still refused
+      put empty into tEntity
+      repeat 200 times
+         put "0123456789" after tEntity
+      end repeat
+      put "<!DOCTYPE root [<!ENTITY e " & quote & tEntity & quote & ">]><root>" into tXML
+      repeat 600 times
+         put "<z>&e;</z>" after tXML
+      end repeat
+      put revXMLCreateTree(tXML & "</root>", true, true, false) into tTree
+      check "revXML reuses a large entity", tTree is an integer and revXMLNumberOfChildren(tTree, "/root", "z", 0) = 600, line 1 to 2 of tTree
+      if tTree is an integer then revXMLDeleteTree tTree
+      put "<!DOCTYPE root [<!ENTITY l0 " & quote & "lol" & quote & ">" into tXML
+      repeat with tLevel = 1 to 9
+         put "<!ENTITY l" & tLevel & " " & quote after tXML
+         repeat 10 times
+            put "&l" & (tLevel - 1) & ";" after tXML
+         end repeat
+         put quote & ">" after tXML
+      end repeat
+      put revXMLCreateTree(tXML & "]><root>&l9;</root>", true, true, false) into tTree
+      check "revXML refuses an entity bomb", tTree begins with "xmlerr" and tTree contains "amplification", line 1 to 2 of tTree
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- XSLT: a transformation that xsl:message terminate="yes" stops
+      -- returns what it made until then, as libxslt 1.1.28 did (1.1.45
+      -- alone returned nothing; the message itself goes to stderr)
+      put "<xsl:stylesheet version=" & quote & "1.0" & quote & " xmlns:xsl=" & quote & "http://www.w3.org/1999/XSL/Transform" & quote & ">" & \
+            "<xsl:output method=" & quote & "text" & quote & "/><xsl:template match=" & quote & "/" & quote & ">before" & \
+            "<xsl:message terminate=" & quote & "yes" & quote & ">smoke test: stopped on purpose</xsl:message>after" & \
+            "</xsl:template></xsl:stylesheet>" into tXSL
+      put revXMLCreateTree(tXSL, false, true, false) into tXSLTree
+      put revXMLCreateTree("<root/>", false, true, false) into tTree
+      put xsltApplyStylesheet(tTree, xsltLoadStylesheet(tXSLTree)) into tResult
+      check "XSLT returns the output of a terminated transform", tResult is "before", tResult
+      if tXSLTree is an integer then revXMLDeleteTree tXSLTree
+      -- HTML output names its encoding in a meta http-equiv element, as
+      -- libxml2 2.9 wrote it (2.15 writes <meta charset>)
+      put "<xsl:stylesheet version=" & quote & "1.0" & quote & " xmlns:xsl=" & quote & "http://www.w3.org/1999/XSL/Transform" & quote & ">" & \
+            "<xsl:output method=" & quote & "html" & quote & "/><xsl:template match=" & quote & "/" & quote & ">" & \
+            "<html><head><title>T</title></head><body/></html></xsl:template></xsl:stylesheet>" into tXSL
+      put revXMLCreateTree(tXSL, false, true, false) into tXSLTree
+      put xsltApplyStylesheet(tTree, xsltLoadStylesheet(tXSLTree)) into tResult
+      check "XSLT HTML output has a Content-Type meta", tResult contains ("<meta http-equiv=" & quote & "Content-Type" & quote & " content=" & quote & "text/html; charset=UTF-8" & quote & ">"), oneLine(tResult)
+      if tXSLTree is an integer then revXMLDeleteTree tXSLTree
+      if tTree is an integer then revXMLDeleteTree tTree
+      -- XPath results longer than revXML's result buffer: 0.2.4 wrote past
+      -- its end (heap corruption) and builds with _FORTIFY_SOURCE abort, so
+      -- this one is last
+      put empty into tLong
+      repeat 4000 times
+         put "0123456789" after tLong
+      end repeat
+      put revXMLCreateTree("<root><z>" & tLong & "</z></root>", false, true, false) into tTree
+      put revXMLDataFromXPathQuery(tTree, "/root/z", ",", "|") into tData
+      check "revXML XPath data of a long text", tData is (tLong & ",|"), the number of chars in tData & " chars"
+      if tTree is an integer then revXMLDeleteTree tTree
    catch tError
       check "no script error (revXML checks)", false, tError
    end try
@@ -330,6 +450,10 @@ on startup
       revZipDeleteItem tZip, "one.txt"
       put revZipEnumerateItems(tZip) into tItems
       check "revZip forgets an item added then deleted", tItems is ("two.txt" & return), tItems
+      -- An item still to be written has no compressed size yet (-1) and the
+      -- method "none", as the old revZip described it
+      put revZipDescribeItem(tZip, "two.txt") into tDescription
+      check "revZip describes an item still to be written", item 5 to 6 of tDescription is "-1,none", tDescription
       revZipAddItemWithFile tZip, "grow.txt", tFile
       put "second line" & return after URL ("binfile:" & tFile)
       revZipCloseArchive tZip
@@ -340,6 +464,16 @@ on startup
       revZipCloseArchive tZip
       if there is a file tFile then delete file tFile
       if there is a file tZip then delete file tZip
+      -- "write" where no archive can be made (its folder does not exist)
+      -- fails at open with the system's reason, as the old libzip did;
+      -- libzip 1.12 alone opened it and failed at close, after every item
+      -- had been added
+      put tTemp & "/oxt_smoke_test_no_such_folder/new.zip" into tZip
+      revZipOpenArchive tZip, "write"
+      put the result into tOpenResult
+      put tZip is among the lines of revZipOpenArchives() into tIsOpen
+      check "revZip write to an uncreatable path fails at open", tOpenResult begins with "ziperr" and not tIsOpen, "result '" & tOpenResult & "', open: " & tIsOpen
+      if tIsOpen then revZipCloseArchive tZip
    catch tError
       check "no script error (revZip checks)", false, tError
    end try
