@@ -270,4 +270,12 @@ on TestExportGroupWithoutSnapshot
    export image "red" to tData as PNG
    TestAssert "export of an image still works", _TestImageSize(tData) is "100,100"
    TestAssert "export of an image leaves the result empty", the result is empty
+
+   -- no handler call between the two exports, since entering one (TestAssert)
+   -- empties the result by itself
+   local tResult
+   export group "mixed" to tData as PNG
+   export image "red" to tData as PNG
+   put the result into tResult
+   TestAssert "an export after a failed one clears the result", tResult is empty
 end TestExportGroupWithoutSnapshot

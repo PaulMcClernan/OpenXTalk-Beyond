@@ -681,6 +681,11 @@ Parse_stat MCExport::parse(MCScriptPoint &sp)
 
 void MCExport::exec_ctxt(MCExecContext &ctxt)
 {
+    // Export can set the result (an object that is not an image, below), so
+    // start each export from an empty one: otherwise a successful export
+    // straight after a failed one would still report the failure.
+    ctxt . SetTheResultToEmpty();
+
     if (sformat == EX_OBJECT)
     {
         if (image == nil)
@@ -747,8 +752,7 @@ void MCExport::exec_ctxt(MCExecContext &ctxt)
 	// as an image and crash the engine. Another object exports nothing and
 	// says why in the result, rather than throwing, because a field (which
 	// did not crash) used to export nothing without an error, and scripts
-	// that relied on that must run as before; export of an object to an
-	// array does the same for an object that is not a widget.
+	// that relied on that must run as before.
 	if (sformat != EX_SNAPSHOT && optr != NULL && optr -> gettype() != CT_IMAGE)
 	{
 		ctxt . SetTheResultToStaticCString("export: selected object is not an image");
