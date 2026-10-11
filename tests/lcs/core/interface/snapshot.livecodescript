@@ -242,24 +242,32 @@ end TestExportSnapshotOfGroupWithEffectsAtSize
 
 -- Without "snapshot", export takes an image. A group there (as in
 -- 'export group "x" to file "x.png" as PNG') was treated as an image and
--- crashed the engine; now it throws "selected object is not an image".
-on _TestExportGroupAsImageToVariableHandler
-   local tData
-   export group "mixed" to tData as PNG
-end _TestExportGroupAsImageToVariableHandler
-
-on _TestExportGroupAsImageToFileHandler
-   export group "mixed" to file (the tempName) as PNG
-end _TestExportGroupAsImageToFileHandler
-
+-- crashed the engine; a field exported nothing without an error. Now any
+-- object that is not an image exports nothing, without an error (so
+-- scripts that ran before still run), and the result says why.
 on TestExportGroupWithoutSnapshot
-   local tData
+   local tData, tPath
    _TestMakeImageGroup
-   TestAssertThrow "export of a group to a variable throws", \
-         "_TestExportGroupAsImageToVariableHandler", the long id of me, "EE_EXPORT_NOTANIMAGE"
-   TestAssertThrow "export of a group to a file throws", \
-         "_TestExportGroupAsImageToFileHandler", the long id of me, "EE_EXPORT_NOTANIMAGE"
+
+   put "unchanged" into tData
+   export group "mixed" to tData as PNG
+   TestAssert "export of a group to a variable sets the result", \
+         the result is "export: selected object is not an image"
+   TestAssert "export of a group leaves the variable alone", tData is "unchanged"
+
+   put the tempName into tPath
+   export group "mixed" to file tPath as PNG
+   TestAssert "export of a group to a file sets the result", \
+         the result is "export: selected object is not an image"
+   TestAssert "export of a group writes no file", there is not a file tPath
+
+   create field "text"
+   export field "text" to tData as PNG
+   TestAssert "export of a field sets the result", \
+         the result is "export: selected object is not an image"
+   TestAssert "export of a field leaves the variable alone", tData is "unchanged"
 
    export image "red" to tData as PNG
    TestAssert "export of an image still works", _TestImageSize(tData) is "100,100"
+   TestAssert "export of an image leaves the result empty", the result is empty
 end TestExportGroupWithoutSnapshot

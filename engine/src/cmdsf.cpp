@@ -744,10 +744,14 @@ void MCExport::exec_ctxt(MCExecContext &ctxt)
 
 	// Without "snapshot" the object is exported as an image, so it must be
 	// one: 'export group "x" to file "x.png" as PNG' used to treat the group
-	// as an image and crash the engine.
+	// as an image and crash the engine. Another object exports nothing and
+	// says why in the result, rather than throwing, because a field (which
+	// did not crash) used to export nothing without an error, and scripts
+	// that relied on that must run as before; export of an object to an
+	// array does the same for an object that is not a widget.
 	if (sformat != EX_SNAPSHOT && optr != NULL && optr -> gettype() != CT_IMAGE)
 	{
-		ctxt . LegacyThrow(EE_EXPORT_NOTANIMAGE);
+		ctxt . SetTheResultToStaticCString("export: selected object is not an image");
 		return;
 	}
 
