@@ -753,9 +753,9 @@ Work left for later. 459 notes, by part of the repository:
 
 ### TODO: revxml (3)
 
-- [revxml/src/revxml.cpp:2336](revxml/src/revxml.cpp#L2336) TODO !!!
-- [revxml/src/revxml.cpp:2339](revxml/src/revxml.cpp#L2339) TODO !!!
-- [revxml/src/revxml.cpp:2342](revxml/src/revxml.cpp#L2342) TODO !!!
+- [revxml/src/revxml.cpp:2545](revxml/src/revxml.cpp#L2545) TODO !!!
+- [revxml/src/revxml.cpp:2548](revxml/src/revxml.cpp#L2548) TODO !!!
+- [revxml/src/revxml.cpp:2551](revxml/src/revxml.cpp#L2551) TODO !!!
 
 <a id="todo-prebuilt"></a>
 

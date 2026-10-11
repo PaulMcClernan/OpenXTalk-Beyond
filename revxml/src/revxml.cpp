@@ -23,6 +23,9 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include <revolution/external.h>
 #include <revolution/support.h>
 #include <libxml/xpath.h>
+#include <libxml/parserInternals.h>
+#include <libxml/pattern.h>
+#include <libxml/uri.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
 
@@ -154,12 +157,8 @@ class XMLDocumentList
 		VXMLDocList::iterator theIterator;
 		for (theIterator = doclist.begin(); theIterator != doclist.end(); theIterator++){
 			CXMLDocument *curobject = (CXMLDocument *)(*theIterator);
-			// MDW-2013-07-09: [[ RevXmlXPath ]]
-			if (NULL != curobject->GetXPathContext())
-				xmlXPathFreeContext(curobject->GetXPathContext());
-			// MDW-2013-09-04: [[ RevXmlXslt ]]
-			if (NULL != curobject->GetXsltContext())
-				xsltFreeStylesheet(curobject->GetXsltContext());
+			// Deleting the object frees its XPath context and stylesheet
+			//   (CXMLDocument::Free) as well as its document.
 			delete curobject;
 		}
 		doclist.clear();
@@ -298,6 +297,136 @@ void CB_elementData(const char *data, int length)
 static Bool REVXMLinited = False;
 
 #define simpleparse(a,b,c) (((b > a) | (c < a))?True:False)
+
+// The path of a file for libxml2 or libxslt to open, in UTF-8, in a new
+//   buffer. The engine passes revXML's arguments in the native encoding
+//   (Windows-1252 on Windows, ISO-8859-1 on Linux), and libxml2 2.15 opens
+//   files on Windows only through UTF-8: its 2.9 build fell back to the
+//   native encoding. So convert the path, as revdb does for SQLite (bug
+//   6429). On Linux that also opens files with accented names, which the
+//   engine names in UTF-8; on macOS the path was already UTF-8.
+// A script that worked around the old build on Linux passes a path that
+//   is UTF-8 already, which the conversion encodes a second time: when the
+//   converted path opens nothing and the path as given opens a file, the
+//   path as given is used (it is UTF-8, as libxml2 needs).
+static bool revxml_path_opens(const char *p_path)
+{
+	// libxml2's own open (on Windows, the path is UTF-8 there too);
+	//   xmlCheckFilename is deprecated.
+	xmlParserInputPtr t_input;
+	t_input = NULL;
+	if (xmlNewInputFromUrl(p_path, (xmlParserInputFlags)0, &t_input) != XML_ERR_OK || t_input == NULL)
+		return false;
+	xmlFreeInputStream(t_input);
+	return true;
+}
+
+// A URL on the network (http:// or ftp://) as libxml2 2.9 passed it on
+//   (its xmlCanonicPath): as it is when it is a URI, else with what a URI
+//   may not hold escaped ("sp ace.xml" is "sp%20ace.xml"), native text
+//   byte by byte ("caf%E9"). A URL is not a file name, so it is not
+//   converted to UTF-8. libxml2 2.15 escapes URLs too, but not those that
+//   revXML loads itself (revxml_load_url), and in another way.
+static char *revxml_url_for_libxml(const char *p_url)
+{
+	xmlURIPtr t_uri;
+	xmlChar *t_escaped;
+	char *t_url;
+	t_url = istrdup(p_url);
+	if (t_url == NULL)
+		return NULL;
+#ifdef _WIN32
+	// On Windows the URL comes in the path form that os_path_resolve made of
+	//   it ("http:\\host\doc.xml"), which would be escaped as "http:%5C%5C...":
+	//   its '\' are made '/' again first, as libxml2 does with a URL that is
+	//   still in that form (xmlNewInputFromUrl).
+	for (char *t_char = t_url; *t_char != '\0'; t_char++)
+		if (*t_char == '\\')
+			*t_char = '/';
+#endif
+	t_uri = xmlParseURI(t_url);
+	if (t_uri != NULL)
+	{
+		xmlFreeURI(t_uri);
+		return t_url;
+	}
+	t_escaped = xmlURIEscapeStr((const xmlChar *)t_url, (const xmlChar *)":/?_.#&;=");
+	if (t_escaped != NULL)
+	{
+		t_uri = xmlParseURI((const char *)t_escaped);
+		if (t_uri != NULL)
+		{
+			char *t_result;
+			xmlFreeURI(t_uri);
+			t_result = istrdup((const char *)t_escaped);
+			if (t_result != NULL)
+			{
+				free(t_url);
+				t_url = t_result;
+			}
+		}
+		xmlFree(t_escaped);
+	}
+	return t_url;
+}
+
+// The path of the file: URL p_url as it is written, not unescaped, or NULL
+//   when p_url is not a file: URL (the forms libxml2 2.9's xmlFileOpen
+//   took).
+static const char *revxml_file_url_path(const char *p_url)
+{
+	const char *t_path;
+	if (xmlStrncasecmp((const xmlChar *)p_url, (const xmlChar *)"file://localhost/", 17) == 0)
+		t_path = p_url + 16;
+	else if (xmlStrncasecmp((const xmlChar *)p_url, (const xmlChar *)"file:///", 8) == 0)
+		t_path = p_url + 7;
+	else if (xmlStrncasecmp((const xmlChar *)p_url, (const xmlChar *)"file:/", 6) == 0)
+		t_path = p_url + 5;
+	else
+		return NULL;
+#ifdef _WIN32
+	// "file:///C:/dir/doc.xml"
+	t_path += 1;
+#endif
+	return t_path;
+}
+
+static char *revxml_path_for_libxml(const char *p_path)
+{
+	char *t_path;
+	const char *t_literal;
+	if (revxml_network_url(p_path))
+		return revxml_url_for_libxml(p_path);
+	t_path = os_path_to_native_utf8(p_path);
+	if (t_path != NULL && strcmp(t_path, p_path) != 0 &&
+		!revxml_path_opens(t_path) && revxml_path_opens(p_path))
+	{
+		char *t_given;
+		t_given = istrdup(p_path);
+		if (t_given != NULL)
+		{
+			free(t_path);
+			t_path = t_given;
+		}
+	}
+	// A file: URL with a '%' in its path that names a file as it is written
+	//   ("file:/dir/a%41.xml" when there is an a%41.xml) is that file, as
+	//   2.9 read it: its xmlFileOpen tried the path as written before it
+	//   unescaped it. 2.15 always unescapes it (aA.xml), so the path is
+	//   passed instead of the URL.
+	t_literal = t_path != NULL ? revxml_file_url_path(t_path) : NULL;
+	if (t_literal != NULL && strchr(t_literal, '%') != NULL && revxml_path_opens(t_literal))
+	{
+		char *t_file;
+		t_file = istrdup(t_literal);
+		if (t_file != NULL)
+		{
+			free(t_path);
+			t_path = t_file;
+		}
+	}
+	return t_path;
+}
 
 
 #ifndef REVDB
@@ -554,7 +683,7 @@ void XML_NewDocumentFromFile(char *args[], int nargs, char **retstring,
 
 		// OK-2007-12-18 : Bug 4905. New path_to_native function declared which allocates a new path buffer.
 		char *t_native_path;
-		t_native_path = os_path_to_native(t_resolved_path);
+		t_native_path = revxml_path_for_libxml(t_resolved_path);
 
 		if (newdoc->ReadFile(t_native_path, wellformed))
 		{
@@ -939,7 +1068,9 @@ void XML_MoveElement(char *args[], int nargs, char **retstring, Bool *pass, Bool
 		else if (strcasecmp(args[3], "after") == 0)
 			before = false;
 		else
-			nargs = 6;
+			// Refused below. It was 6, which went on to read args[4], past
+			//   the end when there were only 4 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;
@@ -993,7 +1124,9 @@ void XML_CopyElement(char *args[], int nargs, char **retstring, Bool *pass, Bool
 		else if (strcasecmp(args[3], "after") == 0)
 			before = false;
 		else
-			nargs = 6;
+			// Refused below. It was 6, which went on to read args[4], past
+			//   the end when there were only 4 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;
@@ -1041,7 +1174,9 @@ void XML_CopyRemoteElement(char *args[], int nargs, char **retstring, Bool *pass
 		else if (strcasecmp(args[4], "after") == 0)
 			before = false;
 		else
-			nargs = 7;
+			// Refused below. It was 7, which went on to read args[5], past
+			//   the end when there were only 5 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;
@@ -1093,7 +1228,9 @@ void XML_MoveRemoteElement(char *args[], int nargs, char **retstring, Bool *pass
 		else if (strcasecmp(args[4], "after") == 0)
 			before = false;
 		else
-			nargs = 7;
+			// Refused below. It was 7, which went on to read args[5], past
+			//   the end when there were only 5 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;
@@ -1167,7 +1304,14 @@ void XML_AddXML(char *args[], int nargs, char **retstring,
 			else
             {
 				CXMLDocument tnewdoc;
-				if (!tnewdoc.Read(args[2],strlen(args[2]),False))
+				// The new XML is parsed into a tree whatever the last
+				//   revXMLCreateTree asked for: after one that built no tree
+				//   (only SAX messages), the parse made no root element to copy.
+				Bool t_buildtree = CXMLDocument::buildtree;
+				CXMLDocument::buildtree = True;
+				Bool t_parsed = tnewdoc.Read(args[2],strlen(args[2]),False);
+				CXMLDocument::buildtree = t_buildtree;
+				if (!t_parsed)
                 {
 					result = (char *)malloc(1024);
 					sprintf(result,"%s\n%s",xmlerrors[XMLERR_BADXML],tnewdoc.GetError());
@@ -1176,8 +1320,16 @@ void XML_AddXML(char *args[], int nargs, char **retstring,
                 {
                     // MW-2014-06-12: [[ Bug 12628 ]] Use Remote operation to copy the root out of the new document.
                     CXMLElement newelement;
-					tnewdoc.GetRootElement(&newelement);
-                    if (!telement.MoveRemoteElement(&newelement, false, false))
+					// A parse of bad data (recover mode) returns a document
+					//   even when it found no element, for text that is not
+					//   XML or that a wrong encoding label made unreadable;
+					//   copying its missing root crashed, with 2.9 as well.
+					if (!tnewdoc.GetRootElement(&newelement))
+					{
+						result = (char *)malloc(1024);
+						sprintf(result,"%s\n%s",xmlerrors[XMLERR_BADXML],tnewdoc.GetError());
+					}
+                    else if (!telement.MoveRemoteElement(&newelement, false, false))
                         result = istrdup(xmlerrors[XMLERR_BADCOPY]);
                     else
                         result = newelement.GetPath();
@@ -1262,6 +1414,63 @@ void XML_GetElementContents(char *args[], int nargs, char **retstring,
 }
 
 
+// The text p_text escaped for xmlStringGetNodeList and xmlNodeSetContent,
+//   as libxml2 2.9's xmlEncodeSpecialChars escaped it: '&', '<', '>' and
+//   '"' as entities, a carriage return as "&#13;", every other byte as it
+//   is. 2.15's xmlEncodeSpecialChars writes the control characters XML 1.0
+//   does not allow (U+0001 to U+001F but tab, newline and return) as
+//   "&#xFFFD;", so revXMLPutIntoNode stored U+FFFD for them, where 2.9
+//   stored them and revXMLNodeContents returned them. The result is the
+//   caller's to free with xmlFree.
+static xmlChar *revxml_escape_content(const xmlChar *p_text)
+{
+	size_t t_length = 0;
+	for (const xmlChar *t_in = p_text; *t_in != '\0'; t_in++)
+	{
+		size_t t_size;
+		switch (*t_in)
+		{
+			case '&': t_size = 5; break;
+			case '<': case '>': t_size = 4; break;
+			case '"': t_size = 6; break;
+			case '\r': t_size = 5; break;
+			default: t_size = 1; break;
+		}
+		if (t_length > (size_t)-1 - 1 - t_size)
+			return NULL;
+		t_length += t_size;
+	}
+
+	xmlChar *t_escaped = (xmlChar *)xmlMalloc(t_length + 1);
+	if (t_escaped == NULL)
+		return NULL;
+
+	xmlChar *t_out = t_escaped;
+	for (const xmlChar *t_in = p_text; *t_in != '\0'; t_in++)
+	{
+		const char *t_entity;
+		switch (*t_in)
+		{
+			case '&': t_entity = "&amp;"; break;
+			case '<': t_entity = "&lt;"; break;
+			case '>': t_entity = "&gt;"; break;
+			case '"': t_entity = "&quot;"; break;
+			case '\r': t_entity = "&#13;"; break;
+			default: t_entity = NULL; break;
+		}
+		if (t_entity != NULL)
+		{
+			size_t t_size = strlen(t_entity);
+			memcpy(t_out, t_entity, t_size);
+			t_out += t_size;
+		}
+		else
+			*t_out++ = *t_in;
+	}
+	*t_out = '\0';
+	return t_escaped;
+}
+
 /*
 Command: XML_SetElementContents - Sets value of an existing element
 Input: [0]=xml document id
@@ -1305,7 +1514,7 @@ void XML_SetElementContents(char *args[], int nargs, char **retstring, Bool *pas
 				// OK-2008-01-30 : Bug 5283. The string passed to xmlStringGetNodeList is interpreted by libXML as
 				// XML rather than as a raw string. Because of this we need to escape any special characters in the string.
 				xmlChar *t_encoded_string;
-				t_encoded_string = xmlEncodeSpecialChars(tdoc -> GetDocPtr(), (const xmlChar *)args[2]);
+				t_encoded_string = revxml_escape_content((const xmlChar *)args[2]);
 
 				if (t_replace_text_only)
 				{
@@ -2259,8 +2468,10 @@ xpathNodeGetContent(xmlNodePtr cur, char *pCharDelimiter)
                 if (buffer == NULL)
                     return (NULL);
 		xpathNodeBufGetContent(buffer, cur, pCharDelimiter);
-                ret = buffer->content;
-                buffer->content = NULL;
+                // xmlBufferDetach, not taking buffer->content: in libxml2
+                //   2.15 a buffer's memory starts at contentIO, which
+                //   xmlBufferFree frees whatever content says.
+                ret = xmlBufferDetach(buffer);
                 xmlBufferFree(buffer);
                 return (ret);
             }
@@ -2295,8 +2506,7 @@ xpathNodeGetContent(xmlNodePtr cur, char *pCharDelimiter)
 
                 xpathNodeBufGetContent(buffer, cur, pCharDelimiter);
 
-                ret = buffer->content;
-                buffer->content = NULL;
+                ret = xmlBufferDetach(buffer);
                 xmlBufferFree(buffer);
                 return (ret);
             }
@@ -2321,8 +2531,7 @@ xpathNodeGetContent(xmlNodePtr cur, char *pCharDelimiter)
 
 	    xpathNodeBufGetContent(buffer, (xmlNodePtr) cur, pCharDelimiter);
 
-	    ret = buffer->content;
-	    buffer->content = NULL;
+	    ret = xmlBufferDetach(buffer);
 	    xmlBufferFree(buffer);
 	    return (ret);
 	}
@@ -2494,6 +2703,44 @@ xpathNodeBufGetContent(xmlBufferPtr buffer, xmlNodePtr cur, char *cDelimiter)
 }
 
 /**
+ * xpathResultAppend
+ *
+ * Appends pText and then pDelimiter to xBuffer, which holds xLength bytes
+ * and a terminating NUL in xSize bytes, making it bigger when it must be.
+ * The two functions below used to make room for the text only, so the
+ * delimiter and the NUL were written past the end of the buffer when the
+ * text (nearly) filled it, and XML_ObjectPtr_to_Data grew it by doubling
+ * once, which a text longer than the buffer overran by the difference.
+ * Returns false, with the buffer as it was, when no memory could be had.
+ */
+static bool xpathResultAppend(char *&xBuffer, size_t &xLength, size_t &xSize, const char *pText, const char *pDelimiter)
+{
+	size_t tTextLength = strlen(pText);
+	size_t tDelimiterLength = strlen(pDelimiter);
+	size_t tMax = (size_t)-1;
+	if (tTextLength > tMax - 1 - xLength || tDelimiterLength > tMax - 1 - xLength - tTextLength)
+		return false;
+	size_t tNeeded = xLength + tTextLength + tDelimiterLength + 1;
+	if (tNeeded > xSize)
+	{
+		size_t tNewSize = xSize > 0 ? xSize : tNeeded;
+		while (tNewSize < tNeeded)
+			tNewSize = tNewSize <= tMax / 2 ? tNewSize * 2 : tNeeded;
+		char *tNewBuffer = (char *)realloc(xBuffer, tNewSize);
+		if (NULL == tNewBuffer)
+			return false;
+		xBuffer = tNewBuffer;
+		xSize = tNewSize;
+	}
+	memcpy(xBuffer + xLength, pText, tTextLength);
+	xLength += tTextLength;
+	memcpy(xBuffer + xLength, pDelimiter, tDelimiterLength);
+	xLength += tDelimiterLength;
+	xBuffer[xLength] = '\0';
+	return true;
+}
+
+/**
  * XML_ObjectPtr_to_Xpaths
  *
  * @pObject
@@ -2501,7 +2748,7 @@ xpathNodeBufGetContent(xmlBufferPtr buffer, xmlNodePtr cur, char *cDelimiter)
  */
 static char *XML_ObjectPtr_to_Xpaths(xmlXPathObjectPtr pObject, char *pLineDelimiter)
 {
-	int iBufferSize = 8192;
+	size_t iBufferSize = 8192;
 	if (NULL != pObject)
 	{
 		xmlNodeSetPtr nodes = XML_Object_to_NodeSet(pObject);
@@ -2510,7 +2757,10 @@ static char *XML_ObjectPtr_to_Xpaths(xmlXPathObjectPtr pObject, char *pLineDelim
     			int i;
 			xmlNodePtr cur;
 		    	int size = (nodes) ? nodes->nodeNr : 0;
+			size_t iLength = 0;
 			char *buffer = (char*)malloc(iBufferSize);
+			if (NULL == buffer)
+				return(NULL);
 			*buffer = (char)0; // null-terminate to start things off
 
 			for(i = 0; i < size; ++i)
@@ -2521,15 +2771,13 @@ static char *XML_ObjectPtr_to_Xpaths(xmlXPathObjectPtr pObject, char *pLineDelim
 					xmlChar *cPtr = xmlGetNodePath(cur);
 					if (NULL != cPtr)
 					{
-						// make more room if needed
-						if (strlen(buffer) + strlen((char*)cPtr) > iBufferSize)
+						bool tAdded = xpathResultAppend(buffer, iLength, iBufferSize, (char*)cPtr, pLineDelimiter);
+						xmlFree(cPtr);
+						if (!tAdded)
 						{
-							iBufferSize += strlen((char*)cPtr) + iBufferSize;
-							buffer = (char*)realloc(buffer, iBufferSize);
+							free(buffer);
+							return(NULL);
 						}
-						strncat(buffer, (char*)cPtr, strlen((char*)cPtr));
-						strcat(buffer, pLineDelimiter);
-						free((char*)cPtr);
 					}
 				}
 			}
@@ -2551,7 +2799,7 @@ static char *XML_ObjectPtr_to_Xpaths(xmlXPathObjectPtr pObject, char *pLineDelim
  */
 static char *XML_ObjectPtr_to_Data(xmlXPathObjectPtr pObject, char *pElementDelimiter, char *pLineDelimiter)
 {
-	int iBufferSize = 8192;
+	size_t iBufferSize = 8192;
 	if (NULL != pObject)
 	{
 		xmlNodeSetPtr nodes = XML_Object_to_NodeSet(pObject);
@@ -2560,7 +2808,10 @@ static char *XML_ObjectPtr_to_Data(xmlXPathObjectPtr pObject, char *pElementDeli
     			int i;
 			xmlNodePtr cur;
 		    	int size = (nodes) ? nodes->nodeNr : 0;
+			size_t iLength = 0;
 			char *buffer = (char*)malloc(iBufferSize);
+			if (NULL == buffer)
+				return(NULL);
 			*buffer = (char)0; // null-terminate to start things off
 
 			for(i = 0; i < size; ++i)
@@ -2571,15 +2822,13 @@ static char *XML_ObjectPtr_to_Data(xmlXPathObjectPtr pObject, char *pElementDeli
 					xmlChar *cPtr = xpathNodeGetContent(cur, pElementDelimiter);
 					if (NULL != cPtr)
 					{
-						// make more room if needed
-						if (strlen(buffer) + strlen((char*)cPtr) > iBufferSize)
+						bool tAdded = xpathResultAppend(buffer, iLength, iBufferSize, (char*)cPtr, pLineDelimiter);
+						xmlFree(cPtr);
+						if (!tAdded)
 						{
-							buffer = (char*)realloc(buffer, iBufferSize * 2);
-							iBufferSize = iBufferSize * 2;
+							free(buffer);
+							return(NULL);
 						}
-						strncat(buffer, (char*)cPtr, strlen((char*)cPtr));
-						strcat(buffer, pLineDelimiter);
-						free((char*)cPtr);
 					}
 				}
 			}
@@ -2590,6 +2839,36 @@ static char *XML_ObjectPtr_to_Data(xmlXPathObjectPtr pObject, char *pElementDeli
 	}
 	else
 		return(NULL);
+}
+
+/**
+ * xpathContextAs29
+ *
+ * Makes ctx evaluate pExpression as libxml2 2.9 did where revXML's results
+ * differ. 2.9 gave a location step from an empty node-set no node-set at
+ * all, which revXML reports as "can't resolve xpath" (/r/nosuch/text(),
+ * /r/a[@k='none']/b), unless it evaluated the expression as a stream
+ * (xmlXPathTryStreamCompile): a path of names, '*', '.', '/' and '//' with
+ * no predicate, function, attribute or prefix, which matched nothing as an
+ * empty node-set (/r/nosuch/b). 2.15 always gives an empty node-set.
+ */
+static void xpathContextAs29(xmlXPathContextPtr ctx, const xmlChar *pExpression)
+{
+	bool tStreamed = false;
+	if (xmlStrchr(pExpression, '[') == NULL && xmlStrchr(pExpression, '(') == NULL &&
+		xmlStrchr(pExpression, '@') == NULL && xmlStrchr(pExpression, ':') == NULL)
+	{
+		xmlPatternPtr tPattern = xmlPatterncompile(pExpression, NULL, XML_PATTERN_XPATH, NULL);
+		if (tPattern != NULL)
+		{
+			// The checks xmlXPathRunStreamEval made before it evaluated.
+			tStreamed = xmlPatternStreamable(tPattern) == 1 && xmlPatternMaxDepth(tPattern) != -1 &&
+				xmlPatternMinDepth(tPattern) != -1 && xmlPatternFromRoot(tPattern) >= 0;
+			xmlFreePattern(tPattern);
+		}
+	}
+	if (!tStreamed)
+		ctx->flags |= XML_XPATH_EMPTY_STEP_NULL;
 }
 
 /**
@@ -2609,6 +2888,15 @@ void XML_EvalXPath(char *args[], int nargs, char **retstring, Bool *pass, Bool *
 	*pass = False;
 	*error = False;
 
+	// The tree and the expression are needed: without them args[1] was
+	//   read past the end of args, and the engine crashed.
+	if (nargs < 2)
+	{
+		*error = True;
+		*retstring = istrdup(xmlerrors[XMLERR_BADARGUMENTS]);
+		return;
+	}
+
 	int docID = atoi(args[0]);
 	CXMLDocument *xmlDocument = doclist.find(docID);
 	if (NULL != xmlDocument)
@@ -2621,6 +2909,7 @@ void XML_EvalXPath(char *args[], int nargs, char **retstring, Bool *pass, Bool *
 			{
 				xmlChar *str = (xmlChar *)args[1];
 
+				xpathContextAs29(ctx, str);
 				xmlXPathObjectPtr result = xmlXPathEvalExpression(str, ctx);
 				if (NULL != result)
 				{
@@ -2670,6 +2959,15 @@ void XML_XPathDataFromQuery(char *args[], int nargs, char **retstring, Bool *pas
 	*pass = False;
 	*error = False;
 
+	// The tree and the expression are needed: without them args[1] was
+	//   read past the end of args, and the engine crashed.
+	if (nargs < 2)
+	{
+		*error = True;
+		*retstring = istrdup(xmlerrors[XMLERR_BADARGUMENTS]);
+		return;
+	}
+
 	int docID = atoi(args[0]);
 	CXMLDocument *xmlDocument = doclist.find(docID);
 	if (NULL != xmlDocument)
@@ -2682,6 +2980,7 @@ void XML_XPathDataFromQuery(char *args[], int nargs, char **retstring, Bool *pas
 			{
 				xmlChar *str = (xmlChar *)args[1];
 
+				xpathContextAs29(ctx, str);
 				xmlXPathObjectPtr result = xmlXPathEvalExpression(str, ctx);
 				if (NULL != result)
 				{
@@ -2747,7 +3046,19 @@ void XML_xsltLoadStylesheet(char *args[], int nargs, char **retstring, Bool *pas
 			xmlDocPtr xmlDoc = xsltDocument->GetDocPtr();
 			if (NULL != xmlDoc)
 			{
-				cur = xsltParseStylesheetDoc(xmlDoc);
+				// The stylesheet owns the document it is made from and frees it
+				//   with itself, so give it a copy: the tree stays the caller's
+				//   and can be deleted first, without leaving the stylesheet
+				//   pointing at a freed document, which revXMLDeleteAllTrees
+				//   (or quitting) then freed a second time. revXMLDeleteTree on
+				//   the stylesheet's id frees the stylesheet and its copy.
+				xmlDocPtr t_copy = xmlCopyDoc(xmlDoc, 1);
+				if (NULL != t_copy)
+				{
+					cur = xsltParseStylesheetDoc(t_copy);
+					if (NULL == cur)
+						xmlFreeDoc(t_copy);
+				}
 				if (NULL != cur)
 				{
 					CXMLDocument *newdoc = new (nothrow) CXMLDocument(cur);
@@ -2802,7 +3113,7 @@ void XML_xsltLoadStylesheetFromFile(char *args[], int nargs, char **retstring, B
 		char *t_resolved_path;
 		t_resolved_path = os_path_resolve(args[0]);
 		char *t_native_path;
-		t_native_path = os_path_to_native(t_resolved_path);
+		t_native_path = revxml_path_for_libxml(t_resolved_path);
 		
 		cur = xsltParseStylesheetFile((const xmlChar *)t_native_path);
 		if (NULL != cur)
@@ -2856,7 +3167,9 @@ void XML_xsltFreeStylesheet(char *args[], int nargs, char **retstring, Bool *pas
 			cur = xsltDocument->GetXsltContext();
 			if (NULL != cur)
 			{
-				xsltFreeStylesheet(cur);
+				// Deleting the object frees the stylesheet; freeing it here
+				//   as well would free it twice.
+				doclist.erase(docID);
 				*retstring = (char *)calloc(1,1);
 			}
 			else
@@ -2929,9 +3242,15 @@ void XML_xsltApplyStylesheet(char *args[], int nargs, char **retstring, Bool *pa
 					}
 					res = xsltApplyStylesheet(cur, xmlDoc, params);
 
-					xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
+					doc_txt_ptr = NULL;
+					if (res != NULL)
+						xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
 
-					*retstring = istrdup((char *)doc_txt_ptr);
+					// libxslt leaves doc_txt_ptr NULL when the transform failed
+					//   or made nothing, and the text is the caller's to free.
+					*retstring = istrdup(doc_txt_ptr != NULL ? (char *)doc_txt_ptr : "");
+					if (doc_txt_ptr != NULL)
+						xmlFree(doc_txt_ptr);
 
 					// free the xml document - we're done with it
 					xmlFreeDoc(res);
@@ -2986,7 +3305,7 @@ void XML_xsltApplyStylesheetFile(char *args[], int nargs, char **retstring, Bool
 				char *t_resolved_path;
 				t_resolved_path = os_path_resolve(args[1]);
 				char *t_native_path;
-				t_native_path = os_path_to_native(t_resolved_path);
+				t_native_path = revxml_path_for_libxml(t_resolved_path);
 				
 				cur = xsltParseStylesheetFile((const xmlChar *)t_native_path);
 				if (NULL != cur)
@@ -3002,9 +3321,15 @@ void XML_xsltApplyStylesheetFile(char *args[], int nargs, char **retstring, Bool
 					}
 					res = xsltApplyStylesheet(cur, xmlDoc, params);
 
-					xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
+					doc_txt_ptr = NULL;
+					if (res != NULL)
+						xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
 
-					*retstring = istrdup((char *)doc_txt_ptr);
+					// libxslt leaves doc_txt_ptr NULL when the transform failed
+					//   or made nothing, and the text is the caller's to free.
+					*retstring = istrdup(doc_txt_ptr != NULL ? (char *)doc_txt_ptr : "");
+					if (doc_txt_ptr != NULL)
+						xmlFree(doc_txt_ptr);
 
 					// free the xsltStylesheetPtr we just created
 					xsltFreeStylesheet(cur);

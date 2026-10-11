@@ -30,7 +30,11 @@ all <string> comparisons, including the comparison <operator|operators>
 <=>, <&gt;>, <&lt;>, <&gt;=>, <&lt;=>, <is in>, <is among>, 
 <is not among>,  and <contains>; the <command|commands> <filter>, 
 <find>, and <replace>; and the <function|functions> <offset>, 
-<itemOffset>, <wordOffset>, <lineOffset>, and <replaceText>.
+<itemOffset>, <wordOffset>, and <lineOffset>.
+
+The regular expression <function|functions> <matchText>, <matchChunk>
+and <replaceText> are not affected: they are always case-sensitive. To
+make a regular expression ignore case, start it with "(?i)".
 
 If the <caseSensitive> <property> is set to true, all the <OpenXTalk>
 terms listed above, as well as all other <string> comparisons, treat
@@ -65,7 +69,7 @@ one <handler> does not affect its <value> in other <handler|handlers> it
 References: replace (command), find (command), filter (command),
 reset (command), wordOffset (function), offset (function),
 value (function), lineOffset (function), replaceText (function),
-keys (function), itemOffset (function), object (glossary),
+matchText (function), matchChunk (function), keys (function), itemOffset (function), object (glossary),
 element (glossary), call (glossary), property (glossary),
 evaluate (glossary), behavior (glossary), operator (glossary),
 case-sensitive (glossary), array (glossary), execute (glossary),

@@ -1,3 +1,50 @@
-Files in this folder are based on libzip
+Files in this folder are based on libzip 1.12 (7 October 2026).
 
-Original source archives are available from <http://www.nih.at/libzip/>
+Original source: https://github.com/nih-at/libzip, tag v1.12.
+
+Only the library is kept: lib/*.c and lib/*.h in src/, zip.h in include/,
+and LICENSE in docs/. The tools, regression tests, man pages and CMake
+files are left out, and so are the parts behind options that are off:
+bzip2, xz and zstd compression (zip_algorithm_bzip2.c, _xz.c, _zstd.c), the
+crypto back ends and WinZip AES encryption (zip_crypto.h,
+zip_crypto_{commoncrypto,gnutls,openssl,win}.{c,h}, zip_winzip_aes.c,
+zip_source_winzip_aes_*.c) and the UWP random source (zip_random_uwp.c).
+zip_crypto.c stays: libzip always builds it, and its _zip_crypto_clear
+wipes passwords. Deflate and stored entries remain, as in the old copy;
+traditional PKWARE encryption (new since libzip 0.10) is built too, though
+revZip does not use it.
+
+Three files are written for OXT-Beyond's build, because gyp runs no
+configure step: include/zipconf.h (CMake makes it from zipconf.h.in),
+src/config.h (from config.h.in, with the answers for MSVC, macOS, Linux
+and Android) and src/zip_err_str.c (CMake makes it from zip.h's error
+codes; the messages are libzip's). libzip.gyp builds the Win32 file and
+random sources on Windows and the stdio and /dev/urandom (or arc4random)
+ones elsewhere. Windows links advapi32: CryptGenRandom seeds the key of
+every archive's name table and makes PKWARE encryption headers, and
+GetSecurityInfo copies the original file's permissions to the temporary
+file that zip_close writes.
+
+Two local changes, marked "OXT-Beyond" in the sources:
+
+- In src/zip_dirent.c, _zip_dirent_read keeps a name (or comment) whose
+  entry is flagged UTF-8 but is not valid UTF-8 as the bytes it is, unless
+  the archive is opened with ZIP_CHECKCONS, rather than refusing the whole
+  archive as inconsistent. Some writers flag names in their own code page;
+  the old copy read every name as it was, so such archives opened, and
+  still do.
+- In src/zip_hash.c, _zip_hash_new seeds the name table's key from
+  zip_random_uint32 when zip_secure_random fails, rather than failing.
+  Every zip_open makes a name table, so without /dev/urandom (a chroot or
+  a sandbox) or a working CryptGenRandom no archive could be opened or
+  made at all; the key only guards lookups against names made to collide,
+  and zip_random_uint32 is what libzip itself falls back to for temporary
+  file names.
+
+The old copy (libzip 0.6.1, July 2005) was modified for LiveCode: a
+progress callback inside zip_fread and zip_close, made-by and
+external-attribute setters, and Windows wide-character paths.
+libzip 1.12 has the last two itself (zip_file_set_external_attributes;
+UTF-8 paths become UTF-16 on Windows), and revzip/src/revzip.cpp now
+reports the same progress messages from its own read loops and from a
+layered source over each item it adds.
