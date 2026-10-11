@@ -60,11 +60,14 @@ and fixes bugs that notes in the inherited code pointed to (see
 since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)). Two of
 those fixes change what existing scripts see: an error in a `try`
 statement's `catch` part is now reported, and serial ports on macOS and
-Linux are in raw mode. 0.2.5-rc.1 is a test release (a pre-release) of
-newer XML and zip libraries for revXML and revZip, and of regular
-expressions that match case again (see
-[0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)); 0.2.4 stays the
-main download until it has held up.
+Linux are in raw mode. 0.2.5-rc.1 and rc.2 are test releases
+(pre-releases) of newer XML and zip libraries for revXML and revZip, of
+regular expressions that match case again (see
+[0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)), of fixes for two
+crashes in `export`, and of the xTalk Assistant, an optional AI helper
+for writing scripts that stays off until you turn it on (see
+[0.2.5-rc.2](#025-rc2-export-crashes-fixed-and-the-xtalk-assistant));
+0.2.4 stays the main download until they have held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1082,6 +1085,50 @@ of a pattern ignores case. From 0.2.4-rc.4 to 0.2.4 they followed the
 The standalone runtimes for the other platforms in each package are
 built again for this release, so standalones for Windows and Linux get
 these changes too.
+
+#### 0.2.5-rc.2: export crashes fixed, and the xTalk Assistant
+
+OXT-Beyond 0.2.5-rc.2, a test release, has everything in 0.2.5-rc.1
+and:
+
+- `export` without "snapshot" of an object that is not an image, such
+  as `export group "Logo" to file "logo.png" as PNG`, no longer crashes
+  the engine (a group, graphic or button) or hangs it (a card). It
+  exports nothing, leaves the variable or file as it was, and sets
+  `the result` to "export: selected object is not an image". To make a
+  picture of a group, use `export snapshot from group ...`. Exporting
+  an image, the selected image, a snapshot, or a widget to an array
+  works as before.
+- `export snapshot` and `import snapshot` of an object whose picture
+  would be over 4 GiB (about 32,000 pixels square, counting every
+  control of a group), or for which there is not enough memory, throw
+  "snapshot: the image is too big to make" instead of crashing.
+- The **xTalk Assistant**, a plugin under *Development > Plugins*, is
+  new and **off by default**: until you turn it on, it adds only its
+  menu item and connects to nothing. It is a window in which you ask an
+  AI model of your choice, from Anthropic or OpenAI (or a service or
+  local server with OpenAI's API, such as Ollama), for help with a
+  script, with your own API key. It can send the script open in the
+  Script Editor with your question, and its Insert button puts the code
+  of an answer at the caret in the Script Editor as one step that Undo
+  takes out again. It never changes a script or an object by itself.
+  The key you type is kept in memory until you quit, forget it or turn
+  the assistant off, never in the preferences, a stack or a log;
+  without one, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` from the
+  environment is used. Setting the environment variable
+  `OXTBEYOND_XTALK_ASSISTANT` to `off` keeps it off, for example on a
+  classroom's computers.
+
+Old stacks are meant to work as they did; these are the differences a
+script can see. A field exported without "snapshot" exported nothing
+before too, and now also sets `the result`. And every `export` now
+starts with an empty `the result`: a script that, after an export,
+reads `the result` of a command it ran before the export now finds it
+empty. The other changes affect only commands that used to crash.
+
+The standalone runtimes for the other platforms in each package are
+built again for this release, so standalones for Windows and Linux get
+these fixes too.
 
 ### xTalk Suite extensions
 
