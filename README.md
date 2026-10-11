@@ -60,13 +60,14 @@ and fixes bugs that notes in the inherited code pointed to (see
 since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)). Two of
 those fixes change what existing scripts see: an error in a `try`
 statement's `catch` part is now reported, and serial ports on macOS and
-Linux are in raw mode. 0.2.5-rc.1 and rc.2 are test releases
+Linux are in raw mode. 0.2.5-rc.1 to rc.3 are test releases
 (pre-releases) of newer XML and zip libraries for revXML and revZip, of
 regular expressions that match case again (see
 [0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)), of fixes for two
 crashes in `export`, and of the xTalk Assistant, an optional AI helper
 for writing scripts that stays off until you turn it on (see
-[0.2.5-rc.2](#025-rc2-export-crashes-fixed-and-the-xtalk-assistant));
+[0.2.5-rc.2](#025-rc2-export-crashes-fixed-and-the-xtalk-assistant) and
+[0.2.5-rc.3](#025-rc3-the-xtalk-assistants-window-opens));
 0.2.4 stays the main download until they have held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1129,6 +1130,26 @@ empty. The other changes affect only commands that used to crash.
 The standalone runtimes for the other platforms in each package are
 built again for this release, so standalones for Windows and Linux get
 these fixes too.
+
+#### 0.2.5-rc.3: the xTalk Assistant's window opens
+
+OXT-Beyond 0.2.5-rc.3, a test release, has everything in 0.2.5-rc.2
+and fixes the xTalk Assistant, which in rc.2 seemed to do nothing when
+it was turned on:
+
+- Pressing **Turn On** under *Development > Plugins > xTalk Assistant*
+  now asks for your API key when there is none, then shows the
+  assistant's window in the middle of the screen. In rc.2 the window
+  was made but stayed hidden, so there was nowhere to type the key. If
+  you have set a base URL of your own (a local server, which may need
+  no key), it does not ask, just as sending a question does not.
+- Choosing the menu item again shows the window where you left it.
+  While there is no key, the window's status line says where to set
+  one: *More > Set API Key...*.
+
+Only the plugin changed, and it is still off until you turn it on, so
+no script or stack sees a difference from 0.2.5-rc.2. The engine and the
+standalone runtimes are those of 0.2.5-rc.2.
 
 ### xTalk Suite extensions
 
