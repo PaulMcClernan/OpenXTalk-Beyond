@@ -45,6 +45,29 @@ Commits do not need a `Signed-off-by` line.
   so the checks of a pull request build and test a change on all three
   platforms.
 
+## Keeping old stacks working
+
+Compatibility with existing stacks comes first, and a change that
+breaks them is not merged. Stacks made with earlier releases, and with
+the LiveCode and OpenXTalk versions this project comes from, must keep
+opening, and old syntax must keep giving the results it gave before.
+This holds for the engine, the externals, the IDE and the stack file
+format.
+
+- If a change could alter what a script sees, run the scripts it
+  touches before and after the change, and compare the results. Pull
+  request #81 did this for its library updates: about 1,800 scripts
+  ran on the released 0.2.4 engine, once with 0.2.4's externals and
+  once with the new ones.
+- Add new behaviour under new syntax or an option, not by changing what
+  existing syntax does.
+- When a fix has to change behaviour (a crash, a security hole), keep
+  the old result wherever it can be kept, and list each difference that
+  remains in the pull request and in the README's notes for the
+  release.
+- If something cannot be done without breaking old stacks, open an
+  issue and ask before writing it.
+
 ## Branches and pull requests
 
 - `main` is the only long-lived branch. Releases are tags on `main`
