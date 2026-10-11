@@ -272,6 +272,52 @@ on TestNotesToRemember
    TestAssert "a dismissed note cannot be kept after all", tMemory["you"] is "Builds for Windows only."
 end TestNotesToRemember
 
+-- Models fills the model menu and, with no model chosen yet, chooses the
+-- one the provider's list suggests (0.2.5-rc.3 chose none, and Send only
+-- said to choose one)
+on TestModelsChoosesAModel
+   local tPort, tPrefs
+   put TestStartServer("200 OK", TestModelList()) into tPort
+   TestOpenTheWindowWithoutAModel "http://127.0.0.1:" & tPort
+   TestAssert "no model to begin with", the label of button "Model" of stack kWindow is empty
+   TestDiagnostic field "Status" of stack kWindow
+   TestAssert "the status line says Send chooses one", field "Status" of stack kWindow contains "Send chooses one"
+   dispatch "xtaChooseModels" to stack kMain
+   TestDiagnostic sRequest
+   TestAssert "asked for the models", sRequest begins with "GET /v1/models"
+   TestAssert "the menu lists them, sorted", the text of button "Model" of stack kWindow is \
+         ("claude-haiku-9" & return & "claude-opus-9" & return & "claude-sonnet-9")
+   TestAssert "the newest Sonnet is chosen", the label of button "Model" of stack kWindow is "claude-sonnet-9"
+   put xtaTestPrefs() into tPrefs
+   TestAssert "and kept", tPrefs["cXTalkAssistant,model,anthropic"] is "claude-sonnet-9"
+   TestDiagnostic field "Status" of stack kWindow
+   TestAssert "the status line says which", field "Status" of stack kWindow contains "Using claude-sonnet-9"
+   TestAssert "Send is Send again", the label of button "Send" of stack kWindow is "Send" and the enabled of button "Models" of stack kWindow
+
+   -- A model the user chose stays chosen
+   revIDESetPreference "cXTalkAssistant,model,anthropic", "claude-opus-9"
+   dispatch "xtaChooseModels" to stack kMain
+   TestAssert "the user's model stays", the label of button "Model" of stack kWindow is "claude-opus-9"
+end TestModelsChoosesAModel
+
+-- Send with no model chosen asks for the models first and uses the one the
+-- list suggests
+on TestSendChoosesAModel
+   local tPort
+   put TestStartServer("200 OK", TestModelList()) into tPort
+   TestQueueAnswer "200 OK", TestAnswer("Hello.")
+   TestOpenTheWindowWithoutAModel "http://127.0.0.1:" & tPort
+   put "Say hello" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sRequests[1] & return & "---" & return & sRequests[2]
+   TestAssert "two requests", sServed is 2
+   TestAssert "first the models", sRequests[1] begins with "GET /v1/models"
+   TestAssert "then the question", sRequests[2] begins with "POST /v1/messages"
+   TestAssert "with the model the list suggests", TestBodyOf(sRequests[2]) contains (TestQ("model") & ":" & TestQ("claude-sonnet-9"))
+   TestAssert "the answer is shown", field "Conversation" of stack kWindow contains "Hello."
+   TestAssert "the model is shown", the label of button "Model" of stack kWindow is "claude-sonnet-9"
+end TestSendChoosesAModel
+
 on TestMoreMenu
    TestOpenTheWindow "http://127.0.0.1:1"
    TestDiagnostic the text of button "More" of stack kWindow
@@ -300,6 +346,20 @@ private command TestOpenTheWindow pBaseUrl
    put "sk-from-env" into $ANTHROPIC_API_KEY
    dispatch "xtalkAssistantMenuPick" to stack kMain
 end TestOpenTheWindow
+
+-- As TestOpenTheWindow, with no model chosen yet
+private command TestOpenTheWindowWithoutAModel pBaseUrl
+   TestOpenTheWindow pBaseUrl
+   revIDESetPreference "cXTalkAssistant,model,anthropic", empty
+   dispatch "xtalkAssistantMenuPick" to stack kMain
+end TestOpenTheWindowWithoutAModel
+
+-- Anthropic's model list: newest first
+private function TestModelList
+   return "{" & TestQ("data") & ":[{" & TestQ("id") & ":" & TestQ("claude-opus-9") & "},{" & \
+         TestQ("id") & ":" & TestQ("claude-sonnet-9") & "},{" & TestQ("id") & ":" & TestQ("claude-haiku-9") & "}]," & \
+         TestQ("has_more") & ":false}"
+end TestModelList
 
 -- A JSON string (the core's writer is not loaded before the window is)
 private function TestQ pText

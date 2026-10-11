@@ -307,9 +307,41 @@ on TestParseModels
    put "{" & TestQ("data") & ":[{" & TestQ("id") & ":" & TestQ("model-a") & "},{" & TestQ("id") & ":" & TestQ("model-b") & "}]," & TestQ("has_more") & ":false}" into tBody
    put xtaParseModels("anthropic", 200, tBody) into tResult
    TestAssert "two models", tResult["models"] is ("model-a" & return & "model-b")
+   TestAssert "the default is the first listed, without a Sonnet", tResult["default"] is "model-a"
    put xtaParseModels("openai", 200, "{" & TestQ("data") & ":[]}") into tResult
    TestAssert "none", tResult["error"] is not empty
+   -- OpenAI's list, in no order, with when each model was made
+   put "{" & TestQ("data") & ":[" & TestModelEntry("text-embedding-3-small", 1705948997) & "," & \
+         TestModelEntry("gpt-5.1", 1762000000) & "," & TestModelEntry("gpt-4o", 1715367049) & "," & \
+         TestModelEntry("gpt-5.2-mini", 1765000000) & "," & TestModelEntry("tts-1", 1681940951) & "]}" into tBody
+   put xtaParseModels("openai", 200, tBody) into tResult
+   TestAssert "OpenAI: every model is listed", the number of lines of tResult["models"] is 5
+   TestAssert "OpenAI: the newest that is just gpt- and a version", tResult["default"] is "gpt-5.1"
 end TestParseModels
+
+-- The model the window begins with when the user has chosen none: a family,
+-- never a name built in
+on TestDefaultModel
+   local tCreated
+   TestAssert "Anthropic: the newest Sonnet (its list is newest first)", \
+         xtaDefaultModel("anthropic", "claude-opus-9" & return & "claude-sonnet-9" & return & "claude-haiku-9" & return & "claude-sonnet-8", tCreated) is "claude-sonnet-9"
+   TestAssert "Anthropic: else the first listed", \
+         xtaDefaultModel("anthropic", "claude-opus-9" & return & "claude-haiku-9", tCreated) is "claude-opus-9"
+   put 300 into tCreated["gpt-4o"]
+   put 200 into tCreated["gpt-5"]
+   put 400 into tCreated["gpt-5-mini"]
+   put 100 into tCreated["o3"]
+   TestAssert "OpenAI: the newest gpt- and a version, not a mini", \
+         xtaDefaultModel("openai", "o3" & return & "gpt-5" & return & "gpt-5-mini" & return & "gpt-4o", tCreated) is "gpt-4o"
+   TestAssert "a local server: the first listed", \
+         xtaDefaultModel("openai", "llama3.2:latest" & return & "qwen2.5-coder:7b", tCreated) is "llama3.2:latest"
+   TestAssert "OpenAI without the dates: the first gpt- and a version", \
+         xtaDefaultModel("openai", "whisper-1" & return & "gpt-4.1" & return & "gpt-5", empty) is "gpt-4.1"
+end TestDefaultModel
+
+private function TestModelEntry pId, pCreated
+   return "{" & TestQ("id") & ":" & TestQ(pId) & "," & TestQ("object") & ":" & TestQ("model") & "," & TestQ("created") & ":" & pCreated & "}"
+end TestModelEntry
 
 on TestCodeBlocks
    local tText, tBlocks

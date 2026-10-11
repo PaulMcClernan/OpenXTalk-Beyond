@@ -131,8 +131,13 @@ command xtalkAssistantMenuPick
       -- Just turned on: ask for the key now, so the user sees where it goes
       -- (More > Set API Key... in the window, later). Not for a base URL of
       -- the user's own, which is kept when it is turned off and may need no
-      -- key, as Send and Models do.
-      get xtaEnsureKey(xtaProvider())
+      -- key, as Send and Models do. Then the provider's models, which tells
+      -- the user at once whether the key works, and chooses a model when
+      -- none is chosen yet: in 0.2.5-rc.3 the key was taken and nothing
+      -- else happened until the user found the Models button.
+      if xtaEnsureKey(xtaProvider()) then
+         xtaChooseModels
+      end if
       exit xtalkAssistantMenuPick
    end if
    xtaOpenWindow
@@ -399,7 +404,7 @@ private function xtaSettingsLine
       put " - API key from the environment" after tLine
    end if
    if xtaModel(tProvider) is empty then
-      put " - choose a model" after tLine
+      put " - no model yet (Send chooses one)" after tLine
    end if
    return tLine
 end xtaSettingsLine
@@ -587,7 +592,10 @@ end xtaSetIncludeScript
 on xtaMoreMenuPick pItem
    switch pItem
       case "Set API Key..."
-         get xtaAskForKey()
+         -- The models tell the user at once whether the provider takes the key
+         if xtaAskForKey() then
+            xtaChooseModels
+         end if
          break
       case "Forget API Key"
          put empty into sKeys[xtaProvider()]
@@ -651,9 +659,9 @@ private command xtaAskForBaseUrl
 end xtaAskForBaseUrl
 
 -- Asks the provider for its models and lets the user pick one from the
--- combo box.
+-- combo box (Models, and after a key is typed).
 on xtaChooseModels
-   local tProvider, tResult, tShutDowns
+   local tProvider, tError
    if sBusy is true then
       exit xtaChooseModels
    end if
@@ -661,32 +669,63 @@ on xtaChooseModels
    if not xtaEnsureKey(tProvider) then
       exit xtaChooseModels
    end if
+   put xtaLoadModels() into tError
+   if tError is not empty then
+      exit xtaChooseModels
+   end if
+   xtaStatus xtaProviderName(tProvider) && "has" && the number of lines of the text of button "Model" of stack kWindow && \
+         "models. Using" && xtaModel(tProvider) & ": choose another from the model menu."
+end xtaChooseModels
+
+-- Asks the provider for its models and puts them in the model menu. When no
+-- model is chosen yet, it chooses the one the provider's list suggests
+-- (xtaDefaultModel), so that the assistant works without the user knowing
+-- a model's name. Returns empty; or why there are none, which the user has
+-- been told; or "stopped" when the user pressed Stop meanwhile (the menu is
+-- filled all the same); or "closed" when the window went away.
+private function xtaLoadModels
+   local tProvider, tResult, tShutDowns, tModels, tStopped
+   put xtaProvider() into tProvider
    put true into sBusy
+   put false into sStopAsked
    xtaUpdateButtons
    xtaStatus "Asking" && xtaProviderName(tProvider) && "for its models..."
    put sShutDowns into tShutDowns
    put xtaListModels(xtaSettings()) into tResult
    if sShutDowns is not tShutDowns then
-      exit xtaChooseModels
+      return "closed"
    end if
    put false into sBusy
+   put (sStopAsked is true) into tStopped
+   put false into sStopAsked
    if there is not a stack kWindow then
-      exit xtaChooseModels
+      return "closed"
    end if
    xtaUpdateButtons
    if tResult["error"] is not empty then
+      -- As Send does: a key the provider refused is asked for again
+      if line 1 of tResult["error"] contains "API key" then
+         put empty into sKeys[tProvider]
+      end if
       xtaStatus xtaSettingsLine()
       answer warning tResult["error"] titled kTitle
-      exit xtaChooseModels
+      return tResult["error"]
    end if
-   sort lines of tResult["models"]
+   if xtaModel(tProvider) is empty then
+      revIDESetPreference kPrefModel & tProvider, tResult["default"]
+   end if
+   put tResult["models"] into tModels
+   sort lines of tModels
    lock messages
-   set the text of button "Model" of stack kWindow to tResult["models"]
+   set the text of button "Model" of stack kWindow to tModels
    set the label of button "Model" of stack kWindow to xtaModel(tProvider)
    unlock messages
-   xtaStatus "The provider has" && the number of lines of tResult["models"] && \
-         "models: pick one from the model menu."
-end xtaChooseModels
+   if tStopped then
+      xtaStatus xtaSettingsLine()
+      return "stopped"
+   end if
+   return empty
+end xtaLoadModels
 
 -- True when there is a key for the provider, asking the user for one if
 -- needed. A base URL of the user's own (a local server) may need none.
@@ -1072,12 +1111,15 @@ on xtaSendPrompt
    -- confirmed
    xtaSetModel the label of button "Model" of stack kWindow
    put xtaProvider() into tProvider
-   if xtaModel(tProvider) is empty then
-      answer information "Choose a model first: type its name, or press Models to choose from the provider's list." titled kTitle
-      exit xtaSendPrompt
-   end if
    if not xtaEnsureKey(tProvider) then
       exit xtaSendPrompt
+   end if
+   -- No model chosen yet: the provider's list names one (in 0.2.5-rc.3 Send
+   -- only said to choose one first)
+   if xtaModel(tProvider) is empty then
+      if xtaLoadModels() is not empty then
+         exit xtaSendPrompt
+      end if
    end if
 
    put the number of elements of sTurns + 1 into tCount

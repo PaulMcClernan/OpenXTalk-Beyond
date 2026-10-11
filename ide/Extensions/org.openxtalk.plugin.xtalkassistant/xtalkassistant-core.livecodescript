@@ -18,7 +18,9 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --                 work with their own base URL; they may need no key.
 --
 -- No model name is built in: model names change faster than this IDE does.
--- The window asks the provider for its list (xtaModelsUrl, xtaParseModels).
+-- The window asks the provider for its list (xtaModelsUrl, xtaParseModels),
+-- which also names the model to use when the user has chosen none
+-- (xtaDefaultModel).
 --
 -- A conversation is an array of turns, keys 1 to N, each with "role"
 -- ("user" or "assistant") and "text".
@@ -35,6 +37,7 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --    xtaRequestBody(pProvider, pModel, pSystem, pTurns, pMaxTokens)
 --    xtaParseReply(pProvider, pStatus, pBody)
 --    xtaParseModels(pProvider, pStatus, pBody)
+--    xtaDefaultModel(pProvider, pIds, pCreated)  the model to begin with
 --    xtaHttpPost(pUrl, pHeaders, pBody), xtaHttpGet(pUrl, pHeaders)
 --    xtaAsk(pSettings, pSystem, pTurns)    one round trip, as xtaParseReply
 --    xtaCodeBlocks(pText)                  the fenced code blocks of a reply
@@ -806,10 +809,12 @@ private function xtaFirstLine pText
    return tLine
 end xtaFirstLine
 
--- The model names in an answer to xtaModelsUrl, one per line, or an array
--- with "error" when there are none.
+-- The model names in an answer to xtaModelsUrl: an array with "models",
+-- one per line in the provider's order, and "default", the one to use when
+-- the user has chosen none (xtaDefaultModel); or with "error" when there
+-- are none.
 function xtaParseModels pProvider, pStatus, pBody
-   local tDoc, tError, tData, tIndex, tIds, tResult
+   local tDoc, tError, tData, tIndex, tIds, tId, tCreated, tResult
    try
       put xtaJsonParse(pBody) into tDoc
    catch tError
@@ -822,19 +827,64 @@ function xtaParseModels pProvider, pStatus, pBody
    end if
    put xtaJsonMember(tDoc, "data") into tData
    repeat with tIndex = 1 to xtaJsonCount(tData)
+      put xtaJsonText(xtaJsonGet(tData, tIndex & "/id")) into tId
+      if tId is empty or return is in tId then
+         next repeat
+      end if
       if tIds is not empty then
          put return after tIds
       end if
-      put xtaJsonText(xtaJsonGet(tData, tIndex & "/id")) after tIds
+      put tId after tIds
+      -- OpenAI's list gives when each model was made, in seconds
+      put xtaJsonText(xtaJsonGet(tData, tIndex & "/created")) into tCreated[tId]
    end repeat
-   filter lines of tIds without empty
    if tIds is empty then
       put "The provider listed no models." into tResult["error"]
       return tResult
    end if
    put tIds into tResult["models"]
+   put xtaDefaultModel(pProvider, tIds, tCreated) into tResult["default"]
    return tResult
 end xtaParseModels
+
+-- The model to use when the user has chosen none, from the provider's list
+-- (pIds, one per line in the provider's order; pCreated, when the provider
+-- gives it, when each was made, by name). Families rather than names, which
+-- change: Anthropic lists its newest models first, and the newest Sonnet
+-- writes code well for less than Opus costs; OpenAI's list is in no order
+-- and mixes in models that do not chat (embeddings, speech, images), so
+-- the newest whose name is just "gpt-" and a version (gpt-4o, gpt-5.1).
+-- Otherwise, and for a local server, the first one listed.
+function xtaDefaultModel pProvider, pIds, pCreated
+   local tId, tBest, tBestCreated
+   switch pProvider
+      case "anthropic"
+         repeat for each line tId in pIds
+            if tId contains "sonnet" then
+               return tId
+            end if
+         end repeat
+         break
+      case "openai"
+         repeat for each line tId in pIds
+            if not matchText(tId, "^gpt-[0-9]+(\.[0-9]+)?o?$") then
+               next repeat
+            end if
+            if tBest is empty then
+               put tId into tBest
+               put pCreated[tId] into tBestCreated
+            else if pCreated[tId] is a number and (tBestCreated is not a number or pCreated[tId] > tBestCreated) then
+               put tId into tBest
+               put pCreated[tId] into tBestCreated
+            end if
+         end repeat
+         if tBest is not empty then
+            return tBest
+         end if
+         break
+   end switch
+   return line 1 of pIds
+end xtaDefaultModel
 
 --------------------------------------------------------------------------------
 -- HTTP
