@@ -570,8 +570,14 @@ end xtaSettings
 on xtaSetProviderByName pName
    local tProvider
    repeat for each item tProvider in xtaProviders()
-      if xtaProviderName(tProvider) is pName then
+      if xtaProviderName(tProvider) is pName and tProvider is not xtaProvider() then
          revIDESetPreference kPrefProvider, tProvider
+         -- The model menu lists the other provider's models
+         if there is a stack kWindow then
+            lock messages
+            set the text of button "Model" of stack kWindow to empty
+            unlock messages
+         end if
       end if
    end repeat
    xtaRefreshWindow

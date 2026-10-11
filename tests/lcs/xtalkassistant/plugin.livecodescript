@@ -298,6 +298,13 @@ on TestModelsChoosesAModel
    revIDESetPreference "cXTalkAssistant,model,anthropic", "claude-opus-9"
    dispatch "xtaChooseModels" to stack kMain
    TestAssert "the user's model stays", the label of button "Model" of stack kWindow is "claude-opus-9"
+
+   -- Another provider: its models are not those
+   dispatch "xtaSetProviderByName" to stack kMain with "OpenAI (or compatible)"
+   TestAssert "the other provider is shown", the label of button "Provider" of stack kWindow is "OpenAI (or compatible)"
+   TestAssert "the model menu is emptied", the text of button "Model" of stack kWindow is empty
+   dispatch "xtaSetProviderByName" to stack kMain with "Anthropic"
+   TestAssert "back to Anthropic, with its model", the label of button "Model" of stack kWindow is "claude-opus-9"
 end TestModelsChoosesAModel
 
 -- Send with no model chosen asks for the models first and uses the one the
