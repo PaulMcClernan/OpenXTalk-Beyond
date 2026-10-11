@@ -14,17 +14,23 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
-## Unreleased
-
-Merged since 0.2.5-rc.1; the next release's section takes these lines.
+## 0.2.5-rc.2 (2026-10-11, pre-release)
 
 - Snapshot: throw instead of crashing on a bitmap over 4 GiB (#85)
 - Test: make the huge group without selecting, as the test stack is not open (#85)
 - Tests: export snapshot of a group of images, in each format (#85)
 - Docs: changelog and LEGACY-TODO.md for the snapshot fix (#85)
 - Docs: the Unreleased section of CHANGELOG.md, for the snapshot fix (#85)
+- Docs: list the changelog commit in the Unreleased section too (#85)
 - Docs: no breaking changes, in CONTRIBUTING.md and a new CLAUDE.md (#88)
 - Docs: an engine change compares the release with the changed build (#88)
+- xTalk Assistant: an optional AI script assistant plugin, off by default (#86)
+- xTalk Assistant: the system prompt's engine advice matches OXT-Beyond (#86)
+- export: throw instead of crashing when the object is not an image (#87)
+- export: export nothing and say why, instead of throwing, for a non-image (#87)
+- export: start each export with an empty result (#87)
+- Version 0.2.5-rc.2, with its changelog (#89)
+- Runtimes: oxt-runtimes-0.2.5-rc.2, built from the merge of #87 (#89)
 
 ## 0.2.5-rc.1 (2026-10-11, pre-release)
 
