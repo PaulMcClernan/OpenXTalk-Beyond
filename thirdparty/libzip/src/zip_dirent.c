@@ -499,11 +499,22 @@ zip_int64_t _zip_dirent_read(zip_dirent_t *zde, zip_source_t *src, zip_buffer_t 
 
         if (zde->bitflags & ZIP_GPBF_ENCODING_UTF_8) {
             if (_zip_guess_encoding(zde->filename, ZIP_ENCODING_UTF8_KNOWN) == ZIP_ENCODING_ERROR) {
-                zip_error_set(error, ZIP_ER_INCONS, ZIP_ER_DETAIL_INVALID_UTF8_IN_FILENAME);
-                if (!from_buffer) {
-                    _zip_buffer_free(buffer);
+                /* OXT-Beyond: some writers set the UTF-8 flag on names in
+                   their own code page. Unless consistency is checked, keep
+                   such a name's bytes as they are, as the old libzip kept
+                   every name, rather than refusing the whole archive: as
+                   UTF8_KNOWN it is returned unconverted and written back
+                   with the flag. */
+                if (!check_consistency) {
+                    zde->filename->encoding = ZIP_ENCODING_UTF8_KNOWN;
                 }
-                return -1;
+                else {
+                    zip_error_set(error, ZIP_ER_INCONS, ZIP_ER_DETAIL_INVALID_UTF8_IN_FILENAME);
+                    if (!from_buffer) {
+                        _zip_buffer_free(buffer);
+                    }
+                    return -1;
+                }
             }
         }
     }
@@ -540,11 +551,17 @@ zip_int64_t _zip_dirent_read(zip_dirent_t *zde, zip_source_t *src, zip_buffer_t 
         }
         if (zde->bitflags & ZIP_GPBF_ENCODING_UTF_8) {
             if (_zip_guess_encoding(zde->comment, ZIP_ENCODING_UTF8_KNOWN) == ZIP_ENCODING_ERROR) {
-                zip_error_set(error, ZIP_ER_INCONS, ZIP_ER_DETAIL_INVALID_UTF8_IN_COMMENT);
-                if (!from_buffer) {
-                    _zip_buffer_free(buffer);
+                /* OXT-Beyond: and the same for the comment. */
+                if (!check_consistency) {
+                    zde->comment->encoding = ZIP_ENCODING_UTF8_KNOWN;
                 }
-                return -1;
+                else {
+                    zip_error_set(error, ZIP_ER_INCONS, ZIP_ER_DETAIL_INVALID_UTF8_IN_COMMENT);
+                    if (!from_buffer) {
+                        _zip_buffer_free(buffer);
+                    }
+                    return -1;
+                }
             }
         }
     }

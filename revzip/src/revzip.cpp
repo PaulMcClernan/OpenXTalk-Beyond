@@ -190,6 +190,26 @@ static bool revzip_progress_message(const char *p_archive_path, const char *p_it
 	return !s_operation_cancelled;
 }
 
+// Begins reading an item: sends its first progress message, at 0, and
+// starts the operation that revZipCancel cancels. The old libzip sent that
+// message for a compressed item from zip_fopen_index, before the operation
+// began, so revZipCancel there was refused and the item was read anyway; it
+// sent none for a stored item, whose first message could cancel, as this
+// one can.
+static void revzip_begin_unpacking(const char *p_archive_path, const char *p_item, const zip_stat_t &p_stat)
+{
+	bool t_stored;
+	t_stored = p_stat . comp_method == ZIP_CM_STORE;
+	if (!t_stored)
+		revzip_progress_message(p_archive_path, p_item, 0, 0, p_stat . size, 0, p_stat . size);
+
+	s_operation_in_progress = true;
+	s_operation_cancelled = false;
+
+	if (t_stored)
+		revzip_progress_message(p_archive_path, p_item, 0, 0, p_stat . size, 0, p_stat . size);
+}
+
 static zip_uint64_t revzip_source_size(zip_source_t *p_source)
 {
 	zip_stat_t t_stat;
@@ -267,6 +287,30 @@ static zip_int64_t revzip_progress_layer(zip_source_t *p_lower, void *p_context,
 			delete t_context;
 			return 0;
 
+		case ZIP_SOURCE_GET_FILE_ATTRIBUTES:
+		{
+			// A device or a pipe added as a file is read as a file (see
+			// revzip_file_source), so record it as a regular file with its
+			// permissions, not as something an unzipper might make a
+			// device of.
+			// (libzip fills in what a layer leaves out from the source below
+			// it, so this layer gives those attributes itself.)
+			if (p_length < sizeof(zip_file_attributes_t))
+				return -1;
+			zip_file_attributes_t *t_attributes;
+			t_attributes = (zip_file_attributes_t *)p_data;
+			if (zip_source_get_file_attributes(p_lower, t_attributes) != 0)
+				return -1;
+			if ((t_attributes->valid & ZIP_FILE_ATTRIBUTES_HOST_SYSTEM) != 0 && t_attributes->host_system == ZIP_OPSYS_UNIX &&
+				(t_attributes->valid & ZIP_FILE_ATTRIBUTES_EXTERNAL_FILE_ATTRIBUTES) != 0)
+			{
+				// S_IFMT and S_IFREG, which Windows does not define.
+				t_attributes->external_file_attributes &= ~((zip_uint32_t)0170000 << 16);
+				t_attributes->external_file_attributes |= (zip_uint32_t)0100000 << 16;
+			}
+			return 0;
+		}
+
 		default:
 			return zip_source_pass_to_lower_layer(p_lower, p_data, p_length, p_command);
 	}
@@ -318,24 +362,163 @@ static void revzip_attach_source(RevZipArchive *p_archive, RevZipProgressSource 
 	p_archive->sources.insert(p_context);
 }
 
+// Whether p_source, a file source for a path that exists, is a folder.
+// libzip's file sources keep a file's Unix mode, where it has one, in the top
+// half of its external attributes; its Windows sources keep none, so there a
+// folder is not known.
+static bool revzip_source_is_folder(zip_source_t *p_source)
+{
+	zip_file_attributes_t t_attributes;
+	zip_file_attributes_init(&t_attributes);
+	if (zip_source_get_file_attributes(p_source, &t_attributes) != 0)
+		return false;
+
+	if ((t_attributes.valid & ZIP_FILE_ATTRIBUTES_HOST_SYSTEM) == 0 || t_attributes.host_system != ZIP_OPSYS_UNIX ||
+		(t_attributes.valid & ZIP_FILE_ATTRIBUTES_EXTERNAL_FILE_ATTRIBUTES) == 0)
+		return false;
+
+	// S_IFMT and S_IFDIR, which Windows does not define.
+	return ((t_attributes.external_file_attributes >> 16) & 0170000) == 0040000;
+}
+
+static zip_int64_t revzip_folder_callback(void *p_state, void *p_data, zip_uint64_t p_length, zip_source_cmd_t p_command)
+{
+	time_t *t_mtime;
+	t_mtime = (time_t *)p_state;
+
+	switch (p_command)
+	{
+		case ZIP_SOURCE_OPEN:
+		case ZIP_SOURCE_READ:
+		case ZIP_SOURCE_CLOSE:
+			return 0;
+
+		case ZIP_SOURCE_STAT:
+		{
+			if (p_length < sizeof(zip_stat_t))
+				return -1;
+			zip_stat_t *t_stat;
+			t_stat = (zip_stat_t *)p_data;
+			t_stat->size = 0;
+			t_stat->mtime = *t_mtime;
+			t_stat->valid |= ZIP_STAT_SIZE | ZIP_STAT_MTIME;
+			return sizeof(zip_stat_t);
+		}
+
+		case ZIP_SOURCE_ERROR:
+		{
+			// Only a stat with too small a buffer fails.
+			zip_error_t t_error;
+			zip_error_init_with_code(&t_error, ZIP_ER_INVAL);
+			zip_int64_t t_result;
+			t_result = zip_error_to_data(&t_error, p_data, p_length);
+			zip_error_fini(&t_error);
+			return t_result;
+		}
+
+		case ZIP_SOURCE_FREE:
+			delete t_mtime;
+			return 0;
+
+		case ZIP_SOURCE_SUPPORTS:
+			return zip_source_make_command_bitmap(ZIP_SOURCE_OPEN, ZIP_SOURCE_READ, ZIP_SOURCE_CLOSE, ZIP_SOURCE_STAT, ZIP_SOURCE_ERROR, ZIP_SOURCE_FREE, -1);
+
+		default:
+			return -1;
+	}
+}
+
+// The item for a folder added as a file. The old libzip opened the folder at
+// close and read nothing from it (on Mac and Linux; on Windows it could not
+// open it), so the item was empty, with the folder's date; libzip 1.12 would
+// fail the close reading it.
+static zip_source_t *revzip_folder_source(zip_t *p_archive, time_t p_mtime)
+{
+	time_t *t_mtime;
+	t_mtime = new (std::nothrow) time_t(p_mtime);
+	if (t_mtime == NULL)
+	{
+		zip_error_set(zip_get_error(p_archive), ZIP_ER_MEMORY, 0);
+		return NULL;
+	}
+
+	zip_source_t *t_source;
+	t_source = zip_source_function(p_archive, revzip_folder_callback, t_mtime);
+	if (t_source == NULL)
+		delete t_mtime;
+
+	return t_source;
+}
+
 // A source that reads the file at p_path when the archive is closed. libzip
 // 1.x accepts a file that does not exist (it is how a new archive is made),
 // so a missing file is refused here, as the old libzip did when the item was
 // added rather than failing the whole close.
+//
+// The old libzip only checked that the file was there when it was added, and
+// at close read it to its end, whatever it was. So a file that is not a
+// regular one (a device) is read to its end here too, and so is one that says
+// it is empty but is not (those in /proc, whose size is 0), where libzip 1.12
+// would read none of it, or fail the close; a folder is an empty item.
 static zip_source_t *revzip_file_source(zip_t *p_archive, const char *p_path)
 {
 	zip_source_t *t_source;
 	t_source = zip_source_file(p_archive, p_path, 0, ZIP_LENGTH_TO_END);
 	if (t_source == NULL)
+	{
+		// The path could not be looked at (a part of it is a file, say),
+		// which the old libzip reported as a missing file.
+		if (zip_error_code_zip(zip_get_error(p_archive)) == ZIP_ER_READ)
+			zip_error_set(zip_get_error(p_archive), ZIP_ER_NOENT, 0);
 		return NULL;
+	}
 
 	zip_stat_t t_stat;
 	zip_stat_init(&t_stat);
-	if (zip_source_stat(t_source, &t_stat) != 0 || (t_stat.valid & ZIP_STAT_SIZE) == 0)
+	if (zip_source_stat(t_source, &t_stat) != 0)
 	{
 		zip_source_free(t_source);
 		zip_error_set(zip_get_error(p_archive), ZIP_ER_NOENT, 0);
 		return NULL;
+	}
+
+	if ((t_stat.valid & ZIP_STAT_SIZE) == 0)
+	{
+		if (!revzip_source_is_folder(t_source))
+			return t_source;
+
+		time_t t_mtime;
+		t_mtime = (t_stat.valid & ZIP_STAT_MTIME) != 0 ? t_stat.mtime : time(NULL);
+		zip_source_free(t_source);
+		return revzip_folder_source(p_archive, t_mtime);
+	}
+
+	if (t_stat.size == 0)
+	{
+		// Read one byte to see whether the file is really empty: an empty
+		// file keeps its source of known length, which libzip stores without
+		// the Zip64 header fields a file of unknown length needs.
+		zip_source_t *t_to_end;
+		t_to_end = zip_source_file(p_archive, p_path, 0, ZIP_LENGTH_UNCHECKED);
+		if (t_to_end != NULL)
+		{
+			bool t_has_data;
+			t_has_data = false;
+			if (zip_source_open(t_to_end) == 0)
+			{
+				char t_byte;
+				t_has_data = zip_source_read(t_to_end, &t_byte, 1) > 0;
+				zip_source_close(t_to_end);
+			}
+
+			if (t_has_data)
+			{
+				zip_source_free(t_source);
+				return t_to_end;
+			}
+
+			zip_source_free(t_to_end);
+		}
 	}
 
 	return t_source;
@@ -427,6 +610,106 @@ static void revzip_reopen_files(RevZipArchive *p_archive)
 	}
 }
 
+// libzip's message for an error code, with the system error that goes with it.
+static std::string revzip_error_string(int p_error, int p_system_error)
+{
+	zip_error_t t_error;
+	zip_error_init(&t_error);
+	zip_error_set(&t_error, p_error, p_system_error);
+	std::string t_string(zip_error_strerror(&t_error));
+	zip_error_fini(&t_error);
+	return t_string;
+}
+
+// The old libzip looked at the archive's path when it was opened, and failed
+// there, with the system's reason, when the path could not be looked at or,
+// for "write" and "update", when no archive could be made there. libzip 1.12
+// makes a new archive in memory and only finds out at close, after every
+// item has been added; and it reports a path it could not look at as a read
+// error, and a folder as an unsupported operation. So look at the path first,
+// as the old libzip did, and fail with its message. Returns false, with the
+// message in r_error, if the open must fail; true leaves it to zip_open (an
+// archive that is there, or a missing one to read, which libzip reports as
+// "No such file").
+static bool revzip_check_path(const char *p_path, int p_flags, std::string &r_error)
+{
+	// The old libzip could not open an empty path, even to make an archive.
+	if (*p_path == '\0')
+	{
+		r_error = revzip_error_string((p_flags & ZIP_CREATE) != 0 ? ZIP_ER_OPEN : ZIP_ER_NOENT, ENOENT);
+		return false;
+	}
+
+	zip_error_t t_error;
+	zip_error_init(&t_error);
+
+	zip_source_t *t_source;
+	t_source = zip_source_file_create(p_path, 0, ZIP_LENGTH_TO_END, &t_error);
+	if (t_source == NULL)
+	{
+		// The path could not be looked at: a part of it is a file, say, or
+		// can't be searched (or, on Windows, a folder in it is missing).
+		int t_code, t_system;
+		t_code = zip_error_code_zip(&t_error);
+		t_system = zip_error_code_system(&t_error);
+		zip_error_fini(&t_error);
+		if (t_code != ZIP_ER_READ)
+			return true;
+
+		if (t_system == ENOENT && (p_flags & ZIP_CREATE) == 0)
+			r_error = revzip_error_string(ZIP_ER_NOENT, 0);
+		else
+			r_error = revzip_error_string(ZIP_ER_OPEN, t_system);
+		return false;
+	}
+	zip_error_fini(&t_error);
+
+	bool t_ok;
+	t_ok = true;
+
+	zip_stat_t t_stat;
+	zip_stat_init(&t_stat);
+	if (zip_source_stat(t_source, &t_stat) != 0)
+	{
+		// Nothing is there. Make the archive's temporary file, as zip_close
+		// will, and remove it again: the old libzip made the archive's file
+		// (and removed it) to see that it could.
+		if ((p_flags & ZIP_CREATE) != 0)
+		{
+			if (zip_source_begin_write(t_source) != 0)
+			{
+				r_error = revzip_error_string(ZIP_ER_OPEN, zip_error_code_system(zip_source_error(t_source)));
+				t_ok = false;
+			}
+			else
+				zip_source_rollback_write(t_source);
+		}
+	}
+	else if ((p_flags & ZIP_EXCL) != 0)
+	{
+		r_error = revzip_error_string(ZIP_ER_EXISTS, 0);
+		t_ok = false;
+	}
+	else if ((t_stat.valid & ZIP_STAT_SIZE) == 0)
+	{
+		// Not a regular file. The old libzip opened a folder, and failed to
+		// read it: on Windows a folder can't be opened as a file at all.
+#ifdef _WINDOWS
+		r_error = revzip_error_string(ZIP_ER_OPEN, EACCES);
+		t_ok = false;
+#else
+		if (revzip_source_is_folder(t_source))
+		{
+			r_error = revzip_error_string(ZIP_ER_READ, EISDIR);
+			t_ok = false;
+		}
+#endif
+	}
+
+	zip_source_free(t_source);
+	return t_ok;
+}
+
 void revZipOpenArchive(char *p_arguments[], int p_argument_count, char **r_result, Bool *r_pass, Bool *r_err)
 {
 	char *t_result = NULL;
@@ -482,12 +765,23 @@ void revZipOpenArchive(char *p_arguments[], int p_argument_count, char **r_resul
 			t_record = NULL;
 			RevZipArchive *t_previous;
 			t_previous = find_archive_by_name(t_path);
+			std::string t_path_error;
 			if (t_previous != NULL && revzip_archive_busy(t_previous))
 			{
 				t_result = strdup("ziperr,archive busy");
 			}
-			else if((t_archive = zip_open(t_path, t_openflag, &t_err)) == NULL) 
+			else if (!revzip_check_path(t_path, t_openflag, t_path_error))
 			{
+				std::string t_outerr = "ziperr," + t_path_error;
+				t_result = strdup(t_outerr.c_str());
+			}
+			else if((t_archive = zip_open(t_path, t_openflag, &t_err)) == NULL)
+			{
+				// The old libzip called every archive it could not make
+				// sense of "Not a zip archive"; libzip 1.12 says what it
+				// found wrong (and is stricter).
+				if (t_err == ZIP_ER_INCONS || t_err == ZIP_ER_TRUNCATED_ZIP)
+					t_err = ZIP_ER_NOZIP;
 				std::string t_outerr = "ziperr," + zip_open_error_string(t_err);
 				t_result = strdup(t_outerr.c_str());
 			}
@@ -859,15 +1153,14 @@ void revZipExtractItemToVariable(char *p_arguments[], int p_argument_count, char
 	t_archive = NULL;
 	if (t_result == NULL)
 	{
+		// An item can be read while the archive is being closed (from a
+		// packing progress message), as before: zip_close reads only the new
+		// items' own sources then, seeks the archive's file before each item
+		// it copies from it, and writes to another file.
 		t_record = find_archive_by_name( t_path );
 		if( !t_record )
 		{
 			t_result = strdup("ziperr,archive not open");
-			t_error = False;
-		}
-		else if (t_record->closing)
-		{
-			t_result = strdup("ziperr,archive busy");
 			t_error = False;
 		}
 		else
@@ -940,10 +1233,8 @@ void revZipExtractItemToVariable(char *p_arguments[], int p_argument_count, char
 
 		std::string t_item(t_stat . name != NULL ? t_stat . name : "");
 		
-		s_operation_in_progress = true;
-		s_operation_cancelled = false;
 		t_record->reading++;
-		revzip_progress_message(t_path, t_item . c_str(), 0, 0, t_stat . size, 0, t_stat . size);
+		revzip_begin_unpacking(t_path, t_item . c_str(), t_stat);
 		while(t_read != t_stat . size && !s_operation_cancelled)
 		{
 			zip_uint64_t t_wanted;
@@ -1060,15 +1351,12 @@ void revZipExtractItemToFile(char *p_arguments[], int p_argument_count, char **r
 	t_archive = NULL;
 	if (t_result == NULL)
 	{
+		// An item can be read while the archive is being closed, as in
+		// revZipExtractItemToVariable.
 		t_record = find_archive_by_name( t_path );
 		if (!t_record)
 		{
 			t_result = strdup("ziperr,archive not open");
-			t_error = False;
-		}
-		else if (t_record->closing)
-		{
-			t_result = strdup("ziperr,archive busy");
 			t_error = False;
 		}
 		else
@@ -1133,11 +1421,10 @@ void revZipExtractItemToFile(char *p_arguments[], int p_argument_count, char **r
 		
 		std::string t_item(t_stat . name != NULL ? t_stat . name : "");
 
-		s_operation_in_progress = true;
-		s_operation_cancelled = false;
 		t_record->reading++;
-		revzip_progress_message(t_path, t_item . c_str(), 0, 0, t_stat . size, 0, t_stat . size);
-		do
+		revzip_begin_unpacking(t_path, t_item . c_str(), t_stat);
+		// (A stored item can be cancelled from its first message.)
+		if (!s_operation_cancelled) do
 		{
 			t_read = zip_fread(t_file, t_buffer, REVZIP_READ_BUFFER_SIZE);
 			if (t_read > 0)
@@ -1785,18 +2072,22 @@ void revZipDescribeItem(char *p_arguments[], int p_argument_count, char **r_resu
 		}
 	}
 
+	RevZipArchive *t_record;
+	t_record = NULL;
 	struct zip *t_archive;
 	zip_int64_t t_index;
 	t_archive = NULL;
 	if (t_result == NULL)
 	{
-		t_archive = find_zip_by_name( t_path );
-		if( !t_archive )
+		t_record = find_archive_by_name( t_path );
+		if( !t_record )
 		{
 			//t_result = strdup("ziperr,archive not open");
 			t_result = strdup("");
 			t_error = False;
 		}
+		else
+			t_archive = t_record->archive;
 	}
 
 	if (t_result == NULL)
@@ -1810,14 +2101,29 @@ void revZipDescribeItem(char *p_arguments[], int p_argument_count, char **r_resu
 		}
 		else
 		{
+			// An item whose data is still to be written (added or replaced
+			// since the archive was opened) has no compressed size or method
+			// yet: the old libzip said -1 and "none" (and a CRC of 0, which
+			// libzip 1.12 says too). libzip 1.12 says the data's size and
+			// whatever method the item had.
+			bool t_pending;
+			t_pending = false;
+			for (std::set<RevZipProgressSource *>::const_iterator t_it = t_record->sources.begin(); t_it != t_record->sources.end(); ++t_it)
+				if ((*t_it)->index == t_index)
+					t_pending = true;
+
 			struct zip_stat t_stat_data;
 			struct zip_stat* t_stat = &t_stat_data;
 			if (zip_stat_index(t_archive, t_index, 0, t_stat) == 0)
 			{
 				std::stringstream t_strstream;
 				t_strstream << t_stat->index << "," << t_stat->crc << "," << t_stat->size << ",";
-				t_strstream << (long long)t_stat->mtime << "," << t_stat->comp_size << ",";
-				switch( t_stat->comp_method )
+				t_strstream << (long long)t_stat->mtime << ",";
+				if (t_pending)
+					t_strstream << "-1,";
+				else
+					t_strstream << t_stat->comp_size << ",";
+				switch( t_pending ? ZIP_CM_STORE : t_stat->comp_method )
 				{
 				case 0:
 					t_strstream << "none";
