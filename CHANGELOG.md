@@ -22,6 +22,7 @@ Merged since 0.2.5-rc.1; the next release's section takes these lines.
 - Test: make the huge group without selecting, as the test stack is not open (#85)
 - Tests: export snapshot of a group of images, in each format (#85)
 - Docs: changelog and LEGACY-TODO.md for the snapshot fix (#85)
+- Docs: the Unreleased section of CHANGELOG.md, for the snapshot fix (#85)
 
 ## 0.2.5-rc.1 (2026-10-11, pre-release)
 
