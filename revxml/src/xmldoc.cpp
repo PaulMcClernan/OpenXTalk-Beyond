@@ -139,7 +139,7 @@ xmlSAXHandler CXMLDocument::SAXHandlerTable = {
 
 void CXMLDocument::startDocumentCallback(void *ctx)
 {
-	if (allowcallbacks)
+	if (allowcallbacks && revxml_sax_sending(ctx))
 		CB_startDocument();
 	xmlSAX2StartDocument(ctx);
 }
@@ -147,7 +147,10 @@ void CXMLDocument::startDocumentCallback(void *ctx)
 void CXMLDocument::endDocumentCallback(void *ctx)
 {
 	if (allowcallbacks)
+	{
+		revxml_sax_flush(ctx);
 		CB_endDocument();
+	}
 	xmlSAX2EndDocument(ctx);
 }
 
@@ -156,8 +159,9 @@ void CXMLDocument::startElementCallback(void *ctx,
 										const xmlChar **atts)
 {
     extern Bool XML_ProcessNameSpaces;
+    revxml_parse_note_position(ctx);
     if (allowcallbacks)
-		CB_startElement((const char *)fullname,(const char **)atts);
+		revxml_sax_start_element(ctx, fullname, atts);
 	if (buildtree)
     {
         //HS-2010-10-11: [[ Bug 7586 ]] Reinstate libxml2 to create name spaces. Implement new liveCode commands to suppress name space creation.
@@ -175,8 +179,9 @@ void CXMLDocument::startElementCallback(void *ctx,
 void CXMLDocument::endElementCallback(void *ctx,
 									  const xmlChar *name)
 {
+	revxml_parse_note_position(ctx);
 	if (allowcallbacks)
-		CB_endElement((const char *)name);
+		revxml_sax_end_element(ctx, name);
 	if (buildtree)
 		xmlSAX2EndElement(ctx,name);
 }
@@ -184,8 +189,9 @@ void CXMLDocument::endElementCallback(void *ctx,
 
 void CXMLDocument::elementCDataCallback(void *ctx,const xmlChar *ch,int len)
 {
+	revxml_parse_note_position(ctx);
 	if (allowcallbacks)
-		CB_elementData((const char *)ch,len);
+		revxml_sax_text(ctx, ch, len, true);
 	if (buildtree)
 		xmlSAX2CDataBlock(ctx,ch,len);
 }
@@ -193,8 +199,17 @@ void CXMLDocument::elementCDataCallback(void *ctx,const xmlChar *ch,int len)
 
 void CXMLDocument::elementDataCallback(void *ctx,const xmlChar *ch,int len)
 {
+	revxml_parse_note_position(ctx);
+	// A character reference after native text, as 2.9 read it
+	//   (xmlnative.cpp).
+	if (!revxml_parse_char_ref(ctx, &ch, &len))
+	{
+		if (buildtree)
+			xmlSAX2Reference(ctx, ch);
+		return;
+	}
 	if (allowcallbacks)
-		CB_elementData((const char *)ch,len);
+		revxml_sax_text(ctx, ch, len, false);
 	if (buildtree)
 		xmlSAX2Characters(ctx,ch,len);
 }
@@ -202,6 +217,7 @@ void CXMLDocument::elementDataCallback(void *ctx,const xmlChar *ch,int len)
 
 void CXMLDocument::warningCallback(void *ctx, const char *msg, ...)
 {
+    revxml_parse_note_error(ctx);
     va_list args;
     va_start(args, msg);
     _vsnprintf(errorbuf, 255, msg, args);
@@ -210,6 +226,7 @@ void CXMLDocument::warningCallback(void *ctx, const char *msg, ...)
 
 void CXMLDocument::errorCallback(void *ctx, const char *msg, ...)
 {
+    revxml_parse_note_error(ctx);
     va_list args;
     va_start(args, msg);
     _vsnprintf(errorbuf, 255, msg, args);
@@ -218,6 +235,7 @@ void CXMLDocument::errorCallback(void *ctx, const char *msg, ...)
 
 void CXMLDocument::fatalCallback(void *ctx, const char *msg, ...)
 {
+    revxml_parse_note_error(ctx);
     va_list args;
     va_start(args, msg);
 	_vsnprintf(errorbuf, 255, msg, args);
@@ -270,11 +288,11 @@ xmlDocPtr CXMLDocument::Parse(const char *data, unsigned long tlength, const cha
 	if (ctxt == NULL)
 		return NULL;
 
+	// Native text, text labelled UTF-16 and encodings libxml2 cannot read
+	//   are read as 2.9 read them (xmlnative.cpp).
 	xmlDocPtr result;
-	if (data != NULL)
-		result = xmlCtxtReadMemory(ctxt, data, (int)tlength, NULL, NULL, options);
-	else
-		result = xmlCtxtReadFile(ctxt, filename, NULL, options);
+	result = revxml_parse(ctxt, data, tlength, filename, options, wellformed != False, allowcallbacks != False,
+						  errorbuf, sizeof(errorbuf));
 
 	xmlFreeParserCtxt(ctxt);
 	return result;

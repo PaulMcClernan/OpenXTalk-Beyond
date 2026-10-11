@@ -15,7 +15,7 @@ LiveCode's 2.9.4 build had, less HTTP, FTP and modules (removed or off);
 src/config.h is written for OXT-Beyond's build (gyp runs no configure
 step).
 
-Two local changes, marked "OXT-Beyond" in the sources:
+Five local changes, marked "OXT-Beyond" in the sources:
 
 - From LiveCode (bug 7586): xmlSAX2StartElementNoNS in src/SAX2.c
   (declared in include/libxml/SAX2.h), used by revXML when namespace
@@ -24,6 +24,16 @@ Two local changes, marked "OXT-Beyond" in the sources:
 - In src/parser.c, a parser with a SAX1 handler (revXML's) passes the
   start tag's line to xmlParseEndTag1, so "Opening and ending tag
   mismatch: b line 2 and c" names the line, as 2.9 did, not line 0.
+- In src/xpath.c, xmlXPathParseLiteral takes a byte that is not UTF-8
+  as part of the literal, as 2.9 did, instead of refusing the expression.
+  revXML passes text in the native encoding (Windows-1252, ISO-8859-1)
+  and keeps native text's bytes in the trees it parses, so an XPath
+  literal in native text matches them.
+- In src/xmlIO.c (xmlSerializeText) and src/encoding.c
+  (xmlCharEncOutput), a byte that is not UTF-8 is written as a reference
+  to the ISO-8859-1 character it is ("&#xE9;"), where 2.15 wrote
+  "&#xFFFD;" or ended the output. Such bytes are native text that
+  revXML keeps in its trees.
 
 LiveCode's other changes to 2.9.4 are not needed: revXML now parses
 through a SAX parser context with xmlCtxtReadMemory and xmlCtxtReadFile

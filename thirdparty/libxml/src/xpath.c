@@ -8453,7 +8453,17 @@ xmlXPathParseLiteral(xmlXPathParserContextPtr ctxt) {
         if (CUR == 0)
             XP_ERRORNULL(XPATH_UNFINISHED_LITERAL_ERROR);
         ch = xmlGetUTF8Char(CUR_PTR, &len);
-        if ((ch < 0) || (IS_CHAR(ch) == 0))
+        /*
+         * OXT-Beyond: a byte that is not UTF-8 is part of the literal, as
+         * in libxml2 2.9. revXML takes text in the native encoding
+         * (Windows-1252, ISO-8859-1), and a tree parsed from native text
+         * keeps its bytes, so "//p[.='caf\xE9']" must compare those bytes.
+         */
+        if (ch < 0) {
+            CUR_PTR += 1;
+            continue;
+        }
+        if (IS_CHAR(ch) == 0)
             XP_ERRORNULL(XPATH_INVALID_CHAR_ERROR);
         CUR_PTR += len;
     }

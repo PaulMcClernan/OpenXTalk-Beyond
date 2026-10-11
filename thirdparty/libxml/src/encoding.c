@@ -2045,6 +2045,16 @@ retry:
         int cur, charrefLen;
 
         cur = xmlGetUTF8Char(content, &len);
+        /*
+         * OXT-Beyond: a byte that is not UTF-8 is native text
+         * (Windows-1252, ISO-8859-1) that revXML keeps in its trees as it
+         * is. It is written as a reference to the ISO-8859-1 character it
+         * is, instead of ending the output there.
+         */
+        if ((cur <= 0) && (xmlBufUse(in) > 0) && (content[0] >= 0x80)) {
+            cur = content[0];
+            len = 1;
+        }
         if (cur <= 0)
             goto error;
 
