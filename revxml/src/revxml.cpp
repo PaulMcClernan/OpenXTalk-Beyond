@@ -977,7 +977,9 @@ void XML_MoveElement(char *args[], int nargs, char **retstring, Bool *pass, Bool
 		else if (strcasecmp(args[3], "after") == 0)
 			before = false;
 		else
-			nargs = 6;
+			// Refused below. It was 6, which went on to read args[4], past
+			//   the end when there were only 4 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;
@@ -1031,7 +1033,9 @@ void XML_CopyElement(char *args[], int nargs, char **retstring, Bool *pass, Bool
 		else if (strcasecmp(args[3], "after") == 0)
 			before = false;
 		else
-			nargs = 6;
+			// Refused below. It was 6, which went on to read args[4], past
+			//   the end when there were only 4 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;
@@ -1079,7 +1083,9 @@ void XML_CopyRemoteElement(char *args[], int nargs, char **retstring, Bool *pass
 		else if (strcasecmp(args[4], "after") == 0)
 			before = false;
 		else
-			nargs = 7;
+			// Refused below. It was 7, which went on to read args[5], past
+			//   the end when there were only 5 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;
@@ -1131,7 +1137,9 @@ void XML_MoveRemoteElement(char *args[], int nargs, char **retstring, Bool *pass
 		else if (strcasecmp(args[4], "after") == 0)
 			before = false;
 		else
-			nargs = 7;
+			// Refused below. It was 7, which went on to read args[5], past
+			//   the end when there were only 5 arguments.
+			nargs = 0;
 	}
 	else
 		before = false;

@@ -131,6 +131,8 @@ static bool revxml_utf8_refused_by_29(const unsigned char *p_text, size_t p_avai
 	return t_value < 0x10000;
 }
 
+struct RevXMLHead;
+
 // The state of one parse, for the SAX handlers, the error handlers and the
 //   native decoder. A script can parse another document from a SAX message,
 //   so parses nest: s_revxml_parse is the innermost, and each one keeps the
@@ -178,6 +180,10 @@ struct RevXMLParse
 	size_t text_capacity;
 	const xmlParserInput *text_input;
 	size_t text_end;
+	// A document on the network (revxml_load_url): how its first bytes say
+	//   it is read, once it is loaded, and whether it is read with markers.
+	RevXMLHead *url_head;
+	bool url_decoder;
 };
 
 enum
@@ -388,6 +394,24 @@ static const xmlChar *revxml_unmark_string(xmlDictPtr p_dict, const xmlChar *p_s
 
 static void revxml_unmark_nodes(xmlDocPtr p_doc, xmlNodePtr p_first, xmlNodePtr p_parent);
 
+// The document's ID table finds an ID attribute by its value, which the
+//   parse registered with its markers: registers it again with its bytes,
+//   so that id() in XPath finds native text, as with 2.9. p_attr's text
+//   has been unmarked.
+static void revxml_unmark_id(xmlDocPtr p_doc, xmlAttrPtr p_attr)
+{
+	xmlChar *t_value;
+	if (p_attr->atype != XML_ATTRIBUTE_ID)
+		return;
+	t_value = xmlNodeListGetString(p_doc, p_attr->children, 1);
+	if (t_value != NULL && xmlGetID(p_doc, t_value) != p_attr)
+	{
+		xmlRemoveID(p_doc, p_attr);
+		xmlAddIDSafe(p_attr, t_value);
+	}
+	xmlFree(t_value);
+}
+
 // The strings of one node of the tree, of an element's attributes and
 //   namespace declarations, and of the declarations in a DTD.
 static void revxml_unmark_node(xmlDocPtr p_doc, xmlNodePtr p_node)
@@ -402,6 +426,7 @@ static void revxml_unmark_node(xmlDocPtr p_doc, xmlNodePtr p_node)
 		{
 			t_attr->name = revxml_unmark_string(t_dict, t_attr->name, true);
 			revxml_unmark_nodes(p_doc, t_attr->children, (xmlNodePtr)t_attr);
+			revxml_unmark_id(p_doc, t_attr);
 		}
 		for (xmlNsPtr t_ns = p_node->nsDef; t_ns != NULL; t_ns = t_ns->next)
 		{
@@ -653,6 +678,25 @@ static void revxml_head(const unsigned char *p_text, size_t p_length, RevXMLHead
 	// After a UTF-8 BOM, libxml2 2.15 reads UTF-8 whatever else is declared.
 }
 
+// Whether p_filename is an http:// or ftp:// URL, or on Windows the path
+//   form of one ("http:\\host\doc.xml") that revXML passes there and
+//   libxml2 turns back into a URL (xmlNewInputFromUrl).
+static bool revxml_network_url(const char *p_filename)
+{
+	size_t t_length;
+	if (xmlStrncasecmp((const xmlChar *)p_filename, (const xmlChar *)"http:", 5) == 0)
+		t_length = 5;
+	else if (xmlStrncasecmp((const xmlChar *)p_filename, (const xmlChar *)"ftp:", 4) == 0)
+		t_length = 4;
+	else
+		return false;
+#ifdef _WIN32
+	if (p_filename[t_length] == '\\' && p_filename[t_length + 1] == '\\')
+		return true;
+#endif
+	return p_filename[t_length] == '/' && p_filename[t_length + 1] == '/';
+}
+
 // The first bytes of the file p_filename, read as the parse reads them (a
 //   gzip-compressed file uncompressed), for revxml_head. Returns false when
 //   there is nothing to look at: the file cannot be read (the parse says
@@ -664,7 +708,8 @@ static bool revxml_file_head(const char *p_filename, RevXMLHead *r_head)
 	memset(r_head, 0, sizeof(*r_head));
 	r_head->kind = kRevXMLHeadDeclared;
 	t_scheme = strstr(p_filename, "://");
-	if (t_scheme != NULL && !(t_scheme - p_filename == 4 && xmlStrncasecmp((const xmlChar *)p_filename, (const xmlChar *)"file", 4) == 0))
+	if ((t_scheme != NULL && !(t_scheme - p_filename == 4 && xmlStrncasecmp((const xmlChar *)p_filename, (const xmlChar *)"file", 4) == 0)) ||
+		revxml_network_url(p_filename))
 		return false;
 	t_input = NULL;
 	if (xmlNewInputFromUrl(p_filename, XML_INPUT_UNZIP, &t_input) != XML_ERR_OK || t_input == NULL)
@@ -1159,6 +1204,52 @@ void revxml_sax_flush(void *p_context)
 	revxml_text_flush(revxml_parse_for(p_context));
 }
 
+// The resource loader of the parse of a document on the network (an
+//   xmlResourceLoader). revxml_file_head cannot look at such a document
+//   without loading it twice, so its first bytes are looked at here, once
+//   libxml2 has loaded it, as libxml2 2.9 read them: a document that
+//   declares no encoding, and gets none from a Content-Type charset
+//   (xmlCheckHTTPInput), is read with markers for its bytes that are not
+//   UTF-8, as a file is. Only the document itself is loaded here; whatever
+//   else the parse loads (a DTD, external entities) libxml2 loads as it
+//   would without this loader.
+static xmlParserErrors revxml_load_url(void *p_context, const char *p_url, const char *p_public_id,
+									   xmlResourceType p_type, xmlParserInputFlags p_flags, xmlParserInputPtr *r_input)
+{
+	RevXMLParse *t_parse;
+	xmlParserInputPtr t_input;
+	xmlParserErrors t_code;
+	xmlCharEncodingHandlerPtr t_handler;
+	(void)p_public_id;
+	(void)p_type;
+	t_parse = (RevXMLParse *)p_context;
+	xmlCtxtSetResourceLoader(t_parse->ctxt, NULL, NULL);
+	t_input = NULL;
+	t_code = xmlNewInputFromUrl(p_url, p_flags, &t_input);
+	*r_input = t_input;
+	if (t_code != XML_ERR_OK || t_input == NULL || t_input->buf == NULL || t_input->buf->encoder != NULL)
+		return t_code;
+	xmlParserInputGrow(t_input, 4000);
+	revxml_head(t_input->base, (size_t)(t_input->end - t_input->base), t_parse->url_head);
+	if (t_parse->url_head->kind == kRevXMLHeadUnsupported)
+	{
+		// Refused before any SAX message, as 2.9 refused it (revxml_parse
+		//   gives the message).
+		xmlFreeInputStream(t_input);
+		*r_input = NULL;
+		return XML_ERR_UNSUPPORTED_ENCODING;
+	}
+	if (t_parse->url_head->kind != kRevXMLHeadUTF8)
+		return t_code;
+	t_parse->label16 = t_parse->url_head->label16;
+	t_parse->stopped = t_parse->strict && t_parse->url_head->label16;
+	t_handler = NULL;
+	if (xmlCharEncNewCustomHandler(kRevXMLNativeEncoding, revxml_native_input, NULL, NULL, t_parse, NULL, &t_handler) == XML_ERR_OK &&
+		xmlInputSetEncodingHandler(t_input, t_handler) == XML_ERR_OK)
+		t_parse->url_decoder = true;
+	return t_code;
+}
+
 // Parses p_data (p_length bytes, a C string) or, when it is NULL, the file
 //   p_filename, with p_ctxt and p_options, as libxml2 2.9 read them (see
 //   the top of this file): with markers for native text, refusing an
@@ -1244,7 +1335,24 @@ xmlDocPtr revxml_parse(xmlParserCtxtPtr p_ctxt, const char *p_data, unsigned lon
 			t_encoding = kRevXMLNativeEncoding;
 			t_decoder = true;
 		}
+		else if (revxml_network_url(p_filename))
+		{
+			t_parse.url_head = &t_head;
+			xmlCtxtSetResourceLoader(p_ctxt, revxml_load_url, &t_parse);
+		}
 		t_doc = xmlCtxtReadFile(p_ctxt, p_filename, t_encoding, p_options);
+		xmlCtxtSetResourceLoader(p_ctxt, NULL, NULL);
+		t_decoder = t_decoder || t_parse.url_decoder;
+		if (t_parse.url_head != NULL && t_head.kind == kRevXMLHeadUnsupported)
+		{
+			if (t_doc != NULL)
+				xmlFreeDoc(t_doc);
+			t_doc = NULL;
+			if (xmlStrcasecmp((const xmlChar *)t_head.label, (const xmlChar *)"HTML") == 0)
+				snprintf(r_error, p_error_size, "switching encoding: encoder error\n");
+			else
+				snprintf(r_error, p_error_size, "Unsupported encoding %s\n", t_head.label);
+		}
 	}
 	revxml_text_flush(&t_parse);
 	t_doc = revxml_parse_finish(&t_parse, &t_head, t_decoder, t_doc, r_error, p_error_size);
