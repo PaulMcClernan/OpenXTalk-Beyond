@@ -35,6 +35,10 @@
 #include <libxml/catalog.h>
 #endif
 #include <libxml/chvalid.h>
+#ifdef LIBXML_HTTP_ENABLED
+/* OXT-Beyond: the restored HTTP client (nanohttp.c), as in 2.14.6. */
+#include <libxml/nanohttp.h>
+#endif
 
 #define CUR(ctxt) ctxt->input->cur
 #define END(ctxt) ctxt->input->end
@@ -2404,18 +2408,148 @@ xmlCtxtResolveFromCatalog(xmlParserCtxtPtr ctxt, const char *url,
 
 #endif
 
+#ifdef LIBXML_HTTP_ENABLED
+/*
+ * OXT-Beyond: 2.14.6's, for the restored HTTP client: an HTTP error status
+ * fails the load, the charset of an XML media type is the input's
+ * encoding, and a redirect's target is the input's file name (the base
+ * URI). Two changes keep 2.9's behaviour:
+ *
+ * - An error status is XML_IO_ENOENT, a warning as 2.9's "failed to load
+ *   HTTP resource" was, not 2.14.6's fatal XML_IO_LOAD_ERROR.
+ *
+ * - A charset of UTF-8, or one libxml2 cannot convert, is not set. Setting
+ *   an encoding makes 2.15 ignore the XML declaration's, but 2.9 still
+ *   switched to a declared encoding other than UTF-8, so a UTF-8 header
+ *   over a document declared ISO-8859-1 decoded it as ISO-8859-1. (2.9
+ *   failed the parse on an unknown charset; it is ignored instead.)
+ */
+static xmlParserErrors
+xmlCheckHTTPInputInternal(xmlParserInputPtr input) {
+    const char *encoding;
+    const char *redir;
+    const char *mime;
+    int code;
+
+    if ((input == NULL) || (input->buf == NULL) ||
+        (input->buf->readcallback != xmlIOHTTPRead) ||
+        (input->buf->context == NULL))
+        return(XML_ERR_OK);
+
+    code = xmlNanoHTTPReturnCode(input->buf->context);
+    if (code >= 400) {
+        /* OXT-Beyond: a warning, as with 2.9 (see above). */
+        return(XML_IO_ENOENT);
+    }
+
+    mime = xmlNanoHTTPMimeType(input->buf->context);
+    if ((xmlStrstr(BAD_CAST mime, BAD_CAST "/xml")) ||
+        (xmlStrstr(BAD_CAST mime, BAD_CAST "+xml"))) {
+        encoding = xmlNanoHTTPEncoding(input->buf->context);
+        /* OXT-Beyond: not UTF-8 (see above). */
+        if ((encoding != NULL) &&
+            (xmlStrcasecmp(BAD_CAST encoding, BAD_CAST "UTF-8") != 0) &&
+            (xmlStrcasecmp(BAD_CAST encoding, BAD_CAST "UTF8") != 0)) {
+            xmlCharEncodingHandlerPtr handler;
+            xmlParserErrors res;
+
+            res = xmlOpenCharEncodingHandler(encoding, /* output */ 0,
+                                             &handler);
+            if (res == 0)
+                xmlInputSetEncodingHandler(input, handler);
+        }
+    }
+
+    redir = xmlNanoHTTPRedir(input->buf->context);
+    if (redir != NULL) {
+        if (input->filename != NULL)
+            xmlFree((xmlChar *) input->filename);
+        input->filename = xmlMemStrdup(redir);
+        if (input->filename == NULL)
+            return(XML_ERR_NO_MEMORY);
+    }
+
+    return(XML_ERR_OK);
+}
+#endif /* LIBXML_HTTP_ENABLED */
+
 /**
+ * Check an input in case it was created from an HTTP stream, in that
+ * case it will handle encoding and update of the base URL in case of
+ * redirection. It also checks for HTTP errors in which case the input
+ * is cleanly freed up and an appropriate error is raised in context
+ *
+ * OXT-Beyond: 2.14.6's, for the restored HTTP client; 2.15's returned
+ * NULL.
+ *
  * @deprecated Internal function, don't use.
  *
  * @param ctxt  an XML parser context
  * @param ret  an XML parser input
- * @returns NULL.
+ * @returns the input or NULL in case of HTTP error.
  */
 xmlParserInput *
-xmlCheckHTTPInput(xmlParserCtxt *ctxt ATTRIBUTE_UNUSED,
-                  xmlParserInput *ret ATTRIBUTE_UNUSED) {
-    return(NULL);
+xmlCheckHTTPInput(xmlParserCtxt *ctxt, xmlParserInput *ret) {
+    /* Avoid unused variable warning if features are disabled. */
+    (void) ctxt;
+
+#ifdef LIBXML_HTTP_ENABLED
+    {
+        int code = xmlCheckHTTPInputInternal(ret);
+
+        if (code != XML_ERR_OK) {
+            if (ret->filename != NULL)
+                xmlCtxtErrIO(ctxt, XML_IO_LOAD_ERROR, ret->filename);
+            else
+                xmlCtxtErrIO(ctxt, XML_IO_LOAD_ERROR, "<null>");
+            xmlFreeInputStream(ret);
+            return(NULL);
+        }
+    }
+#endif
+
+    return(ret);
 }
+
+#ifdef _WIN32
+/*
+ * OXT-Beyond: on Windows revXML hands libxml2 a URL in path form, with
+ * every '/' made a '\' ("http:\\host\doc.xml"); 2.9's xmlCanonicPath made
+ * them '/' again, but 2.15's leaves a string without "://" alone, so the
+ * restored clients would never see the URL. Undo it for an http or ftp
+ * URL that starts so. The result is also the input's file name, the base
+ * URI that document() and relative entities resolve against.
+ *
+ * Returns XML_ERR_OK, setting *out to a new string or to NULL when the
+ * URL is not one of these, or XML_ERR_NO_MEMORY.
+ */
+static xmlParserErrors
+xmlOxtNetworkUrlFromWindowsPath(const char *url, char **out) {
+    size_t schemeLen, len, i;
+    char *ret;
+
+    *out = NULL;
+
+    if (xmlStrncasecmp(BAD_CAST url, BAD_CAST "http:", 5) == 0)
+        schemeLen = 5;
+    else if (xmlStrncasecmp(BAD_CAST url, BAD_CAST "ftp:", 4) == 0)
+        schemeLen = 4;
+    else
+        return(XML_ERR_OK);
+    if ((url[schemeLen] != '\\') || (url[schemeLen + 1] != '\\'))
+        return(XML_ERR_OK);
+
+    len = strlen(url);
+    ret = xmlMalloc(len + 1);
+    if (ret == NULL)
+        return(XML_ERR_NO_MEMORY);
+    for (i = 0; i <= len; i++)
+        ret[i] = (url[i] == '\\') ? '/' : url[i];
+
+    *out = ret;
+    return(XML_ERR_OK);
+}
+#endif /* _WIN32 */
 
 /**
  * Create a new input stream based on a file or a URL.
@@ -2449,12 +2583,24 @@ xmlNewInputFromUrl(const char *url, xmlParserInputFlags flags,
     xmlParserInputBufferPtr buf;
     xmlParserInputPtr input;
     xmlParserErrors code = XML_ERR_OK;
+#ifdef _WIN32
+    char *netUrl = NULL;
+#endif
 
     if (out == NULL)
         return(XML_ERR_ARGUMENT);
     *out = NULL;
     if (url == NULL)
         return(XML_ERR_ARGUMENT);
+
+#ifdef _WIN32
+    /* OXT-Beyond: see xmlOxtNetworkUrlFromWindowsPath. */
+    code = xmlOxtNetworkUrlFromWindowsPath(url, &netUrl);
+    if (code != XML_ERR_OK)
+        return(code);
+    if (netUrl != NULL)
+        url = netUrl;
+#endif
 
 #ifdef LIBXML_CATALOG_ENABLED
     if (flags & XML_INPUT_USE_SYS_CATALOG) {
@@ -2481,11 +2627,26 @@ xmlNewInputFromUrl(const char *url, xmlParserInputFlags flags,
         if (input == NULL)
             code = XML_ERR_NO_MEMORY;
 
+#ifdef LIBXML_HTTP_ENABLED
+        /* OXT-Beyond: as in 2.14.6, for the restored HTTP client. */
+        if (code == XML_ERR_OK) {
+            code = xmlCheckHTTPInputInternal(input);
+            if (code != XML_ERR_OK) {
+                xmlFreeInputStream(input);
+                input = NULL;
+            }
+        }
+#endif
+
         *out = input;
     }
 
     if (resource != NULL)
         xmlFree(resource);
+#ifdef _WIN32
+    if (netUrl != NULL)
+        xmlFree(netUrl);
+#endif
     return(code);
 }
 

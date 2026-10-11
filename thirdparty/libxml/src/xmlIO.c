@@ -1523,6 +1523,54 @@ xmlParserInputBufferCreateUrl(const char *URI, xmlCharEncoding enc,
         if (cb->matchcallback == xmlIODefaultMatch) {
             int fd;
 
+#if defined(LIBXML_HTTP_ENABLED) || defined(LIBXML_FTP_ENABLED)
+            /*
+             * OXT-Beyond: the restored HTTP and FTP clients (nanohttp.c,
+             * nanoftp.c), where 2.14.6's xmlInputDefaultOpen had them,
+             * so a callback the application registers still comes first.
+             * Network access needs XML_INPUT_NETWORK (no XML_PARSE_NONET),
+             * as in 2.14.6, which asked it of HTTP only. A URL that fails
+             * to load is "not found", a warning as with 2.9, and is not
+             * tried as a file name: on Windows that fails with EINVAL, a
+             * fatal error.
+             */
+            {
+                xmlInputOpenCallback netOpen = NULL;
+                xmlInputReadCallback netRead = NULL;
+                xmlInputCloseCallback netClose = NULL;
+
+#ifdef LIBXML_HTTP_ENABLED
+                if (xmlIOHTTPMatch(URI)) {
+                    netOpen = xmlIOHTTPOpen;
+                    netRead = xmlIOHTTPRead;
+                    netClose = xmlIOHTTPClose;
+                }
+#endif
+#ifdef LIBXML_FTP_ENABLED
+                if (xmlIOFTPMatch(URI)) {
+                    netOpen = xmlIOFTPOpen;
+                    netRead = xmlIOFTPRead;
+                    netClose = xmlIOFTPClose;
+                }
+#endif
+                if (netOpen != NULL) {
+                    if ((flags & XML_INPUT_NETWORK) == 0) {
+                        ret = XML_IO_NETWORK_ATTEMPT;
+                    } else {
+                        buf->context = netOpen(URI);
+                        if (buf->context != NULL) {
+                            buf->readcallback = netRead;
+                            buf->closecallback = netClose;
+                            ret = XML_ERR_OK;
+                        } else {
+                            ret = XML_IO_ENOENT;
+                        }
+                    }
+                    break;
+                }
+            }
+#endif /* LIBXML_HTTP_ENABLED || LIBXML_FTP_ENABLED */
+
             ret = xmlFdOpen(URI, 0, &fd);
 
             if (ret == XML_ERR_OK) {

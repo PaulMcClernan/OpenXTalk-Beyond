@@ -7,15 +7,24 @@ the generated tables they include in src/codegen/, the private headers in
 src/include/private/ (where they find src/libxml.h), the public headers in
 include/libxml/, and Copyright and README.md in docs/, renamed COPYING and
 README. xmllint, xmlcatalog, the tests, the Python bindings and the build
-files are left out, and so are nanohttp.c (HTTP support was removed in
-2.15) and xmlmodule.c (module loading is off).
+files are left out, and so is xmlmodule.c (module loading is off).
+
+HTTP and FTP support, which 2.15 and 2.14 removed, come from the last
+releases that had them (tags v2.14.6 and v2.13.9 of the same repository):
+src/nanohttp.c and src/wsockcompat.h are 2.14.6's, src/nanoftp.c and
+include/libxml/nanoftp.h are 2.13.9's. They are restored so that revXML
+loads http:// and ftp:// URLs (revXMLCreateTreeFromFile, the XSLT *File
+functions, document() and xsl:include) as it did with 2.9.4: plain HTTP
+and FTP only, as before, HTTP redirects followed, and through the proxy
+that http_proxy or ftp_proxy names unless no_proxy says otherwise. (For
+HTTP, no_proxy may list hosts since 2.11; 2.9 knew only "*", and FTP
+still does.)
 
 include/libxml/xmlversion.h is made from xmlversion.h.in with the features
-LiveCode's 2.9.4 build had, less HTTP, FTP and modules (removed or off);
-src/config.h is written for OXT-Beyond's build (gyp runs no configure
-step).
+LiveCode's 2.9.4 build had, less modules (off); src/config.h is written
+for OXT-Beyond's build (gyp runs no configure step).
 
-Two local changes, marked "OXT-Beyond" in the sources:
+Local changes, marked "OXT-Beyond" in the sources:
 
 - From LiveCode (bug 7586): xmlSAX2StartElementNoNS in src/SAX2.c
   (declared in include/libxml/SAX2.h), used by revXML when namespace
@@ -24,6 +33,33 @@ Two local changes, marked "OXT-Beyond" in the sources:
 - In src/parser.c, a parser with a SAX1 handler (revXML's) passes the
   start tag's line to xmlParseEndTag1, so "Opening and ending tag
   mismatch: b line 2 and c" names the line, as 2.9 did, not line 0.
+- The HTTP and FTP clients above, built with 2.15's public headers: the
+  xmlIOHTTP* and xmlIOFTP* input callbacks, which 2.14.6 and 2.13.9 kept
+  in xmlIO.c, are at the end of each file; their errors are not reported
+  (2.14.6's nanohttp.c already did not; 2.9 printed them to stderr);
+  nanohttp.c waits with poll() on POSIX systems, as 2.9's build did; in
+  nanoftp.c, each platform's headers and getaddrinfo, have_ipv6 closes
+  its socket with closesocket(), no select() on a socket numbered
+  FD_SETSIZE or above, and EPRT sends the port in decimal.
+- In include/libxml/xmlversion.h, LIBXML_HTTP_ENABLED and
+  LIBXML_FTP_ENABLED; include/libxml/nanohttp.h and xmlIO.h declare the
+  HTTP functions for them (2.15 for its stubs only), and xmlIO.h the FTP
+  input callbacks.
+- In src/xmlIO.c, xmlParserInputBufferCreateUrl opens http:// and ftp://
+  URLs with the clients, where 2.14.6's xmlInputDefaultOpen opened HTTP:
+  after any callbacks the application registered, and only for a parser
+  without XML_PARSE_NONET. A URL that fails to load is XML_IO_ENOENT, a
+  warning as with 2.9, and is not then tried as a file name.
+- In src/parserInternals.c, 2.14.6's HTTP checks of a new input
+  (xmlCheckHTTPInputInternal, and the deprecated xmlCheckHTTPInput, which
+  2.15 made return NULL): an error status fails the load (XML_IO_ENOENT,
+  where 2.14.6 had a fatal XML_IO_LOAD_ERROR), the Content-Type charset of
+  an XML media type is the input's encoding unless it is UTF-8 (setting
+  one makes 2.15 ignore the XML declaration's, which 2.9 still honoured
+  when it was not UTF-8) or unknown, and a redirect's target is the
+  input's file name, the base URI. On Windows, xmlNewInputFromUrl turns
+  "http:\\host\doc.xml", the path form of a URL that revXML passes there,
+  back into "http://host/doc.xml", as 2.9's xmlCanonicPath did.
 
 LiveCode's other changes to 2.9.4 are not needed: revXML now parses
 through a SAX parser context with xmlCtxtReadMemory and xmlCtxtReadFile

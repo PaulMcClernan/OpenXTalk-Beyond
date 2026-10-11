@@ -16,7 +16,8 @@
 
 #include <libxml/xmlversion.h>
 
-#ifdef LIBXML_HTTP_STUBS_ENABLED
+/* OXT-Beyond: also for the restored client (src/nanohttp.c). */
+#if defined(LIBXML_HTTP_ENABLED) || defined(LIBXML_HTTP_STUBS_ENABLED)
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,5 +98,5 @@ XMLPUBFUN void
 }
 #endif
 
-#endif /* LIBXML_HTTP_STUBS_ENABLED */
+#endif /* LIBXML_HTTP_ENABLED || LIBXML_HTTP_STUBS_ENABLED */
 #endif /* __NANO_HTTP_H__ */
