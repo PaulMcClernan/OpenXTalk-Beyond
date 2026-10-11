@@ -3042,6 +3042,32 @@ command actionPaste
    unlock screen
 end actionPaste
 
+-- OXT-Beyond: inserts pText for revSEInsertText (revsestackbehavior). It
+-- uses the last selection that saveLastSelections kept, not the
+-- selectedChunk, because the caller's window has the focus when this runs.
+-- Before the script has been clicked in, the text goes at the end.
+command textInsertAtLastSelection pText
+   local tFrom, tTo
+   if pText is empty or scriptLocked() then
+      exit textInsertAtLastSelection
+   end if
+   put item 1 of sLastSelectedChunk into tFrom
+   put item 2 of sLastSelectedChunk into tTo
+   if tFrom is not an integer or tTo is not an integer then
+      put the number of chars of field "Script" of me + 1 into tFrom
+      put tFrom - 1 into tTo
+   end if
+   lock screen
+   textBeginGroup "Insert"
+   textReplace tFrom, char tFrom to tTo of field "Script" of me, pText
+   -- Formatted as Paste formats what it puts in
+   if __GetPreference("editor,autoformat", true) then
+      scriptFormat "handler", true
+   end if
+   textEndGroup
+   unlock screen
+end textInsertAtLastSelection
+
 command actionUndo
    if scriptLocked() then
       exit actionUndo
