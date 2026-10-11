@@ -58,15 +58,17 @@ on TestGuideReads
    TestAssert "the guide is in the plugin's folder", there is a file guidePath()
    TestAssert "and reads", guideText() begins with "# The xTalk Assistant's guide"
    -- Plain ASCII, as the scripts it teaches: nothing a provider or a
-   -- copy and paste could change
+   -- copy and paste could change. Its line endings are the checkout's
+   -- (.gitattributes: *.md text), CRLF on Windows.
    put url ("binfile:" & guidePath()) into tData
    put 0 into tHigh
    repeat for each byte tByte in tData
-      if byteToNum(tByte) > 126 or (byteToNum(tByte) < 32 and byteToNum(tByte) is not 10) then
+      if byteToNum(tByte) > 126 or (byteToNum(tByte) < 32 and byteToNum(tByte) is not 10 and byteToNum(tByte) is not 13) then
          add 1 to tHigh
       end if
    end repeat
-   TestAssert "plain ASCII, with no tabs or carriage returns", tHigh is 0
+   TestAssert "plain ASCII, with no tabs", tHigh is 0
+   TestAssert "read with one kind of line ending", not (guideText() contains numToChar(13))
    repeat for each line tLine in guideText()
       if tLine begins with "## " then
          put tLine & return after tHeadings
