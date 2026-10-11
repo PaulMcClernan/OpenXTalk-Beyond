@@ -14,6 +14,15 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## Unreleased
+
+Merged since 0.2.5-rc.1; the next release's section takes these lines.
+
+- Snapshot: throw instead of crashing on a bitmap over 4 GiB (#85)
+- Test: make the huge group without selecting, as the test stack is not open (#85)
+- Tests: export snapshot of a group of images, in each format (#85)
+- Docs: changelog and LEGACY-TODO.md for the snapshot fix (#85)
+
 ## 0.2.5-rc.1 (2026-10-11, pre-release)
 
 - Regex: matchText, matchChunk and replaceText always match case again (#83)
