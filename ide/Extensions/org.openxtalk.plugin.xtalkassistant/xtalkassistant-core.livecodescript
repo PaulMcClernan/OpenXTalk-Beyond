@@ -919,9 +919,13 @@ private command xtaAddBlock @xBlocks, @xCount, pLang, pCode
 end xtaAddBlock
 
 -- What the assistant is told before the conversation. It names the language
--- and the engine, and the behaviours of this engine that code written for
--- other xTalks (or by habit) gets wrong; the numbers in brackets are those of
--- xtalk-suite's docs/OXT-ENGINE-NOTES.md, where each one is recorded.
+-- and the engine, and the habits that keep code working on this engine and
+-- the xTalks it came from; the numbers in brackets are those of xtalk-suite's
+-- docs/OXT-ENGINE-NOTES.md, where each one is recorded. Where OXT-Beyond
+-- has changed what those notes saw, the advice still holds and says so
+-- (3.2: README.md, 0.2.4-rc.7; a throw in a catch block reached the caller
+-- on 0.2.5-rc.1), or asks only for the safe form (2.5: this engine's and and
+-- or stop early, by engine/src/operator.cpp).
 function xtaSystemPrompt
    local tPrompt
    put "You are the xTalk Assistant inside OXT-Beyond, a free development environment" && \
@@ -940,12 +944,13 @@ function xtaSystemPrompt
          "evaluates to its own name (1.2, 2.1). Constants must be literal values (1.3)." & return after tPrompt
    put "- Use only straight ASCII quotes; curly quotes stop a script from compiling," && \
          "even in a comment (1.4)." & return after tPrompt
-   put "- and and or evaluate both operands; there is no short-circuit. Put a guard in" && \
-         "its own if before the expression it protects (2.5)." & return after tPrompt
+   put "- Put a guard (is a number, there is a ...) in its own if before the expression" && \
+         "it protects, rather than relying on and or or to skip their second operand (2.5)." & return after tPrompt
    put "- Write a call to a command with no parameters without brackets: myCommand," && \
          "not myCommand() (3.3)." & return after tPrompt
-   put "- A throw inside a catch block does not reach the caller: keep the error in a" && \
-         "variable and throw after end try (3.2)." & return after tPrompt
+   put "- To pass an error on from a catch block, keep it in a variable and throw after" && \
+         "end try: OpenXTalk and LiveCode drop a throw made inside catch (3.2), though" && \
+         "OXT-Beyond 0.2.4 and later pass it on." & return after tPrompt
    put "- Handlers reached by send, dispatch or a callback message must not be private (3.5)." & return after tPrompt
    put "- Array keys ignore case: tA[" & quote & "A" & quote & "] and tA[" & quote & "a" & quote & "] are one element (2.7)." & return after tPrompt
    put "- In a handler reached by send ... in, a socket or URL callback, name controls" && \
