@@ -351,7 +351,8 @@ XML_DEPRECATED
 XMLPUBFUN int
 	xmlFileClose			(void * context);
 
-#ifdef LIBXML_HTTP_STUBS_ENABLED
+/* OXT-Beyond: also for the restored client (src/nanohttp.c). */
+#if defined(LIBXML_HTTP_ENABLED) || defined(LIBXML_HTTP_STUBS_ENABLED)
 /** @cond IGNORE */
 XML_DEPRECATED
 XMLPUBFUN int
@@ -377,7 +378,28 @@ XML_DEPRECATED
 XMLPUBFUN int
 	xmlIOHTTPClose			(void * context);
 /** @endcond */
-#endif /* LIBXML_HTTP_STUBS_ENABLED */
+#endif /* LIBXML_HTTP_ENABLED || LIBXML_HTTP_STUBS_ENABLED */
+
+/*
+ * OXT-Beyond: 2.13.9's FTP input callbacks, restored with its client
+ * (src/nanoftp.c).
+ */
+#if defined(LIBXML_FTP_ENABLED)
+XML_DEPRECATED
+XMLPUBFUN int
+	xmlIOFTPMatch			(const char *filename);
+XML_DEPRECATED
+XMLPUBFUN void *
+	xmlIOFTPOpen			(const char *filename);
+XML_DEPRECATED
+XMLPUBFUN int
+	xmlIOFTPRead			(void * context,
+					 char * buffer,
+					 int len);
+XML_DEPRECATED
+XMLPUBFUN int
+	xmlIOFTPClose			(void * context);
+#endif /* defined(LIBXML_FTP_ENABLED) */
 
 XMLPUBFUN xmlParserInputBufferCreateFilenameFunc
 	xmlParserInputBufferCreateFilenameDefault(

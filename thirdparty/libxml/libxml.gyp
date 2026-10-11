@@ -120,6 +120,9 @@
 							'src/config.h',
 							'src/libxml.h',
 							'src/timsort.h',
+							# The private Windows sockets glue of the two
+							# restored clients below (see ORIGIN).
+							'src/wsockcompat.h',
 							
 							'src/HTMLparser.c',
 							'src/HTMLtree.c',
@@ -136,6 +139,14 @@
 							'src/globals.c',
 							'src/hash.c',
 							'src/list.c',
+							# HTTP and FTP clients that 2.15 removed,
+							# restored from 2.14.6 and 2.13.9 so that
+							# revXML loads http:// and ftp:// URLs as it
+							# did with 2.9, on every platform (see
+							# ORIGIN). Windows links ws2_32 for them
+							# (prebuilt/thirdparty.gyp).
+							'src/nanoftp.c',
+							'src/nanohttp.c',
 							'src/parser.c',
 							'src/parserInternals.c',
 							'src/pattern.c',

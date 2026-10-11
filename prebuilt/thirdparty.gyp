@@ -1200,11 +1200,15 @@
 						'toolset_os == "win"',
 						{
 							# libxml2 seeds its hash tables with
-							# BCryptGenRandom (since 2.12)
+							# BCryptGenRandom (since 2.12); its HTTP
+							# and FTP clients (nanohttp.c, nanoftp.c)
+							# use Windows sockets, which 2.9 got from a
+							# #pragma in libxslt 1.1.28's xsltutils.c
 							'libraries':
 							[
 								'-llibxml',
 								'-lbcrypt',
+								'-lws2_32',
 							],
 						},
 					],
