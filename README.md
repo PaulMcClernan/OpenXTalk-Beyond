@@ -60,7 +60,11 @@ and fixes bugs that notes in the inherited code pointed to (see
 since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)). Two of
 those fixes change what existing scripts see: an error in a `try`
 statement's `catch` part is now reported, and serial ports on macOS and
-Linux are in raw mode.
+Linux are in raw mode. 0.2.5-rc.1 is a test release (a pre-release) of
+newer XML and zip libraries for revXML and revZip, and of regular
+expressions that match case again (see
+[0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)); 0.2.4 stays the
+main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1034,6 +1038,50 @@ scripts see, so they come first:
 The standalone runtimes for the other platforms in each package are
 built again for this release, so standalones for Windows and Linux get
 these fixes too.
+
+#### 0.2.5-rc.1: newer XML and zip libraries
+
+OXT-Beyond 0.2.5-rc.1, a test release, replaces the libraries under
+revXML and revZip, which had published vulnerabilities: libxml2 2.9.4
+(2016) with 2.15.4, libxslt 1.1.28 (2012) with 1.1.45, and revZip's
+libzip 0.8 (about 2008) with 1.12. Old stacks and old revXML and revZip
+scripts are meant to work as they did. Each script was run on 0.2.4's
+engine with the old and the new externals and the results compared:
+about 1,800 scripts in all, covering every revXML, XSLT and revZip call,
+the IDE's own uses (extension manifests, XML-RPC, the drawing library's
+SVGs, the mobile and HTML5 builders) and every stack in the repository.
+
+- Kept as in 0.2.4: accented text in a document that declares no
+  encoding, `&nbsp;` and other undefined entities in a recovered
+  document, adjacent CDATA sections, SAX text in one `revStartXMLData`
+  message, http:// and ftp:// URLs in `revXMLCreateTreeFromFile`, the
+  XSLT file functions and `document()`, the partial result of a
+  transform that stops, XSLT recursion depth, and revZip's progress
+  messages and cancel.
+- Crashes and memory errors of 0.2.4 are gone, among them a stylesheet
+  made from a tree freeing that tree, `revXMLAppend` with a UTF-16
+  fragment, XPath results longer than revXML's buffer, extracting a
+  replaced item, and changing an archive from its own progress handler
+  (now "ziperr,archive busy").
+- Differences a script can still see: error messages name the first
+  error in a document, not the last; documents nested more than 2048
+  deep and entity bombs are refused; encodings 0.2.4 did not know
+  (windows-1252 and others) now parse; `revXMLText` writes well-formed
+  XML where 0.2.4 dropped text or wrote raw control characters; and
+  revZip reads names not marked UTF-8 as code page 437, records Unix
+  file permissions in new items, and opens Zip64 archives. Pull request
+  [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
+  lists every difference.
+
+Regular expressions (`matchText`, `matchChunk`, `replaceText`) match
+case again, whatever the `caseSensitive`, as in LiveCode and as the
+dictionary says (see [The engine](#the-engine)); `(?i)` at the start
+of a pattern ignores case. From 0.2.4-rc.4 to 0.2.4 they followed the
+`caseSensitive`.
+
+The standalone runtimes for the other platforms in each package are
+built again for this release, so standalones for Windows and Linux get
+these changes too.
 
 ### xTalk Suite extensions
 

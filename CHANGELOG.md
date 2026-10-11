@@ -14,6 +14,33 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.5-rc.1 (2026-10-11, pre-release)
+
+- Regex: matchText, matchChunk and replaceText always match case again (#83)
+- Dictionary: the caseSensitive does not affect matchText, matchChunk or replaceText (#83)
+- thirdparty: libxml2 2.15.4 (#81)
+- thirdparty: libxslt 1.1.45 (#81)
+- revXML: a stylesheet made from a tree no longer frees that tree's document (#81)
+- Smoke test: revXML namespaces both ways, a bad document, DTDs, XPath and XSLT (#81)
+- Docs: libxml2 2.15.4 and libxslt 1.1.45 (#81)
+- thirdparty: libzip 1.12 (#81)
+- revZip: port to libzip 1.12 (#81)
+- Smoke test: revZip files, stored items, UTF-8 names, updates and attributes (#81)
+- Docs: libzip 1.12 (#81)
+- libxml2: define XML_SYSCONFDIR on Windows too (#81)
+- libxml2: build as a static library for a DLL again (LIBXML_STATIC_FOR_DLL) (#81)
+- Smoke test: refuse bad XML with dontParseBadData true; XPath paths end with the delimiter (#81)
+- revXML and revZip: fixes from the libxml2 2.15, libxslt and libzip 1.12 review (#81)
+- revXML: tree contents, entities, CDATA and XPath results as 0.2.4 had them (#81)
+- revXML: libxslt and libxml2 changes that give XSLT results 0.2.4's shape again (#81)
+- revXML: read native text, UTF-16 labels and encodings as 0.2.4 did (#81)
+- libxml2: restore the HTTP and FTP clients (nanohttp, nanoftp) (#81)
+- revZip: fail at open, folders, flagged names and cancel as before (#81)
+- revXML: IDs, native text over HTTP and FTP, and node position checks (#81)
+- CI smoke test and docs for the restored revXML, XSLT and revZip behaviour (#81)
+- revXML: 8-bit output, empty XPath steps, translate(), URLs and recovery (#81)
+- Version 0.2.5-rc.1, with its changelog (#84)
+
 ## 0.2.4 (2026-10-10)
 
 - CI: cache the Visual Studio toolset and the apt packages; smaller macOS test downloads (#80)
