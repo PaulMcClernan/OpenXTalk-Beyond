@@ -810,7 +810,7 @@ end xtaSystem
 -- with "path" (its main stack's file) and "name" (its main stack's name),
 -- both empty when there is none, or it was never saved.
 private function xtaWorkStack
-   local tEditor, tObject, tStack, tWork, tPath
+   local tEditor, tObject, tStack, tWork, tPath, tName
    put xtaTopScriptEditor() into tEditor
    if tEditor is not empty then
       try
@@ -823,12 +823,27 @@ private function xtaWorkStack
    if tObject is not empty and there is a tObject then
       put revIDEStackOfObject(tObject) into tStack
    else
+      -- The topStack can be one of the IDE's windows (the Project Browser,
+      -- the Dictionary, ...), in front of the user's stack: then the
+      -- frontmost open stack that is not (the openStacks lists them from
+      -- the front)
       put the topStack into tStack
+      if tStack is empty or there is not a tStack or xtaIsIDEStack(tStack) then
+         put empty into tStack
+         repeat for each line tName in the openStacks
+            if there is a stack tName then
+               if the visible of stack tName and not xtaIsIDEStack(the long id of stack tName) then
+                  put the long id of stack tName into tStack
+                  exit repeat
+               end if
+            end if
+         end repeat
+      end if
    end if
    if tStack is empty or there is not a tStack then
       return tWork
    end if
-   if the short name of tStack begins with "rev" or the _ideoverride of tStack is true then
+   if xtaIsIDEStack(tStack) then
       return tWork
    end if
    put the effective filename of tStack into tPath
@@ -839,6 +854,20 @@ private function xtaWorkStack
    put the mainStack of tStack into tWork["name"]
    return tWork
 end xtaWorkStack
+
+-- True for one of the IDE's stacks, as revIDEStackNameIsIDEStack has it
+-- (which this does not call, so that the tests need no IDE)
+private function xtaIsIDEStack pStack
+   local tName
+   put the short name of pStack into tName
+   if tName begins with "rev" or tName begins with "com.livecode." then
+      return true
+   end if
+   if tName is among the items of "Message Box,Answer Dialog,Ask Dialog,Home" then
+      return true
+   end if
+   return the _ideoverride of pStack is true
+end xtaIsIDEStack
 
 --------------------------------------------------------------------------------
 -- Memory

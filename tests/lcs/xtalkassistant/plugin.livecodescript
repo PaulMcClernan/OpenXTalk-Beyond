@@ -167,6 +167,33 @@ on TestGuideAndNotesAreSent
    TestAssert "the short guide is sent instead", xtaJsonText(xtaJsonGet(tDoc, "system/1/text")) begins with "You are the xTalk Assistant"
 end TestGuideAndNotesAreSent
 
+-- With one of the IDE's windows in front of the user's stack, the notes
+-- about that stack still go with the question
+on TestNotesOfTheStackBehindAnIDEWindow
+   local tPort, tPath, tDoc
+   put sPrefsFolder & "/xtaTestWork.livecode" into tPath
+   put "[stack" && tPath & "]" & return & "- The log is in field Log." & return into url ("file:" & sPrefsFolder & "/xTalk Assistant Memory.txt")
+   put TestStartServer("200 OK", TestAnswer("Hello.")) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   create stack "xtaTestWork"
+   set the filename of stack "xtaTestWork" to tPath
+   save stack "xtaTestWork"
+   go stack "xtaTestWork"
+   create stack "revXtaTestFront"
+   go stack "revXtaTestFront"
+   TestDiagnostic "topStack:" && the short name of the topStack & return & "openStacks:" && the openStacks
+   TestAssert "an IDE window is in front", the short name of the topStack is "revXtaTestFront"
+   put "Hi" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   put xtaJsonParse(TestRequestBody()) into tDoc
+   TestDiagnostic xtaJsonText(xtaJsonGet(tDoc, "system/2/text"))
+   TestAssert "the notes about the stack behind it go with the question", \
+         xtaJsonText(xtaJsonGet(tDoc, "system/2/text")) contains "The log is in field Log."
+   delete stack "revXtaTestFront"
+   delete stack "xtaTestWork"
+   delete file tPath
+end TestNotesOfTheStackBehindAnIDEWindow
+
 on TestCodeThatDoesNotCompileGoesBack
    local tPort, tBad, tGood, tBody
    put "Here:" & return & TestBlock("livecodescript", "on mouseUp" & return & "   put 1 inot tX" & return & "end mouseUp") into tBad
