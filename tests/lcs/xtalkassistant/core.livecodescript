@@ -716,7 +716,7 @@ on TestCheckBlocks
    TestDiagnostic tCheck["report"]
    TestAssert "one of two fails", tCheck["ok"] is false and tCheck["blocks"] is 2 and tCheck["failed"] is 1
    TestAssert "the report names the block and the line", line 1 of tCheck["report"] begins with "Compile check:" \
-         and line 2 of tCheck["report"] is "In livecodescript block 2:" and line 3 of tCheck["report"] begins with "- line 2,"
+         and line 2 of tCheck["report"] is "In xTalk block 2:" and line 3 of tCheck["report"] begins with "- line 2,"
    TestAssert "and asks for every block again", the last line of tCheck["report"] contains "every block again"
    TestAssert "the summary says which", tCheck["summary"] contains "block 2"
    TestAssert "the code, to tell a correction from a repeat", tCheck["code"] contains "inot"
@@ -832,7 +832,8 @@ end TestMemoryProposals
 on TestSystemPrompt
    local tPrompt
    put xtaSystemPrompt() into tPrompt
-   TestAssert "names the language", tPrompt contains "LiveCode Script"
+   TestAssert "names the language as OXT-Beyond does", tPrompt contains "Write xTalk Script for this engine" \
+         and tPrompt contains "Call it xTalk Script when you write to the user"
    TestAssert "plain ASCII", not matchText(tPrompt, "[^\x09\x0A\x20-\x7E]")
 end TestSystemPrompt
 

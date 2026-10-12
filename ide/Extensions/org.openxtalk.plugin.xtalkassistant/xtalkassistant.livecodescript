@@ -648,7 +648,7 @@ private function xtaPromptHint
    if xtaBuildOn() then
       return "Ask a question, or say what to build or fix"
    end if
-   return "Ask a question about LiveCode Script"
+   return "Ask a question about xTalk Script"
 end xtaPromptHint
 
 -- After the assistant put something into the prompt or emptied it: the
@@ -1542,11 +1542,11 @@ private command xtaDocWelcome @xDoc
    put kUiInkSoft into tRun["foregroundColor"]
    put empty into tPara
    if xtaBuildOn() then
-      put "Ask about LiveCode Script, or ask the assistant to build it with you: it can read your stack, make cards, controls " & \
+      put "Ask about xTalk Script, or ask the assistant to build it with you: it can read your stack, make cards, controls " & \
             "and new stacks, write their scripts, run code to try it, and check that what it writes compiles. Nothing changes " & \
             "until you say yes." into tText
    else
-      put "Ask about LiveCode Script: the assistant can read your stack, look up the Dictionary and check that the code it " & \
+      put "Ask about xTalk Script: the assistant can read your stack, look up the Dictionary and check that the code it " & \
             "writes compiles." into tText
    end if
    xtaDocLine xDoc, tText, tRun, tPara
@@ -1773,16 +1773,18 @@ private function xtaCodeFont
    return tFont
 end xtaCodeFont
 
--- What a fenced block's language is called above it
+-- What a fenced block's language is called above it: the two of
+-- OXT-Beyond by the names its Dictionary gives them, xTalk Script and
+-- xTalk Builder, whatever the block is marked (livecodescript, lcb...)
 private function xtaLangLabel pLang
    put toLower(word 1 to -1 of pLang) into pLang
    if xtaIsXTalkLang(pLang) then
-      return "LiveCode Script"
+      return "xTalk Script"
    end if
    switch pLang
       case "livecodebuilder"
       case "lcb"
-         return "LiveCode Builder"
+         return "xTalk Builder"
       case "sh"
       case "bash"
       case "shell"
@@ -3048,13 +3050,13 @@ end xtaMemoryNotesField
 private function xtaTools
    local tTools, tIndex
    put "lookup_dictionary" into tTools[1]["name"]
-   put "Looks up an entry of the OXT-Beyond Dictionary: a command, function, property, message, keyword, constant or control structure of LiveCode Script " & \
+   put "Looks up an entry of the OXT-Beyond Dictionary: a command, function, property, message, keyword, constant or control structure of xTalk Script " & \
          "(put, split, topStack, mouseUp, repeat...). Gives its syntax, parameters, description and examples. Look up what you are not sure exists " & \
          "or how it is written before you use it in code, rather than guess." into tTools[1]["description"]
    put "{`type`:`object`,`properties`:{`term`:{`type`:`string`,`description`:`The entry's name alone: topStack, not the topStack`}},`required`:[`term`]}" \
          into tTools[1]["schema"]
    put "check_code" into tTools[2]["name"]
-   put "Compiles LiveCode Script on OXT-Beyond's engine as the Script Editor does, without running it, and gives each problem with its line: " & \
+   put "Compiles xTalk Script on OXT-Beyond's engine as the Script Editor does, without running it, and gives each problem with its line: " & \
          "compile errors, curly quotes, lines outside any handler, a handler defined twice and, in handlers, names never declared. " & \
          "Give whole handlers, or statements (checked inside a handler of their own). Every livecodescript block of your answer is checked " & \
          "anyway; this lets you correct code before you answer with it." into tTools[2]["description"]
@@ -3110,7 +3112,7 @@ private function xtaTools
          "`script`:{`type`:`string`,`description`:`The object's whole new script: handlers`}}," & \
          "`required`:[`action`]}}},`required`:[`changes`]}" into tTools[6]["schema"]
    put "run_code" into tTools[7]["name"]
-   put "Runs LiveCode Script statements and gives back what they put into the Message Box (put with no container), what they returned, " & \
+   put "Runs xTalk Script statements and gives back what they put into the Message Box (put with no container), what they returned, " & \
          "and any error with its line. Use it to try code before you give it to the user or put it in their stack, and to see what a stack " & \
          "does, rather than asking the user to run it in the Message Box. Where: sandbox (the default), a hidden stack made for the run and " & \
          "deleted after it, where the code can call the handlers you give; or stack, the user's stack, as the Message Box runs code there " & \

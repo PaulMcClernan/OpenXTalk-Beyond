@@ -290,6 +290,7 @@ on TestTheWelcome
    TestAssert "it welcomes the user", line 1 of tText is "What shall we make?" \
          and the textStyle of line 1 of field "Conversation" of stack kWindow is "bold"
    TestAssert "saying what the assistant does", tText contains "new stacks" and tText contains "Nothing changes until you say yes."
+   TestAssert "naming the language as OXT-Beyond does", tText contains "xTalk Script" and not (tText contains "LiveCode")
    put lineOffset("Try one of these:", tText) into tLine
    TestAssert "with questions to begin with", tLine > 0 \
          and the linkText of line tLine + 1 of field "Conversation" of stack kWindow is "example,1" \
@@ -309,8 +310,9 @@ on TestTheWelcome
    TestDiagnostic tText
    TestAssert "without changing stacks, it does not offer to", not (tText contains "new stacks") \
          and "How do I count the words in a field?" is among the lines of tText
-   TestAssert "nor does the hint", field "PromptHint" of stack kWindow is "Ask a question about LiveCode Script" \
+   TestAssert "nor does the hint", field "PromptHint" of stack kWindow is "Ask a question about xTalk Script" \
          and the visible of field "PromptHint" of stack kWindow
+   TestAssert "and neither names LiveCode", tText contains "xTalk Script" and not (tText contains "LiveCode")
 end TestTheWelcome
 
 on TestGuideAndNotesAreSent
@@ -478,8 +480,10 @@ on TestAnAnswerIsLaidOut
    put lineOffset("one line", tText) into tLine
    TestAssert "a list, with italics", tLine > 0 and the listStyle of line tLine of field "Conversation" of stack kWindow is "disc" \
          and the textStyle of word 2 of line tLine of field "Conversation" of stack kWindow is "italic"
-   put lineOffset("LiveCode Script", tText) into tHeader
-   TestAssert "the code has a header that names it", tHeader > 0 and line tHeader + 1 of tText is "on mouseUp"
+   put lineOffset("xTalk Script", tText) into tHeader
+   TestAssert "the code has a header that names it", tHeader > 0 and line tHeader + 1 of tText is "on mouseUp" \
+         and word 1 to 2 of line tHeader of tText is "xTalk Script"
+   TestAssert "as OXT-Beyond names it, though the block is marked livecodescript", not (tText contains "LiveCode")
    TestAssert "with Copy and Insert", word -2 of line tHeader of tText is "Copy" and word -1 of line tHeader of tText is "Insert" \
          and the linkText of word -2 of line tHeader of field "Conversation" of stack kWindow is "copy,2,1" \
          and the linkText of word -1 of line tHeader of field "Conversation" of stack kWindow is "insert,2,1"

@@ -1406,10 +1406,11 @@ function xtaSystemPrompt
    put "You are the xTalk Assistant inside OXT-Beyond, a free development environment" && \
          "that continues OpenXTalk Lite and LiveCode Community 9.x. Its users build" && \
          "programs from stacks, cards and controls (buttons, fields, graphics, images," && \
-         "groups, widgets) and script them in LiveCode Script, the English-like xTalk" && \
-         "language of the HyperCard tradition." & return & return into tPrompt
+         "groups, widgets) and script them in xTalk Script, the English-like language" && \
+         "of the HyperCard tradition that LiveCode calls LiveCode Script. Call it xTalk" && \
+         "Script when you write to the user, as OXT-Beyond does." & return & return into tPrompt
    put "When you write code:" & return after tPrompt
-   put "- Write LiveCode Script for this engine, not HyperTalk, AppleScript or JavaScript." && \
+   put "- Write xTalk Script for this engine, not HyperTalk, AppleScript or JavaScript." && \
          "Put each script in a fenced block marked livecodescript, holding whole handlers" && \
          "(on ... end, command ... end, function ... end), so the user can insert it into" && \
          "the Script Editor as it is." & return after tPrompt
@@ -1430,7 +1431,7 @@ function xtaSystemPrompt
    put "- Array keys ignore case: tA[" & quote & "A" & quote & "] and tA[" & quote & "a" & quote & "] are one element (2.7)." & return after tPrompt
    put "- In a handler reached by send ... in, a socket or URL callback, name controls" && \
          "with their stack, or set the defaultStack first (5.3)." & return after tPrompt
-   put "- If you are not sure a command, function or property exists in LiveCode 9," && \
+   put "- If you are not sure a command, function or property exists in xTalk Script," && \
          "say so rather than inventing one." & return & return after tPrompt
    put "Keep explanations short and plain. When the user shares a script, refer to" && \
          "its handlers by name." after tPrompt
@@ -1624,7 +1625,7 @@ function xtaCheckBlocks pBlocks, pDeclared
       put xtaCheckScript(pBlocks[tIndex]["code"], pDeclared) into tCheck
       if tCheck["ok"] is not true then
          add 1 to tFailed
-         put "In livecodescript block" && tIndex & ":" & return after tReport
+         put "In xTalk block" && tIndex & ":" & return after tReport
          repeat for each line tLine in tCheck["issues"]
             put "- " & tLine & return after tReport
          end repeat
@@ -1646,10 +1647,10 @@ function xtaCheckBlocks pBlocks, pDeclared
    end if
    if tCount is 1 then
       put "Compile check: the code does not compile (" & tFirst & ")." into tResult["summary"]
-      put "Compile check: your livecodescript block does not compile on OXT-Beyond." into tLine
+      put "Compile check: your block of xTalk Script does not compile on OXT-Beyond." into tLine
    else
       put "Compile check:" && tFailed && "of" && tCount && "blocks of code do not compile (" & tFirst & ")." into tResult["summary"]
-      put "Compile check:" && tFailed && "of your" && tCount && "livecodescript blocks do not compile on OXT-Beyond." into tLine
+      put "Compile check:" && tFailed && "of your" && tCount && "blocks of xTalk Script do not compile on OXT-Beyond." into tLine
    end if
    put tLine & return & tReport & "Answer with every block again, corrected and whole." into tResult["report"]
    return tResult
