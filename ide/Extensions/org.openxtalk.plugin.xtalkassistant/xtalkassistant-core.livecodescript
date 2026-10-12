@@ -748,9 +748,14 @@ end xtaToolsJson
 -- the conversation) and of their results (pResults, as the turn after it
 -- has them): for Anthropic, the answer's text and tool_use blocks, then a
 -- user message of tool_result blocks; for OpenAI, the answer with its
--- tool_calls, then a "tool" message for each.
+-- tool_calls, then a "tool" message for each. A result with a picture
+-- ("image", base64, and "imageType", its media type) takes it along: in
+-- its tool_result for Anthropic, as a text and an image block; for
+-- OpenAI, whose tool messages take text alone, in a user message of the
+-- pictures after the tool messages.
 private function xtaCallMessages pProvider, pTurn, pResults, pTurnIndex
    local tCall, tId, tName, tInput, tDoc, tError, tText, tIsError, tCalls, tAnswers, tContent
+   local tImage, tImageType, tPictures
    repeat with tCall = 1 to the number of elements of pTurn["calls"]
       put xtaCallId(pTurn["calls"][tCall]["id"], pTurnIndex, tCall) into tId
       -- Both APIs take only names of letters, digits, _ and -
@@ -767,11 +772,17 @@ private function xtaCallMessages pProvider, pTurn, pResults, pTurnIndex
       if xtaJsonType(tDoc) is not "object" then
          put "{}" into tInput
       end if
+      put empty into tImage
       if pResults[tCall] is an array then
          put pResults[tCall]["text"] into tText
          put (pResults[tCall]["error"] is true) into tIsError
          if tText is empty then
             put "(nothing)" into tText
+         end if
+         put pResults[tCall]["image"] into tImage
+         put pResults[tCall]["imageType"] into tImageType
+         if tImageType is empty then
+            put "image/png" into tImageType
          end if
       else
          put "Not run." into tText
@@ -784,8 +795,16 @@ private function xtaCallMessages pProvider, pTurn, pResults, pTurnIndex
       if pProvider is "anthropic" then
          put "{" & xtaJsonPair("type", xtaJsonString("tool_use")) & comma & xtaJsonPair("id", xtaJsonString(tId)) & comma & \
                xtaJsonPair("name", xtaJsonString(tName)) & comma & xtaJsonPair("input", tInput) & "}" after tCalls
-         put "{" & xtaJsonPair("type", xtaJsonString("tool_result")) & comma & xtaJsonPair("tool_use_id", xtaJsonString(tId)) & comma & \
-               xtaJsonPair("content", xtaJsonString(tText)) after tAnswers
+         if tImage is empty then
+            put "{" & xtaJsonPair("type", xtaJsonString("tool_result")) & comma & xtaJsonPair("tool_use_id", xtaJsonString(tId)) & comma & \
+                  xtaJsonPair("content", xtaJsonString(tText)) after tAnswers
+         else
+            put "{" & xtaJsonPair("type", xtaJsonString("tool_result")) & comma & xtaJsonPair("tool_use_id", xtaJsonString(tId)) & comma & \
+                  xtaJsonPair("content", "[{" & xtaJsonPair("type", xtaJsonString("text")) & comma & xtaJsonPair("text", xtaJsonString(tText)) & "}," & \
+                  "{" & xtaJsonPair("type", xtaJsonString("image")) & comma & xtaJsonPair("source", "{" & \
+                  xtaJsonPair("type", xtaJsonString("base64")) & comma & xtaJsonPair("media_type", xtaJsonString(tImageType)) & comma & \
+                  xtaJsonPair("data", xtaJsonString(tImage)) & "}") & "}]") after tAnswers
+         end if
          if tIsError then
             put comma & xtaJsonPair("is_error", "true") after tAnswers
          end if
@@ -799,6 +818,10 @@ private function xtaCallMessages pProvider, pTurn, pResults, pTurnIndex
          end if
          put "{" & xtaJsonPair("role", xtaJsonString("tool")) & comma & xtaJsonPair("tool_call_id", xtaJsonString(tId)) & comma & \
                xtaJsonPair("content", xtaJsonString(tText)) & "}" after tAnswers
+         if tImage is not empty then
+            put comma & "{" & xtaJsonPair("type", xtaJsonString("image_url")) & comma & xtaJsonPair("image_url", "{" & \
+                  xtaJsonPair("url", xtaJsonString("data:" & tImageType & ";base64," & tImage)) & "}") & "}" after tPictures
+         end if
       end if
    end repeat
    if pProvider is "anthropic" then
@@ -809,10 +832,15 @@ private function xtaCallMessages pProvider, pTurn, pResults, pTurnIndex
       return "{" & xtaJsonPair("role", xtaJsonString("assistant")) & comma & xtaJsonPair("content", "[" & tContent & tCalls & "]") & "}," & \
             "{" & xtaJsonPair("role", xtaJsonString("user")) & comma & xtaJsonPair("content", "[" & tAnswers & "]") & "}"
    end if
+   if tPictures is not empty then
+      put ",{" & xtaJsonPair("role", xtaJsonString("user")) & comma & xtaJsonPair("content", "[{" & \
+            xtaJsonPair("type", xtaJsonString("text")) & comma & xtaJsonPair("text", xtaJsonString("The pictures the tools took, in order:")) & "}" & \
+            tPictures & "]") & "}" into tPictures
+   end if
    -- An empty string rather than null, which some servers with OpenAI's API
    -- refuse
    return "{" & xtaJsonPair("role", xtaJsonString("assistant")) & comma & xtaJsonPair("content", xtaJsonString(pTurn["text"])) & comma & \
-         xtaJsonPair("tool_calls", "[" & tCalls & "]") & "}," & tAnswers
+         xtaJsonPair("tool_calls", "[" & tCalls & "]") & "}," & tAnswers & tPictures
 end xtaCallMessages
 
 -- The id of a call as it is sent: the model's own, or, when that is not one
@@ -1378,10 +1406,11 @@ function xtaSystemPrompt
    put "You are the xTalk Assistant inside OXT-Beyond, a free development environment" && \
          "that continues OpenXTalk Lite and LiveCode Community 9.x. Its users build" && \
          "programs from stacks, cards and controls (buttons, fields, graphics, images," && \
-         "groups, widgets) and script them in LiveCode Script, the English-like xTalk" && \
-         "language of the HyperCard tradition." & return & return into tPrompt
+         "groups, widgets) and script them in xTalk Script, the English-like language" && \
+         "of the HyperCard tradition that LiveCode calls LiveCode Script. Call it xTalk" && \
+         "Script when you write to the user, as OXT-Beyond does." & return & return into tPrompt
    put "When you write code:" & return after tPrompt
-   put "- Write LiveCode Script for this engine, not HyperTalk, AppleScript or JavaScript." && \
+   put "- Write xTalk Script for this engine, not HyperTalk, AppleScript or JavaScript." && \
          "Put each script in a fenced block marked livecodescript, holding whole handlers" && \
          "(on ... end, command ... end, function ... end), so the user can insert it into" && \
          "the Script Editor as it is." & return after tPrompt
@@ -1402,7 +1431,7 @@ function xtaSystemPrompt
    put "- Array keys ignore case: tA[" & quote & "A" & quote & "] and tA[" & quote & "a" & quote & "] are one element (2.7)." & return after tPrompt
    put "- In a handler reached by send ... in, a socket or URL callback, name controls" && \
          "with their stack, or set the defaultStack first (5.3)." & return after tPrompt
-   put "- If you are not sure a command, function or property exists in LiveCode 9," && \
+   put "- If you are not sure a command, function or property exists in xTalk Script," && \
          "say so rather than inventing one." & return & return after tPrompt
    put "Keep explanations short and plain. When the user shares a script, refer to" && \
          "its handlers by name." after tPrompt
@@ -1596,7 +1625,7 @@ function xtaCheckBlocks pBlocks, pDeclared
       put xtaCheckScript(pBlocks[tIndex]["code"], pDeclared) into tCheck
       if tCheck["ok"] is not true then
          add 1 to tFailed
-         put "In livecodescript block" && tIndex & ":" & return after tReport
+         put "In xTalk block" && tIndex & ":" & return after tReport
          repeat for each line tLine in tCheck["issues"]
             put "- " & tLine & return after tReport
          end repeat
@@ -1618,10 +1647,10 @@ function xtaCheckBlocks pBlocks, pDeclared
    end if
    if tCount is 1 then
       put "Compile check: the code does not compile (" & tFirst & ")." into tResult["summary"]
-      put "Compile check: your livecodescript block does not compile on OXT-Beyond." into tLine
+      put "Compile check: your block of xTalk Script does not compile on OXT-Beyond." into tLine
    else
       put "Compile check:" && tFailed && "of" && tCount && "blocks of code do not compile (" & tFirst & ")." into tResult["summary"]
-      put "Compile check:" && tFailed && "of your" && tCount && "livecodescript blocks do not compile on OXT-Beyond." into tLine
+      put "Compile check:" && tFailed && "of your" && tCount && "blocks of xTalk Script do not compile on OXT-Beyond." into tLine
    end if
    put tLine & return & tReport & "Answer with every block again, corrected and whole." into tResult["report"]
    return tResult

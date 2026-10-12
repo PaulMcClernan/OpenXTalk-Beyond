@@ -93,6 +93,7 @@ constant kPrefTools = "cXTalkAssistant,tools"
 constant kPrefMaxTokens = "cXTalkAssistant,maxTokens"
 constant kPrefTimeout = "cXTalkAssistant,timeout"
 constant kPrefBuild = "cXTalkAssistant,build"
+constant kPrefPictures = "cXTalkAssistant,pictures"
 -- The most of the open script that is sent with a question, in characters
 constant kMaxScriptChars = 60000
 -- How many times, by default and at most, code that does not compile goes
@@ -114,11 +115,21 @@ constant kGuideFile = "xtalk-guide.md"
 -- The memory's file, in the user's preferences folder
 constant kMemoryFile = "xTalk Assistant Memory.txt"
 constant kMemoryWindow = "revXTalkAssistantMemory"
--- The tools that change or run something, which the Settings switch takes
--- away
-constant kBuildTools = "make_changes,run_code"
--- How many of the changes of a batch the conversation lists under it
+-- The tools that change, run or save something, which the Settings
+-- switch takes away
+constant kBuildTools = "make_changes,run_code,save_stack"
+-- How many of the changes of a batch the conversation lists under it,
+-- and of the lines a run put into the Message Box
 constant kShownChanges = 8
+constant kShownOutput = 6
+-- How often the activity row under the conversation is redrawn while the
+-- assistant works (its clock and its spinner), in milliseconds
+constant kTickMilliseconds = 125
+-- The longest side of a picture of a card (look_at_card), in pixels, and
+-- how many of the newest pictures go with each request (an older one is
+-- left out, as the model has seen it already)
+constant kPictureSide = 1024
+constant kKeptPictures = 2
 
 -- The xTalk Suite's UI kit v2, by value (its tools/ui-kit.livecodescript):
 -- the page, the panels and their hairline, the accent band and its text,
@@ -139,6 +150,10 @@ constant kUiBad = "176,58,46"
 constant kUiFieldLine = "203,210,222"
 constant kUiCodeBg = "244,246,250"
 constant kUiCodeLine = "210,217,229"
+-- Not the kit's: the header of a block of code in the conversation, and
+-- the tint under the user's questions
+constant kUiCodeHead = "230,235,243"
+constant kUiTint = "236,242,251"
 -- The kit's title band, and the windows' sizes (each fits 1200 x 640, a
 -- 720p screen, as the kit asks)
 constant kUiBand = 30
@@ -194,6 +209,13 @@ local sRunAllowed
 -- What the user undid since the last question, a line each, to tell the
 -- model with the next one
 local sUndone
+-- While a question is being answered, what the activity row shows: when
+-- it began ("start", the milliseconds), what the assistant is doing
+-- ("phase", in words, and "kind": "wait" for the model, "tool", "check",
+-- "ask" or "stop"), the requests made and their tokens so far
+-- ("requests", "in", "out", "cached"), the spinner's angle ("angle") and
+-- the pending redraw ("timer", a message id)
+local sWork
 
 on extensionInitialize
    if the target is not me then
@@ -321,6 +343,8 @@ private command xtaShutDown
    put empty into sAsk
    put empty into sRunAllowed
    put empty into sUndone
+   xtaStopTicking
+   put empty into sWork
    xtaStopErrorHook
    if there is a stack kMemoryWindow then
       delete stack kMemoryWindow
@@ -502,9 +526,39 @@ private command xtaBuildWindow
    set the threeD of field "Conversation" to false
    set the borderWidth of field "Conversation" to 0
    set the opaque of field "Conversation" to false
-   set the margins of field "Conversation" to "6,6,6,6"
+   set the margins of field "Conversation" to "8,8,8,8"
    set the textSize of field "Conversation" to 12
    set the foregroundColor of field "Conversation" to kUiInk
+   -- Its scrollbar shows while it has more than it shows (xtaFitScrollbar)
+   set the vScrollbar of field "Conversation" to false
+
+   -- The activity row, at the foot of the conversation's panel while the
+   -- assistant works (xtaWorkBegin): a hairline over it, a spinner, what
+   -- the assistant is doing, and for how long. Hidden until then.
+   xtaUiGfx "ActivityLine", "16,380," & (kWindowWidth - 16) & ",381"
+   set the style of graphic "ActivityLine" to "rectangle"
+   set the filled of graphic "ActivityLine" to true
+   set the backgroundColor of graphic "ActivityLine" to kUiCardLine
+   set the lineSize of graphic "ActivityLine" to 0
+   xtaUiGfx "ActivitySpin", "28,386,42,400"
+   set the style of graphic "ActivitySpin" to "oval"
+   set the filled of graphic "ActivitySpin" to false
+   set the lineSize of graphic "ActivitySpin" to 2
+   set the foregroundColor of graphic "ActivitySpin" to kUiAccent
+   set the startAngle of graphic "ActivitySpin" to 0
+   set the arcAngle of graphic "ActivitySpin" to 270
+   xtaUiLabel "Activity", empty, "48,382," & (kWindowWidth - 100) & ",402", 11
+   set the dontWrap of field "Activity" to true
+   set the foregroundColor of field "Activity" to kUiInkSoft
+   xtaUiLabel "ActivityTime", empty, (kWindowWidth - 100) & ",382," & (kWindowWidth - 28) & ",402", 11
+   set the dontWrap of field "ActivityTime" to true
+   set the textAlign of field "ActivityTime" to "right"
+   set the textFont of field "ActivityTime" to xtaUiMonoFont()
+   set the foregroundColor of field "ActivityTime" to kUiMuted
+   set the visible of graphic "ActivityLine" to false
+   set the visible of graphic "ActivitySpin" to false
+   set the visible of field "Activity" to false
+   set the visible of field "ActivityTime" to false
 
    -- The bar that asks the user: what is asked, its details (the changes,
    -- or the code), and the buttons that answer it
@@ -543,11 +597,30 @@ private command xtaBuildWindow
    set the label of button "New" to "New Chat"
    set the tooltip of button "New" to "Start a new conversation"
 
+   -- The prompt: a white, rounded ground, whose line is the accent while
+   -- the prompt has the focus; under the prompt the hint that shows while
+   -- it is empty; and the prompt itself, clear, on top. Its scrollbar
+   -- shows while it holds more than it shows (the window's textChanged).
+   xtaUiGfx "PromptBg", "16,500," & (kWindowWidth - 104) & ",572"
+   set the roundRadius of graphic "PromptBg" to 10
+   set the filled of graphic "PromptBg" to true
+   set the backgroundColor of graphic "PromptBg" to kUiCard
+   set the lineSize of graphic "PromptBg" to 1
+   set the foregroundColor of graphic "PromptBg" to kUiFieldLine
+   xtaUiLabel "PromptHint", xtaPromptHint(), "16,500," & (kWindowWidth - 104) & ",572", 12
+   set the margins of field "PromptHint" to "10,7,10,7"
+   set the foregroundColor of field "PromptHint" to kUiMuted
    xtaUiInput "Prompt", "16,500," & (kWindowWidth - 104) & ",572"
+   set the opaque of field "Prompt" to false
+   set the borderWidth of field "Prompt" to 0
+   set the margins of field "Prompt" to "10,7,10,7"
+   set the textFont of field "Prompt" to empty
+   set the textSize of field "Prompt" to 12
+   set the foregroundColor of field "Prompt" to kUiInk
    set the dontWrap of field "Prompt" to false
-   set the vScrollbar of field "Prompt" to true
+   set the vScrollbar of field "Prompt" to false
    set the autoTab of field "Prompt" to false
-   set the tooltip of field "Prompt" to "Your question. Enter, or Command-Return (Control-Return), sends it."
+   set the tooltip of field "Prompt" to "Your question. Enter, or Command-Return (Control-Return), sends it; Escape stops the assistant."
 
    create button "Send"
    set the label of button "Send" to "Send"
@@ -569,6 +642,23 @@ private function xtaFooterText
    end if
    return "The model reads and answers: it cannot change your stacks."
 end xtaFooterText
+
+-- What the prompt says while it is empty
+private function xtaPromptHint
+   if xtaBuildOn() then
+      return "Ask a question, or say what to build or fix"
+   end if
+   return "Ask a question about xTalk Script"
+end xtaPromptHint
+
+-- After the assistant put something into the prompt or emptied it: the
+-- window shows the hint while it is empty, and the scrollbar while it
+-- holds more than it shows (as it does as the user types)
+private command xtaPromptChanged
+   if there is a stack kWindow then
+      dispatch "xtawPromptChanged" to stack kWindow
+   end if
+end xtaPromptChanged
 
 --------------------------------------------------------------------------------
 -- The suite's look
@@ -786,7 +876,9 @@ private command xtaRefreshWindow
    set the hilite of button "Include" of stack kWindow to (revIDEGetPreference(kPrefIncludeScript) is not false)
    set the text of button "More" of stack kWindow to xtaMoreMenuText()
    set the text of field "uiFooter" of stack kWindow to xtaFooterText()
+   set the text of field "PromptHint" of stack kWindow to xtaPromptHint()
    unlock messages
+   xtaPromptChanged
    xtaShowConversation
    xtaUpdateButtons
    if sBusy is not true then
@@ -803,7 +895,7 @@ private command xtaUpdateButtons
    end if
    if sBusy is true then
       set the label of button "Send" of stack kWindow to "Stop"
-      set the tooltip of button "Send" of stack kWindow to "Stop after the answer that is on its way"
+      set the tooltip of button "Send" of stack kWindow to "Stop after the answer that is on its way (Escape)"
       set the enabled of button "Send" of stack kWindow to (sStopAsked is not true)
    else
       set the label of button "Send" of stack kWindow to "Send"
@@ -812,12 +904,14 @@ private command xtaUpdateButtons
    end if
    set the enabled of button "Models" of stack kWindow to (sBusy is not true)
    set the enabled of button "Insert" of stack kWindow to (sBusy is not true and the number of elements of sLastCode > 0)
+   -- Copy the Conversation, once there is one
+   xtaRefreshMoreMenu
    xtaPaintPill
 end xtaUpdateButtons
 
 -- The pill at the right of the band says what the assistant is doing:
--- waiting for the user's answer in the bar, working on a question, without
--- a key, or ready
+-- waiting for the user's answer in the bar, waiting for the model
+-- (thinking), working with its tools, without a key, or ready
 private command xtaPaintPill
    local tProvider
    if there is not a stack kWindow then
@@ -826,8 +920,10 @@ private command xtaPaintPill
    put xtaProvider() into tProvider
    if sAsk["kind"] is not empty then
       xtaSetPill "Needs you", "wait"
+   else if sBusy is true and sWork["kind"] is "wait" then
+      xtaSetPill "Thinking", "busy"
    else if sBusy is true then
-      xtaSetPill "Working", "wait"
+      xtaSetPill "Working", "busy"
    else if xtaKey(tProvider) is empty and xtaBaseUrl(tProvider) is empty then
       xtaSetPill "No key", "bad"
    else
@@ -836,7 +932,7 @@ private command xtaPaintPill
 end xtaPaintPill
 
 -- The kit's pill colors, by kind: ok green, wait amber, bad red, and
--- otherwise the muted blue of the band
+-- otherwise ("busy") the muted blue of the band
 private command xtaSetPill pText, pKind
    local tGround, tInk
    switch pKind
@@ -867,7 +963,7 @@ end xtaSetPill
 -- (and with it no tools are sent, which small models mistake), and Undo
 -- All Changes is there while something the assistant did can be undone
 private function xtaMoreMenuText
-   local tShort, tUndo
+   local tShort, tUndo, tCopy
    if revIDEGetPreference(kPrefShortGuide) is true then
       put "!c" into tShort
    else
@@ -876,8 +972,12 @@ private function xtaMoreMenuText
    if xtaAppliedCount() is 0 then
       put "(" into tUndo
    end if
+   if the number of elements of sTurns is 0 then
+      put "(" into tCopy
+   end if
    return "Settings..." & return & "Set API Key..." & return & "Forget API Key" & return & "-" & return & \
-         "Explain the Last Error" & return & tUndo & "Undo All Changes..." & return & "Memory..." & return & \
+         "Explain the Last Error" & return & "Explain the Open Script" & return & tUndo & "Undo All Changes..." & return & \
+         tCopy & "Copy the Conversation" & return & "Memory..." & return & \
          tShort & "Short Guide, No Tools (for small local models)" & return & "-" & return & \
          "Turn Off xTalk Assistant"
 end xtaMoreMenuText
@@ -905,6 +1005,8 @@ private command xtaStatus pText, pKind
    lock messages
    set the text of field "Status" of stack kWindow to pText
    set the foregroundColor of field "Status" of stack kWindow to tColor
+   -- All of it, where the line is too short for it
+   set the tooltip of field "Status" of stack kWindow to pText
    unlock messages
 end xtaStatus
 
@@ -913,31 +1015,201 @@ private function xtaSettingsLine
    put xtaProvider() into tProvider
    put xtaProviderName(tProvider) into tLine
    if xtaKey(tProvider) is empty then
-      put " - no API key yet (More > Settings...)" after tLine
+      put xtaDot() & "no API key yet (More > Settings...)" after tLine
    else if sKeys[tProvider] is empty then
-      put " - API key from the environment" after tLine
+      put xtaDot() & "API key from the environment" after tLine
    end if
    if xtaModel(tProvider) is empty then
-      put " - no model yet (Send chooses one)" after tLine
+      put xtaDot() & "no model yet (Send chooses one)" after tLine
    else
-      put " -" && xtaModel(tProvider) after tLine
+      put xtaDot() & xtaModel(tProvider) after tLine
    end if
    return tLine
 end xtaSettingsLine
 
--- The conversation, as the window shows it: who said it, in bold in the
--- accent, then what they said, code on the code ground in the Script
--- Editor's font (else the platform's mono face). After an answer, in
--- italics, what the compile check found, and each note the answer
--- proposes to remember, with Remember and Dismiss as links (the answer's
--- memory block itself is not shown). A compile check sent back to the
--- model shows as a turn of its own; what the model's tools did, as a line
--- each in italics, with Undo after changes it made and runs on a stack
--- (and under changes, what they were).
+--------------------------------------------------------------------------------
+-- While the assistant works
+--
+-- From Send until the question is answered, a row at the foot of the
+-- conversation says what the assistant is doing (waiting for the model,
+-- using a tool, checking the code, waiting for the user's answer in the
+-- bar), with a spinner, and how long the question has taken so far; the
+-- pill says Thinking, Working or Needs you; and the status line says which
+-- model is asked, how many requests the question took and their tokens so
+-- far. The row is redrawn every kTickMilliseconds by a message sent to
+-- this stack, which the engine delivers while it waits for the model and
+-- while the bar waits for the user (both wait with messages).
+
+-- The question was sent: the row shows, and its clock starts
+private command xtaWorkBegin
+   xtaStopTicking
+   put empty into sWork
+   put the milliseconds into sWork["start"]
+   put 0 into sWork["requests"]
+   put 0 into sWork["in"]
+   put 0 into sWork["out"]
+   put 0 into sWork["cached"]
+   put 0 into sWork["angle"]
+   xtaShowActivity true
+   xtaStartTicking
+end xtaWorkBegin
+
+-- The question is answered (or stopped, or failed): the row goes, and
+-- the conversation has its room again
+private command xtaWorkEnd
+   xtaStopTicking
+   xtaShowActivity false
+end xtaWorkEnd
+
+private command xtaShowActivity pShow
+   if there is not a stack kWindow then
+      exit xtaShowActivity
+   end if
+   lock screen
+   lock messages
+   set the visible of graphic "ActivityLine" of stack kWindow to pShow
+   set the visible of graphic "ActivitySpin" of stack kWindow to pShow
+   set the visible of field "Activity" of stack kWindow to pShow
+   set the visible of field "ActivityTime" of stack kWindow to pShow
+   unlock messages
+   dispatch "xtawRelayout" to stack kWindow
+   if pShow then
+      xtaPaintActivity
+   end if
+   unlock screen
+end xtaShowActivity
+
+-- What the assistant is doing now: pKind "wait" (for the model), "tool",
+-- "check" (compiling an answer's code), "ask" (waiting for the user in
+-- the bar) or "stop"; pText says it in words
+private command xtaPhase pKind, pText
+   if sBusy is not true then
+      exit xtaPhase
+   end if
+   put pKind into sWork["kind"]
+   put pText into sWork["phase"]
+   xtaPaintActivity
+   xtaPaintPill
+end xtaPhase
+
+-- Redraws the row: the spinner (still, and amber, while the user is
+-- asked), what the assistant is doing, and the question's time so far
+private command xtaPaintActivity
+   local tSeconds
+   if there is not a stack kWindow or sWork["start"] is empty then
+      exit xtaPaintActivity
+   end if
+   put (the milliseconds - sWork["start"]) div 1000 into tSeconds
+   lock messages
+   set the startAngle of graphic "ActivitySpin" of stack kWindow to sWork["angle"]
+   if sWork["kind"] is "ask" then
+      set the foregroundColor of graphic "ActivitySpin" of stack kWindow to kUiWarn
+   else
+      set the foregroundColor of graphic "ActivitySpin" of stack kWindow to kUiAccent
+   end if
+   if field "Activity" of stack kWindow is not sWork["phase"] then
+      set the text of field "Activity" of stack kWindow to sWork["phase"]
+   end if
+   set the text of field "ActivityTime" of stack kWindow to format("%d:%02d", tSeconds div 60, tSeconds mod 60)
+   unlock messages
+end xtaPaintActivity
+
+-- The row's redraw: the spinner turns, and the clock goes on
+on xtaActivityTick
+   put empty into sWork["timer"]
+   if sBusy is not true or sWork["start"] is empty or there is not a stack kWindow then
+      exit xtaActivityTick
+   end if
+   if sWork["kind"] is not "ask" then
+      put (sWork["angle"] + 30) mod 360 into sWork["angle"]
+   end if
+   xtaPaintActivity
+   xtaStartTicking
+end xtaActivityTick
+
+private command xtaStartTicking
+   if sWork["timer"] is not empty then
+      exit xtaStartTicking
+   end if
+   send "xtaActivityTick" to me in kTickMilliseconds milliseconds
+   put the result into sWork["timer"]
+end xtaStartTicking
+
+private command xtaStopTicking
+   if sWork["timer"] is not empty then
+      cancel sWork["timer"]
+      put empty into sWork["timer"]
+   end if
+end xtaStopTicking
+
+-- The status line while the assistant works: the model, and once it has
+-- answered a request, how many requests and their tokens so far
+private command xtaWorkStatus
+   local tProvider, tLine
+   put xtaProvider() into tProvider
+   if sWork["requests"] is 0 then
+      put "Asking" && xtaModel(tProvider) && "(" & xtaServerLabel(tProvider) & ")" into tLine
+   else
+      put xtaModel(tProvider) & xtaDot() & sWork["requests"] && xtaCounted(sWork["requests"], "request", "requests") into tLine
+      if sWork["in"] > 0 or sWork["out"] > 0 then
+         put xtaDot() & sWork["in"] && "tokens in," && sWork["out"] && "out so far" after tLine
+      end if
+   end if
+   xtaStatus tLine
+end xtaWorkStatus
+
+-- Who answers, in a word or two: the provider, or the host of the
+-- user's own server ("localhost:11434")
+private function xtaServerLabel pProvider
+   local tUrl
+   put xtaBaseUrl(pProvider) into tUrl
+   if tUrl is empty then
+      if pProvider is "openai" then
+         return "OpenAI"
+      end if
+      return xtaProviderName(pProvider)
+   end if
+   if tUrl contains "://" then
+      put char offset("://", tUrl) + 3 to -1 of tUrl into tUrl
+   end if
+   set the itemDelimiter to "/"
+   return item 1 of tUrl
+end xtaServerLabel
+
+-- pSingular when pCount is 1, else pPlural
+private function xtaCounted pCount, pSingular, pPlural
+   if pCount is 1 then
+      return pSingular
+   end if
+   return pPlural
+end xtaCounted
+
+--------------------------------------------------------------------------------
+-- The conversation
+--
+-- The conversation field is filled in one go from a styledText array (a
+-- paragraph each: its "style" and its "runs", each run its "text" and its
+-- "style"), which the engine lays out once. Who speaks heads each block,
+-- in bold: "You", "xTalk Assistant" (the accent) or "Compile check"
+-- (amber), and an empty line goes between blocks, so that each label
+-- begins a line of its own in the field's text too. In a block:
+--    the user's words, on a light tint of the accent;
+--    an answer, its Markdown read: headings, lists, quotes, bold, italics,
+--       `code` and links; a fenced block as a card in the code's face,
+--       under a header that names its language and has Copy and, for
+--       xTalk, Insert;
+--    what the tools did, a line each in italics (amber when it did not
+--       work), with Undo after what can be undone; under a batch of
+--       changes, what they were, and under a run, what it put out;
+--    after an answer, what the compile check found, and the notes it
+--       proposes to remember, with Remember and Dismiss;
+--    once a question is answered, how long it took and what it cost, in
+--       small print at the end of its last block.
+-- With no conversation yet, the field welcomes the user instead
+-- (xtaDocWelcome), with questions to begin with.
+
 private command xtaShowConversation
-   local tText, tIndex, tLine, tInCode, tFont, tLineNumber, tLabelLines, tItalicLines
-   local tLinks, tLink, tNote, tCount, tWords, tBody, tCall, tSummary, tResult, tEntry
-   local tStates, tEntries, tUndoLinks, tShown, tMore
+   local tDoc, tEntries, tStates, tIndex, tTurn, tSpeaker, tQuestion, tText, tNew
    if there is not a stack kWindow then
       exit xtaShowConversation
    end if
@@ -948,158 +1220,730 @@ private command xtaShowConversation
          put tEntries[tIndex]["state"] into tStates[tEntries[tIndex]["number"]]
       end repeat
    end if
-   -- The line numbers of the labels and of the italic lines, so that a line
-   -- of an answer that reads the same is not taken for one; and for each
-   -- note's line, its links ("line,turn,note"), and for each line that can
-   -- be undone, its entry ("line,entry")
-   put 0 into tCount
-   repeat with tIndex = 1 to the number of elements of sTurns
-      if sTurns[tIndex]["kind"] is "tools" then
-         repeat with tCall = 1 to the number of elements of sTurns[tIndex]["results"]
-            put sTurns[tIndex]["results"][tCall] into tResult
-            put tResult["summary"] into tSummary
-            replace return with space in tSummary
-            put tResult["entry"] into tEntry
-            if tEntry is not empty then
-               if tStates[tEntry] is "applied" then
-                  put "    Undo" after tSummary
-                  put tCount + 1 & comma & tEntry & return after tUndoLinks
-               else if tStates[tEntry] is "undone" then
-                  put "    (undone)" after tSummary
-               end if
+   if the number of elements of sTurns is 0 then
+      xtaDocWelcome tDoc
+   else
+      put 0 into tQuestion
+      repeat with tIndex = 1 to the number of elements of sTurns
+         put sTurns[tIndex] into tTurn
+         if tTurn["kind"] is "tools" then
+            xtaDocSpeaker tDoc, tSpeaker, "xTalk Assistant"
+            xtaDocTools tDoc, tTurn["results"], tStates, the result
+            next repeat
+         end if
+         if tTurn["role"] is "assistant" then
+            put xtaWithoutMemoryBlocks(tTurn["text"]) into tText
+            -- An answer that only asked for tools shows as what they did
+            if the number of elements of tTurn["calls"] > 0 and word 1 to -1 of tText is empty \
+                  and the number of elements of tTurn["notes"] is 0 then
+               next repeat
             end if
-            put tCount + 1 & comma after tItalicLines
-            xtaAddLines tText, tCount, tSummary
-            -- What a batch changed, a line each (the first few)
-            put 0 into tShown
-            repeat for each line tLine in tResult["lines"]
-               add 1 to tShown
-               if tShown > kShownChanges then
-                  put the number of lines of tResult["lines"] - kShownChanges into tMore
-                  put tCount + 1 & comma after tItalicLines
-                  xtaAddLines tText, tCount, "      ... and" && tMore && "more"
-                  exit repeat
-               end if
-               put tCount + 1 & comma after tItalicLines
-               xtaAddLines tText, tCount, "      " & tLine
-            end repeat
-         end repeat
-         xtaAddLines tText, tCount, empty
-         next repeat
-      end if
-      -- An answer that only asked for tools shows as what they did
-      if sTurns[tIndex]["role"] is "assistant" and the number of elements of sTurns[tIndex]["calls"] > 0 \
-            and word 1 to -1 of xtaWithoutMemoryBlocks(sTurns[tIndex]["text"]) is empty \
-            and the number of elements of sTurns[tIndex]["notes"] is 0 then
-         next repeat
-      end if
-      put tCount + 1 & comma after tLabelLines
-      if sTurns[tIndex]["kind"] is "check" then
-         put sTurns[tIndex]["text"] into tBody
-         if tBody begins with "Compile check: " then
-            delete char 1 to the number of chars of "Compile check: " of tBody
+            xtaDocSpeaker tDoc, tSpeaker, "xTalk Assistant"
+            put the result into tNew
+            xtaDocAnswer tDoc, tText, tIndex, kUiInk, tNew
+            xtaDocCheck tDoc, tTurn["check"]
+            xtaDocNotes tDoc, tIndex
+            next repeat
          end if
-         xtaAddLines tText, tCount, "Compile check" & return & tBody
-      else if sTurns[tIndex]["role"] is "assistant" then
-         xtaAddLines tText, tCount, "xTalk Assistant" & return & xtaWithoutMemoryBlocks(sTurns[tIndex]["text"])
-         if sTurns[tIndex]["check"] is not empty then
-            put tCount + 1 & comma after tItalicLines
-            xtaAddLines tText, tCount, sTurns[tIndex]["check"]
+         if tTurn["kind"] is "check" then
+            xtaDocSpeaker tDoc, tSpeaker, "Compile check"
+            put tTurn["text"] into tText
+            if tText begins with "Compile check: " then
+               delete char 1 to the number of chars of "Compile check: " of tText
+            end if
+            xtaDocAnswer tDoc, tText, tIndex, kUiInkSoft, true
+            next repeat
          end if
-         repeat with tNote = 1 to the number of elements of sTurns[tIndex]["notes"]
-            switch sTurns[tIndex]["notes"][tNote]["state"]
-               case "dismissed"
-                  break
-               case "kept"
-                  put tCount + 1 & comma after tItalicLines
-                  xtaAddLines tText, tCount, "Remembered" && xtaNoteScope(tIndex, tNote) & ":" && sTurns[tIndex]["notes"][tNote]["note"]
-                  break
-               default
-                  put tCount + 1 & comma after tItalicLines
-                  put tCount + 1 & comma & tIndex & comma & tNote & return after tLinks
-                  xtaAddLines tText, tCount, "Note to keep" && xtaNoteScope(tIndex, tNote) & ":" && \
-                        sTurns[tIndex]["notes"][tNote]["note"] & "    Remember  Dismiss"
-                  break
-            end switch
-         end repeat
-      else
-         put sTurns[tIndex]["text"] into tBody
-         if sTurns[tIndex]["attach"] is not empty then
-            put return & "(with the last error, in" && sTurns[tIndex]["attachName"] & ")" after tBody
-         end if
-         if sTurns[tIndex]["context"] is not empty then
-            put return & "(with the script of" && sTurns[tIndex]["contextName"] & ")" after tBody
-         end if
-         xtaAddLines tText, tCount, "You" & return & tBody
-      end if
-      xtaAddLines tText, tCount, empty
-   end repeat
+         -- A question: first what the one before took, then who asks
+         xtaDocMeta tDoc, tQuestion
+         put empty into tSpeaker
+         xtaDocSpeaker tDoc, tSpeaker, "You"
+         xtaDocQuestion tDoc, tTurn
+         put tIndex into tQuestion
+      end repeat
+      xtaDocMeta tDoc, tQuestion
+      xtaDocAdd tDoc, empty, empty
+   end if
    lock screen
    lock messages
-   set the text of field "Conversation" of stack kWindow to tText
-   put revIDEGetPreference("cScriptEditor,editor,font") into tFont
-   if tFont is empty then
-      put xtaUiMonoFont() into tFont
-   end if
-   put false into tInCode
-   put 0 into tLineNumber
-   repeat for each line tLine in tText
-      add 1 to tLineNumber
-      if tLineNumber is among the items of tLabelLines then
-         set the textStyle of line tLineNumber of field "Conversation" of stack kWindow to "bold"
-         set the foregroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiAccent
-         put false into tInCode
-         next repeat
-      end if
-      if tLineNumber is among the items of tItalicLines then
-         set the textStyle of line tLineNumber of field "Conversation" of stack kWindow to "italic"
-         set the foregroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiInkSoft
-         next repeat
-      end if
-      -- Code, with its fences, on the code ground (a line's backgroundColor
-      -- is its paragraph's, the width of the field)
-      if word 1 to -1 of tLine begins with "```" then
-         set the textFont of line tLineNumber of field "Conversation" of stack kWindow to tFont
-         set the foregroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiMuted
-         set the backgroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiCodeBg
-         put not tInCode into tInCode
-         next repeat
-      end if
-      if tInCode then
-         set the textFont of line tLineNumber of field "Conversation" of stack kWindow to tFont
-         set the backgroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiCodeBg
-      end if
-   end repeat
-   -- The last two words of a note's line are its links
-   repeat for each line tLink in tLinks
-      put item 1 of tLink into tLineNumber
-      put the number of words of line tLineNumber of field "Conversation" of stack kWindow into tWords
-      set the textStyle of word tWords - 1 of line tLineNumber of field "Conversation" of stack kWindow to "link"
-      set the linkText of word tWords - 1 of line tLineNumber of field "Conversation" of stack kWindow to "remember," & item 2 to 3 of tLink
-      set the textStyle of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "link"
-      set the linkText of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "dismiss," & item 2 to 3 of tLink
-   end repeat
-   -- And Undo, the last word of the line of what can be undone
-   repeat for each line tLink in tUndoLinks
-      put item 1 of tLink into tLineNumber
-      put the number of words of line tLineNumber of field "Conversation" of stack kWindow into tWords
-      set the textStyle of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "link"
-      set the linkText of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "undo," & item 2 of tLink
-   end repeat
+   set the styledText of field "Conversation" of stack kWindow to tDoc
    unlock messages
+   xtaFitScrollbar
    set the vScroll of field "Conversation" of stack kWindow to the formattedHeight of field "Conversation" of stack kWindow
    unlock screen
 end xtaShowConversation
 
--- Adds pLines (one or more lines) to xText as lines of their own, and
--- counts them in xCount, the number of lines xText has so far
-private command xtaAddLines @xText, @xCount, pLines
-   local tWithout
-   put pLines & return after xText
-   put pLines into tWithout
-   replace return with empty in tWithout
-   add the number of chars of pLines - the number of chars of tWithout + 1 to xCount
-end xtaAddLines
+-- The conversation's scrollbar, only while it has more than it shows
+-- (measured with the scrollbar, so that taking it away cannot make the
+-- text longer than the field)
+private command xtaFitScrollbar
+   lock messages
+   set the vScrollbar of field "Conversation" of stack kWindow to true
+   if the formattedHeight of field "Conversation" of stack kWindow <= the height of field "Conversation" of stack kWindow then
+      set the vScrollbar of field "Conversation" of stack kWindow to false
+   end if
+   unlock messages
+end xtaFitScrollbar
+
+-- Begins a block of pName's (a label) unless xSpeaker, who spoke last,
+-- is pName already. The result is true when a block was begun.
+private command xtaDocSpeaker @xDoc, @xSpeaker, pName
+   local tRun, tPara
+   if xSpeaker is pName then
+      return false
+   end if
+   if the number of elements of xDoc > 0 then
+      xtaDocAdd xDoc, empty, empty
+   end if
+   put "bold" into tRun["textStyle"]
+   if pName is "Compile check" then
+      put kUiWarn into tRun["foregroundColor"]
+   else
+      put kUiAccent into tRun["foregroundColor"]
+   end if
+   put 2 into tPara["spaceBelow"]
+   xtaDocLine xDoc, pName, tRun, tPara
+   put pName into xSpeaker
+   return true
+end xtaDocSpeaker
+
+-- The user's question, on the tint, with what went with it: one
+-- paragraph, its lines kept apart by line breaks within it (a vertical
+-- tab, which the engine lays out as one), so that the tint is one box
+private command xtaDocQuestion @xDoc, pTurn
+   local tRun, tSoft, tPara, tRuns, tText
+   put kUiInk into tRun["foregroundColor"]
+   put kUiInkSoft into tSoft["foregroundColor"]
+   put "italic" into tSoft["textStyle"]
+   put kUiTint into tPara["backgroundColor"]
+   put 6 into tPara["padding"]
+   put pTurn["text"] into tText
+   replace return with numToChar(11) in tText
+   xtaRunAdd tRuns, tText, tRun
+   if pTurn["attach"] is not empty then
+      xtaRunAdd tRuns, numToChar(11) & "(with the last error, in" && pTurn["attachName"] & ")", tSoft
+   end if
+   if pTurn["context"] is not empty then
+      xtaRunAdd tRuns, numToChar(11) & "(with the script of" && pTurn["contextName"] & ")", tSoft
+   end if
+   xtaDocAdd xDoc, tRuns, tPara
+end xtaDocQuestion
+
+-- What the tools did (pResults, a tools turn's), a line each. pNew is
+-- false when the line goes on the block of an answer.
+private command xtaDocTools @xDoc, pResults, pStates, pNew
+   local tCall, tResult, tSummary, tRuns, tStyle, tLink, tEntry, tPara, tSmall, tSub, tShown, tLine, tMore
+   put kUiInkSoft into tSmall["foregroundColor"]
+   put 11 into tSmall["textSize"]
+   put "disc" into tSub["listStyle"]
+   put 2 into tSub["listDepth"]
+   put 14 into tSub["listIndent"]
+   repeat with tCall = 1 to the number of elements of pResults
+      put pResults[tCall] into tResult
+      put tResult["summary"] into tSummary
+      replace return with space in tSummary
+      put empty into tRuns
+      put empty into tStyle
+      put "italic" into tStyle["textStyle"]
+      if tResult["error"] is true then
+         put kUiWarn into tStyle["foregroundColor"]
+      else
+         put kUiInkSoft into tStyle["foregroundColor"]
+      end if
+      xtaRunAdd tRuns, tSummary, tStyle
+      put tResult["entry"] into tEntry
+      if tEntry is not empty then
+         if pStates[tEntry] is "applied" then
+            xtaRunAdd tRuns, "    ", tStyle
+            put empty into tLink
+            put "link" into tLink["textStyle"]
+            put "undo," & tEntry into tLink["linkText"]
+            xtaRunAdd tRuns, "Undo", tLink
+         else if pStates[tEntry] is "undone" then
+            xtaRunAdd tRuns, "    (undone)", tStyle
+         end if
+      end if
+      put empty into tPara
+      if tCall is 1 and pNew is false then
+         put 4 into tPara["spaceAbove"]
+      end if
+      xtaDocAdd xDoc, tRuns, tPara
+      -- What a batch changed, a line each (the first few)
+      put 0 into tShown
+      repeat for each line tLine in tResult["lines"]
+         add 1 to tShown
+         if tShown > kShownChanges then
+            put the number of lines of tResult["lines"] - kShownChanges into tMore
+            xtaDocLine xDoc, "... and" && tMore && "more", tSmall, tSub
+            exit repeat
+         end if
+         xtaDocLine xDoc, tLine, tSmall, tSub
+      end repeat
+      -- What a run put into the Message Box, and returned
+      xtaDocRunOutput xDoc, tResult
+   end repeat
+end xtaDocTools
+
+-- Under a run: what it put into the Message Box (its first lines) and
+-- what it returned, in the code's face
+private command xtaDocRunOutput @xDoc, pResult
+   local tMono, tPara, tLines, tCount, tLine, tValue
+   if pResult["output"] is empty and pResult["value"] is empty then
+      exit xtaDocRunOutput
+   end if
+   put xtaCodeFont() into tMono["textFont"]
+   put 10 into tMono["textSize"]
+   put kUiInk into tMono["foregroundColor"]
+   put kUiCodeBg into tPara["backgroundColor"]
+   put 16 into tPara["leftIndent"]
+   put 8 into tPara["firstIndent"]
+   put 0 into tCount
+   if pResult["output"] is not empty then
+      put the number of lines of pResult["output"] into tLines
+      repeat for each line tLine in pResult["output"]
+         add 1 to tCount
+         if tCount > kShownOutput then
+            put kUiMuted into tMono["foregroundColor"]
+            xtaDocLine xDoc, "... and" && tLines - kShownOutput && "more lines", tMono, tPara
+            put kUiInk into tMono["foregroundColor"]
+            exit repeat
+         end if
+         xtaDocLine xDoc, tLine, tMono, tPara
+      end repeat
+   end if
+   if pResult["value"] is not empty then
+      put line 1 of pResult["value"] into tValue
+      if the number of chars of tValue > 200 then
+         put char 1 to 200 of tValue & "..." into tValue
+      else if the number of lines of pResult["value"] > 1 then
+         put "..." after tValue
+      end if
+      put kUiInkSoft into tMono["foregroundColor"]
+      xtaDocLine xDoc, "returned" && tValue, tMono, tPara
+   end if
+end xtaDocRunOutput
+
+-- What the compile check found of an answer's code (pCheck, its
+-- summary): green when it compiles, amber when it does not
+private command xtaDocCheck @xDoc, pCheck
+   local tRun, tPara
+   if pCheck is empty then
+      exit xtaDocCheck
+   end if
+   put "italic" into tRun["textStyle"]
+   if pCheck contains "not compile" then
+      put kUiWarn into tRun["foregroundColor"]
+   else
+      put kUiOk into tRun["foregroundColor"]
+   end if
+   put 4 into tPara["spaceAbove"]
+   xtaDocLine xDoc, pCheck, tRun, tPara
+end xtaDocCheck
+
+-- The notes an answer (turn pTurn) proposes to remember: those not kept
+-- yet with Remember and Dismiss as links ("remember,turn,note")
+private command xtaDocNotes @xDoc, pTurn
+   local tNote, tRun, tLink, tRuns, tText
+   put "italic" into tRun["textStyle"]
+   put kUiInkSoft into tRun["foregroundColor"]
+   put "link" into tLink["textStyle"]
+   repeat with tNote = 1 to the number of elements of sTurns[pTurn]["notes"]
+      put sTurns[pTurn]["notes"][tNote]["note"] into tText
+      switch sTurns[pTurn]["notes"][tNote]["state"]
+         case "dismissed"
+            break
+         case "kept"
+            xtaDocLine xDoc, "Remembered" && xtaNoteScope(pTurn, tNote) & ":" && tText, tRun, empty
+            break
+         default
+            put empty into tRuns
+            xtaRunAdd tRuns, "Note to keep" && xtaNoteScope(pTurn, tNote) & ":" && tText & "    ", tRun
+            put "remember," & pTurn & comma & tNote into tLink["linkText"]
+            xtaRunAdd tRuns, "Remember", tLink
+            xtaRunAdd tRuns, "  ", tRun
+            put "dismiss," & pTurn & comma & tNote into tLink["linkText"]
+            xtaRunAdd tRuns, "Dismiss", tLink
+            xtaDocAdd xDoc, tRuns, empty
+            break
+      end switch
+   end repeat
+end xtaDocNotes
+
+-- At the end of a question's last block: how long the answer took, how
+-- many requests it made and the tokens they cost (its "stats", kept when
+-- it was answered)
+private command xtaDocMeta @xDoc, pQuestion
+   local tStats, tRun, tPara
+   if pQuestion is 0 or pQuestion is empty then
+      exit xtaDocMeta
+   end if
+   put sTurns[pQuestion]["stats"] into tStats
+   if tStats is not an array then
+      exit xtaDocMeta
+   end if
+   put kUiMuted into tRun["foregroundColor"]
+   put 10 into tRun["textSize"]
+   put 4 into tPara["spaceAbove"]
+   xtaDocLine xDoc, xtaStatsLine(tStats), tRun, tPara
+end xtaDocMeta
+
+-- What a question took, for the conversation and the status line: "12 s,
+-- 2 requests, 1200 tokens in and 300 out"
+private function xtaStatsLine pStats
+   local tLine
+   put xtaDuration(pStats["ms"]) into tLine
+   if pStats["requests"] is 1 then
+      put xtaDot() & "1 request" after tLine
+   else if pStats["requests"] > 1 then
+      put xtaDot() & pStats["requests"] && "requests" after tLine
+   end if
+   if pStats["in"] > 0 or pStats["out"] > 0 then
+      put xtaDot() & pStats["in"] && "tokens in," && pStats["out"] && "out" after tLine
+      if pStats["cached"] > 0 then
+         put " (" & pStats["cached"] && "read from the cache)" after tLine
+      end if
+   end if
+   return tLine
+end xtaStatsLine
+
+-- pMilliseconds as the user reads a time: 0.4 s, 12 s, 1 min 05 s
+private function xtaDuration pMilliseconds
+   local tSeconds
+   if pMilliseconds is not a number then
+      return "0 s"
+   end if
+   if pMilliseconds < 10000 then
+      return format("%.1f s", pMilliseconds / 1000)
+   end if
+   put round(pMilliseconds / 1000) into tSeconds
+   if tSeconds < 60 then
+      return tSeconds && "s"
+   end if
+   return tSeconds div 60 && "min" && format("%02d", tSeconds mod 60) && "s"
+end xtaDuration
+
+-- A separator between the parts of a line: a middle dot between spaces
+private function xtaDot
+   return space & numToCodepoint(183) & space
+end xtaDot
+
+-- The welcome, while there is no conversation: what the assistant does,
+-- and questions to begin with, each a link that puts it into the prompt
+-- ("example,N", xtaExampleText)
+private command xtaDocWelcome @xDoc
+   local tRun, tPara, tLink, tRuns, tIndex, tText, tProvider
+   put "bold" into tRun["textStyle"]
+   put 16 into tRun["textSize"]
+   put kUiInk into tRun["foregroundColor"]
+   put 10 into tPara["spaceAbove"]
+   put 4 into tPara["spaceBelow"]
+   xtaDocLine xDoc, "What shall we make?", tRun, tPara
+   put empty into tRun
+   put kUiInkSoft into tRun["foregroundColor"]
+   put empty into tPara
+   if xtaBuildOn() then
+      put "Ask about xTalk Script, or ask the assistant to build it with you: it can read your stack, make cards, controls " & \
+            "and new stacks, write their scripts, run code to try it, and check that what it writes compiles. Nothing changes " & \
+            "until you say yes." into tText
+   else
+      put "Ask about xTalk Script: the assistant can read your stack, look up the Dictionary and check that the code it " & \
+            "writes compiles." into tText
+   end if
+   xtaDocLine xDoc, tText, tRun, tPara
+   put xtaProvider() into tProvider
+   if xtaKey(tProvider) is empty and xtaBaseUrl(tProvider) is empty then
+      put empty into tRuns
+      put 8 into tPara["spaceAbove"]
+      put kUiBad into tRun["foregroundColor"]
+      xtaRunAdd tRuns, "It needs your" && xtaProviderName(tProvider) && "API key first:", tRun
+      xtaRunAdd tRuns, " ", tRun
+      put "link" into tLink["textStyle"]
+      put "settings" into tLink["linkText"]
+      xtaRunAdd tRuns, "add it in the Settings", tLink
+      xtaRunAdd tRuns, ".", tRun
+      xtaDocAdd xDoc, tRuns, tPara
+      put kUiInkSoft into tRun["foregroundColor"]
+   end if
+   put empty into tPara
+   put 12 into tPara["spaceAbove"]
+   put 2 into tPara["spaceBelow"]
+   put kUiMuted into tRun["foregroundColor"]
+   put 11 into tRun["textSize"]
+   xtaDocLine xDoc, "Try one of these:", tRun, tPara
+   put empty into tPara
+   put "disc" into tPara["listStyle"]
+   put 18 into tPara["listIndent"]
+   put 3 into tPara["spaceBelow"]
+   put "link" into tLink["textStyle"]
+   repeat with tIndex = 1 to 4
+      put xtaExampleText(tIndex) into tText
+      if tText is empty then
+         next repeat
+      end if
+      put "example," & tIndex into tLink["linkText"]
+      put empty into tRuns
+      xtaRunAdd tRuns, tText, tLink
+      xtaDocAdd xDoc, tRuns, tPara
+   end repeat
+   put empty into tPara
+   put 14 into tPara["spaceAbove"]
+   put 10 into tRun["textSize"]
+   xtaDocLine xDoc, "Enter sends your question, and Return starts a new line. Escape stops the assistant.", tRun, tPara
+end xtaDocWelcome
+
+-- The questions the welcome offers: those that build only while the
+-- model may change stacks
+private function xtaExampleText pIndex
+   switch pIndex
+      case 1
+         return "How do I read a text file into a field?"
+      case 2
+         if xtaBuildOn() then
+            return "Make a new stack with a field and a button that counts the words in it"
+         end if
+         return "How do I count the words in a field?"
+      case 3
+         if xtaBuildOn() then
+            return "Add a Clear button to this card that empties every field"
+         end if
+         return "Write a handler that empties every field of a card"
+      case 4
+         return "Why did my last error happen, and how do I fix it?"
+   end switch
+   return empty
+end xtaExampleText
+
+-- Adds a paragraph of pRuns (as xtaRunAdd makes them) and pStyle (a
+-- paragraph's styles, or empty) to xDoc
+private command xtaDocAdd @xDoc, pRuns, pStyle
+   local tIndex
+   put the number of elements of xDoc + 1 into tIndex
+   if the number of elements of pRuns is 0 then
+      put empty into pRuns[1]["text"]
+   end if
+   put pRuns into xDoc[tIndex]["runs"]
+   if pStyle is an array then
+      put pStyle into xDoc[tIndex]["style"]
+   end if
+end xtaDocAdd
+
+-- Adds a run of pText in pStyle (a run's styles, or empty) to xRuns
+private command xtaRunAdd @xRuns, pText, pStyle
+   local tIndex
+   if pText is empty then
+      exit xtaRunAdd
+   end if
+   put the number of elements of xRuns + 1 into tIndex
+   put pText into xRuns[tIndex]["text"]
+   if pStyle is an array then
+      put pStyle into xRuns[tIndex]["style"]
+   end if
+end xtaRunAdd
+
+-- One paragraph of one run
+private command xtaDocLine @xDoc, pText, pRunStyle, pStyle
+   local tRuns
+   xtaRunAdd tRuns, pText, pRunStyle
+   xtaDocAdd xDoc, tRuns, pStyle
+end xtaDocLine
+
+-- A paragraph of the runs of pText, a line of an answer, with its inline
+-- Markdown read (xtaInlineRuns)
+private command xtaDocInline @xDoc, pText, pRunStyle, pStyle
+   xtaDocAdd xDoc, xtaInlineRuns(pText, pRunStyle), pStyle
+end xtaDocInline
+
+-- The runs of pText with what Markdown marks inside a line: `code`,
+-- **bold**, *italic* and _italic_, and [words](https://...), which is a
+-- link; the rest as it is. A mark that is not closed is taken as it is. A
+-- star or underscore marks italics only around words (2 * 3 * 4 is not),
+-- and an underscore only outside a word (a_name_like_this is not).
+private function xtaInlineRuns pText, pBase
+   local tRuns, tPos, tLength, tPlain, tChar, tEnd, tStyle, tUrl, tClose
+   put the number of chars of pText into tLength
+   put 1 into tPos
+   repeat while tPos <= tLength
+      put char tPos of pText into tChar
+      put 0 into tEnd
+      switch tChar
+         case "`"
+            put xtaFindAfter("`", pText, tPos + 1) into tEnd
+            if tEnd > tPos + 1 then
+               xtaRunAdd tRuns, tPlain, pBase
+               put empty into tPlain
+               put pBase into tStyle
+               put xtaCodeFont() into tStyle["textFont"]
+               put kUiCodeHead into tStyle["backgroundColor"]
+               xtaRunAdd tRuns, char tPos + 1 to tEnd - 1 of pText, tStyle
+               put tEnd + 1 into tPos
+               next repeat
+            end if
+            break
+         case "*"
+         case "_"
+            if char tPos + 1 of pText is tChar then
+               -- **bold** (or __bold__)
+               put xtaFindAfter(tChar & tChar, pText, tPos + 2) into tEnd
+               if tEnd > tPos + 2 then
+                  xtaRunAdd tRuns, tPlain, pBase
+                  put empty into tPlain
+                  put pBase into tStyle
+                  put xtaAddTextStyle(tStyle["textStyle"], "bold") into tStyle["textStyle"]
+                  xtaRunAdd tRuns, char tPos + 2 to tEnd - 1 of pText, tStyle
+                  put tEnd + 2 into tPos
+                  next repeat
+               end if
+            else if char tPos + 1 of pText is not space and char tPos + 1 of pText is not empty \
+                  and (tChar is "*" or tPos is 1 or not xtaIsWordChar(char tPos - 1 of pText)) then
+               put xtaFindAfter(tChar, pText, tPos + 1) into tEnd
+               if tEnd > tPos + 1 and char tEnd - 1 of pText is not space \
+                     and (tChar is "*" or not xtaIsWordChar(char tEnd + 1 of pText)) then
+                  xtaRunAdd tRuns, tPlain, pBase
+                  put empty into tPlain
+                  put pBase into tStyle
+                  put xtaAddTextStyle(tStyle["textStyle"], "italic") into tStyle["textStyle"]
+                  xtaRunAdd tRuns, char tPos + 1 to tEnd - 1 of pText, tStyle
+                  put tEnd + 1 into tPos
+                  next repeat
+               end if
+            end if
+            break
+         case "["
+            put xtaFindAfter("](", pText, tPos + 1) into tEnd
+            if tEnd > tPos + 1 then
+               put xtaFindAfter(")", pText, tEnd + 2) into tClose
+               put char tEnd + 2 to tClose - 1 of pText into tUrl
+               if tClose > 0 and (tUrl begins with "https://" or tUrl begins with "http://") and space is not in tUrl then
+                  xtaRunAdd tRuns, tPlain, pBase
+                  put empty into tPlain
+                  put pBase into tStyle
+                  put "link" into tStyle["textStyle"]
+                  put "url," & tUrl into tStyle["linkText"]
+                  xtaRunAdd tRuns, char tPos + 1 to tEnd - 1 of pText, tStyle
+                  put tClose + 1 into tPos
+                  next repeat
+               end if
+            end if
+            break
+      end switch
+      put tChar after tPlain
+      add 1 to tPos
+   end repeat
+   xtaRunAdd tRuns, tPlain, pBase
+   return tRuns
+end xtaInlineRuns
+
+-- Where pNeedle is in pText at or after char pFrom, or 0
+private function xtaFindAfter pNeedle, pText, pFrom
+   local tAt
+   if pFrom > the number of chars of pText then
+      return 0
+   end if
+   put offset(pNeedle, pText, pFrom - 1) into tAt
+   if tAt is 0 then
+      return 0
+   end if
+   return tAt + pFrom - 1
+end xtaFindAfter
+
+private function xtaIsWordChar pChar
+   return pChar is not empty and (pChar is a number or toLower(pChar) is not toUpper(pChar))
+end xtaIsWordChar
+
+-- pStyles (a textStyle: empty, plain, or words with commas) with pStyle
+-- added
+private function xtaAddTextStyle pStyles, pStyle
+   if pStyles is empty or pStyles is "plain" then
+      return pStyle
+   end if
+   if pStyle is among the items of pStyles then
+      return pStyles
+   end if
+   return pStyles & comma & pStyle
+end xtaAddTextStyle
+
+-- The face code is shown in: the Script Editor's, else the platform's
+-- mono face
+private function xtaCodeFont
+   local tFont
+   put revIDEGetPreference("cScriptEditor,editor,font") into tFont
+   if tFont is empty then
+      put xtaUiMonoFont() into tFont
+   end if
+   return tFont
+end xtaCodeFont
+
+-- What a fenced block's language is called above it: the two of
+-- OXT-Beyond by the names its Dictionary gives them, xTalk Script and
+-- xTalk Builder, whatever the block is marked (livecodescript, lcb...)
+private function xtaLangLabel pLang
+   put toLower(word 1 to -1 of pLang) into pLang
+   if xtaIsXTalkLang(pLang) then
+      return "xTalk Script"
+   end if
+   switch pLang
+      case "livecodebuilder"
+      case "lcb"
+         return "xTalk Builder"
+      case "sh"
+      case "bash"
+      case "shell"
+         return "Shell"
+      case "js"
+      case "javascript"
+         return "JavaScript"
+      case "c++"
+      case "cpp"
+         return "C++"
+      case "json"
+      case "html"
+      case "css"
+      case "sql"
+      case "xml"
+         return toUpper(pLang)
+   end switch
+   return toUpper(char 1 of pLang) & char 2 to -1 of pLang
+end xtaLangLabel
+
+-- An answer (pText, turn pTurn) onto xDoc, its Markdown read, in pInk.
+-- pNew is false when it goes on a block already begun (after what its
+-- tools did), and is then set apart from it. Code is numbered as
+-- xtaCodeBlocks numbers it, for Copy and Insert ("copy,turn,block").
+private command xtaDocAnswer @xDoc, pText, pTurn, pInk, pNew
+   local tLine, tInCode, tLang, tBlock, tRuns, tRun, tPara, tTrim, tLevel, tCodeFont
+   local tHeader, tLink, tSpace, tBody, tFirst, tCode, tCodePara
+   put xtaCodeFont() into tCodeFont
+   put false into tInCode
+   put 0 into tBlock
+   put pInk into tBody["foregroundColor"]
+   put tCodeFont into tCode["textFont"]
+   put 11 into tCode["textSize"]
+   put kUiInk into tCode["foregroundColor"]
+   put kUiCodeBg into tCodePara["backgroundColor"]
+   put 10 into tCodePara["firstIndent"]
+   put (pNew is false) into tFirst
+   put 0 into tSpace
+   repeat for each line tLine in pText
+      put word 1 to -1 of tLine into tTrim
+      if tTrim begins with "```" then
+         if tInCode then
+            -- A strip of the code's ground under the last line
+            put empty into tRun
+            put 4 into tRun["textSize"]
+            xtaDocLine xDoc, empty, tRun, tCodePara
+            put false into tInCode
+            put 8 into tSpace
+            next repeat
+         end if
+         put true into tInCode
+         add 1 to tBlock
+         put char 4 to -1 of tTrim into tLang
+         put word 1 of tLang into tLang
+         -- The header: the language, then Copy and, for xTalk, Insert
+         put empty into tRuns
+         put empty into tRun
+         put "bold" into tRun["textStyle"]
+         put kUiInkSoft into tRun["foregroundColor"]
+         put 10 into tRun["textSize"]
+         xtaRunAdd tRuns, xtaLangLabel(tLang), tRun
+         put empty into tLink
+         put "link" into tLink["textStyle"]
+         put 10 into tLink["textSize"]
+         put "copy," & pTurn & comma & tBlock into tLink["linkText"]
+         xtaRunAdd tRuns, "     ", tRun
+         xtaRunAdd tRuns, "Copy", tLink
+         if xtaIsXTalkLang(tLang) then
+            put "insert," & pTurn & comma & tBlock into tLink["linkText"]
+            xtaRunAdd tRuns, "   ", tRun
+            xtaRunAdd tRuns, "Insert", tLink
+         end if
+         put empty into tHeader
+         put kUiCodeHead into tHeader["backgroundColor"]
+         put 4 into tHeader["padding"]
+         put 6 into tHeader["firstIndent"]
+         put max(tSpace, 6) into tHeader["spaceAbove"]
+         if tFirst then
+            put 8 into tHeader["spaceAbove"]
+            put false into tFirst
+         end if
+         xtaDocAdd xDoc, tRuns, tHeader
+         put 0 into tSpace
+         next repeat
+      end if
+      if tInCode then
+         xtaDocLine xDoc, tLine, tCode, tCodePara
+         next repeat
+      end if
+      -- An empty line sets the next paragraph apart, rather than being a
+      -- paragraph of its own
+      if tTrim is empty then
+         put max(tSpace, 8) into tSpace
+         next repeat
+      end if
+      put empty into tPara
+      if tFirst then
+         put 6 into tSpace
+         put false into tFirst
+      end if
+      if tSpace > 0 then
+         put tSpace into tPara["spaceAbove"]
+         put 0 into tSpace
+      end if
+      -- Headings
+      if char 1 of tTrim is "#" then
+         put 0 into tLevel
+         repeat while char tLevel + 1 of tTrim is "#"
+            add 1 to tLevel
+         end repeat
+         if char tLevel + 1 of tTrim is space and tLevel <= 6 then
+            put tBody into tRun
+            put "bold" into tRun["textStyle"]
+            put max(12, 16 - tLevel) into tRun["textSize"]
+            if tPara["spaceAbove"] < 6 then
+               put 6 into tPara["spaceAbove"]
+            end if
+            put 2 into tPara["spaceBelow"]
+            put char tLevel + 2 to -1 of tTrim into tTrim
+            xtaDocInline xDoc, word 1 to -1 of tTrim, tRun, tPara
+            next repeat
+         end if
+      end if
+      -- Lists: - * + bullets, and 1. 2) numbers, each two spaces of indent
+      -- a level deeper
+      if matchText(tLine, "^(\s*)[-*+]\s+(.*)$", tLevel, tTrim) then
+         put "disc" into tPara["listStyle"]
+         put min(3, 1 + the number of chars of tLevel div 2) into tPara["listDepth"]
+         put 18 into tPara["listIndent"]
+         put 2 into tPara["spaceBelow"]
+         xtaDocInline xDoc, tTrim, tBody, tPara
+         next repeat
+      end if
+      if matchText(tLine, "^(\s*)[0-9]+[.)]\s+(.*)$", tLevel, tTrim) then
+         put "decimal" into tPara["listStyle"]
+         put min(3, 1 + the number of chars of tLevel div 2) into tPara["listDepth"]
+         put 18 into tPara["listIndent"]
+         put 2 into tPara["spaceBelow"]
+         xtaDocInline xDoc, tTrim, tBody, tPara
+         next repeat
+      end if
+      -- A quote
+      if tTrim begins with ">" then
+         put tBody into tRun
+         put "italic" into tRun["textStyle"]
+         put kUiInkSoft into tRun["foregroundColor"]
+         put 12 into tPara["leftIndent"]
+         put char 2 to -1 of tTrim into tTrim
+         xtaDocInline xDoc, word 1 to -1 of tTrim, tRun, tPara
+         next repeat
+      end if
+      -- A rule
+      if tTrim is "---" or tTrim is "***" or tTrim is "___" then
+         xtaDocAdd xDoc, empty, tPara
+         next repeat
+      end if
+      xtaDocInline xDoc, tLine, tBody, tPara
+   end repeat
+end xtaDocAnswer
 
 -- Whom a proposed note is about, as the window says it
 private function xtaNoteScope pTurn, pNote
@@ -1201,6 +2045,12 @@ on xtaMoreMenuPick pItem
          break
       case "Explain the Last Error"
          xtaExplainLastError
+         break
+      case "Explain the Open Script"
+         xtaExplainOpenScript
+         break
+      case "Copy the Conversation"
+         xtaCopyConversation
          break
       case "Undo All Changes..."
          xtaUndoAll
@@ -1333,13 +2183,13 @@ private command xtaBuildSettings
    add 25 to tTop
    xtaSettingsNote "Key Note", tLeft, tTop, tRight, 31
 
-   add 35 to tTop
+   add 34 to tTop
    xtaSettingsLabel "Base URL", tTop
    xtaSettingsField "Base URL", tLeft, tTop, tRight
    add 25 to tTop
    xtaSettingsNote "Base URL Note", tLeft, tTop, tRight, 31
 
-   add 35 to tTop
+   add 34 to tTop
    xtaSettingsSection "Section2", "2  Model", tTop
    xtaSettingsLabel "Model", tTop
    create button "Model"
@@ -1355,7 +2205,7 @@ private command xtaBuildSettings
    put "Choose a model or type its name. Get Models asks the provider for all of them, and tells you whether the key works." \
          into field "Model Note"
 
-   add 35 to tTop
+   add 34 to tTop
    xtaSettingsSection "Section3", "3  Answers", tTop
    xtaSettingsLabel "Longest answer", tTop
    xtaSettingsField "Max Tokens", tLeft, tTop, tLeft + 80
@@ -1374,21 +2224,24 @@ private command xtaBuildSettings
    xtaSettingsNote "Timeout Note", tLeft + 88, tTop + 2, tRight, 20
    put "seconds (" & kMinTimeout && "to" && kMaxTimeout & "; empty:" && kDefaultTimeout & ")" into field "Timeout Note"
 
-   add 34 to tTop
+   add 30 to tTop
    xtaSettingsSection "Section4", "4  What the model may do", tTop
    xtaSettingsCheckbox "Include", "Send the open script with each question", tLeft, tTop, tRight
    set the tooltip of button "Include" to "Send the script open in the Script Editor with each question"
-   add 22 to tTop
+   add 21 to tTop
    xtaSettingsCheckbox "Tools", "Let the model look things up, check its code and read your stack", tLeft, tTop, tRight
    set the tooltip of button "Tools" to "The Dictionary, a compile check, your stack and a paused script (when you allow it), and the last error"
-   add 22 to tTop
+   add 21 to tTop
+   xtaSettingsCheckbox "Pictures", "Let the model see pictures of your cards", tLeft, tTop, tRight
+   set the tooltip of button "Pictures" to "To see what it built: not with a server of your own on OpenAI's API, whose model may take no pictures"
+   add 21 to tTop
    xtaSettingsCheckbox "Build", "Let the model change your stacks and run code (it asks you first)", tLeft, tTop, tRight
    set the tooltip of button "Build" to "Changes you apply or not, and code you let run; Undo takes them back"
-   add 22 to tTop
+   add 21 to tTop
    xtaSettingsCheckbox "Short Guide", "Short guide, no tools (for small local models)", tLeft, tTop, tRight
 
    -- The dialog is no taller than 640, the suite's limit (a 720p screen)
-   add 28 to tTop
+   add 26 to tTop
    create button "Cancel"
    set the rect of button "Cancel" to tRight - 196, tTop, tRight - 106, tTop + 24
    create button "Save"
@@ -1406,7 +2259,6 @@ end xtaBuildSettings
 -- goes (the dialog is the defaultStack while it is built)
 private command xtaSettingsSection pName, pText, @xTop
    xtaSettingsSectionIn pName, pText, xTop, kSettingsWidth
-   add 2 to xTop
 end xtaSettingsSection
 
 -- A label at the left of a row
@@ -1480,6 +2332,7 @@ private command xtaFillSettings pProvider, pAll
       put revIDEGetPreference(kPrefTimeout) into field "Timeout" of stack kSettingsWindow
       set the hilite of button "Include" of stack kSettingsWindow to (revIDEGetPreference(kPrefIncludeScript) is not false)
       set the hilite of button "Tools" of stack kSettingsWindow to (revIDEGetPreference(kPrefTools) is not false)
+      set the hilite of button "Pictures" of stack kSettingsWindow to (revIDEGetPreference(kPrefPictures) is not false)
       set the hilite of button "Build" of stack kSettingsWindow to (revIDEGetPreference(kPrefBuild) is not false)
       set the hilite of button "Short Guide" of stack kSettingsWindow to (revIDEGetPreference(kPrefShortGuide) is true)
    end if
@@ -1488,7 +2341,8 @@ private command xtaFillSettings pProvider, pAll
 end xtaFillSettings
 
 -- The switches that do something with the others as they are: the tools
--- not with the short guide, and changing stacks only with the tools
+-- not with the short guide, and pictures and changing stacks only with
+-- the tools
 on xtaSettingsSwitches
    local tTools
    if there is not a stack kSettingsWindow then
@@ -1496,7 +2350,9 @@ on xtaSettingsSwitches
    end if
    put not the hilite of button "Short Guide" of stack kSettingsWindow into tTools
    set the enabled of button "Tools" of stack kSettingsWindow to tTools
-   set the enabled of button "Build" of stack kSettingsWindow to (tTools and the hilite of button "Tools" of stack kSettingsWindow)
+   put tTools and the hilite of button "Tools" of stack kSettingsWindow into tTools
+   set the enabled of button "Pictures" of stack kSettingsWindow to tTools
+   set the enabled of button "Build" of stack kSettingsWindow to tTools
 end xtaSettingsSwitches
 
 -- What the dialog says on its status line (what Save and Get Models
@@ -1736,6 +2592,7 @@ on xtaSettingsSave
    revIDESetPreference kPrefTimeout, tChecked["timeout"]
    revIDESetPreference kPrefIncludeScript, the hilite of button "Include" of stack kSettingsWindow
    revIDESetPreference kPrefTools, the hilite of button "Tools" of stack kSettingsWindow
+   revIDESetPreference kPrefPictures, the hilite of button "Pictures" of stack kSettingsWindow
    revIDESetPreference kPrefBuild, the hilite of button "Build" of stack kSettingsWindow
    revIDESetPreference kPrefShortGuide, the hilite of button "Short Guide" of stack kSettingsWindow
    put empty into tChecked
@@ -2193,13 +3050,13 @@ end xtaMemoryNotesField
 private function xtaTools
    local tTools, tIndex
    put "lookup_dictionary" into tTools[1]["name"]
-   put "Looks up an entry of the OXT-Beyond Dictionary: a command, function, property, message, keyword, constant or control structure of LiveCode Script " & \
+   put "Looks up an entry of the OXT-Beyond Dictionary: a command, function, property, message, keyword, constant or control structure of xTalk Script " & \
          "(put, split, topStack, mouseUp, repeat...). Gives its syntax, parameters, description and examples. Look up what you are not sure exists " & \
          "or how it is written before you use it in code, rather than guess." into tTools[1]["description"]
    put "{`type`:`object`,`properties`:{`term`:{`type`:`string`,`description`:`The entry's name alone: topStack, not the topStack`}},`required`:[`term`]}" \
          into tTools[1]["schema"]
    put "check_code" into tTools[2]["name"]
-   put "Compiles LiveCode Script on OXT-Beyond's engine as the Script Editor does, without running it, and gives each problem with its line: " & \
+   put "Compiles xTalk Script on OXT-Beyond's engine as the Script Editor does, without running it, and gives each problem with its line: " & \
          "compile errors, curly quotes, lines outside any handler, a handler defined twice and, in handlers, names never declared. " & \
          "Give whole handlers, or statements (checked inside a handler of their own). Every livecodescript block of your answer is checked " & \
          "anyway; this lets you correct code before you answer with it." into tTools[2]["description"]
@@ -2255,7 +3112,7 @@ private function xtaTools
          "`script`:{`type`:`string`,`description`:`The object's whole new script: handlers`}}," & \
          "`required`:[`action`]}}},`required`:[`changes`]}" into tTools[6]["schema"]
    put "run_code" into tTools[7]["name"]
-   put "Runs LiveCode Script statements and gives back what they put into the Message Box (put with no container), what they returned, " & \
+   put "Runs xTalk Script statements and gives back what they put into the Message Box (put with no container), what they returned, " & \
          "and any error with its line. Use it to try code before you give it to the user or put it in their stack, and to see what a stack " & \
          "does, rather than asking the user to run it in the Message Box. Where: sandbox (the default), a hidden stack made for the run and " & \
          "deleted after it, where the code can call the handlers you give; or stack, the user's stack, as the Message Box runs code there " & \
@@ -2270,6 +3127,20 @@ private function xtaTools
          "`stack`:{`type`:`string`,`description`:`stack: the stack or substack, by name; empty for the one the user is working on`}," & \
          "`target`:{`type`:`integer`,`description`:`stack: the id of the card or control that is me`}}," & \
          "`required`:[`code`]}" into tTools[7]["schema"]
+   put "look_at_card" into tTools[8]["name"]
+   put "Takes a picture of a card of the user's stack as it looks now, to see what you built or what the user asks about: where " & \
+         "the controls are, whether they overlap or are cut off, whether their text fits, how it all looks. read_stack gives the names, " & \
+         "ids and properties; this shows the card. The user is asked to allow it the first time, as for read_stack." into tTools[8]["description"]
+   put "{`type`:`object`,`properties`:{`stack`:{`type`:`string`,`description`:`The stack or substack, by name; empty for the one the user is working on`}," & \
+         "`card`:{`type`:`integer`,`description`:`The id of the card, as the outline gives it; the card the stack shows when none`}}}" \
+         into tTools[8]["schema"]
+   put "save_stack" into tTools[9]["name"]
+   put "Saves a stack of the user's to its file, with its substacks, as File > Save does. A stack that has never been saved (a new " & \
+         "one you made) is saved where the user chooses, in a file dialog. The user is asked first, every time. Save when the user " & \
+         "asks you to, or offer to when you have built a new stack for them. Saving cannot be undone from the assistant: Undo still " & \
+         "takes back what you changed in the open stack, but the file keeps what was saved until it is saved again." into tTools[9]["description"]
+   put "{`type`:`object`,`properties`:{`stack`:{`type`:`string`,`description`:`The stack to save, by name; empty for the one the user is working on`}}}" \
+         into tTools[9]["schema"]
    repeat with tIndex = 1 to the number of elements of tTools
       replace "`" with quote in tTools[tIndex]["schema"]
    end repeat
@@ -2281,17 +3152,19 @@ end xtaTools
 -- server refused them; and those that change or run something only while
 -- the Settings let the model do that
 private function xtaToolsToSend pProvider
-   local tEmpty, tTools, tKept, tIndex, tCount
+   local tEmpty, tTools, tKept, tIndex, tCount, tBuild, tPictures
    if not xtaToolsOn() or sNoTools[pProvider & comma & xtaModel(pProvider)] is true then
       return tEmpty
    end if
    put xtaTools() into tTools
-   if xtaBuildOn() then
-      return tTools
-   end if
+   put xtaBuildOn() into tBuild
+   put xtaPicturesOn(pProvider) into tPictures
    put 0 into tCount
    repeat with tIndex = 1 to the number of elements of tTools
-      if tTools[tIndex]["name"] is among the items of kBuildTools then
+      if not tBuild and tTools[tIndex]["name"] is among the items of kBuildTools then
+         next repeat
+      end if
+      if not tPictures and tTools[tIndex]["name"] is "look_at_card" then
          next repeat
       end if
       add 1 to tCount
@@ -2299,6 +3172,21 @@ private function xtaToolsToSend pProvider
    end repeat
    return tKept
 end xtaToolsToSend
+
+-- Whether the model can be sent a picture of a card (look_at_card):
+-- unless the user turned it off in the Settings, with Anthropic's API
+-- (whose models all see pictures, as do the proxies that speak it) and
+-- OpenAI's own; not with a server of the user's own on OpenAI's API,
+-- whose model may take no pictures and refuse the request
+private function xtaPicturesOn pProvider
+   if revIDEGetPreference(kPrefPictures) is false then
+      return false
+   end if
+   if pProvider is "anthropic" then
+      return true
+   end if
+   return xtaBaseUrl(pProvider) is empty
+end xtaPicturesOn
 
 -- Whether the model may ask for tools: not with the short guide, nor when
 -- the user turned them off in the Settings
@@ -2349,8 +3237,21 @@ private function xtaRunTool pCall, pDeclared, pProvider
          return xtaToolLastError()
       case "debug_state"
          return xtaToolDebugState(pProvider)
+      case "look_at_card"
+         -- Turned off in the Settings since the model was told of it: the
+         -- Settings can be changed while the model answers, and a picture
+         -- is taken only while they let it be sent
+         if not xtaPicturesOn(pProvider) then
+            put "The assistant's Settings do not let it send you pictures of the user's cards. Go on without one: read_stack says what is on a card." \
+                  into tResult["text"]
+            put true into tResult["error"]
+            put "Did not use look_at_card: the Settings do not let it send pictures of your cards" into tResult["summary"]
+            return tResult
+         end if
+         return xtaToolLookAtCard(xtaJsonText(xtaJsonMember(tInput, "stack")), xtaJsonText(xtaJsonMember(tInput, "card")), pProvider)
       case "make_changes"
       case "run_code"
+      case "save_stack"
          -- Turned off in the Settings since the model was told of them
          if not xtaBuildOn() then
             put "The user has not let the assistant change stacks or run code (in its Settings). Tell them what to do instead, step by step." \
@@ -2361,6 +3262,9 @@ private function xtaRunTool pCall, pDeclared, pProvider
          end if
          if pCall["name"] is "make_changes" then
             return xtaToolMakeChanges(tInput)
+         end if
+         if pCall["name"] is "save_stack" then
+            return xtaToolSaveStack(xtaJsonText(xtaJsonMember(tInput, "stack")))
          end if
          return xtaToolRunCode(tInput)
    end switch
@@ -2379,7 +3283,7 @@ private function xtaToolDictionary pTerm
       put "Looked up nothing in the Dictionary" into tResult["summary"]
       return tResult
    end if
-   xtaStatus "Looking up" && quote & tTerm & quote && "in the Dictionary..."
+   xtaPhase "tool", "Looking up" && quote & tTerm & quote && "in the Dictionary"
    try
       put ideDocsFetchLCSData(tTerm) into tEntries
       -- "the topStack" is the entry "topStack"
@@ -2411,7 +3315,7 @@ private function xtaToolCheck pCode, pDeclared
       put "Checked no code" into tResult["summary"]
       return tResult
    end if
-   xtaStatus "Checking code..."
+   xtaPhase "tool", "Checking code"
    put xtaCheckScript(pCode, pDeclared) into tCheck
    put false into tResult["error"]
    if tCheck["ok"] is true then
@@ -2480,7 +3384,7 @@ private function xtaToolReadStack pStackName, pId, pProvider
          return tResult
       end if
    end if
-   xtaStatus "Reading the stack" && quote & tName & quote & "..."
+   xtaPhase "tool", "Reading the stack" && quote & tName & quote
    if pId is empty then
       if word 1 to -1 of pStackName is empty then
          put xtaStackOutline(tMain) into tResult["text"]
@@ -2535,7 +3439,7 @@ end xtaToolLastError
 -- pauses at an error), the error goes with it.
 private function xtaToolDebugState pProvider
    local tState, tError, tResult
-   xtaStatus "Reading the debugger..."
+   xtaPhase "tool", "Reading the debugger"
    put xtaDebugState() into tState
    if tState["paused"] is not true then
       put tState["text"] && "To pause a script, the user sets a breakpoint (a click left of a line in the Script Editor) and runs the script, " & \
@@ -2561,13 +3465,155 @@ private function xtaToolDebugState pProvider
    return tResult
 end xtaToolDebugState
 
+-- look_at_card: a picture of a card as it looks now (pStackName and
+-- pCardId as read_stack gives them; the card the stack shows when there
+-- is no id), at kPictureSide pixels at most on its longer side, which the
+-- core sends with the tool's result. It shows the stack as reading it
+-- does, so the user allows it as for read_stack.
+private function xtaToolLookAtCard pStackName, pCardId, pProvider
+   local tWork, tTarget, tStack, tName, tCard, tLabel, tWidth, tHeight, tScale, tSize, tData, tError, tResult
+   put xtaWorkStack() into tWork
+   put xtaTargetStack(pStackName, tWork["stack"]) into tTarget
+   if tTarget["problem"] is not empty then
+      put tTarget["problem"] into tResult["text"]
+      put true into tResult["error"]
+      put "Found no card to look at" into tResult["summary"]
+      return tResult
+   end if
+   put tTarget["stack"] into tStack
+   put the short name of xtaMainStackOf(tStack) into tName
+   if not xtaReadAllowed(xtaMainStackOf(tStack), pProvider) then
+      put "The user did not allow reading the stack" && quote & tName & quote & ". Go on without it, and say what you would need to know." into tResult["text"]
+      put true into tResult["error"]
+      put "Not allowed to look at the stack" && quote & tName & quote into tResult["summary"]
+      return tResult
+   end if
+   if pCardId is empty then
+      put the long id of this card of tStack into tCard
+   else if pCardId is an integer and there is a card id pCardId of tStack then
+      put the long id of card id pCardId of tStack into tCard
+   else
+      put "The stack" && quote & the short name of tStack & quote && "has no card with the id" && pCardId & "." into tResult["text"]
+      put true into tResult["error"]
+      put "Looked for a card that is not there" into tResult["summary"]
+      return tResult
+   end if
+   -- As read_stack names it: card "Intro" (id 1003), or card id 1002
+   -- for one with no name
+   put the name of tCard into tLabel
+   if char 1 of word 2 of tLabel is quote then
+      put "card" && quote & the short name of tCard & quote && "(id" && the short id of tCard & ")" into tLabel
+   end if
+   xtaPhase "tool", "Looking at" && tLabel && "of the stack" && quote & the short name of tStack & quote
+   -- A card is the size of its stack's window
+   put the width of tStack into tWidth
+   put the height of tStack into tHeight
+   put 1 into tScale
+   if max(tWidth, tHeight) > kPictureSide then
+      put kPictureSide / max(tWidth, tHeight) into tScale
+   end if
+   put max(1, round(tWidth * tScale)) & comma & max(1, round(tHeight * tScale)) into tSize
+   try
+      export snapshot from tCard at size tSize to tData as PNG
+   catch tError
+      put empty into tData
+   end try
+   if tData is empty then
+      put "The picture of" && tLabel && "could not be taken." into tResult["text"]
+      put true into tResult["error"]
+      put "Could not take a picture of" && tLabel into tResult["summary"]
+      return tResult
+   end if
+   put base64Encode(tData) into tResult["image"]
+   replace return with empty in tResult["image"]
+   put "image/png" into tResult["imageType"]
+   put "A picture of" && tLabel && "of the stack" && quote & the short name of tStack & quote & ", as it looks now:" && \
+         tWidth && "by" && tHeight && "pixels" into tResult["text"]
+   if tScale < 1 then
+      put ", shown at" && item 1 of tSize && "by" && item 2 of tSize after tResult["text"]
+   end if
+   put "." after tResult["text"]
+   put false into tResult["error"]
+   put "Looked at" && tLabel && "of the stack" && quote & the short name of tStack & quote into tResult["summary"]
+   return tResult
+end xtaToolLookAtCard
+
+-- save_stack: the stack (its main stack, with its substacks) is saved as
+-- File > Save saves it, by the IDE's own handler, which asks where for a
+-- stack never saved; after the user says yes in the window's bar, every
+-- time. Saving cannot be undone from the assistant, and the bar says so.
+private function xtaToolSaveStack pStackName
+   local tWork, tTarget, tMain, tName, tFile, tTitle, tDetail, tAnswer, tDone, tError, tResult
+   put xtaWorkStack() into tWork
+   put xtaTargetStack(pStackName, tWork["stack"]) into tTarget
+   if tTarget["problem"] is not empty then
+      put "Nothing was saved:" && tTarget["problem"] into tResult["text"]
+      put true into tResult["error"]
+      put "Found no stack to save" into tResult["summary"]
+      return tResult
+   end if
+   put xtaMainStackOf(tTarget["stack"]) into tMain
+   put the short name of tMain into tName
+   put the effective filename of tMain into tFile
+   if tFile is empty then
+      put "Save the new stack" && quote & tName & quote & "?" into tTitle
+      put "It has never been saved: you choose where, in the dialog that comes next, as File > Save does." into tDetail
+   else
+      put "Save the stack" && quote & tName & quote & "?" into tTitle
+      put "It is saved to its file, with its substacks, as File > Save does:" & return & tFile into tDetail
+   end if
+   put return & return & "Saving cannot be undone from the assistant." after tDetail
+   put xtaAskUser("save", tTitle, tDetail, "Save", empty, "Don't Save") into tAnswer
+   if tAnswer is "stop" then
+      put "Nothing was saved: the user pressed Stop." into tResult["text"]
+      put true into tResult["error"]
+      put "Did not save the stack: you pressed Stop" into tResult["summary"]
+      return tResult
+   end if
+   if tAnswer is not "yes" then
+      put "The user chose not to save the stack" && quote & tName & quote & ", and nothing was saved. Do not ask again unless they ask you to." \
+            into tResult["text"]
+      put true into tResult["error"]
+      put "You chose not to save the stack" && quote & tName & quote into tResult["summary"]
+      return tResult
+   end if
+   xtaPhase "tool", "Saving the stack" && quote & tName & quote
+   try
+      revIDEActionSaveStack tMain
+      put the result into tDone
+   catch tError
+      put xtaPlainError(tError) into tDone
+   end try
+   put the effective filename of tMain into tFile
+   if tDone is "Cancelled" then
+      put "The user cancelled saving the stack" && quote & tName & quote & ", and nothing was saved." into tResult["text"]
+      put true into tResult["error"]
+      put "You cancelled saving the stack" && quote & tName & quote into tResult["summary"]
+      return tResult
+   end if
+   if tDone is not empty or tFile is empty or there is not a file tFile then
+      put "The stack" && quote & tName & quote && "was not saved" into tResult["text"]
+      if tDone is not empty then
+         put ":" && line 1 of tDone after tResult["text"]
+      end if
+      put "." after tResult["text"]
+      put true into tResult["error"]
+      put "Could not save the stack" && quote & tName & quote into tResult["summary"]
+      return tResult
+   end if
+   put "Saved the stack" && quote & tName & quote && "to" && tFile & "." into tResult["text"]
+   put false into tResult["error"]
+   put "Saved the stack" && quote & tName & quote into tResult["summary"]
+   return tResult
+end xtaToolSaveStack
+
 -- make_changes: the batch is checked, shown in the window's bar, and
 -- applied only when the user presses Apply. A batch with mistakes goes
 -- back to the model without asking the user.
 private function xtaToolMakeChanges pInput
    local tWork, tPlan, tWhat, tTitle, tAnswer, tApplied, tResult
    put xtaWorkStack() into tWork
-   xtaStatus "Checking the changes the model asks for..."
+   xtaPhase "tool", "Checking the changes the model asks for"
    put xtaBuildPlan(pInput, tWork["stack"]) into tPlan
    if tPlan["ok"] is not true then
       put "Nothing was changed: the batch has mistakes. Correct them, then send the whole batch again." & return & tPlan["problems"] \
@@ -2601,7 +3647,7 @@ private function xtaToolMakeChanges pInput
       put "You chose not to apply the changes to" && tWhat into tResult["summary"]
       return tResult
    end if
-   xtaStatus "Applying the changes..."
+   xtaPhase "tool", "Applying the changes"
    put xtaBuildApply(tPlan) into tApplied
    if tApplied["ok"] is not true then
       put tApplied["error"] into tResult["text"]
@@ -2610,6 +3656,13 @@ private function xtaToolMakeChanges pInput
       return tResult
    end if
    put tApplied["text"] into tResult["text"]
+   -- A new stack opens where the assistant's window may cover it
+   if tPlan["newStack"] is true and there is a stack tPlan["name"] then
+      put xtaPlaceBeside(the long id of stack tPlan["name"]) into tWhat
+      if tWhat is not empty then
+         put return & "Its window was put beside the assistant's, at" && tWhat & ", so as not to be under it." after tResult["text"]
+      end if
+   end if
    put false into tResult["error"]
    put tApplied["summary"] into tResult["summary"]
    put tApplied["entry"] into tResult["entry"]
@@ -2617,6 +3670,44 @@ private function xtaToolMakeChanges pInput
    xtaRefreshMoreMenu
    return tResult
 end xtaToolMakeChanges
+
+-- Moves pStack (a long id), a stack the assistant has just made, beside
+-- the assistant's window when the two overlap: to its left, else to its
+-- right, where the screen has room, its top level with the window's.
+-- Returns its new rect, or empty when it was left where it was.
+private function xtaPlaceBeside pStack
+   local tWindow, tRect, tScreen, tLine, tWidth, tHeight, tLeft, tTop
+   if there is not a stack kWindow or there is not a pStack then
+      return empty
+   end if
+   put the rect of stack kWindow into tWindow
+   put the rect of pStack into tRect
+   if item 3 of tRect <= item 1 of tWindow or item 1 of tRect >= item 3 of tWindow \
+         or item 4 of tRect <= item 2 of tWindow or item 2 of tRect >= item 4 of tWindow then
+      return empty
+   end if
+   -- The screen the window is on
+   put the screenRect into tScreen
+   repeat for each line tLine in the screenRects
+      if the loc of stack kWindow is within tLine then
+         put tLine into tScreen
+         exit repeat
+      end if
+   end repeat
+   put the width of pStack into tWidth
+   put the height of pStack into tHeight
+   -- 24 pixels apart, for the windows' frames
+   if item 1 of tWindow - 24 - tWidth >= item 1 of tScreen then
+      put item 1 of tWindow - 24 - tWidth into tLeft
+   else if item 3 of tWindow + 24 + tWidth <= item 3 of tScreen then
+      put item 3 of tWindow + 24 into tLeft
+   else
+      return empty
+   end if
+   put max(item 2 of tScreen, min(item 2 of tWindow, item 4 of tScreen - tHeight)) into tTop
+   set the rect of pStack to tLeft, tTop, tLeft + tWidth, tTop + tHeight
+   return the rect of pStack
+end xtaPlaceBeside
 
 -- run_code: the code is checked and shown in the window's bar, and runs
 -- when the user presses Run, or at once where they allowed runs for the
@@ -2627,7 +3718,7 @@ end xtaToolMakeChanges
 private function xtaToolRunCode pInput
    local tWork, tRun, tPlace, tTitle, tDetail, tSession, tAnswer, tRan, tResult, tRisks
    put xtaWorkStack() into tWork
-   xtaStatus "Checking the code the model asks to run..."
+   xtaPhase "tool", "Checking the code the model asks to run"
    put xtaRunPlan(pInput, tWork["stack"]) into tRun
    if tRun["ok"] is not true then
       put "Nothing ran:" && tRun["problems"] into tResult["text"]
@@ -2679,12 +3770,15 @@ private function xtaToolRunCode pInput
          put true into sRunAllowed[tPlace]
       end if
    end if
-   xtaStatus "Running the code... (" & xtaInterruptKeys() && "stops it)"
+   xtaPhase "tool", "Running the code (" & xtaInterruptKeys() && "stops it)"
    put xtaRunCode(tRun) into tRan
    put tRan["text"] into tResult["text"]
    put (tRan["ok"] is not true) into tResult["error"]
    put tRan["summary"] into tResult["summary"]
    put tRan["entry"] into tResult["entry"]
+   -- What it put into the Message Box and returned, for the window
+   put tRan["output"] into tResult["output"]
+   put tRan["value"] into tResult["value"]
    if tRan["entry"] is not empty then
       xtaRefreshMoreMenu
    end if
@@ -2721,7 +3815,7 @@ private function xtaReadAllowed pMain, pProvider
    end if
    put the short name of pMain into tName
    put xtaAskUser("read", "Let the assistant read your stack" && quote & tName & quote & "?", \
-         "It reads the stack's cards and controls, their properties and their scripts, and what a paused script holds. What it reads goes to" && \
+         "It reads the stack's cards and controls, their properties and their scripts, what a paused script holds, and pictures of its cards. What it reads goes to" && \
          xtaProviderName(pProvider) && "with this question and the ones after it, until you turn the assistant off.", "Allow", empty, "Don't Allow") \
          into tAnswer
    if tAnswer is "yes" then
@@ -2768,6 +3862,10 @@ private function xtaAskUser pKind, pTitle, pDetail, pYes, pSession, pNo
    put empty into sAsk
    if sShutDowns is tShutDowns then
       xtaHideAsk
+      if tAnswer is not "stop" then
+         xtaPhase "tool", "Going on with your answer"
+      end if
+      xtaWorkStatus
    end if
    return tAnswer
 end xtaAskUser
@@ -2791,7 +3889,7 @@ private command xtaShowAsk pTitle, pDetail, pYes, pSession, pNo
    lock messages
    set the vScroll of field "AskDetail" of stack kWindow to 0
    unlock messages
-   xtaPaintPill
+   xtaPhase "ask", "Waiting for your answer, below"
    xtaStatus "Waiting for your answer, below the conversation.", "warn"
    unlock screen
 end xtaShowAsk
@@ -2834,7 +3932,11 @@ end xtaAnswerAsk
 -- after it, newest first; More > Undo All Changes... takes back all of it.
 -- The model is told with the next question.
 
--- A link of the conversation: Undo, Remember or Dismiss
+-- A link of the conversation: Undo after what the tools did; Remember
+-- and Dismiss under a note; Copy and Insert over a block of code ("copy"
+-- or "insert", the turn and the block); a link of an answer ("url" and
+-- the address, which opens in the browser); and in the welcome, a
+-- question to begin with ("example" and its number), and the Settings
 on xtaConversationLink pLink
    switch item 1 of pLink
       case "undo"
@@ -2844,8 +3946,52 @@ on xtaConversationLink pLink
       case "dismiss"
          xtaNoteClicked pLink
          break
+      case "copy"
+      case "insert"
+         xtaCodeLink item 1 of pLink, item 2 of pLink, item 3 of pLink
+         break
+      case "url"
+         if item 2 of pLink begins with "https://" or item 2 of pLink begins with "http://" then
+            launch url (item 2 to -1 of pLink)
+         end if
+         break
+      case "example"
+         if sBusy is not true and there is a stack kWindow and xtaExampleText(item 2 of pLink) is not empty then
+            put xtaExampleText(item 2 of pLink) into field "Prompt" of stack kWindow
+            xtaPromptChanged
+            focus on field "Prompt" of stack kWindow
+            select after text of field "Prompt" of stack kWindow
+         end if
+         break
+      case "settings"
+         xtaSettingsDialog "Key"
+         break
    end switch
 end xtaConversationLink
+
+-- Copy or Insert (pAction) over block pBlock of the answer of turn pTurn,
+-- numbered as the conversation numbers them (xtaDocAnswer)
+private command xtaCodeLink pAction, pTurn, pBlock
+   local tBlocks, tCode
+   if pTurn is not an integer or pBlock is not an integer or sTurns[pTurn]["role"] is not "assistant" then
+      exit xtaCodeLink
+   end if
+   put xtaCodeBlocks(xtaWithoutMemoryBlocks(sTurns[pTurn]["text"])) into tBlocks
+   if pBlock < 1 or pBlock > the number of elements of tBlocks then
+      exit xtaCodeLink
+   end if
+   put tBlocks[pBlock]["code"] into tCode
+   if pAction is "copy" then
+      set the clipboardData["text"] to tCode
+      xtaStatus "Copied the code to the clipboard.", "ok"
+      exit xtaCodeLink
+   end if
+   -- Only xTalk goes into a script, as with Insert Code
+   if not xtaIsXTalkLang(tBlocks[pBlock]["lang"]) then
+      exit xtaCodeLink
+   end if
+   xtaInsertText tCode
+end xtaCodeLink
 
 -- True while the library that changes and runs is loaded (from when the
 -- window is first opened until the assistant is turned off)
@@ -3065,16 +4211,103 @@ private command xtaExplainLastError
    xtaSendPrompt tError["text"], tError["name"]
 end xtaExplainLastError
 
+-- More > Explain the Open Script: asks what the script open in the Script
+-- Editor does (what the prompt holds, or else a question of its own),
+-- sent with the script whether or not "Include the open script" is ticked
+private command xtaExplainOpenScript
+   local tContext
+   if sBusy is true or there is not a stack kWindow then
+      exit xtaExplainOpenScript
+   end if
+   put xtaScriptContext() into tContext
+   if tContext["script"] is empty then
+      answer information "Open a script in the Script Editor first. (The scripts of a password-protected stack are not sent.)" titled kTitle
+      exit xtaExplainOpenScript
+   end if
+   if word 1 to -1 of field "Prompt" of stack kWindow is empty then
+      put "Explain what this script does, handler by handler, and point out anything that looks wrong." into field "Prompt" of stack kWindow
+   end if
+   xtaSendPrompt empty, empty, true
+end xtaExplainOpenScript
+
+-- More > Copy the Conversation: all of it as text (Markdown), to paste
+-- into a message or a note: who said what, the answers as the model wrote
+-- them, and what the tools did
+private command xtaCopyConversation
+   local tText, tIndex, tTurn, tCall, tBody, tLast
+   repeat with tIndex = 1 to the number of elements of sTurns
+      put sTurns[tIndex] into tTurn
+      -- What the tools did and the answers after them are one block, as
+      -- in the window
+      if tTurn["kind"] is "tools" then
+         if tLast is not "assistant" then
+            put "### xTalk Assistant" & return & return after tText
+            put "assistant" into tLast
+         end if
+         repeat with tCall = 1 to the number of elements of tTurn["results"]
+            put "- *" & tTurn["results"][tCall]["summary"] & "*" & return after tText
+         end repeat
+         put return after tText
+         next repeat
+      end if
+      if tTurn["role"] is "assistant" then
+         put xtaWithoutMemoryBlocks(tTurn["text"]) into tBody
+         if word 1 to -1 of tBody is empty then
+            next repeat
+         end if
+         if tLast is not "assistant" then
+            put "### xTalk Assistant" & return & return after tText
+            put "assistant" into tLast
+         end if
+         put tBody & return & return after tText
+         if tTurn["check"] is not empty then
+            put "*" & tTurn["check"] & "*" & return & return after tText
+         end if
+         next repeat
+      end if
+      if tTurn["kind"] is "check" then
+         put tTurn["text"] into tBody
+         if tBody begins with "Compile check: " then
+            delete char 1 to the number of chars of "Compile check: " of tBody
+         end if
+         put "### Compile check" & return & return & tBody & return & return after tText
+         put "check" into tLast
+         next repeat
+      end if
+      put "### You" & return & return & tTurn["text"] & return & return after tText
+      put "you" into tLast
+   end repeat
+   if tText is empty then
+      exit xtaCopyConversation
+   end if
+   set the clipboardData["text"] to word 1 to -1 of tText & return
+   xtaStatus "Copied the conversation to the clipboard.", "ok"
+end xtaCopyConversation
+
 -- Send, or Stop while a question is being answered
 on xtaSendOrStop
    if sBusy is true then
       put true into sStopAsked
       xtaUpdateButtons
+      xtaPhase "stop", "Stopping after the answer that is on its way"
       xtaStatus "Stopping after the answer that is on its way..."
       exit xtaSendOrStop
    end if
    xtaSendPrompt
 end xtaSendOrStop
+
+-- Escape, in the window: Stop while a question is being answered. The
+-- result is false when there is nothing to stop, and the window passes
+-- the key on.
+on xtaEscape
+   if sBusy is not true then
+      return false
+   end if
+   if sStopAsked is not true then
+      xtaSendOrStop
+   end if
+   return true
+end xtaEscape
 
 -- Sends the question in the prompt, with the conversation so far, and shows
 -- the answer. pAttach, when given, goes with the question (the last error,
@@ -3086,11 +4319,11 @@ end xtaSendOrStop
 -- user sees ("Compile check"), until the code compiles, the fix rounds are
 -- used up, the model sends the same code again or none, or the user presses
 -- Stop.
-on xtaSendPrompt pAttach, pAttachName
+on xtaSendPrompt pAttach, pAttachName, pWithScript
    local tPrompt, tProvider, tCount, tContext, tReply, tStatus, tShutDowns
    local tWork, tSystem, tDeclared, tRound, tRounds, tBlocks, tCheck, tLastCode
    local tIn, tOut, tCached, tAnswered, tError, tTools, tCalls, tCall, tResults
-   local tToolCalls, tRefusals, tRefusedNow, tSpent, tKind
+   local tToolCalls, tRefusals, tRefusedNow, tSpent, tKind, tQuestion, tStats, tStopped
    if sBusy is true or there is not a stack kWindow then
       exit xtaSendPrompt
    end if
@@ -3115,6 +4348,7 @@ on xtaSendPrompt pAttach, pAttachName
    end if
 
    put the number of elements of sTurns + 1 into tCount
+   put tCount into tQuestion
    put "user" into sTurns[tCount]["role"]
    put tPrompt into sTurns[tCount]["text"]
    if pAttach is not empty then
@@ -3127,7 +4361,7 @@ on xtaSendPrompt pAttach, pAttachName
       put sUndone into sTurns[tCount]["undone"]
       put empty into sUndone
    end if
-   if the hilite of button "Include" of stack kWindow then
+   if the hilite of button "Include" of stack kWindow or pWithScript is true then
       put xtaScriptContext() into tContext
       if tContext["script"] is not empty then
          put tContext["script"] into sTurns[tCount]["context"]
@@ -3141,11 +4375,13 @@ on xtaSendPrompt pAttach, pAttachName
    put tWork["name"] into sTurns[tCount]["stackName"]
    put xtaSystem(tWork) into tSystem
    put empty into field "Prompt" of stack kWindow
+   xtaPromptChanged
    put true into sBusy
    put false into sStopAsked
    -- A stack the user would not let the model read is asked about again
    -- with the next question
    put empty into sReadRefused
+   xtaWorkBegin
    xtaShowConversation
    xtaUpdateButtons
 
@@ -3161,15 +4397,19 @@ on xtaSendPrompt pAttach, pAttachName
    put false into tAnswered
    put sShutDowns into tShutDowns
    repeat forever
-      if tRound is 0 then
-         xtaStatus "Waiting for" && xtaProviderName(tProvider) & "..."
+      if tRound > 0 then
+         xtaPhase "wait", "Waiting for" && xtaModel(tProvider) && "to correct the code (round" && tRound && "of" && tRounds & ")"
+      else if sWork["requests"] > 0 then
+         xtaPhase "wait", "Waiting for" && xtaModel(tProvider) && "to go on"
       else
-         xtaStatus "Waiting for" && xtaProviderName(tProvider) && "to correct the code (round" && tRound && "of" && tRounds & ")..."
+         xtaPhase "wait", "Waiting for" && xtaModel(tProvider)
       end if
+      xtaWorkStatus
       put xtaAsk(xtaSettings(), tSystem, xtaTurnsToSend(), tTools) into tReply
       if sShutDowns is not tShutDowns then
          exit xtaSendPrompt
       end if
+      add 1 to sWork["requests"]
       if tReply["ok"] is not true then
          -- A server of the user's own whose model cannot take tools: asked
          -- again without them, and so until the assistant is turned off
@@ -3183,6 +4423,10 @@ on xtaSendPrompt pAttach, pAttachName
       add tReply["inputTokens"] to tIn
       add tReply["outputTokens"] to tOut
       add tReply["cachedTokens"] to tCached
+      put tIn into sWork["in"]
+      put tOut into sWork["out"]
+      put tCached into sWork["cached"]
+      xtaWorkStatus
       put empty into tCalls
       if tTools is not empty then
          put tReply["calls"] into tCalls
@@ -3255,7 +4499,7 @@ on xtaSendPrompt pAttach, pAttachName
          exit repeat
       end if
       xtaShowConversation
-      xtaStatus "Checking the code..."
+      xtaPhase "check", "Checking that the code compiles"
       put xtaCheckBlocks(tBlocks, tDeclared) into tCheck
       put tCheck["summary"] into sTurns[tCount]["check"]
       if tCheck["ok"] is true or tRound >= tRounds or sStopAsked is true or tCheck["code"] is tLastCode then
@@ -3272,8 +4516,16 @@ on xtaSendPrompt pAttach, pAttachName
       xtaShowConversation
    end repeat
 
+   -- What the question took, for the conversation and the status line
+   put (sStopAsked is true) into tStopped
+   put the milliseconds - sWork["start"] into tStats["ms"]
+   put sWork["requests"] into tStats["requests"]
+   put tIn into tStats["in"]
+   put tOut into tStats["out"]
+   put tCached into tStats["cached"]
    put false into sBusy
    put false into sStopAsked
+   xtaWorkEnd
    if tReply["ok"] is not true then
       put tReply["error"] into tError
       -- The turn that was not answered is taken back: the question stays in
@@ -3290,32 +4542,32 @@ on xtaSendPrompt pAttach, pAttachName
       end if
       if not tAnswered and there is a stack kWindow then
          put tPrompt into field "Prompt" of stack kWindow
+         xtaPromptChanged
       end if
    end if
    if there is not a stack kWindow then
       exit xtaSendPrompt
    end if
+   if tAnswered and sTurns[tQuestion]["role"] is "user" then
+      put tStats into sTurns[tQuestion]["stats"]
+   end if
    xtaShowConversation
    xtaUpdateButtons
    if tAnswered then
       put empty into tKind
-      put xtaProviderName(tProvider) && "-" && xtaModel(tProvider) into tStatus
-      if tIn > 0 or tOut > 0 then
-         put " -" && tIn && "tokens in," && tOut && "out" after tStatus
-         if tCached > 0 then
-            put " (" & tCached && "read from the cache)" after tStatus
-         end if
-      end if
+      put "Answered in" && xtaStatsLine(tStats) into tStatus
       if tReply["stop"] is "max_tokens" or tReply["stop"] is "length" then
-         put " - the answer was cut off at its length limit" after tStatus
+         put xtaDot() & "the answer was cut off at its length limit" after tStatus
          put "warn" into tKind
       end if
       if tSpent then
-         put " - stopped: the model used up its tools for this question" after tStatus
+         put xtaDot() & "stopped: the model used up its tools for this question" after tStatus
          put "warn" into tKind
+      else if tStopped then
+         put xtaDot() & "you stopped it" after tStatus
       end if
       if tCheck["summary"] is not empty and tCheck["ok"] is not true then
-         put " - the code does not compile" after tStatus
+         put xtaDot() & "the code does not compile" after tStatus
          put "warn" into tKind
       end if
       xtaStatus tStatus, tKind
@@ -3333,8 +4585,13 @@ end xtaSendPrompt
 -- The conversation as it is sent: the open script goes with the latest
 -- question that had one, so that it is sent once rather than with every
 -- question; what else went with a question (the last error) stays with it.
+-- Of the pictures of cards (look_at_card), the newest kKeptPictures go
+-- with each request: an older one the model has seen, and it would make
+-- every request after it bigger. None goes once the Settings no longer let
+-- pictures be sent: the user turned them off, or chose a server that is
+-- not sent them, in the middle of the conversation.
 private function xtaTurnsToSend
-   local tTurns, tIndex, tLast
+   local tTurns, tIndex, tLast, tCall, tPictures, tKeep
    put 0 into tLast
    repeat with tIndex = 1 to the number of elements of sTurns
       if sTurns[tIndex]["context"] is not empty then
@@ -3358,6 +4615,29 @@ private function xtaTurnsToSend
          put return & return & "The script I am editing, of" && sTurns[tIndex]["contextName"] & ":" & return & \
                "```livecodescript" & return & sTurns[tIndex]["context"] & return & "```" after tTurns[tIndex]["text"]
       end if
+   end repeat
+   put kKeptPictures into tKeep
+   if not xtaPicturesOn(xtaProvider()) then
+      put 0 into tKeep
+   end if
+   put 0 into tPictures
+   repeat with tIndex = the number of elements of tTurns down to 1
+      repeat with tCall = the number of elements of tTurns[tIndex]["results"] down to 1
+         if tTurns[tIndex]["results"][tCall]["image"] is empty then
+            next repeat
+         end if
+         add 1 to tPictures
+         if tPictures > tKeep then
+            delete variable tTurns[tIndex]["results"][tCall]["image"]
+            if tKeep is 0 then
+               put return & "(The picture is no longer sent: the assistant's Settings no longer let it send pictures.)" \
+                     after tTurns[tIndex]["results"][tCall]["text"]
+            else
+               put return & "(The picture is no longer sent: you saw it then. Look again for how it is now.)" \
+                     after tTurns[tIndex]["results"][tCall]["text"]
+            end if
+         end if
+      end repeat
    end repeat
    return tTurns
 end xtaTurnsToSend
@@ -3422,7 +4702,7 @@ private function xtaScriptContext
 end xtaScriptContext
 
 on xtaInsertCode
-   local tCode, tIndex, tEditor
+   local tCode, tIndex
    if the number of elements of sLastCode is 0 then
       exit xtaInsertCode
    end if
@@ -3450,17 +4730,25 @@ on xtaInsertCode
             exit xtaInsertCode
       end switch
    end if
+   xtaInsertText tCode
+end xtaInsertCode
+
+-- Inserts pCode at the caret in the Script Editor, as one step its Undo
+-- takes out; with no Script Editor that can take it, it goes on the
+-- clipboard
+private command xtaInsertText pCode
+   local tEditor
    put xtaTopScriptEditor() into tEditor
    if tEditor is empty then
-      set the clipboardData["text"] to tCode
+      set the clipboardData["text"] to pCode
       answer information "Open a script in the Script Editor first. The code is on the clipboard meanwhile." titled kTitle
-      exit xtaInsertCode
+      exit xtaInsertText
    end if
-   dispatch "revSEInsertText" to tEditor with tCode
+   dispatch "revSEInsertText" to tEditor with pCode
    if it is not "handled" then
-      set the clipboardData["text"] to tCode
+      set the clipboardData["text"] to pCode
       answer information "This Script Editor cannot take the code; it is on the clipboard to paste." titled kTitle
-      exit xtaInsertCode
+      exit xtaInsertText
    end if
    xtaStatus "Inserted. Apply the script to keep it, or Undo to take it out."
-end xtaInsertCode
+end xtaInsertText

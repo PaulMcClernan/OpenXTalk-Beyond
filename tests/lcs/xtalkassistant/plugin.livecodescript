@@ -14,7 +14,11 @@ script "TestXTalkAssistantPlugin"
 -- only in memory, never as a preference), that the changes and runs the
 -- model asks for are asked about in the window's bar and done only when
 -- the user says yes, that Undo takes them back, and that unloading it
--- takes everything away again. The other dialogs (turning it on, errors,
+-- takes everything away again; that while it works a row under the
+-- conversation says what it does and for how long, and Escape stops it;
+-- that answers are laid out (headings, lists, code with Copy and Insert),
+-- that the model can look at a card and save a stack only when the user
+-- says yes. The other dialogs (turning it on, errors,
 -- the Memory window, Undo All's question), the Settings dialog's modal
 -- loop and the Script Editor are not reached here: they need the IDE.
 -- The window's bar is answered as the user would, by clicking its
@@ -35,6 +39,16 @@ local sPrefsFolder
 -- The answers still to give in the window's bar, and what it asked
 -- (TestAnswerAsks)
 local sAnswers, sAsked
+-- What the window showed while a request was on its way (by request, then
+-- "asked", "escaped" and "answered": TestNoteTheWindow); how long the
+-- server waits before it answers, the answers it holds meanwhile, and
+-- whether it presses Escape in the window when a request comes
+local sDuring, sDelay, sPending, sPressEscape
+-- The angles the spinner was seen at (xtaTestSample)
+local sAngles
+-- The request at which the server turns the pictures switch off, as the
+-- user does in the Settings while the model answers (0: none)
+local sPicturesOffAt
 
 on TestSetup
    local tLibUrl, tStub
@@ -46,13 +60,19 @@ on TestSetup
    end if
    -- The IDE's handlers the plugin calls: the preferences, kept in memory
    -- here so that a test can read them all, and no Script Editor
-   put "local sPrefs" & return & \
+   put "local sPrefs, sSaved" & return & \
          "function revIDEGetPreference pName" & return & "return sPrefs[pName]" & return & "end revIDEGetPreference" & return & \
          "on revIDESetPreference pName, pValue" & return & "put pValue into sPrefs[pName]" & return & "end revIDESetPreference" & return & \
          "function xtaTestPrefs" & return & "return sPrefs" & return & "end xtaTestPrefs" & return & \
          "function revTopMostScriptEditor" & return & "return empty" & return & "end revTopMostScriptEditor" & return & \
          "function revEnvironmentUserPreferencesPath" & return & "return " & quote & sPrefsFolder & quote & return & \
          "end revEnvironmentUserPreferencesPath" & return into tStub
+   -- File > Save: a stack with a file is saved to it; for one never saved
+   -- the user cancels the dialog that asks where
+   put "on revIDEActionSaveStack pStack" & return & "put pStack & return after sSaved" & return & \
+         "if the effective filename of pStack is empty then" & return & "return `Cancelled`" & return & "end if" & return & \
+         "save pStack" & return & "end revIDEActionSaveStack" & return & \
+         "function xtaTestSaved" & return & "return sSaved" & return & "end xtaTestSaved" & return after tStub
    -- The Dictionary, with one entry
    put "function ideDocsFetchLCSData pTerm" & return & "local tData" & return & "if pTerm is `put` then" & return & \
          "put `put` into tData[1][`display name`]" & return & "put `command` into tData[1][`Type`]" & return & \
@@ -169,6 +189,8 @@ on TestAskThroughTheWindow
    TestAssert "the code can be inserted", the enabled of button "Insert" of stack kWindow
    TestDiagnostic field "Status" of stack kWindow
    TestAssert "the tokens are shown", field "Status" of stack kWindow contains "12 tokens in, 34 out"
+   TestAssert "and what the answer took, under it", line -1 of field "Conversation" of stack kWindow contains "1 request" \
+         and line -1 of field "Conversation" of stack kWindow contains "12 tokens in, 34 out"
 
    -- The key is never a preference
    put xtaTestPrefs() into tPrefs
@@ -181,9 +203,120 @@ on TestAskThroughTheWindow
    TestAssert "the key is not in the preferences", not tFound
 
    dispatch "xtaNewConversation" to stack kMain
-   TestAssert "a new conversation", field "Conversation" of stack kWindow is empty
+   TestDiagnostic field "Conversation" of stack kWindow
+   TestAssert "a new conversation, with the welcome", line 1 of field "Conversation" of stack kWindow is "What shall we make?" \
+         and not ("You" is among the lines of field "Conversation" of stack kWindow) \
+         and not (field "Conversation" of stack kWindow contains "end mouseUp")
    TestAssert "nothing to insert", not the enabled of button "Insert" of stack kWindow
 end TestAskThroughTheWindow
+
+-- While the assistant works, a row at the foot of the conversation says
+-- what it does and for how long, its spinner turns, and the pill says it
+-- is thinking; once it has answered the row goes, and the status line and
+-- the conversation say what the answer took
+on TestTheActivityRowWhileItWorks
+   local tPort, tStatus
+   put TestStartServer("200 OK", TestAnswer("Hello.")) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   TestAssert "no row before a question", not the visible of field "Activity" of stack kWindow \
+         and not the visible of graphic "ActivitySpin" of stack kWindow
+   -- The server takes its time, as a model does, and the spinner is
+   -- looked at meanwhile
+   put 1600 into sDelay
+   put empty into sAngles
+   send "xtaTestSample" to me in 100 milliseconds
+   put "Hi" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sDuring[1]["asked"]["activity"] && "/" && sDuring[1]["asked"]["status"] && "/" && \
+         sDuring[1]["answered"]["time"] && "/" && the keys of sAngles
+   TestAssert "the row shows while it waits", sDuring[1]["asked"]["shown"] is true
+   TestAssert "saying what it waits for", sDuring[1]["asked"]["activity"] is "Waiting for test-model"
+   TestAssert "the pill says it is thinking", sDuring[1]["asked"]["pill"] is "Thinking"
+   TestAssert "the status line says whom it asks", sDuring[1]["asked"]["status"] is ("Asking test-model (127.0.0.1:" & tPort & ")")
+   TestAssert "Send is Stop", sDuring[1]["asked"]["send"] is "Stop"
+   -- How far the clock got by then depends on how fast the computer is
+   -- (the tests run four at a time in CI): only that it went on is asked
+   TestAssert "the clock reads minutes and seconds", matchText(sDuring[1]["asked"]["time"], "^[0-9]+:[0-5][0-9]$") \
+         and matchText(sDuring[1]["answered"]["time"], "^[0-9]+:[0-5][0-9]$")
+   TestAssert "and goes on while it waits", TestClockSeconds(sDuring[1]["asked"]["time"]) < TestClockSeconds(sDuring[1]["answered"]["time"])
+   TestAssert "and the spinner turns", the number of elements of sAngles >= 3
+   TestAssert "the row goes once it has answered", not the visible of field "Activity" of stack kWindow \
+         and not the visible of graphic "ActivitySpin" of stack kWindow and not the visible of field "ActivityTime" of stack kWindow
+   TestDiagnostic the rect of field "Conversation" of stack kWindow && "/" && the rect of graphic "ConversationPanel" of stack kWindow
+   TestAssert "and the conversation has its room again", \
+         item 4 of the rect of field "Conversation" of stack kWindow is (item 4 of the rect of graphic "ConversationPanel" of stack kWindow) - 6
+   TestAssert "the pill is ready again", field "Pill" of stack kWindow is "Ready"
+   put field "Status" of stack kWindow into tStatus
+   TestDiagnostic tStatus
+   -- At least the 1.6 s the server held its answer
+   TestAssert "the status line says what it took", tStatus begins with "Answered in " and word 3 of tStatus is a number \
+         and word 3 of tStatus >= 1.6 and word 4 of tStatus is "s" and tStatus contains "1 request" \
+         and tStatus contains "10 tokens in, 20 out (5000 read from the cache)"
+   TestAssert "and so does the conversation, under the answer", line -1 of field "Conversation" of stack kWindow begins with (word 3 of tStatus && "s") \
+         and the textSize of line -1 of field "Conversation" of stack kWindow is 10
+end TestTheActivityRowWhileItWorks
+
+-- Escape stops the assistant while it answers, as Stop does: the tools
+-- the answer then asks for are not used. With nothing to stop, the key
+-- goes on.
+on TestEscapeStopsIt
+   local tPort, tCalls
+   put "last_error" into tCalls[1]["name"]
+   put "{}" into tCalls[1]["input"]
+   put TestStartServer("200 OK", TestToolAnswer(tCalls)) into tPort
+   TestQueueAnswer "200 OK", TestAnswer("Done.")
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   dispatch "xtaEscape" to stack kMain
+   TestAssert "nothing to stop: the key goes on", the result is false
+   put true into sPressEscape
+   put "What went wrong?" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sDuring[1]["escaped"]["status"] && "/" && sDuring[1]["escaped"]["activity"]
+   TestAssert "Escape asks it to stop", sDuring[1]["escaped"]["status"] begins with "Stopping after the answer" \
+         and sDuring[1]["escaped"]["activity"] begins with "Stopping after the answer"
+   TestAssert "asked once", sServed is 1
+   TestDiagnostic field "Conversation" of stack kWindow
+   TestAssert "the tool was not used", "Did not use last_error: you pressed Stop" is among the lines of field "Conversation" of stack kWindow
+   TestDiagnostic field "Status" of stack kWindow
+   TestAssert "the status line says it was stopped", field "Status" of stack kWindow contains "you stopped it"
+   TestAssert "Send is Send again", the label of button "Send" of stack kWindow is "Send" and the enabled of button "Send" of stack kWindow
+   TestAssert "and the row is gone", not the visible of field "Activity" of stack kWindow
+end TestEscapeStopsIt
+
+-- With no conversation, the window welcomes the user, with questions to
+-- begin with: one clicked goes into the prompt, to send or change
+on TestTheWelcome
+   local tText, tLine
+   TestOpenTheWindow "http://127.0.0.1:1"
+   put field "Conversation" of stack kWindow into tText
+   TestDiagnostic tText
+   TestAssert "it welcomes the user", line 1 of tText is "What shall we make?" \
+         and the textStyle of line 1 of field "Conversation" of stack kWindow is "bold"
+   TestAssert "saying what the assistant does", tText contains "new stacks" and tText contains "Nothing changes until you say yes."
+   TestAssert "naming the language as OXT-Beyond does", tText contains "xTalk Script" and not (tText contains "LiveCode")
+   put lineOffset("Try one of these:", tText) into tLine
+   TestAssert "with questions to begin with", tLine > 0 \
+         and the linkText of line tLine + 1 of field "Conversation" of stack kWindow is "example,1" \
+         and the textStyle of line tLine + 1 of field "Conversation" of stack kWindow is "link" \
+         and the linkText of line tLine + 4 of field "Conversation" of stack kWindow is "example,4"
+   TestAssert "and how to send and stop", tText contains "Escape stops the assistant."
+   TestAssert "the empty prompt says what to type", the visible of field "PromptHint" of stack kWindow \
+         and field "PromptHint" of stack kWindow is "Ask a question, or say what to build or fix"
+   dispatch "xtaConversationLink" to stack kMain with "example,2"
+   TestAssert "a question clicked goes into the prompt", field "Prompt" of stack kWindow is line tLine + 2 of tText
+   TestAssert "and the hint goes", not the visible of field "PromptHint" of stack kWindow
+   -- Without changing stacks, the welcome and its questions only ask
+   put empty into field "Prompt" of stack kWindow
+   revIDESetPreference "cXTalkAssistant,build", false
+   dispatch "xtaNewConversation" to stack kMain
+   put field "Conversation" of stack kWindow into tText
+   TestDiagnostic tText
+   TestAssert "without changing stacks, it does not offer to", not (tText contains "new stacks") \
+         and "How do I count the words in a field?" is among the lines of tText
+   TestAssert "nor does the hint", field "PromptHint" of stack kWindow is "Ask a question about xTalk Script" \
+         and the visible of field "PromptHint" of stack kWindow
+   TestAssert "and neither names LiveCode", tText contains "xTalk Script" and not (tText contains "LiveCode")
+end TestTheWelcome
 
 on TestGuideAndNotesAreSent
    local tPort, tDoc, tSystem, tBody
@@ -200,10 +333,12 @@ on TestGuideAndNotesAreSent
    TestAssert "then the user's notes", xtaJsonText(xtaJsonGet(tSystem, "2/text")) contains "- Builds for Linux only."
    TestDiagnostic field "Status" of stack kWindow
    TestAssert "what the cache saved is shown", field "Status" of stack kWindow contains "5000 read from the cache"
-   TestAssert "the tools go with it", xtaJsonCount(xtaJsonMember(tDoc, "tools")) is 7 \
+   TestAssert "the tools go with it", xtaJsonCount(xtaJsonMember(tDoc, "tools")) is 9 \
          and xtaJsonText(xtaJsonGet(tDoc, "tools/1/name")) is "lookup_dictionary" \
          and xtaJsonText(xtaJsonGet(tDoc, "tools/6/name")) is "make_changes" \
-         and xtaJsonText(xtaJsonGet(tDoc, "tools/7/name")) is "run_code"
+         and xtaJsonText(xtaJsonGet(tDoc, "tools/7/name")) is "run_code" \
+         and xtaJsonText(xtaJsonGet(tDoc, "tools/8/name")) is "look_at_card" \
+         and xtaJsonText(xtaJsonGet(tDoc, "tools/9/name")) is "save_stack"
 
    -- The short guide, for a small model, and no tools
    dispatch "xtaMoreMenuPick" to stack kMain with "Short Guide, No Tools (for small local models)"
@@ -298,7 +433,7 @@ on TestFixRoundsRunOut
 end TestFixRoundsRunOut
 
 on TestOnlyXTalkIsInserted
-   local tPort
+   local tPort, tText, tAt
    put TestStartServer("200 OK", TestAnswer(TestBlock("livecodescript", "on mouseUp" & return & "   beep" & return & "end mouseUp"))) into tPort
    TestQueueAnswer "200 OK", TestAnswer("In Python:" & return & TestBlock("python", "print(1)") & return & \
          TestBlock("livecodebuilder", "public handler f()" & return & "end handler"))
@@ -310,10 +445,82 @@ on TestOnlyXTalkIsInserted
    dispatch "xtaSendPrompt" to stack kMain
    TestAssert "asked once more (other languages are not compiled)", sServed is 2
    TestAssert "nothing to insert from the latest answer", not the enabled of button "Insert" of stack kWindow
-   TestDiagnostic field "Conversation" of stack kWindow
-   TestAssert "no compile check is shown for it", line -2 of field "Conversation" of stack kWindow is "```" and \
-         not (line -2 to -1 of field "Conversation" of stack kWindow contains "Compile check")
+   put field "Conversation" of stack kWindow into tText
+   TestDiagnostic tText
+   put lineOffset("Print 1", tText) into tAt
+   TestAssert "the code of the latest answer is shown", tAt > 0 and line tAt to -1 of tText contains "print(1)" \
+         and line tAt to -1 of tText contains "end handler"
+   TestAssert "no compile check is shown for it", not (line tAt to -1 of tText contains "Compile check")
 end TestOnlyXTalkIsInserted
+
+-- An answer is laid out as its Markdown says: a heading, bold, italics,
+-- `code`, a list and a link; each block of code under a header that names
+-- its language, with Copy, and Insert for xTalk alone
+on TestAnAnswerIsLaidOut
+   local tPort, tAnswer, tText, tLine, tHeader, tClipboard
+   put "## Counting words" & return & return & \
+         "Use **the number of words** of a field, and `put` the count:" & return & return & \
+         "- one *line*" & return & "- two" & return & return & \
+         TestBlock("livecodescript", "on mouseUp" & return & "   put the number of words of field 1 into field 2" & return & "end mouseUp") & return & return & \
+         "In Python it is:" & return & return & TestBlock("python", "len(s.split())") & return & return & \
+         "See [the Dictionary](https://example.com/dict)." into tAnswer
+   put TestStartServer("200 OK", TestAnswer(tAnswer)) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   put "How do I count words?" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   put field "Conversation" of stack kWindow into tText
+   TestDiagnostic tText
+   put lineOffset("Counting words", tText) into tLine
+   TestAssert "the heading, bold and larger", tLine > 0 and line tLine of tText is "Counting words" \
+         and the textStyle of line tLine of field "Conversation" of stack kWindow is "bold" \
+         and the textSize of line tLine of field "Conversation" of stack kWindow > 12
+   TestAssert "no Markdown marks are left", not (tText contains "**") and not (tText contains "## ") and not (tText contains "`")
+   put lineOffset("Use the number of words", tText) into tLine
+   TestAssert "bold", tLine > 0 and the textStyle of word 2 to 5 of line tLine of field "Conversation" of stack kWindow is "bold"
+   TestAssert "code in the text, in the code's face", \
+         the textFont of word 10 of line tLine of field "Conversation" of stack kWindow is not empty \
+         and the textFont of word 1 of line tLine of field "Conversation" of stack kWindow is empty
+   put lineOffset("one line", tText) into tLine
+   TestAssert "a list, with italics", tLine > 0 and the listStyle of line tLine of field "Conversation" of stack kWindow is "disc" \
+         and the textStyle of word 2 of line tLine of field "Conversation" of stack kWindow is "italic"
+   put lineOffset("xTalk Script", tText) into tHeader
+   TestAssert "the code has a header that names it", tHeader > 0 and line tHeader + 1 of tText is "on mouseUp" \
+         and word 1 to 2 of line tHeader of tText is "xTalk Script"
+   TestAssert "as OXT-Beyond names it, though the block is marked livecodescript", not (tText contains "LiveCode")
+   TestAssert "with Copy and Insert", word -2 of line tHeader of tText is "Copy" and word -1 of line tHeader of tText is "Insert" \
+         and the linkText of word -2 of line tHeader of field "Conversation" of stack kWindow is "copy,2,1" \
+         and the linkText of word -1 of line tHeader of field "Conversation" of stack kWindow is "insert,2,1"
+   TestAssert "its lines in the code's face", the textFont of line tHeader + 1 of field "Conversation" of stack kWindow is not empty
+   put 0 into tHeader
+   repeat with tLine = 1 to the number of lines of tText
+      if word 1 of line tLine of tText is "Python" then
+         put tLine into tHeader
+      end if
+   end repeat
+   TestAssert "other languages: Copy alone", tHeader > 0 and word -1 of line tHeader of tText is "Copy" \
+         and the linkText of word -1 of line tHeader of field "Conversation" of stack kWindow is "copy,2,2" \
+         and line tHeader + 1 of tText is "len(s.split())"
+   put lineOffset("See the Dictionary.", tText) into tLine
+   TestAssert "a link", tLine > 0 and the linkText of word 2 of line tLine of field "Conversation" of stack kWindow is "url,https://example.com/dict" \
+         and the textStyle of word 2 of line tLine of field "Conversation" of stack kWindow is "link"
+   TestAssert "the compile check after it", "Compile check: the code compiles." is among the lines of tText
+
+   -- Copy puts the code on the clipboard, where the clipboard can be read
+   -- (not in the tests' headless runs on Linux)
+   put TestClipboardWorks() into tClipboard
+   dispatch "xtaConversationLink" to stack kMain with "copy,2,1"
+   TestDiagnostic field "Status" of stack kWindow
+   TestAssert "Copy says it copied", field "Status" of stack kWindow is "Copied the code to the clipboard."
+   if tClipboard then
+      TestAssert "the code is on the clipboard", the clipboardData["text"] is \
+            ("on mouseUp" & return & "   put the number of words of field 1 into field 2" & return & "end mouseUp")
+   end if
+   -- An Insert over code that is not xTalk does nothing, and a link to a
+   -- block that is not there either
+   dispatch "xtaConversationLink" to stack kMain with "insert,2,2"
+   dispatch "xtaConversationLink" to stack kMain with "copy,2,9"
+   TestAssert "nothing else is copied", field "Status" of stack kWindow is "Copied the code to the clipboard."
+end TestAnAnswerIsLaidOut
 
 on TestNotesToRemember
    local tPort, tMemory, tLine, tFound
@@ -418,7 +625,33 @@ on TestMoreMenu
          and not ("Base URL..." is among the lines of the text of button "More" of stack kWindow)
    TestAssert "the short guide, not ticked", "!nShort Guide, No Tools (for small local models)" is among the lines of the text of button "More" of stack kWindow
    TestAssert "Explain the Last Error", "Explain the Last Error" is among the lines of the text of button "More" of stack kWindow
+   TestAssert "Explain the Open Script", "Explain the Open Script" is among the lines of the text of button "More" of stack kWindow
+   TestAssert "Copy the Conversation, once there is one", "(Copy the Conversation" is among the lines of the text of button "More" of stack kWindow
 end TestMoreMenu
+
+-- More > Copy the Conversation: who said what, as Markdown, what the
+-- tools did and the answer after them in one block, as in the window
+on TestCopyTheConversation
+   local tPort, tCalls, tClipboard, tText
+   put "lookup_dictionary" into tCalls[1]["name"]
+   put "{" & TestQ("term") & ":" & TestQ("put") & "}" into tCalls[1]["input"]
+   put TestStartServer("200 OK", TestToolAnswer(tCalls)) into tPort
+   TestQueueAnswer "200 OK", TestAnswer("It places a value.")
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   put "What does put do?" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestAssert "it can be copied now", "Copy the Conversation" is among the lines of the text of button "More" of stack kWindow
+   put TestClipboardWorks() into tClipboard
+   dispatch "xtaMoreMenuPick" to stack kMain with "Copy the Conversation"
+   TestAssert "the status line says so", field "Status" of stack kWindow is "Copied the conversation to the clipboard."
+   if tClipboard then
+      put the clipboardData["text"] into tText
+      TestDiagnostic tText
+      TestAssert "as Markdown", tText begins with ("### You" & return & return & "What does put do?" & return & return & "### xTalk Assistant") \
+            and tText contains ("- *Looked up" && quote & "put" & quote && "in the Dictionary*") and tText contains "It places a value."
+      TestAssert "the tools and the answer in one block", TestCount(tText, "### xTalk Assistant") is 1
+   end if
+end TestCopyTheConversation
 
 on TestUnloadTakesItAllAway
    TestOpenTheWindow "http://127.0.0.1:1"
@@ -447,6 +680,7 @@ on TestSettingsKeepEverything
    TestOpenTheWindow "http://127.0.0.1:1"
    dispatch "xtaSettingsPrepare" to stack kMain with empty
    TestAssert "the dialog is built", there is a stack kSettings
+   TestDiagnostic the width of stack kSettings && "by" && the height of stack kSettings
    TestAssert "it fits a 720p screen", the width of stack kSettings <= 1200 and the height of stack kSettings <= 640
    TestAssert "with what is set", field "Base URL" of stack kSettings is "http://127.0.0.1:1" \
          and the label of button "Model" of stack kSettings is "test-model" and field "Fix Rounds" of stack kSettings is 5
@@ -642,7 +876,7 @@ on TestToolsRefusedByALocalServer
    dispatch "xtaSendPrompt" to stack kMain
    TestAssert "asked twice", sServed is 2
    put xtaJsonParse(TestBodyOf(sRequests[1])) into tDoc
-   TestAssert "first with tools", xtaJsonCount(xtaJsonMember(tDoc, "tools")) is 7
+   TestAssert "first with tools", xtaJsonCount(xtaJsonMember(tDoc, "tools")) is 9
    put xtaJsonParse(TestBodyOf(sRequests[2])) into tDoc
    TestAssert "then without", xtaJsonType(xtaJsonMember(tDoc, "tools")) is "missing"
    TestAssert "the answer is shown", field "Conversation" of stack kWindow contains "Hello."
@@ -793,6 +1027,8 @@ on TestRunsAreAskedAbout
    put xtaJsonText(xtaJsonGet(xtaJsonParse(TestBodyOf(sRequests[4])), "messages/7/content/1/content")) into tText
    TestAssert "Don't Run: nothing ran, and the model was told", tText contains "chose not to run"
    TestAssert "the window says what ran", "Ran the code in a sandbox: no error" is among the lines of field "Conversation" of stack kWindow
+   TestAssert "and what it put out, under it", line lineOffset("Ran the code in a sandbox: no error", field "Conversation" of stack kWindow) + 1 \
+         of field "Conversation" of stack kWindow is "42"
    TestAssert "a run in the sandbox is not undone", not (field "Conversation" of stack kWindow contains "Undo")
 end TestRunsAreAskedAbout
 
@@ -853,6 +1089,172 @@ on TestDebugStateWhenNothingIsPaused
    TestAssert "the window says so", "Looked at the debugger: it is not paused" is among the lines of field "Conversation" of stack kWindow
 end TestDebugStateWhenNothingIsPaused
 
+-- The model can look at a card: it is asked about as reading the stack
+-- is, and the picture goes with the tool's result. Of the pictures of a
+-- conversation the newest two go with each request.
+on TestLookAtTheCard
+   local tPort, tCalls, tContent, tText, tBody
+   put "look_at_card" into tCalls[1]["name"]
+   put "{}" into tCalls[1]["input"]
+   put TestStartServer("200 OK", TestToolAnswer(tCalls)) into tPort
+   TestQueueAnswer "200 OK", TestToolAnswer(tCalls)
+   TestQueueAnswer "200 OK", TestToolAnswer(tCalls)
+   TestQueueAnswer "200 OK", TestAnswer("The button fits.")
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   create stack "xtaTestWork"
+   set the width of stack "xtaTestWork" to 320
+   set the height of stack "xtaTestWork" to 240
+   go stack "xtaTestWork"
+   set the defaultStack to "xtaTestWork"
+   create button "Hello"
+   put "How does my card look?" into field "Prompt" of stack kWindow
+   TestAnswerAsks "yes"
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sAsked
+   TestAssert "asked once, as reading the stack is", the number of lines of sAsked is 1 \
+         and line 1 of sAsked begins with ("Let the assistant read your stack" && quote & "xtaTestWork" & quote & "?")
+   TestAssert "asked four times", sServed is 4
+   put xtaJsonGet(xtaJsonParse(TestBodyOf(sRequests[2])), "messages/3/content/1/content") into tContent
+   put xtaJsonText(xtaJsonGet(tContent, "1/text")) into tText
+   TestDiagnostic tText
+   TestAssert "the result says what the picture shows", tText begins with ("A picture of card id" && the id of this card of stack "xtaTestWork") \
+         and tText contains "320 by 240 pixels"
+   TestAssert "and has it, a PNG", xtaJsonText(xtaJsonGet(tContent, "2/type")) is "image" \
+         and xtaJsonText(xtaJsonGet(tContent, "2/source/type")) is "base64" \
+         and xtaJsonText(xtaJsonGet(tContent, "2/source/media_type")) is "image/png" \
+         and byte 2 to 4 of base64Decode(xtaJsonText(xtaJsonGet(tContent, "2/source/data"))) is "PNG"
+   put TestBodyOf(sRequests[4]) into tBody
+   TestAssert "of three pictures, the newest two go with the last request", TestCount(tBody, TestQ("media_type") & ":" & TestQ("image/png")) is 2
+   TestAssert "and the model is told why the first is not there", tBody contains "The picture is no longer sent"
+   TestDiagnostic field "Conversation" of stack kWindow
+   TestAssert "the window says what was looked at", \
+         ("Looked at card id" && the id of this card of stack "xtaTestWork" && "of the stack" && quote & "xtaTestWork" & quote) \
+         is among the lines of field "Conversation" of stack kWindow
+   delete stack "xtaTestWork"
+end TestLookAtTheCard
+
+-- The Settings switch for pictures takes look_at_card away; a server of
+-- the user's own with OpenAI's API is not offered it at all
+on TestPicturesCanBeTurnedOff
+   local tPort, tDoc, tText, tIndex
+   put TestStartServer("200 OK", TestAnswer("Hello.")) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   revIDESetPreference "cXTalkAssistant,pictures", false
+   put "Hi" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   put xtaJsonParse(TestRequestBody()) into tDoc
+   repeat with tIndex = 1 to xtaJsonCount(xtaJsonMember(tDoc, "tools"))
+      put xtaJsonText(xtaJsonGet(tDoc, "tools/" & tIndex & "/name")) & comma after tText
+   end repeat
+   TestDiagnostic tText
+   TestAssert "no pictures: no look_at_card", tText is "lookup_dictionary,check_code,read_stack,last_error,debug_state,make_changes,run_code,save_stack,"
+   dispatch "xtaSettingsPrepare" to stack kMain with empty
+   TestAssert "the Settings show it off", not the hilite of button "Pictures" of stack kSettings \
+         and the enabled of button "Pictures" of stack kSettings
+   set the hilite of button "Tools" of stack kSettings to false
+   send "mouseUp 1" to button "Tools" of stack kSettings
+   TestAssert "and only with the tools", not the enabled of button "Pictures" of stack kSettings
+   send "mouseUp 1" to button "Cancel" of stack kSettings
+   dispatch function "xtaSettingsDone" to stack kMain
+end TestPicturesCanBeTurnedOff
+
+-- The pictures switch holds from the moment the user turns it off, in the
+-- Settings while the model answers: a look_at_card on its way then takes
+-- no picture, and a picture taken before goes with no request after it
+on TestPicturesTurnedOffWhileItAnswers
+   local tPort, tCalls, tBody
+   put "look_at_card" into tCalls[1]["name"]
+   put "{}" into tCalls[1]["input"]
+   put TestStartServer("200 OK", TestToolAnswer(tCalls)) into tPort
+   TestQueueAnswer "200 OK", TestToolAnswer(tCalls)
+   TestQueueAnswer "200 OK", TestAnswer("The button fits.")
+   -- Off as the second request comes, which has the first picture
+   put 2 into sPicturesOffAt
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   create stack "xtaTestWork"
+   go stack "xtaTestWork"
+   set the defaultStack to "xtaTestWork"
+   create button "Hello"
+   put "How does my card look?" into field "Prompt" of stack kWindow
+   TestAnswerAsks "yes"
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sAsked
+   TestAssert "asked once, to read the stack", the number of lines of sAsked is 1
+   TestAssert "asked three times", sServed is 3
+   TestAssert "the picture went while the switch was on", \
+         TestCount(TestBodyOf(sRequests[2]), TestQ("media_type") & ":" & TestQ("image/png")) is 1
+   put TestBodyOf(sRequests[3]) into tBody
+   TestDiagnostic tBody
+   TestAssert "the call on its way when it was turned off took none", \
+         tBody contains "The assistant's Settings do not let it send you pictures of the user's cards."
+   TestAssert "and the picture taken before goes no more", TestCount(tBody, TestQ("media_type") & ":" & TestQ("image/png")) is 0 \
+         and tBody contains "(The picture is no longer sent: the assistant's Settings no longer let it send pictures.)"
+   TestDiagnostic field "Conversation" of stack kWindow
+   TestAssert "the window says so", "Did not use look_at_card: the Settings do not let it send pictures of your cards" \
+         is among the lines of field "Conversation" of stack kWindow
+   delete stack "xtaTestWork"
+end TestPicturesTurnedOffWhileItAnswers
+
+-- save_stack asks every time, and saves as File > Save does; Don't Save
+-- saves nothing. A stack never saved goes to the dialog that asks where,
+-- which the user can cancel.
+on TestSaveTheStack
+   local tPort, tCalls, tFile, tText
+   put specialFolderPath("temporary") & "/xta-test-save-" & the milliseconds & ".livecode" into tFile
+   create stack "xtaTestWork"
+   set the fileName of stack "xtaTestWork" to tFile
+   go stack "xtaTestWork"
+   put "save_stack" into tCalls[1]["name"]
+   put "{}" into tCalls[1]["input"]
+   put TestStartServer("200 OK", TestToolAnswer(tCalls)) into tPort
+   TestQueueAnswer "200 OK", TestAnswer("Then it stays as it is.")
+   TestQueueAnswer "200 OK", TestToolAnswer(tCalls)
+   TestQueueAnswer "200 OK", TestAnswer("Saved.")
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+
+   -- Don't Save
+   put "Save my stack" into field "Prompt" of stack kWindow
+   TestAnswerAsks "no"
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sAsked
+   TestAssert "the bar asked", item 1 of line 1 of sAsked is ("Save the stack" && quote & "xtaTestWork" & quote & "?") \
+         and item 2 of line 1 of sAsked contains tFile and item 2 of line 1 of sAsked contains "cannot be undone"
+   TestAssert "with no button to allow it for the session", item 3 of line 1 of sAsked is false
+   TestAssert "nothing was saved", xtaTestSaved() is empty and there is not a file tFile
+   put xtaJsonText(xtaJsonGet(xtaJsonParse(TestBodyOf(sRequests[2])), "messages/3/content/1/content")) into tText
+   TestAssert "the model was told", tText contains "chose not to save"
+
+   -- Save
+   put "Save it after all" into field "Prompt" of stack kWindow
+   TestAnswerAsks "yes"
+   dispatch "xtaSendPrompt" to stack kMain
+   TestAssert "asked again", the number of lines of sAsked is 1
+   TestAssert "saved as File > Save saves", the number of lines of xtaTestSaved() is 1 and there is a file tFile
+   put xtaJsonText(xtaJsonGet(xtaJsonParse(TestBodyOf(sRequests[4])), "messages/7/content/1/content")) into tText
+   TestDiagnostic tText
+   TestAssert "the model learns where", tText is ("Saved the stack" && quote & "xtaTestWork" & quote && "to" && tFile & ".")
+   TestAssert "the window says so", ("Saved the stack" && quote & "xtaTestWork" & quote) is among the lines of field "Conversation" of stack kWindow
+   delete stack "xtaTestWork"
+   delete file tFile
+
+   -- A new stack: the dialog asks where, and the user cancels it
+   dispatch "xtaNewConversation" to stack kMain
+   create stack "xtaTestNew"
+   go stack "xtaTestNew"
+   put TestStartServer("200 OK", TestToolAnswer(tCalls)) into tPort
+   TestQueueAnswer "200 OK", TestAnswer("Not saved.")
+   revIDESetPreference "cXTalkAssistant,baseUrl,anthropic", "http://127.0.0.1:" & tPort
+   put "Save the new one" into field "Prompt" of stack kWindow
+   TestAnswerAsks "yes"
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sAsked
+   TestAssert "the bar says it is new", item 1 of line 1 of sAsked is ("Save the new stack" && quote & "xtaTestNew" & quote & "?") \
+         and item 2 of line 1 of sAsked contains "in the dialog that comes next"
+   put xtaJsonText(xtaJsonGet(xtaJsonParse(TestBodyOf(sRequests[2])), "messages/3/content/1/content")) into tText
+   TestAssert "cancelled: the model is told", tText contains "cancelled saving"
+   delete stack "xtaTestNew"
+end TestSaveTheStack
+
 -- The Settings switch takes the tools that change and run away, and a call
 -- to one of them is refused
 on TestChangingStacksCanBeTurnedOff
@@ -874,7 +1276,7 @@ on TestChangingStacksCanBeTurnedOff
       put xtaJsonText(xtaJsonGet(tDoc, "tools/" & tIndex & "/name")) & comma after tText
    end repeat
    TestDiagnostic tText
-   TestAssert "the tools that change and run are not sent", tText is "lookup_dictionary,check_code,read_stack,last_error,debug_state,"
+   TestAssert "the tools that change, run and save are not sent", tText is "lookup_dictionary,check_code,read_stack,last_error,debug_state,look_at_card,"
    put xtaJsonText(xtaJsonGet(xtaJsonParse(TestBodyOf(sRequests[2])), "messages/3/content/1/content")) into tText
    TestAssert "a call to one is refused", tText contains "has not let the assistant change stacks" and sAsked is empty
 end TestChangingStacksCanBeTurnedOff
@@ -1063,6 +1465,10 @@ private function TestStartServer pStatus, pBody
    put 0 into sServed
    put empty into sRequest
    put empty into sRequests
+   put empty into sDuring
+   put 0 into sDelay
+   put false into sPressEscape
+   put 0 into sPicturesOffAt
    accept connections on port 0 with message "xtaTestServerAccept"
    return it
 end TestStartServer
@@ -1105,9 +1511,61 @@ on xtaTestServerBody pSocket, pData
    else
       put sResponses[the number of elements of sResponses] into tAnswer
    end if
+   TestNoteTheWindow "asked"
+   -- Escape, as the user presses it in the window while it waits
+   if sPressEscape is true and there is a stack kWindow then
+      put false into sPressEscape
+      send "escapeKey" to field "Prompt" of stack kWindow
+      TestNoteTheWindow "escaped"
+   end if
+   -- The pictures switch, as the user turns it off in the Settings
+   if sServed is sPicturesOffAt then
+      revIDESetPreference "cXTalkAssistant,pictures", false
+   end if
+   if sDelay > 0 then
+      put tAnswer into sPending[pSocket]
+      send "xtaTestServerWrite" && quote & pSocket & quote to me in sDelay milliseconds
+      exit xtaTestServerBody
+   end if
    write tAnswer to socket pSocket
    close socket pSocket
 end xtaTestServerBody
+
+-- Notes the spinner's angle every 100 milliseconds while the row shows
+on xtaTestSample
+   if there is not a stack kWindow then
+      exit xtaTestSample
+   end if
+   if the visible of graphic "ActivitySpin" of stack kWindow then
+      put true into sAngles[the startAngle of graphic "ActivitySpin" of stack kWindow]
+   end if
+   if sServed is 0 or the visible of graphic "ActivitySpin" of stack kWindow then
+      send "xtaTestSample" to me in 100 milliseconds
+   end if
+end xtaTestSample
+
+-- The answer the server held back (sDelay), as a model takes its time
+on xtaTestServerWrite pSocket
+   TestNoteTheWindow "answered"
+   write sPending[pSocket] to socket pSocket
+   close socket pSocket
+   delete variable sPending[pSocket]
+end xtaTestServerWrite
+
+-- What the window shows as the request sServed is on its way, kept in
+-- sDuring[sServed][pWhen]
+private command TestNoteTheWindow pWhen
+   if there is not a stack kWindow then
+      exit TestNoteTheWindow
+   end if
+   put the visible of field "Activity" of stack kWindow into sDuring[sServed][pWhen]["shown"]
+   put field "Activity" of stack kWindow into sDuring[sServed][pWhen]["activity"]
+   put field "ActivityTime" of stack kWindow into sDuring[sServed][pWhen]["time"]
+   put the startAngle of graphic "ActivitySpin" of stack kWindow into sDuring[sServed][pWhen]["angle"]
+   put field "Pill" of stack kWindow into sDuring[sServed][pWhen]["pill"]
+   put field "Status" of stack kWindow into sDuring[sServed][pWhen]["status"]
+   put the label of button "Send" of stack kWindow into sDuring[sServed][pWhen]["send"]
+end TestNoteTheWindow
 
 private function TestRequestHeader pName
    local tLine
@@ -1161,3 +1619,38 @@ end TestToolAnswer
 private function TestBlock pLang, pCode
    return "```" & pLang & return & pCode & return & "```"
 end TestBlock
+
+-- How many times pNeedle is in pText
+private function TestCount pText, pNeedle
+   local tCount, tSkip, tAt
+   put 0 into tCount
+   put 0 into tSkip
+   repeat forever
+      put offset(pNeedle, pText, tSkip) into tAt
+      if tAt is 0 then
+         exit repeat
+      end if
+      add 1 to tCount
+      add tAt + the number of chars of pNeedle - 1 to tSkip
+   end repeat
+   return tCount
+end TestCount
+
+-- The activity row's clock ("1:05") in seconds
+private function TestClockSeconds pTime
+   set the itemDelimiter to ":"
+   return item 1 of pTime * 60 + item 2 of pTime
+end TestClockSeconds
+
+-- True when what is put on the clipboard can be read back (not in a
+-- headless run on Linux, which has no clipboard)
+private function TestClipboardWorks
+   local tProbe, tError
+   put "xta-clipboard-" & the milliseconds into tProbe
+   try
+      set the clipboardData["text"] to tProbe
+      return the clipboardData["text"] is tProbe
+   catch tError
+      return false
+   end try
+end TestClipboardWorks
