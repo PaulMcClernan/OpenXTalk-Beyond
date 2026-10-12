@@ -447,6 +447,7 @@ on TestSettingsKeepEverything
    TestOpenTheWindow "http://127.0.0.1:1"
    dispatch "xtaSettingsPrepare" to stack kMain with empty
    TestAssert "the dialog is built", there is a stack kSettings
+   TestAssert "it fits a 720p screen", the width of stack kSettings <= 1200 and the height of stack kSettings <= 640
    TestAssert "with what is set", field "Base URL" of stack kSettings is "http://127.0.0.1:1" \
          and the label of button "Model" of stack kSettings is "test-model" and field "Fix Rounds" of stack kSettings is 5
    TestAssert "and says where the key comes from", field "Key Note" of stack kSettings begins with "The key in the environment variable ANTHROPIC_API_KEY is used."

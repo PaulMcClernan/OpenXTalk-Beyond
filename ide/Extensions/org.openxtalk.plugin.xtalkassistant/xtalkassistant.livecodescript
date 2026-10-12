@@ -1314,7 +1314,7 @@ private command xtaBuildSettings
    set the rect of field "Result" to 16, kUiBand + 4, tRight, kUiBand + 34
    set the dontWrap of field "Result" to false
 
-   put 70 into tTop
+   put 68 into tTop
    xtaSettingsSection "Section1", "1  Provider and key", tTop
    xtaSettingsLabel "Provider", tTop
    create button "Provider"
@@ -1387,7 +1387,8 @@ private command xtaBuildSettings
    add 22 to tTop
    xtaSettingsCheckbox "Short Guide", "Short guide, no tools (for small local models)", tLeft, tTop, tRight
 
-   add 34 to tTop
+   -- The dialog is no taller than 640, the suite's limit (a 720p screen)
+   add 28 to tTop
    create button "Cancel"
    set the rect of button "Cancel" to tRight - 196, tTop, tRight - 106, tTop + 24
    create button "Save"
