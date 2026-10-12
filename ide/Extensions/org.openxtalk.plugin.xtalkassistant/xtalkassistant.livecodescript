@@ -1015,14 +1015,14 @@ private function xtaSettingsLine
    put xtaProvider() into tProvider
    put xtaProviderName(tProvider) into tLine
    if xtaKey(tProvider) is empty then
-      put " - no API key yet (More > Settings...)" after tLine
+      put xtaDot() & "no API key yet (More > Settings...)" after tLine
    else if sKeys[tProvider] is empty then
-      put " - API key from the environment" after tLine
+      put xtaDot() & "API key from the environment" after tLine
    end if
    if xtaModel(tProvider) is empty then
-      put " - no model yet (Send chooses one)" after tLine
+      put xtaDot() & "no model yet (Send chooses one)" after tLine
    else
-      put " -" && xtaModel(tProvider) after tLine
+      put xtaDot() & xtaModel(tProvider) after tLine
    end if
    return tLine
 end xtaSettingsLine
