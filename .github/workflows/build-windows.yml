@@ -49,7 +49,8 @@
 # thirdparty/, prebuilt/build-libraries-windows.ps1, which also repackages
 # Spotify's CEF build) unless its cache has them.
 # A run that passes all of these uploads the files in dist (not dist/stage)
-# as the workflow artifact "OXT-Beyond-win-x86_64". Every run, including a
+# as the workflow artifact "OXT-Beyond-win-x86_64", and the installer again
+# alone, not zipped, as the artifact named after it. Every run, including a
 # failed one, uploads the logs as "build-logs-win-x86_64".
 #
 # Releases: .github/workflows/release.yml calls this workflow (workflow_call)
@@ -715,6 +716,19 @@ jobs:
           # The files are compressed already
           compression-level: 0
 
+      # The installer again, alone and not zipped, for trying a build
+      # without downloading the whole set above (about 1.2 GB): with archive
+      # false the artifact is the file itself, named after it. Releases take
+      # the set above only, by its name.
+      - name: Upload the installer alone
+        id: upload_setup
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/OXT-Beyond-${{ steps.product.outputs.version }}-win-x86_64-setup.exe
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
       # The IDE's own windows, as a user sees them with Windows light and
       # dark: tools/ci/ui_tour.py starts the staged IDE with
       # tools/ci/ui-tour.livecodescript, which opens the palettes, the
@@ -889,6 +903,7 @@ jobs:
           ENGINE_VERSION: ${{ steps.verify.outputs.version }}
           SQLITE_VERSION: ${{ steps.verify.outputs.sqlite-version }}
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          SETUP_URL: ${{ steps.upload_setup.outputs.artifact-url }}
         run: |
           $lines = @(
             '### Toolchain',
@@ -905,6 +920,9 @@ jobs:
           }
           else {
             $lines += '- OXT-Beyond-win-x86_64: not uploaded (an earlier step failed)'
+          }
+          if ($env:SETUP_URL) {
+            $lines += "- [OXT-Beyond-$env:VERSION-win-x86_64-setup.exe]($env:SETUP_URL): the installer alone, not zipped"
           }
           $lines += '- build-logs-win-x86_64: msbuild.log and the packaging, smoke test, standalone check, IDE compile check and installer logs'
           $lines += ''
