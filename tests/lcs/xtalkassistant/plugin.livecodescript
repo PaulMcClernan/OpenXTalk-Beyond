@@ -212,7 +212,7 @@ end TestAskThroughTheWindow
 -- is thinking; once it has answered the row goes, and the status line and
 -- the conversation say what the answer took
 on TestTheActivityRowWhileItWorks
-   local tPort
+   local tPort, tStatus
    put TestStartServer("200 OK", TestAnswer("Hello.")) into tPort
    TestOpenTheWindow "http://127.0.0.1:" & tPort
    TestAssert "no row before a question", not the visible of field "Activity" of stack kWindow \
@@ -231,7 +231,11 @@ on TestTheActivityRowWhileItWorks
    TestAssert "the pill says it is thinking", sDuring[1]["asked"]["pill"] is "Thinking"
    TestAssert "the status line says whom it asks", sDuring[1]["asked"]["status"] is ("Asking test-model (127.0.0.1:" & tPort & ")")
    TestAssert "Send is Stop", sDuring[1]["asked"]["send"] is "Stop"
-   TestAssert "the clock goes on while it waits", sDuring[1]["asked"]["time"] is "0:00" and sDuring[1]["answered"]["time"] is "0:01"
+   -- How far the clock got by then depends on how fast the computer is
+   -- (the tests run four at a time in CI): only that it went on is asked
+   TestAssert "the clock reads minutes and seconds", matchText(sDuring[1]["asked"]["time"], "^[0-9]+:[0-5][0-9]$") \
+         and matchText(sDuring[1]["answered"]["time"], "^[0-9]+:[0-5][0-9]$")
+   TestAssert "and goes on while it waits", TestClockSeconds(sDuring[1]["asked"]["time"]) < TestClockSeconds(sDuring[1]["answered"]["time"])
    TestAssert "and the spinner turns", the number of elements of sAngles >= 3
    TestAssert "the row goes once it has answered", not the visible of field "Activity" of stack kWindow \
          and not the visible of graphic "ActivitySpin" of stack kWindow and not the visible of field "ActivityTime" of stack kWindow
@@ -239,11 +243,13 @@ on TestTheActivityRowWhileItWorks
    TestAssert "and the conversation has its room again", \
          item 4 of the rect of field "Conversation" of stack kWindow is (item 4 of the rect of graphic "ConversationPanel" of stack kWindow) - 6
    TestAssert "the pill is ready again", field "Pill" of stack kWindow is "Ready"
-   TestDiagnostic field "Status" of stack kWindow
-   TestAssert "the status line says what it took", field "Status" of stack kWindow begins with "Answered in 1." \
-         and field "Status" of stack kWindow contains "1 request" \
-         and field "Status" of stack kWindow contains "10 tokens in, 20 out (5000 read from the cache)"
-   TestAssert "and so does the conversation, under the answer", line -1 of field "Conversation" of stack kWindow begins with "1." \
+   put field "Status" of stack kWindow into tStatus
+   TestDiagnostic tStatus
+   -- At least the 1.6 s the server held its answer
+   TestAssert "the status line says what it took", tStatus begins with "Answered in " and word 3 of tStatus is a number \
+         and word 3 of tStatus >= 1.6 and word 4 of tStatus is "s" and tStatus contains "1 request" \
+         and tStatus contains "10 tokens in, 20 out (5000 read from the cache)"
+   TestAssert "and so does the conversation, under the answer", line -1 of field "Conversation" of stack kWindow begins with (word 3 of tStatus && "s") \
          and the textSize of line -1 of field "Conversation" of stack kWindow is 10
 end TestTheActivityRowWhileItWorks
 
@@ -1580,6 +1586,12 @@ private function TestCount pText, pNeedle
    end repeat
    return tCount
 end TestCount
+
+-- The activity row's clock ("1:05") in seconds
+private function TestClockSeconds pTime
+   set the itemDelimiter to ":"
+   return item 1 of pTime * 60 + item 2 of pTime
+end TestClockSeconds
 
 -- True when what is put on the clipboard can be read back (not in a
 -- headless run on Linux, which has no clipboard)
