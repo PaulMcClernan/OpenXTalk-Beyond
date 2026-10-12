@@ -377,6 +377,14 @@ on TestRunInTheSandbox
    TestAssert "its line in the handlers", tRan["errorText"] contains "line 2 of the handlers"
    TestAssert "and in the code", tRan["errorText"] contains "line 3 of the code"
    TestAssert "the sandbox is gone after an error too", there is not a stack kSandboxStack
+
+   -- With no handlers, the code is the sandbox's first lines (this was
+   -- one line out, in the real IDE)
+   put xtaRunCode(TestRunPlan("{`code`:`local tX\nput 1 into tX\nput tX + \`abc\` into tX`}", empty)) into tRan
+   TestDiagnostic tRan["text"]
+   TestAssert "with no handlers, the line in the code", tRan["errorText"] contains "line 3 of the code"
+   TestAssert "and the lines around it", tRan["errorText"] contains ">3:"
+   TestAssert "an error is not a stop", tRan["stopped"] is false and tRan["text"] contains "stopped at an error"
 end TestRunInTheSandbox
 
 on TestRunPlanRefusesMistakes

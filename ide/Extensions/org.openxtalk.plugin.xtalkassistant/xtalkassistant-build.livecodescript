@@ -96,6 +96,11 @@ constant kMaxDebugContexts = 2
 -- were in
 constant kObjectNameError = 353
 
+-- The execution errors of a script that was stopped while it ran (the
+-- user pressed Control-period, Command-period on a Mac): repeat, wait,
+-- do, read, shell, click, drag, move, type, if and a handler, "aborted"
+constant kAbortErrors = "98,160,171,240,251,324,470,488,538,604,624"
+
 -- The journal: entries 1 to N, each an array with "number", "kind"
 -- ("changes" or "run"), "state" ("applied" or "undone"), "main" (the name
 -- of the main stack it changed), "stack" (the long id of the stack),
@@ -2166,7 +2171,8 @@ end xtaRunPlan
 -- without an error), "ran" (false when it could not start: then "error"
 -- says why), "ms", "value" (what it returned), "output" (what it put into
 -- the Message Box), "trace" and "errorText" (an error, in words, with the
--- lines around it), "entry" (for a run on the user's stack, the journal
+-- lines around it), "stopped" (true when the user stopped it while it
+-- ran: Control-period), "entry" (for a run on the user's stack, the journal
 -- entry that reverts it), "summary" (for the user) and "text" (for the
 -- model).
 function xtaRunCode pRun
@@ -2201,7 +2207,7 @@ function xtaRunCode pRun
    put empty into msg
    if tWhere is "sandbox" then
       xtbMakeSandbox pRun["handlers"], pRun["code"]
-      put the number of lines of pRun["handlers"] into tHandlersLines
+      put the result into tHandlersLines
    end if
    unlock messages
    put true into tResult["ran"]
@@ -2233,8 +2239,10 @@ function xtaRunCode pRun
    put xtbCut(tValue, kMaxOutputChars) into tResult["value"]
    put xtbCut(tOutput, kMaxOutputChars) into tResult["output"]
    put tError into tResult["trace"]
+   put false into tResult["stopped"]
    if tError is not empty then
       put xtbRunErrorText(tError, pRun, tHandlersLines) into tResult["errorText"]
+      put xtbWasStopped(tError) into tResult["stopped"]
    else
       put true into tResult["ok"]
    end if
@@ -2266,6 +2274,9 @@ function xtaRunCode pRun
    if tError is empty then
       put ": no error" after tResult["summary"]
       put ": no error." after tResult["text"]
+   else if tResult["stopped"] then
+      put ": you stopped it" after tResult["summary"]
+      put ": the user stopped it before it ended (it may never end by itself). Where it was:" & return & tResult["errorText"] after tResult["text"]
    else
       put ": an error" after tResult["summary"]
       put ": it stopped at an error." & return & tResult["errorText"] after tResult["text"]
@@ -2290,7 +2301,7 @@ end xtaRunCode
 -- handler of the statements, then a msgChanged that keeps what "put"
 -- puts into the Message Box from opening it
 private command xtbMakeSandbox pHandlers, pCode
-   local tOldDefault, tScript
+   local tOldDefault, tScript, tLines
    if there is a stack kSandboxStack then
       delete stack kSandboxStack
    end if
@@ -2298,10 +2309,32 @@ private command xtbMakeSandbox pHandlers, pCode
    create invisible stack kSandboxStack
    set the _ideoverride of stack kSandboxStack to true
    set the defaultStack to tOldDefault
-   put pHandlers & return & "on" && kRunHandler & return & pCode & return & "end" && kRunHandler & return & \
-         "on msgChanged" & return & "end msgChanged" into tScript
+   -- The result is the number of lines before the run's own handler,
+   -- which the line numbers of an error are counted from: those of the
+   -- handlers (none when there are none, and a last empty line counts)
+   if pHandlers is not empty then
+      put pHandlers & return into tScript
+   end if
+   put the number of lines of tScript into tLines
+   put "on" && kRunHandler & return & pCode & return & "end" && kRunHandler & return & \
+         "on msgChanged" & return & "end msgChanged" after tScript
    set the script of stack kSandboxStack to tScript
+   return tLines
 end xtbMakeSandbox
+
+-- True when the run stopped because the user stopped it: its innermost
+-- error is one of the engine's "aborted"
+private function xtbWasStopped pTrace
+   local tLine
+   replace crlf with return in pTrace
+   repeat for each line tLine in pTrace
+      if word 1 to -1 of tLine is empty then
+         next repeat
+      end if
+      return item 1 of tLine is among the items of kAbortErrors
+   end repeat
+   return false
+end xtbWasStopped
 
 -- A run's error in words. In the sandbox, a line number is said as the
 -- model wrote it (of the handlers, or of the code); a run on the user's
@@ -2583,6 +2616,10 @@ private function xtbDebugVariables pContext
       return "(The variables of" && pContext["handler"] && "are not read: its stack is password-protected.)" & return
    end if
    put "Variables of" && pContext["handler"] && "(line" && pContext["line"] & "):" & return into tText
+   -- Set back to empty after, as the IDE's debugger does after each use
+   -- (revdebuggerlibrary): it keeps the context the user picked in its
+   -- own variables, and the engine's form of a context ("object,handler,
+   -- line") cannot be set back as it reads
    try
       set the debugContext to pContext["number"]
       debugDo "return the variableNames"

@@ -21,10 +21,20 @@ script "org.openxtalk.plugin.xtalkassistant"
 -- is compiled before the user reads it, and one that does not compile goes
 -- back to the model with the errors, a few rounds at most (the "fix
 -- rounds"). The model can ask for tools that read: the Dictionary, a
--- compile check, the user's stack (after the user allows it) and the last
+-- compile check, the user's stack (after the user allows it), the last
 -- error the IDE showed the user, which a front script notes while the
--- assistant is on (xtalkassistant-errors.livecodescript). It never runs
--- code, and never changes a script or an object by itself.
+-- assistant is on (xtalkassistant-errors.livecodescript), and where a
+-- script paused in the debugger is. And it can ask for tools that build
+-- and run (xtalkassistant-build.livecodescript): a batch of changes to the
+-- user's stack (controls, cards, a new stack, properties, scripts), and
+-- code to run in a sandbox or on the stack. Nothing changes and nothing
+-- runs until the user says yes, in a bar the window shows: Apply for
+-- changes, every time; Run for code, which the user can allow for the
+-- session (code that reaches files, the network or other programs is
+-- always asked about). Undo, next to what was applied in the
+-- conversation, takes it back exactly, and a run on the stack goes back
+-- to the checkpoint saved before it. The Settings switch "Let the model
+-- change stacks and run code" takes those two tools away.
 --
 -- The key: what the user types or pastes in the Settings dialog is kept in
 -- memory until the IDE quits or the user forgets it, and is never written
@@ -34,20 +44,30 @@ script "org.openxtalk.plugin.xtalkassistant"
 -- answer, how long to wait, the fix rounds, the tools, the short guide,
 -- whether the open script goes with a question) is a preference.
 --
--- Files: this stack (the plugin's lifecycle, its settings and the IDE
--- glue), xtalkassistant-core.livecodescript (JSON, the providers, HTTP,
--- the compile checks, the memory and what the tools read; tested by
--- tests/lcs/xtalkassistant), xtalkassistant-window.livecodescript (the
--- window's behavior), xtalkassistant-settings.livecodescript (the Settings
--- dialog's), xtalkassistant-errors.livecodescript (the error hook) and
+-- Files: this stack (the plugin's lifecycle, its settings, its windows
+-- and the IDE glue), xtalkassistant-core.livecodescript (JSON, the
+-- providers, HTTP, the compile checks, the memory and what the tools
+-- read), xtalkassistant-build.livecodescript (what the tools that build
+-- and run do, and Undo; both tested by tests/lcs/xtalkassistant),
+-- xtalkassistant-window.livecodescript (the window's behavior),
+-- xtalkassistant-settings.livecodescript (the Settings dialog's),
+-- xtalkassistant-errors.livecodescript (the error hook) and
 -- xtalk-guide.md (the guide).
+--
+-- The windows wear the xTalk Suite's look (its UI kit v2,
+-- tools/ui-kit.livecodescript in the xtalk-suite repository): an accent
+-- band with the title, one status line under it, white panels on a cool
+-- page, flat entry fields in the platform's mono face, and a footer. The
+-- kit's colors and builders are matched here by value (xtaUi...), not
+-- carried, since this is not one of the suite's stacks.
 --
 -- Public handlers (all reached with dispatch, from the menu bar and the
 -- window):
 --    xtalkAssistantMenuPick       Development > Plugins > xTalk Assistant
 --    xtaSendPrompt, xtaSendOrStop, xtaInsertCode, xtaNewConversation,
 --    xtaChooseModels, xtaSetIncludeScript, xtaSetProviderByName, xtaSetModel,
---    xtaMoreMenuPick, xtaNoteClicked, xtaWindowClosed,
+--    xtaMoreMenuPick, xtaNoteClicked, xtaConversationLink, xtaAnswerAsk,
+--    xtaWindowClosed,
 --    xtaSettingsSave, xtaSettingsGetModels, xtaSettingsForgetKey,
 --    xtaSettingsProvider             (the Settings dialog)
 --    xtaSettingsPrepare, xtaSettingsDone()   (before and after it)
@@ -56,6 +76,7 @@ script "org.openxtalk.plugin.xtalkassistant"
 constant kWindow = "revXTalkAssistant"
 constant kTitle = "xTalk Assistant"
 constant kCore = "org.openxtalk.plugin.xtalkassistant-core"
+constant kBuild = "org.openxtalk.plugin.xtalkassistant-build"
 constant kWindowBehavior = "org.openxtalk.plugin.xtalkassistant-window"
 constant kErrorHook = "org.openxtalk.plugin.xtalkassistant-errors"
 constant kSettingsWindow = "revXTalkAssistantSettings"
@@ -71,14 +92,16 @@ constant kPrefShortGuide = "cXTalkAssistant,shortGuide"
 constant kPrefTools = "cXTalkAssistant,tools"
 constant kPrefMaxTokens = "cXTalkAssistant,maxTokens"
 constant kPrefTimeout = "cXTalkAssistant,timeout"
+constant kPrefBuild = "cXTalkAssistant,build"
 -- The most of the open script that is sent with a question, in characters
 constant kMaxScriptChars = 60000
 -- How many times, by default and at most, code that does not compile goes
 -- back to the model for each question
 constant kDefaultFixRounds = 5
 constant kMaxFixRounds = 10
--- How many tools the model may use for one question
-constant kMaxToolCalls = 12
+-- How many tools the model may use for one question: building a stack,
+-- trying it and correcting it takes more than reading did
+constant kMaxToolCalls = 25
 -- The limits of the Settings dialog's numbers: the longest answer, in
 -- tokens (the provider refuses more than its model takes, and says so),
 -- and how many seconds a request may go without data
@@ -91,6 +114,38 @@ constant kGuideFile = "xtalk-guide.md"
 -- The memory's file, in the user's preferences folder
 constant kMemoryFile = "xTalk Assistant Memory.txt"
 constant kMemoryWindow = "revXTalkAssistantMemory"
+-- The tools that change or run something, which the Settings switch takes
+-- away
+constant kBuildTools = "make_changes,run_code"
+-- How many of the changes of a batch the conversation lists under it
+constant kShownChanges = 8
+
+-- The xTalk Suite's UI kit v2, by value (its tools/ui-kit.livecodescript):
+-- the page, the panels and their hairline, the accent band and its text,
+-- the inks, the status colors, the entry fields' line, and the code's
+-- ground and line
+constant kUiBg = "240,242,246"
+constant kUiCard = "255,255,255"
+constant kUiCardLine = "225,229,236"
+constant kUiAccent = "44,90,160"
+constant kUiAccentText = "255,255,255"
+constant kUiAccentSub = "199,216,241"
+constant kUiInk = "28,34,46"
+constant kUiInkSoft = "95,104,118"
+constant kUiMuted = "138,146,158"
+constant kUiOk = "23,128,63"
+constant kUiWarn = "150,110,40"
+constant kUiBad = "176,58,46"
+constant kUiFieldLine = "203,210,222"
+constant kUiCodeBg = "244,246,250"
+constant kUiCodeLine = "210,217,229"
+-- The kit's title band, and the windows' sizes (each fits 1200 x 640, a
+-- 720p screen, as the kit asks)
+constant kUiBand = 30
+constant kWindowWidth = 560
+constant kWindowHeight = 640
+constant kSettingsWidth = 640
+constant kMemoryWidth = 480
 
 -- The keys the user typed, by provider. Only ever in memory.
 local sKeys
@@ -129,6 +184,16 @@ local sSettingsFetch
 -- True once the window has asked for a key this session, so that it asks
 -- only once
 local sKeyAsked
+-- While the window's bar asks the user something: "kind" ("changes", "run"
+-- or "read") and "answer" ("yes", "session", "no" or "stop"; empty until
+-- one is given)
+local sAsk
+-- Where the user let code run without asking, until the assistant is
+-- turned off: "sandbox", or the long id of a main stack
+local sRunAllowed
+-- What the user undid since the last question, a line each, to tell the
+-- model with the next one
+local sUndone
 
 on extensionInitialize
    if the target is not me then
@@ -224,8 +289,12 @@ private command xtaModelsIfNeeded pIfNotListed
 end xtaModelsIfNeeded
 
 private command xtaTurnOff
-   answer question "Turn the xTalk Assistant off? Its window closes and the API keys you typed are forgotten. You can turn it on again from Development > Plugins." \
-         with "Cancel" or "Turn Off" titled kTitle
+   local tQuestion
+   put "Turn the xTalk Assistant off? Its window closes and the API keys you typed are forgotten. You can turn it on again from Development > Plugins." into tQuestion
+   if xtaAppliedCount() > 0 then
+      put return & return & "The changes it made to your stacks stay as they are, and can no longer be undone from the assistant." after tQuestion
+   end if
+   answer question tQuestion with "Cancel" or "Turn Off" titled kTitle
    if it is not "Turn Off" then
       exit xtaTurnOff
    end if
@@ -249,6 +318,9 @@ private command xtaShutDown
    put empty into sModelMenus
    put empty into sDrafts
    put empty into sKeyAsked
+   put empty into sAsk
+   put empty into sRunAllowed
+   put empty into sUndone
    xtaStopErrorHook
    if there is a stack kMemoryWindow then
       delete stack kMemoryWindow
@@ -264,6 +336,12 @@ private command xtaShutDown
    end if
    if there is a stack kWindow then
       delete stack kWindow
+   end if
+   -- The journal goes, with the hidden stacks and the checkpoints: what
+   -- was applied stays
+   if there is a stack kBuild and the long id of stack kBuild is among the lines of xtaStacksInUse() then
+      xtaBuildCleanup
+      stop using stack kBuild
    end if
    if there is a stack kCore and the long id of stack kCore is among the lines of xtaStacksInUse() then
       xtaCheckCleanup
@@ -281,7 +359,8 @@ private function xtaStacksInUse
    return tList
 end xtaStacksInUse
 
--- Loads the core and the window's behavior from this stack's folder.
+-- Loads the core, the library that builds and runs, and the windows'
+-- behaviors from this stack's folder.
 private command xtaLoadParts
    local tFolder
    put xtaPluginFolder() into tFolder
@@ -291,6 +370,13 @@ private command xtaLoadParts
    if the long id of stack kCore is not among the lines of xtaStacksInUse() then
       start using stack kCore
    end if
+   if there is not a stack kBuild then
+      get the short name of stack (tFolder & "/xtalkassistant-build.livecodescript")
+   end if
+   if the long id of stack kBuild is not among the lines of xtaStacksInUse() then
+      start using stack kBuild
+   end if
+   set the _ideoverride of stack kBuild to true
    if there is not a stack kWindowBehavior then
       get the short name of stack (tFolder & "/xtalkassistant-window.livecodescript")
    end if
@@ -352,26 +438,38 @@ private command xtaOpenWindow
 end xtaOpenWindow
 
 on xtaWindowClosed
-   -- The conversation stays for the next time the window is opened
+   -- The conversation stays for the next time the window is opened; what
+   -- the bar was asking is answered as Stop would
+   if sAsk["kind"] is not empty and sAsk["answer"] is empty then
+      put "stop" into sAsk["answer"]
+   end if
 end xtaWindowClosed
 
 -- Builds the window: a stack made here rather than shipped as a binary
 -- stack, so that all of the plugin is text. Its name begins with "rev", so
--- the IDE treats it as one of its own windows.
+-- the IDE treats it as one of its own windows. It wears the suite's look:
+-- the band with the title and, at its right, the pill that says what the
+-- assistant is doing; the status line; the conversation on a panel; the
+-- bar that asks the user (Ask...), on a panel of its own and hidden until
+-- something is asked; flat entry fields; and a footer. The behavior
+-- (xtalkassistant-window.livecodescript) lays it out, as the kit leaves
+-- the layout to each window.
 private command xtaBuildWindow
-   local tOldDefault, tFont
+   local tOldDefault, tName
    put the defaultStack into tOldDefault
    lock screen
    lock messages
    create invisible stack kWindow
    set the defaultStack to kWindow
-   set the title of stack kWindow to kTitle
-   set the width of stack kWindow to 480
-   set the height of stack kWindow to 600
-   set the minWidth of stack kWindow to 420
-   set the minHeight of stack kWindow to 360
    set the resizable of stack kWindow to true
    set the destroyStack of stack kWindow to true
+   xtaUiChrome kTitle, kWindowWidth, kWindowHeight
+   set the minWidth of stack kWindow to 460
+   set the minHeight of stack kWindow to 520
+   set the linkColor of stack kWindow to kUiAccent
+   set the linkHiliteColor of stack kWindow to kUiAccent
+   set the linkVisitedColor of stack kWindow to kUiAccent
+   xtaUiPill "Pill", (kWindowWidth - 108) & ",6," & (kWindowWidth - 16) & ",24"
 
    create button "Provider"
    set the style of button "Provider" to "menu"
@@ -394,16 +492,46 @@ private command xtaBuildWindow
    set the label of button "More" to "More"
    set the text of button "More" to xtaMoreMenuText()
 
+   -- The conversation, on a panel (made first, so that it is behind)
+   xtaUiPanel "ConversationPanel", "16,90," & (kWindowWidth - 16) & ",400"
    create field "Conversation"
    set the lockText of field "Conversation" to true
    set the traversalOn of field "Conversation" to true
    set the dontWrap of field "Conversation" to false
    set the vScrollbar of field "Conversation" to true
    set the threeD of field "Conversation" to false
-   set the margins of field "Conversation" to 6
+   set the borderWidth of field "Conversation" to 0
+   set the opaque of field "Conversation" to false
+   set the margins of field "Conversation" to "6,6,6,6"
+   set the textSize of field "Conversation" to 12
+   set the foregroundColor of field "Conversation" to kUiInk
+
+   -- The bar that asks the user: what is asked, its details (the changes,
+   -- or the code), and the buttons that answer it
+   xtaUiPanel "AskPanel", "16,230," & (kWindowWidth - 16) & ",400"
+   xtaUiLabel "AskTitle", empty, "28,240," & (kWindowWidth - 28) & ",274", 13
+   set the textStyle of field "AskTitle" to "bold"
+   xtaUiArea "AskDetail", "28,278," & (kWindowWidth - 28) & ",358"
+   set the traversalOn of field "AskDetail" to true
+   repeat for each item tName in "AskNo,AskSession,AskYes"
+      create button tName
+   end repeat
+   set the default of button "AskYes" to false
+   repeat for each item tName in "AskPanel,AskTitle,AskDetail,AskNo,AskSession,AskYes"
+      if tName begins with "AskP" then
+         set the visible of graphic tName to false
+      else if tName begins with "AskT" or tName begins with "AskD" then
+         set the visible of field tName to false
+      else
+         set the visible of button tName to false
+      end if
+   end repeat
 
    create button "Include"
    set the style of button "Include" to "checkbox"
+   -- Ticked, a checkbox made by script is drawn with a raised frame
+   -- (hiliteBorder); the Tools palette's have none
+   set the hiliteBorder of button "Include" to false
    set the label of button "Include" to "Include the open script"
    set the tooltip of button "Include" to "Send the script open in the Script Editor with your question"
 
@@ -415,36 +543,224 @@ private command xtaBuildWindow
    set the label of button "New" to "New Chat"
    set the tooltip of button "New" to "Start a new conversation"
 
-   create field "Prompt"
+   xtaUiInput "Prompt", "16,500," & (kWindowWidth - 104) & ",572"
    set the dontWrap of field "Prompt" to false
    set the vScrollbar of field "Prompt" to true
-   set the threeD of field "Prompt" to false
-   set the margins of field "Prompt" to 4
+   set the autoTab of field "Prompt" to false
    set the tooltip of field "Prompt" to "Your question. Enter, or Command-Return (Control-Return), sends it."
 
    create button "Send"
    set the label of button "Send" to "Send"
    set the default of button "Send" to false
 
-   create field "Status"
-   set the lockText of field "Status" to true
-   set the traversalOn of field "Status" to false
-   set the opaque of field "Status" to false
-   set the showBorder of field "Status" to false
-   set the dontWrap of field "Status" to true
-   set the margins of field "Status" to 0
-   set the textSize of field "Status" to 11
-
-   put revIDEGetPreference("cScriptEditor,editor,font") into tFont
-   if tFont is not empty then
-      set the textFont of field "Prompt" to tFont
-   end if
+   xtaUiFooter xtaFooterText(), "16,614," & (kWindowWidth - 16) & ",632"
+   set the dontWrap of field "uiFooter" to true
 
    set the behavior of stack kWindow to the long id of stack kWindowBehavior
    unlock messages
    set the defaultStack to tOldDefault
    unlock screen
 end xtaBuildWindow
+
+-- What the footer says: what the assistant may do to the user's stacks
+private function xtaFooterText
+   if xtaBuildOn() then
+      return "Nothing changes or runs until you say yes, and Undo takes it back."
+   end if
+   return "The model reads and answers: it cannot change your stacks."
+end xtaFooterText
+
+--------------------------------------------------------------------------------
+-- The suite's look
+--
+-- The xTalk Suite's UI kit v2 (tools/ui-kit.livecodescript), its builders
+-- matched by value and named xtaUi...: each makes a control of the
+-- defaultStack, which is the window being built, as the kit's do. Labels
+-- here also take no focus (traversalOn false), since these windows are
+-- the IDE's and Tab should go from field to field.
+
+-- The platform's own mono face
+private function xtaUiMonoFont
+   if the platform is "MacOS" then
+      return "Menlo"
+   else if the platform is "Win32" then
+      return "Consolas"
+   end if
+   return "DejaVu Sans Mono"
+end xtaUiMonoFont
+
+-- The page, the accent band with the title, and the status line under it
+-- (field "Status", which xtaStatus and the dialogs write)
+private command xtaUiChrome pTitle, pWidth, pHeight
+   local tHeight
+   set the width of this stack to pWidth
+   set the height of this stack to pHeight
+   set the backgroundColor of this card to kUiBg
+   set the title of this stack to pTitle
+   xtaUiGfx "uiBand", "0,0," & pWidth & comma & kUiBand
+   set the style of graphic "uiBand" to "rectangle"
+   set the filled of graphic "uiBand" to true
+   set the backgroundColor of graphic "uiBand" to kUiAccent
+   set the lineSize of graphic "uiBand" to 0
+   xtaUiLabel "uiTitle", "  " & pTitle, "0,0," & pWidth & comma & kUiBand, 15
+   set the foregroundColor of field "uiTitle" to kUiAccentText
+   set the textStyle of field "uiTitle" to "bold"
+   set the dontWrap of field "uiTitle" to true
+   -- Centered on the band by its measured height, as the kit does
+   put the formattedHeight of field "uiTitle" into tHeight
+   if tHeight > 0 and tHeight < kUiBand then
+      set the height of field "uiTitle" to tHeight
+      set the top of field "uiTitle" to (kUiBand - tHeight) div 2
+   end if
+   xtaUiLabel "Status", empty, "16," & (kUiBand + 4) & comma & (pWidth - 16) & comma & (kUiBand + 22), 11
+   set the dontWrap of field "Status" to true
+   set the foregroundColor of field "Status" to kUiInkSoft
+end xtaUiChrome
+
+-- A caption at a fixed rect
+private command xtaUiLabel pName, pText, pRect, pSize
+   if there is not a field pName then
+      create field pName
+   end if
+   set the rect of field pName to pRect
+   set the lockText of field pName to true
+   set the traversalOn of field pName to false
+   set the borderWidth of field pName to 0
+   set the opaque of field pName to false
+   set the threeD of field pName to false
+   set the textSize of field pName to pSize
+   set the foregroundColor of field pName to kUiInk
+   put pText into field pName
+end xtaUiLabel
+
+-- A caption fit to the height of its text, its top where pRect says
+private command xtaUiWrap pName, pText, pRect, pSize
+   local tHeight
+   xtaUiLabel pName, pText, pRect, pSize
+   if pText is not empty then
+      put the formattedHeight of field pName into tHeight
+      if tHeight > 0 then
+         set the height of field pName to tHeight
+         set the top of field pName to item 2 of pRect
+      end if
+   end if
+end xtaUiWrap
+
+-- A small, muted caption
+private command xtaUiCap pName, pText, pRect
+   xtaUiWrap pName, pText, pRect, 10
+   set the foregroundColor of field pName to kUiMuted
+end xtaUiCap
+
+-- A numbered section's header, with a hairline under it
+private command xtaUiSection pName, pText, pRect
+   local tBottom
+   xtaUiWrap pName, pText, pRect, 13
+   set the textStyle of field pName to "bold"
+   put the bottom of field pName into tBottom
+   xtaUiGfx pName & "Line", (item 1 of pRect) & comma & (tBottom + 1) & comma & (item 3 of pRect) & comma & (tBottom + 2)
+   set the style of graphic (pName & "Line") to "rectangle"
+   set the filled of graphic (pName & "Line") to true
+   set the backgroundColor of graphic (pName & "Line") to kUiCardLine
+   set the lineSize of graphic (pName & "Line") to 0
+end xtaUiSection
+
+-- An entry field: flat, a hairline border, the mono face
+private command xtaUiInput pName, pRect
+   if there is not a field pName then
+      create field pName
+   end if
+   set the rect of field pName to pRect
+   set the lockText of field pName to false
+   set the traversalOn of field pName to true
+   set the threeD of field pName to false
+   set the borderWidth of field pName to 1
+   set the borderColor of field pName to kUiFieldLine
+   set the opaque of field pName to true
+   set the backgroundColor of field pName to kUiCard
+   set the margins of field pName to "6,6,6,6"
+   set the textSize of field pName to 11
+   set the textFont of field pName to xtaUiMonoFont()
+end xtaUiInput
+
+-- A read-only area for code and data: mono, flat, scrolling
+private command xtaUiArea pName, pRect
+   if there is not a field pName then
+      create field pName
+   end if
+   set the rect of field pName to pRect
+   set the lockText of field pName to true
+   set the traversalOn of field pName to false
+   set the threeD of field pName to false
+   set the borderWidth of field pName to 1
+   set the borderColor of field pName to kUiCardLine
+   set the opaque of field pName to true
+   set the backgroundColor of field pName to kUiCard
+   set the margins of field pName to "6,6,6,6"
+   set the vScrollbar of field pName to true
+   set the textSize of field pName to 10
+   set the textFont of field pName to xtaUiMonoFont()
+end xtaUiArea
+
+private command xtaUiGfx pName, pRect
+   if there is not a graphic pName then
+      create graphic pName
+   end if
+   set the rect of graphic pName to pRect
+   set the style of graphic pName to "roundRect"
+   set the antialiased of graphic pName to true
+end xtaUiGfx
+
+-- A panel: white, rounded, a hairline and a soft shadow (an engine
+-- without shadows shows the hairline alone)
+private command xtaUiPanel pName, pRect
+   local tShadow, tError
+   xtaUiGfx pName, pRect
+   set the roundRadius of graphic pName to 14
+   set the filled of graphic pName to true
+   set the backgroundColor of graphic pName to kUiCard
+   set the lineSize of graphic pName to 1
+   set the foregroundColor of graphic pName to kUiCardLine
+   set the borderColor of graphic pName to kUiCardLine
+   try
+      put "90,98,114" into tShadow["color"]
+      put 30 into tShadow["opacity"]
+      put 10 into tShadow["size"]
+      put 0 into tShadow["spread"]
+      put 2 into tShadow["distance"]
+      put 90 into tShadow["angle"]
+      set the dropShadow of graphic pName to tShadow
+   catch tError
+   end try
+end xtaUiPanel
+
+-- A pill: a rounded chip (graphic pName & "Bg") and its label (field
+-- pName), colored by xtaSetPill
+private command xtaUiPill pName, pRect
+   local tTop, tBottom, tHeight
+   put item 2 of pRect into tTop
+   put item 4 of pRect into tBottom
+   xtaUiGfx pName & "Bg", pRect
+   set the roundRadius of graphic (pName & "Bg") to tBottom - tTop
+   set the filled of graphic (pName & "Bg") to true
+   set the lineSize of graphic (pName & "Bg") to 0
+   xtaUiLabel pName, "Ready", pRect, 10
+   set the textAlign of field pName to "center"
+   set the dontWrap of field pName to true
+   -- Centered on the chip by its measured height
+   put the formattedHeight of field pName into tHeight
+   if tHeight > 0 and tHeight < tBottom - tTop then
+      set the height of field pName to tHeight
+      set the top of field pName to tTop + ((tBottom - tTop - tHeight) div 2)
+   end if
+end xtaUiPill
+
+-- A footer: italic, muted
+private command xtaUiFooter pText, pRect
+   xtaUiLabel "uiFooter", pText, pRect, 11
+   set the textStyle of field "uiFooter" to "italic"
+   set the foregroundColor of field "uiFooter" to kUiMuted
+end xtaUiFooter
 
 private function xtaProviderNames
    local tList, tProvider
@@ -469,6 +785,7 @@ private command xtaRefreshWindow
    set the label of button "Model" of stack kWindow to xtaModel(tProvider)
    set the hilite of button "Include" of stack kWindow to (revIDEGetPreference(kPrefIncludeScript) is not false)
    set the text of button "More" of stack kWindow to xtaMoreMenuText()
+   set the text of field "uiFooter" of stack kWindow to xtaFooterText()
    unlock messages
    xtaShowConversation
    xtaUpdateButtons
@@ -495,27 +812,100 @@ private command xtaUpdateButtons
    end if
    set the enabled of button "Models" of stack kWindow to (sBusy is not true)
    set the enabled of button "Insert" of stack kWindow to (sBusy is not true and the number of elements of sLastCode > 0)
+   xtaPaintPill
 end xtaUpdateButtons
 
+-- The pill at the right of the band says what the assistant is doing:
+-- waiting for the user's answer in the bar, working on a question, without
+-- a key, or ready
+private command xtaPaintPill
+   local tProvider
+   if there is not a stack kWindow then
+      exit xtaPaintPill
+   end if
+   put xtaProvider() into tProvider
+   if sAsk["kind"] is not empty then
+      xtaSetPill "Needs you", "wait"
+   else if sBusy is true then
+      xtaSetPill "Working", "wait"
+   else if xtaKey(tProvider) is empty and xtaBaseUrl(tProvider) is empty then
+      xtaSetPill "No key", "bad"
+   else
+      xtaSetPill "Ready", "ok"
+   end if
+end xtaPaintPill
+
+-- The kit's pill colors, by kind: ok green, wait amber, bad red, and
+-- otherwise the muted blue of the band
+private command xtaSetPill pText, pKind
+   local tGround, tInk
+   switch pKind
+      case "ok"
+         put "205,240,214" into tGround
+         put "22,101,52" into tInk
+         break
+      case "wait"
+         put "250,240,199" into tGround
+         put "133,98,14" into tInk
+         break
+      case "bad"
+         put "243,215,213" into tGround
+         put "135,44,38" into tInk
+         break
+      default
+         put "31,64,116" into tGround
+         put kUiAccentSub into tInk
+   end switch
+   lock messages
+   set the backgroundColor of graphic "PillBg" of stack kWindow to tGround
+   set the text of field "Pill" of stack kWindow to pText
+   set the foregroundColor of field "Pill" of stack kWindow to tInk
+   unlock messages
+end xtaSetPill
+
 -- The items of the More menu; the short guide's is ticked while it is used
--- (and with it no tools are sent, which small models mistake)
+-- (and with it no tools are sent, which small models mistake), and Undo
+-- All Changes is there while something the assistant did can be undone
 private function xtaMoreMenuText
-   local tShort
+   local tShort, tUndo
    if revIDEGetPreference(kPrefShortGuide) is true then
       put "!c" into tShort
    else
       put "!n" into tShort
    end if
+   if xtaAppliedCount() is 0 then
+      put "(" into tUndo
+   end if
    return "Settings..." & return & "Set API Key..." & return & "Forget API Key" & return & "-" & return & \
-         "Explain the Last Error" & return & "Memory..." & return & \
+         "Explain the Last Error" & return & tUndo & "Undo All Changes..." & return & "Memory..." & return & \
          tShort & "Short Guide, No Tools (for small local models)" & return & "-" & return & \
          "Turn Off xTalk Assistant"
 end xtaMoreMenuText
 
-private command xtaStatus pText
-   if there is a stack kWindow then
-      set the text of field "Status" of stack kWindow to pText
+-- The status line, colored as the kit colors it: pKind "ok" green, "warn"
+-- amber, "bad" red, anything else the soft ink
+private command xtaStatus pText, pKind
+   local tColor
+   if there is not a stack kWindow then
+      exit xtaStatus
    end if
+   switch pKind
+      case "ok"
+         put kUiOk into tColor
+         break
+      case "warn"
+         put kUiWarn into tColor
+         break
+      case "bad"
+         put kUiBad into tColor
+         break
+      default
+         put kUiInkSoft into tColor
+   end switch
+   lock messages
+   set the text of field "Status" of stack kWindow to pText
+   set the foregroundColor of field "Status" of stack kWindow to tColor
+   unlock messages
 end xtaStatus
 
 private function xtaSettingsLine
@@ -535,30 +925,64 @@ private function xtaSettingsLine
    return tLine
 end xtaSettingsLine
 
--- The conversation, as the window shows it: who said it, in bold, then
--- what they said, the lines of code in the Script Editor's font. After an
--- answer, in italics, what the compile check found, and each note the
--- answer proposes to remember, with Remember and Dismiss as links (the
--- answer's memory block itself is not shown). A compile check sent back
--- to the model shows as a turn of its own; what the model's tools did, as
--- a line each in italics.
+-- The conversation, as the window shows it: who said it, in bold in the
+-- accent, then what they said, code on the code ground in the Script
+-- Editor's font (else the platform's mono face). After an answer, in
+-- italics, what the compile check found, and each note the answer
+-- proposes to remember, with Remember and Dismiss as links (the answer's
+-- memory block itself is not shown). A compile check sent back to the
+-- model shows as a turn of its own; what the model's tools did, as a line
+-- each in italics, with Undo after changes it made and runs on a stack
+-- (and under changes, what they were).
 private command xtaShowConversation
    local tText, tIndex, tLine, tInCode, tFont, tLineNumber, tLabelLines, tItalicLines
-   local tLinks, tLink, tNote, tCount, tWords, tBody, tCall, tSummary
+   local tLinks, tLink, tNote, tCount, tWords, tBody, tCall, tSummary, tResult, tEntry
+   local tStates, tEntries, tUndoLinks, tShown, tMore
    if there is not a stack kWindow then
       exit xtaShowConversation
    end if
+   -- What became of what the tools changed: applied or undone, by entry
+   if xtaBuildLoaded() then
+      put xtaBuildEntries() into tEntries
+      repeat with tIndex = 1 to the number of elements of tEntries
+         put tEntries[tIndex]["state"] into tStates[tEntries[tIndex]["number"]]
+      end repeat
+   end if
    -- The line numbers of the labels and of the italic lines, so that a line
    -- of an answer that reads the same is not taken for one; and for each
-   -- note's line, its links ("line,turn,note")
+   -- note's line, its links ("line,turn,note"), and for each line that can
+   -- be undone, its entry ("line,entry")
    put 0 into tCount
    repeat with tIndex = 1 to the number of elements of sTurns
       if sTurns[tIndex]["kind"] is "tools" then
          repeat with tCall = 1 to the number of elements of sTurns[tIndex]["results"]
-            put sTurns[tIndex]["results"][tCall]["summary"] into tSummary
+            put sTurns[tIndex]["results"][tCall] into tResult
+            put tResult["summary"] into tSummary
             replace return with space in tSummary
+            put tResult["entry"] into tEntry
+            if tEntry is not empty then
+               if tStates[tEntry] is "applied" then
+                  put "    Undo" after tSummary
+                  put tCount + 1 & comma & tEntry & return after tUndoLinks
+               else if tStates[tEntry] is "undone" then
+                  put "    (undone)" after tSummary
+               end if
+            end if
             put tCount + 1 & comma after tItalicLines
             xtaAddLines tText, tCount, tSummary
+            -- What a batch changed, a line each (the first few)
+            put 0 into tShown
+            repeat for each line tLine in tResult["lines"]
+               add 1 to tShown
+               if tShown > kShownChanges then
+                  put the number of lines of tResult["lines"] - kShownChanges into tMore
+                  put tCount + 1 & comma after tItalicLines
+                  xtaAddLines tText, tCount, "      ... and" && tMore && "more"
+                  exit repeat
+               end if
+               put tCount + 1 & comma after tItalicLines
+               xtaAddLines tText, tCount, "      " & tLine
+            end repeat
          end repeat
          xtaAddLines tText, tCount, empty
          next repeat
@@ -611,27 +1035,39 @@ private command xtaShowConversation
       xtaAddLines tText, tCount, empty
    end repeat
    lock screen
+   lock messages
    set the text of field "Conversation" of stack kWindow to tText
    put revIDEGetPreference("cScriptEditor,editor,font") into tFont
+   if tFont is empty then
+      put xtaUiMonoFont() into tFont
+   end if
    put false into tInCode
    put 0 into tLineNumber
    repeat for each line tLine in tText
       add 1 to tLineNumber
       if tLineNumber is among the items of tLabelLines then
          set the textStyle of line tLineNumber of field "Conversation" of stack kWindow to "bold"
+         set the foregroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiAccent
          put false into tInCode
          next repeat
       end if
       if tLineNumber is among the items of tItalicLines then
          set the textStyle of line tLineNumber of field "Conversation" of stack kWindow to "italic"
+         set the foregroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiInkSoft
          next repeat
       end if
+      -- Code, with its fences, on the code ground (a line's backgroundColor
+      -- is its paragraph's, the width of the field)
       if word 1 to -1 of tLine begins with "```" then
+         set the textFont of line tLineNumber of field "Conversation" of stack kWindow to tFont
+         set the foregroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiMuted
+         set the backgroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiCodeBg
          put not tInCode into tInCode
          next repeat
       end if
-      if tInCode and tFont is not empty then
+      if tInCode then
          set the textFont of line tLineNumber of field "Conversation" of stack kWindow to tFont
+         set the backgroundColor of line tLineNumber of field "Conversation" of stack kWindow to kUiCodeBg
       end if
    end repeat
    -- The last two words of a note's line are its links
@@ -643,6 +1079,14 @@ private command xtaShowConversation
       set the textStyle of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "link"
       set the linkText of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "dismiss," & item 2 to 3 of tLink
    end repeat
+   -- And Undo, the last word of the line of what can be undone
+   repeat for each line tLink in tUndoLinks
+      put item 1 of tLink into tLineNumber
+      put the number of words of line tLineNumber of field "Conversation" of stack kWindow into tWords
+      set the textStyle of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "link"
+      set the linkText of word tWords of line tLineNumber of field "Conversation" of stack kWindow to "undo," & item 2 of tLink
+   end repeat
+   unlock messages
    set the vScroll of field "Conversation" of stack kWindow to the formattedHeight of field "Conversation" of stack kWindow
    unlock screen
 end xtaShowConversation
@@ -758,6 +1202,9 @@ on xtaMoreMenuPick pItem
       case "Explain the Last Error"
          xtaExplainLastError
          break
+      case "Undo All Changes..."
+         xtaUndoAll
+         break
       case "Memory..."
          xtaEditMemory
          break
@@ -846,99 +1293,107 @@ private command xtaSettingsDialog pFocus
    end if
 end xtaSettingsDialog
 
--- Builds the dialog, invisible: a stack made here, as the window is
+-- Builds the dialog, invisible: a stack made here, as the window is, in
+-- the suite's look: the band, then what Save and Get Models found on the
+-- status line (field "Result", two lines high, since a provider's refusal
+-- can be long), then numbered sections. It fits a 720p screen.
 private command xtaBuildSettings
    local tOldDefault, tTop, tLeft, tRight, tWidth
    put the defaultStack into tOldDefault
-   put 620 into tWidth
-   put 170 into tLeft
-   put tWidth - 12 into tRight
+   put kSettingsWidth into tWidth
+   put 168 into tLeft
+   put tWidth - 16 into tRight
    lock screen
    lock messages
    create invisible stack kSettingsWindow
    set the defaultStack to kSettingsWindow
-   set the title of stack kSettingsWindow to kTitle && "Settings"
-   set the width of stack kSettingsWindow to tWidth
    set the resizable of stack kSettingsWindow to false
    set the destroyStack of stack kSettingsWindow to true
+   xtaUiChrome kTitle && "Settings", tWidth, 600
+   set the name of field "Status" to "Result"
+   set the rect of field "Result" to 16, kUiBand + 4, tRight, kUiBand + 34
+   set the dontWrap of field "Result" to false
 
-   put 12 into tTop
-   xtaSettingsLabel "Provider:", tTop
+   put 70 into tTop
+   xtaSettingsSection "Section1", "1  Provider and key", tTop
+   xtaSettingsLabel "Provider", tTop
    create button "Provider"
    set the style of button "Provider" to "menu"
    set the menuMode of button "Provider" to "option"
    set the text of button "Provider" to xtaProviderNames()
-   set the rect of button "Provider" to tLeft, tTop, tLeft + 160, tTop + 23
+   set the rect of button "Provider" to tLeft, tTop, tLeft + 180, tTop + 24
 
-   add 32 to tTop
-   xtaSettingsLabel "API key:", tTop
+   add 30 to tTop
+   xtaSettingsLabel "API key", tTop
    xtaSettingsField "Key", tLeft, tTop, tRight - 108
    set the tooltip of field "Key" to "Type or paste the API key"
    create button "Forget Key"
-   set the rect of button "Forget Key" to tRight - 100, tTop, tRight, tTop + 23
+   set the rect of button "Forget Key" to tRight - 100, tTop, tRight, tTop + 24
    set the tooltip of button "Forget Key" to "Forget the key typed for this provider"
-   add 27 to tTop
-   xtaSettingsNote "Key Note", tLeft, tTop, tRight, 32
+   add 25 to tTop
+   xtaSettingsNote "Key Note", tLeft, tTop, tRight, 31
 
-   add 36 to tTop
-   xtaSettingsLabel "Base URL:", tTop
+   add 35 to tTop
+   xtaSettingsLabel "Base URL", tTop
    xtaSettingsField "Base URL", tLeft, tTop, tRight
-   add 27 to tTop
-   xtaSettingsNote "Base URL Note", tLeft, tTop, tRight, 32
+   add 25 to tTop
+   xtaSettingsNote "Base URL Note", tLeft, tTop, tRight, 31
 
-   add 36 to tTop
-   xtaSettingsLabel "Model:", tTop
+   add 35 to tTop
+   xtaSettingsSection "Section2", "2  Model", tTop
+   xtaSettingsLabel "Model", tTop
    create button "Model"
    set the style of button "Model" to "menu"
    set the menuMode of button "Model" to "comboBox"
-   set the rect of button "Model" to tLeft, tTop, tRight - 108, tTop + 23
+   set the rect of button "Model" to tLeft, tTop, tRight - 108, tTop + 24
    set the tooltip of button "Model" to "Choose a model, or type its name"
    create button "Get Models"
-   set the rect of button "Get Models" to tRight - 100, tTop, tRight, tTop + 23
+   set the rect of button "Get Models" to tRight - 100, tTop, tRight, tTop + 24
    set the tooltip of button "Get Models" to "Ask the provider for its models (this also tries the key)"
-   add 27 to tTop
-   xtaSettingsNote "Model Note", tLeft, tTop, tRight, 32
+   add 25 to tTop
+   xtaSettingsNote "Model Note", tLeft, tTop, tRight, 31
    put "Choose a model or type its name. Get Models asks the provider for all of them, and tells you whether the key works." \
          into field "Model Note"
 
-   add 36 to tTop
-   xtaSettingsLabel "Longest answer:", tTop
+   add 35 to tTop
+   xtaSettingsSection "Section3", "3  Answers", tTop
+   xtaSettingsLabel "Longest answer", tTop
    xtaSettingsField "Max Tokens", tLeft, tTop, tLeft + 80
    xtaSettingsNote "Max Tokens Note", tLeft + 88, tTop + 2, tRight, 20
    put "tokens (empty: 4096 for Anthropic; OpenAI's model decides)" into field "Max Tokens Note"
 
    add 30 to tTop
-   xtaSettingsLabel "Fix rounds:", tTop
+   xtaSettingsLabel "Fix rounds", tTop
    xtaSettingsField "Fix Rounds", tLeft, tTop, tLeft + 80
    xtaSettingsNote "Fix Rounds Note", tLeft + 88, tTop + 2, tRight, 20
    put "0 to" && kMaxFixRounds & ": tries to correct code that does not compile" into field "Fix Rounds Note"
 
    add 30 to tTop
-   xtaSettingsLabel "Wait for an answer:", tTop
+   xtaSettingsLabel "Wait for an answer", tTop
    xtaSettingsField "Timeout", tLeft, tTop, tLeft + 80
    xtaSettingsNote "Timeout Note", tLeft + 88, tTop + 2, tRight, 20
    put "seconds (" & kMinTimeout && "to" && kMaxTimeout & "; empty:" && kDefaultTimeout & ")" into field "Timeout Note"
 
    add 34 to tTop
+   xtaSettingsSection "Section4", "4  What the model may do", tTop
    xtaSettingsCheckbox "Include", "Send the open script with each question", tLeft, tTop, tRight
    set the tooltip of button "Include" to "Send the script open in the Script Editor with each question"
-   add 24 to tTop
-   xtaSettingsCheckbox "Tools", "Let the model look things up and check its code", tLeft, tTop, tRight
-   set the tooltip of button "Tools" to "The Dictionary, a compile check, your stack (when you allow it) and the last error"
-   add 24 to tTop
+   add 22 to tTop
+   xtaSettingsCheckbox "Tools", "Let the model look things up, check its code and read your stack", tLeft, tTop, tRight
+   set the tooltip of button "Tools" to "The Dictionary, a compile check, your stack and a paused script (when you allow it), and the last error"
+   add 22 to tTop
+   xtaSettingsCheckbox "Build", "Let the model change your stacks and run code (it asks you first)", tLeft, tTop, tRight
+   set the tooltip of button "Build" to "Changes you apply or not, and code you let run; Undo takes them back"
+   add 22 to tTop
    xtaSettingsCheckbox "Short Guide", "Short guide, no tools (for small local models)", tLeft, tTop, tRight
 
-   add 32 to tTop
-   xtaSettingsNote "Result", 12, tTop, tRight, 36
-   set the textSize of field "Result" to empty
-
-   add 44 to tTop
+   add 34 to tTop
    create button "Cancel"
-   set the rect of button "Cancel" to tRight - 196, tTop, tRight - 108, tTop + 23
+   set the rect of button "Cancel" to tRight - 196, tTop, tRight - 106, tTop + 24
    create button "Save"
-   set the rect of button "Save" to tRight - 100, tTop, tRight, tTop + 23
+   set the rect of button "Save" to tRight - 98, tTop, tRight, tTop + 24
    set the default of button "Save" to true
-   set the height of stack kSettingsWindow to tTop + 23 + 16
+   set the height of stack kSettingsWindow to tTop + 24 + 16
 
    set the behavior of stack kSettingsWindow to the long id of stack kSettingsBehavior
    unlock messages
@@ -946,48 +1401,44 @@ private command xtaBuildSettings
    unlock screen
 end xtaBuildSettings
 
--- A label at the left of a row of the dialog (the dialog is the
--- defaultStack while it is built)
+-- A numbered section's header at xTop, which then is where its first row
+-- goes (the dialog is the defaultStack while it is built)
+private command xtaSettingsSection pName, pText, @xTop
+   xtaSettingsSectionIn pName, pText, xTop, kSettingsWidth
+   add 2 to xTop
+end xtaSettingsSection
+
+-- A label at the left of a row
 private command xtaSettingsLabel pText, pTop
-   local tField
-   create field
-   put it into tField
-   set the lockText of tField to true
-   set the traversalOn of tField to false
-   set the showBorder of tField to false
-   set the opaque of tField to false
-   set the dontWrap of tField to true
-   set the textAlign of tField to "right"
-   set the rect of tField to 8, pTop + 2, 162, pTop + 22
-   set the text of tField to pText
+   xtaUiLabel "Label" && pText, pText, "16," & (pTop + 4) & ",158," & (pTop + 20), 11
+   set the textAlign of field ("Label" && pText) to "right"
+   set the dontWrap of field ("Label" && pText) to true
 end xtaSettingsLabel
 
+-- A one-line entry field
 private command xtaSettingsField pName, pLeft, pTop, pRight
-   create field pName
+   xtaUiInput pName, pLeft & comma & pTop & comma & pRight & comma & (pTop + 24)
    set the dontWrap of field pName to true
-   set the threeD of field pName to false
    set the autoTab of field pName to false
-   set the margins of field pName to 3
-   set the rect of field pName to pLeft, pTop, pRight, pTop + 23
 end xtaSettingsField
 
--- Small text that explains the row above it, or says what happened
+-- Small text that explains the row above it (or beside it, one line).
+-- The top margin is 4: with less, the engine clips the tops of the first
+-- line's letters; and the margins are given as four numbers, the form
+-- the suite's kit found OXT keeps.
 private command xtaSettingsNote pName, pLeft, pTop, pRight, pHeight
-   create field pName
-   set the lockText of field pName to true
-   set the traversalOn of field pName to false
-   set the showBorder of field pName to false
-   set the opaque of field pName to false
-   set the dontWrap of field pName to (pHeight < 30)
-   set the margins of field pName to 1
-   set the textSize of field pName to 11
-   set the rect of field pName to pLeft, pTop, pRight, pTop + pHeight
+   xtaUiLabel pName, empty, pLeft & comma & pTop & comma & pRight & comma & (pTop + pHeight), 10
+   set the foregroundColor of field pName to kUiMuted
+   set the dontWrap of field pName to (pHeight < 24)
+   set the margins of field pName to "1,4,1,1"
 end xtaSettingsNote
 
 private command xtaSettingsCheckbox pName, pLabel, pLeft, pTop, pRight
    create button pName
    set the style of button pName to "checkbox"
+   set the hiliteBorder of button pName to false
    set the label of button pName to pLabel
+   set the foregroundColor of button pName to kUiInk
    set the rect of button pName to pLeft, pTop, pRight, pTop + 20
 end xtaSettingsCheckbox
 
@@ -1021,17 +1472,54 @@ private command xtaFillSettings pProvider, pAll
       put " For a local server with OpenAI's API, for example http://localhost:11434/v1 (Ollama), which may need no key." after tNote
    end if
    put tNote into field "Base URL Note" of stack kSettingsWindow
-   put empty into field "Result" of stack kSettingsWindow
+   xtaSettingsResult empty
    if pAll then
       put revIDEGetPreference(kPrefMaxTokens) into field "Max Tokens" of stack kSettingsWindow
       put xtaFixRounds() into field "Fix Rounds" of stack kSettingsWindow
       put revIDEGetPreference(kPrefTimeout) into field "Timeout" of stack kSettingsWindow
       set the hilite of button "Include" of stack kSettingsWindow to (revIDEGetPreference(kPrefIncludeScript) is not false)
-      set the hilite of button "Tools" of stack kSettingsWindow to xtaToolsOn()
+      set the hilite of button "Tools" of stack kSettingsWindow to (revIDEGetPreference(kPrefTools) is not false)
+      set the hilite of button "Build" of stack kSettingsWindow to (revIDEGetPreference(kPrefBuild) is not false)
       set the hilite of button "Short Guide" of stack kSettingsWindow to (revIDEGetPreference(kPrefShortGuide) is true)
    end if
    unlock messages
+   xtaSettingsSwitches
 end xtaFillSettings
+
+-- The switches that do something with the others as they are: the tools
+-- not with the short guide, and changing stacks only with the tools
+on xtaSettingsSwitches
+   local tTools
+   if there is not a stack kSettingsWindow then
+      exit xtaSettingsSwitches
+   end if
+   put not the hilite of button "Short Guide" of stack kSettingsWindow into tTools
+   set the enabled of button "Tools" of stack kSettingsWindow to tTools
+   set the enabled of button "Build" of stack kSettingsWindow to (tTools and the hilite of button "Tools" of stack kSettingsWindow)
+end xtaSettingsSwitches
+
+-- What the dialog says on its status line (what Save and Get Models
+-- found), colored as the kit colors the status line
+private command xtaSettingsResult pText, pKind
+   local tColor
+   switch pKind
+      case "ok"
+         put kUiOk into tColor
+         break
+      case "warn"
+         put kUiWarn into tColor
+         break
+      case "bad"
+         put kUiBad into tColor
+         break
+      default
+         put kUiInkSoft into tColor
+   end switch
+   lock messages
+   set the text of field "Result" of stack kSettingsWindow to pText
+   set the foregroundColor of field "Result" of stack kSettingsWindow to tColor
+   unlock messages
+end xtaSettingsResult
 
 -- What the dialog says about pProvider's key. Only its last four
 -- characters are ever shown.
@@ -1089,7 +1577,7 @@ on xtaSettingsForgetKey
    put empty into sDrafts[sSettingsProvider]["key"]
    put empty into field "Key" of stack kSettingsWindow
    put xtaKeyNote(sSettingsProvider) into field "Key Note" of stack kSettingsWindow
-   put "The key is forgotten." into field "Result" of stack kSettingsWindow
+   xtaSettingsResult "The key is forgotten.", "ok"
 end xtaSettingsForgetKey
 
 -- Get Models: the provider's list, asked with what is in the dialog
@@ -1102,7 +1590,7 @@ on xtaSettingsGetModels
    xtaKeepDraft tProvider
    put xtaSettingsChecked() into tSettings
    if tSettings["error"] is not empty then
-      put tSettings["error"] into field "Result" of stack kSettingsWindow
+      xtaSettingsResult tSettings["error"], "bad"
       exit xtaSettingsGetModels
    end if
    put tProvider into tSettings["provider"]
@@ -1112,10 +1600,10 @@ on xtaSettingsGetModels
       put xtaKey(tProvider) into tSettings["key"]
    end if
    if tSettings["key"] is empty and tSettings["baseUrl"] is empty then
-      put "Paste the API key first." into field "Result" of stack kSettingsWindow
+      xtaSettingsResult "Paste the API key first.", "warn"
       exit xtaSettingsGetModels
    end if
-   put "Asking" && xtaProviderName(tProvider) && "for its models..." into field "Result" of stack kSettingsWindow
+   xtaSettingsResult "Asking" && xtaProviderName(tProvider) && "for its models..."
    set the enabled of button "Get Models" of stack kSettingsWindow to false
    put xtaListModels(tSettings) into tResult
    put empty into tSettings
@@ -1128,7 +1616,7 @@ on xtaSettingsGetModels
       exit xtaSettingsGetModels
    end if
    if tResult["error"] is not empty then
-      put "That did not work:" && tResult["error"] into field "Result" of stack kSettingsWindow
+      xtaSettingsResult "That did not work:" && tResult["error"], "bad"
       exit xtaSettingsGetModels
    end if
    put xtaModelMenu(tProvider, tResult["models"]) into tMenu
@@ -1140,7 +1628,7 @@ on xtaSettingsGetModels
       set the label of button "Model" of stack kSettingsWindow to tResult["default"]
    end if
    unlock messages
-   put xtaProviderName(tProvider) && "listed" && tCount && "models, so it takes the key. Choose one, then Save." into field "Result" of stack kSettingsWindow
+   xtaSettingsResult xtaProviderName(tProvider) && "listed" && tCount && "models, so it takes the key. Choose one, then Save.", "ok"
 end xtaSettingsGetModels
 
 -- What the dialog holds, checked: "drafts" (by provider: "key", "baseUrl"
@@ -1203,7 +1691,7 @@ on xtaSettingsSave
    xtaKeepDraft tProvider
    put xtaSettingsChecked() into tChecked
    if tChecked["error"] is not empty then
-      put tChecked["error"] into field "Result" of stack kSettingsWindow
+      xtaSettingsResult tChecked["error"], "bad"
       exit xtaSettingsSave
    end if
    put false into sSettingsFetch
@@ -1247,6 +1735,7 @@ on xtaSettingsSave
    revIDESetPreference kPrefTimeout, tChecked["timeout"]
    revIDESetPreference kPrefIncludeScript, the hilite of button "Include" of stack kSettingsWindow
    revIDESetPreference kPrefTools, the hilite of button "Tools" of stack kSettingsWindow
+   revIDESetPreference kPrefBuild, the hilite of button "Build" of stack kSettingsWindow
    revIDESetPreference kPrefShortGuide, the hilite of button "Short Guide" of stack kSettingsWindow
    put empty into tChecked
    put true into sSettingsSaved
@@ -1589,60 +2078,62 @@ end xtaEditMemory
 -- Shows the memory's notes in a modal window, and returns what the user
 -- chose ("choice": "save", "forget" or "cancel") and the notes as they
 -- left them ("you", "stack"). The window is made here, like the
--- assistant's, and deleted when it closes.
+-- assistant's and in its look, and deleted when it closes.
 private function xtaMemoryDialog pWork, pYou, pStackNotes
-   local tOldDefault, tResult, tScript
+   local tOldDefault, tResult, tScript, tTop, tRight
    if there is a stack kMemoryWindow then
       delete stack kMemoryWindow
    end if
+   put kMemoryWidth - 16 into tRight
    put the defaultStack into tOldDefault
    lock screen
    lock messages
    create invisible stack kMemoryWindow
    set the defaultStack to kMemoryWindow
-   set the title of stack kMemoryWindow to kTitle && "Memory"
-   set the width of stack kMemoryWindow to 460
-   set the height of stack kMemoryWindow to 440
    set the resizable of stack kMemoryWindow to false
    set the _ideoverride of stack kMemoryWindow to true
+   xtaUiChrome kTitle && "Memory", kMemoryWidth, 480
+   put "The notes go to the provider with every question. Notes that look like a key or a password are refused." into field "Status"
+   set the dontWrap of field "Status" to false
+   set the rect of field "Status" to 16, kUiBand + 4, tRight, kUiBand + 34
 
-   create field "YouLabel"
-   xtaMakeLabel the long id of field "YouLabel"
-   put "About you, for every stack: one note per line. The notes go to the provider with every question." into field "YouLabel"
-   set the rect of field "YouLabel" to 12, 8, 448, 44
-   create field "You"
-   xtaMakeNotesField the long id of field "You"
-   set the rect of field "You" to 12, 48, 448, 176
+   put 72 into tTop
+   xtaSettingsSectionIn "Section1", "1  About you", tTop, kMemoryWidth
+   xtaUiCap "YouLabel", "For every stack: one note per line.", "16," & tTop & comma & tRight & comma & (tTop + 16)
+   put (the bottom of field "YouLabel") + 6 into tTop
+   xtaMemoryNotesField "You", 16, tTop, tRight, tTop + 112
    put pYou into field "You"
 
-   create field "StackLabel"
-   xtaMakeLabel the long id of field "StackLabel"
-   set the rect of field "StackLabel" to 12, 188, 448, 224
-   create field "Stack"
-   xtaMakeNotesField the long id of field "Stack"
-   set the rect of field "Stack" to 12, 228, 448, 356
+   put tTop + 124 into tTop
+   xtaSettingsSectionIn "Section2", "2  About this stack", tTop, kMemoryWidth
+   xtaUiCap "StackLabel", empty, "16," & tTop & comma & tRight & comma & (tTop + 28)
+   set the height of field "StackLabel" to 28
+   xtaMemoryNotesField "Stack", 16, tTop + 32, tRight, tTop + 144
    if pWork["path"] is empty then
-      put "About a stack: open a saved stack, or save this one, to keep notes about it." into field "StackLabel"
+      put "Open a saved stack, or save this one, to keep notes about it." into field "StackLabel"
       set the lockText of field "Stack" to true
       set the enabled of field "Stack" to false
    else
-      put "About the stack" && quote & pWork["name"] & quote & ", kept with its file's path (never in the stack): one note per line." into field "StackLabel"
+      put "The stack" && quote & pWork["name"] & quote & ", kept with its file's path (never in the stack): one note per line." into field "StackLabel"
       put pStackNotes into field "Stack"
    end if
+   put tTop + 156 into tTop
 
    put "on mouseUp" & return & "   set the cXtaChoice of stack " & quote & kMemoryWindow & quote & " to " & quote & "[[choice]]" & quote & return & \
          "   close stack " & quote & kMemoryWindow & quote & return & "end mouseUp" into tScript
    create button "Forget"
    set the label of button "Forget" to "Forget All..."
-   set the rect of button "Forget" to 12, 396, 122, 420
+   set the rect of button "Forget" to 16, tTop, 126, tTop + 24
    set the script of button "Forget" to replaceText(tScript, "\[\[choice\]\]", "forget")
    create button "Cancel"
-   set the rect of button "Cancel" to 250, 396, 340, 420
+   set the rect of button "Cancel" to tRight - 188, tTop, tRight - 98, tTop + 24
    set the script of button "Cancel" to replaceText(tScript, "\[\[choice\]\]", "cancel")
    create button "Save"
-   set the rect of button "Save" to 358, 396, 448, 420
+   set the rect of button "Save" to tRight - 90, tTop, tRight, tTop + 24
    set the script of button "Save" to replaceText(tScript, "\[\[choice\]\]", "save")
    set the cXtaChoice of stack kMemoryWindow to "cancel"
+   xtaUiFooter "Kept in" && quote & kMemoryFile & quote & ", in the preferences folder.", "16," & (tTop + 32) & comma & tRight & comma & (tTop + 50)
+   set the height of stack kMemoryWindow to tTop + 58
 
    unlock messages
    set the defaultStack to tOldDefault
@@ -1666,37 +2157,40 @@ private function xtaMemoryDialog pWork, pYou, pStackNotes
    return tResult
 end xtaMemoryDialog
 
-private command xtaMakeLabel pField
-   set the lockText of pField to true
-   set the traversalOn of pField to false
-   set the opaque of pField to false
-   set the showBorder of pField to false
-   set the dontWrap of pField to false
-   -- Two lines of the IDE's text fit in the label's 36 pixels only without
-   -- the default margins
-   set the margins of pField to 0
-end xtaMakeLabel
+-- A numbered section's header at xTop in a window pWidth wide, which then
+-- is where what follows it goes
+private command xtaSettingsSectionIn pName, pText, @xTop, pWidth
+   xtaUiSection pName, pText, "16," & xTop & comma & (pWidth - 16) & comma & (xTop + 20)
+   put (the bottom of graphic (pName & "Line")) + 8 into xTop
+end xtaSettingsSectionIn
 
-private command xtaMakeNotesField pField
-   set the dontWrap of pField to false
-   set the vScrollbar of pField to true
-   set the threeD of pField to false
-   set the margins of pField to 4
-end xtaMakeNotesField
+-- A field of notes, one per line: an entry field of the kit's that wraps
+-- and scrolls
+private command xtaMemoryNotesField pName, pLeft, pTop, pRight, pBottom
+   xtaUiInput pName, pLeft & comma & pTop & comma & pRight & comma & pBottom
+   set the dontWrap of field pName to false
+   set the vScrollbar of field pName to true
+end xtaMemoryNotesField
 
 --------------------------------------------------------------------------------
 -- Tools
 --
--- What the model may ask the plugin to do while it answers. Each reads and
--- none changes anything: the Dictionary, a compile check, the user's stack
--- (which the user is asked to allow first, since its scripts then go to
--- the provider) and the last error the IDE showed the user. The core makes
--- what they read into text for the model.
+-- What the model may ask the plugin to do while it answers. Five read: the
+-- Dictionary, a compile check, the user's stack and where a script of
+-- theirs is paused in the debugger (which the user is asked to allow
+-- first, since their scripts then go to the provider), and the last error
+-- the IDE showed the user. The core makes what they read into text for the
+-- model. Two change or run something (xtalkassistant-build.livecodescript
+-- does both), and the window's bar asks the user first: make_changes, a
+-- batch of changes to a stack, which the user applies or not, every time;
+-- and run_code, code to run in a sandbox or on the user's stack, which the
+-- user can allow for the session, except code that reaches files, the
+-- network or other programs, which is asked about every time.
 
 -- The tools as xtaRequestBody takes them. A backquote in a schema stands
 -- for a double quote.
 private function xtaTools
-   local tTools
+   local tTools, tIndex
    put "lookup_dictionary" into tTools[1]["name"]
    put "Looks up an entry of the OXT-Beyond Dictionary: a command, function, property, message, keyword, constant or control structure of LiveCode Script " & \
          "(put, split, topStack, mouseUp, repeat...). Gives its syntax, parameters, description and examples. Look up what you are not sure exists " & \
@@ -1722,22 +2216,87 @@ private function xtaTools
    put "Gives the last error the IDE showed the user while the assistant was on: the engine's messages, the object and handler it was in, " & \
          "and the lines of the script around it. Use it when the user asks about an error they hit." into tTools[4]["description"]
    put "{`type`:`object`,`properties`:{}}" into tTools[4]["schema"]
-   replace "`" with quote in tTools[1]["schema"]
-   replace "`" with quote in tTools[2]["schema"]
-   replace "`" with quote in tTools[3]["schema"]
-   replace "`" with quote in tTools[4]["schema"]
+   put "debug_state" into tTools[5]["name"]
+   put "Reads where a script of the user's is paused in the debugger (at a breakpoint, or at an error with Script Debug Mode on): the line " & \
+         "and handler, the handlers that led there, their variables with their values, and the script around the line. Use it when the user " & \
+         "asks about a script that is paused. It only reads: stepping and going on are the user's, in the Script Editor. When nothing is " & \
+         "paused it says how the user can pause a script. The user is asked to allow it, as for read_stack." into tTools[5]["description"]
+   put "{`type`:`object`,`properties`:{}}" into tTools[5]["schema"]
+   put "make_changes" into tTools[6]["name"]
+   put "Changes the user's stack, as a batch the user sees and applies or not in the assistant's window: creates controls, cards or a new " & \
+         "stack; sets properties, custom properties and scripts; deletes controls or cards. Use it to build or correct what the user asks " & \
+         "for, rather than telling them how or giving them code to paste. The batch is checked first, and a mistake (a property the engine " & \
+         "does not have, a value it refuses, a script that does not compile) comes back to you with nothing changed, to correct and send " & \
+         "again. A batch is applied whole or not at all, with messages locked (none of the user's handlers runs), and the user can undo it. " & \
+         "The result gives the ids of what was created. Read the stack first (read_stack) to know its cards, ids and scripts. Each change " & \
+         "has an action: create (kind: button, default button, checkbox, radio button, option menu, pulldown menu, popup menu, combo box, " & \
+         "tab panel, field, text area, label, list field, table field, rectangle, round rectangle, oval, line, polygon, regular polygon, " & \
+         "curve, scrollbar, slider, progress bar, image, player, group, widget (give its widget_kind), card or stack; with name, rect, " & \
+         "properties, custom_properties, script, and ref, a word the later changes of the batch can use for it as object, card or group); " & \
+         "set (object, and properties, custom_properties or script); or delete (object: a control or a card). A new stack is the first " & \
+         "change of its batch, and the rest of the batch is in it; a new card goes after the current card. A script replaces the object's " & \
+         "whole script and is made of handlers. Properties are the engine's, by name; a list of numbers is one value ([10, 20] is 10,20)." \
+         into tTools[6]["description"]
+   put "{`type`:`object`,`properties`:{" & \
+         "`stack`:{`type`:`string`,`description`:`The stack or substack to change, by name; empty for the one the user is working on`}," & \
+         "`changes`:{`type`:`array`,`description`:`The changes, made in order`,`items`:{`type`:`object`,`properties`:{" & \
+         "`action`:{`type`:`string`,`enum`:[`create`,`set`,`delete`]}," & \
+         "`kind`:{`type`:`string`,`description`:`create: what to create`}," & \
+         "`name`:{`type`:`string`,`description`:`create: its name`}," & \
+         "`ref`:{`type`:`string`,`description`:`create: a word the later changes of this batch name it by`}," & \
+         "`card`:{`description`:`create: the card to put it on (an id, a ref or a card's name); the current card when none`}," & \
+         "`group`:{`description`:`create: the group to put it in (an id or a ref)`}," & \
+         "`rect`:{`type`:`array`,`items`:{`type`:`integer`},`description`:`create: left, top, right, bottom`}," & \
+         "`widget_kind`:{`type`:`string`,`description`:`create, a widget: its kind, such as com.livecode.widget.svgpath`}," & \
+         "`object`:{`description`:`set and delete: an id, a ref, or the word stack for the stack itself`}," & \
+         "`properties`:{`type`:`object`,`description`:`Properties of the engine's, by name`}," & \
+         "`custom_properties`:{`type`:`object`,`description`:`Custom properties, by name`}," & \
+         "`script`:{`type`:`string`,`description`:`The object's whole new script: handlers`}}," & \
+         "`required`:[`action`]}}},`required`:[`changes`]}" into tTools[6]["schema"]
+   put "run_code" into tTools[7]["name"]
+   put "Runs LiveCode Script statements and gives back what they put into the Message Box (put with no container), what they returned, " & \
+         "and any error with its line. Use it to try code before you give it to the user or put it in their stack, and to see what a stack " & \
+         "does, rather than asking the user to run it in the Message Box. Where: sandbox (the default), a hidden stack made for the run and " & \
+         "deleted after it, where the code can call the handlers you give; or stack, the user's stack, as the Message Box runs code there " & \
+         "(with the stack's own handlers, me being the card or control given by target, the current card when none), after a checkpoint " & \
+         "the user can go back to (on the stack, return gives nothing back: put the value instead). The user is asked first, and always " & \
+         "when the code reaches files, the network or other programs. Do not use answer or ask: the run would wait for the user. A run " & \
+         "that never ends is stopped only by the user (Control-period)." into tTools[7]["description"]
+   put "{`type`:`object`,`properties`:{" & \
+         "`code`:{`type`:`string`,`description`:`Statements, as typed into the Message Box`}," & \
+         "`where`:{`type`:`string`,`enum`:[`sandbox`,`stack`]}," & \
+         "`handlers`:{`type`:`string`,`description`:`sandbox: whole handlers the code can call`}," & \
+         "`stack`:{`type`:`string`,`description`:`stack: the stack or substack, by name; empty for the one the user is working on`}," & \
+         "`target`:{`type`:`integer`,`description`:`stack: the id of the card or control that is me`}}," & \
+         "`required`:[`code`]}" into tTools[7]["schema"]
+   repeat with tIndex = 1 to the number of elements of tTools
+      replace "`" with quote in tTools[tIndex]["schema"]
+   end repeat
    return tTools
 end xtaTools
 
 -- The tools to send for this question: none with the short guide (for
 -- small local models) or with the tools turned off, or for a model whose
--- server refused them
+-- server refused them; and those that change or run something only while
+-- the Settings let the model do that
 private function xtaToolsToSend pProvider
-   local tEmpty
+   local tEmpty, tTools, tKept, tIndex, tCount
    if not xtaToolsOn() or sNoTools[pProvider & comma & xtaModel(pProvider)] is true then
       return tEmpty
    end if
-   return xtaTools()
+   put xtaTools() into tTools
+   if xtaBuildOn() then
+      return tTools
+   end if
+   put 0 into tCount
+   repeat with tIndex = 1 to the number of elements of tTools
+      if tTools[tIndex]["name"] is among the items of kBuildTools then
+         next repeat
+      end if
+      add 1 to tCount
+      put tTools[tIndex] into tKept[tCount]
+   end repeat
+   return tKept
 end xtaToolsToSend
 
 -- Whether the model may ask for tools: not with the short guide, nor when
@@ -1745,6 +2304,12 @@ end xtaToolsToSend
 private function xtaToolsOn
    return revIDEGetPreference(kPrefShortGuide) is not true and revIDEGetPreference(kPrefTools) is not false
 end xtaToolsOn
+
+-- Whether the model may also change stacks and run code (it asks first):
+-- with the tools, unless the user turned it off in the Settings
+private function xtaBuildOn
+   return xtaToolsOn() and revIDEGetPreference(kPrefBuild) is not false
+end xtaBuildOn
 
 -- True when an answer that is not one says the server cannot take tools:
 -- a local server whose model has none (Ollama), or that was started
@@ -1781,6 +2346,22 @@ private function xtaRunTool pCall, pDeclared, pProvider
          return xtaToolReadStack(xtaJsonText(xtaJsonMember(tInput, "stack")), xtaJsonText(xtaJsonMember(tInput, "id")), pProvider)
       case "last_error"
          return xtaToolLastError()
+      case "debug_state"
+         return xtaToolDebugState(pProvider)
+      case "make_changes"
+      case "run_code"
+         -- Turned off in the Settings since the model was told of them
+         if not xtaBuildOn() then
+            put "The user has not let the assistant change stacks or run code (in its Settings). Tell them what to do instead, step by step." \
+                  into tResult["text"]
+            put true into tResult["error"]
+            put "Did not use" && pCall["name"] & ": changing stacks and running code are turned off in the Settings" into tResult["summary"]
+            return tResult
+         end if
+         if pCall["name"] is "make_changes" then
+            return xtaToolMakeChanges(tInput)
+         end if
+         return xtaToolRunCode(tInput)
    end switch
    put "There is no tool named" && quote & pCall["name"] & quote & "." into tResult["text"]
    put true into tResult["error"]
@@ -1872,23 +2453,11 @@ private function xtaToolReadStack pStackName, pId, pProvider
       put "Did not read the stack" && quote & tName & quote & ": it is password-protected" into tResult["summary"]
       return tResult
    end if
-   if sReadAllowed[tMain] is not true then
-      if sReadRefused[tMain] is not true then
-         answer question "The assistant asks to read your stack" && quote & tName & quote & ": its cards and controls, their properties and their scripts. " & \
-               "What it reads goes to" && xtaProviderName(pProvider) && "with this question and the ones after it, until you turn the assistant off." \
-               with "Don't Allow" or "Allow" titled kTitle
-         if it is "Allow" then
-            put true into sReadAllowed[tMain]
-         else
-            put true into sReadRefused[tMain]
-         end if
-      end if
-      if sReadAllowed[tMain] is not true then
-         put "The user did not allow reading the stack" && quote & tName & quote & ". Go on without it, and say what you would need to know." into tResult["text"]
-         put true into tResult["error"]
-         put "Not allowed to read the stack" && quote & tName & quote into tResult["summary"]
-         return tResult
-      end if
+   if not xtaReadAllowed(tMain, pProvider) then
+      put "The user did not allow reading the stack" && quote & tName & quote & ". Go on without it, and say what you would need to know." into tResult["text"]
+      put true into tResult["error"]
+      put "Not allowed to read the stack" && quote & tName & quote into tResult["summary"]
+      return tResult
    end if
 
    -- The stack asked for: the main stack, or one of its substacks
@@ -1958,6 +2527,428 @@ private function xtaToolLastError
    put false into tResult["error"]
    return tResult
 end xtaToolLastError
+
+-- debug_state: where a script of the user's is paused. It reads their
+-- scripts and what the paused handlers hold, so it is asked about as
+-- reading the stack is. With an error the IDE showed (Script Debug Mode
+-- pauses at an error), the error goes with it.
+private function xtaToolDebugState pProvider
+   local tState, tError, tResult
+   xtaStatus "Reading the debugger..."
+   put xtaDebugState() into tState
+   if tState["paused"] is not true then
+      put tState["text"] && "To pause a script, the user sets a breakpoint (a click left of a line in the Script Editor) and runs the script, " & \
+            "or turns on Script Debug Mode (Development menu) and lets it stop at an error." into tResult["text"]
+      put false into tResult["error"]
+      put tState["summary"] into tResult["summary"]
+      return tResult
+   end if
+   if not xtaReadAllowed(tState["stack"], pProvider) then
+      put "The user did not allow reading the stack" && quote & the short name of tState["stack"] & quote & \
+            ", where the script is paused. Go on without it, and say what you would need to know." into tResult["text"]
+      put true into tResult["error"]
+      put "Not allowed to read the stack" && quote & the short name of tState["stack"] & quote into tResult["summary"]
+      return tResult
+   end if
+   put tState["text"] into tResult["text"]
+   put xtaLastError() into tError
+   if tError is not empty then
+      put return & return & tError["text"] after tResult["text"]
+   end if
+   put false into tResult["error"]
+   put tState["summary"] into tResult["summary"]
+   return tResult
+end xtaToolDebugState
+
+-- make_changes: the batch is checked, shown in the window's bar, and
+-- applied only when the user presses Apply. A batch with mistakes goes
+-- back to the model without asking the user.
+private function xtaToolMakeChanges pInput
+   local tWork, tPlan, tWhat, tTitle, tAnswer, tApplied, tResult
+   put xtaWorkStack() into tWork
+   xtaStatus "Checking the changes the model asks for..."
+   put xtaBuildPlan(pInput, tWork["stack"]) into tPlan
+   if tPlan["ok"] is not true then
+      put "Nothing was changed: the batch has mistakes. Correct them, then send the whole batch again." & return & tPlan["problems"] \
+            into tResult["text"]
+      put true into tResult["error"]
+      put "Proposed changes that need correcting first" into tResult["summary"]
+      return tResult
+   end if
+   if tPlan["newStack"] is true then
+      put "a new stack" && quote & tPlan["name"] & quote into tWhat
+   else
+      put "the stack" && quote & tPlan["name"] & quote into tWhat
+   end if
+   if tPlan["count"] is 1 then
+      put "Apply this change to" && tWhat & "?" into tTitle
+   else
+      put "Apply these" && tPlan["count"] && "changes to" && tWhat & "?" into tTitle
+   end if
+   put xtaAskUser("changes", tTitle, tPlan["lines"] & return & return & "Undo, in the conversation, takes them back.", "Apply", empty, "Don't Apply") \
+         into tAnswer
+   if tAnswer is "stop" then
+      put "Nothing was changed: the user pressed Stop." into tResult["text"]
+      put true into tResult["error"]
+      put "Did not apply the changes: you pressed Stop" into tResult["summary"]
+      return tResult
+   end if
+   if tAnswer is not "yes" then
+      put "The user chose not to apply these changes, and nothing was changed. Ask them what they would like instead; do not send the same batch again." \
+            into tResult["text"]
+      put true into tResult["error"]
+      put "You chose not to apply the changes to" && tWhat into tResult["summary"]
+      return tResult
+   end if
+   xtaStatus "Applying the changes..."
+   put xtaBuildApply(tPlan) into tApplied
+   if tApplied["ok"] is not true then
+      put tApplied["error"] into tResult["text"]
+      put true into tResult["error"]
+      put "Could not apply the changes:" && line 1 of tApplied["error"] into tResult["summary"]
+      return tResult
+   end if
+   put tApplied["text"] into tResult["text"]
+   put false into tResult["error"]
+   put tApplied["summary"] into tResult["summary"]
+   put tApplied["entry"] into tResult["entry"]
+   put tPlan["lines"] into tResult["lines"]
+   xtaRefreshMoreMenu
+   return tResult
+end xtaToolMakeChanges
+
+-- run_code: the code is checked and shown in the window's bar, and runs
+-- when the user presses Run, or at once where they allowed runs for the
+-- session (the sandbox, or a stack); code that reaches what cannot be
+-- undone (files, the network, other programs...) is asked about every
+-- time. A run on a stack is saved as a checkpoint first, which Undo goes
+-- back to.
+private function xtaToolRunCode pInput
+   local tWork, tRun, tPlace, tTitle, tDetail, tSession, tAnswer, tRan, tResult, tRisks
+   put xtaWorkStack() into tWork
+   xtaStatus "Checking the code the model asks to run..."
+   put xtaRunPlan(pInput, tWork["stack"]) into tRun
+   if tRun["ok"] is not true then
+      put "Nothing ran:" && tRun["problems"] into tResult["text"]
+      put true into tResult["error"]
+      put "Proposed code to run that needs correcting first" into tResult["summary"]
+      return tResult
+   end if
+   if tRun["where"] is "sandbox" then
+      put "sandbox" into tPlace
+   else
+      put xtaMainStackOf(tRun["stack"]) into tPlace
+   end if
+   if sRunAllowed[tPlace] is not true or tRun["risks"] is not empty then
+      if tRun["where"] is "sandbox" then
+         put "Run this code in a sandbox?" into tTitle
+         put "It runs in a hidden stack made for the run, and deleted after it." into tDetail
+         put "Allow in the Sandbox" into tSession
+      else
+         put "Run this code on the stack" && quote & the short name of tPlace & quote & "?" into tTitle
+         put tRun["label"] & ". A copy of the stack is saved first, and Undo, in the conversation, goes back to it." into tDetail
+         put "Allow on This Stack" into tSession
+      end if
+      if tRun["risks"] is not empty then
+         put tRun["risks"] into tRisks
+         replace return with ", " in tRisks
+         put "Careful: it uses" && tRisks & ", and what it does there cannot be undone." & return & tDetail into tDetail
+         -- Asked about every time
+         put empty into tSession
+      end if
+      put return & return & tRun["code"] after tDetail
+      if tRun["handlers"] is not empty then
+         put return & return & "-- With these handlers:" & return & tRun["handlers"] after tDetail
+      end if
+      put xtaAskUser("run", tTitle, tDetail, "Run", tSession, "Don't Run") into tAnswer
+      if tAnswer is "stop" then
+         put "Nothing ran: the user pressed Stop." into tResult["text"]
+         put true into tResult["error"]
+         put "Did not run the code: you pressed Stop" into tResult["summary"]
+         return tResult
+      end if
+      if tAnswer is not "yes" and tAnswer is not "session" then
+         put "The user chose not to run this code, and nothing ran. Ask them what they would like instead; do not send the same code again." \
+               into tResult["text"]
+         put true into tResult["error"]
+         put "You chose not to run the code" into tResult["summary"]
+         return tResult
+      end if
+      if tAnswer is "session" then
+         put true into sRunAllowed[tPlace]
+      end if
+   end if
+   xtaStatus "Running the code... (" & xtaInterruptKeys() && "stops it)"
+   put xtaRunCode(tRun) into tRan
+   put tRan["text"] into tResult["text"]
+   put (tRan["ok"] is not true) into tResult["error"]
+   put tRan["summary"] into tResult["summary"]
+   put tRan["entry"] into tResult["entry"]
+   if tRan["entry"] is not empty then
+      xtaRefreshMoreMenu
+   end if
+   return tResult
+end xtaToolRunCode
+
+-- The keys that stop a running script: the engine's interrupt
+private function xtaInterruptKeys
+   if the platform is "MacOS" then
+      return "Command-period"
+   end if
+   return "Control-period"
+end xtaInterruptKeys
+
+-- The long id of the main stack of pStack (a long id)
+private function xtaMainStackOf pStack
+   if the owner of pStack is empty then
+      return the long id of pStack
+   end if
+   return the long id of the owner of pStack
+end xtaMainStackOf
+
+-- True when the user lets the model read the stack pMain (the long id of
+-- a main stack): its scripts then go to the provider. Asked in the
+-- window's bar the first time, then allowed until the assistant is turned
+-- off; Don't Allow holds until the next question.
+private function xtaReadAllowed pMain, pProvider
+   local tName, tAnswer
+   if sReadAllowed[pMain] is true then
+      return true
+   end if
+   if sReadRefused[pMain] is true then
+      return false
+   end if
+   put the short name of pMain into tName
+   put xtaAskUser("read", "Let the assistant read your stack" && quote & tName & quote & "?", \
+         "It reads the stack's cards and controls, their properties and their scripts, and what a paused script holds. What it reads goes to" && \
+         xtaProviderName(pProvider) && "with this question and the ones after it, until you turn the assistant off.", "Allow", empty, "Don't Allow") \
+         into tAnswer
+   if tAnswer is "yes" then
+      put true into sReadAllowed[pMain]
+      return true
+   end if
+   if tAnswer is "no" then
+      put true into sReadRefused[pMain]
+   end if
+   return false
+end xtaReadAllowed
+
+--------------------------------------------------------------------------------
+-- The bar that asks the user
+--
+-- What the assistant asks while it answers (apply these changes, run this
+-- code, read this stack) is asked in a bar in its window, above the
+-- prompt, rather than in a dialog: the user can read the conversation
+-- and scroll the details before answering, and Stop answers it too.
+
+-- Shows the bar and waits for the answer, which a click on one of its
+-- buttons gives (xtaAnswerAsk): "yes", "session" (yes, and do not ask
+-- again this session) or "no"; or "stop" when the user pressed Stop,
+-- closed the window or turned the assistant off. pKind is what is asked
+-- ("changes", "run" or "read"); pSession is the label of the button that
+-- allows it for the session, empty for none.
+private function xtaAskUser pKind, pTitle, pDetail, pYes, pSession, pNo
+   local tShutDowns, tAnswer
+   if there is not a stack kWindow or sStopAsked is true then
+      return "stop"
+   end if
+   put pKind into sAsk["kind"]
+   put empty into sAsk["answer"]
+   xtaShowAsk pTitle, pDetail, pYes, pSession, pNo
+   put sShutDowns into tShutDowns
+   repeat while sAsk["answer"] is empty
+      if sShutDowns is not tShutDowns or there is not a stack kWindow or sStopAsked is true then
+         put "stop" into sAsk["answer"]
+         exit repeat
+      end if
+      wait 50 milliseconds with messages
+   end repeat
+   put sAsk["answer"] into tAnswer
+   put empty into sAsk
+   if sShutDowns is tShutDowns then
+      xtaHideAsk
+   end if
+   return tAnswer
+end xtaAskUser
+
+private command xtaShowAsk pTitle, pDetail, pYes, pSession, pNo
+   lock screen
+   lock messages
+   set the text of field "AskTitle" of stack kWindow to pTitle
+   set the text of field "AskDetail" of stack kWindow to pDetail
+   set the label of button "AskYes" of stack kWindow to pYes
+   set the label of button "AskSession" of stack kWindow to pSession
+   set the label of button "AskNo" of stack kWindow to pNo
+   set the visible of graphic "AskPanel" of stack kWindow to true
+   set the visible of field "AskTitle" of stack kWindow to true
+   set the visible of field "AskDetail" of stack kWindow to true
+   set the visible of button "AskYes" of stack kWindow to true
+   set the visible of button "AskSession" of stack kWindow to (pSession is not empty)
+   set the visible of button "AskNo" of stack kWindow to true
+   unlock messages
+   dispatch "xtawRelayout" to stack kWindow
+   lock messages
+   set the vScroll of field "AskDetail" of stack kWindow to 0
+   unlock messages
+   xtaPaintPill
+   xtaStatus "Waiting for your answer, below the conversation.", "warn"
+   unlock screen
+end xtaShowAsk
+
+private command xtaHideAsk
+   local tName
+   if there is not a stack kWindow then
+      exit xtaHideAsk
+   end if
+   lock screen
+   lock messages
+   set the visible of graphic "AskPanel" of stack kWindow to false
+   set the visible of field "AskTitle" of stack kWindow to false
+   set the visible of field "AskDetail" of stack kWindow to false
+   repeat for each item tName in "AskYes,AskSession,AskNo"
+      set the visible of button tName of stack kWindow to false
+   end repeat
+   unlock messages
+   dispatch "xtawRelayout" to stack kWindow
+   xtaPaintPill
+   unlock screen
+end xtaHideAsk
+
+-- A button of the bar: "yes", "session" or "no"
+on xtaAnswerAsk pAnswer
+   if sAsk["kind"] is empty or sAsk["answer"] is not empty then
+      exit xtaAnswerAsk
+   end if
+   if pAnswer is among the items of "yes,session,no" then
+      put pAnswer into sAsk["answer"]
+   end if
+end xtaAnswerAsk
+
+--------------------------------------------------------------------------------
+-- Undo
+--
+-- What the assistant changed, and the runs on a stack, are a journal (the
+-- library's) until the assistant is turned off. Undo, after an entry in
+-- the conversation, takes it back, and what was applied to the same stack
+-- after it, newest first; More > Undo All Changes... takes back all of it.
+-- The model is told with the next question.
+
+-- A link of the conversation: Undo, Remember or Dismiss
+on xtaConversationLink pLink
+   switch item 1 of pLink
+      case "undo"
+         xtaUndoEntry item 2 of pLink
+         break
+      case "remember"
+      case "dismiss"
+         xtaNoteClicked pLink
+         break
+   end switch
+end xtaConversationLink
+
+-- True while the library that changes and runs is loaded (from when the
+-- window is first opened until the assistant is turned off)
+private function xtaBuildLoaded
+   if there is not a stack kBuild then
+      return false
+   end if
+   return the long id of stack kBuild is among the lines of xtaStacksInUse()
+end xtaBuildLoaded
+
+-- How many sets of changes, and runs on a stack, can be undone
+private function xtaAppliedCount
+   local tEntries, tIndex, tCount
+   put 0 into tCount
+   if not xtaBuildLoaded() then
+      return tCount
+   end if
+   put xtaBuildEntries() into tEntries
+   repeat with tIndex = 1 to the number of elements of tEntries
+      if tEntries[tIndex]["state"] is "applied" then
+         add 1 to tCount
+      end if
+   end repeat
+   return tCount
+end xtaAppliedCount
+
+private command xtaRefreshMoreMenu
+   if there is a stack kWindow then
+      lock messages
+      set the text of button "More" of stack kWindow to xtaMoreMenuText()
+      unlock messages
+   end if
+end xtaRefreshMoreMenu
+
+-- Undo, after an entry in the conversation. When the user changed some of
+-- it since, they are asked first: it goes back as it was before the
+-- assistant changed it, and what they changed goes too.
+private command xtaUndoEntry pEntry
+   local tResult
+   if not xtaBuildLoaded() or pEntry is not an integer then
+      exit xtaUndoEntry
+   end if
+   put xtaBuildUndo(pEntry, false) into tResult
+   if tResult["changed"] is not empty then
+      answer question "You have changed some of this since the assistant did it:" & return & tResult["changed"] & return & return & \
+            "Undo puts it back as it was before, and what you changed goes too." with "Cancel" or "Undo Anyway" titled kTitle
+      if it is not "Undo Anyway" then
+         exit xtaUndoEntry
+      end if
+      put xtaBuildUndo(pEntry, true) into tResult
+   end if
+   xtaUndone tResult
+end xtaUndoEntry
+
+-- More > Undo All Changes...
+private command xtaUndoAll
+   local tCount, tResult
+   put xtaAppliedCount() into tCount
+   if tCount is 0 then
+      xtaStatus "There is nothing to undo."
+      exit xtaUndoAll
+   end if
+   if tCount is 1 then
+      answer question "Undo what the assistant did to your stack? It goes back as it was before." with "Cancel" or "Undo All" titled kTitle
+   else
+      answer question "Undo all that the assistant did to your stacks:" && tCount && "sets of changes and runs, the newest first? They go back as they were before." \
+            with "Cancel" or "Undo All" titled kTitle
+   end if
+   if it is not "Undo All" then
+      exit xtaUndoAll
+   end if
+   put xtaBuildUndoAll(false) into tResult
+   if tResult["changed"] is not empty then
+      answer question "You have changed some of it since the assistant did it:" & return & tResult["changed"] & return & return & \
+            "Undo puts it back as it was before, and what you changed goes too." with "Cancel" or "Undo Anyway" titled kTitle
+      if it is not "Undo Anyway" then
+         exit xtaUndoAll
+      end if
+      put xtaBuildUndoAll(true) into tResult
+   end if
+   xtaUndone tResult
+end xtaUndoAll
+
+-- After Undo: the window shows what is undone, and what was undone goes
+-- to the model with the next question
+private command xtaUndone pResult
+   local tEntries, tIndex
+   if pResult["undone"] is not empty then
+      put xtaBuildEntries() into tEntries
+      repeat for each line tIndex in pResult["undone"]
+         put "- " & tEntries[tIndex]["summary"] & return after sUndone
+      end repeat
+   end if
+   xtaShowConversation
+   xtaRefreshMoreMenu
+   if pResult["undone"] is empty then
+      xtaStatus pResult["error"], "bad"
+   else if pResult["error"] is not empty then
+      xtaStatus "Undone, but not all of it.", "bad"
+      answer warning "Some of it could not be undone:" & return & pResult["error"] titled kTitle
+   else
+      xtaStatus pResult["summary"] & ".", "ok"
+   end if
+end xtaUndone
 
 -- The newest error the error hook noted that was in a script of the user's
 -- (not one of the IDE's): an array with "text" (for the model: the engine's
@@ -2050,6 +3041,7 @@ on xtaNewConversation
    end if
    put empty into sTurns
    put empty into sLastCode
+   put empty into sUndone
    xtaRefreshWindow
 end xtaNewConversation
 
@@ -2097,7 +3089,7 @@ on xtaSendPrompt pAttach, pAttachName
    local tPrompt, tProvider, tCount, tContext, tReply, tStatus, tShutDowns
    local tWork, tSystem, tDeclared, tRound, tRounds, tBlocks, tCheck, tLastCode
    local tIn, tOut, tCached, tAnswered, tError, tTools, tCalls, tCall, tResults
-   local tToolCalls, tRefusals, tRefusedNow, tSpent
+   local tToolCalls, tRefusals, tRefusedNow, tSpent, tKind
    if sBusy is true or there is not a stack kWindow then
       exit xtaSendPrompt
    end if
@@ -2127,6 +3119,12 @@ on xtaSendPrompt pAttach, pAttachName
    if pAttach is not empty then
       put pAttach into sTurns[tCount]["attach"]
       put pAttachName into sTurns[tCount]["attachName"]
+   end if
+   -- What the user undid since the last question: the model goes by what
+   -- the tools told it, and the objects are gone
+   if sUndone is not empty then
+      put sUndone into sTurns[tCount]["undone"]
+      put empty into sUndone
    end if
    if the hilite of button "Include" of stack kWindow then
       put xtaScriptContext() into tContext
@@ -2283,6 +3281,10 @@ on xtaSendPrompt pAttach, pAttachName
       -- did: the next question sends them.
       put the number of elements of sTurns into tCount
       if sTurns[tCount]["kind"] is not "tools" then
+         -- What the user undid goes with the next question instead
+         if sTurns[tCount]["undone"] is not empty then
+            put sTurns[tCount]["undone"] before sUndone
+         end if
          delete variable sTurns[tCount]
       end if
       if not tAnswered and there is a stack kWindow then
@@ -2295,6 +3297,7 @@ on xtaSendPrompt pAttach, pAttachName
    xtaShowConversation
    xtaUpdateButtons
    if tAnswered then
+      put empty into tKind
       put xtaProviderName(tProvider) && "-" && xtaModel(tProvider) into tStatus
       if tIn > 0 or tOut > 0 then
          put " -" && tIn && "tokens in," && tOut && "out" after tStatus
@@ -2304,14 +3307,17 @@ on xtaSendPrompt pAttach, pAttachName
       end if
       if tReply["stop"] is "max_tokens" or tReply["stop"] is "length" then
          put " - the answer was cut off at its length limit" after tStatus
+         put "warn" into tKind
       end if
       if tSpent then
          put " - stopped: the model used up its tools for this question" after tStatus
+         put "warn" into tKind
       end if
       if tCheck["summary"] is not empty and tCheck["ok"] is not true then
          put " - the code does not compile" after tStatus
+         put "warn" into tKind
       end if
-      xtaStatus tStatus
+      xtaStatus tStatus, tKind
    else
       xtaStatus xtaSettingsLine()
    end if
@@ -2342,6 +3348,10 @@ private function xtaTurnsToSend
       put sTurns[tIndex]["results"] into tTurns[tIndex]["results"]
       if sTurns[tIndex]["attach"] is not empty then
          put return & return & sTurns[tIndex]["attach"] after tTurns[tIndex]["text"]
+      end if
+      if sTurns[tIndex]["undone"] is not empty then
+         put return & return & "(Since your last answer I undid what follows, so it is no longer in the stack. Read the stack again before you change it.)" & \
+               return & sTurns[tIndex]["undone"] after tTurns[tIndex]["text"]
       end if
       if tIndex is tLast then
          put return & return & "The script I am editing, of" && sTurns[tIndex]["contextName"] & ":" & return & \

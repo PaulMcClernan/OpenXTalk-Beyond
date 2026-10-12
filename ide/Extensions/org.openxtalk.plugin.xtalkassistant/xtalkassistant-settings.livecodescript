@@ -39,6 +39,12 @@ on mouseUp pButton
       case "Forget Key"
          dispatch "xtaSettingsForgetKey" to stack kMain
          break
+      -- A switch the others depend on: changing stacks needs the tools,
+      -- and the short guide sends none
+      case "Tools"
+      case "Short Guide"
+         dispatch "xtaSettingsSwitches" to stack kMain
+         pass mouseUp
       default
          pass mouseUp
    end switch
