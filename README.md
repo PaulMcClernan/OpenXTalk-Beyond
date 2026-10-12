@@ -223,7 +223,7 @@ successful run and download the artifact under *Artifacts*.
 
 | Platform | Workflow | Artifact |
 | --- | --- | --- |
-| Windows | [Build (Windows)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml) | `OXT-Beyond-win-x86_64` |
+| Windows | [Build (Windows)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml) | `OXT-Beyond-win-x86_64`, and the installer alone as `OXT-Beyond-<ver>-win-x86_64-setup.exe` (kept for 14 days) |
 | macOS | [Build (macOS)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml) | `OXT-Beyond-mac-universal` |
 | Linux | [Build (Linux)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-linux.yml) | `OXT-Beyond-linux-x86_64`, `OXT-Beyond-linux-arm64` |
 
