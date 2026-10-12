@@ -17,13 +17,19 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --                 Other services and local servers that speak the same API
 --                 work with their own base URL; they may need no key.
 --
--- No model name is built in: model names change faster than this IDE does.
--- The window asks the provider for its list (xtaModelsUrl, xtaParseModels),
--- which also names the model to use when the user has chosen none
--- (xtaDefaultModel).
+-- Model names change faster than this IDE does, so the window asks the
+-- provider for its list (xtaModelsUrl, xtaParseModels), which also names
+-- the model to use when the user has chosen none (xtaDefaultModel). The
+-- few names built in (xtaSuggestedModels) are the providers' current
+-- recommendations, offered in the model menu before the list has come and
+-- put first in it after; a name the user types is used as typed.
 --
 -- A conversation is an array of turns, keys 1 to N, each with "role"
--- ("user" or "assistant") and "text".
+-- ("user" or "assistant") and "text". An answer may ask for tools: its
+-- turn then has "calls" (keys 1 to N, each with "id", "name" and "input",
+-- the JSON object of the call's arguments), and the turn after it has
+-- "kind" "tools" and "results" (keys 1 to N, one for each call in their
+-- order, with "text", and "error" true when the tool could not do it).
 --
 -- Public handlers:
 --    xtaJsonString(pText)                  pText as a JSON string
@@ -34,12 +40,22 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --    xtaDefaultBaseUrl(pProvider)
 --    xtaRequestUrl(pProvider, pBaseUrl), xtaModelsUrl(pProvider, pBaseUrl)
 --    xtaRequestHeaders(pProvider, pKey)    header lines for the httpHeaders
---    xtaRequestBody(pProvider, pModel, pSystem, pTurns, pMaxTokens)
+--    xtaRequestBody(pProvider, pModel, pSystem, pTurns, pMaxTokens, pTools,
+--                   pTokensName)
 --    xtaParseReply(pProvider, pStatus, pBody)
 --    xtaParseModels(pProvider, pStatus, pBody)
 --    xtaDefaultModel(pProvider, pIds, pCreated)  the model to begin with
---    xtaHttpPost(pUrl, pHeaders, pBody), xtaHttpGet(pUrl, pHeaders)
---    xtaAsk(pSettings, pSystem, pTurns)    one round trip, as xtaParseReply
+--    xtaSuggestedModels(pProvider), xtaModelMenu(pProvider, pIds)
+--                                          the model menu
+--    xtaHttpPost(pUrl, pHeaders, pBody, pTimeout),
+--    xtaHttpGet(pUrl, pHeaders, pTimeout)
+--    xtaAsk(pSettings, pSystem, pTurns, pTools)  one round trip, as
+--                                          xtaParseReply
+--    xtaDictionaryText(pTerm, pEntries)    a Dictionary entry, for the model
+--    xtaErrorText(pTrace), xtaScriptExcerpt(pScript, pLine)
+--                                          an error the user hit, for the model
+--    xtaStackOutline(pStack), xtaObjectText(pObject)
+--                                          the user's stack, for the model
 --    xtaCodeBlocks(pText)                  the fenced code blocks of a reply
 --    xtaIsXTalkLang(pLang), xtaXTalkBlocks(pBlocks)   which blocks are xTalk
 --    xtaSystemPrompt()                     the short guide, built in
@@ -77,6 +93,18 @@ constant kXTalkLangs = "livecodescript,livecode,lcs,xtalk"
 -- user, or about one stack: all of it goes with every question
 constant kMemoryMaxNote = 300
 constant kMemoryMaxScope = 3000
+-- The most text one tool gives the model (a Dictionary lookup, an outline
+-- of a stack, an object), what of a Dictionary entry it gives, and how many
+-- lines of a script it shows on each side of an error's line
+constant kReadMaxChars = 24000
+constant kDictionaryMaxEntries = 4
+constant kDictionaryMaxDescription = 6000
+constant kDictionaryMaxExamples = 5
+constant kExcerptLines = 5
+-- The property values shown of an object are those this long at most
+constant kMaxPropertyChars = 200
+-- The execution error whose hint is the object the error was in
+constant kObjectNameError = 353
 
 -- The JSON reader's state while it reads one text: the text, where it is,
 -- the length in code units, the nesting depth, and the position of the next
@@ -598,18 +626,40 @@ end xtaRequestHeaders
 -- billed as usual). OpenAI caches the start of a long prompt by itself, so
 -- it gets the parts joined, in their order. A text, or one part not marked
 -- "cache", goes as a plain string, as it always has.
-function xtaRequestBody pProvider, pModel, pSystem, pTurns, pMaxTokens
-   local tMessages, tIndex, tRole, tMax, tBody, tParts, tBlocks
+-- pTools are the tools the model may ask for: keys 1 to N, each with
+-- "name", "description" and "schema" (the JSON Schema of its input, a JSON
+-- object). An answer that asked for tools goes with the results of the turn
+-- after it, a call with no result as one that was not run, since both APIs
+-- refuse a call without its result. Without pTools, the calls and results
+-- are left out, as a server that has no tools refuses them.
+function xtaRequestBody pProvider, pModel, pSystem, pTurns, pMaxTokens, pTools, pTokensName
+   local tMessages, tIndex, tRole, tMax, tBody, tParts, tBlocks, tWithTools, tResults
    if word 1 to -1 of pModel is empty then
       throw "xTalk Assistant: no model is chosen."
    end if
    put xtaSystemParts(pSystem) into tParts
+   put (the number of elements of pTools > 0) into tWithTools
    put empty into tMessages
    if pProvider is "openai" and the number of elements of tParts > 0 then
       put "{" & xtaJsonPair("role", xtaJsonString("system")) & comma & \
             xtaJsonPair("content", xtaJsonString(xtaSystemText(tParts))) & "}" into tMessages
    end if
    repeat with tIndex = 1 to the number of elements of pTurns
+      -- Results go with the calls of the answer before them (below)
+      if pTurns[tIndex]["kind"] is "tools" then
+         next repeat
+      end if
+      if tWithTools and pTurns[tIndex]["role"] is "assistant" and the number of elements of pTurns[tIndex]["calls"] > 0 then
+         put empty into tResults
+         if pTurns[tIndex + 1]["kind"] is "tools" then
+            put pTurns[tIndex + 1]["results"] into tResults
+         end if
+         if tMessages is not empty then
+            put comma after tMessages
+         end if
+         put xtaCallMessages(pProvider, pTurns[tIndex], tResults, tIndex) after tMessages
+         next repeat
+      end if
       if pTurns[tIndex]["text"] is empty then
          next repeat
       end if
@@ -648,9 +698,131 @@ function xtaRequestBody pProvider, pModel, pSystem, pTurns, pMaxTokens
          put comma & xtaJsonPair("system", "[" & tBlocks & "]") after tBody
       end if
    end if
+   -- OpenAI needs no limit; one the user set goes as pTokensName
+   if pProvider is "openai" and pMaxTokens is an integer and pMaxTokens > 0 then
+      if pTokensName is empty then
+         put "max_completion_tokens" into pTokensName
+      end if
+      put comma & xtaJsonPair(pTokensName, pMaxTokens + 0) after tBody
+   end if
+   if tWithTools then
+      put comma & xtaJsonPair("tools", xtaToolsJson(pProvider, pTools)) after tBody
+   end if
    put comma & xtaJsonPair("messages", "[" & tMessages & "]") & "}" after tBody
    return tBody
 end xtaRequestBody
+
+-- The tools as the provider takes them
+private function xtaToolsJson pProvider, pTools
+   local tIndex, tJson, tName, tSchema, tDoc, tError
+   repeat with tIndex = 1 to the number of elements of pTools
+      put pTools[tIndex]["name"] into tName
+      put pTools[tIndex]["schema"] into tSchema
+      try
+         put xtaJsonParse(tSchema) into tDoc
+      catch tError
+         put empty into tDoc
+      end try
+      if xtaJsonType(tDoc) is not "object" then
+         throw "xTalk Assistant: the tool" && tName && "has no schema."
+      end if
+      if tJson is not empty then
+         put comma after tJson
+      end if
+      if pProvider is "anthropic" then
+         put "{" & xtaJsonPair("name", xtaJsonString(tName)) & comma & \
+               xtaJsonPair("description", xtaJsonString(pTools[tIndex]["description"])) & comma & \
+               xtaJsonPair("input_schema", tSchema) & "}" after tJson
+      else
+         put "{" & xtaJsonPair("type", xtaJsonString("function")) & comma & xtaJsonPair("function", "{" & \
+               xtaJsonPair("name", xtaJsonString(tName)) & comma & \
+               xtaJsonPair("description", xtaJsonString(pTools[tIndex]["description"])) & comma & \
+               xtaJsonPair("parameters", tSchema) & "}") & "}" after tJson
+      end if
+   end repeat
+   return "[" & tJson & "]"
+end xtaToolsJson
+
+-- The messages of an answer that asked for tools (pTurn, turn pTurnIndex of
+-- the conversation) and of their results (pResults, as the turn after it
+-- has them): for Anthropic, the answer's text and tool_use blocks, then a
+-- user message of tool_result blocks; for OpenAI, the answer with its
+-- tool_calls, then a "tool" message for each.
+private function xtaCallMessages pProvider, pTurn, pResults, pTurnIndex
+   local tCall, tId, tName, tInput, tDoc, tError, tText, tIsError, tCalls, tAnswers, tContent
+   repeat with tCall = 1 to the number of elements of pTurn["calls"]
+      put xtaCallId(pTurn["calls"][tCall]["id"], pTurnIndex, tCall) into tId
+      -- Both APIs take only names of letters, digits, _ and -
+      put pTurn["calls"][tCall]["name"] into tName
+      if not matchText(tName, "^[A-Za-z0-9_-]{1,64}$") then
+         put "unknown_tool" into tName
+      end if
+      put pTurn["calls"][tCall]["input"] into tInput
+      try
+         put xtaJsonParse(tInput) into tDoc
+      catch tError
+         put empty into tDoc
+      end try
+      if xtaJsonType(tDoc) is not "object" then
+         put "{}" into tInput
+      end if
+      if pResults[tCall] is an array then
+         put pResults[tCall]["text"] into tText
+         put (pResults[tCall]["error"] is true) into tIsError
+         if tText is empty then
+            put "(nothing)" into tText
+         end if
+      else
+         put "Not run." into tText
+         put true into tIsError
+      end if
+      if tCalls is not empty then
+         put comma after tCalls
+         put comma after tAnswers
+      end if
+      if pProvider is "anthropic" then
+         put "{" & xtaJsonPair("type", xtaJsonString("tool_use")) & comma & xtaJsonPair("id", xtaJsonString(tId)) & comma & \
+               xtaJsonPair("name", xtaJsonString(tName)) & comma & xtaJsonPair("input", tInput) & "}" after tCalls
+         put "{" & xtaJsonPair("type", xtaJsonString("tool_result")) & comma & xtaJsonPair("tool_use_id", xtaJsonString(tId)) & comma & \
+               xtaJsonPair("content", xtaJsonString(tText)) after tAnswers
+         if tIsError then
+            put comma & xtaJsonPair("is_error", "true") after tAnswers
+         end if
+         put "}" after tAnswers
+      else
+         put "{" & xtaJsonPair("id", xtaJsonString(tId)) & comma & xtaJsonPair("type", xtaJsonString("function")) & comma & \
+               xtaJsonPair("function", "{" & xtaJsonPair("name", xtaJsonString(tName)) & comma & \
+               xtaJsonPair("arguments", xtaJsonString(tInput)) & "}") & "}" after tCalls
+         if tIsError then
+            put "Error:" && tText into tText
+         end if
+         put "{" & xtaJsonPair("role", xtaJsonString("tool")) & comma & xtaJsonPair("tool_call_id", xtaJsonString(tId)) & comma & \
+               xtaJsonPair("content", xtaJsonString(tText)) & "}" after tAnswers
+      end if
+   end repeat
+   if pProvider is "anthropic" then
+      -- Anthropic refuses an empty text block
+      if pTurn["text"] is not empty then
+         put "{" & xtaJsonPair("type", xtaJsonString("text")) & comma & xtaJsonPair("text", xtaJsonString(pTurn["text"])) & "}," into tContent
+      end if
+      return "{" & xtaJsonPair("role", xtaJsonString("assistant")) & comma & xtaJsonPair("content", "[" & tContent & tCalls & "]") & "}," & \
+            "{" & xtaJsonPair("role", xtaJsonString("user")) & comma & xtaJsonPair("content", "[" & tAnswers & "]") & "}"
+   end if
+   -- An empty string rather than null, which some servers with OpenAI's API
+   -- refuse
+   return "{" & xtaJsonPair("role", xtaJsonString("assistant")) & comma & xtaJsonPair("content", xtaJsonString(pTurn["text"])) & comma & \
+         xtaJsonPair("tool_calls", "[" & tCalls & "]") & "}," & tAnswers
+end xtaCallMessages
+
+-- The id of a call as it is sent: the model's own, or, when that is not one
+-- both APIs take (a local server may give none), one made from where the
+-- call is in the conversation, the same for the call and its result
+private function xtaCallId pId, pTurnIndex, pCall
+   if matchText(pId, "^[A-Za-z0-9_-]{1,64}$") then
+      return pId
+   end if
+   return "call_" & pTurnIndex & "_" & pCall
+end xtaCallId
 
 -- The parts of a system prompt (see xtaRequestBody), numbered from 1,
 -- without the empty ones.
@@ -693,10 +865,15 @@ end xtaSystemText
 --    inputTokens, outputTokens   what the request cost, when the answer says
 --    cachedTokens  how much of the input was read from the provider's cache
 --                  (Anthropic counts it apart from inputTokens, OpenAI in it)
+--    calls         the tools it asked for, keys 1 to N, each with "id",
+--                  "name" and "input" (the JSON object of the arguments)
+--    status        pStatus
 --    error         why there is no answer, in words for the user
 function xtaParseReply pProvider, pStatus, pBody
-   local tReply, tDoc, tError, tParts, tIndex, tPart, tText
+   local tReply, tDoc, tError, tParts, tIndex, tPart, tText, tCalls, tCount, tInput
    put false into tReply["ok"]
+   put pStatus into tReply["status"]
+   put 0 into tCount
    try
       put xtaJsonParse(pBody) into tDoc
    catch tError
@@ -716,6 +893,11 @@ function xtaParseReply pProvider, pStatus, pBody
             put xtaJsonItem(tParts, tIndex) into tPart
             if xtaJsonText(xtaJsonMember(tPart, "type")) is "text" then
                put xtaJsonText(xtaJsonMember(tPart, "text")) after tText
+            else if xtaJsonText(xtaJsonMember(tPart, "type")) is "tool_use" then
+               add 1 to tCount
+               put xtaJsonText(xtaJsonMember(tPart, "id")) into tCalls[tCount]["id"]
+               put xtaJsonText(xtaJsonMember(tPart, "name")) into tCalls[tCount]["name"]
+               put xtaCallInput(pBody, xtaJsonMember(tPart, "input")) into tCalls[tCount]["input"]
             end if
          end repeat
          put xtaJsonText(xtaJsonMember(tDoc, "stop_reason")) into tReply["stop"]
@@ -734,6 +916,24 @@ function xtaParseReply pProvider, pStatus, pBody
             return tReply
          end if
          put xtaJsonText(tPart) into tText
+         put xtaJsonGet(tDoc, "choices/1/message/tool_calls") into tParts
+         repeat with tIndex = 1 to xtaJsonCount(tParts)
+            put xtaJsonItem(tParts, tIndex) into tPart
+            if xtaJsonText(xtaJsonGet(tPart, "function/name")) is empty then
+               next repeat
+            end if
+            add 1 to tCount
+            put xtaJsonText(xtaJsonMember(tPart, "id")) into tCalls[tCount]["id"]
+            put xtaJsonText(xtaJsonGet(tPart, "function/name")) into tCalls[tCount]["name"]
+            -- The arguments are a JSON text in a string; some servers send
+            -- the object itself
+            put xtaJsonGet(tPart, "function/arguments") into tInput
+            if xtaJsonType(tInput) is "string" then
+               put xtaJsonText(tInput) into tCalls[tCount]["input"]
+            else
+               put xtaCallInput(pBody, tInput) into tCalls[tCount]["input"]
+            end if
+         end repeat
          put xtaJsonText(xtaJsonGet(tDoc, "choices/1/finish_reason")) into tReply["stop"]
          put xtaJsonText(xtaJsonGet(tDoc, "usage/prompt_tokens")) into tReply["inputTokens"]
          put xtaJsonText(xtaJsonGet(tDoc, "usage/completion_tokens")) into tReply["outputTokens"]
@@ -745,9 +945,19 @@ function xtaParseReply pProvider, pStatus, pBody
    end switch
 
    put tText into tReply["text"]
+   put tCalls into tReply["calls"]
    put true into tReply["ok"]
    return tReply
 end xtaParseReply
+
+-- The arguments of a call as JSON text, from their parsed value in pBody:
+-- an object exactly as it was sent, anything else as no arguments
+private function xtaCallInput pBody, pNode
+   if xtaJsonType(pNode) is "object" then
+      return xtaJsonRaw(pBody, pNode)
+   end if
+   return "{}"
+end xtaCallInput
 
 -- Why an answer is not a success, in words for the user, or empty when it
 -- is one. The providers put their reason in error/message.
@@ -849,10 +1059,11 @@ end xtaParseModels
 
 -- The model to use when the user has chosen none, from the provider's list
 -- (pIds, one per line in the provider's order; pCreated, when the provider
--- gives it, when each was made, by name). Families rather than names, which
+-- gives it, when each was made, by name). Families before names, which
 -- change: Anthropic lists its newest models first, and the newest Sonnet
--- writes code well for less than Opus costs; OpenAI's list is in no order
+-- writes code well for less than Opus costs. OpenAI's list is in no order
 -- and mixes in models that do not chat (embeddings, speech, images), so
+-- the first of its suggested models it lists (xtaSuggestedModels), else
 -- the newest whose name is just "gpt-" and a version (gpt-4o, gpt-5.1).
 -- Otherwise, and for a local server, the first one listed.
 function xtaDefaultModel pProvider, pIds, pCreated
@@ -866,6 +1077,11 @@ function xtaDefaultModel pProvider, pIds, pCreated
          end repeat
          break
       case "openai"
+         repeat for each line tId in xtaSuggestedModels(pProvider)
+            if tId is among the lines of pIds then
+               return tId
+            end if
+         end repeat
          repeat for each line tId in pIds
             if not matchText(tId, "^gpt-[0-9]+(\.[0-9]+)?o?$") then
                next repeat
@@ -886,6 +1102,47 @@ function xtaDefaultModel pProvider, pIds, pCreated
    return line 1 of pIds
 end xtaDefaultModel
 
+-- The provider's current recommendations (October 2026), one per line, the
+-- one to begin with first: Anthropic's Sonnet for its balance of speed,
+-- cost and code, then Opus, Haiku and Fable; OpenAI's balanced model, then
+-- its flagship and its smallest. The model menu offers them before the
+-- provider's list has come; they are not checked against the account.
+function xtaSuggestedModels pProvider
+   switch pProvider
+      case "anthropic"
+         return "claude-sonnet-5-5" & return & "claude-opus-5-5" & return & \
+               "claude-haiku-5-5" & return & "claude-fable-5-1"
+      case "openai"
+         return "gpt-6.1-sol" & return & "gpt-6-astra" & return & "gpt-6-luna"
+   end switch
+   return empty
+end xtaSuggestedModels
+
+-- The lines of the model menu: the suggested models the provider listed
+-- (all of them before its list has come, when pIds is empty), then the
+-- rest of its list in alphabetical order. For a local server (none of the
+-- suggestions listed) that is its list, sorted.
+function xtaModelMenu pProvider, pIds
+   local tMenu, tId, tRest
+   if pIds is empty then
+      return xtaSuggestedModels(pProvider)
+   end if
+   repeat for each line tId in xtaSuggestedModels(pProvider)
+      if tId is among the lines of pIds then
+         put tId & return after tMenu
+      end if
+   end repeat
+   repeat for each line tId in pIds
+      if tId is not empty and tId is not among the lines of tMenu then
+         put tId & return after tRest
+      end if
+   end repeat
+   sort lines of tRest
+   put tRest after tMenu
+   delete the last char of tMenu
+   return tMenu
+end xtaModelMenu
+
 --------------------------------------------------------------------------------
 -- HTTP
 --
@@ -897,20 +1154,26 @@ end xtaDefaultModel
 -- no answer came), body (the answer as text) and error (why there was no
 -- answer).
 
-function xtaHttpPost pUrl, pHeaders, pBody
-   return xtaHttp("post", pUrl, pHeaders, pBody)
+function xtaHttpPost pUrl, pHeaders, pBody, pTimeout
+   return xtaHttp("post", pUrl, pHeaders, pBody, pTimeout)
 end xtaHttpPost
 
-function xtaHttpGet pUrl, pHeaders
-   return xtaHttp("get", pUrl, pHeaders, empty)
+function xtaHttpGet pUrl, pHeaders, pTimeout
+   return xtaHttp("get", pUrl, pHeaders, empty, pTimeout)
 end xtaHttpGet
 
-private function xtaHttp pMethod, pUrl, pHeaders, pBody
+-- pTimeout: how many seconds the request may go without data, or empty
+-- for kRequestTimeoutMilliseconds
+private function xtaHttp pMethod, pUrl, pHeaders, pBody, pTimeout
    local tOldHeaders, tOldTimeout, tData, tResult, tError, tAnswer
    put the httpHeaders into tOldHeaders
    put the socketTimeoutInterval into tOldTimeout
    set the httpHeaders to pHeaders
-   set the socketTimeoutInterval to kRequestTimeoutMilliseconds
+   if pTimeout is an integer and pTimeout > 0 then
+      set the socketTimeoutInterval to pTimeout * 1000
+   else
+      set the socketTimeoutInterval to kRequestTimeoutMilliseconds
+   end if
    try
       if pMethod is "post" then
          post textEncode(pBody, "UTF-8") to url pUrl
@@ -951,19 +1214,26 @@ private function xtaHttp pMethod, pUrl, pHeaders, pBody
 end xtaHttp
 
 -- One round trip: sends the conversation and returns what xtaParseReply
--- does. pSettings has "provider", "baseUrl", "key", "model" and "maxTokens".
-function xtaAsk pSettings, pSystem, pTurns
-   local tProvider, tHeaders, tBody, tAnswer, tReply, tError
+-- does. pSettings has "provider", "baseUrl", "key", "model", "maxTokens"
+-- and "timeout" (seconds; the last two may be empty); pTools, when given,
+-- are the tools the model may ask for (xtaRequestBody).
+function xtaAsk pSettings, pSystem, pTurns, pTools
+   local tProvider, tHeaders, tBody, tAnswer, tReply, tError, tTokensName
    put pSettings["provider"] into tProvider
+   -- OpenAI's own API takes the limit as max_completion_tokens (its newer
+   -- models refuse max_tokens); a server of the user's own, as max_tokens
+   if tProvider is "openai" and pSettings["baseUrl"] is not empty then
+      put "max_tokens" into tTokensName
+   end if
    try
       put xtaRequestHeaders(tProvider, pSettings["key"]) into tHeaders
-      put xtaRequestBody(tProvider, pSettings["model"], pSystem, pTurns, pSettings["maxTokens"]) into tBody
+      put xtaRequestBody(tProvider, pSettings["model"], pSystem, pTurns, pSettings["maxTokens"], pTools, tTokensName) into tBody
    catch tError
       put false into tReply["ok"]
       put xtaPlainError(tError) into tReply["error"]
       return tReply
    end try
-   put xtaHttpPost(xtaRequestUrl(tProvider, pSettings["baseUrl"]), tHeaders, tBody) into tAnswer
+   put xtaHttpPost(xtaRequestUrl(tProvider, pSettings["baseUrl"]), tHeaders, tBody, pSettings["timeout"]) into tAnswer
    put empty into tHeaders
    if tAnswer["status"] is empty then
       put false into tReply["ok"]
@@ -985,7 +1255,7 @@ function xtaListModels pSettings
    end try
    -- Anthropic's model list wants the version header too; neither list
    -- needs a body, so the Content-Type line does no harm.
-   put xtaHttpGet(xtaModelsUrl(tProvider, pSettings["baseUrl"]), tHeaders) into tAnswer
+   put xtaHttpGet(xtaModelsUrl(tProvider, pSettings["baseUrl"]), tHeaders, pSettings["timeout"]) into tAnswer
    put empty into tHeaders
    if tAnswer["status"] is empty then
       put tAnswer["error"] into tResult["error"]
@@ -1544,6 +1814,495 @@ private function xtaHasCurlyQuote pText
    return numToCodepoint(8216) is in pText or numToCodepoint(8217) is in pText \
          or numToCodepoint(8220) is in pText or numToCodepoint(8221) is in pText
 end xtaHasCurlyQuote
+
+--------------------------------------------------------------------------------
+-- What the model reads with its tools
+--
+-- The plugin carries out the tools the model asks for; these make what the
+-- tools read into text for the model. Nothing here asks the user, runs code
+-- or changes anything (the plugin asks before it reads the user's stack).
+
+-- The Dictionary's entries for pTerm, as the IDE's ideDocsFetchLCSData gives
+-- them (keys 1 to N, each an array with "display name", "Type", "Summary",
+-- "Syntax" 1 to N, "params" 1 to N with "name", "type" and "description",
+-- "value" (what it returns, by name, with "description"), "Description",
+-- "Example" 1 to N, "Synonyms" 1 to N, "References" (by kind, 1 to N),
+-- "Introduced", "Platforms" 1 to N and "Changes"), as text for the model.
+-- The Dictionary writes a word that is another entry <thus>; that is kept.
+function xtaDictionaryText pTerm, pEntries
+   local tCount, tText, tIndex
+   put the number of elements of pEntries into tCount
+   if tCount is 0 then
+      return "The Dictionary has no entry for" && quote & pTerm & quote & \
+            ". Look up a command, function, property or message by its name alone (topStack, not the topStack), or a word near it."
+   end if
+   if tCount is 1 then
+      put "The Dictionary's entry for" && quote & pTerm & quote into tText
+   else
+      put "The Dictionary has" && tCount && "entries for" && quote & pTerm & quote into tText
+   end if
+   put " (a word in <angle brackets> in its text is the name of another entry):" & return after tText
+   repeat with tIndex = 1 to tCount
+      if tIndex > kDictionaryMaxEntries or the number of chars of tText > kReadMaxChars then
+         put return & "Also:" && pEntries[tIndex]["display name"] && "(" & pEntries[tIndex]["Type"] & ")" after tText
+      else
+         put return & xtaDictionaryEntry(pEntries[tIndex]) after tText
+      end if
+   end repeat
+   return tText
+end xtaDictionaryText
+
+private function xtaDictionaryEntry pEntry
+   local tText, tIndex, tKey, tKeys, tList, tName, tSeen, tDescription
+   put pEntry["display name"] into tText
+   if pEntry["Type"] is not empty then
+      put " (" & pEntry["Type"] & ")" after tText
+   end if
+   put return after tText
+   if pEntry["Summary"] is not empty then
+      put "Summary:" && pEntry["Summary"] & return after tText
+   end if
+   if the number of elements of pEntry["Syntax"] > 0 then
+      put "Syntax:" & return after tText
+      repeat with tIndex = 1 to the number of elements of pEntry["Syntax"]
+         put xtaIndent(pEntry["Syntax"][tIndex]) & return after tText
+      end repeat
+   end if
+   if the number of elements of pEntry["params"] > 0 then
+      put "Parameters:" & return after tText
+      repeat with tIndex = 1 to the number of elements of pEntry["params"]
+         put pEntry["params"][tIndex]["name"] into tName
+         if pEntry["params"][tIndex]["type"] is not empty then
+            put " (" & pEntry["params"][tIndex]["type"] & ")" after tName
+         end if
+         if pEntry["params"][tIndex]["description"] is not empty then
+            put ":" && pEntry["params"][tIndex]["description"] after tName
+         end if
+         put xtaIndent(tName) & return after tText
+      end repeat
+   end if
+   if pEntry["value"] is an array then
+      put the keys of pEntry["value"] into tKeys
+      sort lines of tKeys
+      put "Returns:" & return after tText
+      repeat for each line tKey in tKeys
+         put xtaIndent(tKey & ":" && pEntry["value"][tKey]["description"]) & return after tText
+      end repeat
+   end if
+   if pEntry["Description"] is not empty then
+      put pEntry["Description"] into tDescription
+      if the number of chars of tDescription > kDictionaryMaxDescription then
+         put char 1 to kDictionaryMaxDescription of tDescription & " ... (the rest is left out)" into tDescription
+      end if
+      put "Description:" & return & tDescription & return after tText
+   end if
+   repeat with tIndex = 1 to min(kDictionaryMaxExamples, the number of elements of pEntry["Example"])
+      put "Example:" & return & xtaIndent(pEntry["Example"][tIndex]) & return after tText
+   end repeat
+   if the number of elements of pEntry["Synonyms"] > 0 then
+      put empty into tList
+      repeat with tIndex = 1 to the number of elements of pEntry["Synonyms"]
+         if tList is not empty then
+            put ", " after tList
+         end if
+         put pEntry["Synonyms"][tIndex] after tList
+      end repeat
+      put "Synonyms:" && tList & return after tText
+   end if
+   if pEntry["References"] is an array then
+      put the keys of pEntry["References"] into tKeys
+      sort lines of tKeys
+      put empty into tList
+      repeat for each line tKey in tKeys
+         repeat with tIndex = 1 to the number of elements of pEntry["References"][tKey]
+            put tKey && pEntry["References"][tKey][tIndex] into tName
+            if tSeen[tName] is true then
+               next repeat
+            end if
+            put true into tSeen[tName]
+            if tList is not empty then
+               put ", " after tList
+            end if
+            put tName after tList
+         end repeat
+      end repeat
+      if tList is not empty then
+         put "See also:" && tList & return after tText
+      end if
+   end if
+   if pEntry["Introduced"] is not empty then
+      put "Introduced in" && pEntry["Introduced"] & "." & return after tText
+   end if
+   if pEntry["Changes"] is not empty then
+      put "Changes:" && pEntry["Changes"] & return after tText
+   end if
+   return tText
+end xtaDictionaryEntry
+
+-- pText with every line indented by four spaces
+private function xtaIndent pText
+   replace return with return & "    " in pText
+   return "    " & pText
+end xtaIndent
+
+-- An execution error as the engine reports it (pTrace: lines of
+-- "code,line,column,hint", the most telling first, as the IDE's errorDialog
+-- message has it), as text for the model. A line with code 353 names the
+-- object whose script the lines before it were in. The message of a code
+-- is that line of the scriptExecutionErrors (empty in a standalone); an
+-- error a script threw itself is its own text.
+function xtaErrorText pTrace
+   local tLine, tCode, tLineNumber, tColumn, tHint, tMessage, tText
+   replace crlf with return in pTrace
+   repeat for each line tLine in pTrace
+      if word 1 to -1 of tLine is empty then
+         next repeat
+      end if
+      put item 1 of tLine into tCode
+      if tCode is not an integer then
+         put "- thrown by the script:" && tLine & return after tText
+         next repeat
+      end if
+      put item 2 of tLine into tLineNumber
+      put item 3 of tLine into tColumn
+      put item 4 to -1 of tLine into tHint
+      if tCode is kObjectNameError then
+         put "- in the script of" && tHint & return after tText
+         next repeat
+      end if
+      put empty into tMessage
+      if tCode > 0 then
+         put line tCode of the scriptExecutionErrors into tMessage
+      end if
+      if tMessage is empty then
+         put "error" && tCode into tMessage
+      else
+         put " (error" && tCode & ")" after tMessage
+      end if
+      put "- " & tMessage after tText
+      if tLineNumber is an integer then
+         if tLineNumber > 0 then
+            put ", line" && tLineNumber after tText
+            if tColumn is an integer then
+               if tColumn > 0 then
+                  put ", column" && tColumn after tText
+               end if
+            end if
+         end if
+      end if
+      if tHint is not empty then
+         put ", near" && quote & tHint & quote after tText
+      end if
+      put return after tText
+   end repeat
+   if tText is not empty then
+      delete the last char of tText
+   end if
+   return tText
+end xtaErrorText
+
+-- Where an execution error happened: an array with "object" (the object
+-- the first line with code 353 names) and "line" (the first line number
+-- given, in that object's script), either empty when the trace has none
+function xtaErrorWhere pTrace
+   local tLine, tWhere
+   replace crlf with return in pTrace
+   repeat for each line tLine in pTrace
+      if item 1 of tLine is kObjectNameError then
+         if tWhere["object"] is empty then
+            put item 4 to -1 of tLine into tWhere["object"]
+         end if
+      else if tWhere["line"] is empty and item 2 of tLine is an integer then
+         if item 2 of tLine > 0 then
+            put item 2 of tLine into tWhere["line"]
+         end if
+      end if
+   end repeat
+   return tWhere
+end xtaErrorWhere
+
+-- The lines of pScript around line pLine, numbered, pLine marked with ">"
+function xtaScriptExcerpt pScript, pLine
+   local tFrom, tTo, tIndex, tText
+   replace crlf with return in pScript
+   if pLine is not an integer then
+      return empty
+   end if
+   if pLine < 1 or pLine > the number of lines of pScript then
+      return empty
+   end if
+   put max(1, pLine - kExcerptLines) into tFrom
+   put min(the number of lines of pScript, pLine + kExcerptLines) into tTo
+   repeat with tIndex = tFrom to tTo
+      if tIndex is pLine then
+         put ">" after tText
+      else
+         put space after tText
+      end if
+      put tIndex & ":" && line tIndex of pScript & return after tText
+   end repeat
+   delete the last char of tText
+   return tText
+end xtaScriptExcerpt
+
+-- An outline of the main stack pStack and its substacks, for the model:
+-- each stack, its cards, and the controls on each (their type, name, id
+-- and rect, a group's controls under it), with how many lines each script
+-- has. A group on more than one card is listed under the first. The
+-- outline stops at kReadMaxChars, and says so.
+function xtaStackOutline pStack
+   local tText, tSub, tSeen, tCut
+   put the long id of pStack into pStack
+   put xtaStackLines(pStack, tSeen) into tText
+   repeat for each line tSub in the substacks of pStack
+      if the number of chars of tText > kReadMaxChars then
+         exit repeat
+      end if
+      put empty into tSeen
+      put xtaStackLines(the long id of stack tSub of pStack, tSeen) after tText
+   end repeat
+   if the number of chars of tText > kReadMaxChars then
+      put char 1 to kReadMaxChars of tText into tText
+      put the number of lines of tText into tCut
+      delete line tCut of tText
+      put "(The outline stops here, at its length limit. Ask for a card by its stack and id to see its controls.)" after tText
+   else
+      delete the last char of tText
+   end if
+   return tText
+end xtaStackOutline
+
+-- One stack of the outline, and its cards and controls; xSeen keeps which
+-- controls are listed already
+private function xtaStackLines pStack, @xSeen
+   local tText, tIndex, tCard
+   if the mainStack of pStack is the short name of pStack then
+      put "Stack" into tText
+   else
+      put "Substack" into tText
+   end if
+   put space & xtaQuoted(the short name of pStack) after tText
+   if the title of pStack is not empty and the title of pStack is not the short name of pStack then
+      put ", titled" && xtaQuoted(the title of pStack) after tText
+   end if
+   put "," && the width of pStack && "x" && the height of pStack & "," && the number of cards of pStack && "cards" after tText
+   put xtaScriptNote(pStack) & return after tText
+   repeat with tIndex = 1 to the number of cards of pStack
+      put the long id of card tIndex of pStack into tCard
+      put "  " & xtaNamed(tCard) & xtaScriptNote(tCard) & return after tText
+      put xtaControlLines(tCard, xSeen, "    ") after tText
+   end repeat
+   return tText
+end xtaStackLines
+
+-- The controls of the card pCard, one per line, each group's controls
+-- under it; xSeen has, by id, the card each was listed on before
+private function xtaControlLines pCard, @xSeen, pIndent
+   local tText, tIndex, tControl, tId, tDepth
+   repeat with tIndex = 1 to the number of controls of pCard
+      put the long id of control tIndex of pCard into tControl
+      put the id of tControl into tId
+      put xtaCountOf(" of group id ", tControl) into tDepth
+      if xSeen[tId] is not empty then
+         -- A group on this card that was listed under another
+         if tDepth is 0 then
+            put pIndent & xtaNamed(tControl) & ": also on" && xSeen[tId] & ", with its controls" & return after tText
+         end if
+         next repeat
+      end if
+      put xtaRef(pCard) into xSeen[tId]
+      repeat tDepth times
+         put "  " after tText
+      end repeat
+      put pIndent & xtaControlLine(tControl) & return after tText
+   end repeat
+   return tText
+end xtaControlLines
+
+-- One control: its type, name, id and rect, what kind of widget, whether
+-- it is hidden, its behavior, and how long its script is
+private function xtaControlLine pControl
+   local tText
+   put xtaNamed(pControl) && "at" && the rect of pControl into tText
+   if word 1 of the name of pControl is "widget" then
+      put ", kind" && the kind of pControl after tText
+   end if
+   if not the visible of pControl then
+      put ", hidden" after tText
+   end if
+   if the behavior of pControl is not empty then
+      put ", behavior" && the behavior of pControl after tText
+   end if
+   return tText & xtaScriptNote(pControl)
+end xtaControlLine
+
+-- ", script: N lines" for an object with a script, else empty
+private function xtaScriptNote pObject
+   local tScript
+   put the script of pObject into tScript
+   if tScript is empty then
+      return empty
+   end if
+   return ", script:" && the number of lines of tScript && "lines"
+end xtaScriptNote
+
+-- One object of the user's stack, for the model: what and where it is, its
+-- properties that have a short value, the names of its custom properties,
+-- the text of a field, the controls of a card or the cards of a stack, and
+-- its script
+function xtaObjectText pObject
+   local tText, tType, tProps, tKeys, tKey, tValue, tList, tScript, tCard, tSeen, tIndex
+   put the long id of pObject into pObject
+   put word 1 of the name of pObject into tType
+   put xtaNamed(pObject) into tText
+   if tType is "stack" then
+      if the mainStack of pObject is not the short name of pObject then
+         put ", a substack of" && xtaQuoted(the mainStack of pObject) after tText
+      end if
+   else
+      if tType is not "card" then
+         -- The card is in the control's long id, which the engine wrote
+         put char offset(" card id ", pObject) + 1 to -1 of pObject into tCard
+         put " on" && xtaRef(tCard) after tText
+      end if
+      put " of stack" && xtaQuoted(the short name of xtaStackOfLongId(pObject)) after tText
+   end if
+   put return after tText
+
+   put the properties of pObject into tProps
+   put the keys of tProps into tKeys
+   sort lines of tKeys
+   put "Properties (those with a short value):" & return after tText
+   repeat for each line tKey in tKeys
+      put tProps[tKey] into tValue
+      if tValue is an array or tValue is empty or the number of chars of tValue > kMaxPropertyChars then
+         next repeat
+      end if
+      if matchText(tValue, "[[:cntrl:]]") then
+         next repeat
+      end if
+      put "  " & tKey & ":" && tValue & return after tText
+   end repeat
+   put empty into tList
+   repeat for each line tKey in the customKeys of pObject
+      if tList is not empty then
+         put ", " after tList
+      end if
+      put tKey after tList
+   end repeat
+   if tList is not empty then
+      put "Custom properties (names only):" && tList & return after tText
+   end if
+   put empty into tList
+   repeat for each line tKey in the customPropertySets of pObject
+      if tList is not empty then
+         put ", " after tList
+      end if
+      put tKey after tList
+   end repeat
+   if tList is not empty then
+      put "Custom property sets:" && tList & return after tText
+   end if
+
+   switch tType
+      case "field"
+         put "Text:" & return & xtaCut(the text of pObject, kReadMaxChars div 4) & return after tText
+         break
+      case "button"
+         if the text of pObject is not empty then
+            put "Menu items or text:" & return & xtaCut(the text of pObject, kReadMaxChars div 8) & return after tText
+         end if
+         break
+      case "card"
+         put "Controls:" & return & xtaControlLines(pObject, tSeen, "  ") after tText
+         break
+      case "stack"
+         put "Cards:" & return after tText
+         repeat with tIndex = 1 to the number of cards of pObject
+            put "  " & xtaNamed(the long id of card tIndex of pObject) & return after tText
+         end repeat
+         break
+   end switch
+
+   put the script of pObject into tScript
+   repeat while the last char of tScript is return
+      delete the last char of tScript
+   end repeat
+   if tScript is empty then
+      put "No script." after tText
+   else
+      put "Script (" & the number of lines of tScript && "lines):" & return & "```livecodescript" & return & \
+            xtaCut(tScript, kReadMaxChars) & return & "```" after tText
+   end if
+   return tText
+end xtaObjectText
+
+-- The stack an object is in (the stack itself for a stack), from its long
+-- id, which ends with it
+private function xtaStackOfLongId pObject
+   local tAt
+   if word 1 of pObject is "stack" then
+      return pObject
+   end if
+   put offset(" of stack ", pObject) into tAt
+   return char tAt + 4 to -1 of pObject
+end xtaStackOfLongId
+
+-- pText, cut to pMax characters at the end of a line, saying so
+private function xtaCut pText, pMax
+   local tLines
+   if the number of chars of pText <= pMax then
+      return pText
+   end if
+   put the number of lines of pText into tLines
+   put char 1 to pMax of pText into pText
+   if the number of lines of pText > 1 then
+      delete the last line of pText
+   end if
+   return pText & return & "... (" & tLines - the number of lines of pText && "more lines left out)"
+end xtaCut
+
+-- pText in double quotes
+private function xtaQuoted pText
+   return quote & pText & quote
+end xtaQuoted
+
+-- An object of the user's stack as a script would name it: its type and
+-- name (button "OK"), or for one with no name its id (card id 1002)
+private function xtaRef pObject
+   local tName
+   put the name of pObject into tName
+   if char 1 of word 2 of tName is quote then
+      return word 1 of tName && xtaQuoted(the short name of pObject)
+   end if
+   return tName
+end xtaRef
+
+-- As xtaRef, with the id after a name: button "OK" (id 1003), card id 1002
+private function xtaNamed pObject
+   local tRef
+   put xtaRef(pObject) into tRef
+   if word 2 of tRef is "id" then
+      return tRef
+   end if
+   return tRef && "(id" && the id of pObject & ")"
+end xtaNamed
+
+-- How many times pNeedle is in pText
+private function xtaCountOf pNeedle, pText
+   local tCount, tAt, tFound
+   put 0 into tCount
+   put 0 into tAt
+   repeat forever
+      put offset(pNeedle, pText, tAt) into tFound
+      if tFound is 0 then
+         exit repeat
+      end if
+      add 1 to tCount
+      add tFound to tAt
+   end repeat
+   return tCount
+end xtaCountOf
 
 --------------------------------------------------------------------------------
 -- Memory
