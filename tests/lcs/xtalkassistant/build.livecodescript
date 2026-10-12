@@ -150,7 +150,7 @@ end TestPlanSaysWhatItWillDo
 -- Applying and undoing
 
 on TestApplyAndUndoCreates
-   local tStack, tDump, tPlan, tApplied, tUndone, tCard, tButton, tGroup
+   local tStack, tDump, tPlan, tApplied, tUndone, tCard, tButton, tGroup, tMade, tSince, tWhy
    put TestUserStack() into tStack
    put xtaStackDump(tStack) into tDump
    put TestPlan("{`changes`:[" & \
@@ -169,6 +169,7 @@ on TestApplyAndUndoCreates
    TestAssert "applied", tApplied["ok"] is true and tApplied["entry"] is 1
    TestAssert "the summary", tApplied["summary"] is ("Applied 6 changes to the stack" && quote & kUserStack & quote)
    TestAssert "the model is told the ids", tApplied["text"] contains "(id"
+   put xtaStackDump(tStack) into tMade
 
    put the long id of button "Save" of card 1 of tStack into tButton
    TestAssert "the button is made where it was asked", the rect of tButton is "20,200,120,223"
@@ -186,14 +187,45 @@ on TestApplyAndUndoCreates
    TestAssert "the IDE is told of the new controls", xtaTestTold() contains "ideNewControl" and xtaTestTold() contains "ideNewCard"
    TestAssert "the stack is marked as edited", kUserStack is among the lines of xtaTestEdited()
 
+   -- The user did nothing since, so Undo does not ask: the new card was
+   -- opened before the batch's prints were taken (the engine settles some
+   -- of what is on a card when it first opens it). If it asks, the label
+   -- says about what, and what changed in the stack since the batch.
+   put TestDumpDifference(tMade, xtaStackDump(tStack)) into tSince
    put xtaBuildUndo(1, false) into tUndone
    TestDiagnostic tUndone["error"] & tUndone["changed"]
-   TestAssert "undone", tUndone["ok"] is true and tUndone["undone"] contains 1
-   TestAssert "the stack is as it was (gate 2)", TestSameDump(tDump, xtaStackDump(tStack))
+   put tUndone["error"] & return & tUndone["changed"] into tWhy
+   if tSince is not empty then
+      put return & "since the batch," && line 1 to 3 of tSince after tWhy
+   end if
+   TestAssert "undone" & TestWhy(tWhy), tUndone["ok"] is true and tUndone["undone"] contains 1
+   TestAssertSameDump "the stack is as it was (gate 2)", tDump, xtaStackDump(tStack)
    TestAssert "the IDE is told they are gone", xtaTestTold() contains "ideControlDeleted" and xtaTestTold() contains "ideCardDeleted"
    put xtaBuildUndo(1, false) into tUndone
    TestAssert "undone only once", tUndone["ok"] is false and tUndone["error"] contains "undone already"
 end TestApplyAndUndoCreates
+
+on TestUndoDoesNotAskAfterTheNewCardOpens
+   local tStack, tDump, tPlan, tApplied, tUndone
+   put TestUserStack() into tStack
+   put xtaStackDump(tStack) into tDump
+   -- A field given a scrollbar on a card the batch makes: the engine
+   -- settles its scrollbarWidth when the card first opens, which is not
+   -- the user changing it
+   put TestPlan("{`changes`:[" & \
+         "{`action`:`create`,`kind`:`card`,`name`:`Third`,`ref`:`c3`}," & \
+         "{`action`:`create`,`kind`:`field`,`name`:`Log`,`card`:`c3`,`properties`:{`vScrollbar`:true}}" & \
+         "]}", tStack) into tPlan
+   TestDiagnostic tPlan["problems"]
+   TestAssert "the batch is checked", tPlan["ok"] is true
+   put xtaBuildApply(tPlan) into tApplied
+   TestDiagnostic tApplied["error"]
+   TestAssert "applied", tApplied["ok"] is true
+   TestAssert "the user is shown the new card", the short name of this card of tStack is "Third"
+   put xtaBuildUndo(tApplied["entry"], false) into tUndone
+   TestAssert "undone without asking" & TestWhy(tUndone["error"] & return & tUndone["changed"]), tUndone["ok"] is true
+   TestAssertSameDump "the stack is as it was", tDump, xtaStackDump(tStack)
+end TestUndoDoesNotAskAfterTheNewCardOpens
 
 on TestApplyAndUndoChangesAndDeletes
    local tStack, tDump, tPlan, tApplied, tUndone, tGo, tInner, tNotes, tCardId, tInnerId
@@ -229,7 +261,7 @@ on TestApplyAndUndoChangesAndDeletes
    TestAssert "the button is back in its group, with its id", there is a button id tInnerId of tStack \
          and the long id of the owner of button id tInnerId of tStack contains "group"
    TestAssert "the card is back, with its id and its place", the id of card 2 of tStack is tCardId
-   TestAssert "the stack is as it was (gate 2)", TestSameDump(tDump, xtaStackDump(tStack))
+   TestAssertSameDump "the stack is as it was (gate 2)", tDump, xtaStackDump(tStack)
    TestAssert "the copy is used up", the number of cards of stack kHoldStack is 1 and the number of controls of card 1 of stack kHoldStack is 0
 end TestApplyAndUndoChangesAndDeletes
 
@@ -272,7 +304,7 @@ on TestABatchThatFailsChangesNothing
    put xtaBuildApply(tPlan) into tApplied
    TestDiagnostic tApplied["error"]
    TestAssert "it failed", tApplied["ok"] is false and tApplied["error"] contains "Nothing was changed: change 4"
-   TestAssert "the stack is as it was", TestSameDump(tDump, xtaStackDump(tStack))
+   TestAssertSameDump "the stack is as it was", tDump, xtaStackDump(tStack)
    TestAssert "nothing in the journal", the number of elements of xtaBuildEntries() is 0
 end TestABatchThatFailsChangesNothing
 
@@ -306,7 +338,7 @@ on TestUndoTakesLaterEntriesFirst
    TestAssert "both undone, the later first", tUndone["ok"] is true and tUndone["undone"] is ("2" & return & "1" & return)
    put xtaBuildEntries() into tEntries
    TestAssert "the journal says so", tEntries[1]["state"] is "undone" and tEntries[2]["state"] is "undone"
-   TestAssert "the stack is as it was", TestSameDump(tDump, xtaStackDump(tStack))
+   TestAssertSameDump "the stack is as it was", tDump, xtaStackDump(tStack)
    put xtaBuildUndoAll(false) into tUndone
    TestAssert "nothing left to undo", tUndone["ok"] is false and tUndone["error"] contains "nothing to undo"
 end TestUndoTakesLaterEntriesFirst
@@ -332,7 +364,7 @@ on TestCheckpointBringsAStackBack
    TestAssert "the button made since is gone", there is not a button "Extra" of card 1 of tStack
    TestAssert "the field is as it was", field "Notes" of card 1 of tStack is "hello"
    TestAssert "the stack is still unsaved after it", the fileName of tStack is empty
-   TestAssert "the stack is as it was", TestSameDump(tDump, xtaStackDump(tStack))
+   TestAssertSameDump "the stack is as it was", tDump, xtaStackDump(tStack)
 
    put specialFolderPath("temporary") & "/xtaTestUser-" & the milliseconds & ".livecode" into tFile
    save tStack as tFile
@@ -428,7 +460,7 @@ on TestRunOnTheStackCanBeUndone
    TestDiagnostic tUndone["error"] & tUndone["changed"]
    TestAssert "undone", tUndone["ok"] is true
    put the long id of stack kUserStack into tStack
-   TestAssert "the stack is as it was (gate 2)", TestSameDump(tDump, xtaStackDump(tStack))
+   TestAssertSameDump "the stack is as it was (gate 2)", tDump, xtaStackDump(tStack)
 end TestRunOnTheStackCanBeUndone
 
 on TestRiskScan
@@ -593,21 +625,43 @@ private function TestNewStack pName
    return the long id of stack pName
 end TestNewStack
 
--- Two dumps the same; when not, the first lines that differ, for the log
-private function TestSameDump pBefore, pAfter
-   local tIndex, tShown
+-- That two dumps are the same; when they are not, the label says where
+-- (the first lines that differ), since the job's log shows the labels of
+-- the checks that failed and not the diagnostics
+private command TestAssertSameDump pLabel, pBefore, pAfter
+   local tDifference
+   put TestDumpDifference(pBefore, pAfter) into tDifference
+   TestAssert pLabel & TestWhy(line 1 to 3 of tDifference), tDifference is empty
+end TestAssertSameDump
+
+-- The first lines that differ between two dumps (the diagnostics show
+-- them whole), or empty
+private function TestDumpDifference pBefore, pAfter
+   local tIndex, tShown, tText
    if pBefore is pAfter then
-      return true
+      return empty
    end if
    put 0 into tShown
    repeat with tIndex = 1 to max(the number of lines of pBefore, the number of lines of pAfter)
       if line tIndex of pBefore is not line tIndex of pAfter then
          TestDiagnostic "line" && tIndex & ":" && line tIndex of pBefore && "/" && line tIndex of pAfter
+         put "line" && tIndex & ":" && char 1 to 160 of line tIndex of pBefore && "/" && char 1 to 160 of line tIndex of pAfter & return after tText
          add 1 to tShown
          if tShown > 8 then
             exit repeat
          end if
       end if
    end repeat
-   return false
-end TestSameDump
+   return tText
+end TestDumpDifference
+
+-- pWhy as the end of a check's label: empty when it has nothing to say,
+-- else its lines in parentheses, on one line
+private function TestWhy pWhy
+   filter lines of pWhy without empty
+   if pWhy is empty then
+      return empty
+   end if
+   replace return with "; " in pWhy
+   return " (" & pWhy & ")"
+end TestWhy

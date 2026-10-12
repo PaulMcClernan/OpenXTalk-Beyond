@@ -1176,13 +1176,12 @@ function xtaBuildApply pPlan
    put the short name of xtbMainStackOf(tStack) into tEntry["main"]
    put "applied" into tEntry["state"]
    put the number of elements of sJournal + 1 into tEntry["number"]
+   -- The cards made are opened, the last one last to show the user what was
+   -- built, before the prints are taken: the engine settles some of what is
+   -- on a card when it first opens it (a scrolling field's scrollbarWidth,
+   -- for one), which is not the user changing it
+   xtbOpenCardsMade tEntry, tStack
    xtbTakePrints tEntry
-   -- The last card made, to show the user what was built
-   if tEntry["lastCard"] is not empty then
-      if there is a tEntry["lastCard"] and xtbIsOpen(tStack) then
-         go tEntry["lastCard"]
-      end if
-   end if
    unlock messages
    xtbRestoreDefaultStack tOldDefault
    unlock screen
@@ -1818,6 +1817,26 @@ private function xtbHoldStack
    unlock messages
    return the long id of stack kHoldStack
 end xtbHoldStack
+
+-- Goes to each card the entry made that is still there, in the order they
+-- were made, when their stack is open: the user is left on the last one,
+-- and what was made on each has been opened once. (What was made on a
+-- card that was there already is first opened when the user goes to it,
+-- and Undo may then ask whether to undo it anyway.)
+private command xtbOpenCardsMade pEntry, pStack
+   local tIndex, tStep
+   if pEntry["lastCard"] is empty or not xtbIsOpen(pStack) then
+      exit xtbOpenCardsMade
+   end if
+   repeat with tIndex = 1 to the number of elements of pEntry["steps"]
+      put pEntry["steps"][tIndex] into tStep
+      if tStep["op"] is "created" and word 1 of tStep["object"] is "card" then
+         if there is a tStep["object"] then
+            go tStep["object"]
+         end if
+      end if
+   end repeat
+end xtbOpenCardsMade
 
 -- How the entry left each object it made or changed, to tell later
 -- whether the user changed it since
