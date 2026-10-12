@@ -8,10 +8,11 @@ script "org.openxtalk.plugin.xtalkassistant-window"
 -- The window wears the xTalk Suite's look (its UI kit v2), which leaves
 -- the layout to each window: a 16 pixel edge, rows of 24, gaps of 8. From
 -- the top: the band with the title and the pill, the status line, the
--- row of settings, and the conversation on a panel; from the bottom: the
--- footer, the prompt and Send, the row of actions on the answer, and,
--- while the assistant asks the user something, the bar that asks it, on a
--- panel of its own that the conversation makes room for.
+-- row of settings, and the conversation on a panel, with the activity row
+-- at its foot while the assistant works; from the bottom: the footer, the
+-- prompt and Send, the row of actions on the answer, and, while the
+-- assistant asks the user something, the bar that asks it, on a panel of
+-- its own that the conversation makes room for.
 
 constant kMain = "org.openxtalk.plugin.xtalkassistant"
 constant kEdge = 16
@@ -22,6 +23,11 @@ constant kPromptHeight = 72
 constant kSendWidth = 80
 constant kAskHeight = 172
 constant kPillWidth = 92
+constant kActivityHeight = 26
+-- The prompt's line, as the kit draws an entry field's, and the accent
+-- it takes while the prompt has the focus
+constant kFieldLine = "203,210,222"
+constant kAccent = "44,90,160"
 
 on preOpenStack
    xtawLayout the width of me, the height of me
@@ -70,6 +76,8 @@ private command xtawLayout pWidth, pHeight
    -- on the answer
    set the rect of field "uiFooter" of me to tLeft, pHeight - 26, tRight, pHeight - 8
    put pHeight - 34 into tBottom
+   set the rect of graphic "PromptBg" of me to tLeft, tBottom - kPromptHeight, tRight - kSendWidth - kGap, tBottom
+   set the rect of field "PromptHint" of me to tLeft, tBottom - kPromptHeight, tRight - kSendWidth - kGap, tBottom
    set the rect of field "Prompt" of me to tLeft, tBottom - kPromptHeight, tRight - kSendWidth - kGap, tBottom
    set the rect of button "Send" of me to tRight - kSendWidth, tBottom - kPromptHeight, tRight, tBottom - kPromptHeight + kRowHeight
    put tBottom - kPromptHeight - kGap into tBottom
@@ -97,11 +105,44 @@ private command xtawLayout pWidth, pHeight
       put tBottom - kAskHeight - kGap into tBottom
    end if
 
-   -- The conversation takes the rest, on its panel
+   -- The conversation takes the rest, on its panel; while the assistant
+   -- works, the activity row is at the panel's foot, under a hairline
    set the rect of graphic "ConversationPanel" of me to tLeft, tPanelTop, tRight, tBottom
+   if the visible of field "Activity" of me then
+      set the rect of graphic "ActivityLine" of me to tLeft + 1, tBottom - kActivityHeight - 1, tRight - 1, tBottom - kActivityHeight
+      set the rect of graphic "ActivitySpin" of me to tLeft + 14, tBottom - kActivityHeight + 6, tLeft + 28, tBottom - kActivityHeight + 20
+      set the rect of field "Activity" of me to tLeft + 34, tBottom - kActivityHeight + 2, tRight - 76, tBottom - 4
+      set the rect of field "ActivityTime" of me to tRight - 76, tBottom - kActivityHeight + 2, tRight - 12, tBottom - 4
+      put tBottom - kActivityHeight into tBottom
+   end if
    set the rect of field "Conversation" of me to tLeft + 6, tPanelTop + 6, tRight - 6, tBottom - 6
+   xtawFitScrollbar "Conversation"
    unlock screen
 end xtawLayout
+
+-- A field's scrollbar, only while it holds more than it shows (measured
+-- with the scrollbar, so that taking it away cannot make the text longer
+-- than the field)
+private command xtawFitScrollbar pName
+   lock messages
+   set the vScrollbar of field pName of me to true
+   if the formattedHeight of field pName of me <= the height of field pName of me then
+      set the vScrollbar of field pName of me to false
+   end if
+   unlock messages
+end xtawFitScrollbar
+
+-- The main stack put something into the prompt or emptied it
+on xtawPromptChanged
+   xtawPromptShown
+end xtawPromptChanged
+
+-- The prompt's hint while it is empty, and its scrollbar while it holds
+-- more than it shows
+private command xtawPromptShown
+   set the visible of field "PromptHint" of me to (field "Prompt" of me is empty)
+   xtawFitScrollbar "Prompt"
+end xtawPromptShown
 
 on mouseUp pButton
    if pButton is not 1 then
@@ -165,13 +206,49 @@ on linkClicked pLink
    end if
 end linkClicked
 
--- A model name typed into the combo box
+-- (A model name typed into the combo box is taken in closeField, above.)
+
+on textChanged
+   if the short name of the target is "Prompt" then
+      xtawPromptShown
+   end if
+   pass textChanged
+end textChanged
+
+-- The prompt's line is the accent while the prompt has the focus
+on openField
+   if the short name of the target is "Prompt" then
+      set the foregroundColor of graphic "PromptBg" of me to kAccent
+   end if
+   pass openField
+end openField
+
+on exitField
+   xtawPromptLeft
+   pass exitField
+end exitField
+
 on closeField
+   xtawPromptLeft
    if the short name of the target is "Model" then
       dispatch "xtaSetModel" to stack kMain with the label of the target
    end if
    pass closeField
 end closeField
+
+private command xtawPromptLeft
+   if the short name of the target is "Prompt" then
+      set the foregroundColor of graphic "PromptBg" of me to kFieldLine
+   end if
+end xtawPromptLeft
+
+-- Escape stops the assistant while it answers
+on escapeKey
+   dispatch "xtaEscape" to stack kMain
+   if the result is not true then
+      pass escapeKey
+   end if
+end escapeKey
 
 -- Return starts a new line in the prompt; Command-Return (Control-Return on
 -- Windows and Linux) or Enter sends it.

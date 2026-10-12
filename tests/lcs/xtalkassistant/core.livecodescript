@@ -328,6 +328,43 @@ on TestRequestBodyToolsOpenAI
          and xtaJsonText(xtaJsonGet(tMessages, "9/content")) is "Error: Not run."
 end TestRequestBodyToolsOpenAI
 
+-- A tool's picture (look_at_card's) goes with its result: in the
+-- tool_result for Anthropic, after its text; for OpenAI, whose tool
+-- messages take text alone, in a user message after the tool messages
+on TestRequestBodyPictures
+   local tTurns, tDoc, tMessages
+   put TestToolTurns() into tTurns
+   put "iVBORw0KGgo=" into tTurns[3]["results"][1]["image"]
+   put "image/png" into tTurns[3]["results"][1]["imageType"]
+   put xtaJsonParse(xtaRequestBody("anthropic", "m", "Be brief.", tTurns, empty, TestTools())) into tDoc
+   put xtaJsonMember(tDoc, "messages") into tMessages
+   TestDiagnostic xtaJsonText(xtaJsonGet(tMessages, "3/content/1/content/1/text"))
+   TestAssert "Anthropic: the text, then the picture, in the result", \
+         xtaJsonText(xtaJsonGet(tMessages, "3/content/1/tool_use_id")) is "toolu_01" \
+         and xtaJsonText(xtaJsonGet(tMessages, "3/content/1/content/1/type")) is "text" \
+         and xtaJsonText(xtaJsonGet(tMessages, "3/content/1/content/1/text")) is "put: places a value" \
+         and xtaJsonText(xtaJsonGet(tMessages, "3/content/1/content/2/type")) is "image" \
+         and xtaJsonText(xtaJsonGet(tMessages, "3/content/1/content/2/source/type")) is "base64" \
+         and xtaJsonText(xtaJsonGet(tMessages, "3/content/1/content/2/source/media_type")) is "image/png" \
+         and xtaJsonText(xtaJsonGet(tMessages, "3/content/1/content/2/source/data")) is "iVBORw0KGgo="
+   TestAssert "a result without one is a text, as before", xtaJsonText(xtaJsonGet(tMessages, "3/content/2/content")) is "does not compile" \
+         and xtaJsonText(xtaJsonGet(tMessages, "3/content/2/is_error")) is "true"
+   TestAssert "no other message", xtaJsonCount(tMessages) is 8
+   put xtaJsonParse(xtaRequestBody("openai", "m", "Be brief.", tTurns, empty, TestTools())) into tDoc
+   put xtaJsonMember(tDoc, "messages") into tMessages
+   -- system, question, answer, two results, the pictures, answer,
+   -- question, answer, one result, question
+   TestAssert "OpenAI: one message more", xtaJsonCount(tMessages) is 11
+   TestAssert "the results stay text", xtaJsonText(xtaJsonGet(tMessages, "4/content")) is "put: places a value" \
+         and xtaJsonText(xtaJsonGet(tMessages, "5/role")) is "tool"
+   TestAssert "then the pictures, from the user", xtaJsonText(xtaJsonGet(tMessages, "6/role")) is "user" \
+         and xtaJsonText(xtaJsonGet(tMessages, "6/content/1/type")) is "text" \
+         and xtaJsonText(xtaJsonGet(tMessages, "6/content/2/type")) is "image_url" \
+         and xtaJsonText(xtaJsonGet(tMessages, "6/content/2/image_url/url")) is "data:image/png;base64,iVBORw0KGgo="
+   TestAssert "and the answer after them", xtaJsonText(xtaJsonGet(tMessages, "7/role")) is "assistant" \
+         and xtaJsonText(xtaJsonGet(tMessages, "7/content")) is "It places a value."
+end TestRequestBodyPictures
+
 -- A server with no tools is sent the conversation without calls or results
 on TestRequestBodyWithoutTools
    local tDoc, tMessages

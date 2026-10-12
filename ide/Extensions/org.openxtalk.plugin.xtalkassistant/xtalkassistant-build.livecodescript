@@ -64,6 +64,7 @@ script "org.openxtalk.plugin.xtalkassistant-build"
 --    xtaCheckpointSave(pStack), xtaCheckpointRestore(pPath, pStack)
 --    xtaDebugState()                  a paused script, for the model
 --    xtaStackDump(pStack)             a stack as text, to compare
+--    xtaTargetStack(pName, pDefault)  the stack a tool names, checked
 --    xtaBuildCleanup                  forgets all of it (turning off)
 
 -- The hidden stacks made here; their names begin with "rev", so the IDE
@@ -338,7 +339,12 @@ end xtaBuildPlan
 -- The stack a batch or a run is in: pName (the main stack's name, a
 -- substack's of it, or another stack's open in the IDE), else pDefault
 -- (the long id of the main stack the user works on). An array with
--- "stack" (its long id), or "problem".
+-- "stack" (its long id), or "problem". (xtaTargetStack: the same, for the
+-- plugin's tools that save a stack and look at a card.)
+function xtaTargetStack pName, pDefault
+   return xtbTargetStack(pName, pDefault)
+end xtaTargetStack
+
 private function xtbTargetStack pName, pDefault
    local tResult, tMain, tStack, tSub
    put word 1 to -1 of pName into pName
