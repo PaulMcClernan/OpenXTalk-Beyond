@@ -61,6 +61,7 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --    xtaSystemPrompt()                     the short guide, built in
 --    xtaReadGuide(pPath)                   the guide (xtalk-guide.md)
 --    xtaDeclaredNames(pScript)             what a script declares at its top
+--    xtaScriptCounts(pCode)                its handlers and its statements
 --    xtaCheckScript(pCode, pDeclared), xtaCheckBlocks(pBlocks, pDeclared),
 --    xtaCheckCleanup                       compile checks (see "Checking code")
 --    xtaMemoryParse, xtaMemoryFormat, xtaMemoryLoad, xtaMemorySave,
@@ -1625,6 +1626,20 @@ function xtaCheckBlocks pBlocks, pDeclared
    put tLine & return & tReport & "Answer with every block again, corrected and whole." into tResult["report"]
    return tResult
 end xtaCheckBlocks
+
+-- How pCode is made, as the compile check reads it: an array with
+-- "handlers" (how many handlers it defines) and "statements" (how many
+-- lines outside any handler are not declarations). An object's script is
+-- handlers; statements are what the Message Box runs.
+function xtaScriptCounts pCode
+   local tScan, tCounts
+   replace crlf with return in pCode
+   replace numToChar(13) with return in pCode
+   put xtaScanScript(pCode) into tScan
+   put tScan["handlers"] into tCounts["handlers"]
+   put tScan["statements"] into tCounts["statements"]
+   return tCounts
+end xtaScriptCounts
 
 -- The names a script declares with local, global and constant outside its
 -- handlers, one per line
