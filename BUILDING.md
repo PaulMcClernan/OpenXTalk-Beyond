@@ -667,7 +667,13 @@ copies Git keeps: the `.lcdoc` files of `docs/dictionary` and
 `docs/glossary`, the documentation comments of the LiveCode Builder
 modules in `libscript/src` and `engine/src`, the guides in `docs/guides`
 and `ide/Documentation/guides`, and the documentation of the extensions
-that OXT-Beyond installs and of the IDE library.
+that OXT-Beyond installs and of the IDE library. For the
+[xTalk Suite extensions](#xtalk-suite-extensions) that documentation is
+the doc comments of their sources at the pinned commits, which the
+script fetches (the sources only, no native library) into the work
+folder; LiveCode's Dictionary reads the same
+comments from the installed sources when the IDE loads the extensions. A
+member whose source has no doc comments simply has no entries.
 [`tools/ci/build_docs.sh`](tools/ci/build_docs.sh) generates them into
 `ide/Documentation/html_viewer/resources/data`, which Git ignores and
 where `package.py` takes them from; packaging stops when they are

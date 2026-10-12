@@ -38,7 +38,9 @@ and, with --extensions, from the JSON files in that folder of what
 extensions.txt lists there (<id>.js, one library each in the same format):
 a "module" goes into builder and the others into xtalk, as LiveCode's
 Dictionary shows them. --list-extensions writes that extensions.txt: one line
-for each extension OXT-Beyond installs that can have docs, and one for the
+for each extension OXT-Beyond installs that can have docs (the xTalk Suite
+extensions too, from their pinned sources, which it fetches unless
+--no-xtalk-suite; --offline uses only the cache), and one for the
 IDE library, with its id, kind, source file, title and author separated by
 tabs; tools/ci/extension_docs.livecodescript then writes the JSON files. For
 each section it replaces every file of resaved/ and writes index.txt (the
@@ -406,8 +408,8 @@ def extension_sources(repo=REPO):
     installs that can have docs: those built from extensions/ (the sources
     of extensions/extensions.gyp) that tools/oxt/layout.py installs, with
     their .lcb or .livecodescript file, and those of ide/Extensions with an
-    api.lcdoc; then the IDE library. The xTalk Suite extensions document
-    their handlers in their own repositories only."""
+    api.lcdoc; then the IDE library. The xTalk Suite extensions come from
+    xtalk_suite_sources, which --list-extensions adds."""
     sys.path.insert(0, os.path.join(repo, 'tools', 'oxt'))
     import layout  # noqa: E402
     installed = set(layout.REPO_BUILT_EXTENSIONS)
@@ -444,6 +446,51 @@ def extension_sources(repo=REPO):
         raise TextDictionaryError('no source in extensions/extensions.gyp for %s' % ', '.join(sorted(missing)))
     ident, kind, path, title, author = IDE_LIBRARY
     out.append((ident, kind, os.path.join(repo, *path), title, author))
+    for x in out:
+        if any('\t' in field or '\n' in field for field in x):
+            raise TextDictionaryError('%s: a tab or line end in %r' % (x[2], x))
+    return out
+
+
+def xtalk_suite_sources(folder, cache=None, offline=False, manifest=None, log=print):
+    """[(id, kind, source, title, author)] of the xTalk Suite extensions that
+    OXT-Beyond ships built in (tools/oxt/xtalk-extensions.json), whose docs
+    are the doc comments of their pinned sources. xtalk_extensions.py fetches
+    the sources only (no native library) into its cache. An LCB library is
+    read from the cache; a script library is written into <folder>/xtalk as
+    the build ships it (xtalk_extensions.wrap_lcs: its script header and the
+    extensionInitialize pair), so that the docs tool opens it as the stack
+    the IDE loads. A member whose source has no doc comments gets no entries
+    (tools/ci/extension_docs.livecodescript skips it), as before."""
+    sys.path.insert(0, os.path.join(REPO, 'tools', 'oxt'))
+    import xtalk_extensions as xt  # noqa: E402
+    try:
+        data = xt.load_manifest(manifest or xt.DEFAULT_MANIFEST)
+        local = xt.fetch_sources(data, xt.cache_dir(REPO, cache), offline, log)
+    except xt.XtalkError as e:
+        raise TextDictionaryError('xTalk Suite sources: %s' % e)
+    out = []
+    scripts = os.path.join(folder, 'xtalk')
+    for m in data['members']:
+        for e in m['extensions']:
+            path = local.get((m['name'], e['main']))
+            if path is None:
+                raise TextDictionaryError('%s: %s is not a source file of the manifest' % (m['name'], e['main']))
+            if e['kind'] == 'lcb':
+                text, title, author = _metadata(LCB_METADATA, path)
+                out.append((e['id'], 'library', path, title or e['id'], author))
+            else:
+                with open(path, 'rb') as f:
+                    raw = f.read()
+                try:
+                    wrapped = xt.wrap_lcs(raw, e['stack'], '%s %s' % (m['name'], e['main']))[0]
+                except xt.XtalkError as err:
+                    raise TextDictionaryError(str(err))
+                os.makedirs(scripts, exist_ok=True)
+                target = os.path.join(scripts, e['stack'] + '.livecodescript')
+                with open(target, 'wb') as f:
+                    f.write(wrapped)
+                out.append((e['stack'], 'library', target, e['title'], e['author']))
     for x in out:
         if any('\t' in field or '\n' in field for field in x):
             raise TextDictionaryError('%s: a tab or line end in %r' % (x[2], x))
@@ -518,11 +565,19 @@ def main(argv=None):
                     help='add the extensions\' JSON files of DIR (tools/ci/extension_docs.livecodescript)')
     ap.add_argument('--list-extensions', metavar='DIR',
                     help='only write DIR/extensions.txt, the extensions whose docs to add')
+    ap.add_argument('--no-xtalk-suite', action='store_true',
+                    help='with --list-extensions: leave the xTalk Suite extensions out')
+    ap.add_argument('--xtalk-cache', metavar='DIR',
+                    help='the xTalk Suite sources cache (default: as tools/oxt/xtalk_extensions.py)')
+    ap.add_argument('--offline', action='store_true',
+                    help='use only the xTalk Suite sources already in the cache')
     args = ap.parse_args(argv)
     try:
         if args.list_extensions:
             os.makedirs(args.list_extensions, exist_ok=True)
             found = extension_sources()
+            if not args.no_xtalk_suite:
+                found += xtalk_suite_sources(args.list_extensions, args.xtalk_cache, args.offline)
             with open(os.path.join(args.list_extensions, EXTENSION_LIST), 'w', encoding='utf-8',
                       newline='\n') as f:
                 f.write(''.join('\t'.join(x) + '\n' for x in found))
