@@ -46,6 +46,9 @@ local sAnswers, sAsked
 local sDuring, sDelay, sPending, sPressEscape
 -- The angles the spinner was seen at (xtaTestSample)
 local sAngles
+-- The request at which the server turns the pictures switch off, as the
+-- user does in the Settings while the model answers (0: none)
+local sPicturesOffAt
 
 on TestSetup
    local tLibUrl, tStub
@@ -1155,6 +1158,43 @@ on TestPicturesCanBeTurnedOff
    dispatch function "xtaSettingsDone" to stack kMain
 end TestPicturesCanBeTurnedOff
 
+-- The pictures switch holds from the moment the user turns it off, in the
+-- Settings while the model answers: a look_at_card on its way then takes
+-- no picture, and a picture taken before goes with no request after it
+on TestPicturesTurnedOffWhileItAnswers
+   local tPort, tCalls, tBody
+   put "look_at_card" into tCalls[1]["name"]
+   put "{}" into tCalls[1]["input"]
+   put TestStartServer("200 OK", TestToolAnswer(tCalls)) into tPort
+   TestQueueAnswer "200 OK", TestToolAnswer(tCalls)
+   TestQueueAnswer "200 OK", TestAnswer("The button fits.")
+   -- Off as the second request comes, which has the first picture
+   put 2 into sPicturesOffAt
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   create stack "xtaTestWork"
+   go stack "xtaTestWork"
+   set the defaultStack to "xtaTestWork"
+   create button "Hello"
+   put "How does my card look?" into field "Prompt" of stack kWindow
+   TestAnswerAsks "yes"
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic sAsked
+   TestAssert "asked once, to read the stack", the number of lines of sAsked is 1
+   TestAssert "asked three times", sServed is 3
+   TestAssert "the picture went while the switch was on", \
+         TestCount(TestBodyOf(sRequests[2]), TestQ("media_type") & ":" & TestQ("image/png")) is 1
+   put TestBodyOf(sRequests[3]) into tBody
+   TestDiagnostic tBody
+   TestAssert "the call on its way when it was turned off took none", \
+         tBody contains "The assistant's Settings do not let it send you pictures of the user's cards."
+   TestAssert "and the picture taken before goes no more", TestCount(tBody, TestQ("media_type") & ":" & TestQ("image/png")) is 0 \
+         and tBody contains "(The picture is no longer sent: the assistant's Settings no longer let it send pictures.)"
+   TestDiagnostic field "Conversation" of stack kWindow
+   TestAssert "the window says so", "Did not use look_at_card: the Settings do not let it send pictures of your cards" \
+         is among the lines of field "Conversation" of stack kWindow
+   delete stack "xtaTestWork"
+end TestPicturesTurnedOffWhileItAnswers
+
 -- save_stack asks every time, and saves as File > Save does; Don't Save
 -- saves nothing. A stack never saved goes to the dialog that asks where,
 -- which the user can cancel.
@@ -1428,6 +1468,7 @@ private function TestStartServer pStatus, pBody
    put empty into sDuring
    put 0 into sDelay
    put false into sPressEscape
+   put 0 into sPicturesOffAt
    accept connections on port 0 with message "xtaTestServerAccept"
    return it
 end TestStartServer
@@ -1476,6 +1517,10 @@ on xtaTestServerBody pSocket, pData
       put false into sPressEscape
       send "escapeKey" to field "Prompt" of stack kWindow
       TestNoteTheWindow "escaped"
+   end if
+   -- The pictures switch, as the user turns it off in the Settings
+   if sServed is sPicturesOffAt then
+      revIDESetPreference "cXTalkAssistant,pictures", false
    end if
    if sDelay > 0 then
       put tAnswer into sPending[pSocket]

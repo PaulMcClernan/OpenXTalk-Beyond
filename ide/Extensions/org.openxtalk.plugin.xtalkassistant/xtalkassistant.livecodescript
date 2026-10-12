@@ -3238,6 +3238,16 @@ private function xtaRunTool pCall, pDeclared, pProvider
       case "debug_state"
          return xtaToolDebugState(pProvider)
       case "look_at_card"
+         -- Turned off in the Settings since the model was told of it: the
+         -- Settings can be changed while the model answers, and a picture
+         -- is taken only while they let it be sent
+         if not xtaPicturesOn(pProvider) then
+            put "The assistant's Settings do not let it send you pictures of the user's cards. Go on without one: read_stack says what is on a card." \
+                  into tResult["text"]
+            put true into tResult["error"]
+            put "Did not use look_at_card: the Settings do not let it send pictures of your cards" into tResult["summary"]
+            return tResult
+         end if
          return xtaToolLookAtCard(xtaJsonText(xtaJsonMember(tInput, "stack")), xtaJsonText(xtaJsonMember(tInput, "card")), pProvider)
       case "make_changes"
       case "run_code"
@@ -4577,9 +4587,11 @@ end xtaSendPrompt
 -- question; what else went with a question (the last error) stays with it.
 -- Of the pictures of cards (look_at_card), the newest kKeptPictures go
 -- with each request: an older one the model has seen, and it would make
--- every request after it bigger.
+-- every request after it bigger. None goes once the Settings no longer let
+-- pictures be sent: the user turned them off, or chose a server that is
+-- not sent them, in the middle of the conversation.
 private function xtaTurnsToSend
-   local tTurns, tIndex, tLast, tCall, tPictures
+   local tTurns, tIndex, tLast, tCall, tPictures, tKeep
    put 0 into tLast
    repeat with tIndex = 1 to the number of elements of sTurns
       if sTurns[tIndex]["context"] is not empty then
@@ -4604,6 +4616,10 @@ private function xtaTurnsToSend
                "```livecodescript" & return & sTurns[tIndex]["context"] & return & "```" after tTurns[tIndex]["text"]
       end if
    end repeat
+   put kKeptPictures into tKeep
+   if not xtaPicturesOn(xtaProvider()) then
+      put 0 into tKeep
+   end if
    put 0 into tPictures
    repeat with tIndex = the number of elements of tTurns down to 1
       repeat with tCall = the number of elements of tTurns[tIndex]["results"] down to 1
@@ -4611,10 +4627,15 @@ private function xtaTurnsToSend
             next repeat
          end if
          add 1 to tPictures
-         if tPictures > kKeptPictures then
+         if tPictures > tKeep then
             delete variable tTurns[tIndex]["results"][tCall]["image"]
-            put return & "(The picture is no longer sent: you saw it then. Look again for how it is now.)" \
-                  after tTurns[tIndex]["results"][tCall]["text"]
+            if tKeep is 0 then
+               put return & "(The picture is no longer sent: the assistant's Settings no longer let it send pictures.)" \
+                     after tTurns[tIndex]["results"][tCall]["text"]
+            else
+               put return & "(The picture is no longer sent: you saw it then. Look again for how it is now.)" \
+                     after tTurns[tIndex]["results"][tCall]["text"]
+            end if
          end if
       end repeat
    end repeat
