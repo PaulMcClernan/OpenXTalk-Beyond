@@ -1259,8 +1259,12 @@ repositories at pinned commits when OXT-Beyond is packaged (see
   never adds the script libraries by itself: tick them in *Standalone
   Settings*, with the LCB libraries they need (for example `coinxt` with
   `org.openxtalk.library.coin`).
-- Their documentation is in their repositories (`docs/`); the Dictionary
-  does not have it.
+- Both dictionaries have them: every public handler of their libraries
+  has an entry in LiveCode's Dictionary, which reads it from the
+  extension's source when the IDE loads the extension, and in the text
+  dictionary (*Preferences > Dictionary*), which is made from the same
+  sources when OXT-Beyond is built. Their guides and the rest of their
+  documentation are in their repositories (`docs/`).
 - Their licences (MIT, and those of the libraries built into them) are
   in each extension's `licenses` folder and in
   [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#xtalk-suite-extensions).
@@ -1434,11 +1438,10 @@ from their own repositories at pinned commits (see
 [xTalk Suite extensions](#xtalk-suite-extensions) and
 [BUILDING.md](BUILDING.md#xtalk-suite-extensions)). Their limitations:
 the native libraries are the members' prebuilt binaries, which
-OXT-Beyond checks but does not build; the Dictionary does not have
-their documentation; the standalone builder does not add the script
-libraries by itself; and enetxt and Box2Dxt need the Visual C++ runtime,
-whose DLLs the Windows packages ship next to them (the Linux and macOS
-packages do not yet).
+OXT-Beyond checks but does not build; the standalone builder does not
+add the script libraries by itself; and enetxt and Box2Dxt need the
+Visual C++ runtime, whose DLLs the Windows packages ship next to them
+(the Linux and macOS packages do not yet).
 
 Issues and pull requests for any of these are welcome.
 
