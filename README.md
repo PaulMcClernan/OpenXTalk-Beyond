@@ -60,14 +60,16 @@ and fixes bugs that notes in the inherited code pointed to (see
 since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)). Two of
 those fixes change what existing scripts see: an error in a `try`
 statement's `catch` part is now reported, and serial ports on macOS and
-Linux are in raw mode. 0.2.5-rc.1 to rc.3 are test releases
+Linux are in raw mode. 0.2.5-rc.1 to rc.4 are test releases
 (pre-releases) of newer XML and zip libraries for revXML and revZip, of
 regular expressions that match case again (see
 [0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)), of fixes for two
 crashes in `export`, and of the xTalk Assistant, an optional AI helper
-for writing scripts that stays off until you turn it on (see
-[0.2.5-rc.2](#025-rc2-export-crashes-fixed-and-the-xtalk-assistant) and
-[0.2.5-rc.3](#025-rc3-the-xtalk-assistants-window-opens));
+for writing scripts, which builds and runs them in your stack when you
+say yes and stays off until you turn it on (see
+[0.2.5-rc.2](#025-rc2-export-crashes-fixed-and-the-xtalk-assistant),
+[0.2.5-rc.3](#025-rc3-the-xtalk-assistants-window-opens) and
+[0.2.5-rc.4](#025-rc4-the-xtalk-assistant-builds-runs-and-debugs));
 0.2.4 stays the main download until they have held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -223,7 +225,7 @@ successful run and download the artifact under *Artifacts*.
 
 | Platform | Workflow | Artifact |
 | --- | --- | --- |
-| Windows | [Build (Windows)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml) | `OXT-Beyond-win-x86_64` |
+| Windows | [Build (Windows)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml) | `OXT-Beyond-win-x86_64`, and the installer alone as `OXT-Beyond-<ver>-win-x86_64-setup.exe` (kept for 14 days) |
 | macOS | [Build (macOS)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml) | `OXT-Beyond-mac-universal` |
 | Linux | [Build (Linux)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-linux.yml) | `OXT-Beyond-linux-x86_64`, `OXT-Beyond-linux-arm64` |
 
@@ -520,6 +522,9 @@ On Linux:
   script editor are in `cache/IDEScriptEdits`
 - Your own extensions and plugins: `~/OXT-Beyond_extensions`, unless you
   choose another folder in Preferences
+
+The xTalk Assistant keeps the notes you ask it to remember in
+`xTalk Assistant Memory.txt`, in the preferences folder.
 
 Installed and portable copies of OXT-Beyond on the same computer share
 these folders. LiveCode and OpenXTalk Lite keep their preferences
@@ -1150,6 +1155,57 @@ it was turned on:
 Only the plugin changed, and it is still off until you turn it on, so
 no script or stack sees a difference from 0.2.5-rc.2. The engine and the
 standalone runtimes are those of 0.2.5-rc.2.
+
+#### 0.2.5-rc.4: the xTalk Assistant builds, runs and debugs
+
+OXT-Beyond 0.2.5-rc.4, a test release, has everything in 0.2.5-rc.3
+and a much more capable xTalk Assistant, still off until you turn it
+on:
+
+- **Your key works when you paste it.** In rc.3 the key was asked for
+  in a dialog that keeps only keys typed one by one, so a pasted key
+  came back empty and the assistant said there was no key. Now
+  **More > Settings...** (which **Turn On** opens when there is no key)
+  has every setting in one dialog: the provider, the API key, a base
+  URL for a local server, the model, the longest answer, how long to
+  wait for one, and what the model may do. **Get Models** lists the
+  provider's models and says at once whether the key works. The
+  current models are offered before that, and one is chosen for you.
+- **Answers it has checked.** The model gets a guide to LiveCode Script
+  on OXT-Beyond, and every block of xTalk code in its answer is
+  compiled before you read it; one that does not compile goes back to
+  the model to correct (up to 5 times, which you can change). The
+  model can look things up in the Dictionary, check its code, and read
+  your stack and the last error you hit (it asks before it reads a
+  stack).
+- **It builds, runs and debugs, when you say yes.** Ask for what you
+  want ("add a field and a button that counts") rather than for code
+  to paste: the model can make the changes in your stack, run code to
+  try them (in a hidden stack made for the run, or on your stack after
+  a copy of it is saved), and read a script paused at a breakpoint.
+  Each change and each run is shown in a bar in the assistant's window
+  first and happens only when you press **Apply** or **Run** (or allow
+  runs for the session); code that reaches files, the network or other
+  programs is asked about every time. **Undo**, after each change in
+  the conversation, takes it back exactly, and **More > Undo All
+  Changes...** takes back everything. Control-period (Command-period
+  on a Mac) stops a run that does not end. A switch in Settings turns
+  changing and running off.
+- **Notes it remembers.** Notes about you and about the stack you work
+  on go with every question. The model may suggest one, which is kept
+  only when you press **Remember**; **More > Memory...** shows and
+  edits them. They are kept in `xTalk Assistant Memory.txt` in the
+  preferences folder.
+- **A new look.** The window, Settings and Memory look like the xTalk
+  Suite's demos, with a status pill that says when the assistant is
+  working or needs you.
+
+Only the plugin changed, and it is still off until you turn it on, so
+no script or stack sees a difference from 0.2.5-rc.3. Once it is on, it
+changes a stack or runs code only after you say yes. Each question now
+sends the guide too, and may make more than one request (while the
+model corrects its code or uses a tool), each costing what a question
+does. The engine and the standalone runtimes are those of 0.2.5-rc.2.
 
 ### xTalk Suite extensions
 

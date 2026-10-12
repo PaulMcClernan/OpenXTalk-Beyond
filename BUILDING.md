@@ -1926,12 +1926,16 @@ It follows this guide:
    install for the current user, smoke test of the installed program,
    uninstall.
 
-It uploads three artifacts:
+It uploads four artifacts:
 
 - `OXT-Beyond-win-x86_64`: when every step succeeds, the files in
   `dist\` (the installer, the three zips, in release builds the xTalk
   sources zip, and `SHA256SUMS`; not the staged folder), kept for 30
   days;
+- `OXT-Beyond-<ver>-win-x86_64-setup.exe`: the same installer alone and
+  not zipped (uploaded with `archive: false`, so the artifact is the
+  file and takes its name), for trying a build without downloading the
+  whole set; kept for 14 days, and never part of a release;
 - `build-logs-win-x86_64`: `msbuild.log` and the logs of packaging, the
   smoke test, the standalone check, the IDE compile check, the engine
   tests and building and testing the installer, kept
