@@ -29,7 +29,9 @@
 # 2. tools/ci/extension_docs.livecodescript makes the dictionary data of the
 #    extensions that OXT-Beyond installs and of the IDE library, as the IDE
 #    makes it when it loads them (tools/oxt/text_dictionary.py
-#    --list-extensions lists them).
+#    --list-extensions lists them, and fetches the pinned sources of the
+#    xTalk Suite extensions of tools/oxt/xtalk-extensions.json into
+#    <work folder>/xtalk; their doc comments are their docs).
 # 3. tools/oxt/text_dictionary.py makes the entries of the text dictionary
 #    (Preferences > Dictionary) from both.
 #
@@ -131,7 +133,7 @@ echo "LiveCode's docs builder"
 
 # 2. The extensions' docs
 echo "The extensions' docs"
-python3 "$repo/tools/oxt/text_dictionary.py" --list-extensions "$work/ext"
+python3 "$repo/tools/oxt/text_dictionary.py" --list-extensions "$work/ext" --xtalk-cache "$work/xtalk"
 OXT_EXTENSION_DOCS=$work/ext "$engine" -ui "$repo/tools/ci/extension_docs.livecodescript"
 
 # 3. The text dictionary

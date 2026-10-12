@@ -1064,6 +1064,32 @@ def fetch(data, cache, offline=False, platforms=None, members=None, log=print):
     return local
 
 
+def fetch_sources(data, cache, offline=False, log=print):
+    """Make sure the 'source' files of every member are in the cache and
+    verified, and nothing else: the text dictionary's docs build reads the
+    extensions' doc comments and needs no native library. Returns
+    {(member name, path): local file}."""
+    local = {}
+    for m in data['members']:
+        for f in member_files(m, 'source'):
+            path = cache_file(cache, m, f)
+            if os.path.isfile(path) and fetch_assets.check_file(f, path) is None:
+                local[(m['name'], f['path'])] = path
+                continue
+            if os.path.isfile(path):
+                os.remove(path)
+            asset = collections.OrderedDict([('id', '%s %s' % (m['name'], f['path'])), ('url', file_url(m, f)),
+                                             ('sha256', f['sha256']), ('size', f['size'])])
+            try:
+                got = fetch_assets.fetch(asset, os.path.dirname(path), offline, log)
+            except fetch_assets.AssetError as e:
+                raise XtalkError(str(e))
+            if os.path.normcase(os.path.abspath(got)) != os.path.normcase(os.path.abspath(path)):
+                raise XtalkError('%s %s was saved as %s, expected %s' % (m['name'], f['path'], got, path))
+            local[(m['name'], f['path'])] = path
+    return local
+
+
 def cmd_fetch(args, log=print):
     data = load_manifest(args.manifest)
     platforms = selected_platforms(data, args.platforms)

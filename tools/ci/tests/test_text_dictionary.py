@@ -314,11 +314,59 @@ class ExtensionsTest(unittest.TestCase):
     def test_list(self):
         tmp = tempfile.mkdtemp()
         try:
-            self.assertEqual(run(['--list-extensions', tmp]), 0)
+            self.assertEqual(run(['--list-extensions', tmp, '--no-xtalk-suite']), 0)
             with open(os.path.join(tmp, td.EXTENSION_LIST), encoding='utf-8') as f:
                 lines = f.read().splitlines()
             self.assertEqual(len(lines), len(td.extension_sources()))
             self.assertTrue(all(len(line.split('\t')) == 5 for line in lines))
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_xtalk_suite(self):
+        """One row per extension of tools/oxt/xtalk-extensions.json, from
+        its pinned source (here stand-ins in place of the fetched files):
+        an LCB library read where it is, with its metadata title; a script
+        library written as the build ships it, script header included."""
+        import xtalk_extensions as xt
+        data = xt.load_manifest()
+        tmp = tempfile.mkdtemp()
+        stand_ins = {}
+        try:
+            for m in data['members']:
+                for f in xt.member_files(m, 'source'):
+                    path = os.path.join(tmp, 'cache', m['name'], *f['path'].split('/'))
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, 'w', encoding='utf-8', newline='\n') as fh:
+                        if path.endswith('.lcb'):
+                            fh.write('library org.test.x\nmetadata title is "Test %s"\n'
+                                     'metadata author is "Tester"\nend library\n' % m['name'])
+                        else:
+                            fh.write('-- no script header\non testHandler\nend testHandler\n')
+                    stand_ins[(m['name'], f['path'])] = path
+            fetched = []
+            real = xt.fetch_sources
+            xt.fetch_sources = lambda data, cache, offline=False, log=print: (fetched.append(offline), stand_ins)[1]
+            try:
+                rows = td.xtalk_suite_sources(os.path.join(tmp, 'ext'), offline=True)
+            finally:
+                xt.fetch_sources = real
+            self.assertEqual(fetched, [True])
+            want = [e for m in data['members'] for e in m['extensions']]
+            self.assertEqual(len(rows), len(want))
+            for (ident, kind, source, title, author), e in zip(rows, want):
+                self.assertEqual(kind, 'library')
+                self.assertTrue(os.path.isfile(source), source)
+                if e['kind'] == 'lcb':
+                    self.assertEqual(ident, e['id'])
+                    self.assertTrue(title.startswith('Test '), title)
+                    self.assertEqual(author, 'Tester')
+                else:
+                    self.assertEqual(ident, e['stack'])
+                    self.assertEqual((title, author), (e['title'], e['author']))
+                    with open(source, encoding='utf-8') as fh:
+                        text = fh.read()
+                    self.assertTrue(text.startswith('script "%s"\n' % e['stack']), text[:40])
+                    self.assertIn('on extensionInitialize', text)
         finally:
             shutil.rmtree(tmp)
 
