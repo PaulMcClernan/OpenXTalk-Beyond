@@ -14,6 +14,23 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.5-rc.4 (2026-10-12, pre-release)
+
+- xTalk Assistant: a guide, a compile check with fix rounds, and memory (#92)
+- Tests: the guide's line endings are the checkout's (CRLF on Windows) (#92)
+- Tests: a temporary https diagnostic for the assistant (to be removed) (#92)
+- xTalk Assistant: fetch the models and choose one, instead of waiting (#92)
+- xTalk Assistant: switching provider empties the model menu (#92)
+- xTalk Assistant: the work stack is found behind an IDE window (#92)
+- Tests: remove the temporary https diagnostic (#92)
+- xTalk Assistant: a Settings dialog where a pasted key works, current models, tools (#92)
+- Build (Windows): upload the installer alone as well (#92)
+- xTalk Assistant: a library that builds, runs and undoes what the user approves (#92)
+- xTalk Assistant: builds, runs and debugs what the user asks, in the suite's look (#92)
+- xTalk Assistant: the Settings dialog fits a 720p screen (#92)
+- xTalk Assistant: Undo does not ask after a card the batch made opens (#92)
+- Version 0.2.5-rc.4, with its changelog (#93)
+
 ## 0.2.5-rc.3 (2026-10-11, pre-release)
 
 - xTalk Assistant: show the window when it opens, and ask for the key when turned on (#90)
