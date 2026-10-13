@@ -5,8 +5,9 @@ script "TestXTalkAssistantCore"
 -- and whole round trips through libURL to a server of this process that
 -- answers as the providers do. No key and no internet are needed.
 
--- The test server's answer, and the request it read
-local sResponse, sRequest
+-- The test server's answer, the request it read, and how long libURL
+-- would wait for the answer to it (the socketTimeoutInterval then)
+local sResponse, sRequest, sWaitDuring
 
 on TestSetup
    local tCore, tLibUrl
@@ -130,7 +131,7 @@ on TestRequestBodyAnthropic
    put xtaJsonParse(tBody) into tDoc
    TestAssert "model, trimmed", xtaJsonText(xtaJsonMember(tDoc, "model")) is "some-model"
    TestAssert "max_tokens is a number", xtaJsonType(xtaJsonMember(tDoc, "max_tokens")) is "number"
-   TestAssert "max_tokens default", xtaJsonText(xtaJsonMember(tDoc, "max_tokens")) is 4096
+   TestAssert "max_tokens default", xtaJsonText(xtaJsonMember(tDoc, "max_tokens")) is 16000
    TestAssert "system", xtaJsonText(xtaJsonMember(tDoc, "system")) is "Be brief."
    put xtaJsonMember(tDoc, "messages") into tMessages
    TestAssert "the empty turn is left out", xtaJsonCount(tMessages) is 3
@@ -163,6 +164,31 @@ on TestRequestBodyOpenAI
    put xtaJsonParse(xtaRequestBody("openai", "some-model", "Be brief.", TestTurns(), 500, empty, "max_tokens")) into tDoc
    TestAssert "a local server's", xtaJsonText(xtaJsonMember(tDoc, "max_tokens")) is 500
 end TestRequestBodyOpenAI
+
+-- The longest answer a request asks for: what the user set, otherwise
+-- Anthropic's default, and none for OpenAI, whose model decides. The
+-- default leaves room to think: Anthropic's models think before they
+-- answer, the thinking counts toward the limit, and with 0.2.5-rc.4's
+-- 4096 a question that built a stack came back empty.
+on TestMaxTokens
+   TestAssert "anthropic, none set", xtaMaxTokens("anthropic", empty) is 16000
+   TestAssert "anthropic, set", xtaMaxTokens("anthropic", 2048) is 2048
+   TestAssert "a limit that is not one is none", xtaMaxTokens("anthropic", "lots") is 16000 \
+         and xtaMaxTokens("anthropic", 0) is 16000 and xtaMaxTokens("anthropic", -5) is 16000
+   TestAssert "openai, none set", xtaMaxTokens("openai", empty) is empty
+   TestAssert "openai, set", xtaMaxTokens("openai", 500) is 500
+end TestMaxTokens
+
+-- How long a request may go without data: what the user set, otherwise
+-- ten minutes, and longer for an answer given more room than Anthropic's
+-- libraries would wait ten minutes for, up to an hour
+on TestRequestWait
+   TestAssert "what the user set", xtaRequestWait(60, 32000) is 60
+   TestAssert "ten minutes by default", xtaRequestWait(empty, empty) is 600 and xtaRequestWait(empty, 16000) is 600
+   TestAssert "longer for more room", xtaRequestWait(empty, 32000) is 900
+   TestAssert "up to an hour", xtaRequestWait(empty, 1000000) is 3600
+   TestAssert "a wait that is not one is none", xtaRequestWait("soon", 16000) is 600 and xtaRequestWait(0, 32000) is 900
+end TestRequestWait
 
 -- The guide is marked for Anthropic's cache, and the notes after it are not
 private function TestSystemParts
@@ -452,6 +478,28 @@ on TestParseReplyAnthropic
    put xtaParseReply("anthropic", empty, empty) into tReply
    TestAssert "no answer", tReply["ok"] is false and tReply["error"] is not empty
 end TestParseReplyAnthropic
+
+-- An answer Anthropic stopped on safety grounds: what was said before
+-- it, and the kind of request it was taken for when Anthropic says (its
+-- stop_details can be null, or the answer empty)
+on TestParseReplyRefusal
+   local tBody, tReply
+   put "{" & TestQ("content") & ":[{" & TestQ("type") & ":" & TestQ("text") & "," & TestQ("text") & ":" & TestQ("Sure") & "}]," & \
+         TestQ("stop_reason") & ":" & TestQ("refusal") & "," & TestQ("stop_details") & ":{" & TestQ("type") & ":" & TestQ("refusal") & "," & \
+         TestQ("category") & ":" & TestQ("cyber") & "," & TestQ("explanation") & ":" & TestQ("Declined.") & "}}" into tBody
+   put xtaParseReply("anthropic", 200, tBody) into tReply
+   TestAssert "an answer", tReply["ok"] is true and tReply["text"] is "Sure"
+   TestAssert "stopped as a refusal", tReply["stop"] is "refusal"
+   TestAssert "of its category", tReply["category"] is "cyber"
+   put "{" & TestQ("content") & ":[]," & TestQ("stop_reason") & ":" & TestQ("refusal") & "," & TestQ("stop_details") & ":null}" into tBody
+   put xtaParseReply("anthropic", 200, tBody) into tReply
+   TestAssert "an empty one, with no details", tReply["ok"] is true and tReply["stop"] is "refusal" \
+         and tReply["category"] is empty and tReply["text"] is empty
+   put "{" & TestQ("content") & ":[{" & TestQ("type") & ":" & TestQ("text") & "," & TestQ("text") & ":" & TestQ("Hi") & "}]," & \
+         TestQ("stop_reason") & ":" & TestQ("end_turn") & "}" into tBody
+   put xtaParseReply("anthropic", 200, tBody) into tReply
+   TestAssert "an answer that was not stopped has none", tReply["stop"] is "end_turn" and tReply["category"] is empty
+end TestParseReplyRefusal
 
 on TestParseReplyCachedTokens
    local tBody, tReply
@@ -1022,6 +1070,7 @@ end xtaTestServerHeaders
 
 on xtaTestServerBody pSocket, pData
    put pData after sRequest
+   put the socketTimeoutInterval into sWaitDuring
    write sResponse to socket pSocket
    close socket pSocket
 end xtaTestServerBody
@@ -1071,6 +1120,35 @@ on TestAskAnthropic
    TestAssert "the timeout is put back", the socketTimeoutInterval is tOldTimeout
    set the httpHeaders to empty
 end TestAskAnthropic
+
+-- libURL waits ten minutes for an answer, or longer for one given more
+-- room, as it arrives whole when the model is done; or as long as the user
+-- said
+on TestAskWaitsForTheAnswer
+   local tPort, tSettings, tReply, tOldTimeout, tBody
+   put "{" & TestQ("content") & ":[{" & TestQ("type") & ":" & TestQ("text") & "," & TestQ("text") & ":" & TestQ("Hi") & "}]," & \
+         TestQ("stop_reason") & ":" & TestQ("end_turn") & "}" into tBody
+   put the socketTimeoutInterval into tOldTimeout
+   put TestStartServer("200 OK", tBody) into tPort
+   put "anthropic" into tSettings["provider"]
+   put "http://127.0.0.1:" & tPort into tSettings["baseUrl"]
+   put "sk-local" into tSettings["key"]
+   put "test-model" into tSettings["model"]
+   put xtaAsk(tSettings, empty, TestTurns()) into tReply
+   TestAssert "ten minutes for the default room", tReply["ok"] is true and sWaitDuring is 600000
+   put TestStartServer("200 OK", tBody) into tPort
+   put "http://127.0.0.1:" & tPort into tSettings["baseUrl"]
+   put 32000 into tSettings["maxTokens"]
+   put xtaAsk(tSettings, empty, TestTurns()) into tReply
+   TestAssert "fifteen for twice as much", tReply["ok"] is true and sWaitDuring is 900000 \
+         and xtaJsonText(xtaJsonMember(xtaJsonParse(TestRequestBody()), "max_tokens")) is 32000
+   put TestStartServer("200 OK", tBody) into tPort
+   put "http://127.0.0.1:" & tPort into tSettings["baseUrl"]
+   put 60 into tSettings["timeout"]
+   put xtaAsk(tSettings, empty, TestTurns()) into tReply
+   TestAssert "as long as the user said", tReply["ok"] is true and sWaitDuring is 60000
+   TestAssert "and the engine's is put back", the socketTimeoutInterval is tOldTimeout
+end TestAskWaitsForTheAnswer
 
 on TestAskOpenAI
    local tPort, tSettings, tReply, tDoc

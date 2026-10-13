@@ -42,6 +42,8 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --    xtaRequestHeaders(pProvider, pKey)    header lines for the httpHeaders
 --    xtaRequestBody(pProvider, pModel, pSystem, pTurns, pMaxTokens, pTools,
 --                   pTokensName)
+--    xtaMaxTokens(pProvider, pMaxTokens)   the longest answer a request
+--                                          asks for (empty: none)
 --    xtaParseReply(pProvider, pStatus, pBody)
 --    xtaParseModels(pProvider, pStatus, pBody)
 --    xtaDefaultModel(pProvider, pIds, pCreated)  the model to begin with
@@ -49,6 +51,8 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --                                          the model menu
 --    xtaHttpPost(pUrl, pHeaders, pBody, pTimeout),
 --    xtaHttpGet(pUrl, pHeaders, pTimeout)
+--    xtaRequestWait(pTimeout, pMaxTokens)  how long a request may go
+--                                          without data, in seconds
 --    xtaAsk(pSettings, pSystem, pTurns, pTools)  one round trip, as
 --                                          xtaParseReply
 --    xtaDictionaryText(pTerm, pEntries)    a Dictionary entry, for the model
@@ -75,11 +79,24 @@ constant kAnthropicVersion = "2023-06-01"
 constant kAnthropicBaseUrl = "https://api.anthropic.com"
 constant kOpenAIBaseUrl = "https://api.openai.com/v1"
 -- Anthropic requires max_tokens; this is used when the settings give none.
-constant kDefaultMaxTokens = 4096
--- How long a request may go without data. A model can think for a while
--- before the first byte of a (non-streamed) answer arrives, and libURL
--- gives up after the engine's socketTimeoutInterval (10 seconds by default).
-constant kRequestTimeoutMilliseconds = 180000
+-- Its models think before they answer (Claude Opus 5.5 always does), and
+-- the thinking counts toward max_tokens: with the 4096 of 0.2.5-rc.4 a
+-- question that builds a stack could use them all up thinking, and the
+-- answer came back empty. 16000 is what Anthropic advises for a request
+-- that is not streamed.
+constant kDefaultMaxTokens = 16000
+-- How long a request may go without data. A (non-streamed) answer arrives
+-- whole when the model is done, which for kDefaultMaxTokens can take three
+-- minutes or more, and libURL gives up after the engine's
+-- socketTimeoutInterval (10 seconds by default). Ten minutes, as
+-- Anthropic's own libraries wait; longer for an answer given more room
+-- (xtaRequestWait).
+constant kRequestTimeoutMilliseconds = 600000
+-- How long the longest answer may take, as Anthropic's libraries reckon
+-- it: an hour for 128000 tokens
+constant kTokensAnHour = 128000
+-- Asking for the models takes a moment, so it is not given as long
+constant kListTimeoutSeconds = 180
 -- How deeply JSON may nest before the reader refuses it.
 constant kJsonMaxDepth = 64
 -- The hidden stack whose button the compile checks set the script of. Its
@@ -677,10 +694,7 @@ function xtaRequestBody pProvider, pModel, pSystem, pTurns, pMaxTokens, pTools, 
 
    put "{" & xtaJsonPair("model", xtaJsonString(word 1 to -1 of pModel)) into tBody
    if pProvider is "anthropic" then
-      put pMaxTokens into tMax
-      if tMax is not an integer or tMax < 1 then
-         put kDefaultMaxTokens into tMax
-      end if
+      put xtaMaxTokens(pProvider, pMaxTokens) into tMax
       put comma & xtaJsonPair("max_tokens", tMax + 0) after tBody
       if the number of elements of tParts is 1 and tParts[1]["cache"] is not true then
          put comma & xtaJsonPair("system", xtaJsonString(tParts[1]["text"])) after tBody
@@ -712,6 +726,19 @@ function xtaRequestBody pProvider, pModel, pSystem, pTurns, pMaxTokens, pTools, 
    put comma & xtaJsonPair("messages", "[" & tMessages & "]") & "}" after tBody
    return tBody
 end xtaRequestBody
+
+-- The longest answer a request asks for, in tokens: pMaxTokens when the
+-- user set it; otherwise kDefaultMaxTokens for Anthropic, which requires
+-- one, and empty for OpenAI, whose model then decides
+function xtaMaxTokens pProvider, pMaxTokens
+   if pMaxTokens is an integer and pMaxTokens > 0 then
+      return pMaxTokens
+   end if
+   if pProvider is "anthropic" then
+      return kDefaultMaxTokens
+   end if
+   return empty
+end xtaMaxTokens
 
 -- The tools as the provider takes them
 private function xtaToolsJson pProvider, pTools
@@ -890,7 +917,10 @@ end xtaSystemText
 --    ok            true when the model answered
 --    text          what it said (all its text parts, in order)
 --    stop          why it stopped (the provider's word, such as "end_turn",
---                  "stop", "max_tokens" or "length")
+--                  "stop", "max_tokens" or "length"; "refusal" when
+--                  Anthropic's safety check stopped it)
+--    category      for a refusal, the kind of request the check took it
+--                  for, when Anthropic says
 --    inputTokens, outputTokens   what the request cost, when the answer says
 --    cachedTokens  how much of the input was read from the provider's cache
 --                  (Anthropic counts it apart from inputTokens, OpenAI in it)
@@ -930,6 +960,7 @@ function xtaParseReply pProvider, pStatus, pBody
             end if
          end repeat
          put xtaJsonText(xtaJsonMember(tDoc, "stop_reason")) into tReply["stop"]
+         put xtaJsonText(xtaJsonGet(tDoc, "stop_details/category")) into tReply["category"]
          put xtaJsonText(xtaJsonGet(tDoc, "usage/input_tokens")) into tReply["inputTokens"]
          put xtaJsonText(xtaJsonGet(tDoc, "usage/output_tokens")) into tReply["outputTokens"]
          put xtaJsonText(xtaJsonGet(tDoc, "usage/cache_read_input_tokens")) into tReply["cachedTokens"]
@@ -1242,6 +1273,22 @@ private function xtaHttp pMethod, pUrl, pHeaders, pBody, pTimeout
    return tAnswer
 end xtaHttp
 
+-- How many seconds a request may go without data: pTimeout when the user
+-- set it; otherwise kRequestTimeoutMilliseconds, or longer for a request
+-- that gives its answer pMaxTokens of room, since a (non-streamed) answer
+-- arrives whole when the model is done (kTokensAnHour), up to an hour
+function xtaRequestWait pTimeout, pMaxTokens
+   local tWait
+   if pTimeout is an integer and pTimeout > 0 then
+      return pTimeout
+   end if
+   put kRequestTimeoutMilliseconds div 1000 into tWait
+   if pMaxTokens is an integer and pMaxTokens > 0 then
+      put max(tWait, min(3600, (pMaxTokens * 3600 + kTokensAnHour - 1) div kTokensAnHour)) into tWait
+   end if
+   return tWait
+end xtaRequestWait
+
 -- One round trip: sends the conversation and returns what xtaParseReply
 -- does. pSettings has "provider", "baseUrl", "key", "model", "maxTokens"
 -- and "timeout" (seconds; the last two may be empty); pTools, when given,
@@ -1262,7 +1309,8 @@ function xtaAsk pSettings, pSystem, pTurns, pTools
       put xtaPlainError(tError) into tReply["error"]
       return tReply
    end try
-   put xtaHttpPost(xtaRequestUrl(tProvider, pSettings["baseUrl"]), tHeaders, tBody, pSettings["timeout"]) into tAnswer
+   put xtaHttpPost(xtaRequestUrl(tProvider, pSettings["baseUrl"]), tHeaders, tBody, \
+         xtaRequestWait(pSettings["timeout"], xtaMaxTokens(tProvider, pSettings["maxTokens"]))) into tAnswer
    put empty into tHeaders
    if tAnswer["status"] is empty then
       put false into tReply["ok"]
@@ -1274,8 +1322,12 @@ end xtaAsk
 
 -- The model names the provider offers, as xtaParseModels returns them.
 function xtaListModels pSettings
-   local tProvider, tHeaders, tAnswer, tResult, tError
+   local tProvider, tHeaders, tAnswer, tResult, tError, tTimeout
    put pSettings["provider"] into tProvider
+   put pSettings["timeout"] into tTimeout
+   if not (tTimeout is an integer and tTimeout > 0) then
+      put kListTimeoutSeconds into tTimeout
+   end if
    try
       put xtaRequestHeaders(tProvider, pSettings["key"]) into tHeaders
    catch tError
@@ -1284,7 +1336,7 @@ function xtaListModels pSettings
    end try
    -- Anthropic's model list wants the version header too; neither list
    -- needs a body, so the Content-Type line does no harm.
-   put xtaHttpGet(xtaModelsUrl(tProvider, pSettings["baseUrl"]), tHeaders, pSettings["timeout"]) into tAnswer
+   put xtaHttpGet(xtaModelsUrl(tProvider, pSettings["baseUrl"]), tHeaders, tTimeout) into tAnswer
    put empty into tHeaders
    if tAnswer["status"] is empty then
       put tAnswer["error"] into tResult["error"]
