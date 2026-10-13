@@ -60,7 +60,7 @@ and fixes bugs that notes in the inherited code pointed to (see
 since (see [0.2.4-rc.7](#024-rc7-more-engine-and-library-fixes)). Two of
 those fixes change what existing scripts see: an error in a `try`
 statement's `catch` part is now reported, and serial ports on macOS and
-Linux are in raw mode. 0.2.5-rc.1 to rc.4 are test releases
+Linux are in raw mode. 0.2.5-rc.1 to rc.5 are test releases
 (pre-releases) of newer XML and zip libraries for revXML and revZip, of
 regular expressions that match case again (see
 [0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)), of fixes for two
@@ -69,7 +69,9 @@ for writing scripts, which builds and runs them in your stack when you
 say yes and stays off until you turn it on (see
 [0.2.5-rc.2](#025-rc2-export-crashes-fixed-and-the-xtalk-assistant),
 [0.2.5-rc.3](#025-rc3-the-xtalk-assistants-window-opens) and
-[0.2.5-rc.4](#025-rc4-the-xtalk-assistant-builds-runs-and-debugs));
+[0.2.5-rc.4](#025-rc4-the-xtalk-assistant-builds-runs-and-debugs)),
+and of entries for the xTalk Suite's extensions in both dictionaries
+(see [0.2.5-rc.5](#025-rc5-the-xtalk-suite-in-both-dictionaries));
 0.2.4 stays the main download until they have held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1206,6 +1208,81 @@ changes a stack or runs code only after you say yes. Each question now
 sends the guide too, and may make more than one request (while the
 model corrects its code or uses a tool), each costing what a question
 does. The engine and the standalone runtimes are those of 0.2.5-rc.2.
+
+#### 0.2.5-rc.5: the xTalk Suite in both dictionaries
+
+OXT-Beyond 0.2.5-rc.5, a test release, has everything in 0.2.5-rc.4,
+and:
+
+- **The xTalk Suite's extensions are in both dictionaries.** Every
+  public handler of the 15 libraries that the
+  [xTalk Suite extensions](#xtalk-suite-extensions) bring, 1162 in all,
+  has an entry in LiveCode's Dictionary and in the text dictionary
+  (*Preferences > Dictionary*), as the other built-in extensions have:
+  its summary, syntax, parameters, what it returns, an example and a
+  description, with links to related entries. Each library has an
+  entry of its own as well. The documentation was added in the members'
+  repositories, and OXT-Beyond now takes the commits that have it.
+- **The xTalk Assistant keeps you posted.** From Send until the answer,
+  a row under the conversation says what the assistant is doing
+  ("Waiting for the model", "Reading the stack", "Checking that the
+  code compiles", "Waiting for your answer, below") beside a turning
+  spinner and a clock. The pill says **Thinking**, **Working** or
+  **Needs you**, Escape stops it as Stop does, and each answer ends with
+  what it took: the time, the requests and the tokens.
+- **Answers are laid out.** Headings, lists, quotes, bold, italics,
+  inline code and links show as such, and each block of code is a card
+  headed with its language, with **Copy**, and **Insert** for xTalk. A
+  link opens in your browser. Before the first question, the window
+  says what the assistant can do and offers four questions to start
+  with.
+- **New stacks it can look at and save.** Asked for an app, a tool or a
+  game, the model makes a new stack, moved beside the assistant's
+  window when it would open under it. Once you allow it to read a
+  stack, it can look at a card (a picture of it, to check the layout it
+  built), and it can save a stack, which it asks about every time. A new
+  switch in Settings, **Let the model see pictures of your cards**,
+  turns the pictures off. The *More* menu has **Explain the Open
+  Script** and **Copy the Conversation**, and the window and the model
+  call the language xTalk Script.
+- **A fix in the Preferences.** The *Automatic Updates* card no longer
+  stops with an error when the window moves to another card right after
+  showing it (CI's screenshot tour did that on an Intel Mac).
+
+The suite's extensions changed only in their comments, except the
+Box2Dxt Kit, which brings the fixes made for Box2Dxt's platformer game.
+Two of them change what existing calls do:
+
+- After a saved stack reopens, `b2kSound`, `b2kSoundLoop` and
+  `b2kSoundIsLoaded` use the `b2ksnd_` audio clip saved in the stack,
+  where before the sound counted as not made yet.
+- With `b2kSheetPersist` on, `b2kSheetLoadAtlas` reuses the regions
+  saved with the sheet's image instead of reading the atlas's XML
+  again, and saves them in two new custom properties of the image,
+  `uB2kAtlasXml` and `uB2kAtlasRows`.
+
+The Kit also sweeps a previous session's leftover sprite controls off
+the card in one pass when it tears down, with the same result, and has
+three new handlers (`b2kSoundClip`, `b2kSheetAdoptAtlas` and
+`b2kSheetAtlasRows`). The suite has tested these changes headlessly;
+they have not yet run on an engine. The xTalk Assistant is
+still off until you turn it on, so with it off nothing else differs
+from 0.2.5-rc.4; once it is on, it sends a picture of a card only after
+you allow it to read that stack, and saves a stack only when you press
+**Save**. The Preferences fix changes only the Preferences window. The
+engine and the standalone runtimes are those of 0.2.5-rc.2.
+
+Known problem: in 51 of the new entries a line of the description is
+read as a separate part, because it starts with one word and a colon.
+The library entry of NostrXT's relay client stops at "Call nxrShutdown
+from", without its last paragraph: the library handles the engine's
+`socketError`, `socketClosed` and `socketTimeout` messages, and a stack
+script that handles them too must pass the ones that are not its own,
+or another library will hang. `dcCreateChannel` shows its last sentence
+as a return value named "It", and in the other 49 a word runs into the
+next one after a colon (for example "automatic:creating"). The fix is
+in the xTalk Suite (its pull request 158) and comes with the next
+release.
 
 ### xTalk Suite extensions
 
