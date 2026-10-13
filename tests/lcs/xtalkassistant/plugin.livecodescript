@@ -18,7 +18,10 @@ script "TestXTalkAssistantPlugin"
 -- conversation says what it does and for how long, and Escape stops it;
 -- that answers are laid out (headings, lists, code with Copy and Insert),
 -- that the model can look at a card and save a stack only when the user
--- says yes. The other dialogs (turning it on, errors,
+-- says yes; that an answer cut off at its length limit is asked for again
+-- with more room, and one that cannot be, or that the provider stopped on
+-- safety grounds, says why it ends there and has none of its calls carried
+-- out. The other dialogs (turning it on, errors,
 -- the Memory window, Undo All's question), the Settings dialog's modal
 -- loop and the Script Editor are not reached here: they need the IDE.
 -- The window's bar is answered as the user would, by clicking its
@@ -685,6 +688,9 @@ on TestSettingsKeepEverything
    TestAssert "with what is set", field "Base URL" of stack kSettings is "http://127.0.0.1:1" \
          and the label of button "Model" of stack kSettings is "test-model" and field "Fix Rounds" of stack kSettings is 5
    TestAssert "and says where the key comes from", field "Key Note" of stack kSettings begins with "The key in the environment variable ANTHROPIC_API_KEY is used."
+   TestAssert "the notes say what an empty number means", \
+         field "Max Tokens Note" of stack kSettings is "tokens (empty: 16000 for Anthropic; OpenAI's model decides)" \
+         and field "Timeout Note" of stack kSettings is "seconds (10 to 3600; empty: 600, more for a long answer)"
    -- As pasted: with spaces and a line break around it
    put "  sk-ant-typed-1234  " & return into field "Key" of stack kSettings
    put "http://127.0.0.1:" & tPort into field "Base URL" of stack kSettings
@@ -888,6 +894,151 @@ on TestToolsRefusedByALocalServer
    put xtaJsonParse(TestRequestBody()) into tDoc
    TestAssert "no tools from then on", sServed is 1 and xtaJsonType(xtaJsonMember(tDoc, "tools")) is "missing"
 end TestToolsRefusedByALocalServer
+
+--------------------------------------------------------------------------------
+-- Answers cut off at their length limit, and answers stopped on safety
+-- grounds. Anthropic's models think before they answer, and the thinking
+-- counts toward the limit: in 0.2.5-rc.4 (4096 tokens) a question that
+-- built a stack came back with nothing but thinking, and the window showed
+-- an empty answer.
+
+-- An answer cut off before it said anything is asked for again with twice
+-- the room, and the window says why it waits again
+on TestACutOffAnswerIsAskedAgain
+   local tPort, tDoc, tConversation, tStatus
+   put TestStartServer("200 OK", TestStopAnswer(TestThinkingBlock(), "max_tokens")) into tPort
+   TestQueueAnswer "200 OK", TestAnswer("Here is the stack.")
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   put "Make me a notepad." into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestAssert "asked twice", sServed is 2
+   TestAssert "first with the room Anthropic gets by default", TestBodyOf(sRequests[1]) contains (TestQ("max_tokens") & ":16000")
+   TestAssert "then with twice as much", TestBodyOf(sRequests[2]) contains (TestQ("max_tokens") & ":32000")
+   TestDiagnostic sDuring[2]["asked"]["activity"]
+   TestAssert "and the window said why while it waited", \
+         sDuring[2]["asked"]["activity"] is "Cut off at 16000 tokens: asking again with room for 32000"
+   put xtaJsonParse(TestBodyOf(sRequests[2])) into tDoc
+   TestAssert "the answer that was cut off is not sent back", xtaJsonCount(xtaJsonMember(tDoc, "messages")) is 1
+   put field "Conversation" of stack kWindow into tConversation
+   TestDiagnostic tConversation
+   TestAssert "the answer is shown", tConversation contains "Here is the stack." and not (tConversation contains "Cut off")
+   put field "Status" of stack kWindow into tStatus
+   TestDiagnostic tStatus
+   TestAssert "the status line counts both requests", tStatus contains "2 requests" and tStatus contains "20 tokens in, 16020 out"
+   TestAssert "and has nothing to warn of", not (tStatus contains "cut off")
+end TestACutOffAnswerIsAskedAgain
+
+-- A call cut off while the model wrote it is never carried out: its input
+-- is not whole. With no more room to give, the window says why the answer
+-- ends there, and the next question sends no call without its result.
+on TestACutOffCallIsNotCarriedOut
+   local tPort, tNote, tConversation, tLine, tDoc
+   put TestStartServer("200 OK", TestStopAnswer(TestTextBlock("Let me look.") & "," & \
+         TestCallBlock("lookup_dictionary", "{" & TestQ("term") & ":" & TestQ("pu") & "}", 1), "max_tokens")) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   put "What does put do?" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestAssert "asked again with more room, and no more", sServed is 2 \
+         and TestBodyOf(sRequests[2]) contains (TestQ("max_tokens") & ":32000")
+   put field "Conversation" of stack kWindow into tConversation
+   TestDiagnostic tConversation
+   TestAssert "the call was not carried out", not (tConversation contains "Looked up")
+   put "Cut off at the length limit of 32000 tokens, while the model was writing a call to lookup_dictionary, which was not carried out." && \
+         "Ask for less at a time, such as one card or a few controls, or raise the longest answer in More > Settings." into tNote
+   TestAssert "what it said is shown", tConversation contains "Let me look."
+   put lineOffset(tNote, tConversation) into tLine
+   TestAssert "and why it ends there, in italics", tLine > 0 and line tLine of tConversation is tNote \
+         and the textStyle of line tLine of field "Conversation" of stack kWindow is "italic"
+   -- 0.2.5-rc.4 named the colours of the conversation's runs as the engine
+   -- does not take them, and none showed
+   TestAssert "in amber", the foregroundColor of line tLine of field "Conversation" of stack kWindow is "150,110,40"
+   TestAssert "under who answered, in the accent", \
+         the foregroundColor of line lineOffset("xTalk Assistant", tConversation) of field "Conversation" of stack kWindow is "44,90,160"
+   TestDiagnostic field "Status" of stack kWindow
+   TestAssert "the status line says it was cut off", field "Status" of stack kWindow contains "the answer was cut off at its length limit"
+   put TestStartServer("200 OK", TestAnswer("It places a value.")) into tPort
+   revIDESetPreference "cXTalkAssistant,baseUrl,anthropic", "http://127.0.0.1:" & tPort
+   put "Go on" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic TestRequestBody()
+   TestAssert "the next question sends no call", not (TestRequestBody() contains "tool_use") \
+         and not (TestRequestBody() contains "toolu_1")
+   put xtaJsonParse(TestRequestBody()) into tDoc
+   TestAssert "but what was said", xtaJsonText(xtaJsonGet(tDoc, "messages/2/content")) is "Let me look." \
+         and xtaJsonCount(xtaJsonMember(tDoc, "messages")) is 3
+   TestAssert "with the usual room again", TestRequestBody() contains (TestQ("max_tokens") & ":16000")
+end TestACutOffCallIsNotCarriedOut
+
+-- An answer cut off once it had said something is shown with why it ends
+-- there, and is not asked for again; its code is not whole, so it is not
+-- sent back to be corrected
+on TestACutOffAnswerIsShown
+   local tPort, tAnswer, tNote, tConversation, tText
+   put "Here is the first part:" & return & TestBlock("livecodescript", "on mouseUp" & return & "   put 1 inot tX") into tAnswer
+   put TestStartServer("200 OK", TestStopAnswer(TestTextBlock(tAnswer), "max_tokens")) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   put "Write it all" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestAssert "asked once", sServed is 1
+   put field "Conversation" of stack kWindow into tConversation
+   TestDiagnostic tConversation
+   put "Cut off at the length limit of 16000 tokens. Ask the assistant to go on, or raise the longest answer in More > Settings." into tNote
+   TestAssert "what it said and why it ends there", tConversation contains "Here is the first part:" and tNote is among the lines of tConversation
+   TestAssert "its code was not sent back", not (tConversation contains "Compile check")
+   TestAssert "the status line says it was cut off", field "Status" of stack kWindow contains "the answer was cut off at its length limit"
+   if TestClipboardWorks() then
+      dispatch "xtaMoreMenuPick" to stack kMain with "Copy the Conversation"
+      put the clipboardData["text"] into tText
+      TestDiagnostic tText
+      TestAssert "a copy of the conversation says so too", tText contains ("*" & tNote & "*")
+   end if
+end TestACutOffAnswerIsShown
+
+-- An answer cut off before it said anything, with no more room to give
+-- (the user's limit is the most already), says so instead of nothing
+on TestACutOffAnswerWithNoMoreRoom
+   local tPort, tNote
+   revIDESetPreference "cXTalkAssistant,maxTokens", 64000
+   put TestStartServer("200 OK", TestStopAnswer(TestThinkingBlock(), "max_tokens")) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   put "Make me a notepad." into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestAssert "asked once, with the user's limit", sServed is 1 and TestRequestBody() contains (TestQ("max_tokens") & ":64000")
+   TestDiagnostic field "Conversation" of stack kWindow
+   put "Cut off at the length limit of 64000 tokens, before the model wrote its answer: its thinking counts toward the limit." && \
+         "Ask for less at a time, or raise the longest answer in More > Settings." into tNote
+   TestAssert "the window says why there is no answer", tNote is among the lines of field "Conversation" of stack kWindow
+   revIDESetPreference "cXTalkAssistant,maxTokens", empty
+end TestACutOffAnswerWithNoMoreRoom
+
+-- An answer the provider stopped on safety grounds: what it asked for is
+-- not done, the window says why it ends there, and it is not sent with
+-- the next question
+on TestARefusalIsNotCarriedOut
+   local tPort, tNote, tConversation, tDoc
+   put TestStartServer("200 OK", TestStopAnswer(TestTextBlock("I'll start.") & "," & \
+         TestCallBlock("lookup_dictionary", "{" & TestQ("term") & ":" & TestQ("put") & "}", 1), "refusal", \
+         "{" & TestQ("type") & ":" & TestQ("refusal") & "," & TestQ("category") & ":" & TestQ("cyber") & "}")) into tPort
+   TestOpenTheWindow "http://127.0.0.1:" & tPort
+   put "Scan the ports" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestAssert "asked once", sServed is 1
+   put field "Conversation" of stack kWindow into tConversation
+   TestDiagnostic tConversation
+   TestAssert "its call was not carried out", not (tConversation contains "Looked up")
+   put "Anthropic stopped this answer on safety grounds (cyber). Nothing it asked for was done, and it is not sent with your next question." into tNote
+   TestAssert "the window says why it ends there", tConversation contains "I'll start." and tNote is among the lines of tConversation
+   TestDiagnostic field "Status" of stack kWindow
+   TestAssert "and so does the status line", field "Status" of stack kWindow contains "the provider stopped the answer on safety grounds"
+   put TestStartServer("200 OK", TestAnswer("Hello.")) into tPort
+   revIDESetPreference "cXTalkAssistant,baseUrl,anthropic", "http://127.0.0.1:" & tPort
+   put "Something else" into field "Prompt" of stack kWindow
+   dispatch "xtaSendPrompt" to stack kMain
+   TestDiagnostic TestRequestBody()
+   put xtaJsonParse(TestRequestBody()) into tDoc
+   TestAssert "the next question does not send it", not (TestRequestBody() contains "I'll start.") \
+         and not (TestRequestBody() contains "tool_use") and xtaJsonCount(xtaJsonMember(tDoc, "messages")) is 2
+end TestARefusalIsNotCarriedOut
 
 --------------------------------------------------------------------------------
 -- Changing stacks and running code
@@ -1614,6 +1765,36 @@ private function TestToolAnswer pCalls
    return "{" & TestQ("content") & ":[" & tContent & "]," & TestQ("stop_reason") & ":" & TestQ("tool_use") & "," & \
          TestQ("usage") & ":{" & TestQ("input_tokens") & ":10," & TestQ("output_tokens") & ":20}}"
 end TestToolAnswer
+
+-- An answer as Anthropic gives it that stopped for pStop ("max_tokens",
+-- "refusal"): pContent is its content blocks, and pDetails its
+-- stop_details, null when empty (JSON both)
+private function TestStopAnswer pContent, pStop, pDetails
+   if pDetails is empty then
+      put "null" into pDetails
+   end if
+   return "{" & TestQ("content") & ":[" & pContent & "]," & TestQ("stop_reason") & ":" & TestQ(pStop) & "," & \
+         TestQ("stop_details") & ":" & pDetails & "," & \
+         TestQ("usage") & ":{" & TestQ("input_tokens") & ":10," & TestQ("output_tokens") & ":16000}}"
+end TestStopAnswer
+
+-- Content blocks as Anthropic gives them: text, a call (with the id
+-- toolu_pNumber, and pInput a JSON object), and the thinking of a model
+-- that thinks before it answers (empty: Anthropic leaves it out unless
+-- asked)
+private function TestTextBlock pText
+   return "{" & TestQ("type") & ":" & TestQ("text") & "," & TestQ("text") & ":" & TestQ(pText) & "}"
+end TestTextBlock
+
+private function TestCallBlock pName, pInput, pNumber
+   return "{" & TestQ("type") & ":" & TestQ("tool_use") & "," & TestQ("id") & ":" & TestQ("toolu_" & pNumber) & "," & \
+         TestQ("name") & ":" & TestQ(pName) & "," & TestQ("input") & ":" & pInput & "}"
+end TestCallBlock
+
+private function TestThinkingBlock
+   return "{" & TestQ("type") & ":" & TestQ("thinking") & "," & TestQ("thinking") & ":" & TestQ(empty) & "," & \
+         TestQ("signature") & ":" & TestQ("c2ln") & "}"
+end TestThinkingBlock
 
 -- pCode in a fenced block marked pLang
 private function TestBlock pLang, pCode

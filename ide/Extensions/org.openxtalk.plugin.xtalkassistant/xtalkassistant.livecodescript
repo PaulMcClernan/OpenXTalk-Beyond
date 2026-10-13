@@ -103,12 +103,17 @@ constant kMaxFixRounds = 10
 -- How many tools the model may use for one question: building a stack,
 -- trying it and correcting it takes more than reading did
 constant kMaxToolCalls = 25
+-- The most room an answer cut off at its length limit is asked for again
+-- with, in tokens (xtaMoreRoom). Answers are not streamed: one this long
+-- takes several minutes to arrive.
+constant kMostRoom = 32000
 -- The limits of the Settings dialog's numbers: the longest answer, in
 -- tokens (the provider refuses more than its model takes, and says so),
 -- and how many seconds a request may go without data
 constant kMaxMaxTokens = 1000000
--- What an empty wait means, as the core's kRequestTimeoutMilliseconds
-constant kDefaultTimeout = 180
+-- What an empty wait means, as the core's kRequestTimeoutMilliseconds: at
+-- least that, and longer for an answer given more room (xtaRequestWait)
+constant kDefaultTimeout = 600
 constant kMinTimeout = 10
 constant kMaxTimeout = 3600
 constant kGuideFile = "xtalk-guide.md"
@@ -1189,10 +1194,13 @@ end xtaCounted
 --
 -- The conversation field is filled in one go from a styledText array (a
 -- paragraph each: its "style" and its "runs", each run its "text" and its
--- "style"), which the engine lays out once. Who speaks heads each block,
--- in bold: "You", "xTalk Assistant" (the accent) or "Compile check"
--- (amber), and an empty line goes between blocks, so that each label
--- begins a line of its own in the field's text too. In a block:
+-- "style"), which the engine lays out once. A run's colour is its
+-- "textColor", the only name the engine takes for it: before 0.2.5-rc.5
+-- the colours below were given as "foregroundColor", and none showed. Who
+-- speaks heads each block, in bold: "You", "xTalk Assistant" (the accent)
+-- or "Compile check" (amber), and an empty line goes between blocks, so
+-- that each label begins a line of its own in the field's text too. In a
+-- block:
 --    the user's words, on a light tint of the accent;
 --    an answer, its Markdown read: headings, lists, quotes, bold, italics,
 --       `code` and links; a fenced block as a card in the code's face,
@@ -1242,6 +1250,7 @@ private command xtaShowConversation
             put the result into tNew
             xtaDocAnswer tDoc, tText, tIndex, kUiInk, tNew
             xtaDocCheck tDoc, tTurn["check"]
+            xtaDocCut tDoc, tTurn["cut"]
             xtaDocNotes tDoc, tIndex
             next repeat
          end if
@@ -1297,9 +1306,9 @@ private command xtaDocSpeaker @xDoc, @xSpeaker, pName
    end if
    put "bold" into tRun["textStyle"]
    if pName is "Compile check" then
-      put kUiWarn into tRun["foregroundColor"]
+      put kUiWarn into tRun["textColor"]
    else
-      put kUiAccent into tRun["foregroundColor"]
+      put kUiAccent into tRun["textColor"]
    end if
    put 2 into tPara["spaceBelow"]
    xtaDocLine xDoc, pName, tRun, tPara
@@ -1312,8 +1321,8 @@ end xtaDocSpeaker
 -- tab, which the engine lays out as one), so that the tint is one box
 private command xtaDocQuestion @xDoc, pTurn
    local tRun, tSoft, tPara, tRuns, tText
-   put kUiInk into tRun["foregroundColor"]
-   put kUiInkSoft into tSoft["foregroundColor"]
+   put kUiInk into tRun["textColor"]
+   put kUiInkSoft into tSoft["textColor"]
    put "italic" into tSoft["textStyle"]
    put kUiTint into tPara["backgroundColor"]
    put 6 into tPara["padding"]
@@ -1333,7 +1342,7 @@ end xtaDocQuestion
 -- false when the line goes on the block of an answer.
 private command xtaDocTools @xDoc, pResults, pStates, pNew
    local tCall, tResult, tSummary, tRuns, tStyle, tLink, tEntry, tPara, tSmall, tSub, tShown, tLine, tMore
-   put kUiInkSoft into tSmall["foregroundColor"]
+   put kUiInkSoft into tSmall["textColor"]
    put 11 into tSmall["textSize"]
    put "disc" into tSub["listStyle"]
    put 2 into tSub["listDepth"]
@@ -1346,9 +1355,9 @@ private command xtaDocTools @xDoc, pResults, pStates, pNew
       put empty into tStyle
       put "italic" into tStyle["textStyle"]
       if tResult["error"] is true then
-         put kUiWarn into tStyle["foregroundColor"]
+         put kUiWarn into tStyle["textColor"]
       else
-         put kUiInkSoft into tStyle["foregroundColor"]
+         put kUiInkSoft into tStyle["textColor"]
       end if
       xtaRunAdd tRuns, tSummary, tStyle
       put tResult["entry"] into tEntry
@@ -1393,7 +1402,7 @@ private command xtaDocRunOutput @xDoc, pResult
    end if
    put xtaCodeFont() into tMono["textFont"]
    put 10 into tMono["textSize"]
-   put kUiInk into tMono["foregroundColor"]
+   put kUiInk into tMono["textColor"]
    put kUiCodeBg into tPara["backgroundColor"]
    put 16 into tPara["leftIndent"]
    put 8 into tPara["firstIndent"]
@@ -1403,9 +1412,9 @@ private command xtaDocRunOutput @xDoc, pResult
       repeat for each line tLine in pResult["output"]
          add 1 to tCount
          if tCount > kShownOutput then
-            put kUiMuted into tMono["foregroundColor"]
+            put kUiMuted into tMono["textColor"]
             xtaDocLine xDoc, "... and" && tLines - kShownOutput && "more lines", tMono, tPara
-            put kUiInk into tMono["foregroundColor"]
+            put kUiInk into tMono["textColor"]
             exit repeat
          end if
          xtaDocLine xDoc, tLine, tMono, tPara
@@ -1418,7 +1427,7 @@ private command xtaDocRunOutput @xDoc, pResult
       else if the number of lines of pResult["value"] > 1 then
          put "..." after tValue
       end if
-      put kUiInkSoft into tMono["foregroundColor"]
+      put kUiInkSoft into tMono["textColor"]
       xtaDocLine xDoc, "returned" && tValue, tMono, tPara
    end if
 end xtaDocRunOutput
@@ -1432,20 +1441,33 @@ private command xtaDocCheck @xDoc, pCheck
    end if
    put "italic" into tRun["textStyle"]
    if pCheck contains "not compile" then
-      put kUiWarn into tRun["foregroundColor"]
+      put kUiWarn into tRun["textColor"]
    else
-      put kUiOk into tRun["foregroundColor"]
+      put kUiOk into tRun["textColor"]
    end if
    put 4 into tPara["spaceAbove"]
    xtaDocLine xDoc, pCheck, tRun, tPara
 end xtaDocCheck
+
+-- Why an answer ends where it does, when it was cut off or stopped
+-- (its "cut": xtaCutNote, xtaRefusalNote), in amber
+private command xtaDocCut @xDoc, pCut
+   local tRun, tPara
+   if pCut is empty then
+      exit xtaDocCut
+   end if
+   put "italic" into tRun["textStyle"]
+   put kUiWarn into tRun["textColor"]
+   put 4 into tPara["spaceAbove"]
+   xtaDocLine xDoc, pCut, tRun, tPara
+end xtaDocCut
 
 -- The notes an answer (turn pTurn) proposes to remember: those not kept
 -- yet with Remember and Dismiss as links ("remember,turn,note")
 private command xtaDocNotes @xDoc, pTurn
    local tNote, tRun, tLink, tRuns, tText
    put "italic" into tRun["textStyle"]
-   put kUiInkSoft into tRun["foregroundColor"]
+   put kUiInkSoft into tRun["textColor"]
    put "link" into tLink["textStyle"]
    repeat with tNote = 1 to the number of elements of sTurns[pTurn]["notes"]
       put sTurns[pTurn]["notes"][tNote]["note"] into tText
@@ -1481,7 +1503,7 @@ private command xtaDocMeta @xDoc, pQuestion
    if tStats is not an array then
       exit xtaDocMeta
    end if
-   put kUiMuted into tRun["foregroundColor"]
+   put kUiMuted into tRun["textColor"]
    put 10 into tRun["textSize"]
    put 4 into tPara["spaceAbove"]
    xtaDocLine xDoc, xtaStatsLine(tStats), tRun, tPara
@@ -1534,12 +1556,12 @@ private command xtaDocWelcome @xDoc
    local tRun, tPara, tLink, tRuns, tIndex, tText, tProvider
    put "bold" into tRun["textStyle"]
    put 16 into tRun["textSize"]
-   put kUiInk into tRun["foregroundColor"]
+   put kUiInk into tRun["textColor"]
    put 10 into tPara["spaceAbove"]
    put 4 into tPara["spaceBelow"]
    xtaDocLine xDoc, "What shall we make?", tRun, tPara
    put empty into tRun
-   put kUiInkSoft into tRun["foregroundColor"]
+   put kUiInkSoft into tRun["textColor"]
    put empty into tPara
    if xtaBuildOn() then
       put "Ask about xTalk Script, or ask the assistant to build it with you: it can read your stack, make cards, controls " & \
@@ -1554,7 +1576,7 @@ private command xtaDocWelcome @xDoc
    if xtaKey(tProvider) is empty and xtaBaseUrl(tProvider) is empty then
       put empty into tRuns
       put 8 into tPara["spaceAbove"]
-      put kUiBad into tRun["foregroundColor"]
+      put kUiBad into tRun["textColor"]
       xtaRunAdd tRuns, "It needs your" && xtaProviderName(tProvider) && "API key first:", tRun
       xtaRunAdd tRuns, " ", tRun
       put "link" into tLink["textStyle"]
@@ -1562,12 +1584,12 @@ private command xtaDocWelcome @xDoc
       xtaRunAdd tRuns, "add it in the Settings", tLink
       xtaRunAdd tRuns, ".", tRun
       xtaDocAdd xDoc, tRuns, tPara
-      put kUiInkSoft into tRun["foregroundColor"]
+      put kUiInkSoft into tRun["textColor"]
    end if
    put empty into tPara
    put 12 into tPara["spaceAbove"]
    put 2 into tPara["spaceBelow"]
-   put kUiMuted into tRun["foregroundColor"]
+   put kUiMuted into tRun["textColor"]
    put 11 into tRun["textSize"]
    xtaDocLine xDoc, "Try one of these:", tRun, tPara
    put empty into tPara
@@ -1815,10 +1837,10 @@ private command xtaDocAnswer @xDoc, pText, pTurn, pInk, pNew
    put xtaCodeFont() into tCodeFont
    put false into tInCode
    put 0 into tBlock
-   put pInk into tBody["foregroundColor"]
+   put pInk into tBody["textColor"]
    put tCodeFont into tCode["textFont"]
    put 11 into tCode["textSize"]
-   put kUiInk into tCode["foregroundColor"]
+   put kUiInk into tCode["textColor"]
    put kUiCodeBg into tCodePara["backgroundColor"]
    put 10 into tCodePara["firstIndent"]
    put (pNew is false) into tFirst
@@ -1843,7 +1865,7 @@ private command xtaDocAnswer @xDoc, pText, pTurn, pInk, pNew
          put empty into tRuns
          put empty into tRun
          put "bold" into tRun["textStyle"]
-         put kUiInkSoft into tRun["foregroundColor"]
+         put kUiInkSoft into tRun["textColor"]
          put 10 into tRun["textSize"]
          xtaRunAdd tRuns, xtaLangLabel(tLang), tRun
          put empty into tLink
@@ -1930,7 +1952,7 @@ private command xtaDocAnswer @xDoc, pText, pTurn, pInk, pNew
       if tTrim begins with ">" then
          put tBody into tRun
          put "italic" into tRun["textStyle"]
-         put kUiInkSoft into tRun["foregroundColor"]
+         put kUiInkSoft into tRun["textColor"]
          put 12 into tPara["leftIndent"]
          put char 2 to -1 of tTrim into tTrim
          xtaDocInline xDoc, word 1 to -1 of tTrim, tRun, tPara
@@ -2210,7 +2232,7 @@ private command xtaBuildSettings
    xtaSettingsLabel "Longest answer", tTop
    xtaSettingsField "Max Tokens", tLeft, tTop, tLeft + 80
    xtaSettingsNote "Max Tokens Note", tLeft + 88, tTop + 2, tRight, 20
-   put "tokens (empty: 4096 for Anthropic; OpenAI's model decides)" into field "Max Tokens Note"
+   put "tokens (empty:" && xtaMaxTokens("anthropic", empty) && "for Anthropic; OpenAI's model decides)" into field "Max Tokens Note"
 
    add 30 to tTop
    xtaSettingsLabel "Fix rounds", tTop
@@ -2222,7 +2244,7 @@ private command xtaBuildSettings
    xtaSettingsLabel "Wait for an answer", tTop
    xtaSettingsField "Timeout", tLeft, tTop, tLeft + 80
    xtaSettingsNote "Timeout Note", tLeft + 88, tTop + 2, tRight, 20
-   put "seconds (" & kMinTimeout && "to" && kMaxTimeout & "; empty:" && kDefaultTimeout & ")" into field "Timeout Note"
+   put "seconds (" & kMinTimeout && "to" && kMaxTimeout & "; empty:" && kDefaultTimeout & ", more for a long answer)" into field "Timeout Note"
 
    add 30 to tTop
    xtaSettingsSection "Section4", "4  What the model may do", tTop
@@ -4252,16 +4274,21 @@ private command xtaCopyConversation
       end if
       if tTurn["role"] is "assistant" then
          put xtaWithoutMemoryBlocks(tTurn["text"]) into tBody
-         if word 1 to -1 of tBody is empty then
+         if word 1 to -1 of tBody is empty and tTurn["cut"] is empty then
             next repeat
          end if
          if tLast is not "assistant" then
             put "### xTalk Assistant" & return & return after tText
             put "assistant" into tLast
          end if
-         put tBody & return & return after tText
+         if word 1 to -1 of tBody is not empty then
+            put tBody & return & return after tText
+         end if
          if tTurn["check"] is not empty then
             put "*" & tTurn["check"] & "*" & return & return after tText
+         end if
+         if tTurn["cut"] is not empty then
+            put "*" & tTurn["cut"] & "*" & return & return after tText
          end if
          next repeat
       end if
@@ -4324,6 +4351,7 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
    local tWork, tSystem, tDeclared, tRound, tRounds, tBlocks, tCheck, tLastCode
    local tIn, tOut, tCached, tAnswered, tError, tTools, tCalls, tCall, tResults
    local tToolCalls, tRefusals, tRefusedNow, tSpent, tKind, tQuestion, tStats, tStopped
+   local tSettings, tRoom, tMore, tAgain, tCutNote, tCallName, tRefused
    if sBusy is true or there is not a stack kWindow then
       exit xtaSendPrompt
    end if
@@ -4397,7 +4425,10 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
    put false into tAnswered
    put sShutDowns into tShutDowns
    repeat forever
-      if tRound > 0 then
+      if tAgain is not empty then
+         xtaPhase "wait", tAgain
+         put empty into tAgain
+      else if tRound > 0 then
          xtaPhase "wait", "Waiting for" && xtaModel(tProvider) && "to correct the code (round" && tRound && "of" && tRounds & ")"
       else if sWork["requests"] > 0 then
          xtaPhase "wait", "Waiting for" && xtaModel(tProvider) && "to go on"
@@ -4405,7 +4436,12 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
          xtaPhase "wait", "Waiting for" && xtaModel(tProvider)
       end if
       xtaWorkStatus
-      put xtaAsk(xtaSettings(), tSystem, xtaTurnsToSend(), tTools) into tReply
+      put xtaSettings() into tSettings
+      -- More room than the Settings give, after an answer was cut off
+      if tRoom is not empty then
+         put tRoom into tSettings["maxTokens"]
+      end if
+      put xtaAsk(tSettings, tSystem, xtaTurnsToSend(), tTools) into tReply
       if sShutDowns is not tShutDowns then
          exit xtaSendPrompt
       end if
@@ -4427,6 +4463,37 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
       put tOut into sWork["out"]
       put tCached into sWork["cached"]
       xtaWorkStatus
+      -- An answer cut off at its length limit before it said anything, or
+      -- while it was writing a call to a tool, is asked for again with more
+      -- room (xtaMoreRoom): Anthropic's models think before they answer,
+      -- and the thinking counts toward the limit. In 0.2.5-rc.4 such an
+      -- answer showed as an empty one. A call that was cut off is never
+      -- carried out, as its input is not whole, nor are the calls of an
+      -- answer the provider stopped on safety grounds, which is not sent
+      -- back either: the window says why the answer ends there (its "cut").
+      put empty into tCutNote
+      put empty into tCallName
+      put false into tRefused
+      if tTools is not empty and the number of elements of tReply["calls"] > 0 then
+         put tReply["calls"][the number of elements of tReply["calls"]]["name"] into tCallName
+      end if
+      if tReply["stop"] is "max_tokens" or tReply["stop"] is "length" then
+         if (tCallName is not empty or word 1 to -1 of tReply["text"] is empty) and sStopAsked is not true then
+            put xtaMoreRoom(tProvider, tRoom) into tMore
+            if tMore is not empty then
+               -- Short enough for the activity row beside its clock
+               put "Cut off at" && xtaRoom(tProvider, tRoom) && "tokens: asking again with room for" && tMore into tAgain
+               put tMore into tRoom
+               next repeat
+            end if
+         end if
+         put xtaCutNote(tProvider, tRoom, tReply["text"], tCallName) into tCutNote
+         put empty into tReply["calls"]
+      else if tReply["stop"] is "refusal" or tReply["stop"] is "content_filter" then
+         put xtaRefusalNote(tProvider, tReply["category"]) into tCutNote
+         put true into tRefused
+         put empty into tReply["calls"]
+      end if
       put empty into tCalls
       if tTools is not empty then
          put tReply["calls"] into tCalls
@@ -4440,6 +4507,12 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
       put xtaMemoryProposals(tReply["text"]) into sTurns[tCount]["notes"]
       put sTurns[tCount - 1]["stackPath"] into sTurns[tCount]["stackPath"]
       put sTurns[tCount - 1]["stackName"] into sTurns[tCount]["stackName"]
+      if tCutNote is not empty then
+         put tCutNote into sTurns[tCount]["cut"]
+      end if
+      if tRefused then
+         put true into sTurns[tCount]["refused"]
+      end if
       -- Insert takes the code of the latest answer, or none when it has
       -- none; an answer that only asks for tools leaves it as the answers
       -- to this question had it
@@ -4495,7 +4568,9 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
          next repeat
       end if
 
-      if the number of elements of tBlocks is 0 then
+      -- The code of an answer that was cut off is not whole: it is not
+      -- sent back to be corrected
+      if the number of elements of tBlocks is 0 or tCutNote is not empty then
          exit repeat
       end if
       xtaShowConversation
@@ -4559,6 +4634,9 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
       if tReply["stop"] is "max_tokens" or tReply["stop"] is "length" then
          put xtaDot() & "the answer was cut off at its length limit" after tStatus
          put "warn" into tKind
+      else if tReply["stop"] is "refusal" or tReply["stop"] is "content_filter" then
+         put xtaDot() & "the provider stopped the answer on safety grounds" after tStatus
+         put "warn" into tKind
       end if
       if tSpent then
          put xtaDot() & "stopped: the model used up its tools for this question" after tStatus
@@ -4582,6 +4660,73 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
    end if
 end xtaSendPrompt
 
+-- The longest answer the next request asks for, in tokens: pRoom when an
+-- answer was cut off and more room was given, otherwise what the Settings
+-- say (empty when OpenAI's model decides)
+private function xtaRoom pProvider, pRoom
+   if pRoom is not empty then
+      return pRoom
+   end if
+   return xtaMaxTokens(pProvider, revIDEGetPreference(kPrefMaxTokens))
+end xtaRoom
+
+-- The room to ask again with, for an answer cut off at the length limit
+-- xtaRoom(pProvider, pRoom): twice that, and at least what Anthropic gets
+-- by default, up to kMostRoom; empty when there is no more to give (the
+-- limit is kMostRoom or more already, or OpenAI's model decides it)
+private function xtaMoreRoom pProvider, pRoom
+   local tNow, tMore
+   put xtaRoom(pProvider, pRoom) into tNow
+   if tNow is not an integer then
+      return empty
+   end if
+   put min(max(tNow * 2, xtaMaxTokens("anthropic", empty)), kMostRoom) into tMore
+   if tMore <= tNow then
+      return empty
+   end if
+   return tMore
+end xtaMoreRoom
+
+-- Why an answer cut off at its length limit ends where it does, for the
+-- window: pText is what it said, and pCallName the tool it was asking for
+-- when it was cut off (empty when none)
+private function xtaCutNote pProvider, pRoom, pText, pCallName
+   local tRoom, tNote
+   put xtaRoom(pProvider, pRoom) into tRoom
+   if tRoom is empty then
+      put "Cut off at the model's length limit" into tNote
+   else
+      put "Cut off at the length limit of" && tRoom && "tokens" into tNote
+   end if
+   if pCallName is not empty then
+      put ", while the model was writing a call to" && pCallName & ", which was not carried out." && \
+            "Ask for less at a time, such as one card or a few controls, or raise the longest answer in More > Settings." after tNote
+   else if word 1 to -1 of pText is empty then
+      put ", before the model wrote its answer: its thinking counts toward the limit." && \
+            "Ask for less at a time, or raise the longest answer in More > Settings." after tNote
+   else
+      put "." && "Ask the assistant to go on, or raise the longest answer in More > Settings." after tNote
+   end if
+   return tNote
+end xtaCutNote
+
+-- Why an answer the provider stopped on safety grounds ends where it does
+-- (Anthropic's "refusal", OpenAI's "content_filter"): pCategory is the kind
+-- of request Anthropic took it for, when it says
+private function xtaRefusalNote pProvider, pCategory
+   local tNote
+   if pProvider is "anthropic" then
+      put "Anthropic stopped this answer on safety grounds" into tNote
+   else
+      put "The provider's content filter stopped this answer" into tNote
+   end if
+   if pCategory is not empty then
+      put " (" & pCategory & ")" after tNote
+   end if
+   put ". Nothing it asked for was done, and it is not sent with your next question." after tNote
+   return tNote
+end xtaRefusalNote
+
 -- The conversation as it is sent: the open script goes with the latest
 -- question that had one, so that it is sent once rather than with every
 -- question; what else went with a question (the last error) stays with it.
@@ -4589,7 +4734,9 @@ end xtaSendPrompt
 -- with each request: an older one the model has seen, and it would make
 -- every request after it bigger. None goes once the Settings no longer let
 -- pictures be sent: the user turned them off, or chose a server that is
--- not sent them, in the middle of the conversation.
+-- not sent them, in the middle of the conversation. An answer the provider
+-- stopped on safety grounds is left out (its "refused"): what it said is
+-- not whole, and the model is not to go on from it.
 private function xtaTurnsToSend
    local tTurns, tIndex, tLast, tCall, tPictures, tKeep
    put 0 into tLast
@@ -4601,6 +4748,9 @@ private function xtaTurnsToSend
    repeat with tIndex = 1 to the number of elements of sTurns
       put sTurns[tIndex]["role"] into tTurns[tIndex]["role"]
       put sTurns[tIndex]["text"] into tTurns[tIndex]["text"]
+      if sTurns[tIndex]["refused"] is true then
+         put empty into tTurns[tIndex]["text"]
+      end if
       put sTurns[tIndex]["kind"] into tTurns[tIndex]["kind"]
       put sTurns[tIndex]["calls"] into tTurns[tIndex]["calls"]
       put sTurns[tIndex]["results"] into tTurns[tIndex]["results"]

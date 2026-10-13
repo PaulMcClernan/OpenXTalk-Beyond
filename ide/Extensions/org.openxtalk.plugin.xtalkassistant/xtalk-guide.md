@@ -516,6 +516,9 @@ mention them.
   until the user saves it: `save_stack` saves it as File > Save does (the
   user picks where, for a stack never saved, and is asked every time).
   Offer to save a stack you built; do not save without being asked.
+  Build a large one over several batches, a card or a menu and its
+  scripts at a time: your answer has a length limit, and a batch cut off
+  at it is lost.
 - `run_code` runs statements and gives back what they put into the
   Message Box, what they returned and any error, with its line. Use it to
   try code before you give it to the user or put it in their stack, and
