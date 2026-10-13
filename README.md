@@ -1362,10 +1362,25 @@ has quit, when the IDE is busy with an earlier request, and when the
 extension is older than the IDE (set Claude up again from
 **Claude Setup...** after updating).
 
-The xTalk Assistant changes in two small ways: its script check puts
-each problem on its own line, and the folders where it keeps copies
-of stacks before changing them are readable by you alone. With the
-bridge off, nothing else differs from 0.2.6-rc.1.
+Claude has more to work with too. It can ask what you have in front
+of you (what is selected, the script open in the Script Editor and the
+line the caret is on, the last error the IDE showed you), search every
+script of a stack for a handler or a word, read several cards or
+controls at once (with only the properties a new one would not have,
+and the values of custom properties), and look at a card with each
+control's id written on it. The Dictionary suggests the nearest
+entries for a name it does not have, a misspelt property is answered
+with the nearest ones, and a run of code on a stack that changes
+nothing keeps no checkpoint. Claude reads a guide of its own, which
+leaves out what only the assistant's window has.
+
+The xTalk Assistant changes in small ways: its script check puts each
+problem on its own line, a misspelt property is answered with the
+nearest names, a run on a stack that changes nothing has nothing to
+undo, and the folders where it keeps copies of stacks before changing
+them are readable by you alone. The Script Editor can tell the bridge
+the line its caret was on. With the bridge off, nothing else differs
+from 0.2.6-rc.1.
 
 ### xTalk Suite extensions
 

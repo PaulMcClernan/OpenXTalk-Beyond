@@ -17,6 +17,7 @@ words, is in the [README](README.md#the-ide) and on the
 ## 0.2.6-rc.2 (2026-10-13, pre-release)
 
 - xTalk MCP Bridge: every run asks, long scripts in parts, a bridge file that names its IDE (#101)
+- xTalk MCP Bridge: ide_context, search_scripts, leaner reads, ids on a card, a guide of its own (#101)
 - Version 0.2.6-rc.2, with its changelog (#101)
 
 ## 0.2.6-rc.1 (2026-10-13, pre-release)

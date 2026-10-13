@@ -2931,6 +2931,25 @@ on revSEInsertText pText
    dispatch "textInsertAtLastSelection" to field "Script" of me with pText
 end revSEInsertText
 
+-- OXT-Beyond: the line of the script being edited that the caret was last
+-- on (the start of the last selection), or empty before the script was
+-- clicked in. The xTalk MCP Bridge plugin
+-- (ide/Extensions/org.openxtalk.plugin.mcpbridge) reads it while another
+-- program has the focus, which is why the last selection is used.
+function revSEGetLastSelectedLine
+   local tChunk, tFrom
+   dispatch "getLastSelectedChunk" to field "Script" of me
+   put the result into tChunk
+   put item 1 of tChunk into tFrom
+   if tFrom is not an integer then
+      return empty
+   end if
+   if tFrom < 1 then
+      return empty
+   end if
+   return the number of lines of (char 1 to tFrom - 1 of field "Script" of me & "x")
+end revSEGetLastSelectedLine
+
 function revSEGetScript pScript
    dispatch function "textGetScript" to field "Script" of me
    return the result

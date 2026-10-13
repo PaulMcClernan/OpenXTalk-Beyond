@@ -26,9 +26,11 @@
   "tools": [
     { "name": "xtalk_guide", "description": "The guide to writing xTalk Script for OXT-Beyond" },
     { "name": "list_stacks", "description": "The user's stacks open in OXT-Beyond" },
-    { "name": "read_stack", "description": "An outline of a stack, or a card or control with its properties and script" },
+    { "name": "ide_context", "description": "The selection, the script open in the Script Editor and the last error" },
+    { "name": "read_stack", "description": "An outline of a stack, or cards and controls with their properties and scripts" },
     { "name": "read_script", "description": "A script, whole and in parts, with line numbers and its handlers" },
-    { "name": "look_at_card", "description": "A picture of a card as it looks now" },
+    { "name": "search_scripts", "description": "Where text is in the scripts of a stack, with the handler of each line" },
+    { "name": "look_at_card", "description": "A picture of a card or a control as it looks now, with the ids if asked" },
     { "name": "lookup_dictionary", "description": "An entry of the OXT-Beyond Dictionary" },
     { "name": "check_code", "description": "Compiles xTalk Script without running it" },
     { "name": "make_changes", "description": "Creates, sets and deletes controls, cards and stacks, as one checked batch" },

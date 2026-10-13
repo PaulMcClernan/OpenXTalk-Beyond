@@ -25,8 +25,10 @@ script "org.openxtalk.plugin.mcpbridge"
 -- the same item. Set the environment variable OXTBEYOND_MCP_BRIDGE to "off"
 -- to keep it off for good.
 --
--- Files: this stack (the plugin's lifecycle, its dialogs, and the two
--- functions the bridge asks: mcbConfirm and mcbEditorStack),
+-- Files: this stack (the plugin's lifecycle, its dialogs, and the
+-- functions the bridge asks: mcbConfirm, mcbEditorStack and
+-- mcbEditorContext), mcpbridge-errors.livecodescript (notes the errors the
+-- IDE shows the user, for ide_context),
 -- mcpbridge-tools.livecodescript (the socket and the tools, tested by
 -- tests/lcs/mcpbridge), mcp/server.js (the MCP server, tested by
 -- tools/ci/tests/test_mcp_bridge_server.py) and mcp/manifest.json (what
@@ -38,7 +40,8 @@ script "org.openxtalk.plugin.mcpbridge"
 -- Public handlers (all reached with dispatch):
 --    mcpBridgeMenuPick           Development > Plugins > xTalk MCP Bridge
 --    mcbIsEnabled()
---    mcbConfirm(pTitle, pDetail, pYes), mcbEditorStack()   (the bridge's)
+--    mcbConfirm(pTitle, pDetail, pYes), mcbEditorStack(),
+--    mcbEditorContext()          (the bridge's)
 
 constant kTitle = "xTalk MCP Bridge"
 constant kTools = "org.openxtalk.plugin.mcpbridge-tools"
@@ -351,3 +354,38 @@ function mcbEditorStack
       return empty
    end try
 end mcbEditorStack
+
+-- The script open in the topmost Script Editor: an array with "object"
+-- (its long id), "line" (the line the caret was last on, or empty) and
+-- "unapplied" (true when the editor holds changes not yet applied), or
+-- empty when no script is open
+function mcbEditorContext
+   local tEditor, tObject, tContext, tLine, tError
+   try
+      put revTopMostScriptEditor() into tEditor
+      if tEditor is empty or there is not a tEditor then
+         return empty
+      end if
+      dispatch "revSEGetCurrentObject" to tEditor
+      put the result into tObject
+      if tObject is empty or there is not a tObject then
+         return empty
+      end if
+      put the long id of tObject into tContext["object"]
+      dispatch function "revSEGetLastSelectedLine" to tEditor
+      put the result into tContext["line"]
+      -- The objects whose scripts the user changed and has not applied
+      put false into tContext["unapplied"]
+      dispatch "revSEGetModifiedObjects" to tEditor
+      repeat for each line tLine in the result
+         if there is a tLine then
+            if the long id of tLine is tContext["object"] then
+               put true into tContext["unapplied"]
+            end if
+         end if
+      end repeat
+   catch tError
+      return empty
+   end try
+   return tContext
+end mcbEditorContext

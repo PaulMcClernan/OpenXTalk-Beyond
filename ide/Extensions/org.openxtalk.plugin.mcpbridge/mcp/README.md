@@ -44,10 +44,13 @@ off.
 Claude can do the same things the xTalk Assistant's tools do:
 
 - **Read and look:** read the guide to xTalk Script, list your open
-  stacks, read a stack's outline or one of its cards or controls, look at
-  a picture of a card, look up the Dictionary, check that code compiles,
-  and read a script that is paused in the debugger. A long script is
-  read in parts, with line numbers and where each handler is.
+  stacks, see what you have selected, the script open in the Script
+  Editor and the last error the IDE showed you, read a stack's outline
+  or its cards and controls, search its scripts, look at a picture of a
+  card (with each control's id written on it, if Claude asks), look up
+  the Dictionary, check that code compiles, and read a script that is
+  paused in the debugger. A long script is read in parts, with line
+  numbers and where each handler is.
 - **Build:** create, change and delete controls, cards and new stacks,
   and change one handler, or a few lines, of a script while leaving the
   rest of it as it is. Each request is checked first and is made

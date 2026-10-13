@@ -30,8 +30,13 @@ script "org.openxtalk.plugin.mcpbridge-tools"
 -- library, which this loads from that folder without turning the assistant
 -- on: the same checked batches of changes, all or nothing and undoable,
 -- the same runs in a sandbox or after a checkpoint, the same compile
--- check, outline and Dictionary; read_script and edit_script, the
--- bridge's own, read and change a long script in parts. What the user is asked differs. Claude's
+-- check, outline and Dictionary. The bridge's own: read_script and
+-- edit_script read and change a long script in parts, search_scripts
+-- finds text in every script of a stack, ide_context says what the user
+-- has in front of them (the selection, the Script Editor, the last error,
+-- noted by mcpbridge-errors.livecodescript while the bridge is on), and
+-- the guide is bridge-guide.md around the language sections of the
+-- assistant's. What the user is asked differs. Claude's
 -- apps ask the user before each tool the first time (and, unless the user
 -- says always, every time), so this asks only about what cannot be taken
 -- back: every run of code (it runs in this engine, with the IDE's reach;
@@ -73,13 +78,28 @@ constant kPictureSide = 1024
 constant kMaxAskChars = 3000
 -- The tools, in the order the MCP server lists them (mcp/server.js has
 -- their descriptions and schemas)
-constant kTools = "xtalk_guide,list_stacks,read_stack,read_script,look_at_card,lookup_dictionary,check_code,make_changes,edit_script,run_code,save_stack,list_changes,undo_changes,debug_state"
+constant kTools = "xtalk_guide,list_stacks,ide_context,read_stack,read_script,search_scripts,look_at_card,lookup_dictionary,check_code,make_changes,edit_script,run_code,save_stack,list_changes,undo_changes,debug_state"
 -- The most text of a script read_script gives at once (read_stack gives
 -- 24,000 characters of a script, then says how many lines it left out)
 constant kScriptReadChars = 20000
 -- What the assistant's core puts after a text it cut (xtaCut): a script
 -- sent back with it was copied from a cut one
 constant kCutMark = "more lines left out)"
+-- The bridge's guide (sections 1, 6 and 7, for Claude through the bridge)
+-- and the line in it where sections 2 to 5 of the assistant's go
+constant kBridgeGuideFile = "bridge-guide.md"
+constant kGuideSections = "<!-- the xTalk Assistant's guide, sections 2 to 5 -->"
+-- The error hook (mcpbridge-errors.livecodescript), by its stack name
+constant kErrorHook = "org.openxtalk.plugin.mcpbridge-errors"
+-- The stack a picture with the controls' ids is drawn in, deleted after
+constant kOverlayStack = "org.openxtalk.plugin.mcpbridge-overlay"
+-- The most objects read_stack reads at once, and matches search_scripts gives
+constant kMaxReadIds = 20
+constant kMaxSearchMatches = 100
+-- The most characters of a line search_scripts shows
+constant kSearchLineChars = 160
+-- The most names lookup_dictionary suggests for a term with no entry
+constant kNearestEntries = 8
 
 -- The token a request must carry; empty while the server is not running,
 -- when every request is refused
@@ -92,6 +112,8 @@ local sPort, sClients, sInfoFile, sAssistantFolder, sAsker
 local sLoadedCore, sLoadedBuild
 -- True while a tool runs
 local sBusy
+-- The Dictionary's entry names, read once (lookup_dictionary's suggestions)
+local sDictionaryNames
 
 --------------------------------------------------------------------------------
 -- The server
@@ -111,6 +133,7 @@ function mcbServerStart pAssistantFolder, pAsker, pInfoFile
    put false into sBusy
    mcbEnsureParts
    mcbDeleteOldCheckpoints
+   mcbStartErrorHook
    get binaryDecode("H*", randomBytes(16), tHex)
    put tHex into sToken
    -- Only this computer: the engine binds the accepting socket to the
@@ -174,6 +197,7 @@ command mcbServerStop
    end if
    put empty into sToken
    put false into sBusy
+   mcbStopErrorHook
    put empty into sInfoFile
    put empty into sAsker
    if not mcbAssistantOn() then
@@ -195,6 +219,49 @@ command mcbServerStop
    put false into sLoadedBuild
    put false into sLoadedCore
 end mcbServerStop
+
+-- Puts the error hook in the front of the message path, where it notes
+-- each error the IDE shows the user (for ide_context) and passes it on
+private command mcbStartErrorHook
+   local tFile, tError
+   try
+      if there is not a stack kErrorHook then
+         put mcbFolder() & "/mcpbridge-errors.livecodescript" into tFile
+         if there is not a file tFile then
+            exit mcbStartErrorHook
+         end if
+         get the short name of stack tFile
+         set the _ideoverride of stack kErrorHook to true
+      end if
+      if not (the long id of stack kErrorHook is among the lines of the frontScripts) then
+         insert the script of stack kErrorHook into front
+      end if
+   catch tError
+   end try
+end mcbStartErrorHook
+
+-- Takes the error hook out of the message path, and forgets the errors
+private command mcbStopErrorHook
+   local tError
+   try
+      if there is not a stack kErrorHook then
+         exit mcbStopErrorHook
+      end if
+      if the long id of stack kErrorHook is among the lines of the frontScripts then
+         remove the script of stack kErrorHook from front
+      end if
+      delete stack kErrorHook
+   catch tError
+   end try
+end mcbStopErrorHook
+
+-- The folder this script's file is in (the plugin's)
+private function mcbFolder
+   local tFile
+   put the effective filename of me into tFile
+   set the itemDelimiter to "/"
+   return item 1 to -2 of tFile
+end mcbFolder
 
 function mcbServerPort
    return sPort
@@ -515,14 +582,18 @@ function mcbCallTool pTool, pArguments
             return mcbToolGuide()
          case "list_stacks"
             return mcbToolListStacks()
+         case "ide_context"
+            return mcbToolContext()
          case "read_stack"
-            return mcbToolReadStack(mcbArg(pArguments, "stack"), mcbArg(pArguments, "id"), mcbArg(pArguments, "details") is true)
+            return mcbToolReadStack(pArguments)
          case "read_script"
             return mcbToolReadScript(pArguments)
+         case "search_scripts"
+            return mcbToolSearchScripts(pArguments)
          case "edit_script"
             return mcbToolEditScript(pArguments)
          case "look_at_card"
-            return mcbToolLookAtCard(mcbArg(pArguments, "stack"), mcbArg(pArguments, "card"))
+            return mcbToolLookAtCard(pArguments)
          case "lookup_dictionary"
             return mcbToolDictionary(mcbArg(pArguments, "term"))
          case "check_code"
@@ -734,20 +805,32 @@ end mcbTarget
 -- The tools that read
 
 private function mcbToolGuide
-   local tText
-   put xtaReadGuide(sAssistantFolder & "/" & kGuideFile) into tText
-   if tText is empty then
-      put xtaSystemPrompt() into tText
+   local tBridge, tGuide, tAt, tEnd, tText
+   put xtaReadGuide(mcbFolder() & "/" & kBridgeGuideFile) into tBridge
+   put xtaReadGuide(sAssistantFolder & "/" & kGuideFile) into tGuide
+   if tBridge is empty or not (kGuideSections is in tBridge) then
+      -- Without the bridge's guide, the assistant's, with what reads
+      -- differently through the bridge first
+      if tGuide is empty then
+         put xtaSystemPrompt() into tGuide
+      end if
+      put "How to write xTalk Script for OXT-Beyond. It was written for the xTalk Assistant, the IDE's own chat window, and " & \
+            "through this bridge some of it reads differently: there is no assistant window, Insert button or memory here; " & \
+            "make_changes and edit_script change the stack as soon as the user allows the tool in this app; run_code asks the " & \
+            "user in OXT-Beyond before every run." & return & return & tGuide into tText
+      return mcbResult(tText, false)
    end if
-   put "How to write xTalk Script for OXT-Beyond. It was written for the xTalk Assistant, the IDE's own chat window, and " & \
-         "through this bridge some of it reads differently:" & return & \
-         "- There is no assistant window, Insert button or memory here: what it says of those does not apply." & return & \
-         "- make_changes and edit_script change the stack as soon as the user allows the tool in this app (OXT-Beyond does not " & \
-         "ask again, and the user does not apply the batch); undo_changes takes a change back." & return & \
-         "- run_code asks the user in OXT-Beyond before every run, showing the code." & return & \
-         "- read_stack shows the first 24,000 characters of a script; read_script reads a long one in parts, and edit_script " & \
-         "changes one handler or a range of lines of it." & return & return & tText into tText
-   return mcbResult(tText, false)
+   -- Sections 2 to 5 of the assistant's guide (the language, objects,
+   -- this engine, house style) go where the bridge's guide says
+   put offset(return & "## 2.", tGuide) into tAt
+   put offset(return & "## 6.", tGuide) into tEnd
+   if tAt > 0 and tEnd > tAt then
+      put char tAt + 1 to tEnd - 1 of tGuide into tText
+   else
+      put "## 2. The language" & return & return & xtaSystemPrompt() into tText
+   end if
+   replace kGuideSections with word 1 to -1 of tText in tBridge
+   return mcbResult(tBridge, false)
 end mcbToolGuide
 
 private function mcbToolListStacks
@@ -803,6 +886,176 @@ private function mcbToolListStacks
    return mcbResult(tText, false)
 end mcbToolListStacks
 
+-- What the user has in front of them in the IDE: the stack they work on
+-- and its card, what is selected, the script open in the Script Editor
+-- (and the caret's line, and whether it holds changes not yet applied),
+-- the last error the IDE showed them, and a script paused in the debugger
+private function mcbToolContext
+   local tWork, tText, tTop, tLine, tObject, tList, tEditor, tError, tState, tLast
+   put mcbWorkStack() into tWork
+   if tWork is empty then
+      put "The user has no stack of their own open in OXT-Beyond." into tText
+   else
+      put "The user is working on the stack" && quote & the short name of tWork & quote & "." into tText
+      put the topStack into tTop
+      if tTop is not empty and there is a tTop then
+         put the long id of tTop into tTop
+         if not mcbIsIDEStack(tTop) then
+            put return & "In front:" && mcbObjectLabel(tTop) & ", on" && mcbObjectLabel(the long id of this card of tTop) & "." after tText
+         end if
+      end if
+   end if
+
+   repeat for each line tLine in the selectedObjects
+      try
+         if there is not a tLine then
+            next repeat
+         end if
+         put the long id of tLine into tObject
+         if mcbIsIDEStack(mcbStackOfObject(tObject)) then
+            next repeat
+         end if
+         put "- " & mcbObjectLabel(tObject) && "of stack" && quote & the short name of mcbStackOfObject(tObject) & quote & return after tList
+      catch tError
+      end try
+   end repeat
+   if tList is empty then
+      put return & "Nothing is selected." after tText
+   else
+      put return & "Selected (with the pointer tool):" & return & char 1 to -2 of tList after tText
+   end if
+
+   put mcbEditorNow() into tEditor
+   if tEditor["object"] is empty or there is not a tEditor["object"] then
+      put return & "No script is open in the Script Editor." after tText
+   else if mcbIsIDEStack(mcbStackOfObject(tEditor["object"])) then
+      put return & "The Script Editor shows a script of the IDE's own." after tText
+   else
+      put return & "The Script Editor shows the script of" && mcbObjectLabel(tEditor["object"]) && "of stack" && \
+            quote & the short name of mcbStackOfObject(tEditor["object"]) & quote after tText
+      if tEditor["line"] is an integer then
+         put ", with the caret on line" && tEditor["line"] after tText
+      end if
+      put "." after tText
+      if tEditor["unapplied"] is true then
+         put " It holds changes the user has not applied: ask them to apply or revert them before you change that script " & \
+               "(read_script reads the script as it was last applied)." after tText
+      end if
+   end if
+
+   put mcbLastError() into tLast
+   if tLast is empty then
+      put return & "The IDE has shown the user no error since the bridge was turned on." after tText
+   else
+      put return & tLast after tText
+   end if
+
+   try
+      put xtaDebugState() into tState
+      if tState["paused"] is true then
+         put return & "A script is paused in the debugger: debug_state reads where, and its variables." after tText
+      end if
+   catch tError
+   end try
+   return mcbResult(tText, false)
+end mcbToolContext
+
+-- The script open in the Script Editor, from the asker (the IDE's): an
+-- array with "object", "line" and "unapplied", or empty
+private function mcbEditorNow
+   local tContext, tError
+   if sAsker is empty or there is not a sAsker then
+      return empty
+   end if
+   try
+      dispatch function "mcbEditorContext" to sAsker
+      if it is "handled" then
+         put the result into tContext
+      end if
+   catch tError
+      put empty into tContext
+   end try
+   if tContext is not an array then
+      return empty
+   end if
+   return tContext
+end mcbEditorNow
+
+-- The newest error the error hook noted in a script of the user's (not
+-- one of the IDE's), as text for Claude: the engine's messages, then the
+-- lines of the script around the error when it can be read; or empty
+private function mcbLastError
+   local tErrors, tIndex, tFound, tWhere, tObject, tStack, tName, tScript, tExcerpt, tError, tText
+   if there is not a stack kErrorHook then
+      return empty
+   end if
+   try
+      dispatch function "mcbErrorHookErrors" to stack kErrorHook
+      put the result into tErrors
+   catch tError
+      return empty
+   end try
+   put false into tFound
+   repeat with tIndex = the number of elements of tErrors down to 1
+      put xtaErrorWhere(tErrors[tIndex]["trace"]) into tWhere
+      put tWhere["object"] into tObject
+      if tObject is empty then
+         put tErrors[tIndex]["target"] into tObject
+      end if
+      put empty into tStack
+      try
+         if tObject is not empty and there is a tObject then
+            put mcbStackOfObject(the long id of tObject) into tStack
+         end if
+      catch tError
+         put empty into tStack
+      end try
+      if tStack is not empty then
+         if mcbIsIDEStack(tStack) then
+            next repeat
+         end if
+      end if
+      put true into tFound
+      exit repeat
+   end repeat
+   if not tFound then
+      return empty
+   end if
+   if tStack is empty then
+      -- The object is gone: the error as it was reported
+      put tObject into tName
+   else
+      put the name of tObject && "of stack" && quote & the short name of tStack & quote into tName
+   end if
+   put "The last error the IDE showed the user, in" && tName && "(" & the seconds - tErrors[tIndex]["seconds"] && \
+         "seconds ago), as the engine reported it:" & return & xtaErrorText(tErrors[tIndex]["trace"]) into tText
+   if tStack is not empty and tWhere["line"] is not empty then
+      try
+         put mcbScriptOf(tObject) into tScript
+      catch tError
+         put empty into tScript
+      end try
+      put xtaScriptExcerpt(tScript, tWhere["line"]) into tExcerpt
+      if tExcerpt is not empty then
+         put return & "The script of" && tName & ", around line" && tWhere["line"] & ":" & return & tExcerpt after tText
+      end if
+   end if
+   return tText
+end mcbLastError
+
+-- The stack an object is in (itself for a stack), from its long id
+private function mcbStackOfObject pObject
+   local tAt
+   if word 1 of pObject is "stack" then
+      return pObject
+   end if
+   put offset(" of stack ", pObject) into tAt
+   if tAt is 0 then
+      return empty
+   end if
+   return char tAt + 4 to -1 of pObject
+end mcbStackOfObject
+
 private function mcbOpenLongIds
    local tName, tList
    repeat for each line tName in the openStacks
@@ -815,32 +1068,65 @@ end mcbOpenLongIds
 
 -- An outline of a main stack and its substacks; with an id, that card or
 -- control; with details, the stack's own properties, cards and script
-private function mcbToolReadStack pStackName, pId, pDetails
-   local tTarget, tStack, tObject
-   put mcbTarget(pStackName) into tTarget
+-- An outline of a main stack and its substacks; with id (or ids, several),
+-- those cards or controls; with details, the stack's own properties,
+-- cards and script. An object's properties are those a new one of its
+-- type would not have, unless all_properties.
+private function mcbToolReadStack pArguments
+   local tTarget, tStack, tObject, tLean, tIds, tNode, tIndex, tId, tText, tMissing, tCount
+   put mcbTarget(mcbArg(pArguments, "stack")) into tTarget
    if tTarget["problem"] is not empty then
       return mcbResult(tTarget["problem"] && "list_stacks names the user's stacks.", true)
    end if
    put tTarget["stack"] into tStack
-   if pId is empty then
-      if pDetails then
-         return mcbResult(mcbWithScriptHint(xtaObjectText(tStack)), false)
+   put mcbArg(pArguments, "all_properties") is not "true" into tLean
+   put word 1 to -1 of mcbArg(pArguments, "id") into tId
+   if tId is not empty then
+      put tId & return into tIds
+   end if
+   put xtaJsonMember(pArguments, "ids") into tNode
+   repeat with tIndex = 1 to xtaJsonCount(tNode)
+      put word 1 to -1 of xtaJsonText(xtaJsonItem(tNode, tIndex)) & return after tIds
+   end repeat
+   if tIds is empty then
+      if mcbArg(pArguments, "details") is "true" then
+         return mcbResult(mcbWithScriptHint(xtaObjectText(tStack, tLean)), false)
       end if
       return mcbResult(xtaStackOutline(mcbMainStackOf(tStack)), false)
    end if
-   if pId is not an integer then
-      return mcbResult("An id is a whole number, as the outline gives it.", true)
+   if the number of lines of tIds > kMaxReadIds then
+      return mcbResult("read_stack reads at most" && kMaxReadIds && "objects at once.", true)
    end if
-   if there is a card id pId of tStack then
-      put the long id of card id pId of tStack into tObject
-   else if there is a control id pId of tStack then
-      put the long id of control id pId of tStack into tObject
+   put 0 into tCount
+   repeat for each line tId in tIds
+      if tId is not an integer then
+         return mcbResult("An id is a whole number, as the outline gives it.", true)
+      end if
+      put empty into tObject
+      if there is a card id tId of tStack then
+         put the long id of card id tId of tStack into tObject
+      else if there is a control id tId of tStack then
+         put the long id of control id tId of tStack into tObject
+      end if
+      if tObject is empty then
+         put tId & ", " after tMissing
+         next repeat
+      end if
+      add 1 to tCount
+      if tText is not empty then
+         put return & return after tText
+      end if
+      put xtaObjectText(tObject, tLean) after tText
+   end repeat
+   if tMissing is not empty then
+      delete char -2 to -1 of tMissing
+      if tText is not empty then
+         put return & return after tText
+      end if
+      put "The stack" && quote & the short name of tStack & quote && "has no card or control with the id" && tMissing & \
+            ". Ids repeat from stack to stack: name the substack it is in as stack." after tText
    end if
-   if tObject is empty then
-      return mcbResult("The stack" && quote & the short name of tStack & quote && "has no card or control with the id" && pId & \
-            ". Ids repeat from stack to stack: name the substack it is in as stack.", true)
-   end if
-   return mcbResult(mcbWithScriptHint(xtaObjectText(tObject)), false)
+   return mcbResult(mcbWithScriptHint(tText), tCount is 0)
 end mcbToolReadStack
 
 -- An object's text, and when its script was cut, how to read the rest and
@@ -854,38 +1140,57 @@ private function mcbWithScriptHint pText
 end mcbWithScriptHint
 
 -- A picture of a card as it looks now, as the assistant takes it
-private function mcbToolLookAtCard pStackName, pCardId
-   local tTarget, tStack, tCard, tLabel, tWidth, tHeight, tScale, tSize, tData, tError, tResult
-   put mcbTarget(pStackName) into tTarget
+-- A picture of a card as it looks now, as the assistant takes it, or of
+-- one control of it (id); with labels, each control's id drawn on it
+private function mcbToolLookAtCard pArguments
+   local tTarget, tStack, tCard, tCardId, tId, tObject, tLabel, tWidth, tHeight, tScale, tSize, tData, tError, tResult, tLabels
+   put mcbTarget(mcbArg(pArguments, "stack")) into tTarget
    if tTarget["problem"] is not empty then
       return mcbResult(tTarget["problem"], true)
    end if
    put tTarget["stack"] into tStack
-   if pCardId is empty then
+   put word 1 to -1 of mcbArg(pArguments, "card") into tCardId
+   put word 1 to -1 of mcbArg(pArguments, "id") into tId
+   put mcbArg(pArguments, "labels") is "true" into tLabels
+   if tCardId is empty then
       put the long id of this card of tStack into tCard
-   else if pCardId is an integer and there is a card id pCardId of tStack then
-      put the long id of card id pCardId of tStack into tCard
+   else if tCardId is an integer and there is a card id tCardId of tStack then
+      put the long id of card id tCardId of tStack into tCard
    else
-      return mcbResult("The stack" && quote & the short name of tStack & quote && "has no card with the id" && pCardId & ".", true)
+      return mcbResult("The stack" && quote & the short name of tStack & quote && "has no card with the id" && tCardId & ".", true)
    end if
-   put the name of tCard into tLabel
-   if char 1 of word 2 of tLabel is quote then
-      put "card" && quote & the short name of tCard & quote && "(id" && the short id of tCard & ")" into tLabel
+   if tId is not empty then
+      if tId is not an integer or there is not a control id tId of tStack then
+         return mcbResult("The stack" && quote & the short name of tStack & quote && "has no control with the id" && tId & ".", true)
+      end if
+      put the long id of control id tId of tStack into tObject
+      put mcbObjectLabel(tObject) into tLabel
+      put the width of tObject into tWidth
+      put the height of tObject into tHeight
+   else
+      put tCard into tObject
+      put the name of tCard into tLabel
+      if char 1 of word 2 of tLabel is quote then
+         put "card" && quote & the short name of tCard & quote && "(id" && the short id of tCard & ")" into tLabel
+      end if
+      put the width of tStack into tWidth
+      put the height of tStack into tHeight
    end if
-   put the width of tStack into tWidth
-   put the height of tStack into tHeight
    put 1 into tScale
    if max(tWidth, tHeight) > kPictureSide then
       put kPictureSide / max(tWidth, tHeight) into tScale
    end if
    put max(1, round(tWidth * tScale)) & comma & max(1, round(tHeight * tScale)) into tSize
    try
-      export snapshot from tCard at size tSize to tData as PNG
+      export snapshot from tObject at size tSize to tData as PNG
    catch tError
       put empty into tData
    end try
    if tData is empty then
       return mcbResult("The picture of" && tLabel && "could not be taken.", true)
+   end if
+   if tLabels and tId is empty then
+      put mcbWithIds(tData, tCard, tScale, tSize) into tData
    end if
    put base64Encode(tData) into tResult["image"]
    replace return with empty in tResult["image"]
@@ -895,13 +1200,82 @@ private function mcbToolLookAtCard pStackName, pCardId
    if tScale < 1 then
       put ", shown at" && item 1 of tSize && "by" && item 2 of tSize after tResult["text"]
    end if
+   if tLabels and tId is empty then
+      put ", each visible control outlined in red with its id in a yellow box at its top left" after tResult["text"]
+   end if
    put "." after tResult["text"]
    put false into tResult["error"]
    return tResult
 end mcbToolLookAtCard
 
+-- The picture pData of the card pCard (taken at pScale, pSize), with each
+-- visible control outlined and its id at its top left: drawn in a hidden
+-- stack of the bridge's own, deleted after, so that nothing of the user's
+-- is touched. The picture as it was when it cannot be drawn.
+private function mcbWithIds pData, pCard, pScale, pSize
+   local tOldDefault, tIndex, tControl, tRect, tItem, tData, tError, tStack
+   put the defaultStack into tOldDefault
+   lock screen
+   lock messages
+   try
+      if there is a stack kOverlayStack then
+         delete stack kOverlayStack
+      end if
+      create invisible stack kOverlayStack
+      put the long id of stack kOverlayStack into tStack
+      set the _ideoverride of tStack to true
+      set the defaultStack to kOverlayStack
+      set the rect of tStack to 0, 0, item 1 of pSize, item 2 of pSize
+      create image "Card" in card 1 of tStack
+      set the text of image "Card" of tStack to pData
+      set the rect of image "Card" of tStack to 0, 0, item 1 of pSize, item 2 of pSize
+      repeat with tIndex = 1 to the number of controls of pCard
+         put the long id of control tIndex of pCard into tControl
+         if not the visible of tControl then
+            next repeat
+         end if
+         put the rect of tControl into tRect
+         repeat with tItem = 1 to 4
+            put round(item tItem of tRect * pScale) into item tItem of tRect
+         end repeat
+         create graphic in card 1 of tStack
+         set the style of last graphic of card 1 of tStack to "rectangle"
+         set the opaque of last graphic of card 1 of tStack to false
+         set the lineSize of last graphic of card 1 of tStack to 1
+         set the foregroundColor of last graphic of card 1 of tStack to "255,0,0"
+         set the rect of last graphic of card 1 of tStack to tRect
+         create field in card 1 of tStack
+         set the text of last field of card 1 of tStack to the short id of tControl
+         set the textSize of last field of card 1 of tStack to 10
+         set the textColor of last field of card 1 of tStack to "0,0,0"
+         set the opaque of last field of card 1 of tStack to true
+         set the backgroundColor of last field of card 1 of tStack to "255,255,128"
+         set the showBorder of last field of card 1 of tStack to false
+         set the margins of last field of card 1 of tStack to 1
+         set the width of last field of card 1 of tStack to the formattedWidth of last field of card 1 of tStack
+         set the height of last field of card 1 of tStack to the formattedHeight of last field of card 1 of tStack
+         set the topLeft of last field of card 1 of tStack to item 1 to 2 of tRect
+      end repeat
+      export snapshot from card 1 of tStack at size pSize to tData as PNG
+   catch tError
+      put empty into tData
+   end try
+   if there is a stack kOverlayStack then
+      delete stack kOverlayStack
+   end if
+   unlock messages
+   if tOldDefault is not empty and there is a stack tOldDefault then
+      set the defaultStack to tOldDefault
+   end if
+   unlock screen
+   if tData is empty then
+      return pData
+   end if
+   return tData
+end mcbWithIds
+
 private function mcbToolDictionary pTerm
-   local tTerm, tEntries, tError
+   local tTerm, tEntries, tError, tNear, tText
    put word 1 to -1 of pTerm into tTerm
    if tTerm is empty then
       return mcbResult("Give the term to look up.", true)
@@ -915,8 +1289,51 @@ private function mcbToolDictionary pTerm
    catch tError
       return mcbResult("The Dictionary cannot be read here.", true)
    end try
-   return mcbResult(xtaDictionaryText(tTerm, tEntries), false)
+   put xtaDictionaryText(tTerm, tEntries) into tText
+   if the number of elements of tEntries is 0 then
+      put xtaNearest(tTerm, mcbDictionaryNames(), kNearestEntries) into tNear
+      if tNear is not empty then
+         replace return with ", " in tNear
+         put return & "The entries with the nearest names:" && tNear & "." after tText
+      end if
+   end if
+   return mcbResult(tText, false)
 end mcbToolDictionary
+
+-- The names of the xTalk Script entries of the Dictionary, one per line,
+-- read once from the IDE's documentation database (empty when it cannot
+-- be read)
+private function mcbDictionaryNames
+   local tConnection, tNames, tEntries, tIndex, tError
+   if sDictionaryNames is not empty then
+      return sDictionaryNames
+   end if
+   try
+      ideDocsInitialize
+      put the result into tConnection
+      if tConnection is an integer then
+         put revDataFromQuery(tab, return, tConnection, \
+               "SELECT DISTINCT entry_name FROM dictionary_data WHERE library_name = 'LiveCode Script'") into tNames
+         if tNames begins with "revdberr" then
+            put empty into tNames
+         end if
+      end if
+   catch tError
+      put empty into tNames
+   end try
+   if tNames is empty then
+      try
+         put ideDocsFetchLCSEntries() into tEntries
+         repeat with tIndex = 1 to the number of elements of tEntries
+            put tEntries[tIndex]["display name"] & return after tNames
+         end repeat
+      catch tError
+         put empty into tNames
+      end try
+   end if
+   put tNames into sDictionaryNames
+   return tNames
+end mcbDictionaryNames
 
 private function mcbToolCheck pCode
    local tCheck, tText, tLine
@@ -1142,6 +1559,151 @@ private function mcbHandlerIndex pHandlers
    delete the last char of tOut
    return tOut
 end mcbHandlerIndex
+
+-- Finds pArguments' text (or with regex, a pattern) in the scripts of the
+-- user's stacks: that stack's main stack and its substacks, or every
+-- stack of the user's open when none is named. Each line found with its
+-- object, line number and the handler it is in; case is ignored.
+private function mcbToolSearchScripts pArguments
+   local tText, tRegex, tTarget, tStacks, tStack, tName, tObjects, tObject, tSeen, tList, tError, tLine, \
+         tFound, tCount, tShown, tOut, tLocked, tCard, tCtl
+   put mcbArg(pArguments, "text") into tText
+   if tText is empty then
+      return mcbResult("Give the text to find.", true)
+   end if
+   put mcbArg(pArguments, "regex") is "true" into tRegex
+   if tRegex then
+      if char 1 to 2 of tText is not "(?" then
+         put "(?i)" & tText into tText
+      end if
+      try
+         get matchText("", tText)
+      catch tError
+         return mcbResult("The regular expression cannot be read:" && line 1 of tError, true)
+      end try
+   end if
+   if word 1 to -1 of mcbArg(pArguments, "stack") is empty then
+      repeat for each line tName in the mainStacks
+         if there is a stack tName then
+            if not mcbIsIDEStack(the long id of stack tName) then
+               put the long id of stack tName & return after tStacks
+            end if
+         end if
+      end repeat
+      if tStacks is empty then
+         return mcbResult("The user has no stack of their own open in OXT-Beyond.", true)
+      end if
+   else
+      put mcbTarget(mcbArg(pArguments, "stack")) into tTarget
+      if tTarget["problem"] is not empty then
+         return mcbResult(tTarget["problem"] && "list_stacks names the user's stacks.", true)
+      end if
+      put mcbMainStackOf(tTarget["stack"]) & return into tStacks
+   end if
+   -- Every object with a script: each stack, its cards, their controls
+   repeat for each line tStack in tStacks
+      put tStack & return after tObjects
+      repeat for each line tName in the substacks of tStack
+         put the long id of stack tName of tStack & return after tObjects
+      end repeat
+   end repeat
+   put 0 into tCount
+   put 0 into tShown
+   repeat for each line tStack in tObjects
+      if word 1 of tStack is not "stack" then
+         next repeat
+      end if
+      put tStack & return into tList
+      repeat with tCard = 1 to the number of cards of tStack
+         put the long id of card tCard of tStack & return after tList
+         repeat with tCtl = 1 to the number of controls of card tCard of tStack
+            put the long id of control tCtl of card tCard of tStack & return after tList
+         end repeat
+      end repeat
+      repeat for each line tObject in tList
+         if tSeen[tObject] is true then
+            next repeat
+         end if
+         put true into tSeen[tObject]
+         try
+            put mcbScriptSearched(tObject, tText, tRegex) into tFound
+         catch tError
+            put quote & the short name of tStack & quote & ", " after tLocked
+            exit repeat
+         end try
+         repeat for each line tLine in tFound
+            add 1 to tCount
+            if tShown < kMaxSearchMatches then
+               add 1 to tShown
+               put "- " & mcbObjectLabel(tObject) after tOut
+               if word 1 of tObject is not "stack" then
+                  put " of stack" && quote & the short name of mcbStackOfObject(tObject) & quote after tOut
+               end if
+               put ", " & tLine & return after tOut
+            end if
+         end repeat
+      end repeat
+   end repeat
+   if tCount is 0 then
+      put "No script contains" && quote & mcbArg(pArguments, "text") & quote & "." into tOut
+   else
+      put "Found in" && tCount && "lines (the handler each is in after its number):" & return before tOut
+      delete the last char of tOut
+      if tCount > tShown then
+         put return & "(" & tCount - tShown && "more lines found: search for something narrower.)" after tOut
+      end if
+   end if
+   if tLocked is not empty then
+      put return & "Not searched (password-protected):" && char 1 to -3 of tLocked & "." after tOut
+   end if
+   return mcbResult(tOut, false)
+end mcbToolSearchScripts
+
+-- The lines of pObject's script holding pText (a regular expression when
+-- pRegex), one per line: "line N (in on mouseUp): the line"; a line
+-- that begins the handler named pText says "defines it". Throws for a
+-- password-protected stack.
+private function mcbScriptSearched pObject, pText, pRegex
+   local tScript, tHandlers, tLineNo, tLine, tOut, tHandler, tIn, tHit
+   put mcbScriptOf(pObject) into tScript
+   if tScript is empty then
+      return empty
+   end if
+   if not pRegex and not (pText is in tScript) then
+      return empty
+   end if
+   put mcbHandlers(tScript) into tHandlers
+   set the itemDelimiter to tab
+   put 0 into tLineNo
+   repeat for each line tLine in tScript
+      add 1 to tLineNo
+      if pRegex then
+         put matchText(tLine, pText) into tHit
+      else
+         put pText is in tLine into tHit
+      end if
+      if not tHit then
+         next repeat
+      end if
+      put empty into tIn
+      repeat for each line tHandler in tHandlers
+         if tLineNo >= item 3 of tHandler and tLineNo <= item 4 of tHandler then
+            put " (in" && item 1 of tHandler && item 2 of tHandler into tIn
+            if tLineNo is item 3 of tHandler and toLower(item 2 of tHandler) is toLower(word 1 to -1 of pText) then
+               put ", defines it" after tIn
+            end if
+            put ")" after tIn
+            exit repeat
+         end if
+      end repeat
+      put word 1 to -1 of tLine into tLine
+      if the number of chars of tLine > kSearchLineChars then
+         put char 1 to kSearchLineChars of tLine & "..." into tLine
+      end if
+      put "line" && tLineNo & tIn & ":" && tLine & return after tOut
+   end repeat
+   return tOut
+end mcbScriptSearched
 
 -- Changes part of a script: the handler named (replaced by code, which is
 -- that handler whole; added at the end when the script has none of that

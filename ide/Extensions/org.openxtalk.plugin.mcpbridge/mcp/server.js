@@ -69,8 +69,10 @@ const INSTRUCTIONS = [
   'These tools work in OXT-Beyond, a free IDE for xTalk Script (the language of LiveCode Community 9 and',
   'OpenXTalk, descended from HyperCard), on the stacks the user has open in it.',
   'Call xtalk_guide once before you write xTalk code: it is the house guide to the language and this engine.',
-  'Find the user\'s stacks with list_stacks, read one with read_stack (an outline first, then a card or control',
-  'by its id), and see a card with look_at_card. Build with make_changes (controls, cards, a new stack,',
+  'Find the user\'s stacks with list_stacks, and what they have in front of them (the selection, the script open in',
+  'the Script Editor, the last error) with ide_context. Read a stack with read_stack (an outline first, then cards or',
+  'controls by their ids), find text in its scripts with search_scripts, and see a card with look_at_card.',
+  'Build with make_changes (controls, cards, a new stack,',
   'properties and scripts, as one checked batch), try code with run_code, and save with save_stack.',
   'A long script is read in parts with read_script and changed a handler or a range of lines at a time with edit_script.',
   'A change is made as soon as the user allows the tool here; OXT-Beyond asks the user itself before every run of code',
@@ -81,6 +83,13 @@ const INSTRUCTIONS = [
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const CHANGES = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
+// Code run in OXT-Beyond can do what the IDE can: files, the network, other programs
+const RUNS = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
+// What make_changes creates (the xTalk Assistant's xtbKinds)
+const KINDS = ['button', 'default button', 'checkbox', 'radio button', 'option menu', 'pulldown menu', 'popup menu', 'combo box',
+  'tab panel', 'field', 'text area', 'label', 'list field', 'table field', 'rectangle', 'round rectangle', 'oval', 'line',
+  'polygon', 'regular polygon', 'curve', 'scrollbar', 'slider', 'progress bar', 'image', 'player', 'group', 'widget', 'card',
+  'stack'];
 const STACK = { type: 'string', description: 'The stack or substack, by name, as list_stacks gives it; empty for the one the user is working on' };
 
 const TOOLS = [
@@ -101,19 +110,33 @@ const TOOLS = [
     annotations: READ_ONLY
   },
   {
+    name: 'ide_context',
+    title: 'See what the user has in front of them',
+    description: 'Tells what the user has in front of them in OXT-Beyond: the stack they work on and the card in front, the ' +
+      'objects selected with the pointer tool, the script open in the Script Editor with the line its caret is on (and ' +
+      'whether it holds changes they have not applied), the last error the IDE showed them with the script around it, and ' +
+      'whether a script is paused in the debugger. Use it when the user speaks of "this", "the selected button" or "the error".',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: READ_ONLY
+  },
+  {
     name: 'read_stack',
     title: 'Read a stack',
     description: 'Reads a stack of the user\'s. With no id: an outline of it and its substacks, their cards and their ' +
       'controls with ids and rects, and how long each script is. With an id from the outline, and the stack it is in ' +
       '(ids repeat from stack to stack): that card\'s or control\'s properties and script, and a card\'s controls. ' +
-      'With details true and no id: the stack\'s own properties, cards and script. Password-protected stacks are not read. ' +
+      'With ids: several at once. An object\'s properties are those a new one of its kind would not have (all_properties ' +
+      'for every one), with its custom properties and their values. With details true and no id: the stack\'s own ' +
+      'properties, cards and script. Password-protected stacks are not read. ' +
       'A script is shown up to 24,000 characters; read_script reads a longer one whole, in parts.',
     inputSchema: {
       type: 'object',
       properties: {
         stack: STACK,
         id: { type: 'integer', description: 'The id of a card or control, as the outline gives it' },
-        details: { type: 'boolean', description: 'With no id: the stack\'s own properties and script instead of the outline' }
+        ids: { type: 'array', items: { type: 'integer' }, maxItems: 20, description: 'Several ids, read at once' },
+        details: { type: 'boolean', description: 'With no id: the stack\'s own properties and script instead of the outline' },
+        all_properties: { type: 'boolean', description: 'Every property with a short value, not only those a new object would not have' }
       }
     },
     annotations: READ_ONLY
@@ -137,16 +160,37 @@ const TOOLS = [
     annotations: READ_ONLY
   },
   {
+    name: 'search_scripts',
+    title: 'Search the scripts',
+    description: 'Finds text in every script of a stack of the user\'s (the stack, its cards and controls, and its substacks), ' +
+      'or of all their open stacks when none is named: each line found with its object, line number and the handler it is ' +
+      'in, and where a handler of that name is defined. Case is ignored. Use it to find where a handler is defined or ' +
+      'called, or a variable or property is used, rather than reading each object.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'What to find: a handler\'s name, a word, a phrase' },
+        stack: { type: 'string', description: 'The stack, by name, searched with its main stack and substacks; every stack of the user\'s open when none' },
+        regex: { type: 'boolean', description: 'text is a regular expression (PCRE), matched against each line' }
+      },
+      required: ['text']
+    },
+    annotations: READ_ONLY
+  },
+  {
     name: 'look_at_card',
     title: 'Look at a card',
     description: 'Takes a picture of a card of the user\'s stack as it looks now, to see what you built or what the user ' +
       'asks about: where the controls are, whether they overlap or are cut off, whether their text fits. read_stack gives ' +
-      'the names, ids and properties; this shows the card.',
+      'the names, ids and properties; this shows the card. With labels, each control is outlined with its id written on ' +
+      'it, to match what you see with read_stack; with id, only that control is shown.',
     inputSchema: {
       type: 'object',
       properties: {
         stack: STACK,
-        card: { type: 'integer', description: 'The id of the card, as the outline gives it; the card the stack shows when none' }
+        card: { type: 'integer', description: 'The id of the card, as the outline gives it; the card the stack shows when none' },
+        id: { type: 'integer', description: 'Only this control, by its id' },
+        labels: { type: 'boolean', description: 'Outline each control and write its id on it' }
       }
     },
     annotations: READ_ONLY
@@ -156,7 +200,8 @@ const TOOLS = [
     title: 'Look up the Dictionary',
     description: 'Looks up an entry of the OXT-Beyond Dictionary: a command, function, property, message, keyword, constant ' +
       'or control structure of xTalk Script (put, split, topStack, mouseUp, repeat...). Gives its syntax, parameters, ' +
-      'description and examples. Look up what you are not sure exists or how it is written, rather than guess.',
+      'description and examples, or the entries with the nearest names when there is none. Look up what you are not sure ' +
+      'exists or how it is written, rather than guess.',
     inputSchema: {
       type: 'object',
       properties: { term: { type: 'string', description: 'The entry\'s name alone: topStack, not the topStack' } },
@@ -182,7 +227,7 @@ const TOOLS = [
     title: 'Change a stack',
     description: 'Changes the user\'s stack as one batch: creates controls, cards or a new stack; sets properties, custom ' +
       'properties and scripts; deletes controls or cards. The batch is checked first, and a mistake (a property the engine ' +
-      'does not have, a value it refuses, a script that does not compile) comes back with nothing changed, to correct and ' +
+      'does not have, with the nearest names, a value it refuses, a script that does not compile) comes back with nothing changed, to correct and ' +
       'send again. A batch is made whole or not at all, with messages locked (none of the user\'s handlers runs), and ' +
       'undo_changes takes it back. The result gives the ids of what was created. Read the stack first to know its cards, ' +
       'ids and scripts. Each change has an action: create (kind: button, default button, checkbox, radio button, option ' +
@@ -206,7 +251,7 @@ const TOOLS = [
             type: 'object',
             properties: {
               action: { type: 'string', enum: ['create', 'set', 'delete'] },
-              kind: { type: 'string', description: 'create: what to create' },
+              kind: { type: 'string', enum: KINDS, description: 'create: what to create' },
               name: { type: 'string', description: 'create: its name' },
               ref: { type: 'string', description: 'create: a word the later changes of this batch name it by' },
               card: { description: 'create: the card to put it on (an id, a ref or a card\'s name); the current card when none' },
@@ -258,7 +303,7 @@ const TOOLS = [
       '(the default), a hidden stack made for the run and deleted after it, where the code can call the handlers you give; ' +
       'or stack, the user\'s stack, as the Message Box runs code there (with the stack\'s own handlers, me being the card ' +
       'or control given by target, the current card when none), after a checkpoint undo_changes goes back to (on the ' +
-      'stack, return gives nothing back: put the value instead). Every run is shown to the user in OXT-Beyond first, and ' +
+      'stack, return gives nothing back: put the value instead; a run that changed nothing keeps no checkpoint). Every run is shown to the user in OXT-Beyond first, and ' +
       'runs only when they allow it: keep the code short and plain, so that they can read it. Do not use answer or ask: ' +
       'the run would wait for the user. A run ' +
       'that never ends is stopped only by the user (Control-period, Command-period on a Mac).',
@@ -273,7 +318,7 @@ const TOOLS = [
       },
       required: ['code']
     },
-    annotations: CHANGES
+    annotations: RUNS
   },
   {
     name: 'save_stack',

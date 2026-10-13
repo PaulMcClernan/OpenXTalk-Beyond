@@ -366,6 +366,108 @@ on TestCheckCodeGivesOneProblemALine
    TestAssert "two problems, two lines", tCount is 2
 end TestCheckCodeGivesOneProblemALine
 
+-- What the user has in front of them: the stack, the selection, the last
+-- error the IDE showed them (noted by the bridge's own error hook)
+on TestIdeContext
+   local tStack, tReply
+   TestStart
+   put TestUserStack() into tStack
+   put TestCall("ide_context") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "the stack the user works on", not TestIsError(tReply) and TestText(tReply) contains ("working on the stack" && quote & kUserStack & quote)
+   TestAssert "no error yet", TestText(tReply) contains "no error since the bridge was turned on"
+   TestAssert "the hook is in the message path", the long id of stack "org.openxtalk.plugin.mcpbridge-errors" is among the lines of the frontScripts
+   -- As the engine sends it on its way to the IDE's debugger
+   dispatch "traceError" to button "Go" of tStack with "mouseUp", 4, 7, "219,4,7,frobnicate"
+   put TestCall("ide_context") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "the error, and where", TestText(tReply) contains "The last error the IDE showed the user" and TestText(tReply) contains "Go"
+   mcbServerStop
+   TestAssert "the hook is taken out", there is not a stack "org.openxtalk.plugin.mcpbridge-errors"
+end TestIdeContext
+
+on TestSearchScripts
+   local tStack, tReply
+   TestStart
+   put TestUserStack() into tStack
+   set the script of button "Go" of tStack to "on mouseUp" & return & "  doThing 1" & return & "end mouseUp" & return & return & \
+         "on doThing pCount" & return & "  beep" & return & "end doThing"
+   set the script of card 1 of tStack to "on openCard" & return & "  doThing 2" & return & "end openCard"
+   put TestCall("search_scripts", "{`text`:`doThing`}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "every line, with its handler", not TestIsError(tReply) and TestText(tReply) contains "line 2 (in on mouseUp): doThing 1" \
+         and TestText(tReply) contains "line 5 (in on doThing, defines it)" and TestText(tReply) contains "line 2 (in on openCard): doThing 2"
+   TestAssert "four lines", TestText(tReply) contains "Found in 4 lines"
+   put TestCall("search_scripts", "{`stack`:`" & kUserStack & "`,`text`:`^\\s*BEEP$`,`regex`:true}") into tReply
+   TestAssert "a pattern, whatever the case", TestText(tReply) contains "line 6 (in on doThing): beep"
+   put TestCall("search_scripts", "{`text`:`(`,`regex`:true}") into tReply
+   TestAssert "a pattern that cannot be read", TestIsError(tReply)
+   put TestCall("search_scripts", "{`text`:`nowhere at all`}") into tReply
+   TestAssert "nothing found", not TestIsError(tReply) and TestText(tReply) contains "No script contains"
+end TestSearchScripts
+
+on TestReadStackIsLeanAndReadsSeveral
+   local tStack, tReply, tGo, tCard
+   TestStart
+   put TestUserStack() into tStack
+   set the cNote of button "Go" of tStack to "hello"
+   put the short id of button "Go" of tStack into tGo
+   put the short id of card 1 of tStack into tCard
+   put TestCall("read_stack", "{`stack`:`" & kUserStack & "`,`ids`:[" & tGo & "," & tCard & ",99999]}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "both, and the one there is not", not TestIsError(tReply) and TestText(tReply) contains ("button" && quote & "Go" & quote) \
+         and TestText(tReply) contains ("card" && quote & "Main" & quote) and TestText(tReply) contains "no card or control with the id 99999"
+   TestAssert "custom values, not the defaults", TestText(tReply) contains "cNote: hello" and TestText(tReply) contains "that a new button does not have"
+   put TestCall("read_stack", "{`stack`:`" & kUserStack & "`,`id`:" & tGo & ",`all_properties`:true}") into tReply
+   TestAssert "every property when asked", TestText(tReply) contains "Properties (those with a short value):"
+end TestReadStackIsLeanAndReadsSeveral
+
+on TestLookAtCardWithIds
+   local tStack, tReply, tPlain
+   TestStart
+   put TestUserStack() into tStack
+   put TestCall("look_at_card", "{`stack`:`" & kUserStack & "`}") into tReply
+   put xtaJsonText(xtaJsonMember(tReply, "image")) into tPlain
+   put TestCall("look_at_card", "{`stack`:`" & kUserStack & "`,`labels`:true}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "a picture with the ids drawn", not TestIsError(tReply) and TestText(tReply) contains "with its id" \
+         and xtaJsonText(xtaJsonMember(tReply, "image")) is not empty and xtaJsonText(xtaJsonMember(tReply, "image")) is not tPlain
+   TestAssert "the stack it was drawn in is gone", there is not a stack "org.openxtalk.plugin.mcpbridge-overlay"
+   put TestCall("look_at_card", "{`stack`:`" & kUserStack & "`,`id`:" & the short id of button "Go" of tStack & "}") into tReply
+   TestAssert "one control", not TestIsError(tReply) and TestText(tReply) contains ("button" && quote & "Go" & quote)
+end TestLookAtCardWithIds
+
+on TestARunThatChangesNothingKeepsNoCheckpoint
+   local tStack, tReply
+   TestStart
+   put TestUserStack() into tStack
+   dispatch "mcbTestSetAnswer" to stack "mcbTestIDE" with true
+   put TestCall("run_code", "{`where`:`stack`,`stack`:`" & kUserStack & "`,`code`:`put the short name of this stack`}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "it ran, and says there is nothing to undo", not TestIsError(tReply) and TestText(tReply) contains "nothing to undo" \
+         and not (TestText(tReply) contains "This is change")
+   put TestCall("run_code", "{`where`:`stack`,`stack`:`" & kUserStack & "`,`code`:`set the cMark of this stack to 1`}") into tReply
+   TestAssert "one that changes it can be undone", TestText(tReply) contains "This is change 1"
+end TestARunThatChangesNothingKeepsNoCheckpoint
+
+on TestAMisspeltPropertyGetsTheNearest
+   local tReply
+   TestStart
+   get TestUserStack()
+   put TestCall("make_changes", "{`stack`:`" & kUserStack & "`,`changes`:[{`action`:`set`,`object`:`stack`,`properties`:{`titel`:`x`}}]}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "the nearest names", TestIsError(tReply) and TestText(tReply) contains "the nearest properties are" and TestText(tReply) contains "title"
+end TestAMisspeltPropertyGetsTheNearest
+
+on TestTheGuideIsTheBridges
+   local tReply
+   TestStart
+   put TestCall("xtalk_guide") into tReply
+   TestAssert "its own sections, and the assistant's on the language", TestText(tReply) contains "## 7. Your tools" \
+         and TestText(tReply) contains "## 2." and TestText(tReply) contains "## 5." and not (TestText(tReply) contains "<!--") \
+         and not (TestText(tReply) contains "Insert Code")
+end TestTheGuideIsTheBridges
+
 on TestSaveIsAskedAbout
    local tReply, tStack, tFile
    TestStart
