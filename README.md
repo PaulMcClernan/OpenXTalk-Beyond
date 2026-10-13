@@ -66,11 +66,12 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 is a test release (a pre-release) of the xTalk MCP
-Bridge, which lets Claude, signed in with your own Claude plan in the
-Claude desktop app or Claude Code, build stacks in the IDE (see
-[0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge)); 0.2.5 stays the main
-download until it has held up.
+lists. 0.2.6-rc.1 and 0.2.6-rc.2 are test releases (pre-releases) of
+the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
+plan in the Claude desktop app or Claude Code, build stacks in the IDE
+(see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge) and
+[0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run)); 0.2.5 stays
+the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1343,6 +1344,28 @@ difference from 0.2.5. It has been tested on Linux, the IDE's side
 against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
+
+#### 0.2.6-rc.2: the bridge asks before every run
+
+OXT-Beyond 0.2.6-rc.2 fixes what a review of 0.2.6-rc.1's bridge found.
+The IDE now asks you before it runs **any** code Claude sends, and
+shows you the code: rc.1 asked only when a scan saw a risk, and that
+scan missed some ways of reaching the shell or files. Claude can read
+a long script in numbered parts and change one handler or a few lines
+of it (new tools `read_script` and `edit_script`), where before it saw
+only the first 24,000 characters and had to send the whole script
+back. The bridge's file names the IDE that wrote it and only you can
+read it; quitting the IDE deletes it, and an IDE deletes only its own,
+so a second IDE no longer breaks the first one's bridge. The server in
+the desktop extension says so when the file was left by an IDE that
+has quit, when the IDE is busy with an earlier request, and when the
+extension is older than the IDE (set Claude up again from
+**Claude Setup...** after updating).
+
+The xTalk Assistant changes in two small ways: its script check puts
+each problem on its own line, and the folders where it keeps copies
+of stacks before changing them are readable by you alone. With the
+bridge off, nothing else differs from 0.2.6-rc.1.
 
 ### xTalk Suite extensions
 
