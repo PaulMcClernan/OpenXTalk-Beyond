@@ -1245,6 +1245,20 @@ and:
   turns the pictures off. The *More* menu has **Explain the Open
   Script** and **Copy the Conversation**, and the window and the model
   call the language xTalk Script.
+- **Answers no longer come back blank.** Anthropic's models think before
+  they answer, and the thinking counts toward how long an answer may be,
+  so a question that builds something could use all of the 4096 tokens
+  0.2.5-rc.4 asked for and come back empty. The assistant now asks
+  Anthropic for 16000 tokens when the Settings give no limit. An answer
+  cut off before it says anything, or while it writes a call to a tool,
+  is asked for again with more room, up to 32000 tokens; otherwise an
+  answer cut off at the limit ends with a note that says why. A call cut
+  off at the limit is never carried out, an answer stopped on safety
+  grounds says so, and a request waits at least ten minutes for an
+  answer when the Settings do not say (it was three). A limit set in the
+  Settings is what each answer is asked for first, and a wait set there
+  is used as before. The conversation's colours show, which they never
+  did.
 - **A fix in the Preferences.** The *Automatic Updates* card no longer
   stops with an error when the window moves to another card right after
   showing it (CI's screenshot tour did that on an Intel Mac).
@@ -1265,12 +1279,14 @@ The Kit also sweeps a previous session's leftover sprite controls off
 the card in one pass when it tears down, with the same result, and has
 three new handlers (`b2kSoundClip`, `b2kSheetAdoptAtlas` and
 `b2kSheetAtlasRows`). The suite has tested these changes headlessly;
-they have not yet run on an engine. The xTalk Assistant is
-still off until you turn it on, so with it off nothing else differs
-from 0.2.5-rc.4; once it is on, it sends a picture of a card only after
-you allow it to read that stack, and saves a stack only when you press
-**Save**. The Preferences fix changes only the Preferences window. The
-engine and the standalone runtimes are those of 0.2.5-rc.2.
+they have not yet run on an engine. The xTalk Assistant is still off
+until you turn it on, so with it off nothing else differs from
+0.2.5-rc.4. Once it is on, it sends a picture of a card only after you
+allow it to read that stack, and saves a stack only when you press
+**Save**; a question may cost more than in 0.2.5-rc.4, since an answer
+may be longer and one that is cut off may be asked for again. The
+Preferences fix changes only the Preferences window. The engine and the
+standalone runtimes are those of 0.2.5-rc.2.
 
 Known problem: in 51 of the new entries a line of the description is
 read as a separate part, because it starts with one word and a colon.

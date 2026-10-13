@@ -23,9 +23,11 @@ words, is in the [README](README.md#the-ide) and on the
 - xTalk Assistant: turning pictures off holds at once, mid-answer too (#95)
 - Text dictionary: add the xTalk Suite extensions from their pinned sources (#94)
 - Preferences: the update note no longer fails when the window moved on (#94)
+- xTalk Assistant: no more blank answers when the model thinks long (#97)
 - README: the xTalk Suite extensions are in both dictionaries (#96)
 - xTalk Suite extensions: pin the members' documented versions (#96)
 - Version 0.2.5-rc.5, with its changelog (#96)
+- Version 0.2.5-rc.5: the assistant's fix in the changelog and the README (#96)
 
 ## 0.2.5-rc.4 (2026-10-12, pre-release)
 
