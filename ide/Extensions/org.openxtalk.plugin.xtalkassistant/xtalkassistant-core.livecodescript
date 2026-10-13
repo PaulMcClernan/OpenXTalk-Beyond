@@ -58,8 +58,9 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --    xtaDictionaryText(pTerm, pEntries)    a Dictionary entry, for the model
 --    xtaErrorText(pTrace), xtaScriptExcerpt(pScript, pLine)
 --                                          an error the user hit, for the model
---    xtaStackOutline(pStack), xtaObjectText(pObject)
+--    xtaStackOutline(pStack), xtaObjectText(pObject, pLean)
 --                                          the user's stack, for the model
+--    xtaNearest(pWord, pNames, pMax)       the names nearest a misspelt one
 --    xtaCodeBlocks(pText)                  the fenced code blocks of a reply
 --    xtaIsXTalkLang(pLang), xtaXTalkBlocks(pBlocks)   which blocks are xTalk
 --    xtaSystemPrompt()                     the short guide, built in
@@ -1522,6 +1523,11 @@ function xtaCheckScript pCode, pDeclared
    end if
    put xtaScanScript(pCode) into tScan
    put tScan["issues"] into tIssues
+   -- One issue per line: the scan's come without a last return, and what
+   -- follows is put after them
+   if tIssues is not empty then
+      put return after tIssues
+   end if
    put 0 into tOffset
    put pCode into tScript
    if tScan["handlers"] is 0 and tScan["statements"] > 0 then
@@ -1918,6 +1924,90 @@ end xtaHasCurlyQuote
 -- tools read into text for the model. Nothing here asks the user, runs code
 -- or changes anything (the plugin asks before it reads the user's stack).
 
+-- The names of pNames (one per line) nearest pWord, at most pMax of them,
+-- the nearest first, one per line: those a few letters away (by edit
+-- distance, at most a third of its length, and 2 for a short word), then
+-- those that hold it or that it holds. For "did you mean" in a message:
+-- a property misspelt, a Dictionary entry not found. Case is ignored.
+function xtaNearest pWord, pNames, pMax
+   local tWord, tName, tLower, tLimit, tScore, tScores, tLine, tResult, tCount, tSeen
+   put toLower(word 1 to -1 of pWord) into tWord
+   if tWord is empty or pMax is not an integer or pMax < 1 then
+      return empty
+   end if
+   put max(2, the number of chars of tWord div 3) into tLimit
+   repeat for each line tName in pNames
+      put toLower(word 1 to -1 of tName) into tLower
+      if tLower is empty then
+         next repeat
+      end if
+      put xtaEditDistance(tWord, tLower, tLimit) into tScore
+      if tScore > tLimit then
+         if the number of chars of tWord < 3 or the number of chars of tLower < 3 then
+            next repeat
+         end if
+         -- After every name a few letters away, the shorter first: those
+         -- that hold the word, then those it holds
+         if tLower contains tWord then
+            put tLimit + 1 + the number of chars of tLower - the number of chars of tWord into tScore
+         else if tWord contains tLower then
+            put tLimit + 1000 + the number of chars of tWord - the number of chars of tLower into tScore
+         else
+            next repeat
+         end if
+      end if
+      put tScore & tab & word 1 to -1 of tName & return after tScores
+   end repeat
+   set the itemDelimiter to tab
+   sort lines of tScores numeric by item 1 of each
+   put 0 into tCount
+   repeat for each line tLine in tScores
+      if tSeen[item 2 of tLine] is true then
+         next repeat
+      end if
+      put true into tSeen[item 2 of tLine]
+      put item 2 of tLine & return after tResult
+      add 1 to tCount
+      if tCount >= pMax then
+         exit repeat
+      end if
+   end repeat
+   delete the last char of tResult
+   return tResult
+end xtaNearest
+
+-- The edit distance of pA and pB (letters inserted, deleted or changed),
+-- or pLimit + 1 when it is more than pLimit
+private function xtaEditDistance pA, pB, pLimit
+   local tLenA, tLenB, tPrev, tRow, tI, tJ, tCost, tBest
+   put the number of chars of pA into tLenA
+   put the number of chars of pB into tLenB
+   if abs(tLenA - tLenB) > pLimit then
+      return pLimit + 1
+   end if
+   repeat with tJ = 0 to tLenB
+      put tJ into tPrev[tJ]
+   end repeat
+   repeat with tI = 1 to tLenA
+      put tI into tRow[0]
+      put tI into tBest
+      repeat with tJ = 1 to tLenB
+         if char tI of pA is char tJ of pB then
+            put 0 into tCost
+         else
+            put 1 into tCost
+         end if
+         put min(tPrev[tJ] + 1, tRow[tJ - 1] + 1, tPrev[tJ - 1] + tCost) into tRow[tJ]
+         put min(tBest, tRow[tJ]) into tBest
+      end repeat
+      if tBest > pLimit then
+         return pLimit + 1
+      end if
+      put tRow into tPrev
+   end repeat
+   return tPrev[tLenB]
+end xtaEditDistance
+
 -- The Dictionary's entries for pTerm, as the IDE's ideDocsFetchLCSData gives
 -- them (keys 1 to N, each an array with "display name", "Type", "Summary",
 -- "Syntax" 1 to N, "params" 1 to N with "name", "type" and "description",
@@ -2245,9 +2335,11 @@ end xtaScriptNote
 -- One object of the user's stack, for the model: what and where it is, its
 -- properties that have a short value, the names of its custom properties,
 -- the text of a field, the controls of a card or the cards of a stack, and
--- its script
-function xtaObjectText pObject
-   local tText, tType, tProps, tKeys, tKey, tValue, tList, tScript, tCard, tSeen, tIndex
+-- its script. With pLean (the MCP bridge's read_stack), only the
+-- properties a new object of its type would not have, and the values of
+-- its custom properties (a long or many-line one by its length).
+function xtaObjectText pObject, pLean
+   local tText, tType, tProps, tKeys, tKey, tValue, tList, tScript, tCard, tSeen, tIndex, tDefaults, tCustom
    put the long id of pObject into pObject
    put word 1 of the name of pObject into tType
    put xtaNamed(pObject) into tText
@@ -2268,7 +2360,14 @@ function xtaObjectText pObject
    put the properties of pObject into tProps
    put the keys of tProps into tKeys
    sort lines of tKeys
-   put "Properties (those with a short value):" & return after tText
+   if pLean is true then
+      put xtaTemplateProperties(tType) into tDefaults
+   end if
+   if tDefaults is an array then
+      put "Properties (those with a short value that a new" && tType && "does not have):" & return after tText
+   else
+      put "Properties (those with a short value):" & return after tText
+   end if
    repeat for each line tKey in tKeys
       put tProps[tKey] into tValue
       if tValue is an array or tValue is empty or the number of chars of tValue > kMaxPropertyChars then
@@ -2277,17 +2376,39 @@ function xtaObjectText pObject
       if matchText(tValue, "[[:cntrl:]]") then
          next repeat
       end if
+      if tDefaults is an array and tKey is among the keys of tDefaults then
+         -- Compared as text, never as numbers
+         if ("v" & tDefaults[tKey]) is ("v" & tValue) then
+            next repeat
+         end if
+      end if
       put "  " & tKey & ":" && tValue & return after tText
    end repeat
    put empty into tList
-   repeat for each line tKey in the customKeys of pObject
+   if pLean is true then
+      put the customProperties of pObject into tCustom
+      repeat for each line tKey in the keys of tCustom
+         put tCustom[tKey] into tValue
+         if tValue is an array then
+            put "(an array)" into tValue
+         else if the number of chars of tValue > kMaxPropertyChars or matchText(tValue, "[[:cntrl:]]") then
+            put "(" & the number of chars of tValue && "characters, in" && the number of lines of tValue && "lines)" into tValue
+         end if
+         put "  " & tKey & ":" && tValue & return after tList
+      end repeat
       if tList is not empty then
-         put ", " after tList
+         put "Custom properties:" & return & tList after tText
       end if
-      put tKey after tList
-   end repeat
-   if tList is not empty then
-      put "Custom properties (names only):" && tList & return after tText
+   else
+      repeat for each line tKey in the customKeys of pObject
+         if tList is not empty then
+            put ", " after tList
+         end if
+         put tKey after tList
+      end repeat
+      if tList is not empty then
+         put "Custom properties (names only):" && tList & return after tText
+      end if
    end if
    put empty into tList
    repeat for each line tKey in the customPropertySets of pObject
@@ -2332,6 +2453,32 @@ function xtaObjectText pObject
    end if
    return tText
 end xtaObjectText
+
+-- The properties a new object of the type pType has (those of its
+-- template), or empty for a type with no template (a widget)
+private function xtaTemplateProperties pType
+   switch pType
+      case "stack"
+         return the properties of the templateStack
+      case "card"
+         return the properties of the templateCard
+      case "button"
+         return the properties of the templateButton
+      case "field"
+         return the properties of the templateField
+      case "graphic"
+         return the properties of the templateGraphic
+      case "image"
+         return the properties of the templateImage
+      case "scrollbar"
+         return the properties of the templateScrollbar
+      case "player"
+         return the properties of the templatePlayer
+      case "group"
+         return the properties of the templateGroup
+   end switch
+   return empty
+end xtaTemplateProperties
 
 -- The stack an object is in (the stack itself for a stack), from its long
 -- id, which ends with it

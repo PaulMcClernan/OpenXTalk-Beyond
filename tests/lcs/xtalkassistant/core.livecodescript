@@ -1036,6 +1036,29 @@ on TestObjectText
    delete stack "xtaReadMain"
 end TestObjectText
 
+-- Lean (the MCP bridge's read_stack): only what a new object of the
+-- type would not have, and the custom properties' values
+on TestObjectTextLean
+   local tText, tFull
+   TestMakeStackToRead
+   put xtaObjectText(the long id of button "OK" of card "Main" of stack "xtaReadMain", true) into tText
+   TestDiagnostic tText
+   TestAssert "what it has of its own", "  rect: 10,10,110,33" is among the lines of tText and "  name: OK" is among the lines of tText
+   TestAssert "custom properties with their values", "  cSecret: not shown" is among the lines of tText
+   put xtaObjectText(the long id of button "OK" of card "Main" of stack "xtaReadMain") into tFull
+   TestAssert "not lean, as before", "Custom properties (names only): cSecret" is among the lines of tFull
+   TestAssert "not what every new button has", tText contains "that a new button does not have" \
+         and the number of lines of tText * 2 < the number of lines of tFull
+   delete stack "xtaReadMain"
+end TestObjectTextLean
+
+on TestNearest
+   TestAssert "a letter or two away, nearest first", line 1 of xtaNearest("lable", "name" & return & "label" & return & "labels", 2) is "label"
+   TestAssert "at most as many as asked", the number of lines of xtaNearest("lable", "label" & return & "labels" & return & "table", 2) is 2
+   TestAssert "a name that holds it, before one it holds", xtaNearest("topstack", "stack" & return & "the topStack", 3) is ("the topStack" & return & "stack")
+   TestAssert "nothing near", xtaNearest("zzzzzz", "label" & return & "name", 3) is empty
+end TestNearest
+
 --------------------------------------------------------------------------------
 -- Round trips through libURL to a server of this process
 

@@ -6,9 +6,10 @@ script "TestMcpBridgeTools"
 -- plugin's main stack, which asks the user: that the server listens on
 -- 127.0.0.1, writes its port and token and deletes them when it stops,
 -- that a request without the token is refused, that the tools read, build,
--- run and undo through the requests the MCP server sends, that code which
--- reaches what cannot be undone runs only when the user says yes, and that
--- a real socket gets its answer.
+-- run and undo through the requests the MCP server sends, that code runs
+-- only when the user says yes (every run), that a long script is read in
+-- parts and edited by handler or by lines, and that a real socket gets its
+-- answer.
 
 constant kTools = "org.openxtalk.plugin.mcpbridge-tools"
 constant kUserStack = "mcbTestUserStack"
@@ -220,10 +221,14 @@ end TestUndoAsksWhenTheUserChangedIt
 on TestRunsAndWhatTheUserIsAsked
    local tReply, tFile
    TestStart
+   dispatch "mcbTestSetAnswer" to stack "mcbTestIDE" with false
+   put TestCall("run_code", "{`code`:`put 6 * 7`}") into tReply
+   TestAssert "every run is asked about, and refused, does not run", TestIsError(tReply) and not (TestText(tReply) contains "42") \
+         and mcbTestAsked() contains "run code"
+   dispatch "mcbTestSetAnswer" to stack "mcbTestIDE" with true
    put TestCall("run_code", "{`code`:`put 6 * 7`}") into tReply
    TestDiagnostic TestText(tReply)
-   TestAssert "a run in the sandbox", not TestIsError(tReply) and TestText(tReply) contains "42"
-   TestAssert "it was not asked about", mcbTestAsked() is empty
+   TestAssert "allowed, a run in the sandbox", not TestIsError(tReply) and TestText(tReply) contains "42"
    put specialFolderPath("temporary") & "/mcbtest-nothing-" & the milliseconds into tFile
    dispatch "mcbTestSetAnswer" to stack "mcbTestIDE" with false
    put TestCall("run_code", "{`code`:`put \`x\` into url (\`file:" & tFile & "\`)`}") into tReply
@@ -235,6 +240,233 @@ on TestRunsAndWhatTheUserIsAsked
    TestAssert "allowed, it runs", not TestIsError(tReply) and there is a file tFile
    delete file tFile
 end TestRunsAndWhatTheUserIsAsked
+
+-- Code worded so that a reading of its text does not see what it does
+-- (here "the shell of", which xtaRiskScan does not know) is asked about
+-- all the same
+on TestCodeTheScanMissesIsAskedAbout
+   local tReply
+   TestStart
+   dispatch "mcbTestSetAnswer" to stack "mcbTestIDE" with false
+   put TestCall("run_code", "{`code`:`get the shell of \`echo mcbtest\``}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "asked, refused, it does not run", TestIsError(tReply) and TestText(tReply) contains "Nothing ran" \
+         and mcbTestAsked() contains "run code"
+end TestCodeTheScanMissesIsAskedAbout
+
+-- The token is text: the same letters in another case, or a number equal
+-- to it as a number, is not it
+on TestTheTokenIsComparedAsText
+   local tToken, tReply
+   TestStart
+   put TestToken() into tToken
+   TestAssert "there is a token", tToken is not empty
+   -- is ignores case here, so ask matchText whether there is a letter
+   if matchText(tToken, "[a-z]") then
+      put xtaJsonParse(mcbHandleLine("{" & quote & "id" & quote & ":3," & quote & "token" & quote & ":" & quote & toUpper(tToken) & quote & "," & \
+            quote & "method" & quote & ":" & quote & "hello" & quote & "}")) into tReply
+      TestAssert "the token in capitals is refused", xtaJsonText(xtaJsonMember(tReply, "ok")) is "false"
+   end if
+   put xtaJsonParse(mcbHandleLine("{" & quote & "id" & quote & ":4," & quote & "token" & quote & ":" & quote & "0" & tToken & quote & "," & \
+         quote & "method" & quote & ":" & quote & "hello" & quote & "}")) into tReply
+   TestAssert "the token with a 0 before it is refused", xtaJsonText(xtaJsonMember(tReply, "ok")) is "false"
+end TestTheTokenIsComparedAsText
+
+-- The file names this process, is the user's alone (off Windows), and is
+-- left alone when another IDE has written its own there since
+on TestTheFileNamesThisProcessAndIsKeptByItsOwner
+   local tInfo, tMode, tOther
+   TestStart
+   put xtaJsonParse(textDecode(url ("binfile:" & sInfoFile), "UTF-8")) into tInfo
+   TestAssert "the file has this process's id", xtaJsonText(xtaJsonMember(tInfo, "pid")) is the processID
+   if the platform is "Linux" then
+      put word 1 of shell("stat -c %a" && quote & sInfoFile & quote) into tMode
+   else if the platform is "MacOS" then
+      put word 1 of shell("stat -f %Lp" && quote & sInfoFile & quote) into tMode
+   end if
+   if tMode is not empty then
+      TestAssert "only the user can read it", tMode is "600"
+   end if
+   put "{" & quote & "protocol" & quote & ":1," & quote & "port" & quote & ":1," & quote & "token" & quote & ":" & quote & "another" & quote & "}" into tOther
+   put textEncode(tOther, "UTF-8") into url ("binfile:" & sInfoFile)
+   mcbServerStop
+   TestAssert "another IDE's file is kept", there is a file sInfoFile
+   delete file sInfoFile
+end TestTheFileNamesThisProcessAndIsKeptByItsOwner
+
+-- A script too long for read_stack: read in parts, with line numbers and
+-- its handlers, and one handler by name
+on TestALongScriptIsReadInParts
+   local tStack, tScript, tIndex, tReply, tId
+   TestStart
+   put TestUserStack() into tStack
+   repeat with tIndex = 1 to 600
+      put "on h" & tIndex & return & "  put" && tIndex && "into tValue -- a comment long enough that 600 of these pass the read_stack cut" & return & "end h" & tIndex & return after tScript
+   end repeat
+   set the script of button "Go" of tStack to tScript
+   put the short id of button "Go" of tStack into tId
+   put TestCall("read_stack", "{`stack`:`" & kUserStack & "`,`id`:" & tId & "}") into tReply
+   TestAssert "read_stack cuts it, and says how to read the rest", TestText(tReply) contains "more lines left out" and TestText(tReply) contains "read_script"
+   put TestCall("read_script", "{`stack`:`" & kUserStack & "`,`id`:" & tId & "}") into tReply
+   TestAssert "the first part, numbered, with the handlers", not TestIsError(tReply) and TestText(tReply) contains "1: on h1" \
+         and TestText(tReply) contains "- on h600, lines 1798 to 1800" and TestText(tReply) contains "read on with from_line"
+   put TestCall("read_script", "{`stack`:`" & kUserStack & "`,`id`:" & tId & ",`from_line`:1795}") into tReply
+   TestAssert "the rest", TestText(tReply) contains "1800: end h600" and not (TestText(tReply) contains "read on")
+   put TestCall("read_script", "{`stack`:`" & kUserStack & "`,`id`:" & tId & ",`handler`:`H300`}") into tReply
+   TestAssert "one handler", TestText(tReply) contains "898: on h300" and TestText(tReply) contains "900: end h300" \
+         and not (TestText(tReply) contains "901:")
+   put TestCall("make_changes", "{`stack`:`" & kUserStack & "`,`changes`:[{`action`:`set`,`object`:" & tId & \
+         ",`script`:`on h1\nend h1\n... (10 more lines left out)`}]}") into tReply
+   TestAssert "a cut script is not sent back", TestIsError(tReply) and the number of lines of the script of button "Go" of tStack is 1800
+end TestALongScriptIsReadInParts
+
+-- edit_script: a handler replaced, added and deleted, lines replaced only
+-- when they read as old_text, a mistake changing nothing, and undo
+on TestEditScript
+   local tStack, tReply, tId, tCall
+   TestStart
+   put TestUserStack() into tStack
+   set the script of button "Go" of tStack to "on mouseUp" & return & "  beep" & return & "end mouseUp" & return & return & \
+         "function twice pX" & return & "  return pX * 2" & return & "end twice"
+   put the short id of button "Go" of tStack into tId
+   put "{`stack`:`" & kUserStack & "`,`id`:" & tId & "," into tCall
+   put TestCall("edit_script", tCall & "`handler`:`twice`,`code`:`function twice pX\n  return pX + pX\nend twice`}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "a handler replaced, the rest kept", not TestIsError(tReply) and the script of button "Go" of tStack contains "pX + pX" \
+         and line 2 of the script of button "Go" of tStack is "  beep"
+   put TestCall("edit_script", tCall & "`handler`:`mouseDown`,`code`:`on mouseDown\n  beep 2\nend mouseDown`}") into tReply
+   TestAssert "a handler added at the end", not TestIsError(tReply) and line -3 of the script of button "Go" of tStack is "on mouseDown"
+   put TestCall("edit_script", tCall & "`handler`:`mouseUp`,`code`:`on mouseUp\n  put into\nend mouseUp`}") into tReply
+   TestAssert "a script that would not compile changes nothing", TestIsError(tReply) and line 2 of the script of button "Go" of tStack is "  beep"
+   put TestCall("edit_script", tCall & "`handler`:`mouseUp`,`code`:`on mouseDown\nend mouseDown`}") into tReply
+   TestAssert "code that is another handler is refused", TestIsError(tReply)
+   put TestCall("edit_script", tCall & "`from_line`:2,`to_line`:2,`old_text`:`  beep 3`,`code`:`  beep 4`}") into tReply
+   TestAssert "lines that do not read as old_text are not changed", TestIsError(tReply) and line 2 of the script of button "Go" of tStack is "  beep"
+   put TestCall("edit_script", tCall & "`from_line`:2,`to_line`:2,`old_text`:`  beep`,`code`:`  beep 4`}") into tReply
+   TestAssert "lines replaced", not TestIsError(tReply) and line 2 of the script of button "Go" of tStack is "  beep 4"
+   put TestCall("edit_script", tCall & "`handler`:`twice`,`delete`:true}") into tReply
+   TestAssert "a handler deleted", not TestIsError(tReply) and not (the script of button "Go" of tStack contains "twice")
+   put TestCall("undo_changes", "{`entry`:1}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "undo puts the script back", not TestIsError(tReply) and the script of button "Go" of tStack contains "return pX * 2" \
+         and line 2 of the script of button "Go" of tStack is "  beep"
+end TestEditScript
+
+-- check_code gives each problem on a line of its own
+on TestCheckCodeGivesOneProblemALine
+   local tReply, tLine, tCount
+   TestStart
+   put TestCall("check_code", "{`code`:`put 1\non x\n  put into\nend x`}") into tReply
+   TestDiagnostic TestText(tReply)
+   repeat for each line tLine in TestText(tReply)
+      if tLine begins with "- " then
+         add 1 to tCount
+      end if
+   end repeat
+   TestAssert "two problems, two lines", tCount is 2
+end TestCheckCodeGivesOneProblemALine
+
+-- What the user has in front of them: the stack, the selection, the last
+-- error the IDE showed them (noted by the bridge's own error hook)
+on TestIdeContext
+   local tStack, tReply
+   TestStart
+   put TestUserStack() into tStack
+   put TestCall("ide_context") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "the stack the user works on", not TestIsError(tReply) and TestText(tReply) contains ("working on the stack" && quote & kUserStack & quote)
+   TestAssert "no error yet", TestText(tReply) contains "no error since the bridge was turned on"
+   TestAssert "the hook is in the message path", the long id of stack "org.openxtalk.plugin.mcpbridge-errors" is among the lines of the frontScripts
+   -- As the engine sends it on its way to the IDE's debugger
+   dispatch "traceError" to button "Go" of tStack with "mouseUp", 4, 7, "219,4,7,frobnicate"
+   put TestCall("ide_context") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "the error, and where", TestText(tReply) contains "The last error the IDE showed the user" and TestText(tReply) contains "Go"
+   mcbServerStop
+   TestAssert "the hook is taken out", there is not a stack "org.openxtalk.plugin.mcpbridge-errors"
+end TestIdeContext
+
+on TestSearchScripts
+   local tStack, tReply
+   TestStart
+   put TestUserStack() into tStack
+   set the script of button "Go" of tStack to "on mouseUp" & return & "  doThing 1" & return & "end mouseUp" & return & return & \
+         "on doThing pCount" & return & "  beep" & return & "end doThing"
+   set the script of card 1 of tStack to "on openCard" & return & "  doThing 2" & return & "end openCard"
+   put TestCall("search_scripts", "{`text`:`doThing`}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "every line, with its handler", not TestIsError(tReply) and TestText(tReply) contains "line 2 (in on mouseUp): doThing 1" \
+         and TestText(tReply) contains "line 5 (in on doThing, defines it)" and TestText(tReply) contains "line 2 (in on openCard): doThing 2"
+   TestAssert "four lines", TestText(tReply) contains "Found in 4 lines"
+   put TestCall("search_scripts", "{`stack`:`" & kUserStack & "`,`text`:`^\\s*BEEP$`,`regex`:true}") into tReply
+   TestAssert "a pattern, whatever the case", TestText(tReply) contains "line 6 (in on doThing): beep"
+   put TestCall("search_scripts", "{`text`:`(`,`regex`:true}") into tReply
+   TestAssert "a pattern that cannot be read", TestIsError(tReply)
+   put TestCall("search_scripts", "{`text`:`nowhere at all`}") into tReply
+   TestAssert "nothing found", not TestIsError(tReply) and TestText(tReply) contains "No script contains"
+end TestSearchScripts
+
+on TestReadStackIsLeanAndReadsSeveral
+   local tStack, tReply, tGo, tCard
+   TestStart
+   put TestUserStack() into tStack
+   set the cNote of button "Go" of tStack to "hello"
+   put the short id of button "Go" of tStack into tGo
+   put the short id of card 1 of tStack into tCard
+   put TestCall("read_stack", "{`stack`:`" & kUserStack & "`,`ids`:[" & tGo & "," & tCard & ",99999]}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "both, and the one there is not", not TestIsError(tReply) and TestText(tReply) contains ("button" && quote & "Go" & quote) \
+         and TestText(tReply) contains ("card" && quote & "Main" & quote) and TestText(tReply) contains "no card or control with the id 99999"
+   TestAssert "custom values, not the defaults", TestText(tReply) contains "cNote: hello" and TestText(tReply) contains "that a new button does not have"
+   put TestCall("read_stack", "{`stack`:`" & kUserStack & "`,`id`:" & tGo & ",`all_properties`:true}") into tReply
+   TestAssert "every property when asked", TestText(tReply) contains "Properties (those with a short value):"
+end TestReadStackIsLeanAndReadsSeveral
+
+on TestLookAtCardWithIds
+   local tStack, tReply, tPlain
+   TestStart
+   put TestUserStack() into tStack
+   put TestCall("look_at_card", "{`stack`:`" & kUserStack & "`}") into tReply
+   put xtaJsonText(xtaJsonMember(tReply, "image")) into tPlain
+   put TestCall("look_at_card", "{`stack`:`" & kUserStack & "`,`labels`:true}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "a picture with the ids drawn", not TestIsError(tReply) and TestText(tReply) contains "with its id" \
+         and xtaJsonText(xtaJsonMember(tReply, "image")) is not empty and xtaJsonText(xtaJsonMember(tReply, "image")) is not tPlain
+   TestAssert "the stack it was drawn in is gone", there is not a stack "org.openxtalk.plugin.mcpbridge-overlay"
+   put TestCall("look_at_card", "{`stack`:`" & kUserStack & "`,`id`:" & the short id of button "Go" of tStack & "}") into tReply
+   TestAssert "one control", not TestIsError(tReply) and TestText(tReply) contains ("button" && quote & "Go" & quote)
+end TestLookAtCardWithIds
+
+on TestARunThatChangesNothingKeepsNoCheckpoint
+   local tStack, tReply
+   TestStart
+   put TestUserStack() into tStack
+   dispatch "mcbTestSetAnswer" to stack "mcbTestIDE" with true
+   put TestCall("run_code", "{`where`:`stack`,`stack`:`" & kUserStack & "`,`code`:`put the short name of this stack`}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "it ran, and says there is nothing to undo", not TestIsError(tReply) and TestText(tReply) contains "nothing to undo" \
+         and not (TestText(tReply) contains "This is change")
+   put TestCall("run_code", "{`where`:`stack`,`stack`:`" & kUserStack & "`,`code`:`set the cMark of this stack to 1`}") into tReply
+   TestAssert "one that changes it can be undone", TestText(tReply) contains "This is change 1"
+end TestARunThatChangesNothingKeepsNoCheckpoint
+
+on TestAMisspeltPropertyGetsTheNearest
+   local tReply
+   TestStart
+   get TestUserStack()
+   put TestCall("make_changes", "{`stack`:`" & kUserStack & "`,`changes`:[{`action`:`set`,`object`:`stack`,`properties`:{`titel`:`x`}}]}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "the nearest names", TestIsError(tReply) and TestText(tReply) contains "the nearest properties are" and TestText(tReply) contains "title"
+end TestAMisspeltPropertyGetsTheNearest
+
+on TestTheGuideIsTheBridges
+   local tReply
+   TestStart
+   put TestCall("xtalk_guide") into tReply
+   TestAssert "its own sections, and the assistant's on the language", TestText(tReply) contains "## 7. Your tools" \
+         and TestText(tReply) contains "## 2." and TestText(tReply) contains "## 5." and not (TestText(tReply) contains "<!--") \
+         and not (TestText(tReply) contains "Insert Code")
+end TestTheGuideIsTheBridges
 
 on TestSaveIsAskedAbout
    local tReply, tStack, tFile

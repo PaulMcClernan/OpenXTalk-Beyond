@@ -14,6 +14,12 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.6-rc.2 (2026-10-13, pre-release)
+
+- xTalk MCP Bridge: every run asks, long scripts in parts, a bridge file that names its IDE (#101)
+- xTalk MCP Bridge: ide_context, search_scripts, leaner reads, ids on a card, a guide of its own (#101)
+- Version 0.2.6-rc.2, with its changelog (#101)
+
 ## 0.2.6-rc.1 (2026-10-13, pre-release)
 
 - Add the xTalk MCP Bridge: Claude, on the user's own plan, builds stacks (#99)

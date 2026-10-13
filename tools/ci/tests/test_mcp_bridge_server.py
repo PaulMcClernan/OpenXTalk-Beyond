@@ -41,6 +41,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -49,12 +50,21 @@ SERVER = os.path.join(PLUGIN, 'mcp', 'server.js')
 NODE = shutil.which('node')
 
 
+def ide_tools():
+    """The tools OXT-Beyond says it has: its kTools."""
+    with open(os.path.join(PLUGIN, 'mcpbridge-tools.livecodescript'), encoding='utf-8') as f:
+        match = re.search(r'^constant kTools = "([^"]*)"', f.read(), re.M)
+    return match.group(1) if match else ''
+
+
 class FakeOXT:
     """OXT-Beyond's side: answers each line with handler(request)."""
 
-    def __init__(self, handler, token='0123456789abcdef0123456789abcdef'):
+    def __init__(self, handler, token='0123456789abcdef0123456789abcdef', tools=None, hello_delay=0):
         self.handler = handler
         self.token = token
+        self.tools = ide_tools() if tools is None else tools
+        self.hello_delay = hello_delay
         self.requests = []
         self.connections = 0
         self.in_flight = 0
@@ -96,7 +106,9 @@ class FakeOXT:
                     if request.get('token') != self.token:
                         reply = {'ok': False, 'error': 'The token is not the bridge\'s.'}
                     elif request.get('method') == 'hello':
-                        reply = {'ok': True, 'protocol': 1, 'tools': 'x'}
+                        if self.hello_delay:
+                            time.sleep(self.hello_delay)
+                        reply = {'ok': True, 'protocol': 1, 'tools': self.tools}
                     else:
                         reply = self.handler(request)
                     with self.lock:
@@ -133,14 +145,17 @@ class McpBridgeServerTest(unittest.TestCase):
             self.oxt.close()
         shutil.rmtree(self.folder, ignore_errors=True)
 
-    def start_oxt(self, handler, protocol=1, token=None):
-        self.oxt = FakeOXT(handler)
+    def start_oxt(self, handler, protocol=1, token=None, pid=None, **fake):
+        self.oxt = FakeOXT(handler, **fake)
+        info = {'protocol': protocol, 'port': self.oxt.port,
+                'token': token or self.oxt.token, 'engine': 'test'}
+        if pid is not None:
+            info['pid'] = pid
         with open(self.info, 'w') as f:
-            json.dump({'protocol': protocol, 'port': self.oxt.port,
-                       'token': token or self.oxt.token, 'engine': 'test'}, f)
+            json.dump(info, f)
 
-    def start_server(self):
-        env = dict(os.environ, OXT_MCP_BRIDGE_FILE=self.info, OXT_MCP_TIMEOUT_MS='20000')
+    def start_server(self, **settings):
+        env = dict(os.environ, OXT_MCP_BRIDGE_FILE=self.info, OXT_MCP_TIMEOUT_MS='20000', **settings)
         self.proc = subprocess.Popen([NODE, SERVER], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, env=env)
 
@@ -295,8 +310,6 @@ class McpBridgeServerTest(unittest.TestCase):
         self.assertIn('closed the connection', result['content'][0]['text'])
 
     def test_calls_go_one_at_a_time(self):
-        import time
-
         def handler(request):
             time.sleep(0.2)
             return {'ok': True, 'isError': False, 'text': request['tool']}
@@ -311,6 +324,81 @@ class McpBridgeServerTest(unittest.TestCase):
             replies[reply['id']] = reply['result']['content'][0]['text']
         self.assertEqual([replies[i] for i in sent], ['list_stacks', 'xtalk_guide', 'list_changes'])
         self.assertEqual(self.oxt.most_in_flight, 1)
+
+    def test_a_file_left_by_an_ide_that_quit(self):
+        ended = subprocess.Popen([NODE, '-e', ''])
+        ended.wait()
+        self.start_oxt(lambda request: {'ok': True, 'isError': False, 'text': 'should not run'}, pid=ended.pid)
+        self.start_server()
+        self.initialize()
+        result = self.call('list_stacks')
+        self.assertTrue(result['isError'])
+        self.assertIn('quit or crashed', result['content'][0]['text'])
+        self.assertEqual(self.oxt.requests, [])
+
+    def test_a_file_naming_a_running_ide(self):
+        self.start_oxt(lambda request: {'ok': True, 'isError': False, 'text': 'ran'}, pid=os.getpid())
+        self.start_server()
+        self.initialize()
+        self.assertEqual(self.call('list_stacks')['content'][0]['text'], 'ran')
+
+    def test_an_ide_that_never_says_hello(self):
+        self.start_oxt(lambda request: {'ok': True, 'isError': False, 'text': 'ran'}, hello_delay=3)
+        self.start_server(OXT_MCP_HELLO_TIMEOUT_MS='500')
+        self.initialize()
+        result = self.call('list_stacks')
+        self.assertTrue(result['isError'])
+        self.assertIn('within', result['content'][0]['text'])
+
+    def test_other_tools_in_the_ide_are_noted_once(self):
+        self.start_oxt(lambda request: {'ok': True, 'isError': False, 'text': 'ran'},
+                       tools=ide_tools() + ',paint_card')
+        self.start_server()
+        self.initialize()
+        first = self.call('list_stacks')['content'][0]['text']
+        self.assertIn('paint_card', first)
+        self.assertIn('Claude Setup', first)
+        self.assertEqual(self.call('list_stacks')['content'][0]['text'], 'ran')
+
+    def test_the_same_tools_get_no_note(self):
+        self.start_oxt(lambda request: {'ok': True, 'isError': False, 'text': 'ran'})
+        self.start_server()
+        self.initialize()
+        self.assertEqual(self.call('list_stacks')['content'][0]['text'], 'ran')
+
+    def test_a_call_that_waits_too_long_is_told_the_ide_is_busy(self):
+        def handler(request):
+            time.sleep(1.5)
+            return {'ok': True, 'isError': False, 'text': request['tool']}
+        self.start_oxt(handler)
+        self.start_server(OXT_MCP_BUSY_WAIT_MS='300')
+        self.initialize()
+        first = self.send('tools/call', {'name': 'list_stacks', 'arguments': {}})
+        second = self.send('tools/call', {'name': 'list_changes', 'arguments': {}})
+        replies = {}
+        for _ in range(2):
+            reply = self.receive()
+            replies[reply['id']] = reply['result']
+        self.assertEqual(replies[first]['content'][0]['text'], 'list_stacks')
+        self.assertTrue(replies[second]['isError'])
+        self.assertIn('busy', replies[second]['content'][0]['text'])
+        time.sleep(0.5)
+        self.assertEqual([r.get('tool') for r in self.oxt.requests if r['method'] == 'call'], ['list_stacks'])
+
+    def test_a_cancelled_call_is_not_sent_and_not_answered(self):
+        def handler(request):
+            time.sleep(0.8)
+            return {'ok': True, 'isError': False, 'text': request['tool']}
+        self.start_oxt(handler)
+        self.start_server()
+        self.initialize()
+        first = self.send('tools/call', {'name': 'list_stacks', 'arguments': {}})
+        second = self.send('tools/call', {'name': 'list_changes', 'arguments': {}})
+        self.send('notifications/cancelled', {'requestId': second, 'reason': 'test'}, notify=True)
+        self.assertEqual(self.receive()['id'], first)
+        ping = self.send('ping')
+        self.assertEqual(self.receive()['id'], ping)
+        self.assertEqual([r.get('tool') for r in self.oxt.requests if r['method'] == 'call'], ['list_stacks'])
 
 
 if __name__ == '__main__':

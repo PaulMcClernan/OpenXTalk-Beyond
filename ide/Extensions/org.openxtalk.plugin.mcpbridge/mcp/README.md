@@ -44,18 +44,27 @@ off.
 Claude can do the same things the xTalk Assistant's tools do:
 
 - **Read and look:** read the guide to xTalk Script, list your open
-  stacks, read a stack's outline or one of its cards or controls, look at
-  a picture of a card, look up the Dictionary, check that code compiles,
-  and read a script that is paused in the debugger.
-- **Build:** create, change and delete controls, cards and new stacks.
-  Each request is checked first and is made completely or not at all.
+  stacks, see what you have selected, the script open in the Script
+  Editor and the last error the IDE showed you, read a stack's outline
+  or its cards and controls, search its scripts, look at a picture of a
+  card (with each control's id written on it, if Claude asks), look up
+  the Dictionary, check that code compiles, and read a script that is
+  paused in the debugger. A long script is read in parts, with line
+  numbers and where each handler is.
+- **Build:** create, change and delete controls, cards and new stacks,
+  and change one handler, or a few lines, of a script while leaving the
+  rest of it as it is. Each request is checked first and is made
+  completely or not at all.
 - **Run and save:** run code in a sandbox or on your stack, and save a
   stack.
 
 Claude's app asks you before it uses each tool. OXT-Beyond asks you
 itself in three cases:
 
-- before running code that reaches files, the network or other programs;
+- before running any code, which it shows you. Code runs inside
+  OXT-Beyond with everything the IDE can reach (your files, the network,
+  other programs), and no check of its text can see all of what it does,
+  so read it before you press **Run**;
 - before saving a stack;
 - before undoing something that you have changed since Claude changed it.
 

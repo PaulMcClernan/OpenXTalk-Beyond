@@ -611,6 +611,11 @@ private command xtbPlanValues pNode, pType, @xChange
          if not (tName is among the lines of tNames) then
             put "there is no property named" && quote & tName & quote && "(a misspelt property would quietly become a custom property);" && \
                   "a custom property goes in custom_properties" into xChange["problem"]
+            put xtaNearest(tName, tNames, 3) into tLine
+            if tLine is not empty then
+               replace return with ", " in tLine
+               put "; the nearest properties are" && tLine after xChange["problem"]
+            end if
             exit xtbPlanValues
          end if
          add 1 to tCount
@@ -1913,6 +1918,11 @@ private function xtbBeforePrints pMain
    return tPrints
 end xtbBeforePrints
 
+-- A digest of how the main stack of pStack is, with its substacks
+private function xtbDumpPrint pStack
+   return base64Encode(md5Digest(textEncode(xtaStackDump(pStack), "UTF-8")))
+end xtbDumpPrint
+
 -- A digest of how pObject is, and all it holds
 private function xtbPrint pObject
    local tDigest
@@ -2025,6 +2035,11 @@ function xtaCheckpointSave pStack
       if there is not a folder sCheckpointFolder then
          put empty into sCheckpointFolder
          return "the folder for checkpoints could not be made in" && specialFolderPath("temporary") for error
+      end if
+      -- The copies of the user's stacks are theirs alone to read, where
+      -- the system lets that be said (the temporary folder is often shared)
+      if the platform is not "Win32" then
+         get shell("chmod 700" && quote & sCheckpointFolder & quote)
       end if
    end if
    add 1 to sCheckpointCount
@@ -2198,10 +2213,11 @@ end xtaRunPlan
 -- the Message Box), "trace" and "errorText" (an error, in words, with the
 -- lines around it), "stopped" (true when the user stopped it while it
 -- ran: Control-period), "entry" (for a run on the user's stack, the journal
--- entry that reverts it), "summary" (for the user) and "text" (for the
--- model).
+-- entry that reverts it; none when the run left the stack as it was, whose
+-- checkpoint is then deleted), "summary" (for the user) and "text" (for
+-- the model).
 function xtaRunCode pRun
-   local tResult, tCheckpoint, tOldDefault, tOldMsg, tStart, tError, tValue, tOutput, tHandlersLines, tEntry, tWhere
+   local tResult, tCheckpoint, tOldDefault, tOldMsg, tStart, tError, tValue, tOutput, tHandlersLines, tEntry, tWhere, tBeforeRun, tKept, tSame
    put false into tResult["ok"]
    put false into tResult["ran"]
    if pRun["ok"] is not true then
@@ -2217,6 +2233,7 @@ function xtaRunCode pRun
          return tResult
       end if
       put xtbBeforePrints(the short name of xtbMainStackOf(pRun["stack"])) into tEntry["before"]
+      put xtbDumpPrint(pRun["stack"]) into tBeforeRun
       put xtaCheckpointSave(pRun["stack"]) into tCheckpoint
       if tCheckpoint is empty then
          put "The checkpoint could not be saved (" & the result & "), so nothing ran." into tResult["error"]
@@ -2272,7 +2289,23 @@ function xtaRunCode pRun
       put true into tResult["ok"]
    end if
 
+   -- A run that left the stack as it was (it only read it) keeps no
+   -- checkpoint and makes no entry: there is nothing to undo
+   put true into tKept
    if tWhere is "stack" then
+      if there is a pRun["stack"] then
+         -- Digests, compared as text whose case counts
+         set the caseSensitive to true
+         put ("d" & xtbDumpPrint(pRun["stack"])) is ("d" & tBeforeRun) into tSame
+         set the caseSensitive to false
+         if tSame then
+            put false into tKept
+            delete file tCheckpoint
+            put the short name of xtbMainStackOf(pRun["stack"]) into tEntry["main"]
+         end if
+      end if
+   end if
+   if tWhere is "stack" and tKept then
       put "run" into tEntry["kind"]
       put "applied" into tEntry["state"]
       put tCheckpoint into tEntry["checkpoint"]
@@ -2290,10 +2323,14 @@ function xtaRunCode pRun
    if tWhere is "sandbox" then
       put "Ran the code in a sandbox" into tResult["summary"]
       put "Ran in a sandbox (a hidden stack, deleted after the run)" into tResult["text"]
-   else
+   else if tKept then
       put "Ran the code on the stack" && quote & tEntry["main"] & quote into tResult["summary"]
       put "Ran on the stack" && quote & tEntry["main"] & quote & ", as" && xtbLabel(pRun["target"]) & \
             ", after a checkpoint that the user can go back to" into tResult["text"]
+   else
+      put "Ran the code on the stack" && quote & tEntry["main"] & quote into tResult["summary"]
+      put "Ran on the stack" && quote & tEntry["main"] & quote & ", as" && xtbLabel(pRun["target"]) & \
+            ", and left it as it was (so there is nothing to undo)" into tResult["text"]
    end if
    put " in" && tResult["ms"] && "ms" after tResult["text"]
    if tError is empty then
