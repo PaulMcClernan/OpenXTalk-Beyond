@@ -61,6 +61,8 @@ script "org.openxtalk.plugin.mcpbridge-tools"
 --                                        "error", "image", "imageType")
 --    mcbToolNames()                      the tools, one per line
 --    mcbUndoLast()                       the newest change still applied, undone
+--    mcbDesktopConfigText(pOld, pName, pServerPath)  Claude desktop's
+--                                        config with the bridge's entry added
 
 -- What the answer to "hello" calls this end of the protocol; the MCP
 -- server refuses a version it does not know
@@ -636,6 +638,77 @@ private function mcbResult pText, pIsError
    put (pIsError is true) into tResult["error"]
    return tResult
 end mcbResult
+
+--------------------------------------------------------------------------------
+-- Claude desktop's config
+
+-- The text of Claude desktop's claude_desktop_config.json with the entry
+-- pName under "mcpServers" that runs node with the server pServerPath,
+-- given the file's text now (pOld, empty for no file): every other entry
+-- and setting is kept as it was written, an older entry of that name is
+-- replaced. An array with "text", or "problem" when pOld is not a JSON
+-- object (the file is then left to the user).
+function mcbDesktopConfigText pOld, pName, pServerPath
+   local tResult, tEntry, tRoot, tServers, tIndex, tName, tText, tError, tParts
+   mcbEnsureParts
+   put mcbJsonString(pName) & ": {" & return & \
+         "      " & mcbJsonString("command") & ": " & mcbJsonString("node") & "," & return & \
+         "      " & mcbJsonString("args") & ": [" & mcbJsonString(pServerPath) & "]" & return & "    }" into tEntry
+   if word 1 to -1 of pOld is empty then
+      put "{" & return & "  " & mcbJsonString("mcpServers") & ": {" & return & "    " & tEntry & return & "  }" & return & "}" & return into tResult["text"]
+      return tResult
+   end if
+   try
+      put xtaJsonParse(pOld) into tRoot
+   catch tError
+      put "it is not JSON that can be read (" & line 1 of tError & ")" into tResult["problem"]
+      return tResult
+   end try
+   if xtaJsonType(tRoot) is not "object" then
+      put "it does not hold a JSON object" into tResult["problem"]
+      return tResult
+   end if
+   put xtaJsonMember(tRoot, "mcpServers") into tServers
+   if xtaJsonType(tServers) is not "missing" and xtaJsonType(tServers) is not "object" then
+      put "its mcpServers is not an object" into tResult["problem"]
+      return tResult
+   end if
+   -- The servers already there, bar an older entry of this name
+   put empty into tParts
+   repeat with tIndex = 1 to xtaJsonCount(tServers)
+      put tServers["names"][tIndex] into tName
+      if mcbSameName(tName, pName) then
+         next repeat
+      end if
+      put "    " & mcbJsonString(tName) & ": " & xtaJsonRaw(pOld, tServers["members"][tName]) & "," & return after tParts
+   end repeat
+   put "  " & mcbJsonString("mcpServers") & ": {" & return & tParts & "    " & tEntry & return & "  }" into tServers
+   -- The other settings as they were, mcpServers where it was (else last)
+   put "{" & return into tText
+   put empty into tParts
+   repeat with tIndex = 1 to xtaJsonCount(tRoot)
+      put tRoot["names"][tIndex] into tName
+      if mcbSameName(tName, "mcpServers") then
+         put tServers & "," & return after tText
+         put "done" into tParts
+      else
+         put "  " & mcbJsonString(tName) & ": " & xtaJsonRaw(pOld, tRoot["members"][tName]) & "," & return after tText
+      end if
+   end repeat
+   if tParts is empty then
+      put tServers & "," & return after tText
+   end if
+   delete char -2 of tText
+   put "}" & return after tText
+   put tText into tResult["text"]
+   return tResult
+end mcbDesktopConfigText
+
+-- Two JSON member names compared as text whose case counts
+private function mcbSameName pA, pB
+   set the caseSensitive to true
+   return ("n" & pA) is ("n" & pB)
+end mcbSameName
 
 --------------------------------------------------------------------------------
 -- The assistant's libraries

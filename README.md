@@ -66,11 +66,12 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 and 0.2.6-rc.2 are test releases (pre-releases) of
+lists. 0.2.6-rc.1 to 0.2.6-rc.3 are test releases (pre-releases) of
 the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
 plan in the Claude desktop app or Claude Code, build stacks in the IDE
-(see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge) and
-[0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run)); 0.2.5 stays
+(see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
+[0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
+[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)); 0.2.5 stays
 the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1344,6 +1345,19 @@ difference from 0.2.5. It has been tested on Linux, the IDE's side
 against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
+
+#### 0.2.6-rc.3: setting up the Claude desktop app
+
+OXT-Beyond 0.2.6-rc.3 makes the bridge easier to add to the Claude
+desktop app. **Claude Setup...** has a new button, **Add to Claude
+Desktop**, which adds OXT-Beyond to Claude's settings file
+(`claude_desktop_config.json`) after asking, keeps every other setting
+in it, and saves a copy of the file beside it; that way needs Node.js.
+The desktop extension still needs nothing installed: the dialogs now
+say to install it from Claude's *Settings > Extensions > Advanced
+settings > Install Extension...*, since opening the saved file does
+nothing where the system does not know it is Claude's (on Windows, as
+0.2.6-rc.2's testing found). Nothing else differs from 0.2.6-rc.2.
 
 #### 0.2.6-rc.2: the bridge asks before every run
 
