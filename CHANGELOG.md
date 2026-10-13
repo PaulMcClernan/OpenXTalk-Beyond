@@ -14,6 +14,23 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.5-rc.5 (2026-10-13, pre-release)
+
+- xTalk Assistant: a clock while it works, answers laid out, new stacks looked at and saved (#95)
+- xTalk Assistant: the idle status line parts are set apart by a middle dot too (#95)
+- xTalk Assistant tests: the clock's test asks only that it went on (#95)
+- xTalk Assistant: name the language xTalk Script, as OXT-Beyond does (#95)
+- xTalk Assistant: turning pictures off holds at once, mid-answer too (#95)
+- Text dictionary: add the xTalk Suite extensions from their pinned sources (#94)
+- Preferences: the update note no longer fails when the window moved on (#94)
+- xTalk Assistant: no more blank answers when the model thinks long (#97)
+- IDE: Dictionary lookups find the core entries again after an upgrade (#97)
+- README: the xTalk Suite extensions are in both dictionaries (#96)
+- xTalk Suite extensions: pin the members' documented versions (#96)
+- Version 0.2.5-rc.5, with its changelog (#96)
+- Version 0.2.5-rc.5: the assistant's fix in the changelog and the README (#96)
+- Version 0.2.5-rc.5: the Dictionary fix in the changelog and the README (#96)
+
 ## 0.2.5-rc.4 (2026-10-12, pre-release)
 
 - xTalk Assistant: a guide, a compile check with fix rounds, and memory (#92)
