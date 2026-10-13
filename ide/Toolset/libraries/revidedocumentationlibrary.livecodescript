@@ -11,12 +11,158 @@ on extensionFinalize
    end if
 end extensionFinalize
 
+# OXT-Beyond: every build of one engine version shares one documentation
+# cache folder, and its api.sqlite was copied from the distributed one only
+# when there was none, so the first build to make it fixed its core entries
+# for good. One made by a build that shipped no api.sqlite held nothing but
+# extensions' docs, and every lookup of "put" or "menuPick" found no entry,
+# in the Script Editor and the xTalk Assistant alike, while the Dictionary
+# window, which reads its own files, showed them. So the cache keeps a note
+# of the distributed api.sqlite it holds (the file's MD5), and when that
+# differs it takes the distributed libraries' entries afresh and keeps every
+# other library's: an extension writes its docs here only when its own
+# cached docs are out of date, so a fresh copy of the file would lose them.
+constant kDocsSourceNote = "api.sqlite.source"
+
+private function ideDocsDigest pData
+   local tHex
+   if pData is empty then
+      return empty
+   end if
+   get binaryDecode("H*", md5Digest(pData), tHex)
+   return tHex
+end ideDocsDigest
+
 private on ideDocsEnsureDatabase pLocation
+   local tData
    if there is not a file (pLocation & slash & "api.sqlite") then
-      put url ("binfile:" & revIDESpecialFolderPath("API") & slash & "api.sqlite") into \
-            url ("binfile:" & pLocation & slash & "api.sqlite")
+      put url ("binfile:" & revIDESpecialFolderPath("API") & slash & "api.sqlite") into tData
+      put tData into url ("binfile:" & pLocation & slash & "api.sqlite")
+      # A fresh copy holds the distributed entries already
+      if the result is empty and tData is not empty then
+         put ideDocsDigest(tData) into url ("binfile:" & pLocation & slash & kDocsSourceNote)
+      end if
    end if
 end ideDocsEnsureDatabase
+
+# Brings the cache's entries for the distributed libraries up to date with
+# the distributed api.sqlite, once for each one it has not seen. Whatever
+# fails leaves the cache as it was.
+private on ideDocsRefreshCache pConnection, pLocation
+   local tSource, tDigest
+   put revIDESpecialFolderPath("API") & slash & "api.sqlite" into tSource
+   if there is not a file tSource then
+      exit ideDocsRefreshCache
+   end if
+   put ideDocsDigest(url ("binfile:" & tSource)) into tDigest
+   if tDigest is empty or \
+         tDigest is url ("binfile:" & pLocation & slash & kDocsSourceNote) then
+      exit ideDocsRefreshCache
+   end if
+
+   try
+      if ideDocsMergeDistributed(pConnection, tSource) is empty then
+         put tDigest into url ("binfile:" & pLocation & slash & kDocsSourceNote)
+      end if
+   catch tError
+      # Lookups then find what they found before
+   end try
+end ideDocsRefreshCache
+
+# Replaces the cache's entries for every library the distributed api.sqlite
+# at pSource documents with that file's entries. Returns empty when it did,
+# else what failed.
+private function ideDocsMergeDistributed pConnection, pSource
+   local tSourceUTF8, tFailed
+
+   # A cache made before any extension wrote to it has no tables
+   revExecuteSQL pConnection, "CREATE TABLE IF NOT EXISTS apis(api_id integer primary key, api_name text)"
+   if the result is not a number then
+      return "unable to create table 'apis'" & return & the result
+   end if
+   revExecuteSQL pConnection, "CREATE TABLE IF NOT EXISTS dictionary_data(api_id integer," && \
+         "library_name text, entry_name text, entry_type text, entry_data blob)"
+   if the result is not a number then
+      return "unable to create table 'dictionary_data'" & return & the result
+   end if
+
+   # SQLite reads an attached file's name as UTF-8
+   put textEncode(pSource, "UTF-8") into tSourceUTF8
+   revExecuteSQL pConnection, "ATTACH DATABASE :1 AS oxtdist", "tSourceUTF8"
+   if the result is not a number then
+      return "unable to open" && pSource & return & the result
+   end if
+   put ideDocsMergeAttached(pConnection) into tFailed
+   revExecuteSQL pConnection, "DETACH DATABASE oxtdist"
+   return tFailed
+end ideDocsMergeDistributed
+
+private function ideDocsMergeAttached pConnection
+   local tCount, tPairs, tFailed, tAPI, tLibrary
+
+   # Only a distributed file that holds entries replaces any
+   put revDataFromQuery(tab, return, pConnection, "SELECT count(*) FROM oxtdist.dictionary_data") into tCount
+   if tCount is not an integer or tCount < 1 then
+      return "no distributed entries" & return & tCount
+   end if
+   # Each distributed library, with the name of its API
+   put revDataFromQuery(tab, return, pConnection, \
+         "SELECT DISTINCT s.api_name, d.library_name FROM oxtdist.dictionary_data d" && \
+         "JOIN oxtdist.apis s ON s.api_id = d.api_id") into tPairs
+   if tPairs is empty or tPairs begins with "revdberr" then
+      return "no distributed libraries" & return & tPairs
+   end if
+
+   revExecuteSQL pConnection, "BEGIN TRANSACTION"
+   if the result is not a number then
+      return "unable to begin" & return & the result
+   end if
+
+   # The distributed APIs the cache lacks
+   revExecuteSQL pConnection, "INSERT INTO main.apis(api_name) SELECT DISTINCT api_name" && \
+         "FROM oxtdist.apis WHERE api_name IS NOT NULL AND api_name NOT IN" && \
+         "(SELECT api_name FROM main.apis WHERE api_name IS NOT NULL)"
+   if the result is not a number then
+      put "unable to add the distributed APIs" & return & the result into tFailed
+   end if
+
+   # The cache's entries for each distributed library go...
+   set the itemDelimiter to tab
+   repeat for each line tPair in tPairs
+      if tFailed is not empty then
+         exit repeat
+      end if
+      put item 1 of tPair into tAPI
+      put item 2 of tPair into tLibrary
+      revExecuteSQL pConnection, "DELETE FROM main.dictionary_data WHERE library_name = :1" && \
+            "AND api_id IN (SELECT api_id FROM main.apis WHERE api_name = :2)", "tLibrary", "tAPI"
+      if the result is not a number then
+         put "unable to remove the entries of" && tLibrary & return & the result into tFailed
+      end if
+   end repeat
+
+   # ...and the distributed ones come in, under the cache's id for their API
+   if tFailed is empty then
+      revExecuteSQL pConnection, "INSERT INTO main.dictionary_data(api_id, library_name," && \
+            "entry_name, entry_type, entry_data) SELECT (SELECT min(a.api_id) FROM main.apis a" && \
+            "WHERE a.api_name = s.api_name), d.library_name, d.entry_name, d.entry_type," && \
+            "d.entry_data FROM oxtdist.dictionary_data d JOIN oxtdist.apis s ON s.api_id = d.api_id"
+      if the result is not a number then
+         put "unable to copy the distributed entries" & return & the result into tFailed
+      end if
+   end if
+
+   if tFailed is empty then
+      revExecuteSQL pConnection, "COMMIT"
+      if the result is not a number then
+         put "unable to commit" & return & the result into tFailed
+      end if
+   end if
+   if tFailed is not empty then
+      revExecuteSQL pConnection, "ROLLBACK"
+   end if
+   return tFailed
+end ideDocsMergeAttached
 
 local sConnectionsA
 command ideDocsInitialize pDistributed
@@ -47,6 +193,9 @@ command ideDocsInitialize pDistributed
    end if
    
    put tConnection into sConnectionsA[tKey]
+   if tKey is "cache" then
+      ideDocsRefreshCache tConnection, tLocation
+   end if
    return tConnection
 end ideDocsInitialize
 
