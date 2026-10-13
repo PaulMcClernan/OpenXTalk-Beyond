@@ -1259,6 +1259,15 @@ and:
   Settings is what each answer is asked for first, and a wait set there
   is used as before. The conversation's colours show, which they never
   did.
+- **Dictionary lookups find the built-in entries again.** The Script
+  Editor's lookups and the xTalk Assistant's could find no entry for
+  `put`, `menuPick`, `menubar` and the rest: every build of one engine
+  version shares one documentation cache, and one first made by a build
+  without the Dictionary's database kept only the extensions' entries.
+  The cache now notes which copy of that database it holds, and when it
+  changes, the first lookup brings the built-in entries up to date and
+  keeps the extensions'. The Dictionary window, which reads its own
+  files, was not affected.
 - **A fix in the Preferences.** The *Automatic Updates* card no longer
   stops with an error when the window moves to another card right after
   showing it (CI's screenshot tour did that on an Intel Mac).
@@ -1285,8 +1294,9 @@ until you turn it on, so with it off nothing else differs from
 allow it to read that stack, and saves a stack only when you press
 **Save**; a question may cost more than in 0.2.5-rc.4, since an answer
 may be longer and one that is cut off may be asked for again. The
-Preferences fix changes only the Preferences window. The engine and the
-standalone runtimes are those of 0.2.5-rc.2.
+Preferences fix changes only the Preferences window, and the Dictionary
+fix only the IDE's documentation cache. The engine and the standalone
+runtimes are those of 0.2.5-rc.2.
 
 Known problem: in 51 of the new entries a line of the description is
 read as a separate part, because it starts with one word and a colon.
