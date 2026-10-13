@@ -77,7 +77,7 @@
     {
       "name": "TorrentXT",
       "repository": "SethMorrowSoftware/TorrentXT",
-      "commit": "6be70ad665b58fee59a0cbbe840e73a126a30c34",
+      "commit": "2fc152b69677a905fe4a6eef14514462a0789d6f",
       "version": "0.1.0",
       "version_from": {
         "path": "src/torrent.lcb",
@@ -134,7 +134,7 @@
     {
       "name": "dataChannelXT",
       "repository": "SethMorrowSoftware/dataChannelXT",
-      "commit": "dd376ee4d277777dc8e330ef6ea686ba82279d41",
+      "commit": "8878096994764e71a96afe2659d55e0ca97348bd",
       "version": "0.1.0",
       "version_from": {
         "path": "src/datachannel.lcb",
@@ -142,7 +142,7 @@
       },
       "licence": "MIT (Seth Morrow Software); the libraries statically link libdatachannel and libjuice (MPL-2.0), usrsctp (BSD-3-Clause), plog (MIT) and, on Windows and macOS, OpenSSL 3 (Apache-2.0)",
       "files": [
-        {"path": "src/datachannel.lcb", "role": "source", "sha256": "408db5f52c8783ae8ffe2c45152b4c363d8317d1515a3f0adfd06571b9303fa7", "size": 62089},
+        {"path": "src/datachannel.lcb", "role": "source", "sha256": "148d01824aad76b4eaf9cbc4ce6a0cfe0a5224551124614f1ca95e18f161003c", "size": 62089},
         {"path": "examples/datachannel-helpers.livecodescript", "role": "source", "sha256": "a23d906ee282df1e6fbe614a27bc35173c59d5228a819eea963c84b8a1a80916", "size": 20266},
         {"path": "src/code/MANIFEST.sha256", "role": "code-manifest", "sha256": "d5692e066e14e40132d2bf71ecf72992a8e6ec514683e0b110d5a2ee6c6fbd38", "size": 575},
         {"path": "src/code/x86_64-win32/datachannelxt.dll", "role": "library", "sha256": "05bf16b5861c34c37045f248d428de32a7695f4c497558724036ea67c6f8a22e", "size": 6729728, "imports": ["CRYPT32.dll", "WS2_32.dll", "bcrypt.dll", "KERNEL32.dll", "USER32.dll", "ADVAPI32.dll"]},
@@ -163,7 +163,7 @@
     {
       "name": "Box2Dxt",
       "repository": "SethMorrowSoftware/Box2Dxt",
-      "commit": "eb26dc8c91587066ad9648ad65a93c31f06a99ed",
+      "commit": "ae884459c1d17beda213c3206087c98b89da256f",
       "version": "0.2.0",
       "version_from": {
         "path": "src/box2dxt.lcb",
@@ -173,7 +173,7 @@
       "licence": "MIT (Seth Morrow and Box2Dxt contributors); the libraries statically link Box2D (MIT); the Windows libraries need the Microsoft Visual C++ runtime",
       "files": [
         {"path": "src/box2dxt.lcb", "role": "source", "sha256": "bde77cafb09344922e286e8d1e076527d1fb6be8c9f564f804dba9e54d43f378", "size": 294359},
-        {"path": "src/box2dxt-kit.livecodescript", "role": "source", "sha256": "96078fca6e1a253a8836925afdf6e6a882f42cb6da693856ac012d819a81a9fb", "size": 373701},
+        {"path": "src/box2dxt-kit.livecodescript", "role": "source", "sha256": "cfa234e3ae0d438cf9d0d252ed662f8e868241e0c838c668831f35acb5d7f6ea", "size": 374025},
         {"path": "src/code/MANIFEST.sha256", "role": "code-manifest", "sha256": "7ac09a53e64fb7e6dbbdae6201d0f91766eb23a175aa24c96d388456cb3e0f1b", "size": 539},
         {"path": "src/code/x86_64-win32/box2dxt.dll", "role": "library", "sha256": "c4609496ce2b2a585accfd63629cb362a7f912f62aefbf88f5d0aba684f26270", "size": 337408, "imports": ["KERNEL32.dll", "VCRUNTIME140.dll", "api-ms-win-crt-heap-l1-1-0.dll", "api-ms-win-crt-utility-l1-1-0.dll", "api-ms-win-crt-math-l1-1-0.dll", "api-ms-win-crt-stdio-l1-1-0.dll", "api-ms-win-crt-runtime-l1-1-0.dll"]},
         {"path": "src/code/x86-win32/box2dxt.dll", "role": "library", "sha256": "5d52eba29ab8e3c3c6945db0d5ed01224ee6a2424863fbcf1f1411a61fa456be", "size": 301056, "imports": ["KERNEL32.dll", "VCRUNTIME140.dll", "api-ms-win-crt-heap-l1-1-0.dll", "api-ms-win-crt-utility-l1-1-0.dll", "api-ms-win-crt-math-l1-1-0.dll", "api-ms-win-crt-stdio-l1-1-0.dll", "api-ms-win-crt-runtime-l1-1-0.dll"]},
@@ -191,7 +191,7 @@
     {
       "name": "CoinXT",
       "repository": "SethMorrowSoftware/CoinXT",
-      "commit": "cbe32cd92440a8220e11c1f8abfa51e5d96e2e06",
+      "commit": "1f279fb5d1c33c6d36474b740d029f2140cf2904",
       "version": "0.1.0",
       "version_from": {
         "path": "src/coinxt.lcb",
@@ -199,8 +199,8 @@
       },
       "licence": "MIT (Seth Morrow); the libraries statically link trezor-crypto (MIT, Tomas Dzetkulic and Pavol Rusnak) and libsecp256k1 (MIT), SHA-2 by Aaron D. Gifford (BSD-3-Clause) and other vendored code listed in THIRD-PARTY-LICENSES.md",
       "files": [
-        {"path": "src/coinxt.lcb", "role": "source", "sha256": "eafdfd36872a092e2977b1b7c413b73054377c078101553cb544ede419047c12", "size": 101219},
-        {"path": "src/coinxt.livecodescript", "role": "source", "sha256": "102465a7aa4ff5b3d3580bd5a5de9478f5700fd079292a08ba18c1e0ac56c090", "size": 198063},
+        {"path": "src/coinxt.lcb", "role": "source", "sha256": "2b17a3a4ffc7fa07a245dcc1d64ef70e941b09e1448b23abc2f9a37846c77332", "size": 101219},
+        {"path": "src/coinxt.livecodescript", "role": "source", "sha256": "fa6a32233255ce65ac4f2c3f79750562ec7d2f0fee89d3d7aef8a675dd2e0657", "size": 198063},
         {"path": "src/code/MANIFEST.sha256", "role": "code-manifest", "sha256": "77c058bfbfa516415b53c79054b0e3ba58dea69bed0af635f6abeaf0e4dc7015", "size": 533},
         {"path": "src/code/x86_64-win32/coinxt.dll", "role": "library", "sha256": "4dd16d10c03d0cfba07142210f9e0d3dae7c7d61f8205fe48291871c97722bc7", "size": 454297, "imports": ["bcrypt.dll", "KERNEL32.dll", "msvcrt.dll"]},
         {"path": "src/code/x86-win32/coinxt.dll", "role": "library", "sha256": "86a22d64c2bc44e0615e1bfa524d899901db09ba2cb367ac9ddeae59d72ecbc6", "size": 400356, "imports": ["bcrypt.dll", "KERNEL32.dll", "msvcrt.dll"]},
@@ -222,7 +222,7 @@
     {
       "name": "OnionXT",
       "repository": "SethMorrowSoftware/OnionXT",
-      "commit": "177fce9d85a101a7e54e31146705f947ee816f28",
+      "commit": "e752b3706a63d3d51505c2c0d2088d03b34163af",
       "version": "1.0.0",
       "version_from": {
         "path": "src/onionxt.livecodescript",
@@ -230,7 +230,7 @@
       },
       "licence": "MIT (Seth Morrow); pure LiveCode Script",
       "files": [
-        {"path": "src/onionxt.livecodescript", "role": "source", "sha256": "b81cddcd97c9b36b235ac76c91125bc49bc2059a60aa749eb6807456351ab75b", "size": 120640},
+        {"path": "src/onionxt.livecodescript", "role": "source", "sha256": "3360b3e340616aed4daf3223f1467ecffa070e5b14f010f34188a8f599328b89", "size": 120640},
         {"path": "src/onion-httpd.livecodescript", "role": "source", "sha256": "fd6532557138526c6a031c520ffad390399cb80eec0c59bdb6c1875f4c6b6300", "size": 26997},
         {"path": "LICENSE", "role": "licence", "sha256": "54dd160704cd20e2cb16452f277c699891ae7f083883a2b0e444e58c7bf45620", "size": 1243}
       ],
@@ -242,7 +242,7 @@
     {
       "name": "NostrXT",
       "repository": "SethMorrowSoftware/NostrXT",
-      "commit": "a5128aba8d7ba4ceb6fda93a3f521b471e8107a6",
+      "commit": "87387f07643d9a8f3f86e144ccfb047b12655a1c",
       "version": "0.1.0",
       "version_from": {
         "path": "src/nostrxt.livecodescript",
@@ -250,8 +250,8 @@
       },
       "licence": "MIT (Seth Morrow); pure LiveCode Script",
       "files": [
-        {"path": "src/nostrxt.livecodescript", "role": "source", "sha256": "4bf2211e755396ce3d1c27a699957fb9b2d69f28686552f3ee0d51cac02feea6", "size": 189541},
-        {"path": "src/nostr-relay.livecodescript", "role": "source", "sha256": "b18f6ed94ae06278240231adb175ec32fe5144b7de7372ac5d61824b2da43afc", "size": 46147},
+        {"path": "src/nostrxt.livecodescript", "role": "source", "sha256": "040a686ae06aa78c826926efff070a7df3923f5c91204cab8d05e2de853ac008", "size": 189545},
+        {"path": "src/nostr-relay.livecodescript", "role": "source", "sha256": "16b25dce80f911b063f9212cf4f93811a3bf090fc0477df29af9cfe68b5b62c5", "size": 46147},
         {"path": "LICENSE", "role": "licence", "sha256": "ba246fcb1ac9df433783375d2bb4abb40c782dfedb6e419ec71f6bb832968fbb", "size": 1562}
       ],
       "extensions": [
