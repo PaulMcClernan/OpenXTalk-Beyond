@@ -1,0 +1,44 @@
+{
+  "manifest_version": "0.3",
+  "name": "oxt-beyond",
+  "display_name": "OXT-Beyond",
+  "version": "0.1.0",
+  "description": "Read and build the xTalk stacks open in OXT-Beyond: cards, controls, scripts and new stacks, with code checked and run on its engine.",
+  "long_description": "The xTalk MCP Bridge of OXT-Beyond, a free IDE for xTalk Script (the language of LiveCode Community and OpenXTalk). With the bridge turned on in OXT-Beyond (Development > Plugins > xTalk MCP Bridge), Claude can list and read the stacks open there, look at their cards, look up the Dictionary, compile code, build controls, cards, scripts and new stacks as checked batches that can be undone, run code in a sandbox or on a stack, and save. It talks only to OXT-Beyond on this computer.",
+  "author": {
+    "name": "OXT-Beyond contributors",
+    "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond"
+  },
+  "homepage": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond",
+  "license": "GPL-3.0-only",
+  "server": {
+    "type": "node",
+    "entry_point": "server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server.js"]
+    }
+  },
+  "tools": [
+    { "name": "xtalk_guide", "description": "The guide to writing xTalk Script for OXT-Beyond" },
+    { "name": "list_stacks", "description": "The user's stacks open in OXT-Beyond" },
+    { "name": "read_stack", "description": "An outline of a stack, or a card or control with its properties and script" },
+    { "name": "look_at_card", "description": "A picture of a card as it looks now" },
+    { "name": "lookup_dictionary", "description": "An entry of the OXT-Beyond Dictionary" },
+    { "name": "check_code", "description": "Compiles xTalk Script without running it" },
+    { "name": "make_changes", "description": "Creates, sets and deletes controls, cards and stacks, as one checked batch" },
+    { "name": "run_code", "description": "Runs xTalk Script in a sandbox or on a stack" },
+    { "name": "save_stack", "description": "Saves a stack to its file, after the user says yes in OXT-Beyond" },
+    { "name": "list_changes", "description": "What was changed or run, and whether it was undone" },
+    { "name": "undo_changes", "description": "Takes back a change or a run" },
+    { "name": "debug_state", "description": "Where a script paused in the debugger is" }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=16.0.0" }
+  }
+}

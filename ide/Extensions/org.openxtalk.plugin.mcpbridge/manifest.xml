@@ -1,0 +1,1 @@
+<package version="0.0">  <name>org.openxtalk.plugin.mcpbridge</name>  <title>xTalk MCP Bridge</title>  <author>OXT-Beyond</author>  <version>0.1.0</version>  <type>plugin</type>  <license>community</license> </package>

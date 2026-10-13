@@ -14,6 +14,11 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.6-rc.1 (2026-10-13, pre-release)
+
+- Add the xTalk MCP Bridge: Claude, on the user's own plan, builds stacks (#99)
+- Version 0.2.6-rc.1, with its changelog (#99)
+
 ## 0.2.5 (2026-10-13)
 
 - xTalk Suite extensions: pin the members' fixed doc comments (#98)

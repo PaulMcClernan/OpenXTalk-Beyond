@@ -66,7 +66,11 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists.
+lists. 0.2.6-rc.1 is a test release (a pre-release) of the xTalk MCP
+Bridge, which lets Claude, signed in with your own Claude plan in the
+Claude desktop app or Claude Code, build stacks in the IDE (see
+[0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge)); 0.2.5 stays the main
+download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1310,6 +1314,35 @@ as a return value named "It", and in the other 49 a word runs into the
 next one after a colon (for example "automatic:creating"). The fix is
 in the xTalk Suite (its pull request 158) and comes with the next
 release.
+
+#### 0.2.6-rc.1: the xTalk MCP Bridge
+
+OXT-Beyond 0.2.6-rc.1, a test release, has everything in 0.2.5 and the
+**xTalk MCP Bridge**, a plugin under *Development > Plugins*, new and
+**off by default**: until you turn it on, it adds only its menu item
+and opens nothing. It lets Claude, in the Claude desktop app or Claude
+Code and signed in with your own Claude plan (no API key), read the
+stacks open in the IDE and build in them: make cards, controls and
+scripts, run code, look at a card, check a script, save, and undo what
+it did. Anthropic lets no other program sign in to a Claude account,
+so the IDE does not call Claude itself: Claude's app runs a small MCP
+server (`server.js`, which needs Node.js) that passes each step to the
+IDE over a connection only your own computer can reach, with a key the
+IDE writes to `~/.oxt-beyond/mcp-bridge.json` when the bridge is on.
+Its menu item's **Claude Setup...** saves a desktop extension for the
+Claude desktop app, or copies the command that adds it to Claude Code.
+Claude's app asks you before each step; the IDE asks too before what
+cannot be undone (code that reaches files, the network or other
+programs, saving a stack, and undoing over your own edits). Setting the
+environment variable `OXTBEYOND_MCP_BRIDGE` to `off` keeps it off.
+The bridge uses the xTalk Assistant's tools without turning the
+assistant on, and the two share one list of changes for undo.
+
+Nothing else changes: with the bridge off, no script or stack sees a
+difference from 0.2.5. It has been tested on Linux, the IDE's side
+against 0.2.5-rc.5's engine and the server against a stand-in; it has
+not yet been tried with the Claude desktop app, or on Windows or macOS.
+The engine and the standalone runtimes are those of 0.2.5-rc.2.
 
 ### xTalk Suite extensions
 

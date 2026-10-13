@@ -1775,6 +1775,11 @@ private function revMenubarDevelopmentMenu pContext
    if there is a stack "org.openxtalk.plugin.xtalkassistant" then
       put tab & "xTalk Assistant" & return after tDevelopment
    end if
+   -- OXT-Beyond: the xTalk MCP Bridge, an extension too, the same way: it
+   -- stays off until the user turns it on from this entry
+   if there is a stack "org.openxtalk.plugin.mcpbridge" then
+      put tab & "xTalk MCP Bridge" & return after tDevelopment
+   end if
    put tab & "-" & return after tDevelopment
    put tab & "Plugin Settings" & return after tDevelopment
    put "-" & return after tDevelopment
@@ -2864,6 +2869,12 @@ on revMenubarDevelopmentMenuPick pWhich
                -- OXT-Beyond: see revMenubarDevelopmentMenu
                if there is a stack "org.openxtalk.plugin.xtalkassistant" then
                   dispatch "xtalkAssistantMenuPick" to stack "org.openxtalk.plugin.xtalkassistant"
+               end if
+               break
+            case "xTalk MCP Bridge"
+               -- OXT-Beyond: see revMenubarDevelopmentMenu
+               if there is a stack "org.openxtalk.plugin.mcpbridge" then
+                  dispatch "mcpBridgeMenuPick" to stack "org.openxtalk.plugin.mcpbridge"
                end if
                break
             default  --plugin selected
