@@ -30,10 +30,15 @@ off.
 1. In OXT-Beyond, choose *Development > Plugins > xTalk MCP Bridge* and
    press **Turn On**.
 2. In the window that follows:
-   - For the **Claude desktop app**, press **Save Desktop Extension...**
-     and open the `.mcpb` file it saves. Claude's app runs the server
-     with the Node.js it comes with, so you do not need to install
-     anything else.
+   - For the **Claude desktop app**, press **Save Desktop Extension...**,
+     then in Claude choose *Settings > Extensions > Advanced settings >
+     Install Extension...* and choose the `.mcpb` file it saved (opening
+     the file itself works only where the system knows it is Claude's).
+     Claude's app runs the server with the Node.js it comes with, so you
+     do not need to install anything else. Or press **Add to Claude
+     Desktop**, which adds OXT-Beyond to Claude's settings file
+     (`claude_desktop_config.json`, keeping a copy of it); that way needs
+     Node.js. Quit Claude completely and open it again afterwards.
    - For **Claude Code**, press **Copy Claude Code Command** and paste
      the command into a terminal. This needs Node.js 16 or later.
 3. Ask Claude to work on your stack. OXT-Beyond must be open with the

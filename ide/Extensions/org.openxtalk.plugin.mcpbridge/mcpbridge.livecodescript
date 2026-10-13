@@ -241,25 +241,121 @@ end mcbAssistantFolder
 private command mcbSetupDialog
    local tText
    put "Add OXT-Beyond to Claude once, in the app you use:" & return & return & \
-         "Claude desktop app: press Save Desktop Extension..., then open the file it saves (or, in Claude, Settings > Extensions > Advanced settings > Install Extension... and choose it). Claude's app runs it with its own Node.js; you install nothing else." & return & return & \
+         "Claude desktop app: press Save Desktop Extension..., then in Claude choose Settings > Extensions > Advanced settings > Install Extension... and choose the file it saved (opening the file works only where Windows or macOS knows it is Claude's). Claude's app runs it with its own Node.js; you install nothing else." & return & return & \
+         "Or press Add to Claude Desktop, which adds OXT-Beyond to the Claude desktop app's settings file for you. That way needs Node.js (nodejs.org)." & return & return & \
          "Claude Code: press Copy Claude Code Command and paste it into a terminal. It needs Node.js 16 or later." & return & return & \
-         "Copy Desktop Config gives the entry for Claude's claude_desktop_config.json instead, for a computer with Node.js." & return & return & \
          "Then sign in to Claude with your own account, as usual, and ask it to work on your stack. This IDE must be open with the bridge on." into tText
-   answer information tText with "Save Desktop Extension..." or "Copy Claude Code Command" or "Copy Desktop Config" or "Close" titled kTitle
+   answer information tText with "Save Desktop Extension..." or "Add to Claude Desktop" or "Copy Claude Code Command" or "Close" titled kTitle
    switch it
       case "Save Desktop Extension..."
          mcbSaveDesktopExtension
          break
+      case "Add to Claude Desktop"
+         mcbAddToClaudeDesktop
+         break
       case "Copy Claude Code Command"
          set the clipboardData["text"] to mcbClaudeCodeCommand()
-         answer information "Copied. Paste it into a terminal, then start Claude Code (claude) and ask it to work on your stack:" & return & return & mcbClaudeCodeCommand() titled kTitle
-         break
-      case "Copy Desktop Config"
-         set the clipboardData["text"] to mcbDesktopConfig()
-         answer information "Copied. In the Claude desktop app, open Settings > Developer > Edit Config, put this entry under" && quote & "mcpServers" & quote & ", save, and restart Claude:" & return & return & mcbDesktopConfig() titled kTitle
+         answer information "The command is on the clipboard: paste it into a terminal (Ctrl+V, or Command-V on a Mac), then start Claude Code (claude) and ask it to work on your stack. It reads:" & return & return & mcbClaudeCodeCommand() titled kTitle
          break
    end switch
 end mcbSetupDialog
+
+-- Where the Claude desktop app keeps its settings file
+private function mcbClaudeConfigPath
+   local tFolder
+   switch the platform
+      case "Win32"
+         put $APPDATA into tFolder
+         replace backslash with slash in tFolder
+         return tFolder & "/Claude/claude_desktop_config.json"
+      case "MacOS"
+         return specialFolderPath("home") & "/Library/Application Support/Claude/claude_desktop_config.json"
+      default
+         put $XDG_CONFIG_HOME into tFolder
+         if tFolder is empty then
+            put specialFolderPath("home") & "/.config" into tFolder
+         end if
+         return tFolder & "/Claude/claude_desktop_config.json"
+   end switch
+end mcbClaudeConfigPath
+
+-- The path as the platform writes it, for the user to read
+private function mcbNativePath pPath
+   if the platform is "Win32" then
+      replace slash with backslash in pPath
+   end if
+   return pPath
+end mcbNativePath
+
+-- True when a program named node can be found on the PATH
+private function mcbHasNode
+   local tOut, tResult, tHide
+   put the hideConsoleWindows into tHide
+   set the hideConsoleWindows to true
+   if the platform is "Win32" then
+      put shell("where node") into tOut
+   else
+      put shell("command -v node") into tOut
+   end if
+   put the result into tResult
+   set the hideConsoleWindows to tHide
+   return tResult is 0 and word 1 to -1 of tOut is not empty
+end mcbHasNode
+
+-- Adds OXT-Beyond's entry to the Claude desktop app's settings file, after
+-- the user says yes, keeping the rest of the file as it was and a copy of
+-- it beside it. When the file cannot be read as JSON, the whole entry goes
+-- on the clipboard for the user to put in by hand.
+private command mcbAddToClaudeDesktop
+   local tPath, tFolder, tOld, tData, tMerged, tNote, tProblem, tError
+   put mcbClaudeConfigPath() into tPath
+   if not mcbHasNode() then
+      put return & return & "Node.js does not seem to be installed (no node program was found). Install it from nodejs.org first, or use Save Desktop Extension..., which needs none." into tNote
+   end if
+   answer question "Add OXT-Beyond to the Claude desktop app's settings file?" & return & return & mcbNativePath(tPath) & return & return & \
+         "Its other settings stay as they are, and a copy of the file is kept beside it as claude_desktop_config.json.bak. Claude runs the bridge's server with Node.js." & tNote \
+         with "Cancel" or "Add" titled kTitle
+   if it is not "Add" then
+      exit mcbAddToClaudeDesktop
+   end if
+   if there is a file tPath then
+      put url ("binfile:" & tPath) into tData
+      put textDecode(tData, "UTF-8") into tOld
+      -- A byte order mark some editors write
+      if char 1 of tOld is numToCodepoint(65279) then
+         delete char 1 of tOld
+      end if
+   end if
+   try
+      put mcbDesktopConfigText(tOld, kServerName, mcbServerPath()) into tMerged
+   catch tError
+      put line 1 of tError into tMerged["problem"]
+   end try
+   if tMerged["problem"] is not empty then
+      set the clipboardData["text"] to mcbDesktopConfig()
+      answer error "The settings file could not be changed:" && tMerged["problem"] & "." & return & return & \
+            "OXT-Beyond's entry is on the clipboard. In Claude, open Settings > Developer > Edit Config, paste it (Ctrl+V) inside " & quote & "mcpServers" & quote & \
+            ", save, and quit and reopen Claude." titled kTitle
+      exit mcbAddToClaudeDesktop
+   end if
+   set the itemDelimiter to slash
+   put item 1 to -2 of tPath into tFolder
+   if there is not a folder tFolder then
+      create folder tFolder
+   end if
+   if tData is not empty then
+      put tData into url ("binfile:" & tPath & ".bak")
+   end if
+   put textEncode(tMerged["text"], "UTF-8") into url ("binfile:" & tPath)
+   put the result into tProblem
+   if tProblem is not empty then
+      set the clipboardData["text"] to tMerged["text"]
+      answer error "The settings file could not be written (" & tProblem & "). What it should hold is on the clipboard: in Claude, open Settings > Developer > Edit Config, replace the text with it (Ctrl+V), save, and quit and reopen Claude." titled kTitle
+      exit mcbAddToClaudeDesktop
+   end if
+   answer information "Added. Now quit the Claude desktop app completely and open it again: closing its window is not enough (on Windows, right-click its icon by the clock and choose Quit; on a Mac, Claude > Quit Claude)." & return & return & \
+         "Then ask Claude to list your OXT-Beyond stacks. If it cannot, Claude's log of the server is in its logs folder (Settings > Developer shows it), as mcp-server-oxt-beyond.log." titled kTitle
+end mcbAddToClaudeDesktop
 
 -- The server's file, in the form of the platform's paths
 private function mcbServerPath
@@ -320,11 +416,11 @@ private command mcbSaveDesktopExtension
    end try
    if tProblem is not empty then
       answer error "The extension could not be saved:" && tProblem & return & return & \
-            "Copy Desktop Config sets Claude up another way." titled kTitle
+            "Add to Claude Desktop sets Claude up another way." titled kTitle
       exit mcbSaveDesktopExtension
    end if
-   answer information "Saved" && tFile & "." & return & return & \
-         "Open it (double-click it) to install it in the Claude desktop app, or in Claude choose Settings > Extensions > Advanced settings > Install Extension... and choose it." titled kTitle
+   answer information "Saved" && mcbNativePath(tFile) & "." & return & return & \
+         "In the Claude desktop app, choose Settings > Extensions > Advanced settings > Install Extension..., choose this file, and turn the extension on. (Opening the file itself works only where the system knows it is Claude's.)" titled kTitle
 end mcbSaveDesktopExtension
 
 --------------------------------------------------------------------------------

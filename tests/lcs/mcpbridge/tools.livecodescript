@@ -468,6 +468,31 @@ on TestTheGuideIsTheBridges
          and not (TestText(tReply) contains "Insert Code")
 end TestTheGuideIsTheBridges
 
+-- Claude desktop's settings file, with the bridge's entry added and the
+-- rest kept as it was written
+on TestDesktopConfig
+   local tOld, tNew, tParsed
+   TestStart
+   put mcbDesktopConfigText(empty, "oxt-beyond", "C:\OXT\server.js") into tNew
+   put xtaJsonParse(tNew["text"]) into tParsed
+   TestAssert "a new file", tNew["problem"] is empty and \
+         xtaJsonText(xtaJsonItem(xtaJsonGet(tParsed, "mcpServers/oxt-beyond/args"), 1)) is "C:\OXT\server.js"
+   put "{" & quote & "mcpServers" & quote & ": {" & quote & "other" & quote & ": {" & quote & "command" & quote & ": " & quote & "x" & quote & "}," & \
+         quote & "oxt-beyond" & quote & ": {" & quote & "command" & quote & ": " & quote & "old" & quote & "}}, " & \
+         quote & "globalShortcut" & quote & ": " & quote & "Ctrl+Space" & quote & "}" into tOld
+   put mcbDesktopConfigText(tOld, "oxt-beyond", "/opt/server.js") into tNew
+   TestDiagnostic tNew["text"]
+   put xtaJsonParse(tNew["text"]) into tParsed
+   TestAssert "the other server and setting are kept", xtaJsonText(xtaJsonGet(tParsed, "mcpServers/other/command")) is "x" \
+         and xtaJsonText(xtaJsonMember(tParsed, "globalShortcut")) is "Ctrl+Space"
+   TestAssert "the older entry is replaced", xtaJsonText(xtaJsonGet(tParsed, "mcpServers/oxt-beyond/command")) is "node" \
+         and xtaJsonCount(xtaJsonMember(tParsed, "mcpServers")) is 2
+   put mcbDesktopConfigText("{" & quote & "theme" & quote & ": 1}", "oxt-beyond", "/opt/server.js") into tNew
+   TestAssert "mcpServers added to a file without it", xtaJsonText(xtaJsonGet(xtaJsonParse(tNew["text"]), "mcpServers/oxt-beyond/command")) is "node"
+   put mcbDesktopConfigText("{" & quote & "a" & quote & ": ", "oxt-beyond", "/opt/server.js") into tNew
+   TestAssert "a broken file is left alone", tNew["problem"] is not empty and tNew["text"] is empty
+end TestDesktopConfig
+
 on TestSaveIsAskedAbout
    local tReply, tStack, tFile
    TestStart
