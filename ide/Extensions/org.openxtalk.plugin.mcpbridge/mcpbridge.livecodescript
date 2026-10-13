@@ -100,7 +100,7 @@ command mcpBridgeMenuPick
    if not mcbIsEnabled() then
       answer question "The xTalk MCP Bridge lets Claude, in the Claude desktop app or in Claude Code, work on the stacks you have open here: read them, build cards, controls, scripts and new stacks, and try code. It uses your own Claude plan (Free, Pro, Max, Team or Enterprise): you sign in to Claude's app as usual, and this IDE needs no API key." & return & return & \
             "Turning it on starts a connection that only programs on this computer can reach, with a key that is kept in a file only you can read, and OXT-Beyond sends nothing to the internet. Then you add OXT-Beyond to Claude once (the next window shows how)." & return & return & \
-            "Claude's app asks you before it uses each tool. Here you are asked before code that reaches files, the network or other programs runs, and before a stack is saved; everything else Claude changes can be undone from this menu item." \
+            "Claude's app asks you before it uses each tool. Here you are asked before any code Claude sends runs (you see the code), and before a stack is saved; everything else Claude changes can be undone from this menu item." \
             with "Cancel" or "Turn On" titled kTitle
       if it is not "Turn On" then
          exit mcpBridgeMenuPick

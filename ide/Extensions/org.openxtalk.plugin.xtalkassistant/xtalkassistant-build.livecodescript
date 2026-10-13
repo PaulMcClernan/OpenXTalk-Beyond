@@ -2026,6 +2026,11 @@ function xtaCheckpointSave pStack
          put empty into sCheckpointFolder
          return "the folder for checkpoints could not be made in" && specialFolderPath("temporary") for error
       end if
+      -- The copies of the user's stacks are theirs alone to read, where
+      -- the system lets that be said (the temporary folder is often shared)
+      if the platform is not "Win32" then
+         get shell("chmod 700" && quote & sCheckpointFolder & quote)
+      end if
    end if
    add 1 to sCheckpointCount
    put sCheckpointFolder & "/checkpoint-" & sCheckpointCount & ".livecode" into tFile

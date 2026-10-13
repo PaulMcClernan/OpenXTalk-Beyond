@@ -46,7 +46,7 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.2.0';
 // The bridge protocol this speaks (the "protocol" of the IDE's file and of
 // its answer to hello)
 const BRIDGE_PROTOCOL = 1;
@@ -57,6 +57,13 @@ const MCP_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 // a question in the IDE, can take minutes
 const CALL_TIMEOUT_MS = Number(process.env.OXT_MCP_TIMEOUT_MS) || 10 * 60 * 1000;
 const CONNECT_TIMEOUT_MS = 5000;
+// How long OXT-Beyond may take to answer hello: it answers at once unless
+// it is stuck
+const HELLO_TIMEOUT_MS = Number(process.env.OXT_MCP_HELLO_TIMEOUT_MS) || 15000;
+// How long a call waits for an earlier one to finish before it is told
+// that OXT-Beyond is busy (the earlier one may be waiting for the user to
+// answer a question there)
+const BUSY_WAIT_MS = Number(process.env.OXT_MCP_BUSY_WAIT_MS) || 20000;
 
 const INSTRUCTIONS = [
   'These tools work in OXT-Beyond, a free IDE for xTalk Script (the language of LiveCode Community 9 and',
@@ -65,8 +72,9 @@ const INSTRUCTIONS = [
   'Find the user\'s stacks with list_stacks, read one with read_stack (an outline first, then a card or control',
   'by its id), and see a card with look_at_card. Build with make_changes (controls, cards, a new stack,',
   'properties and scripts, as one checked batch), try code with run_code, and save with save_stack.',
-  'A change is made as soon as the user allows the tool here; OXT-Beyond asks the user itself only before code',
-  'that reaches files, the network or other programs, before saving, and before undoing what they changed since.',
+  'A long script is read in parts with read_script and changed a handler or a range of lines at a time with edit_script.',
+  'A change is made as soon as the user allows the tool here; OXT-Beyond asks the user itself before every run of code',
+  '(showing it), before saving, and before undoing what they changed since.',
   'undo_changes takes back what you changed or ran on a stack. Check code with check_code and look up what you',
   'are not sure of with lookup_dictionary rather than guess.'
 ].join(' ');
@@ -98,13 +106,32 @@ const TOOLS = [
     description: 'Reads a stack of the user\'s. With no id: an outline of it and its substacks, their cards and their ' +
       'controls with ids and rects, and how long each script is. With an id from the outline, and the stack it is in ' +
       '(ids repeat from stack to stack): that card\'s or control\'s properties and script, and a card\'s controls. ' +
-      'With details true and no id: the stack\'s own properties, cards and script. Password-protected stacks are not read.',
+      'With details true and no id: the stack\'s own properties, cards and script. Password-protected stacks are not read. ' +
+      'A script is shown up to 24,000 characters; read_script reads a longer one whole, in parts.',
     inputSchema: {
       type: 'object',
       properties: {
         stack: STACK,
         id: { type: 'integer', description: 'The id of a card or control, as the outline gives it' },
         details: { type: 'boolean', description: 'With no id: the stack\'s own properties and script instead of the outline' }
+      }
+    },
+    annotations: READ_ONLY
+  },
+  {
+    name: 'read_script',
+    title: 'Read a script',
+    description: 'Reads the script of a stack, card or control of the user\'s, with line numbers and where each handler ' +
+      'begins and ends: the whole of a long script, in parts (about 20,000 characters at a time; the result says where ' +
+      'to read on), or one handler by name. Use it before edit_script, which takes these line numbers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        stack: STACK,
+        id: { type: 'integer', description: 'The id of a card or control, as read_stack gives it; none for the stack\'s own script' },
+        handler: { type: 'string', description: 'Only this handler, by name (mouseUp)' },
+        from_line: { type: 'integer', description: 'The first line to read (1 when none)' },
+        to_line: { type: 'integer', description: 'The last line to read (the end when none)' }
       }
     },
     annotations: READ_ONLY
@@ -165,7 +192,8 @@ const TOOLS = [
       'the later changes of the batch can use for it as object, card or group); set (object, and properties, ' +
       'custom_properties or script); or delete (object: a control or a card). A new stack is the first change of its ' +
       'batch, and the rest of the batch is in it; a new card goes after the current card. A script replaces the object\'s ' +
-      'whole script and is made of handlers. Properties are the engine\'s, by name; a list of numbers is one value ' +
+      'whole script and is made of handlers; to change part of a script, above all a long one (read_stack shows 24,000 ' +
+      'characters of a script), use edit_script. Properties are the engine\'s, by name; a list of numbers is one value ' +
       '([10, 20] is 10,20). Build a large stack over several batches.',
     inputSchema: {
       type: 'object',
@@ -199,6 +227,30 @@ const TOOLS = [
     annotations: CHANGES
   },
   {
+    name: 'edit_script',
+    title: 'Edit a script',
+    description: 'Changes part of the script of a stack, card or control of the user\'s, leaving the rest as it is: ' +
+      'replaces one handler (handler, and code: that handler whole, from its first line to its end line), adds it when the ' +
+      'script has none of that name, or deletes it (handler and delete: true); or replaces lines from_line to to_line ' +
+      '(as read_script numbers them) with code, when they still read as old_text (an empty code, or delete: true, deletes ' +
+      'them). The whole script is then checked and compiled, and set as make_changes sets one: a mistake comes back with ' +
+      'nothing changed, and undo_changes takes it back. Line numbers move after an edit: read again before the next edit by lines.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        stack: STACK,
+        id: { type: 'integer', description: 'The id of a card or control, as read_stack gives it; none for the stack\'s own script' },
+        handler: { type: 'string', description: 'The handler to replace, add or delete, by name' },
+        from_line: { type: 'integer', description: 'The first line to replace' },
+        to_line: { type: 'integer', description: 'The last line to replace' },
+        old_text: { type: 'string', description: 'With from_line and to_line: those lines as you read them, without their numbers' },
+        code: { type: 'string', description: 'The new handler, or the new lines' },
+        delete: { type: 'boolean', description: 'Delete the handler or the lines' }
+      }
+    },
+    annotations: CHANGES
+  },
+  {
     name: 'run_code',
     title: 'Run code',
     description: 'Runs xTalk Script statements and gives back what they put into the Message Box (put with no container), ' +
@@ -206,8 +258,9 @@ const TOOLS = [
       '(the default), a hidden stack made for the run and deleted after it, where the code can call the handlers you give; ' +
       'or stack, the user\'s stack, as the Message Box runs code there (with the stack\'s own handlers, me being the card ' +
       'or control given by target, the current card when none), after a checkpoint undo_changes goes back to (on the ' +
-      'stack, return gives nothing back: put the value instead). Code that reaches files, the network or other programs ' +
-      'runs only when the user allows it in OXT-Beyond. Do not use answer or ask: the run would wait for the user. A run ' +
+      'stack, return gives nothing back: put the value instead). Every run is shown to the user in OXT-Beyond first, and ' +
+      'runs only when they allow it: keep the code short and plain, so that they can read it. Do not use answer or ask: ' +
+      'the run would wait for the user. A run ' +
       'that never ends is stopped only by the user (Control-period, Command-period on a Mac).',
     inputSchema: {
       type: 'object',
@@ -273,7 +326,25 @@ function infoFilePath() {
 const NOT_RUNNING = 'OXT-Beyond is not running, or its xTalk MCP Bridge is off. Ask the user to open OXT-Beyond and choose ' +
   'Development > Plugins > xTalk MCP Bridge, then Turn On; then try again.';
 
+const STALE = 'OXT-Beyond is not running: the bridge\'s file was left by an OXT-Beyond that has quit or crashed. Ask the user ' +
+  'to open OXT-Beyond (the bridge starts with it when it was on) or turn the bridge on in Development > Plugins > ' +
+  'xTalk MCP Bridge; then try again.';
+
+const BUSY = 'OXT-Beyond is still busy with an earlier request: it may be waiting for the user to answer a question there, ' +
+  'or running code. Ask the user to look at OXT-Beyond, then try again.';
+
 class BridgeError extends Error {}
+
+// True when a process with this id runs (one the user may not signal still
+// runs: EPERM)
+function processRuns(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM';
+  }
+}
 
 // The connection to OXT-Beyond, made when a call needs it and made again
 // after it closes (the user may turn the bridge off and on, which changes
@@ -286,6 +357,8 @@ class Bridge {
     this.pending = null;   // { id, resolve, reject, timer }
     this.nextId = 1;
     this.queue = Promise.resolve();
+    this.waiting = 0;      // calls queued or running
+    this.toolsNote = '';   // said once after connecting, when the tools differ
   }
 
   readInfo() {
@@ -308,6 +381,11 @@ class Bridge {
     }
     if (!Number.isInteger(info.port) || typeof info.token !== 'string') {
       throw new BridgeError('The bridge\'s file ' + infoFilePath() + ' has no port or token.');
+    }
+    // The IDE that wrote it has gone (an older OXT-Beyond writes no pid)
+    if (Number.isInteger(info.pid) && info.pid > 0 && !processRuns(info.pid)) {
+      log('the bridge file names process ' + info.pid + ', which is not running');
+      throw new BridgeError(STALE);
     }
     return info;
   }
@@ -379,7 +457,9 @@ class Bridge {
   async send(request) {
     if (!this.socket) {
       await this.connect();
-      const hello = await this.exchange({ method: 'hello' });
+      const hello = await this.exchange({ method: 'hello' }, HELLO_TIMEOUT_MS,
+        'OXT-Beyond did not answer within ' + Math.round(HELLO_TIMEOUT_MS / 1000) + ' seconds of connecting. It may be ' +
+        'busy (waiting for the user to answer a question there, or running code); ask the user to look at OXT-Beyond, then try again.');
       if (!hello.ok) {
         this.close();
         throw new BridgeError(hello.error || NOT_RUNNING);
@@ -388,21 +468,22 @@ class Bridge {
         this.close();
         throw new BridgeError('OXT-Beyond speaks bridge protocol ' + hello.protocol + ', and this MCP server ' + BRIDGE_PROTOCOL + '.');
       }
+      this.toolsNote = toolsDifference(hello.tools);
     }
-    return this.exchange(request);
+    return this.exchange(request, CALL_TIMEOUT_MS);
   }
 
-  exchange(request) {
+  exchange(request, timeoutMs, timeoutText) {
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
       const timer = setTimeout(() => {
         if (this.pending && this.pending.id === id) {
           this.pending = null;
-          reject(new BridgeError('OXT-Beyond did not answer in ' + Math.round(CALL_TIMEOUT_MS / 1000) + ' seconds. ' +
-            'It may be waiting for the user, or running code that does not end (Control-period stops it).'));
+          reject(new BridgeError(timeoutText || ('OXT-Beyond did not answer in ' + Math.round(timeoutMs / 1000) + ' seconds. ' +
+            'It may be waiting for the user, or running code that does not end (Control-period stops it).')));
           this.close();
         }
-      }, CALL_TIMEOUT_MS);
+      }, timeoutMs);
       this.pending = { id, resolve, reject, timer };
       this.socket.write(JSON.stringify(Object.assign({ id, token: this.token }, request)) + '\n');
     });
@@ -415,22 +496,79 @@ class Bridge {
     }
   }
 
-  // One call at a time, in the order they came
-  call(tool, args) {
-    const run = () => this.send({ method: 'call', tool, arguments: args || {} });
+  // One call at a time, in the order they came. A call that waits more
+  // than BUSY_WAIT_MS for an earlier one is told that OXT-Beyond is busy,
+  // and is not sent later; a call cancelled by the client before its turn
+  // is not sent at all (one already sent cannot be taken back).
+  call(tool, args, state) {
+    const ticket = state || {};
+    const run = () => {
+      if (ticket.abandoned || ticket.cancelled) {
+        return Promise.reject(new BridgeError(ticket.cancelled ? 'Cancelled.' : BUSY));
+      }
+      ticket.started = true;
+      return this.send({ method: 'call', tool, arguments: args || {} });
+    };
+    const busy = this.waiting > 0;
+    this.waiting++;
     const result = this.queue.then(run, run);
-    this.queue = result.catch(() => {});
-    return result;
+    const settled = result.catch(() => {}).then(() => { this.waiting--; });
+    this.queue = settled;
+    if (!busy) {
+      return result;
+    }
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (!ticket.started) {
+          ticket.abandoned = true;
+          reject(new BridgeError(BUSY));
+        }
+      }, BUSY_WAIT_MS);
+      result.then((r) => { clearTimeout(timer); resolve(r); }, (e) => { clearTimeout(timer); reject(e); });
+    });
+  }
+
+  // The note about the tools, once
+  takeToolsNote() {
+    const note = this.toolsNote;
+    this.toolsNote = '';
+    return note;
   }
 }
 
+// What differs between the tools OXT-Beyond has (its answer to hello: a
+// comma list) and those listed here: the .mcpb holds a copy of this file
+// taken when it was saved, and OXT-Beyond may have been updated since
+function toolsDifference(ideTools) {
+  if (typeof ideTools !== 'string' || ideTools === '') {
+    return '';
+  }
+  const ide = new Set(ideTools.split(',').map((t) => t.trim()).filter(Boolean));
+  const missingHere = [...ide].filter((t) => !TOOL_NAMES.has(t));
+  const missingThere = [...TOOL_NAMES].filter((t) => !ide.has(t));
+  if (missingHere.length === 0 && missingThere.length === 0) {
+    return '';
+  }
+  log('tools differ: OXT-Beyond has ' + [...ide].join(',') + '; this server ' + [...TOOL_NAMES].join(','));
+  let note = 'Note: this MCP server and OXT-Beyond are different versions';
+  if (missingHere.length) {
+    note += ' (OXT-Beyond also has ' + missingHere.join(', ') + ', which this server does not offer)';
+  }
+  if (missingThere.length) {
+    note += ' (' + missingThere.join(', ') + ' will fail: OXT-Beyond does not have them)';
+  }
+  return note + '. Tell the user to set Claude up again from OXT-Beyond: Development > Plugins > xTalk MCP Bridge > Claude Setup.';
+}
+
 const bridge = new Bridge();
+// The state of each tools/call not yet answered, by its request id
+const inFlight = new Map();
 
 function textResult(text, isError) {
   return { content: [{ type: 'text', text }], isError: !!isError };
 }
 
-async function callTool(params) {
+async function callTool(params, state) {
   const name = params && params.name;
   if (!TOOL_NAMES.has(name)) {
     return textResult('There is no tool named "' + name + '".', true);
@@ -438,7 +576,7 @@ async function callTool(params) {
   const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
   let reply;
   try {
-    reply = await bridge.call(name, args);
+    reply = await bridge.call(name, args, state);
   } catch (e) {
     if (e instanceof BridgeError) {
       return textResult(e.message, true);
@@ -448,7 +586,8 @@ async function callTool(params) {
   if (!reply.ok) {
     return textResult(reply.error || 'OXT-Beyond refused the request.', true);
   }
-  const content = [{ type: 'text', text: reply.text || '' }];
+  const note = bridge.takeToolsNote();
+  const content = [{ type: 'text', text: (reply.text || '') + (note ? '\n\n' + note : '') }];
   if (reply.image) {
     content.push({ type: 'image', data: reply.image, mimeType: reply.imageType || 'image/png' });
   }
@@ -471,7 +610,11 @@ async function handle(message) {
   const { id, method, params } = message;
   const isRequest = id !== undefined && id !== null;
   if (!isRequest) {
-    // Notifications (initialized, cancelled...) need no answer
+    // A cancelled call is not sent if it has not been yet, and gets no
+    // answer; other notifications (initialized...) need nothing
+    if (method === 'notifications/cancelled' && params && inFlight.has(params.requestId)) {
+      inFlight.get(params.requestId).cancelled = true;
+    }
     return;
   }
   switch (method) {
@@ -491,13 +634,27 @@ async function handle(message) {
     case 'tools/list':
       respond(id, { tools: TOOLS });
       return;
-    case 'tools/call':
+    case 'tools/call': {
+      const state = { cancelled: false };
+      inFlight.set(id, state);
+      let result;
+      let failure;
       try {
-        respond(id, await callTool(params));
+        result = await callTool(params, state);
       } catch (e) {
-        respondError(id, -32603, 'Internal error: ' + e.message);
+        failure = e;
+      }
+      inFlight.delete(id);
+      if (state.cancelled) {
+        return;
+      }
+      if (failure) {
+        respondError(id, -32603, 'Internal error: ' + failure.message);
+      } else {
+        respond(id, result);
       }
       return;
+    }
     default:
       respondError(id, -32601, 'Method not found: ' + method);
   }

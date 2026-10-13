@@ -1522,6 +1522,11 @@ function xtaCheckScript pCode, pDeclared
    end if
    put xtaScanScript(pCode) into tScan
    put tScan["issues"] into tIssues
+   -- One issue per line: the scan's come without a last return, and what
+   -- follows is put after them
+   if tIssues is not empty then
+      put return after tIssues
+   end if
    put 0 into tOffset
    put pCode into tScript
    if tScan["handlers"] is 0 and tScan["statements"] > 0 then
