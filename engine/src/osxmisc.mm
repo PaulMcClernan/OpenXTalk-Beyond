@@ -181,7 +181,10 @@ IO_stat MCHcstak::macreadresources(void)
     MCAutoStringRef t_path;
     MCAutoStringRef t_error;
     /* UNCHECKED */ MCStringCreateWithCString(name, &t_path);
-	if (MCS_mac_openresourcefile_with_path(*t_path, fsRdPerm, false, resFileRefNum, &t_error))
+	// This returns true even when it fails, with the reason in t_error: a
+	// stack with no resource fork has no icons, cursors or sounds to read.
+	if (!MCS_mac_openresourcefile_with_path(*t_path, fsRdPerm, false, resFileRefNum, &t_error)
+	    || *t_error != nil)
 		return IO_NORMAL;
 	
 	ResourceCount rtypeCount = Count1Types(); //get the # of total resource types in current res file
@@ -214,18 +217,18 @@ IO_stat MCHcstak::macreadresources(void)
 				{
 					MCHcbmap *newicon = new MCHcbmap;
 					newicon->appendto(icons);
-					newicon->icon(id, *t_resname, *hres);
+					newicon->icon(id, *t_resname, *hres, (uint4)GetHandleSize(hres));
 				}
 				else if (rtype == 'CURS')
 				{
 					MCHcbmap *newcurs = new MCHcbmap;
 					newcurs->appendto(cursors);
-					newcurs->cursor(id, *t_resname, *hres);
+					newcurs->cursor(id, *t_resname, *hres, (uint4)GetHandleSize(hres));
 				}
 				else if (rtype == 'snd ')
 				{
 					MCHcsnd *newsnd = new MCHcsnd;
-					if (newsnd->import(id, *t_resname, *hres))
+					if (newsnd->import(id, *t_resname, *hres, (uint4)GetHandleSize(hres)))
 						newsnd->appendto(snds);
 						else
 							delete newsnd;
