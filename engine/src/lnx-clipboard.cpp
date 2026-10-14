@@ -554,6 +554,12 @@ bool MCLinuxRawClipboard::FlushData()
     if (!s_clipboard_store_timeout)
         g_source_destroy(g_main_context_find_source_by_id(NULL, t_timeout_event));
     
+    // The manager owns the CLIPBOARD now. Forget it here, so that the
+    // destructor does not set its owner to None, which would take it from
+    // the manager (X does not check who owns a selection that is cleared).
+    if (t_saved)
+        LostSelection();
+    
     return t_saved;
 #else
     return false;

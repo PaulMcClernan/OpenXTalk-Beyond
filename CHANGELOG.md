@@ -34,6 +34,7 @@ words, is in the [README](README.md#the-ide) and on the
 - CHANGELOG: list the GTK 2 build fix for the Linux clipboard (#105)
 - rc.4 takes in the plugin packages of #104 (#105)
 - Linux clipboard: find the clipboard manager, which is another process (#105)
+- Linux clipboard: leave the saved clipboard to the manager as the engine quits (#105)
 
 ## 0.2.6-rc.3 (2026-10-13, pre-release)
 
