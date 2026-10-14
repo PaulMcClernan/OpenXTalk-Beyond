@@ -56,6 +56,9 @@ constant kServerName = "oxt-beyond"
 -- What a package of this plugin for another xTalk's IDE carries
 -- (tools/plugins); OXT-Beyond's own copy has no such file
 constant kCompat = "org.openxtalk.plugin.mcpbridge-compat"
+-- Where in the user's ~/.oxt-beyond folder a package keeps the copy of the
+-- MCP server that Claude runs (mcbServerPath)
+constant kStableServerFile = "mcp/server.js"
 
 -- Why the bridge could not start when it last tried, for the menu item
 local sStartProblem
@@ -114,7 +117,7 @@ command mcpBridgeMenuPick
    end if
    if not mcbIsEnabled() then
       answer question "The xTalk MCP Bridge lets Claude, in the Claude desktop app or in Claude Code, work on the stacks you have open here: read them, build cards, controls, scripts and new stacks, and try code. It uses your own Claude plan (Free, Pro, Max, Team or Enterprise): you sign in to Claude's app as usual, and this IDE needs no API key." & return & return & \
-            "Turning it on starts a connection that only programs on this computer can reach, with a key that is kept in a file only you can read, and OXT-Beyond sends nothing to the internet. Then you add OXT-Beyond to Claude once (the next window shows how)." & return & return & \
+            "Turning it on starts a connection that only programs on this computer can reach, with a key that is kept in a file only you can read, and " & mcbHostName() & " sends nothing to the internet. Then you add " & mcbHostName() & " to Claude once (the next window shows how)." & return & return & \
             "Claude's app asks you before it uses each tool. Here you are asked before any code Claude sends runs (you see the code), and before a stack is saved; everything else Claude changes can be undone from this menu item." \
             with "Cancel" or "Turn On" titled kTitle
       if it is not "Turn On" then
@@ -143,7 +146,7 @@ command mcpBridgeMenuPick
    end if
    put mcbClients() into tClients
    if tClients is 0 then
-      put "The xTalk MCP Bridge is on. Claude is not connected yet: in Claude's app, ask it to do something with OXT-Beyond." into tText
+      put "The xTalk MCP Bridge is on. Claude is not connected yet: in Claude's app, ask it to do something with " & mcbHostName() & "." into tText
    else
       put "The xTalk MCP Bridge is on, and Claude is connected." into tText
    end if
@@ -163,7 +166,7 @@ command mcpBridgeMenuPick
 end mcpBridgeMenuPick
 
 private command mcbTurnOff
-   answer question "Turn the xTalk MCP Bridge off? Claude can no longer reach OXT-Beyond, and what it changed can no longer be undone from here (it stays as it is). You can turn it on again from Development > Plugins." \
+   answer question "Turn the xTalk MCP Bridge off? Claude can no longer reach " & mcbHostName() & ", and what it changed can no longer be undone from here (it stays as it is). You can turn it on again from Development > Plugins." \
          with "Cancel" or "Turn Off" titled kTitle
    if it is not "Turn Off" then
       exit mcbTurnOff
@@ -262,9 +265,9 @@ end mcbAssistantFolder
 
 private command mcbSetupDialog
    local tText
-   put "Add OXT-Beyond to Claude once, in the app you use:" & return & return & \
+   put "Add " & mcbHostName() & " to Claude once, in the app you use:" & return & return & \
          "Claude desktop app: press Save Desktop Extension..., then in Claude choose Settings > Extensions > Advanced settings > Install Extension... and choose the file it saved (opening the file works only where Windows or macOS knows it is Claude's). Claude's app runs it with its own Node.js; you install nothing else." & return & return & \
-         "Or press Add to Claude Desktop, which adds OXT-Beyond to the Claude desktop app's settings file for you. That way needs Node.js (nodejs.org)." & return & return & \
+         "Or press Add to Claude Desktop, which adds " & mcbHostName() & " to the Claude desktop app's settings file for you. That way needs Node.js (nodejs.org)." & return & return & \
          "Claude Code: press Copy Claude Code Command and paste it into a terminal. It needs Node.js 16 or later." & return & return & \
          "Then sign in to Claude with your own account, as usual, and ask it to work on your stack. This IDE must be open with the bridge on." into tText
    answer information tText with "Save Desktop Extension..." or "Add to Claude Desktop" or "Copy Claude Code Command" or "Close" titled kTitle
@@ -334,7 +337,7 @@ private command mcbAddToClaudeDesktop
    if not mcbHasNode() then
       put return & return & "Node.js does not seem to be installed (no node program was found). Install it from nodejs.org first, or use Save Desktop Extension..., which needs none." into tNote
    end if
-   answer question "Add OXT-Beyond to the Claude desktop app's settings file?" & return & return & mcbNativePath(tPath) & return & return & \
+   answer question "Add " & mcbHostName() & " to the Claude desktop app's settings file?" & return & return & mcbNativePath(tPath) & return & return & \
          "Its other settings stay as they are, and a copy of the file is kept beside it as claude_desktop_config.json.bak. Claude runs the bridge's server with Node.js." & tNote \
          with "Cancel" or "Add" titled kTitle
    if it is not "Add" then
@@ -356,7 +359,7 @@ private command mcbAddToClaudeDesktop
    if tMerged["problem"] is not empty then
       set the clipboardData["text"] to mcbDesktopConfig()
       answer error "The settings file could not be changed:" && tMerged["problem"] & "." & return & return & \
-            "OXT-Beyond's entry is on the clipboard. In Claude, open Settings > Developer > Edit Config, paste it (Ctrl+V) inside " & quote & "mcpServers" & quote & \
+            mcbHostName() & "'s entry is on the clipboard. In Claude, open Settings > Developer > Edit Config, paste it (Ctrl+V) inside " & quote & "mcpServers" & quote & \
             ", save, and quit and reopen Claude." titled kTitle
       exit mcbAddToClaudeDesktop
    end if
@@ -376,13 +379,25 @@ private command mcbAddToClaudeDesktop
       exit mcbAddToClaudeDesktop
    end if
    answer information "Added. Now quit the Claude desktop app completely and open it again: closing its window is not enough (on Windows, right-click its icon by the clock and choose Quit; on a Mac, Claude > Quit Claude)." & return & return & \
-         "Then ask Claude to list your OXT-Beyond stacks. If it cannot, Claude's log of the server is in its logs folder (Settings > Developer shows it), as mcp-server-oxt-beyond.log." titled kTitle
+         "Then ask Claude to list your " & mcbHostName() & " stacks. If it cannot, Claude's log of the server is in its logs folder (Settings > Developer shows it), as mcp-server-oxt-beyond.log." titled kTitle
 end mcbAddToClaudeDesktop
 
--- The server's file, in the form of the platform's paths
+-- The server's file, in the form of the platform's paths. A package of
+-- the bridge for another xTalk's IDE is installed in a folder named with
+-- its version, which the next version replaces, so there Claude is given
+-- a copy that outlives an upgrade (the compatibility stack's
+-- xtpcStableCopy); OXT-Beyond's own copy has no compatibility stack, and
+-- its path is given as it is.
 private function mcbServerPath
-   local tPath
+   local tPath, tCopy
    put mcbPluginFolder() & "/mcp/server.js" into tPath
+   if there is a stack kCompat then
+      dispatch function "xtpcStableCopy" to stack kCompat with tPath, kStableServerFile, false
+      put the result into tCopy
+      if it is "handled" and tCopy is not empty then
+         put tCopy into tPath
+      end if
+   end if
    if the platform is "Win32" then
       replace slash with backslash in tPath
    end if
@@ -407,7 +422,7 @@ end mcbDesktopConfig
 -- server, which Claude's app installs and runs with its own Node.js
 private command mcbSaveDesktopExtension
    local tFile, tArchive, tProblem, tError
-   ask file "Save the Claude desktop extension as:" with "OXT-Beyond.mcpb"
+   ask file "Save the Claude desktop extension as:" with (mcbHostName() & ".mcpb")
    if it is empty then
       exit mcbSaveDesktopExtension
    end if
@@ -529,6 +544,9 @@ private command mcbStartCompat
       end if
       set the _ideoverride of stack kCompat to true
       dispatch "xtpcStart" to stack kCompat
+      -- A copy of the MCP server that Claude was given before an upgrade
+      -- is brought up to this version's
+      dispatch function "xtpcStableCopy" to stack kCompat with mcbPluginFolder() & "/mcp/server.js", kStableServerFile, true
    catch tError
    end try
 end mcbStartCompat
@@ -557,3 +575,20 @@ private function mcbCompatInUse
    end repeat
    return tList
 end mcbCompatInUse
+
+-- The IDE's name, where the user or the model reads it: "OXT-Beyond", or,
+-- in a package of the plugin installed in another xTalk's IDE, the name
+-- its compatibility stack gives (tools/plugins/plugin-compat.livecodescript.in)
+private function mcbHostName
+   local tStack, tName
+   repeat for each item tStack in "org.openxtalk.plugin.xtalkassistant-compat,org.openxtalk.plugin.mcpbridge-compat"
+      if there is a stack tStack then
+         dispatch function "xtpcHostName" to stack tStack
+         put the result into tName
+         if it is "handled" and tName is not empty then
+            return tName
+         end if
+      end if
+   end repeat
+   return "OXT-Beyond"
+end mcbHostName

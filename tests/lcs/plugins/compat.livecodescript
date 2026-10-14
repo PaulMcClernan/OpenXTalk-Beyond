@@ -8,9 +8,12 @@ script "TestXTalkPluginCompat"
 -- it writes a launcher into the user's Plugins folder, which is a stack of
 -- the menu item's name that dispatches the plugin's menu message, and
 -- takes it out again when stopped; that a file of that name it did not
--- write is left alone; and that the Script Editor handlers it adds put
--- text at the last selection as one undo group and say which line that
--- is, through a stand-in for the editor's field. The packages themselves
+-- write is left alone; that the Script Editor handlers it adds put text
+-- at the last selection as one undo group and say which line that is,
+-- through a stand-in for the editor's field; that it names the IDE
+-- (OXT-Beyond where the menu bar lists the plugin, otherwise by its
+-- Toolset's folder); and that it keeps a copy of a file in ~/.oxt-beyond
+-- and brings it up to date. The packages themselves
 -- are checked by tools/ci/tests/test_plugin_packages.py.
 
 constant kCompat = "xtpcTestMain-compat"
@@ -24,7 +27,8 @@ local sFolder, sToolset, sPlugins
 
 on TestSetup
    local tTemplate, tText, tStub, tCompatFile
-   put specialFolderPath("temporary") & "/xtpc-test-" & the milliseconds into sFolder
+   -- Named as HyperXTalk's installs are, which xtpcHostName goes by
+   put specialFolderPath("temporary") & "/xtpc-test-HyperXTalk-" & the milliseconds into sFolder
    put sFolder & "/Toolset" into sToolset
    put sFolder & "/My xTalk/Plugins" into sPlugins
    create folder sFolder
@@ -205,3 +209,39 @@ on TestLastSelectedLine
    TestAssert "empty before a click", the result is empty
    delete stack "xtpcTestEditor"
 end TestLastSelectedLine
+
+on TestHostName
+   -- An IDE whose menu bar does not list the plugin: named by its Toolset
+   set the script of stack "revMenuBar" to empty
+   dispatch function "xtpcHostName" to stack kCompat
+   TestAssert "HyperXTalk, by its folder", the result is "HyperXTalk"
+end TestHostName
+
+on TestHostNameNative
+   set the script of stack "revMenuBar" to "on revTestPick" & return & \
+         "dispatch" && quote & kPick & quote && "to stack" && quote & kMain & quote & return & "end revTestPick"
+   dispatch function "xtpcHostName" to stack kCompat
+   TestAssert "OXT-Beyond, whose menu bar lists the plugin", the result is "OXT-Beyond"
+end TestHostNameNative
+
+on TestStableCopy
+   local tSource, tCopy, tSecond
+   put sFolder into $HOME
+   put sFolder into $USERPROFILE
+   put sFolder & "/source.js" into tSource
+   put "one" into url ("binfile:" & tSource)
+   dispatch function "xtpcStableCopy" to stack kCompat with tSource, "mcp/server.js", true
+   TestAssert "no copy made when only an existing one is to be refreshed", the result is tSource
+   dispatch function "xtpcStableCopy" to stack kCompat with tSource, "mcp/server.js", false
+   put the result into tCopy
+   TestDiagnostic tCopy
+   TestAssert "the copy is in ~/.oxt-beyond", tCopy is (sFolder & "/.oxt-beyond/mcp/server.js")
+   TestAssert "with the source's bytes", url ("binfile:" & tCopy) is "one"
+   put "two" into url ("binfile:" & tSource)
+   dispatch function "xtpcStableCopy" to stack kCompat with tSource, "mcp/server.js", true
+   put the result into tSecond
+   TestAssert "the same path again", tSecond is tCopy
+   TestAssert "brought up to date", url ("binfile:" & tCopy) is "two"
+   dispatch function "xtpcStableCopy" to stack kCompat with sFolder & "/missing.js", "mcp/server.js", false
+   TestAssert "a missing source is given back", the result is (sFolder & "/missing.js")
+end TestStableCopy

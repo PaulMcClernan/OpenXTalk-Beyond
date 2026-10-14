@@ -2416,13 +2416,13 @@ private function xtaKeyNote pProvider
    put xtaProviderName(pProvider) into tName
    if sKeys[pProvider] is not empty then
       return "A key is set, ending in" && quote & char -4 to -1 of sKeys[pProvider] & quote & \
-            ". Paste another here to change it. It is kept in memory until you quit OXT-Beyond, and never saved."
+            ". Paste another here to change it. It is kept in memory until you quit " & xtaHostName() & ", and never saved."
    end if
    if xtaKey(pProvider) is not empty then
       return "The key in the environment variable" && xtaKeyVariable(pProvider) && \
             "is used. Paste one here to use it instead (kept in memory until you quit, never saved)."
    end if
-   return "Paste your" && tName && "API key here. It is kept in memory until you quit OXT-Beyond, and never saved."
+   return "Paste your" && tName && "API key here. It is kept in memory until you quit " & xtaHostName() & ", and never saved."
 end xtaKeyNote
 
 private function xtaKeyVariable pProvider
@@ -3081,13 +3081,13 @@ end xtaMemoryNotesField
 private function xtaTools
    local tTools, tIndex
    put "lookup_dictionary" into tTools[1]["name"]
-   put "Looks up an entry of the OXT-Beyond Dictionary: a command, function, property, message, keyword, constant or control structure of xTalk Script " & \
+   put "Looks up an entry of the " & xtaHostName() & " Dictionary: a command, function, property, message, keyword, constant or control structure of xTalk Script " & \
          "(put, split, topStack, mouseUp, repeat...). Gives its syntax, parameters, description and examples. Look up what you are not sure exists " & \
          "or how it is written before you use it in code, rather than guess." into tTools[1]["description"]
    put "{`type`:`object`,`properties`:{`term`:{`type`:`string`,`description`:`The entry's name alone: topStack, not the topStack`}},`required`:[`term`]}" \
          into tTools[1]["schema"]
    put "check_code" into tTools[2]["name"]
-   put "Compiles xTalk Script on OXT-Beyond's engine as the Script Editor does, without running it, and gives each problem with its line: " & \
+   put "Compiles xTalk Script on " & xtaHostName() & "'s engine as the Script Editor does, without running it, and gives each problem with its line: " & \
          "compile errors, curly quotes, lines outside any handler, a handler defined twice and, in handlers, names never declared. " & \
          "Give whole handlers, or statements (checked inside a handler of their own). Every livecodescript block of your answer is checked " & \
          "anyway; this lets you correct code before you answer with it." into tTools[2]["description"]
@@ -3350,10 +3350,10 @@ private function xtaToolCheck pCode, pDeclared
    put xtaCheckScript(pCode, pDeclared) into tCheck
    put false into tResult["error"]
    if tCheck["ok"] is true then
-      put "The code compiles on OXT-Beyond's engine. That is not the same as doing what was asked." into tResult["text"]
+      put "The code compiles on " & xtaHostName() & "'s engine. That is not the same as doing what was asked." into tResult["text"]
       put "Checked code: it compiles" into tResult["summary"]
    else
-      put "The code does not compile on OXT-Beyond's engine:" into tResult["text"]
+      put "The code does not compile on " & xtaHostName() & "'s engine:" into tResult["text"]
       repeat for each line tLine in tCheck["issues"]
          put return & "- " & tLine after tResult["text"]
       end repeat
@@ -4961,3 +4961,20 @@ private function xtaCompatInUse
    end repeat
    return tList
 end xtaCompatInUse
+
+-- The IDE's name, where the user or the model reads it: "OXT-Beyond", or,
+-- in a package of the plugin installed in another xTalk's IDE, the name
+-- its compatibility stack gives (tools/plugins/plugin-compat.livecodescript.in)
+private function xtaHostName
+   local tStack, tName
+   repeat for each item tStack in "org.openxtalk.plugin.xtalkassistant-compat,org.openxtalk.plugin.mcpbridge-compat"
+      if there is a stack tStack then
+         dispatch function "xtpcHostName" to stack tStack
+         put the result into tName
+         if it is "handled" and tName is not empty then
+            return tName
+         end if
+      end if
+   end repeat
+   return "OXT-Beyond"
+end xtaHostName

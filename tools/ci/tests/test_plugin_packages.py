@@ -141,6 +141,27 @@ class PluginPackages(unittest.TestCase):
         for name in re.findall(r'sAssistantFolder & "/([^"]+)"', tools):
             self.assertIn('xtalkassistant/' + name, names)
         self.assertIn('mcp/server.js', names)
+        # The copy Claude runs is made from the package's own server
+        self.assertIn('constant kStableServerFile = "mcp/server.js"', bridge)
+        compat = zf.read('mcpbridge-compat.livecodescript').decode('utf-8')
+        self.assertRegex(compat, r'(?m)^function xtpcStableCopy pSource, pName, pOnlyIfThere$')
+
+    def test_host_name(self):
+        """Every stack that names the IDE asks a compatibility stack for its
+        name, which the stack answers."""
+        for plugin in self.builder.PLUGINS:
+            zf = zipfile.ZipFile(io.BytesIO(self.read(plugin['name'])))
+            compat = zf.read(plugin['main'] + '-compat.livecodescript').decode('utf-8')
+            self.assertRegex(compat, r'(?m)^function xtpcHostName$')
+            for name in zf.namelist():
+                if not name.endswith('.livecodescript') or name.endswith('-compat.livecodescript'):
+                    continue
+                text = zf.read(name).decode('utf-8')
+                for fn in sorted(set(re.findall(r'\b((?:xta|mcb)HostName)\(\)', text))):
+                    with self.subTest(name=name, fn=fn):
+                        self.assertRegex(text, r'(?m)^private function %s$' % fn)
+                        self.assertIn('dispatch function "xtpcHostName" to stack tStack', text)
+                        self.assertIn('%s-compat' % plugin['name'], text)
 
     def test_check_refuses(self):
         check = self.builder.check_package

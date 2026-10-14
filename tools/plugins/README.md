@@ -24,7 +24,12 @@ of their code. A package adds:
   it out again when the extension is uninstalled. It also answers
   `revSEInsertText` and `revSEGetLastSelectedLine` for a Script Editor that
   has neither (LiveCode Community 9.6's), through the editor's own field
-  handlers. OXT-Beyond's own copy of the plugins has no such file, and the
+  handlers. It gives the IDE's name where the plugins name it (OXT-Beyond
+  on OXT-Beyond; HyperXTalk, OpenXTalk or LiveCode elsewhere), and keeps
+  the copy of the bridge's MCP server that Claude runs in `~/.oxt-beyond`,
+  so that Claude's settings still point at a file after the package is
+  upgraded (its install folder is named with its version). OXT-Beyond's
+  own copy of the plugins has no such file, and the
   main stacks load it only when it is there, so nothing changes in
   OXT-Beyond's built-in plugins.
 - For the bridge, `xtalkassistant/` with the assistant's core, build
@@ -40,7 +45,12 @@ installing (`extensionValidateLCEPackage` and
 `extensions/script-libraries/extension-utils`, the same in LiveCode
 Community 9.6.3). `tools/ci/tests/test_plugin_packages.py` tests the
 builder and the packages; `tests/lcs/plugins` tests the compatibility stack
-on the engine.
+on the engine. `.github/workflows/plugin-packages.yml` builds the packages
+for every change to the plugins and uploads them as the run's artifact; it
+also compiles every stack in them on LiveCode Community 9.6.3's own engine
+when the repository variable `LCC_SERVER_URL` names a zip of its server
+build (`tools/plugins/stock-compile-check.lc`). LiveCode Ltd no longer
+serves the Community builds, so the variable has to name a copy of one.
 
 ## Installing
 
@@ -61,5 +71,6 @@ HyperXTalk:
 3. Insert puts the answer's code at the caret in the Script Editor, as one
    undoable step.
 4. The bridge starts and Claude reaches it; `ide_context` gives the line
-   the caret is on.
+   the caret is on. Its dialogs and what Claude is told name the IDE
+   (LiveCode or HyperXTalk), not OXT-Beyond.
 5. Uninstalling takes the launcher out of the Plugins folder.

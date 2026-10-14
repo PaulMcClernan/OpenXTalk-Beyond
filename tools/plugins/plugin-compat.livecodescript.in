@@ -32,6 +32,17 @@ script "@COMPAT_STACK@"
 --    handlers LiveCode Community 9.6's field behavior has. An editor that
 --    has its own handles the dispatch first and this is never reached.
 --
+--  * The IDE's name. The plugins say "OXT-Beyond" where they name the IDE,
+--    to the user and to the model; xtpcHostName gives the name to say in
+--    the IDE this package is installed in instead (OXT-Beyond on OXT-Beyond).
+--
+--  * A file that must outlive an upgrade. An installed package's folder is
+--    named with its version, so a path into it that another program keeps
+--    (Claude's settings name the MCP server's file) breaks when the next
+--    version replaces it. xtpcStableCopy keeps a copy of such a file in
+--    the user's ~/.oxt-beyond folder, where the bridge keeps its own file,
+--    and brings the copy up to date.
+--
 -- Verified statically; needs a pass on LiveCode Community 9.6 and on
 -- HyperXTalk (tools/plugins/README.md says what to try).
 
@@ -45,6 +56,8 @@ constant kLauncherMark = "-- xtalk-plugin-launcher: @MAIN_STACK@"
 -- Whether this loaded the launcher into the user's Plugins folder, so that
 -- unloading takes out only what it put in
 local sWroteLauncher
+-- The IDE's name, once xtpcHostName has worked it out
+local sHostName
 
 -- Called by the main stack's extensionInitialize, once this stack is in use
 command xtpcStart
@@ -253,3 +266,88 @@ function revSEGetLastSelectedLine
    end if
    return the number of lines of (char 1 to tFrom - 1 of field "Script" of stack tEditor & "x")
 end revSEGetLastSelectedLine
+
+--------------------------------------------------------------------------------
+-- The IDE's name
+
+-- OXT-Beyond where the menu bar lists the plugin itself; otherwise
+-- HyperXTalk or OpenXTalk when the IDE's Toolset folder is named so (their
+-- installs are), and LiveCode for LiveCode Community and the rest
+function xtpcHostName
+   local tPath, tError
+   if sHostName is not empty then
+      return sHostName
+   end if
+   if xtpcMenuIsNative() then
+      put "OXT-Beyond" into sHostName
+      return sHostName
+   end if
+   try
+      put toLower(revEnvironmentToolsetPath()) into tPath
+   catch tError
+   end try
+   if tPath contains "hyperxtalk" then
+      put "HyperXTalk" into sHostName
+   else if tPath contains "openxtalk" then
+      put "OpenXTalk" into sHostName
+   else
+      put "LiveCode" into sHostName
+   end if
+   return sHostName
+end xtpcHostName
+
+--------------------------------------------------------------------------------
+-- Files that outlive an upgrade
+
+-- The user's folder for them: ~/.oxt-beyond, as the bridge's own file
+-- (mcbInfoFilePath in mcpbridge-tools.livecodescript)
+function xtpcStableFolder
+   local tHome
+   if the platform is "Win32" then
+      put $USERPROFILE into tHome
+      replace backslash with slash in tHome
+   else
+      put $HOME into tHome
+   end if
+   if tHome is empty then
+      put specialFolderPath("home") into tHome
+   end if
+   return tHome & "/.oxt-beyond"
+end xtpcStableFolder
+
+-- Copies pSource to pName (a path such as "mcp/server.js") in the stable
+-- folder when the copy is missing or differs, and gives the copy's path; or
+-- pSource, when it could not be copied. With pOnlyIfThere true, a missing
+-- copy is not made (an upgrade refreshes only a copy someone uses).
+function xtpcStableCopy pSource, pName, pOnlyIfThere
+   local tTarget, tFolder, tData, tPart, tPath, tError
+   if pSource is empty or pName is empty or there is not a file pSource then
+      return pSource
+   end if
+   put xtpcStableFolder() & "/" & pName into tTarget
+   if pOnlyIfThere is true and there is not a file tTarget then
+      return pSource
+   end if
+   try
+      put url ("binfile:" & pSource) into tData
+      if there is a file tTarget and url ("binfile:" & tTarget) is tData then
+         return tTarget
+      end if
+      set the itemDelimiter to slash
+      put item 1 to -2 of tTarget into tFolder
+      -- Each folder of the path, from the top ("/home", or "C:/Users")
+      repeat with tPart = 2 to the number of items of tFolder
+         put item 1 to tPart of tFolder into tPath
+         if there is not a folder tPath then
+            create folder tPath
+         end if
+      end repeat
+      put tData into url ("binfile:" & tTarget)
+      if the result is not empty then
+         return pSource
+      end if
+   catch tError
+      return pSource
+   end try
+   return tTarget
+end xtpcStableCopy
