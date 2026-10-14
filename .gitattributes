@@ -65,5 +65,7 @@ prebuilt/cef-sha1sums text eol=lf
 
 
 
-# HyperCard stacks, the HyperCard importer's test input, are binary.
+# HyperCard stacks, the HyperCard importer's test input, are binary (BinHex
+# files too: their Mac line endings must not change).
 *.stack binary
+*.hqx binary

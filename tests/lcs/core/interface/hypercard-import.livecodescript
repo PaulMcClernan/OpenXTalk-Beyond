@@ -18,25 +18,42 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 -- "import stack from file" with HyperCard stacks. The stacks in
 -- lcs-input-files/hypercard are HyperCardPreview's test stacks (MIT, see
--- the LICENSE.txt there), and the values asserted are the ones its own
--- tests assert, read the way this importer has always mapped HyperCard
--- onto the engine: rects one pixel wider and taller, the text of a
--- background field on a card is that card's text, HyperCard addressing
--- ("field 1" is a background field, "card field 1" a card's own).
+-- the LICENSE.txt there) and, in games/, a game released into the public
+-- domain (UNLICENSE.txt); the README there says where each came from. The
+-- values asserted for HyperCardPreview's stacks are the ones its own tests
+-- assert, read the way this importer has always mapped HyperCard onto the
+-- engine: rects one pixel wider and taller, the text of a background field
+-- on a card is that card's text, HyperCard addressing ("field 1" is a
+-- background field, "card field 1" a card's own).
+--
+-- An imported stack is opened, and its scripts run from then on: the
+-- imports below lock messages so that no stack's own handlers run here.
+
+-- Import lcs-input-files/hypercard/<pPath>, which makes a stack named
+-- pStack (a plain stack is named after its file, a MacBinary or BinHex one
+-- after the Mac file inside it).
+private function _ImportFile pPath, pStack
+   local tError
+   lock messages
+   try
+      import stack from file TestGetInputFile("hypercard/" & pPath)
+   catch tError
+   end try
+   unlock messages
+   TestAssert pPath && "imports", tError is empty and there is a stack pStack
+   return pStack
+end _ImportFile
 
 private function _Import pName
-   local tFile
-   put TestGetInputFile("hypercard/" & pName & ".stack") into tFile
-   import stack from file tFile
-   TestAssert pName && "imports", the result is empty
-   -- the imported stack is named after its file
-   return pName & ".stack"
+   return _ImportFile(pName & ".stack", pName & ".stack")
 end _Import
 
 private command _Close pStack
+   lock messages
    if there is a stack pStack then
       delete stack pStack
    end if
+   unlock messages
 end _Close
 
 private function _BgButton pStack, pBg, pIndex
@@ -239,7 +256,9 @@ on TestHyperCardImportMacBinary
    end repeat
    put the temporary folder & "/hypercard-import-test.bin" into tFile
    put tHeader & tData into url ("binfile:" & tFile)
+   lock messages
    import stack from file tFile
+   unlock messages
    TestAssert "MacBinary imports", the result is empty
    put "HCMacBinaryTest" into tStack
    TestAssert "MacBinary cards", the number of cards of stack tStack is 6
@@ -260,3 +279,49 @@ on TestHyperCardImportNotAStack
    TestAssert "not a stack is refused", tError is not empty
    delete file tFile
 end TestHyperCardImportNotAStack
+
+on TestHyperCardImportBinHex
+   -- a BinHex 4.0 file, as stacks were posted to bulletin boards
+   local tStack, tField
+   put _ImportFile("TestFormattedContent.hqx", "TestFormattedContent") into tStack
+   put the long id of card field 2 of card 1 of stack tStack into tField
+   TestAssert "BinHex text", the text of tField is "formatted content: fontsizestyleall"
+   TestAssert "BinHex style run", the textFont of char 20 to 23 of tField is "Palatino"
+   _Close tStack
+end TestHyperCardImportBinHex
+
+on TestHyperCardImportOddStacks
+   local tStack
+   -- the top bits of some block sizes are flags
+   put _Import("TestStrangeFlags") into tStack
+   TestAssert "flagged block sizes: cards", the number of cards of stack tStack is 17
+   TestAssert "flagged block sizes: backgrounds", the number of bgs of stack tStack is 17
+   _Close tStack
+
+   -- a password, and a password with Private Access, which encrypts part
+   -- of the stack's header: the stack still imports
+   put _Import("TestPassword") into tStack
+   TestAssert "password: cards", the number of cards of stack tStack is 1
+   _Close tStack
+   put _Import("TestPrivateAccess") into tStack
+   TestAssert "private access: cards", the number of cards of stack tStack is 1
+   _Close tStack
+end TestHyperCardImportOddStacks
+
+on TestHyperCardImportGame
+   -- a whole game from the time: 67 cards, each with its own picture
+   local tStack, tPictures
+   put _ImportFile("games/Surf.stack", "Surf.stack") into tStack
+   TestAssert "game: cards", the number of cards of stack tStack is 67
+   TestAssert "game: backgrounds", the number of bgs of stack tStack is 1
+   TestAssert "game: card size", the width of stack tStack & "x" & the height of stack tStack is "640x480"
+   TestAssert "game: first and last card", \
+      the id of card 1 of stack tStack & comma & the id of card 67 of stack tStack is "3046,37217"
+   TestAssert "game: stack script", the number of lines of the script of stack tStack is 60
+   put 0 into tPictures
+   repeat with tCard = 1 to 67
+      add the number of card images of card tCard of stack tStack to tPictures
+   end repeat
+   TestAssert "game: a picture on every card", tPictures is 67
+   _Close tStack
+end TestHyperCardImportGame
