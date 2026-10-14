@@ -22,10 +22,11 @@
 #   - tools/plugins/build-plugin-packages.py builds both .lce packages from
 #     ide/Extensions and checks them as the Extension Manager does;
 #   - every script-only stack in them is compiled by LiveCode Community
-#     9.6.3's own engine (its server build, from downloads.livecode.com,
-#     checked against its SHA-256), with tools/plugins/stock-compile-check.lc,
-#     so that syntax only OXT-Beyond's engine knows is found here and not
-#     by someone installing a package;
+#     9.6.3's own engine (its server build, from the repository variable
+#     LCC_SERVER_URL, when it is set), with
+#     tools/plugins/stock-compile-check.lc, so that syntax only
+#     OXT-Beyond's engine knows is found here and not by someone
+#     installing a package;
 #   - the packages are uploaded as the run's artifact, to install in
 #     LiveCode Community 9.6.3, HyperXTalk or OpenXTalk for testing.
 #
@@ -61,7 +62,7 @@ defaults:
 
 jobs:
   packages:
-    name: Build and check on LiveCode Community 9.6.3
+    name: Build and check the packages
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -81,41 +82,28 @@ jobs:
           done
           echo "VERSION=$(cat ide/.version)" >> "$GITHUB_ENV"
 
-      # LiveCode Community 9.6.3's server engine. LiveCode Ltd's download
-      # site is tried first under the names its releases used, then the
-      # Internet Archive's copy of each; the first that is a zip with a
-      # livecode-server in it is used. Its SHA-256 is printed, and checked
-      # when one is pinned here.
+      # LiveCode Community 9.6.3's server engine, from the repository
+      # variable LCC_SERVER_URL (a zip with livecode-server in it) and
+      # checked against LCC_SERVER_SHA256 when that is set. LiveCode Ltd no
+      # longer serves the Community builds (downloads.livecode.com answers
+      # with a page, 2026-10-14), so there is no public copy to fetch: until
+      # the variable names one, the compile on the stock engine is skipped,
+      # and the packages are still built, checked and uploaded.
       - name: Fetch LiveCode Community 9.6.3 (server engine)
+        if: vars.LCC_SERVER_URL != ''
         env:
-          LCC_SERVER_SHA256: ''
+          LCC_SERVER_URL: ${{ vars.LCC_SERVER_URL }}
+          LCC_SERVER_SHA256: ${{ vars.LCC_SERVER_SHA256 }}
         run: |
-          names="LiveCodeCommunityServer-9_6_3-Linux-x86_64.zip LiveCodeServer-9_6_3-Linux-x86_64.zip LiveCodeCommunityServer-9_6_3-Linux-x64.zip"
-          urls=""
-          for name in $names; do
-            urls="$urls https://downloads.livecode.com/livecode/9_6_3/$name"
-          done
-          for name in $names; do
-            urls="$urls https://web.archive.org/web/2024id_/https://downloads.livecode.com/livecode/9_6_3/$name"
-          done
           zip="$RUNNER_TEMP/lcc-server.zip"
-          found=""
-          for url in $urls; do
-            rm -f "$zip"
-            if curl -sSfL --retry 2 -o "$zip" "$url" && unzip -tq "$zip" >/dev/null 2>&1; then
-              found="$url"
-              break
-            fi
-            echo "not a zip: $url ($(file -b "$zip" 2>/dev/null | cut -c1-60))"
-          done
-          if [ -z "$found" ]; then
-            echo "::error::no download of LiveCode Community 9.6.3's server engine worked"
-            exit 1
-          fi
-          echo "from $found"
+          curl -sSfL --retry 3 -o "$zip" "$LCC_SERVER_URL"
           sha256sum "$zip"
           if [ -n "$LCC_SERVER_SHA256" ]; then
             echo "$LCC_SERVER_SHA256  $zip" | sha256sum -c -
+          fi
+          if ! unzip -tq "$zip" >/dev/null 2>&1; then
+            echo "::error::LCC_SERVER_URL is not a zip ($(file -b "$zip" | cut -c1-60))"
+            exit 1
           fi
           mkdir -p "$RUNNER_TEMP/lcc-server"
           unzip -q "$zip" -d "$RUNNER_TEMP/lcc-server"
@@ -129,6 +117,7 @@ jobs:
           echo "LCC_SERVER=$server" >> "$GITHUB_ENV"
 
       - name: Compile the packages' scripts on LiveCode Community 9.6.3
+        if: vars.LCC_SERVER_URL != ''
         run: |
           "$LCC_SERVER" tools/plugins/stock-compile-check.lc "$RUNNER_TEMP/unpacked" | tee "$RUNNER_TEMP/stock-compile.log"
           status="${PIPESTATUS[0]}"
@@ -137,6 +126,11 @@ jobs:
           done
           grep -q '^SUMMARY ' "$RUNNER_TEMP/stock-compile.log" || { echo "::error::the check did not finish"; exit 1; }
           exit "$status"
+
+      - name: Say the stock engine's compile was skipped
+        if: vars.LCC_SERVER_URL == ''
+        run: |
+          echo "::notice::Not compiled on LiveCode Community 9.6.3: set the repository variable LCC_SERVER_URL to a zip of its server engine"
 
       - name: Upload the packages
         if: always()
