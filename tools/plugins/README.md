@@ -52,6 +52,13 @@ when the repository variable `LCC_SERVER_URL` names a zip of its server
 build (`tools/plugins/stock-compile-check.lc`). LiveCode Ltd no longer
 serves the Community builds, so the variable has to name a copy of one.
 
+Each GitHub release carries both packages, built by the release
+workflow's publish job with the release's version
+(`build-plugin-packages.py --release`):
+`OXT-Beyond-<version>-xtalk-assistant-plugin.lce` and
+`OXT-Beyond-<version>-mcp-bridge-plugin.lce`, checked with the release's
+other files against its `SHA256SUMS`.
+
 ## Installing
 
 In the IDE: Tools > Extension Manager, then its install button (it asks

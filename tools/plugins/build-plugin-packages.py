@@ -45,12 +45,20 @@ named <main>-<part>. The zip is the same bytes for the same sources: the
 files in order, with one fixed time.
 
   python3 tools/plugins/build-plugin-packages.py [--out DIR] [--version V]
+  python3 tools/plugins/build-plugin-packages.py --release --out DIR --version V
   python3 tools/plugins/build-plugin-packages.py --check PACKAGE.lce ...
+
+--release names the packages as a release's files
+(OXT-Beyond-<version>-xtalk-assistant-plugin.lce and
+OXT-Beyond-<version>-mcp-bridge-plugin.lce) and writes a SHA256SUMS beside
+them: the artifact "OXT-Beyond-plugins" that .github/workflows/release.yml
+makes and tools/ci/release_assets.py checks.
 
 Tested by tools/ci/tests/test_plugin_packages.py.
 """
 
 import argparse
+import hashlib
 import io
 import os
 import re
@@ -71,13 +79,18 @@ ZIP_TIME = (2026, 1, 1, 0, 0, 0)
 # menu bar dispatches to the main stack for the plugin's entry in
 # Development > Plugins (ide/Toolset/palettes/menubar/revmenubar.livecodescript);
 # "title" is that entry's text. "extra" maps a folder in the package to the
-# files of another plugin's folder it carries.
+# files of another plugin's folder it carries. "release" is the end of the
+# package's name among a release's files (OXT-Beyond-<version><release>,
+# --release; the ASSETS of tools/ci/release_assets.py name the same): the
+# Extension Manager reads the plugin's name and version from the manifest,
+# and of the file's name only that it ends in .lce.
 PLUGINS = [
     {
         'name': 'org.openxtalk.plugin.xtalkassistant',
         'main': 'xtalkassistant',
         'title': 'xTalk Assistant',
         'menu_pick': 'xtalkAssistantMenuPick',
+        'release': '-xtalk-assistant-plugin.lce',
         'extra': {},
     },
     {
@@ -85,6 +98,7 @@ PLUGINS = [
         'main': 'mcpbridge',
         'title': 'xTalk MCP Bridge',
         'menu_pick': 'mcpBridgeMenuPick',
+        'release': '-mcp-bridge-plugin.lce',
         # mcbAssistantFolder in mcpbridge.livecodescript (its
         # kBundledAssistantFolder), mcbEnsureParts and the guide's file in
         # mcpbridge-tools.livecodescript
@@ -153,7 +167,11 @@ def package_manifest(path, version):
     return new.encode('utf-8')
 
 
-def build(plugin, version, out_dir):
+def release_name(plugin, version):
+    return 'OXT-Beyond-%s%s' % (version, plugin['release'])
+
+
+def build(plugin, version, out_dir, file_name=None):
     folder = os.path.join(EXTENSIONS, plugin['name'])
     entries = {}
     for rel, full in plugin_files(folder):
@@ -189,10 +207,21 @@ def build(plugin, version, out_dir):
     if problems:
         raise SystemExit('%s: %s' % (plugin['name'], '; '.join(problems)))
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, '%s-%s.lce' % (plugin['name'], version))
+    path = os.path.join(out_dir, file_name or '%s-%s.lce' % (plugin['name'], version))
     with open(path, 'wb') as f:
         f.write(data)
     return path
+
+
+def write_sums(paths, out_dir):
+    """SHA256SUMS over the packages, as sha256sum writes it and as
+    tools/ci/release_assets.py checks a release artifact."""
+    lines = []
+    for path in sorted(paths, key=os.path.basename):
+        with open(path, 'rb') as f:
+            lines.append('%s  %s' % (hashlib.sha256(f.read()).hexdigest(), os.path.basename(path)))
+    with open(os.path.join(out_dir, 'SHA256SUMS'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write('\n'.join(lines) + '\n')
 
 
 def check_package(data):
@@ -262,6 +291,9 @@ def main(argv=None):
                         help='where the packages go (default: _build/plugins)')
     parser.add_argument('--version', default=None,
                         help="the packages' version (default: ide/.version)")
+    parser.add_argument('--release', action='store_true',
+                        help="name the packages as a release's files and write SHA256SUMS "
+                             '(the release workflow)')
     parser.add_argument('--check', nargs='+', metavar='PACKAGE',
                         help='check packages instead of building them')
     args = parser.parse_args(argv)
@@ -276,8 +308,13 @@ def main(argv=None):
     version = args.version or oxt_version()
     if not re.match(r'^[0-9A-Za-z][0-9A-Za-z.+-]*$', version):
         raise SystemExit('not a version: %r' % version)
+    paths = []
     for plugin in PLUGINS:
-        print(build(plugin, version, args.out))
+        name = release_name(plugin, version) if args.release else None
+        paths.append(build(plugin, version, args.out, name))
+        print(paths[-1])
+    if args.release:
+        write_sums(paths, args.out)
     return 0
 
 

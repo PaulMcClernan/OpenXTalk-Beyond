@@ -163,6 +163,30 @@ class PluginPackages(unittest.TestCase):
                         self.assertIn('dispatch function "xtpcHostName" to stack tStack', text)
                         self.assertIn('%s-compat' % plugin['name'], text)
 
+    def test_release_files(self):
+        """--release writes the files and SHA256SUMS the release's
+        OXT-Beyond-plugins artifact has (tools/ci/release_assets.py)."""
+        spec = importlib.util.spec_from_file_location(
+            'release_assets', os.path.join(REPO, 'tools', 'ci', 'release_assets.py'))
+        release_assets = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_assets)
+        version = '9.9.9-test'
+        artifacts = tempfile.mkdtemp(prefix='plugin-release-')
+        folder = os.path.join(artifacts, 'OXT-Beyond-plugins')
+        self.assertEqual(self.builder.main(['--release', '--version', version, '--out', folder]), 0)
+        want = [names for artifact, _, names in release_assets.expected(version)
+                if artifact == 'OXT-Beyond-plugins']
+        self.assertEqual(len(want), 1)
+        self.assertEqual(sorted(os.listdir(folder)), sorted(want[0] + ['SHA256SUMS']))
+        problems = release_assets.Problems()
+        digests = release_assets.check_artifact(folder, 'OXT-Beyond-plugins', want[0], problems)
+        self.assertEqual(list(problems), [])
+        self.assertEqual(sorted(digests), sorted(want[0]))
+        # The same packages as without --release, under the release's names
+        for plugin in self.builder.PLUGINS:
+            with open(os.path.join(folder, self.builder.release_name(plugin, version)), 'rb') as f:
+                self.assertEqual(f.read(), self.read(plugin['name']))
+
     def test_check_refuses(self):
         check = self.builder.check_package
         main = b'script "a.b.c"\n'
