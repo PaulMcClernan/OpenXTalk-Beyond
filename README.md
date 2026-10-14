@@ -72,7 +72,8 @@ plan in the Claude desktop app or Claude Code, build stacks in the IDE
 (see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
 [0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
 [0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), and of the
-fixes in [0.2.6-rc.4](#026-rc4-hypercard-import-and-the-linux-clipboard);
+fixes and plugin packages in
+[0.2.6-rc.4](#026-rc4-hypercard-import-the-linux-clipboard-and-plugins);
 0.2.5 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1348,7 +1349,7 @@ against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
 
-#### 0.2.6-rc.4: HyperCard import and the Linux clipboard
+#### 0.2.6-rc.4: HyperCard import, the Linux clipboard and plugins
 
 OXT-Beyond 0.2.6-rc.4 fixes two things that never worked, and changes
 nothing an existing script sees:
@@ -1364,6 +1365,19 @@ nothing an existing script sees:
   application before. Without one, nothing changes. Linux standalones
   made from the Windows and macOS packages get this once the runtimes
   for the other platforms are built again.
+
+It also brings the xTalk Assistant and the xTalk MCP Bridge to other
+xTalks' IDEs (LiveCode Community 9, HyperXTalk and OpenXTalk): each
+release now carries both as extension packages
+(`OXT-Beyond-<version>-xtalk-assistant-plugin.lce` and
+`OXT-Beyond-<version>-mcp-bridge-plugin.lce`), which that IDE's
+Extension Manager installs into Development > Plugins (see
+[tools/plugins](tools/plugins/README.md)). They are experimental:
+checked as the Extension Manager checks a package, but not yet tried in
+those IDEs. In another IDE the bridge has its own server in Claude
+(`livecode`, `hyperxtalk` or `openxtalk`), so it and OXT-Beyond can
+both be bridged on one computer. OXT-Beyond's built-in copies work as
+before.
 
 The rest is upkeep: a test that `read from process ... until EOF` ends
 on every platform once the process has finished, and
