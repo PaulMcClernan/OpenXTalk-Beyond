@@ -492,9 +492,10 @@ bool MCLinuxRawClipboard::FlushData()
         return false;
     
     // Nothing to do without a clipboard manager (most desktops run one; a
-    // bare window manager may not)
-    GdkAtom t_manager = gdk_atom_intern_static_string("CLIPBOARD_MANAGER");
-    if (gdk_selection_owner_get_for_display(GetDisplay(), t_manager) == NULL)
+    // bare window manager may not). The manager is another process, so
+    // gdk_selection_owner_get_for_display cannot see it: it answers only
+    // with this process's own windows.
+    if (!gdk_display_supports_clipboard_persistence(GetDisplay()))
         return false;
     
     // The targets the manager is to save: every representation of the data,

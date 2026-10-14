@@ -33,6 +33,7 @@ words, is in the [README](README.md#the-ide) and on the
 - Linux clipboard: pass the targets as GTK 2's header declares them (#105)
 - CHANGELOG: list the GTK 2 build fix for the Linux clipboard (#105)
 - rc.4 takes in the plugin packages of #104 (#105)
+- Linux clipboard: find the clipboard manager, which is another process (#105)
 
 ## 0.2.6-rc.3 (2026-10-13, pre-release)
 
