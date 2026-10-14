@@ -511,10 +511,14 @@ bool MCLinuxRawClipboard::FlushData()
     // Ask the manager to save them. It answers with SelectionNotify, after it
     // has read the data through selection requests, which this loop answers
     // (the engine's event loop no longer runs).
+    // (GTK 2's header takes the list as non-const; it is only read)
+    MCAutoArray<GdkAtom> t_atoms;
+    if (!t_atoms.New(t_count))
+        return false;
+    MCMemoryCopy(t_atoms.Ptr(), MCDataGetBytePtr(*t_targets), t_count * sizeof(GdkAtom));
     gdk_display_store_clipboard(GetDisplay(), GetClipboardWindow(),
                                 GDK_CURRENT_TIME,
-                                reinterpret_cast<const GdkAtom *>(MCDataGetBytePtr(*t_targets)),
-                                t_count);
+                                t_atoms.Ptr(), t_count);
     gdk_display_flush(GetDisplay());
     
     s_clipboard_store_timeout = false;
