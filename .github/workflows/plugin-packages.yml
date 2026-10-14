@@ -81,20 +81,44 @@ jobs:
           done
           echo "VERSION=$(cat ide/.version)" >> "$GITHUB_ENV"
 
-      # LiveCode Community 9.6.3's server engine, checked against its
-      # SHA-256 when one is pinned here; printed either way, to pin
+      # LiveCode Community 9.6.3's server engine. LiveCode Ltd's download
+      # site is tried first under the names its releases used, then the
+      # Internet Archive's copy of each; the first that is a zip with a
+      # livecode-server in it is used. Its SHA-256 is printed, and checked
+      # when one is pinned here.
       - name: Fetch LiveCode Community 9.6.3 (server engine)
         env:
-          LCC_SERVER_URL: https://downloads.livecode.com/livecode/9_6_3/LiveCodeCommunityServer-9_6_3-Linux-x86_64.zip
           LCC_SERVER_SHA256: ''
         run: |
-          curl -sSfL --retry 3 -o "$RUNNER_TEMP/lcc-server.zip" "$LCC_SERVER_URL"
-          sha256sum "$RUNNER_TEMP/lcc-server.zip"
+          names="LiveCodeCommunityServer-9_6_3-Linux-x86_64.zip LiveCodeServer-9_6_3-Linux-x86_64.zip LiveCodeCommunityServer-9_6_3-Linux-x64.zip"
+          urls=""
+          for name in $names; do
+            urls="$urls https://downloads.livecode.com/livecode/9_6_3/$name"
+          done
+          for name in $names; do
+            urls="$urls https://web.archive.org/web/2024id_/https://downloads.livecode.com/livecode/9_6_3/$name"
+          done
+          zip="$RUNNER_TEMP/lcc-server.zip"
+          found=""
+          for url in $urls; do
+            rm -f "$zip"
+            if curl -sSfL --retry 2 -o "$zip" "$url" && unzip -tq "$zip" >/dev/null 2>&1; then
+              found="$url"
+              break
+            fi
+            echo "not a zip: $url ($(file -b "$zip" 2>/dev/null | cut -c1-60))"
+          done
+          if [ -z "$found" ]; then
+            echo "::error::no download of LiveCode Community 9.6.3's server engine worked"
+            exit 1
+          fi
+          echo "from $found"
+          sha256sum "$zip"
           if [ -n "$LCC_SERVER_SHA256" ]; then
-            echo "$LCC_SERVER_SHA256  $RUNNER_TEMP/lcc-server.zip" | sha256sum -c -
+            echo "$LCC_SERVER_SHA256  $zip" | sha256sum -c -
           fi
           mkdir -p "$RUNNER_TEMP/lcc-server"
-          unzip -q "$RUNNER_TEMP/lcc-server.zip" -d "$RUNNER_TEMP/lcc-server"
+          unzip -q "$zip" -d "$RUNNER_TEMP/lcc-server"
           server="$(find "$RUNNER_TEMP/lcc-server" -type f -name 'livecode-server' | head -n 1)"
           if [ -z "$server" ]; then
             echo "::error::no livecode-server in the download"

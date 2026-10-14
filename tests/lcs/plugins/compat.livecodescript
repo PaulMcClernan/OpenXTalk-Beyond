@@ -156,7 +156,8 @@ end TestUsersOwnFileLeftAlone
 private command TestMakeEditor pText, pChunk
    local tScript
    create invisible stack "xtpcTestEditor"
-   create field "Script" in stack "xtpcTestEditor"
+   set the defaultStack to "xtpcTestEditor"
+   create field "Script"
    put pText into field "Script" of stack "xtpcTestEditor"
    put "local sLog" & return & \
          "command getLastSelectedChunk" & return & "return `" & pChunk & "`" & return & "end getLastSelectedChunk" & return & \
