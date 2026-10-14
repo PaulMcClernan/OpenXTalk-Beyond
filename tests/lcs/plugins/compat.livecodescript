@@ -225,14 +225,17 @@ on TestHostNameNative
 end TestHostNameNative
 
 on TestServerName
+   local tFile
    put sFolder into $HOME
    put sFolder into $USERPROFILE
    set the script of stack "revMenuBar" to empty
    dispatch function "xtpcServerName" to stack kCompat
    TestAssert "the IDE's own server name", the result is "hyperxtalk"
    dispatch function "xtpcBridgeFile" to stack kCompat
-   TestDiagnostic the result
-   TestAssert "and bridge file, in ~/.oxt-beyond", the result is (sFolder & "/.oxt-beyond/mcp-bridge-hyperxtalk.json")
+   -- Kept first: TestDiagnostic, a command, sets the result
+   put the result into tFile
+   TestDiagnostic tFile
+   TestAssert "and bridge file, in ~/.oxt-beyond", tFile is (sFolder & "/.oxt-beyond/mcp-bridge-hyperxtalk.json")
 end TestServerName
 
 on TestServerNameNative
