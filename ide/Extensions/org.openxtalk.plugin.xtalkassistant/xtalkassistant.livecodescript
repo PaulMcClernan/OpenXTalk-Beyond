@@ -81,6 +81,9 @@ constant kWindowBehavior = "org.openxtalk.plugin.xtalkassistant-window"
 constant kErrorHook = "org.openxtalk.plugin.xtalkassistant-errors"
 constant kSettingsWindow = "revXTalkAssistantSettings"
 constant kSettingsBehavior = "org.openxtalk.plugin.xtalkassistant-settings"
+-- What a package of this plugin for another xTalk's IDE carries
+-- (tools/plugins); OXT-Beyond's own copy has no such file
+constant kCompat = "org.openxtalk.plugin.xtalkassistant-compat"
 -- Preferences (custom properties of the revPreferences stack)
 constant kPrefEnabled = "cXTalkAssistant,enabled"
 constant kPrefProvider = "cXTalkAssistant,provider"
@@ -228,6 +231,11 @@ on extensionInitialize
    end if
    -- Part of the IDE, not of the user's work
    set the _ideoverride of me to true
+   -- In another xTalk's IDE (LiveCode Community 9 and the IDEs built on
+   -- it), a package of this plugin (tools/plugins) carries a stack that
+   -- gives it the menu item and the Script Editor handlers that IDE lacks.
+   -- OXT-Beyond's own copy has no such file, so this does nothing here.
+   xtaStartCompat
    -- Turned on in an earlier session: the error hook notes the errors the
    -- user hits from the start, so that they can be explained
    if xtaIsEnabled() then
@@ -243,6 +251,7 @@ on extensionFinalize
       pass extensionFinalize
    end if
    xtaShutDown
+   xtaStopCompat
 end extensionFinalize
 
 --------------------------------------------------------------------------------
@@ -4902,3 +4911,53 @@ private command xtaInsertText pCode
    end if
    xtaStatus "Inserted. Apply the script to keep it, or Undo to take it out."
 end xtaInsertText
+
+--------------------------------------------------------------------------------
+-- In another xTalk's IDE
+
+-- Loads the package's compatibility stack (xtalkassistant-compat.livecodescript),
+-- when this copy of the plugin has one, and starts it; it does nothing on
+-- an IDE whose menu bar and Script Editor know the plugin already
+private command xtaStartCompat
+   local tFile, tError
+   put xtaPluginFolder() & "/xtalkassistant-compat.livecodescript" into tFile
+   if there is not a file tFile then
+      exit xtaStartCompat
+   end if
+   try
+      if there is not a stack kCompat then
+         get the short name of stack tFile
+      end if
+      if not (the long id of stack kCompat is among the lines of xtaCompatInUse()) then
+         start using stack kCompat
+      end if
+      set the _ideoverride of stack kCompat to true
+      dispatch "xtpcStart" to stack kCompat
+   catch tError
+   end try
+end xtaStartCompat
+
+private command xtaStopCompat
+   local tError
+   if there is not a stack kCompat then
+      exit xtaStopCompat
+   end if
+   try
+      dispatch "xtpcStop" to stack kCompat
+      if the long id of stack kCompat is among the lines of xtaCompatInUse() then
+         stop using stack kCompat
+      end if
+      delete stack kCompat
+   catch tError
+   end try
+end xtaStopCompat
+
+private function xtaCompatInUse
+   local tList, tName
+   repeat for each line tName in the stacksInUse
+      if there is a stack tName then
+         put the long id of stack tName & return after tList
+      end if
+   end repeat
+   return tList
+end xtaCompatInUse

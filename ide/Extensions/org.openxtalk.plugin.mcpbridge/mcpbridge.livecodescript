@@ -46,10 +46,16 @@ script "org.openxtalk.plugin.mcpbridge"
 constant kTitle = "xTalk MCP Bridge"
 constant kTools = "org.openxtalk.plugin.mcpbridge-tools"
 constant kAssistantFolderName = "org.openxtalk.plugin.xtalkassistant"
+-- Where a package of the bridge keeps its copy of the assistant's files
+-- (mcbAssistantFolder)
+constant kBundledAssistantFolder = "xtalkassistant"
 -- Preferences (custom properties of the revPreferences stack)
 constant kPrefEnabled = "cMcpBridge,enabled"
 -- The name Claude's apps show for the server
 constant kServerName = "oxt-beyond"
+-- What a package of this plugin for another xTalk's IDE carries
+-- (tools/plugins); OXT-Beyond's own copy has no such file
+constant kCompat = "org.openxtalk.plugin.mcpbridge-compat"
 
 -- Why the bridge could not start when it last tried, for the menu item
 local sStartProblem
@@ -60,6 +66,11 @@ on extensionInitialize
    end if
    -- Part of the IDE, not of the user's work
    set the _ideoverride of me to true
+   -- In another xTalk's IDE (LiveCode Community 9 and the IDEs built on
+   -- it), a package of this plugin (tools/plugins) carries a stack that
+   -- gives it the menu item and the Script Editor handlers that IDE lacks.
+   -- OXT-Beyond's own copy has no such file, so this does nothing here.
+   mcbStartCompat
    -- Turned on in an earlier session: started once the IDE is up
    if mcbIsEnabled() then
       send "mcbAutoStart" to me in 2 seconds
@@ -71,6 +82,7 @@ on extensionFinalize
       pass extensionFinalize
    end if
    mcbStop
+   mcbStopCompat
 end extensionFinalize
 
 on mcbAutoStart
@@ -229,10 +241,20 @@ private function mcbPluginFolder
    return item 1 to -2 of the effective filename of me
 end mcbPluginFolder
 
--- The xTalk Assistant's folder, beside this one
+-- The xTalk Assistant's folder, beside this one. A package of the bridge
+-- for another xTalk's IDE (tools/plugins) is installed in a folder of its
+-- own, named with its version, so it carries the assistant's core, build
+-- library and guide in a folder inside its own (kBundledAssistantFolder);
+-- that one is used only when there is no assistant beside the bridge, as
+-- there always is in OXT-Beyond.
 private function mcbAssistantFolder
+   local tBeside
    set the itemDelimiter to slash
-   return item 1 to -2 of mcbPluginFolder() & slash & kAssistantFolderName
+   put item 1 to -2 of mcbPluginFolder() & slash & kAssistantFolderName into tBeside
+   if there is not a folder tBeside and there is a folder (mcbPluginFolder() & slash & kBundledAssistantFolder) then
+      return mcbPluginFolder() & slash & kBundledAssistantFolder
+   end if
+   return tBeside
 end mcbAssistantFolder
 
 --------------------------------------------------------------------------------
@@ -485,3 +507,53 @@ function mcbEditorContext
    end try
    return tContext
 end mcbEditorContext
+
+--------------------------------------------------------------------------------
+-- In another xTalk's IDE
+
+-- Loads the package's compatibility stack (mcpbridge-compat.livecodescript),
+-- when this copy of the plugin has one, and starts it; it does nothing on
+-- an IDE whose menu bar and Script Editor know the plugin already
+private command mcbStartCompat
+   local tFile, tError
+   put mcbPluginFolder() & "/mcpbridge-compat.livecodescript" into tFile
+   if there is not a file tFile then
+      exit mcbStartCompat
+   end if
+   try
+      if there is not a stack kCompat then
+         get the short name of stack tFile
+      end if
+      if not (the long id of stack kCompat is among the lines of mcbCompatInUse()) then
+         start using stack kCompat
+      end if
+      set the _ideoverride of stack kCompat to true
+      dispatch "xtpcStart" to stack kCompat
+   catch tError
+   end try
+end mcbStartCompat
+
+private command mcbStopCompat
+   local tError
+   if there is not a stack kCompat then
+      exit mcbStopCompat
+   end if
+   try
+      dispatch "xtpcStop" to stack kCompat
+      if the long id of stack kCompat is among the lines of mcbCompatInUse() then
+         stop using stack kCompat
+      end if
+      delete stack kCompat
+   catch tError
+   end try
+end mcbStopCompat
+
+private function mcbCompatInUse
+   local tList, tName
+   repeat for each line tName in the stacksInUse
+      if there is a stack tName then
+         put the long id of stack tName & return after tList
+      end if
+   end repeat
+   return tList
+end mcbCompatInUse
