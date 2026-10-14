@@ -90,6 +90,7 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/pull_request_template.md'
       - '.github/workflows/ci-checks.yml'
+      - '.github/workflows/plugin-packages.yml'
       - '.github/workflows/field-speed.yml'
       - '.github/workflows/ide-screenshots.yml'
       - '.github/workflows/media-check.yml'
