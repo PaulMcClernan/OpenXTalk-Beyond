@@ -14,6 +14,15 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.6-rc.4 (2026-10-14, pre-release)
+
+- Fix HyperCard stack import (#103)
+- More HyperCard stacks for the import test (#103)
+- Linux: keep the clipboard after quitting, when a clipboard manager runs (#105)
+- Windows: replace the stale end-of-file note for ended processes, with a test (#105)
+- IDE and LEGACY-TODO.md: answer or drop notes that were done or not notes (#105)
+- Version 0.2.6-rc.4, with its changelog (#105)
+
 ## 0.2.6-rc.3 (2026-10-13, pre-release)
 
 - xTalk MCP Bridge: Add to Claude Desktop writes Claude's settings file; clearer setup (#102)
