@@ -146,6 +146,32 @@ class PluginPackages(unittest.TestCase):
         compat = zf.read('mcpbridge-compat.livecodescript').decode('utf-8')
         self.assertRegex(compat, r'(?m)^function xtpcStableCopy pSource, pName, pOnlyIfThere$')
 
+    def test_one_server_per_ide(self):
+        """In another IDE the bridge's server has that IDE's name and bridge
+        file: the compatibility stack gives them, the bridge asks for them,
+        and the desktop extension's manifest has the lines it rewrites."""
+        zf = zipfile.ZipFile(io.BytesIO(self.read('org.openxtalk.plugin.mcpbridge')))
+        compat = zf.read('mcpbridge-compat.livecodescript').decode('utf-8')
+        for fn in ('xtpcServerName', 'xtpcBridgeFile'):
+            self.assertRegex(compat, r'(?m)^function %s$' % fn)
+        bridge = zf.read('mcpbridge.livecodescript').decode('utf-8')
+        tools = zf.read('mcpbridge-tools.livecodescript').decode('utf-8')
+        self.assertIn('dispatch function "xtpcServerName" to stack kCompat', bridge)
+        self.assertIn('dispatch function "xtpcBridgeFile" to stack kCompat', bridge)
+        self.assertIn('dispatch function "xtpcBridgeFile" to stack "org.openxtalk.plugin.mcpbridge-compat"', tools)
+        self.assertRegex(tools, r'(?m)^function mcbDesktopConfigText pOld, pName, pServerPath, pBridgeFile$')
+        # The server reads the file it is told
+        server = zf.read('mcp/server.js').decode('utf-8')
+        self.assertIn('process.env.OXT_MCP_BRIDGE_FILE', server)
+        # mcbManifestLine's lines, each once in the manifest
+        manifest = zf.read('mcp/manifest.json').decode('utf-8')
+        for line in ('"name": "oxt-beyond"', '"display_name": "OXT-Beyond"', '"args": ["${__dirname}/server.js"]'):
+            with self.subTest(line):
+                self.assertEqual(manifest.count(line), 1)
+        self.assertIn('constant kServerName = "oxt-beyond"', bridge)
+        self.assertIn('return quote & "display_name" & quote & ": " & quote & "OXT-Beyond" & quote', bridge)
+        self.assertIn('return quote & "args" & quote & ": [" & quote & "${__dirname}/server.js" & quote & "]"', bridge)
+
     def test_host_name(self):
         """Every stack that names the IDE asks a compatibility stack for its
         name, which the stack answers."""

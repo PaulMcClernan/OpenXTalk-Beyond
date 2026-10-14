@@ -28,7 +28,12 @@ of their code. A package adds:
   on OXT-Beyond; HyperXTalk, OpenXTalk or LiveCode elsewhere), and keeps
   the copy of the bridge's MCP server that Claude runs in `~/.oxt-beyond`,
   so that Claude's settings still point at a file after the package is
-  upgraded (its install folder is named with its version). OXT-Beyond's
+  upgraded (its install folder is named with its version). It gives the
+  bridge's MCP server that IDE's own name in Claude (`livecode`,
+  `hyperxtalk` or `openxtalk`) and its own file for the port and key
+  (`~/.oxt-beyond/mcp-bridge-<name>.json`, which Claude's settings pass
+  to the server in `OXT_MCP_BRIDGE_FILE`), so that OXT-Beyond and another
+  IDE can both be bridged on one computer. OXT-Beyond's
   own copy of the plugins has no such file, and the
   main stacks load it only when it is there, so nothing changes in
   OXT-Beyond's built-in plugins.
@@ -79,5 +84,7 @@ HyperXTalk:
    undoable step.
 4. The bridge starts and Claude reaches it; `ide_context` gives the line
    the caret is on. Its dialogs and what Claude is told name the IDE
-   (LiveCode or HyperXTalk), not OXT-Beyond.
+   (LiveCode or HyperXTalk), not OXT-Beyond, and Claude lists the server
+   as `livecode` or `hyperxtalk`. With OXT-Beyond's bridge on as well,
+   Claude reaches each IDE through its own server.
 5. Uninstalling takes the launcher out of the Plugins folder.

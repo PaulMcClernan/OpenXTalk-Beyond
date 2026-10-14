@@ -224,6 +224,26 @@ on TestHostNameNative
    TestAssert "OXT-Beyond, whose menu bar lists the plugin", the result is "OXT-Beyond"
 end TestHostNameNative
 
+on TestServerName
+   put sFolder into $HOME
+   put sFolder into $USERPROFILE
+   set the script of stack "revMenuBar" to empty
+   dispatch function "xtpcServerName" to stack kCompat
+   TestAssert "the IDE's own server name", the result is "hyperxtalk"
+   dispatch function "xtpcBridgeFile" to stack kCompat
+   TestDiagnostic the result
+   TestAssert "and bridge file, in ~/.oxt-beyond", the result is (sFolder & "/.oxt-beyond/mcp-bridge-hyperxtalk.json")
+end TestServerName
+
+on TestServerNameNative
+   set the script of stack "revMenuBar" to "on revTestPick" & return & \
+         "dispatch" && quote & kPick & quote && "to stack" && quote & kMain & quote & return & "end revTestPick"
+   dispatch function "xtpcServerName" to stack kCompat
+   TestAssert "none on OXT-Beyond, whose bridge keeps oxt-beyond", the result is empty
+   dispatch function "xtpcBridgeFile" to stack kCompat
+   TestAssert "nor a bridge file of its own", the result is empty
+end TestServerNameNative
+
 on TestStableCopy
    local tSource, tCopy, tSecond
    put sFolder into $HOME

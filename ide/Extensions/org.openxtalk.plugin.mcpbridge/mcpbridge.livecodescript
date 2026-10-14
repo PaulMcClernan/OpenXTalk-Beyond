@@ -51,7 +51,8 @@ constant kAssistantFolderName = "org.openxtalk.plugin.xtalkassistant"
 constant kBundledAssistantFolder = "xtalkassistant"
 -- Preferences (custom properties of the revPreferences stack)
 constant kPrefEnabled = "cMcpBridge,enabled"
--- The name Claude's apps show for the server
+-- The name Claude's apps show for the server (mcbServerName: a package of
+-- the bridge in another xTalk's IDE gives that IDE's own)
 constant kServerName = "oxt-beyond"
 -- What a package of this plugin for another xTalk's IDE carries
 -- (tools/plugins); OXT-Beyond's own copy has no such file
@@ -352,7 +353,7 @@ private command mcbAddToClaudeDesktop
       end if
    end if
    try
-      put mcbDesktopConfigText(tOld, kServerName, mcbServerPath()) into tMerged
+      put mcbDesktopConfigText(tOld, mcbServerName(), mcbServerPath(), mcbBridgeFile()) into tMerged
    catch tError
       put line 1 of tError into tMerged["problem"]
    end try
@@ -379,7 +380,7 @@ private command mcbAddToClaudeDesktop
       exit mcbAddToClaudeDesktop
    end if
    answer information "Added. Now quit the Claude desktop app completely and open it again: closing its window is not enough (on Windows, right-click its icon by the clock and choose Quit; on a Mac, Claude > Quit Claude)." & return & return & \
-         "Then ask Claude to list your " & mcbHostName() & " stacks. If it cannot, Claude's log of the server is in its logs folder (Settings > Developer shows it), as mcp-server-oxt-beyond.log." titled kTitle
+         "Then ask Claude to list your " & mcbHostName() & " stacks. If it cannot, Claude's log of the server is in its logs folder (Settings > Developer shows it), as mcp-server-" & mcbServerName() & ".log." titled kTitle
 end mcbAddToClaudeDesktop
 
 -- The server's file, in the form of the platform's paths. A package of
@@ -404,24 +405,70 @@ private function mcbServerPath
    return tPath
 end mcbServerPath
 
+-- The name Claude's apps give the server: "oxt-beyond", or in a package
+-- of the bridge for another xTalk's IDE that IDE's (its compatibility
+-- stack's xtpcServerName), so that two IDEs bridged on one computer are
+-- two servers
+private function mcbServerName
+   local tName
+   if there is a stack kCompat then
+      dispatch function "xtpcServerName" to stack kCompat
+      put the result into tName
+      if it is "handled" and tName is not empty then
+         return tName
+      end if
+   end if
+   return kServerName
+end mcbServerName
+
+-- The file the server is told to read the port and token from
+-- (OXT_MCP_BRIDGE_FILE), in the form of the platform's paths: in a package
+-- for another xTalk's IDE, that IDE's own (xtpcBridgeFile, which the
+-- bridge writes: mcbInfoFilePath); empty in OXT-Beyond, whose server reads
+-- its own ~/.oxt-beyond/mcp-bridge.json unasked
+private function mcbBridgeFile
+   local tFile
+   if there is a stack kCompat then
+      dispatch function "xtpcBridgeFile" to stack kCompat
+      put the result into tFile
+      if it is not "handled" then
+         put empty into tFile
+      end if
+   end if
+   if the platform is "Win32" then
+      replace slash with backslash in tFile
+   end if
+   return tFile
+end mcbBridgeFile
+
 private function mcbClaudeCodeCommand
-   return "claude mcp add --scope user" && kServerName && "-- node" && quote & mcbServerPath() & quote
+   local tEnv
+   if mcbBridgeFile() is not empty then
+      put " -e" && quote & "OXT_MCP_BRIDGE_FILE=" & mcbBridgeFile() & quote into tEnv
+   end if
+   return "claude mcp add --scope user" && mcbServerName() & tEnv && "-- node" && quote & mcbServerPath() & quote
 end mcbClaudeCodeCommand
 
 private function mcbDesktopConfig
-   local tPath
+   local tPath, tFile, tEnv
    put mcbServerPath() into tPath
    replace backslash with backslash & backslash in tPath
    replace quote with backslash & quote in tPath
-   return quote & kServerName & quote & ": {" & return & \
+   put mcbBridgeFile() into tFile
+   if tFile is not empty then
+      replace backslash with backslash & backslash in tFile
+      replace quote with backslash & quote in tFile
+      put "," & return & "  " & quote & "env" & quote & ": {" & quote & "OXT_MCP_BRIDGE_FILE" & quote & ": " & quote & tFile & quote & "}" into tEnv
+   end if
+   return quote & mcbServerName() & quote & ": {" & return & \
          "  " & quote & "command" & quote & ": " & quote & "node" & quote & "," & return & \
-         "  " & quote & "args" & quote & ": [" & quote & tPath & quote & "]" & return & "}"
+         "  " & quote & "args" & quote & ": [" & quote & tPath & quote & "]" & tEnv & return & "}"
 end mcbDesktopConfig
 
 -- A Claude desktop extension (.mcpb): a zip of the manifest and the
 -- server, which Claude's app installs and runs with its own Node.js
 private command mcbSaveDesktopExtension
-   local tFile, tArchive, tProblem, tError
+   local tFile, tArchive, tProblem, tError, tManifest
    ask file "Save the Claude desktop extension as:" with (mcbHostName() & ".mcpb")
    if it is empty then
       exit mcbSaveDesktopExtension
@@ -433,11 +480,16 @@ private command mcbSaveDesktopExtension
    if there is a file tFile then
       delete file tFile
    end if
+   put mcbDesktopManifest() into tManifest
+   if tManifest["problem"] is not empty then
+      answer error "The extension could not be saved:" && tManifest["problem"] titled kTitle
+      exit mcbSaveDesktopExtension
+   end if
    try
       revZipOpenArchive tFile, "write"
       put the result into tProblem
       if tProblem is empty then
-         revZipAddItemWithFile tFile, "manifest.json", mcbPluginFolder() & "/mcp/manifest.json"
+         revZipAddItemWithFile tFile, "manifest.json", tManifest["file"]
          put the result into tProblem
       end if
       if tProblem is empty then
@@ -451,6 +503,9 @@ private command mcbSaveDesktopExtension
    catch tError
       put "the zip library is not available (" & line 1 of tError & ")" into tProblem
    end try
+   if tManifest["temporary"] then
+      delete file tManifest["file"]
+   end if
    if tProblem is not empty then
       answer error "The extension could not be saved:" && tProblem & return & return & \
             "Add to Claude Desktop sets Claude up another way." titled kTitle
@@ -459,6 +514,60 @@ private command mcbSaveDesktopExtension
    answer information "Saved" && mcbNativePath(tFile) & "." & return & return & \
          "In the Claude desktop app, choose Settings > Extensions > Advanced settings > Install Extension..., choose this file, and turn the extension on. (Opening the file itself works only where the system knows it is Claude's.)" titled kTitle
 end mcbSaveDesktopExtension
+
+-- The manifest.json the desktop extension takes: the bridge's own
+-- (mcp/manifest.json); or, in a package for another xTalk's IDE, a copy in
+-- the temporary folder with that IDE's server name, its name to show, and
+-- the bridge file its server reads (mcbServerName, mcbBridgeFile). An array
+-- with "file" and "temporary" (true for the copy), or "problem".
+private function mcbDesktopManifest
+   local tResult, tText, tFile, tCopy, tOld
+   put mcbPluginFolder() & "/mcp/manifest.json" into tResult["file"]
+   put false into tResult["temporary"]
+   put mcbBridgeFile() into tFile
+   if tFile is empty then
+      return tResult
+   end if
+   put textDecode(url ("binfile:" & tResult["file"]), "UTF-8") into tText
+   -- "name" of the server, not of a tool, and only as written
+   set the caseSensitive to true
+   replace backslash with backslash & backslash in tFile
+   replace quote with backslash & quote in tFile
+   repeat for each item tOld in "name,display_name,args"
+      if not (tText contains mcbManifestLine(tOld)) then
+         put "its manifest has no" && mcbManifestLine(tOld) into tResult["problem"]
+         return tResult
+      end if
+   end repeat
+   replace mcbManifestLine("name") with quote & "name" & quote & ": " & quote & mcbServerName() & quote in tText
+   replace mcbManifestLine("display_name") with quote & "display_name" & quote & ": " & quote & mcbHostName() & quote in tText
+   replace mcbManifestLine("args") with mcbManifestLine("args") & "," & return & \
+         "      " & quote & "env" & quote & ": {" & quote & "OXT_MCP_BRIDGE_FILE" & quote & ": " & quote & tFile & quote & "}" in tText
+   put specialFolderPath("temporary") & "/mcpbridge-manifest-" & the milliseconds & ".json" into tCopy
+   put textEncode(tText, "UTF-8") into url ("binfile:" & tCopy)
+   if the result is not empty then
+      put "the manifest could not be written to" && tCopy && "(" & the result & ")" into tResult["problem"]
+      return tResult
+   end if
+   put tCopy into tResult["file"]
+   put true into tResult["temporary"]
+   return tResult
+end mcbDesktopManifest
+
+-- A line of mcp/manifest.json as the bridge's own reads, which a package
+-- for another xTalk's IDE changes (mcbDesktopManifest;
+-- tools/ci/tests/test_plugin_packages.py checks the manifest has them)
+private function mcbManifestLine pKey
+   switch pKey
+      case "name"
+         return quote & "name" & quote & ": " & quote & kServerName & quote
+      case "display_name"
+         return quote & "display_name" & quote & ": " & quote & "OXT-Beyond" & quote
+      case "args"
+         return quote & "args" & quote & ": [" & quote & "${__dirname}/server.js" & quote & "]"
+   end switch
+   return empty
+end mcbManifestLine
 
 --------------------------------------------------------------------------------
 -- What the bridge asks

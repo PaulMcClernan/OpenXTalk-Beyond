@@ -297,6 +297,31 @@ function xtpcHostName
 end xtpcHostName
 
 --------------------------------------------------------------------------------
+-- One MCP server per IDE
+
+-- The name Claude's apps give the xTalk MCP Bridge's server in this IDE:
+-- empty on OXT-Beyond, whose bridge keeps its own ("oxt-beyond"); else
+-- the IDE's name in lower case ("livecode", "hyperxtalk", "openxtalk"),
+-- so that two IDEs bridged on one computer are two servers in Claude
+function xtpcServerName
+   if xtpcHostName() is "OXT-Beyond" then
+      return empty
+   end if
+   return toLower(xtpcHostName())
+end xtpcServerName
+
+-- The file that IDE's bridge writes its port and token to and its server
+-- reads (the server is told it in OXT_MCP_BRIDGE_FILE): empty on
+-- OXT-Beyond, whose bridge keeps ~/.oxt-beyond/mcp-bridge.json; else
+-- ~/.oxt-beyond/mcp-bridge-<server name>.json
+function xtpcBridgeFile
+   if xtpcServerName() is empty then
+      return empty
+   end if
+   return xtpcStableFolder() & "/mcp-bridge-" & xtpcServerName() & ".json"
+end xtpcBridgeFile
+
+--------------------------------------------------------------------------------
 -- Files that outlive an upgrade
 
 -- The user's folder for them: ~/.oxt-beyond, as the bridge's own file

@@ -276,9 +276,19 @@ end mcbServerClients
 
 -- The file the MCP server reads the port and token from:
 -- .oxt-beyond/mcp-bridge.json in the user's home folder (USERPROFILE on
--- Windows, HOME elsewhere), as Node's os.homedir() finds it
+-- Windows, HOME elsewhere), as Node's os.homedir() finds it. A package of
+-- the bridge in another xTalk's IDE (tools/plugins) writes the file its
+-- compatibility stack names instead (xtpcBridgeFile), one per IDE, and
+-- Claude is told it; OXT-Beyond's own copy has no such stack.
 function mcbInfoFilePath
-   local tHome
+   local tHome, tFile
+   if there is a stack "org.openxtalk.plugin.mcpbridge-compat" then
+      dispatch function "xtpcBridgeFile" to stack "org.openxtalk.plugin.mcpbridge-compat"
+      put the result into tFile
+      if it is "handled" and tFile is not empty then
+         return tFile
+      end if
+   end if
    if the platform is "Win32" then
       put $USERPROFILE into tHome
       replace backslash with slash in tHome
@@ -646,14 +656,22 @@ end mcbResult
 -- pName under "mcpServers" that runs node with the server pServerPath,
 -- given the file's text now (pOld, empty for no file): every other entry
 -- and setting is kept as it was written, an older entry of that name is
--- replaced. An array with "text", or "problem" when pOld is not a JSON
--- object (the file is then left to the user).
-function mcbDesktopConfigText pOld, pName, pServerPath
+-- replaced. With pBridgeFile, the entry tells the server that file in
+-- OXT_MCP_BRIDGE_FILE (a package of the bridge in another xTalk's IDE;
+-- empty, as OXT-Beyond's own bridge gives it, leaves the server's own).
+-- An array with "text", or "problem" when pOld is not a JSON object (the
+-- file is then left to the user).
+function mcbDesktopConfigText pOld, pName, pServerPath, pBridgeFile
    local tResult, tEntry, tRoot, tServers, tIndex, tName, tText, tError, tParts
    mcbEnsureParts
    put mcbJsonString(pName) & ": {" & return & \
          "      " & mcbJsonString("command") & ": " & mcbJsonString("node") & "," & return & \
-         "      " & mcbJsonString("args") & ": [" & mcbJsonString(pServerPath) & "]" & return & "    }" into tEntry
+         "      " & mcbJsonString("args") & ": [" & mcbJsonString(pServerPath) & "]" into tEntry
+   if pBridgeFile is not empty then
+      put "," & return & "      " & mcbJsonString("env") & ": {" & mcbJsonString("OXT_MCP_BRIDGE_FILE") & ": " & \
+            mcbJsonString(pBridgeFile) & "}" after tEntry
+   end if
+   put return & "    }" after tEntry
    if word 1 to -1 of pOld is empty then
       put "{" & return & "  " & mcbJsonString("mcpServers") & ": {" & return & "    " & tEntry & return & "  }" & return & "}" & return into tResult["text"]
       return tResult
