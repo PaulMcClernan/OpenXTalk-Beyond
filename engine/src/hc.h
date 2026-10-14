@@ -138,7 +138,7 @@ public:
 	uint2 id;
 	MCHcsnd();
 	~MCHcsnd();
-	Boolean import(uint4 inid, MCNameRef inname, char *sptr);
+	Boolean import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length);
 	MCAudioClip *build();
 	MCHcsnd *next()
 	{
@@ -159,14 +159,16 @@ public:
 class MCHctext : public MCDLlist
 {
 public:
+	// the style runs: nruns (offset, style id) pairs, then the text length
 	uint2 *atts;
+	uint2 nruns;
 	char *string;
 	Boolean card;
 	uint2 id;
 	uint4 cid;
 	MCHctext();
 	~MCHctext();
-	IO_stat parse(char *sptr);
+	IO_stat parse(char *sptr, uint4 p_avail, uint4 &r_length);
 	MCCdata *buildf(MCHcstak *hcsptr, MCField *parent);
 	MCCdata *buildb();
 	char *buildm();
@@ -204,7 +206,7 @@ public:
 	MCHctext *text;
 	MCHcfield();
 	~MCHcfield();
-	IO_stat parse(char *sptr);
+	IO_stat parse(char *sptr, uint4 p_size);
 	MCControl *build(MCHcstak *hcsptr, MCStack *sptr);
 	MCHcfield *next()
 	{
@@ -241,7 +243,7 @@ public:
 	MCHctext *text;
 	MCHcbutton();
 	~MCHcbutton();
-	IO_stat parse(char *sptr);
+	IO_stat parse(char *sptr, uint4 p_size);
 	MCControl *build(MCHcstak *hcsptr, MCStack *sptr);
 	MCHcbutton *next()
 	{
@@ -275,9 +277,9 @@ public:
 	MCHcbmap();
 	~MCHcbmap();
 	void setvisible(Boolean newvis);
-	void icon(uint4 inid, MCNameRef inname, char *sptr);
-	void cursor(uint4 inid, MCNameRef inname, char *sptr);
-	IO_stat parse(char *sptr);
+	void icon(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length);
+	void cursor(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length);
+	IO_stat parse(char *sptr, uint4 p_size);
 	MCControl *build();
 	MCHcbmap *next()
 	{
@@ -311,7 +313,7 @@ public:
 	uint4 id;
 	MCHccard();
 	~MCHccard();
-	IO_stat parse(char *sptr);
+	IO_stat parse(char *sptr, uint4 p_size);
 	MCCard *build(MCHcstak* hcsptr, MCStack *sptr);
 	MCHccard *next()
 	{
@@ -341,11 +343,13 @@ public:
 	MCHctext *hctexts;
 	uint4 id;
 	uint4 bkgdid;
+	// the next background in the stack's chain of backgrounds
+	uint4 nextid;
 	uint4 bmapid;
 	uint1 atts;
 	MCHcbkgd();
 	~MCHcbkgd();
-	IO_stat parse(char *sptr);
+	IO_stat parse(char *sptr, uint4 p_size);
 	MCGroup *build(MCHcstak* hcsptr, MCStack *sptr);
 	MCHcbkgd *next()
 	{
@@ -380,8 +384,18 @@ public:
 	uint2 natts;
 	uint2 pagesize;
 	uint4 npbuffers;
-	uint2 *pbuffersizes;
+	uint4 *pbuffersizes;
+	uint4 *pbufferids;
 	char **pbuffers;
+	// the order of the PAGE blocks and their card counts, from the LIST block
+	uint4 nlistpages;
+	// the first background in the chain the STAK block starts
+	uint4 firstbkgd;
+	uint4 *listpageids;
+	uint4 *listpagecounts;
+	// the FTBL blocks, which hold the font names
+	uint4 nfontbuffers;
+	char **fontbuffers;
 	MCHcbkgd *hcbkgds;
 	MCHccard *hccards;
 	MCHcbmap *hcbmaps;
@@ -397,6 +411,8 @@ public:
 	const char *getfont(uint2 fid);
 	void getatts(uint2 aid, const char *&font, uint2 &size, uint2 &style);
 	IO_stat read(IO_handle stream);
+	IO_stat readblocks(const uint1 *p_data, uint4 p_size);
+	void readresources(const uint1 *p_fork, uint4 p_size);
 	MCStack *build();
 	
 #ifdef _MAC_DESKTOP

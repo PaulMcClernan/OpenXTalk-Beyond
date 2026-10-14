@@ -90,71 +90,6 @@ static const uint2 mc_icons[HC_NICONS] =
         386, 394, 386, 394, 394, 393, 392, 391, 390, 339, 348, 605, 604,
         331, 349 };
 
-static const uint1 hqx[82] =
-    {
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 13,
-        14, 15, 16, 17, 18, 19, 0, 20, 21, 0, 0, 0, 0, 0,
-        0, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-        34, 35, 36, 0, 37, 38, 39, 40, 41, 42, 43, 0, 44,
-        45, 46, 47, 0, 0, 0, 0, 48, 49, 50, 51,52, 53, 54,
-        0, 55, 56, 57, 58, 59, 60, 0, 0, 61, 62, 63};
-
-static const uint1 h1[256] =
-    {
-        0x00, 0x01, 0x03, 0x02, 0x07, 0x06, 0x04, 0x05,
-        0x0f, 0x0e, 0x0c, 0x0d, 0x08, 0x09, 0x0b, 0x0a, 0x1f, 0x1e, 0x1c,
-        0x1d, 0x18, 0x19, 0x1b, 0x1a, 0x10, 0x11, 0x13, 0x12, 0x17, 0x16,
-        0x14, 0x15, 0x3f, 0x3e, 0x3c, 0x3d, 0x38, 0x39, 0x3b, 0x3a, 0x30,
-        0x31, 0x33, 0x32, 0x37, 0x36, 0x34, 0x35, 0x20, 0x21, 0x23, 0x22,
-        0x27, 0x26, 0x24, 0x25, 0x2f, 0x2e, 0x2c, 0x2d, 0x28, 0x29, 0x2b,
-        0x2a, 0x7f, 0x7e, 0x7c, 0x7d, 0x78, 0x79, 0x7b, 0x7a, 0x70, 0x71,
-        0x73, 0x72, 0x77, 0x76, 0x74, 0x75, 0x60, 0x61, 0x63, 0x62, 0x67,
-        0x66, 0x64, 0x65, 0x6f, 0x6e, 0x6c, 0x6d, 0x68, 0x69, 0x6b, 0x6a,
-        0x40, 0x41, 0x43, 0x42, 0x47, 0x46, 0x44, 0x45, 0x4f, 0x4e, 0x4c,
-        0x4d, 0x48, 0x49, 0x4b, 0x4a, 0x5f, 0x5e, 0x5c, 0x5d, 0x58, 0x59,
-        0x5b, 0x5a, 0x50, 0x51, 0x53, 0x52, 0x57, 0x56, 0x54, 0x55, 0xff,
-        0xfe, 0xfc, 0xfd, 0xf8, 0xf9, 0xfb, 0xfa, 0xf0, 0xf1, 0xf3, 0xf2,
-        0xf7, 0xf6, 0xf4, 0xf5, 0xe0, 0xe1, 0xe3, 0xe2, 0xe7, 0xe6, 0xe4,
-        0xe5, 0xef, 0xee, 0xec, 0xed, 0xe8, 0xe9, 0xeb, 0xea, 0xc0, 0xc1,
-        0xc3, 0xc2, 0xc7, 0xc6, 0xc4, 0xc5, 0xcf, 0xce, 0xcc, 0xcd, 0xc8,
-        0xc9, 0xcb, 0xca, 0xdf, 0xde, 0xdc, 0xdd, 0xd8, 0xd9, 0xdb, 0xda,
-        0xd0, 0xd1, 0xd3, 0xd2, 0xd7, 0xd6, 0xd4, 0xd5, 0x80, 0x81, 0x83,
-        0x82, 0x87, 0x86, 0x84, 0x85, 0x8f, 0x8e, 0x8c, 0x8d, 0x88, 0x89,
-        0x8b, 0x8a, 0x9f, 0x9e, 0x9c, 0x9d, 0x98, 0x99, 0x9b, 0x9a, 0x90,
-        0x91, 0x93, 0x92, 0x97, 0x96, 0x94, 0x95, 0xbf, 0xbe, 0xbc, 0xbd,
-        0xb8, 0xb9, 0xbb, 0xba, 0xb0, 0xb1, 0xb3, 0xb2, 0xb7, 0xb6, 0xb4,
-        0xb5, 0xa0, 0xa1, 0xa3, 0xa2, 0xa7, 0xa6, 0xa4, 0xa5, 0xaf, 0xae,
-        0xac, 0xad, 0xa8, 0xa9, 0xab, 0xaa, };
-
-static uint1 h2[256] =
-    {
-        0x00, 0x01, 0x02, 0x03, 0x05, 0x04, 0x07, 0x06,
-        0x0a, 0x0b, 0x08, 0x09, 0x0f, 0x0e, 0x0d, 0x0c, 0x15, 0x14, 0x17,
-        0x16, 0x10, 0x11, 0x12, 0x13, 0x1f, 0x1e, 0x1d, 0x1c, 0x1a, 0x1b,
-        0x18, 0x19, 0x2a, 0x2b, 0x28, 0x29, 0x2f, 0x2e, 0x2d, 0x2c, 0x20,
-        0x21, 0x22, 0x23, 0x25, 0x24, 0x27, 0x26, 0x3f, 0x3e, 0x3d, 0x3c,
-        0x3a, 0x3b, 0x38, 0x39, 0x35, 0x34, 0x37, 0x36, 0x30, 0x31, 0x32,
-        0x33, 0x55, 0x54, 0x57, 0x56, 0x50, 0x51, 0x52, 0x53, 0x5f, 0x5e,
-        0x5d, 0x5c, 0x5a, 0x5b, 0x58, 0x59, 0x40, 0x41, 0x42, 0x43, 0x45,
-        0x44, 0x47, 0x46, 0x4a, 0x4b, 0x48, 0x49, 0x4f, 0x4e, 0x4d, 0x4c,
-        0x7f, 0x7e, 0x7d, 0x7c, 0x7a, 0x7b, 0x78, 0x79, 0x75, 0x74, 0x77,
-        0x76, 0x70, 0x71, 0x72, 0x73, 0x6a, 0x6b, 0x68, 0x69, 0x6f, 0x6e,
-        0x6d, 0x6c, 0x60, 0x61, 0x62, 0x63, 0x65, 0x64, 0x67, 0x66, 0xaa,
-        0xab, 0xa8, 0xa9, 0xaf, 0xae, 0xad, 0xac, 0xa0, 0xa1, 0xa2, 0xa3,
-        0xa5, 0xa4, 0xa7, 0xa6, 0xbf, 0xbe, 0xbd, 0xbc, 0xba, 0xbb, 0xb8,
-        0xb9, 0xb5, 0xb4, 0xb7, 0xb6, 0xb0, 0xb1, 0xb2, 0xb3, 0x80, 0x81,
-        0x82, 0x83, 0x85, 0x84, 0x87, 0x86, 0x8a, 0x8b, 0x88, 0x89, 0x8f,
-        0x8e, 0x8d, 0x8c, 0x95, 0x94, 0x97, 0x96, 0x90, 0x91, 0x92, 0x93,
-        0x9f, 0x9e, 0x9d, 0x9c, 0x9a, 0x9b, 0x98, 0x99, 0xff, 0xfe, 0xfd,
-        0xfc, 0xfa, 0xfb, 0xf8, 0xf9, 0xf5, 0xf4, 0xf7, 0xf6, 0xf0, 0xf1,
-        0xf2, 0xf3, 0xea, 0xeb, 0xe8, 0xe9, 0xef, 0xee, 0xed, 0xec, 0xe0,
-        0xe1, 0xe2, 0xe3, 0xe5, 0xe4, 0xe7, 0xe6, 0xd5, 0xd4, 0xd7, 0xd6,
-        0xd0, 0xd1, 0xd2, 0xd3, 0xdf, 0xde, 0xdd, 0xdc, 0xda, 0xdb, 0xd8,
-        0xd9, 0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc4, 0xc7, 0xc6, 0xca, 0xcb,
-        0xc8, 0xc9, 0xcf, 0xce, 0xcd, 0xcc, };
-
-static uint1 patbytes[8] = {0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55};
-
 void hcstat_append(const char *msg, ...)
 {
 	// Build the new message string (msg is printf format string)
@@ -185,222 +120,208 @@ static uint32_t MCHCBitmapStride(uint32_t p_width)
 	return ((p_width + 31) & ~0x1F ) / 8;
 }
 
-// IM-2014-04-08: [[ Bug 12101 ]] Modify to return decoded bitmap data directly 
-static bool convert_hcbitmap_data(uint1 *sptr, uint2 width, uint2 height, uint8_t *&r_bitmapdata)
+// Big-endian reads that leave the block in place: the parsers below used to
+// swap fields in the block itself, which made reading a field twice (or
+// reading the size of a record another parser had swapped) depend on the
+// order the parsers ran in.
+static uint2 hc_get_uint2(const char *p_ptr)
+{
+	const uint1 *t_ptr = (const uint1 *)p_ptr;
+	return uint2((t_ptr[0] << 8) | t_ptr[1]);
+}
+
+static int2 hc_get_int2(const char *p_ptr)
+{
+	return int2(hc_get_uint2(p_ptr));
+}
+
+static uint4 hc_get_uint4(const char *p_ptr)
+{
+	const uint1 *t_ptr = (const uint1 *)p_ptr;
+	return (uint4(t_ptr[0]) << 24) | (uint4(t_ptr[1]) << 16) | (uint4(t_ptr[2]) << 8) | uint4(t_ptr[3]);
+}
+
+// Every block is read into a buffer with this many zero bytes after it, so
+// that the name and script strings at the end of a block are always
+// terminated and a short fixed-size header near its end reads zeros rather
+// than whatever follows in memory.
+#define HC_BLOCK_PADDING 64
+
+// XOR each bit of a row with the bit p_distance bits to its left, from left
+// to right, so that each result feeds the next (the "dh" step of the bitmap
+// format: p_distance is 1, 2, 8 or 16).
+static void hcbitmap_apply_dh(uint1 *p_row, uint32_t p_stride, uint32_t p_distance)
+{
+	uint32_t t_bits = p_stride * 8;
+	for (uint32_t k = p_distance ; k < t_bits ; k++)
+	{
+		uint32_t s = k - p_distance;
+		if (p_row[s >> 3] & (0x80 >> (s & 7)))
+			p_row[k >> 3] ^= (0x80 >> (k & 7));
+	}
+}
+
+// Decode one plane (image or mask) of a BMAP block: Bill Atkinson's
+// "WOBA" compression, as documented by the HyperCard format notes of
+// Rebecca Bettencourt and implemented by HyperCardPreview and stackimport.
+// p_top is the plane's top edge on the card: the pattern rows of opcodes
+// 0x83 and 0x84 are indexed by the card row, not the plane's.
+// IM-2014-04-08: [[ Bug 12101 ]] Modify to return decoded bitmap data directly
+static bool convert_hcbitmap_data(const uint1 *sptr, uint4 p_length, uint2 width, uint2 height, int2 p_top, uint8_t *&r_bitmapdata)
 {
 	uint8_t *t_data;
 	uint32_t t_stride;
 
 	t_stride = MCHCBitmapStride(width);
 
-	if (!MCMemoryNewArray(t_stride * (height + 64), t_data))
+	if (!MCMemoryNewArray(t_stride * height + 1, t_data))
 		return false;
 
 	r_bitmapdata = t_data;
 
-	uint1 xorcode = 0x89;
-	uint2 patindex = 0;
+	if (t_stride == 0)
+		return true;
 
-	uint2 bpl = t_stride;
-	uint1 *dptr = t_data;
-	uint1 *deptr = t_data + height * bpl;
-	uint1 *startptr = sptr;
-	uint2 repcount = 1;
-	uint2 line = 0;
-	while (dptr < deptr)
+	const uint1 *startptr = sptr;
+	const uint1 *eptr = sptr + p_length;
+
+	// The pattern bytes start as a 50% grey, for each decode.
+	uint1 t_patterns[8] = {0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55};
+	uint32_t dh = 0;
+	uint32_t dv = 0;
+	uint32_t y = 0;
+	while (y < height)
 	{
-		uint2 hrepcount = bpl;
-		line = (dptr - t_data) / bpl;
-		uint1 opcode = *sptr++;
-		if (opcode == 0)
-			opcode = *sptr++;
-		switch(opcode & 0xF0)
+		uint1 *t_row = t_data + y * t_stride;
+		uint32_t x = 0;
+		uint32_t t_repeat = 1;
+		bool t_whole_rows = false;
+		while (x < t_stride && !t_whole_rows)
 		{
-		case 0x00:
-		case 0x10:
-		case 0x20:
-		case 0x30:
-		case 0x40:
-		case 0x50:
-		case 0x60:
-		case 0x70:
-			hrepcount = opcode & 0xF;
-			if (hrepcount == 0)
+			if (sptr >= eptr)
 			{
-				hrepcount = (opcode & 0xF0) >> 4;
-				while (hrepcount--)
-					*dptr++ = *sptr++;
+				hcstat_append("Error: ran out of bitmap data at offset %d, line %d",
+				              (int)(sptr - startptr), (int)y);
+				return true;
+			}
+			uint1 opcode = *sptr++;
+			if (opcode < 0x80)
+			{
+				// z zero bytes followed by d data bytes
+				uint32_t t_zeros = opcode & 0x0F;
+				uint32_t t_bytes = opcode >> 4;
+				if ((uint32_t)(eptr - sptr) < t_bytes)
+					t_bytes = (uint32_t)(eptr - sptr);
+				while (t_repeat--)
+				{
+					x += t_zeros;
+					for (uint32_t i = 0 ; i < t_bytes ; i++, x++)
+						if (x < t_stride)
+							t_row[x] = sptr[i];
+				}
+				sptr += t_bytes;
+				t_repeat = 1;
+			}
+			else if (opcode >= 0xA0 && opcode < 0xC0)
+				t_repeat = opcode & 0x1F;
+			else if (opcode >= 0xC0 && opcode < 0xE0)
+			{
+				// (opcode & 0x1F) * 8 data bytes
+				uint32_t t_bytes = (opcode & 0x1F) << 3;
+				if ((uint32_t)(eptr - sptr) < t_bytes)
+					t_bytes = (uint32_t)(eptr - sptr);
+				while (t_repeat--)
+					for (uint32_t i = 0 ; i < t_bytes ; i++, x++)
+						if (x < t_stride)
+							t_row[x] = sptr[i];
+				sptr += t_bytes;
+				t_repeat = 1;
+			}
+			else if (opcode >= 0xE0)
+			{
+				// (opcode & 0x1F) * 16 zero bytes
+				x += ((opcode & 0x1F) << 4) * t_repeat;
+				t_repeat = 1;
+			}
+			else if (opcode >= 0x88 && opcode <= 0x8F)
+			{
+				static const uint1 s_dh[8] = {16, 0, 0, 0, 1, 1, 2, 8};
+				static const uint1 s_dv[8] = {0, 0, 1, 2, 0, 1, 2, 0};
+				dh = s_dh[opcode - 0x88];
+				dv = s_dv[opcode - 0x88];
+			}
+			else if (opcode <= 0x86)
+			{
+				// Whole rows, repeated t_repeat times: these are stored as
+				// they are, with no dh or dv step.
+				uint1 t_value = 0;
+				if (opcode == 0x83)
+				{
+					if (sptr >= eptr)
+						return true;
+					t_value = *sptr++;
+					t_patterns[(p_top + y) & 7] = t_value;
+				}
+				if (opcode == 0x80 && (uint32_t)(eptr - sptr) < t_stride)
+				{
+					hcstat_append("Error: ran out of bitmap data at offset %d, line %d",
+					              (int)(sptr - startptr), (int)y);
+					return true;
+				}
+				while (t_repeat-- && y < height)
+				{
+					t_row = t_data + y * t_stride;
+					switch (opcode)
+					{
+					case 0x80:
+						memcpy(t_row, sptr, t_stride);
+						break;
+					case 0x81:
+						break;
+					case 0x82:
+						memset(t_row, 0xFF, t_stride);
+						break;
+					case 0x83:
+						memset(t_row, t_value, t_stride);
+						break;
+					case 0x84:
+						memset(t_row, t_patterns[(p_top + y) & 7], t_stride);
+						break;
+					case 0x85:
+						if (y >= 1)
+							memcpy(t_row, t_row - t_stride, t_stride);
+						break;
+					case 0x86:
+						if (y >= 2)
+							memcpy(t_row, t_row - 2 * t_stride, t_stride);
+						break;
+					}
+					y++;
+				}
+				if (opcode == 0x80)
+					sptr += t_stride;
+				t_whole_rows = true;
 			}
 			else
 			{
-				while (hrepcount--)
-					*dptr++ = 0;
-				hrepcount = (opcode & 0xF0) >> 4;
-				while (hrepcount--)
-				{
-					*dptr++ = *sptr++;
-				}
-			}
-			break;
-		case 0x80:
-			switch (opcode & 0xF)
-			{
-			case 0x0:
-				while (hrepcount--)
-					*dptr++ = *sptr++;
-				break;
-			case 0x1:
-				while (repcount--)
-				{
-					while (hrepcount--)
-						*dptr++ = 0;
-					hrepcount = bpl;
-				}
-				break;
-			case 0x2:
-				while (repcount--)
-				{
-					while (hrepcount--)
-						*dptr++ = 0xFF;
-					hrepcount = bpl;
-				}
-				break;
-			case 0x3:
-				patbytes[patindex] = *sptr++;
-			case 0x4:
-				while (repcount--)
-				{
-					while (hrepcount--)
-						*dptr++ = patbytes[patindex];
-					hrepcount = bpl;
-					patindex = (patindex + 1) & 0x7;
-				}
-				break;
-			case 0x5:
-				while (repcount--)
-				{
-					while (hrepcount--)
-					{
-						*dptr = *(dptr - bpl);
-						dptr++;
-					}
-					hrepcount = bpl;
-				}
-				break;
-			case 0x6:
-				while (repcount--)
-				{
-					while (hrepcount--)
-					{
-						*dptr = *(dptr - (bpl << 1));
-						dptr++;
-					}
-					hrepcount = bpl;
-				}
-				break;
-			case 0x8:
-			case 0x9:
-			case 0xA:
-			case 0xB:
-			case 0xC:
-			case 0xD:
-			case 0xE:
-			case 0xF:
-				xorcode = opcode;
-				break;
-			case 0x7:
-
+				// 0x87 and 0x90-0x9F are not opcodes: the data is over.
 				hcstat_append("Unknown BMAP opcode %x at offset %d, line %d",
-				        opcode, (int)(sptr - startptr), line);
-
+				              opcode, (int)(sptr - startptr), (int)y);
 				return true;
 			}
-			repcount = 1;
+		}
+		if (t_whole_rows)
 			continue;
-		case 0x90:
-			hcstat_append("Unknown BMAP opcode %x at offset %d, line %d",
-			        opcode, (int)(sptr - startptr), line);
 
-			return true;
-		case 0xA0:
-		case 0xB0:
-			repcount = opcode & 0x1F;
-			continue;
-		case 0xC0:
-		case 0xD0:
-			hrepcount = (opcode & 0x1F) << 3;
-			while (hrepcount--)
-				*dptr++ = *sptr++;
-			break;
-		case 0xE0:
-		case 0xF0:
-			hrepcount = (opcode & 0x1F) << 4;
-			while (hrepcount--)
-				*dptr++ = 0;
-			break;
-		}
-		if ((dptr - t_data) % bpl == 0)
+		if (dh != 0)
+			hcbitmap_apply_dh(t_row, t_stride, dh);
+		if (dv != 0 && y >= dv)
 		{
-			line = (dptr - t_data) / bpl - 1;
-			uint1 remainder = 0;
-			hrepcount = bpl;
-			uint1 *t1ptr = dptr - bpl;
-			uint1 *t2ptr = dptr - bpl;
-			switch (xorcode)
-			{
-			case 0x88:
-				t2ptr += 2;
-				hrepcount -= 2;
-				break;
-			case 0x89:
-				continue;
-			case 0x8A:
-				t1ptr = dptr - bpl * 2;
-				break;
-			case 0x8B:
-				t1ptr = dptr - bpl * 3;
-				break;
-			case 0x8C:
-				while (hrepcount--)
-				{
-					*t2ptr = h1[*t2ptr ^ remainder];
-					remainder = *t2ptr++ << 7;
-				}
-				continue;
-			case 0x8D:
-				while (hrepcount--)
-				{
-					*t2ptr = h1[*t2ptr ^ remainder];
-					remainder = *t2ptr++ << 7;
-				}
-				hrepcount = bpl;
-				t1ptr = dptr - bpl * 2;
-				t2ptr = dptr - bpl;
-				break;
-			case 0x8E:
-				while (hrepcount--)
-				{
-					*t2ptr = h2[*t2ptr ^ remainder];
-					remainder = *t2ptr++ << 6;
-				}
-				hrepcount = bpl;
-				t1ptr = dptr - bpl * 3;
-				t2ptr = dptr - bpl;
-				break;
-			case 0x8F:
-				t2ptr++;
-				hrepcount--;
-				break;
-			}
-			if (line != 0)
-				while (hrepcount--)
-					*t2ptr++ ^= *t1ptr++;
+			const uint1 *t_above = t_row - dv * t_stride;
+			for (uint32_t i = 0 ; i < t_stride ; i++)
+				t_row[i] ^= t_above[i];
 		}
-	}
-	if (dptr > deptr)
-	{
-		hcstat_append("Error: ran off end of image at offset %d line %d",
-		        (int)(sptr - startptr), line);
+		y++;
 	}
 	return true;
 }
@@ -515,6 +436,53 @@ static char *convert_script(const char *string)
 	return newstring;
 }
 
+// Read the name and the script that end a part, card or background record:
+// the name, its terminating zero, (for a part) one more byte, then the
+// script. Both are bounded by p_avail, the bytes left in the record, and
+// the name is converted from MacRoman as the text and scripts are.
+static void hc_read_name_and_script(const char *sptr, uint4 p_avail, uint4 p_gap, char *&r_name, char *&r_script)
+{
+	r_name = NULL;
+	r_script = NULL;
+	uint4 t_name_length = 0;
+	while (t_name_length < p_avail && sptr[t_name_length] != '\0')
+		t_name_length++;
+	if (t_name_length != 0)
+	{
+		char *t_name = new (nothrow) char[t_name_length + 1];
+		memcpy(t_name, sptr, t_name_length);
+		t_name[t_name_length] = '\0';
+		r_name = convert_string(t_name);
+		delete[] t_name;
+	}
+	uint4 t_script_offset = t_name_length + p_gap;
+	if (t_script_offset >= p_avail)
+		return;
+	uint4 t_script_length = 0;
+	while (t_script_offset + t_script_length < p_avail && sptr[t_script_offset + t_script_length] != '\0')
+		t_script_length++;
+	char *t_script = new (nothrow) char[t_script_length + 1];
+	memcpy(t_script, &sptr[t_script_offset], t_script_length);
+	t_script[t_script_length] = '\0';
+	r_script = convert_script(t_script);
+	delete[] t_script;
+}
+
+// Read a part's rectangle (top, left, bottom, right at offset 6).
+static MCRectangle hc_read_part_rect(const char *sptr)
+{
+	MCRectangle t_rect;
+	int4 t_top = hc_get_int2(&sptr[6]);
+	int4 t_left = hc_get_int2(&sptr[8]);
+	int4 t_bottom = hc_get_int2(&sptr[10]);
+	int4 t_right = hc_get_int2(&sptr[12]);
+	t_rect.x = t_left;
+	t_rect.y = t_top;
+	t_rect.width = MCU_max(t_right - t_left + 1, 0);
+	t_rect.height = MCU_max(t_bottom - t_top + 1, 0);
+	return t_rect;
+}
+
 static MCHcfield *findfield(MCHcfield *flist, uint2 fid)
 {
 	if (flist != NULL)
@@ -557,37 +525,48 @@ MCHcsnd::~MCHcsnd()
 {
     MCValueRelease(m_name);
 	if (data != NULL)
-		delete data;
+		delete[] data;
 }
 
-Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr)
+// A 'snd ' resource is format 1 (a list of synthesizers, then commands) or
+// format 2 (commands only). Its first command is a bufferCmd whose second
+// parameter is the offset of the sound header. Only uncompressed sampled
+// sound (a standard sound header, encode 0) is imported.
+Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length)
 {
 	id = inid;
 	maxid = MCU_max((uint4)id, maxid);
     MCValueAssign(m_name, inname);
-	uint2 type = get_uint2(sptr);
-	uint2 hsize;
-	real8 baserate;
+	if (p_length < 4)
+		return False;
+	uint2 type = hc_get_uint2(sptr);
+	uint4 t_commands;
 	if (type == 1)
-	{
-		if (sptr[40]) // compressed sound
-			return False;
-		hsize = get_uint4(&sptr[16]);
-		rate = get_uint2(&sptr[28]);
-		baserate = (real8)(sptr[41] - 0x3C);
-		size = get_uint4(&sptr[32]);
-	}
+		t_commands = 4 + hc_get_uint2(&sptr[2]) * 6;
+	else if (type == 2)
+		t_commands = 4;
 	else
-	{
-		hsize = get_uint4(&sptr[10]);
-		if (sptr[hsize + 20]) // compressed sound
-			return False;
-		rate = get_uint2(&sptr[hsize + 8]);
-		baserate = (real8)(sptr[hsize + 21] - 0x3C);
-		size = get_uint4(&sptr[hsize + 4]);
-	}
-	rate = (uint2)((real8)rate / pow(1.05946309434, (real8)baserate));
+		return False;
+	// the number of commands, then the first command: cmd, param1, param2
+	if (t_commands + 10 > p_length || hc_get_uint2(&sptr[t_commands]) == 0)
+		return False;
+	uint4 hsize = hc_get_uint4(&sptr[t_commands + 6]);
+	if (hsize > p_length || p_length - hsize < 22)
+		return False;
+	if (sptr[hsize + 20]) // compressed or extended sound
+		return False;
+	size = hc_get_uint4(&sptr[hsize + 4]);
+	rate = hc_get_uint2(&sptr[hsize + 8]);
+	uint1 t_base = (uint1)sptr[hsize + 21];
+	if (t_base == 0)
+		t_base = 0x3C;
+	real8 baserate = (real8)((int)t_base - 0x3C);
+	if (size > p_length - hsize - 22)
+		size = p_length - hsize - 22;
+	rate = (uint2)((real8)rate / pow(1.05946309434, baserate));
 	data = new (nothrow) int1[size];
+	if (data == NULL)
+		return False;
 	memcpy(data, sptr + hsize + 22, size);
 	uint1 *dptr = (uint1 *)data;
 	uint4 i = size;
@@ -614,19 +593,23 @@ MCHctext::MCHctext()
 {
 	card = False;
 	atts = NULL;
+	nruns = 0;
 	string = NULL;
 }
 
 MCHctext::~MCHctext()
 {
-	delete atts;
-	delete string;
+	delete[] atts;
+	delete[] string;
 }
 
-IO_stat MCHctext::parse(char *sptr)
+// Parse one content record of a card or background block, given the bytes
+// left in the block, and return the record's length in r_length.
+IO_stat MCHctext::parse(char *sptr, uint4 p_avail, uint4 &r_length)
 {
-	uint1 *uint1ptr = (uint1 *)sptr;
-	int2 fid = (*uint1ptr << 8) | *(uint1ptr + 1);
+	if (p_avail < 2)
+		return IO_ERROR;
+	int2 fid = hc_get_int2(sptr);
 	if (fid < 0)
 	{
 		card = True;
@@ -635,27 +618,47 @@ IO_stat MCHctext::parse(char *sptr)
 	else
 		id = fid;
 	if (version == 1)
+	{
 		string = convert_string(&sptr[2]);
+		r_length = MCU_min((uint4)strlen(&sptr[2]) + 3, p_avail);
+	}
 	else
 	{
-		uint2 offset;
-		uint2 *uint2ptr = (uint2 *)sptr;
-		uint2 tsize = swap_uint2(&uint2ptr[1]);
-		if (uint1ptr[4] & 0x80)
+		if (p_avail < 4)
+			return IO_ERROR;
+		uint4 tsize = hc_get_uint2(&sptr[2]);
+		r_length = MCU_min(((tsize + 1) & ~0x01) + 4, p_avail);
+		if (tsize > p_avail - 4)
+			tsize = p_avail - 4;
+		uint4 offset;
+		uint1 *uint1ptr = (uint1 *)sptr;
+		if (tsize != 0 && uint1ptr[4] & 0x80)
 		{
-			uint2 natts = swap_uint2(&uint2ptr[2]) & 0x7FFF;
+			uint4 natts = 0;
+			if (tsize >= 2)
+				natts = hc_get_uint2(&sptr[4]) & 0x7FFF;
+			if (natts < 2 || natts > tsize)
+			{
+				hcstat_append("Error: bad text style length %d in part %d", (int)natts, (int)id);
+				natts = tsize;
+			}
 			tsize -= natts;
 			offset = natts + 4;
 			natts = (natts >> 1) - 1;
-			atts = new (nothrow) uint2[natts + 1];
-			uint2 i;
-			for (i = 0 ; i < natts ; i++)
-				atts[i] = swap_uint2(&uint2ptr[i + 3]);
-			atts[natts] = tsize;
+			if (natts != 0)
+			{
+				atts = new (nothrow) uint2[natts + 1];
+				uint2 i;
+				for (i = 0 ; i < natts ; i++)
+					atts[i] = hc_get_uint2(&sptr[6 + i * 2]);
+				atts[natts] = tsize;
+				nruns = natts / 2;
+			}
 		}
 		else
 		{
-			tsize--;
+			if (tsize != 0)
+				tsize--;
 			offset = 5;
 		}
 		char *newstring = new (nothrow) char[tsize + 1];
@@ -672,21 +675,16 @@ MCCdata *MCHctext::buildf(MCHcstak *hcsptr, MCField *parent)
 	MCCdata *fptr = new (nothrow) MCCdata(cid);
 	if (string == NULL)
 		string = MCU_empty();
+	// The style runs: pairs of (offset in the text, style id), the last
+	// followed by the length of the text. A run covers its offset up to the
+	// next run's, across line ends, so each line takes the part of each run
+	// that falls inside it. (The old walk never left the first run of the
+	// last line, so a one-line field kept only its first style.)
 	char *eptr = string;
 	MCParagraph *paragraphs = NULL;
-	const char *tname = nullptr;
-	uint2 tsize = 0;
-	uint2 tstyle = 0;
-	uint2 aindex = 2;
-	uint2 aoffset = 0;
-	uint2 alength = 0;
+	uint4 t_line_start = 0;
 
     MCExecContext ctxt(nil, nil, nil);
-	if (atts != NULL)
-	{
-		hcsptr->getatts(atts[1], tname, tsize, tstyle);
-		alength = atts[aindex];
-	}
 	do
 	{
 		char *sptr = eptr;
@@ -700,49 +698,39 @@ MCCdata *MCHctext::buildf(MCHcstak *hcsptr, MCField *parent)
 		/* UNCHECKED */ MCStringCreateWithNativeChars((const char_t*)sptr, length, &t_string);
 		pgptr->settext(*t_string);
 		pgptr->appendto(paragraphs);
-		if (atts != NULL)
+		for (uint2 r = 0 ; r < nruns ; r++)
 		{
-			uint2 cindex = 0;
-			do
+			uint4 t_from = MCU_max((uint4)atts[r * 2], t_line_start);
+			uint4 t_to = MCU_min((uint4)atts[r * 2 + 2], t_line_start + length);
+			if (t_from >= t_to)
+				continue;
+			integer_t t_first = (integer_t)(t_from - t_line_start);
+			integer_t t_last = (integer_t)(t_to - t_line_start);
+			const char *tname = nullptr;
+			uint2 tsize = 0;
+			uint2 tstyle = 0;
+			hcsptr->getatts(atts[r * 2 + 1], tname, tsize, tstyle);
+			if (tname != NULL)
 			{
-                if (tname != NULL)
-                {
-                    MCAutoStringRef t_fontname;
-                    MCStringCreateWithCString(tname, &t_fontname);
-                    pgptr -> SetTextFontOfCharChunk(ctxt, (integer_t)cindex, (integer_t)MCU_min(length, cindex + alength), *t_fontname);
-                }
-				if (tsize != 0xFFFF)
-                {
-                    uinteger_t t_size;
-                    t_size = tsize;
-                    pgptr -> SetTextSizeOfCharChunk(ctxt, (integer_t)cindex, (integer_t)MCU_min(length, cindex + alength), &t_size);
-                }
-				if (tstyle != FA_DEFAULT_STYLE)
-                {
-                    MCInterfaceTextStyle t_style;
-                    t_style . style = tstyle;
-                    pgptr -> SetTextStyleOfCharChunk(ctxt, (integer_t)cindex, (integer_t)MCU_min(length, cindex + alength), t_style);
-                }
-				uint2 tlength = alength;
-				if (alength <= length - cindex && eptr != NULL)
-				{
-					Boolean skip = alength == length - cindex;
-					hcsptr->getatts(atts[aindex + 1], tname, tsize, tstyle);
-					aoffset = atts[aindex];
-					aindex += 2;
-					alength = atts[aindex] - aoffset;
-					if (skip)
-					{
-						cindex++;
-						alength--;
-					}
-				}
-				else
-					alength -= length + 1 - cindex;
-				cindex += tlength;
+				MCAutoStringRef t_fontname;
+				MCStringCreateWithCString(tname, &t_fontname);
+				pgptr -> SetTextFontOfCharChunk(ctxt, t_first, t_last, *t_fontname);
 			}
-			while (cindex < length);
+			if (tsize != 0xFFFF)
+			{
+				uinteger_t t_size;
+				t_size = tsize;
+				pgptr -> SetTextSizeOfCharChunk(ctxt, t_first, t_last, &t_size);
+			}
+			if (tstyle != FA_DEFAULT_STYLE)
+			{
+				MCInterfaceTextStyle t_style;
+				t_style . style = tstyle;
+				pgptr -> SetTextStyleOfCharChunk(ctxt, t_first, t_last, t_style);
+			}
 		}
+		// the line and its line end
+		t_line_start += length + 1;
 	}
 	while (eptr != NULL);
 	fptr->setparagraphs(paragraphs);
@@ -772,8 +760,8 @@ MCHcfield::MCHcfield()
 
 MCHcfield::~MCHcfield()
 {
-	delete name;
-	delete script;
+	delete[] name;
+	delete[] script;
 	while (text != NULL)
 	{
 		MCHctext *tptr = text->remove
@@ -782,28 +770,21 @@ MCHcfield::~MCHcfield()
 	}
 }
 
-IO_stat MCHcfield::parse(char *sptr)
+IO_stat MCHcfield::parse(char *sptr, uint4 p_size)
 {
-	int2 *int2ptr = (int2 *)sptr;
-	uint2 *uint2ptr = (uint2 *)sptr;
-
-	id = swap_uint2(&uint2ptr[1]);
-	rect.x = swap_int2(&int2ptr[4]);
-	rect.y = swap_int2(&int2ptr[3]);
-	rect.width = swap_int2(&int2ptr[6]) - rect.x + 1;
-	rect.height = swap_int2(&int2ptr[5]) - rect.y + 1;
-	atts = (sptr[5] << 8) | (sptr[14] & 0xFF);
-	style = sptr[15];
-	tfont = swap_uint2(&uint2ptr[11]);
-	tsize = swap_uint2(&uint2ptr[12]);
-	hctstyle = swap_uint2(&uint2ptr[13]);
+	if (p_size < 30)
+		return IO_ERROR;
+	id = hc_get_uint2(&sptr[2]);
+	rect = hc_read_part_rect(sptr);
+	atts = (uint2(uint1(sptr[5])) << 8) | uint1(sptr[14]);
+	style = uint1(sptr[15]);
+	tfont = hc_get_uint2(&sptr[22]);
+	tsize = hc_get_uint2(&sptr[24]);
+	hctstyle = hc_get_uint2(&sptr[26]);
 	tstyle = convert_style(hctstyle);
-	talign = (sptr[21] & 0xFF);
-	theight = swap_uint2(&uint2ptr[14]);
-	uint2 offset = 15;
-	if (sptr[offset * 2])
-		name = strclone(&sptr[offset * 2]);
-	script = convert_script(&sptr[offset * 2 + strlen(&sptr[offset * 2]) + 2]);
+	talign = uint1(sptr[21]);
+	theight = hc_get_uint2(&sptr[28]);
+	hc_read_name_and_script(&sptr[30], p_size - 30, 2, name, script);
 	return IO_NORMAL;
 }
 
@@ -811,14 +792,15 @@ MCControl *MCHcfield::build(MCHcstak *hcsptr, MCStack *sptr)
 {
 	MCField *fptr = (MCField *)MCtemplatefield->clone(False, OP_NONE, false);
 	fptr->parent = sptr;
-	fptr -> setname_cstring(name);
-	delete name;
+	if (name != NULL)
+		fptr -> setname_cstring(name);
+	delete[] name;
 	fptr->altid = id;
 	fptr->obj_id = ++maxid;
 	if (script != NULL)
 	{
 		fptr -> setscript_cstring(script);
-		delete script;
+		delete[] script;
 	}
 	name = script = NULL;
 	fptr->rect = rect;
@@ -949,8 +931,8 @@ MCHcbutton::MCHcbutton()
 
 MCHcbutton::~MCHcbutton()
 {
-	delete name;
-	delete script;
+	delete[] name;
+	delete[] script;
 	while (text != NULL)
 	{
 		MCHctext *tptr = text->remove
@@ -959,29 +941,22 @@ MCHcbutton::~MCHcbutton()
 	}
 }
 
-IO_stat MCHcbutton::parse(char *sptr)
+IO_stat MCHcbutton::parse(char *sptr, uint4 p_size)
 {
-	int2 *int2ptr = (int2 *)sptr;
-	uint2 *uint2ptr = (uint2 *)sptr;
-
-	id = swap_uint2(&uint2ptr[1]);
-	rect.x = swap_int2(&int2ptr[4]);
-	rect.y = swap_int2(&int2ptr[3]);
-	rect.width = swap_int2(&int2ptr[6]) - rect.x + 1;
-	rect.height = swap_int2(&int2ptr[5]) - rect.y + 1;
-	atts = (sptr[5] << 8) | (sptr[14] & 0xFF);
-	style = sptr[15];
-	titlewidth = swap_uint2(&uint2ptr[8]);
-	icon = swap_uint2(&uint2ptr[9]);
-	tfont = swap_uint2(&uint2ptr[11]);
-	tsize = swap_uint2(&uint2ptr[12]);
-	hctstyle = swap_uint2(&uint2ptr[13]);
+	if (p_size < 30)
+		return IO_ERROR;
+	id = hc_get_uint2(&sptr[2]);
+	rect = hc_read_part_rect(sptr);
+	atts = (uint2(uint1(sptr[5])) << 8) | uint1(sptr[14]);
+	style = uint1(sptr[15]);
+	titlewidth = hc_get_uint2(&sptr[16]);
+	icon = hc_get_uint2(&sptr[18]);
+	tfont = hc_get_uint2(&sptr[22]);
+	tsize = hc_get_uint2(&sptr[24]);
+	hctstyle = hc_get_uint2(&sptr[26]);
 	tstyle = convert_style(hctstyle);
-	talign = (sptr[21] & 0xFF);
-	uint2 offset = 15;
-	if (sptr[offset * 2])
-		name = strclone(&sptr[offset * 2]);
-	script = convert_script(&sptr[offset * 2 + strlen(&sptr[offset * 2]) + 2]);
+	talign = uint1(sptr[21]);
+	hc_read_name_and_script(&sptr[30], p_size - 30, 2, name, script);
 	return IO_NORMAL;
 }
 
@@ -989,15 +964,16 @@ MCControl *MCHcbutton::build(MCHcstak *hcsptr, MCStack *sptr)
 {
 	MCButton *bptr = (MCButton *)MCtemplatebutton->clone(False, OP_NONE, false);
 	bptr->parent = sptr;
-	bptr->setname_cstring(name);
-	delete name;
+	if (name != NULL)
+		bptr->setname_cstring(name);
+	delete[] name;
 	bptr->altid = id;
 	bptr->obj_id = ++maxid;
 	bptr->rect = rect;
 	if (script != NULL)
 	{
 		bptr -> setscript_cstring(script);
-		delete script;
+		delete[] script;
 	}
 	name = script = NULL;
 	bptr->flags &= ~(F_STYLE | F_DISPLAY_STYLE | F_ALIGNMENT | F_SHOW_ICON
@@ -1026,7 +1002,9 @@ MCControl *MCHcbutton::build(MCHcstak *hcsptr, MCStack *sptr)
 		else
 		{
 			MCStringRef t_menustring = nil;
-			/* UNCHECKED */ MCStringCreateWithCString(tptr->buildm(), t_menustring);
+			char *t_menu = tptr->buildm();
+			/* UNCHECKED */ MCStringCreateWithCString(t_menu != NULL ? t_menu : "", t_menustring);
+			delete[] t_menu;
 			MCValueAssign(bptr->menustring, t_menustring);
 			MCValueRelease(t_menustring);
 		}
@@ -1162,7 +1140,7 @@ void MCHcbmap::setvisible(Boolean newvis)
 	visible = newvis;
 }
 
-void MCHcbmap::icon(uint4 inid, MCNameRef inname, char *sptr)
+void MCHcbmap::icon(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length)
 {
 	id = inid;
     MCValueAssign(m_name, inname);
@@ -1176,10 +1154,12 @@ void MCHcbmap::icon(uint4 inid, MCNameRef inname, char *sptr)
 	}
 	rect.width = rect.height = 32;
 	// IM-2014-04-08: [[ Bug 12101 ]] Copy raw bitmap to data
-	/* UNCHECKED */ MCMemoryAllocateCopy((uint8_t*)sptr, 128, data);
+	/* UNCHECKED */ MCMemoryNewArray(128, data);
+	if (data != nil)
+		MCMemoryCopy(data, sptr, MCU_min(p_length, (uint4)128));
 }
 
-void MCHcbmap::cursor(uint4 inid, MCNameRef inname, char *sptr)
+void MCHcbmap::cursor(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length)
 {
 	id = inid;
     MCValueAssign(m_name, inname);
@@ -1193,54 +1173,90 @@ void MCHcbmap::cursor(uint4 inid, MCNameRef inname, char *sptr)
 	}
 	rect.width = rect.height = 16;
 	mrect = rect;
+	// A CURS resource is 68 bytes: the image, the mask, then the hot spot.
+	char t_curs[68];
+	memset(t_curs, 0, sizeof(t_curs));
+	memcpy(t_curs, sptr, MCU_min(p_length, (uint4)sizeof(t_curs)));
 	// IM-2014-04-08: [[ Bug 12101 ]] Copy raw bitmaps to data and mask
-	/* UNCHECKED */ MCMemoryAllocateCopy((uint8_t*)sptr, 32, data);
-	/* UNCHECKED */ MCMemoryAllocateCopy((uint8_t*)sptr + 32, 32, mask);
-	xhot = get_uint2(&sptr[64]);
-	yhot = get_uint2(&sptr[66]);
+	// The cursor's rows are 2 bytes; the bitmaps here pad rows to 4.
+	uint32_t t_stride = MCHCBitmapStride(16);
+	/* UNCHECKED */ MCMemoryNewArray(t_stride * 16, data);
+	/* UNCHECKED */ MCMemoryNewArray(t_stride * 16, mask);
+	for (uint32_t y = 0 ; data != nil && mask != nil && y < 16 ; y++)
+	{
+		memcpy(&data[y * t_stride], &t_curs[y * 2], 2);
+		memcpy(&mask[y * t_stride], &t_curs[32 + y * 2], 2);
+	}
+	xhot = hc_get_uint2(&t_curs[64]);
+	yhot = hc_get_uint2(&t_curs[66]);
 }
 
-IO_stat MCHcbmap::parse(char *sptr)
+// Read a BMAP rectangle (top, left, bottom, right) as the 32-pixel aligned
+// rectangle its bitmap is stored in.
+static MCRectangle hc_read_bmap_rect(const char *sptr, MCRectangle &r_exact)
 {
-	int2 *int2ptr = (int2 *)sptr;
-	uint4 *uint4ptr = (uint4 *)sptr;
-	id = swap_uint4(&uint4ptr[2]);
+	int4 t_top = hc_get_int2(&sptr[0]);
+	int4 t_left = hc_get_int2(&sptr[2]);
+	int4 t_bottom = hc_get_int2(&sptr[4]);
+	int4 t_right = hc_get_int2(&sptr[6]);
+	r_exact.x = t_left;
+	r_exact.y = t_top;
+	r_exact.width = MCU_max(t_right - t_left, 0);
+	r_exact.height = MCU_max(t_bottom - t_top, 0);
+	MCRectangle t_rect;
+	t_rect.x = t_left & 0xFFE0;
+	t_rect.y = t_top;
+	t_rect.width = MCU_max((t_right - t_rect.x + 31) & 0xFFE0, 0);
+	t_rect.height = r_exact.height;
+	return t_rect;
+}
+
+IO_stat MCHcbmap::parse(char *sptr, uint4 p_size)
+{
+	// version 1 blocks have no filler after the id, so every field is 4
+	// bytes earlier
+	uint4 t_shift = version == 1 ? 4 : 0;
+	if (p_size < 64 - t_shift)
+		return IO_ERROR;
+	id = hc_get_uint4(&sptr[8]);
 	maxid = MCU_max(id, maxid);
-	uint4 offset;
-	uint4 masksize;
-	if (version == 1)
-	{
-		mrect.x = swap_int2(&int2ptr[15]) & 0xFFE0;
-		mrect.y = swap_int2(&int2ptr[14]);
-		mrect.width = (swap_int2(&int2ptr[17]) - mrect.x + 31) & 0xFFE0;
-		mrect.height = swap_int2(&int2ptr[16]) - mrect.y;
-		rect.x = swap_int2(&int2ptr[19]) & 0xFFE0;
-		rect.y = swap_int2(&int2ptr[18]);
-		rect.width = (swap_int2(&int2ptr[21]) - rect.x + 31) & 0xFFE0;
-		rect.height = swap_int2(&int2ptr[20]) - rect.y;
-		masksize = swap_uint4(&uint4ptr[13]);
-		offset = 60;
-	}
-	else
-	{
-		mrect.x = swap_int2(&int2ptr[17]) & 0xFFE0;
-		mrect.y = swap_int2(&int2ptr[16]);
-		mrect.width = (swap_int2(&int2ptr[19]) - mrect.x + 31) & 0xFFE0;
-		mrect.height = swap_int2(&int2ptr[18]) - mrect.y;
-		rect.x = swap_int2(&int2ptr[21]) & 0xFFE0;
-		rect.y = swap_int2(&int2ptr[20]);
-		rect.width = (swap_int2(&int2ptr[23]) - rect.x + 31) & 0xFFE0;
-		rect.height = swap_int2(&int2ptr[22]) - rect.y;
-		masksize = swap_uint4(&uint4ptr[14]);
-		offset = 64;
-	}
+	MCRectangle t_exact_mask, t_exact_rect;
+	mrect = hc_read_bmap_rect(&sptr[32 - t_shift], t_exact_mask);
+	rect = hc_read_bmap_rect(&sptr[40 - t_shift], t_exact_rect);
+	uint4 masksize = hc_get_uint4(&sptr[56 - t_shift]);
+	uint4 datasize = hc_get_uint4(&sptr[60 - t_shift]);
+	uint4 offset = 64 - t_shift;
+	if (masksize > p_size - offset)
+		masksize = p_size - offset;
 	// IM-2014-04-08: [[ Bug 12101 ]] Decode bitmap to mask
-	if (masksize != 0)
-		/* UNCHECKED */ convert_hcbitmap_data((uint8_t*)&sptr[offset], mrect.width, mrect.height, mask);
+	if (masksize != 0 && mrect.width != 0 && mrect.height != 0)
+		/* UNCHECKED */ convert_hcbitmap_data((uint1 *)&sptr[offset], masksize, mrect.width, mrect.height, mrect.y, mask);
+	else if (t_exact_mask.width != 0 && t_exact_mask.height != 0)
+	{
+		// A mask rectangle with no mask data is an opaque rectangle: the
+		// white of the picture inside it hides what is behind it.
+		uint32_t t_stride = MCHCBitmapStride(mrect.width);
+		if (MCMemoryNewArray(t_stride * mrect.height, mask))
+		{
+			uint32_t t_from = t_exact_mask.x - mrect.x;
+			uint32_t t_to = t_from + t_exact_mask.width;
+			for (uint32_t y = 0 ; y < mrect.height ; y++)
+				for (uint32_t x = t_from ; x < t_to ; x++)
+					mask[y * t_stride + (x >> 3)] |= 0x80 >> (x & 7);
+		}
+	}
 	offset += masksize;
+	if (datasize > p_size - offset)
+		datasize = p_size - offset;
 	// IM-2014-04-08: [[ Bug 12101 ]] Decode bitmap to data
 	if (rect.width != 0 && rect.height != 0)
-		/* UNCHECKED */ convert_hcbitmap_data((uint8_t*)&sptr[offset], rect.width, rect.height, data);
+		/* UNCHECKED */ convert_hcbitmap_data((uint1 *)&sptr[offset], datasize, rect.width, rect.height, rect.y, data);
+	else if (mask != nil)
+	{
+		// a picture that is only white: no black pixels, in the mask's area
+		rect = mrect;
+		/* UNCHECKED */ MCMemoryNewArray(MCHCBitmapStride(rect.width) * rect.height, data);
+	}
 	return IO_NORMAL;
 }
 
@@ -1381,9 +1397,9 @@ MCHccard::MCHccard()
 
 MCHccard::~MCHccard()
 {
-	delete name;
-	delete script;
-	delete objects;
+	delete[] name;
+	delete[] script;
+	delete[] objects;
 	while (hcbuttons != NULL)
 	{
 		MCHcbutton *bptr = hcbuttons->remove
@@ -1404,84 +1420,90 @@ MCHccard::~MCHccard()
 	}
 }
 
-IO_stat MCHccard::parse(char *sptr)
+// Parse the parts, contents, name and script of a card or background
+// block. p_offset is the offset of the first part. Every record is checked
+// against the block size: a record that would run past the end stops the
+// parse there, keeping what was read before it.
+static void hc_parse_layer(char *sptr, uint4 p_size, uint4 p_offset, uint2 &x_nobjects, uint2 p_ntext,
+                           uint4 p_cid, uint2 *&r_objects, MCHcbutton *&x_buttons, MCHcfield *&x_fields,
+                           MCHctext *&x_texts, char *&r_name, char *&r_script)
 {
-	uint2 *uint2ptr = (uint2 *)sptr;
-	uint4 *uint4ptr = (uint4 *)sptr;
-	id = swap_uint4(&uint4ptr[2]);
-	maxid = MCU_max(id, maxid);
-	uint2 ntext;
-	uint4 offset;
-	if (version == 1)
-	{
-		bmapid = swap_uint4(&uint4ptr[3]);
-		bkgdid = swap_uint4(&uint4ptr[8]);
-		nobjects = swap_uint2(&uint2ptr[18]);
-		ntext = swap_uint2(&uint2ptr[22]);
-		atts = sptr[18];
-		offset = 25;
-	}
-	else
-	{
-		bmapid = swap_uint4(&uint4ptr[4]);
-		bkgdid = swap_uint4(&uint4ptr[9]);
-		nobjects = swap_uint2(&uint2ptr[20]);
-		ntext = swap_uint2(&uint2ptr[24]);
-		atts = sptr[20];
-		offset = 27;
-	}
-	if (nobjects)
-		objects = new (nothrow) uint2[nobjects];
+	uint4 offset = p_offset;
+	uint2 t_wanted = x_nobjects;
+	x_nobjects = 0;
+	if (t_wanted)
+		r_objects = new (nothrow) uint2[t_wanted];
 	uint2 i;
-	for (i = 0 ; i < nobjects ; i++)
+	for (i = 0 ; i < t_wanted ; i++)
 	{
-		objects[i] = sptr[offset * 2 + 4];
-		switch (objects[i])
+		if (offset > p_size || p_size - offset < 30)
+		{
+			hcstat_append("Error: part %d of block %d runs past its end", (int)i + 1, (int)p_cid);
+			break;
+		}
+		uint4 t_part_size = hc_get_uint2(&sptr[offset]);
+		if (t_part_size < 30 || t_part_size > p_size - offset)
+		{
+			hcstat_append("Error: part %d of block %d has a bad size (%d)", (int)i + 1, (int)p_cid, (int)t_part_size);
+			break;
+		}
+		uint2 t_type = uint1(sptr[offset + 4]);
+		r_objects[x_nobjects++] = t_type;
+		switch (t_type)
 		{
 		case HC_OTYPE_BUTTON:
 			{
 				MCHcbutton *newbutton = new (nothrow) MCHcbutton;
-				newbutton->appendto(hcbuttons);
-				if (newbutton->parse(&sptr[offset * 2]) != IO_NORMAL)
-					return IO_ERROR;
+				newbutton->appendto(x_buttons);
+				newbutton->parse(&sptr[offset], t_part_size);
 			}
 			break;
 		case HC_OTYPE_FIELD:
 			{
 				MCHcfield *newfield = new (nothrow) MCHcfield;
-				newfield->appendto(hcfields);
-				if (newfield->parse(&sptr[offset * 2]) != IO_NORMAL)
-					return IO_ERROR;
+				newfield->appendto(x_fields);
+				newfield->parse(&sptr[offset], t_part_size);
 			}
 			break;
 		default:
-			hcstat_append("Error: Unknown object type %x",
-			        swap_uint2(&uint2ptr[offset]));
+			hcstat_append("Error: unknown object type %x", t_type);
 			break;
 		}
-		offset += swap_uint2(&uint2ptr[offset]) >> 1;
+		offset += t_part_size;
 	}
-	offset <<= 1;
-	while (ntext--)
+	while (p_ntext--)
 	{
+		if (offset >= p_size)
+		{
+			hcstat_append("Error: the text of block %d runs past its end", (int)p_cid);
+			break;
+		}
 		MCHctext *newtext = new (nothrow) MCHctext;
-		newtext->cid = id;
-		newtext->appendto(hctexts);
-		if (newtext->parse(&sptr[offset]) != IO_NORMAL)
-			return IO_ERROR;
-		if (version == 1)
-			if (newtext->string != NULL)
-				offset += strlen(newtext->string) + 3;
-			else
-				offset += 3;
-		else
-			offset += ((uint2ptr[(offset >> 1) + 1] + 1) & ~0x01) + 4;
+		newtext->cid = p_cid;
+		newtext->appendto(x_texts);
+		uint4 t_length = 0;
+		if (newtext->parse(&sptr[offset], p_size - offset, t_length) != IO_NORMAL || t_length == 0)
+			break;
+		offset += t_length;
 	}
+	if (offset < p_size)
+		hc_read_name_and_script(&sptr[offset], p_size - offset, 1, r_name, r_script);
+}
 
-	if (sptr[offset])
-		name = strclone(&sptr[offset]);
-	script = convert_script(&sptr[offset + strlen(&sptr[offset]) + 1]);
-	
+IO_stat MCHccard::parse(char *sptr, uint4 p_size)
+{
+	// version 1 blocks have no filler after the id
+	uint4 t_shift = version == 1 ? 4 : 0;
+	if (p_size < 54 - t_shift)
+		return IO_ERROR;
+	id = hc_get_uint4(&sptr[8]);
+	maxid = MCU_max(id, maxid);
+	bmapid = hc_get_uint4(&sptr[16 - t_shift]);
+	atts = uint1(sptr[20 - t_shift]);
+	bkgdid = hc_get_uint4(&sptr[36 - t_shift]);
+	nobjects = hc_get_uint2(&sptr[40 - t_shift]);
+	uint2 ntext = hc_get_uint2(&sptr[48 - t_shift]);
+	hc_parse_layer(sptr, p_size, 54 - t_shift, nobjects, ntext, id, objects, hcbuttons, hcfields, hctexts, name, script);
 	return IO_NORMAL;
 }
 
@@ -1490,18 +1512,19 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 	MCObjptr *newoptr;
 	MCCard *cptr = MCtemplatecard->clone(False, False);
 	cptr->obj_id = id;
-	cptr->setname_cstring(name);
-	delete name;
+	if (name != NULL)
+		cptr->setname_cstring(name);
+	delete[] name;
 	if (script != NULL)
 	{
 		cptr -> setscript_cstring(script);
-		delete script;
+		delete[] script;
 	}
 	name = script = NULL;
 	if (atts & HC_BC_DONT_SEARCH)
-		cptr->flags |= F_G_DONT_SEARCH;
+		cptr->flags |= F_C_DONT_SEARCH;
 	if (atts & HC_BC_CANT_DELETE)
-		cptr->flags |= F_G_CANT_DELETE;
+		cptr->flags |= F_C_CANT_DELETE;
 	newoptr = new (nothrow) MCObjptr;
 	newoptr->setparent(cptr);
 	newoptr->setid(bkgdid);
@@ -1513,9 +1536,12 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 		newoptr->setid(bmapid);
 		newoptr->appendto(cptr->objptrs);
 		MCHcbmap *bmptr = hcsptr->getbmap(bmapid);
-		bmptr->setvisible((atts & HC_BC_HIDE_BMAP) == 0);
+		if (bmptr != NULL)
+			bmptr->setvisible((atts & HC_BC_HIDE_BMAP) == 0);
 	}
 	MCHcbkgd *bgptr = hcsptr->getbkgd(bkgdid);
+	if (bgptr == NULL)
+		hcstat_append("Error: card %d has no background %d", (int)id, (int)bkgdid);
 	while (hctexts != NULL)
 	{
 		MCHctext *tptr = hctexts->remove
@@ -1534,6 +1560,8 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 					delete tptr;
 			}
 		}
+		else if (bgptr == NULL)
+			delete tptr;
 		else
 		{
 			MCHcfield *fptr = findfield(bgptr->hcfields, tptr->id);
@@ -1593,13 +1621,14 @@ MCHcbkgd::MCHcbkgd()
 	hcbuttons = NULL;
 	hcfields = NULL;
 	hctexts = NULL;
+	nextid = 0;
 }
 
 MCHcbkgd::~MCHcbkgd()
 {
-	delete name;
-	delete script;
-	delete objects;
+	delete[] name;
+	delete[] script;
+	delete[] objects;
 	while (hcbuttons != NULL)
 	{
 		MCHcbutton *bptr = hcbuttons->remove
@@ -1620,81 +1649,21 @@ MCHcbkgd::~MCHcbkgd()
 	}
 }
 
-IO_stat MCHcbkgd::parse(char *sptr)
+IO_stat MCHcbkgd::parse(char *sptr, uint4 p_size)
 {
-	uint2 *uint2ptr = (uint2 *)sptr;
-	uint4 *uint4ptr = (uint4 *)sptr;
-	id = swap_uint4(&uint4ptr[2]);
+	// version 1 blocks have no filler after the id
+	uint4 t_shift = version == 1 ? 4 : 0;
+	if (p_size < 50 - t_shift)
+		return IO_ERROR;
+	id = hc_get_uint4(&sptr[8]);
 	maxid = MCU_max(id, maxid);
-	uint4 offset;
-	uint2 ntext;
-	if (version == 1)
-	{
-		bmapid = swap_uint4(&uint4ptr[3]);
-		nobjects = swap_uint2(&uint2ptr[16]);
-		ntext = swap_uint2(&uint2ptr[20]);
-		atts = sptr[18];
-		offset = 23;
-	}
-	else
-	{
-		bmapid = swap_uint4(&uint4ptr[4]);
-		nobjects = swap_uint2(&uint2ptr[18]);
-		ntext = swap_uint2(&uint2ptr[22]);
-		atts = sptr[20];
-		offset = 25;
-	}
-	if (nobjects)
-		objects = new (nothrow) uint2[nobjects];
-	uint2 i;
-	for (i = 0 ; i < nobjects ; i++)
-	{
-		objects[i] = sptr[offset * 2 + 4];
-		switch (objects[i])
-		{
-		case HC_OTYPE_BUTTON:
-			{
-				MCHcbutton *newbutton = new (nothrow) MCHcbutton;
-				newbutton->appendto(hcbuttons);
-				if (newbutton->parse(&sptr[offset * 2]) != IO_NORMAL)
-					return IO_ERROR;
-			}
-			break;
-		case HC_OTYPE_FIELD:
-			{
-				MCHcfield *newfield = new (nothrow) MCHcfield;
-				newfield->appendto(hcfields);
-				if (newfield->parse(&sptr[offset * 2]) != IO_NORMAL)
-					return IO_ERROR;
-			}
-			break;
-		default:
-			hcstat_append("Error: bad object type %x",
-			        swap_uint2(&uint2ptr[offset]));
-			break;
-		}
-		offset += swap_uint2(&uint2ptr[offset]) >> 1;
-	}
-	offset <<= 1;
-	while (ntext--)
-	{
-		MCHctext *newtext = new (nothrow) MCHctext;
-		newtext->cid = 0;
-		newtext->appendto(hctexts);
-		if (newtext->parse(&sptr[offset]) != IO_NORMAL)
-			return IO_ERROR;
-		if (version == 1)
-			if (newtext->string != NULL)
-				offset += strlen(newtext->string) + 3;
-			else
-				offset += 3;
-		else
-			offset += ((uint2ptr[(offset >> 1) + 1] + 1) & ~0x01) + 4;
-	}
-
-	if (sptr[offset])
-		name = strclone(&sptr[offset]);
-	script = convert_script(&sptr[offset + strlen(&sptr[offset]) + 1]);
+	bmapid = hc_get_uint4(&sptr[16 - t_shift]);
+	atts = uint1(sptr[20 - t_shift]);
+	nextid = hc_get_uint4(&sptr[28 - t_shift]);
+	nobjects = hc_get_uint2(&sptr[36 - t_shift]);
+	uint2 ntext = hc_get_uint2(&sptr[44 - t_shift]);
+	// background contents belong to no card: cid 0
+	hc_parse_layer(sptr, p_size, 50 - t_shift, nobjects, ntext, 0, objects, hcbuttons, hcfields, hctexts, name, script);
 	return IO_NORMAL;
 }
 
@@ -1704,14 +1673,15 @@ MCGroup *MCHcbkgd::build(MCHcstak *hcsptr, MCStack *sptr)
 	// MW-2011-08-09: [[ Groups ]] HC backgrounds are shared.
 	gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
 	gptr->obj_id = id;
-	gptr->setname_cstring(name);
-	delete name;
+	if (name != NULL)
+		gptr->setname_cstring(name);
+	delete[] name;
 	gptr->rect = sptr->getrect();
 	gptr->rect.x = gptr->rect.y = 0;
 	if (script != NULL)
 	{
 		gptr -> setscript_cstring(script);
-		delete script;
+		delete[] script;
 	}
 	name = script = NULL;
 	if (atts & HC_BC_DONT_SEARCH)
@@ -1721,9 +1691,13 @@ MCGroup *MCHcbkgd::build(MCHcstak *hcsptr, MCStack *sptr)
 	if (bmapid != 0)
 	{
 		MCHcbmap *bmptr = hcsptr->removebmap(bmapid);
-		bmptr->setvisible((atts & HC_BC_HIDE_BMAP) == 0);
-		MCControl *iptr = bmptr->build();
-		delete bmptr;
+		MCControl *iptr = NULL;
+		if (bmptr != NULL)
+		{
+			bmptr->setvisible((atts & HC_BC_HIDE_BMAP) == 0);
+			iptr = bmptr->build();
+			delete bmptr;
+		}
 		if (iptr != NULL)
 		{
 			iptr->setparent(gptr);
@@ -1790,7 +1764,14 @@ MCHcstak::MCHcstak(char *inname)
 	  pagesize(0),
 	  npbuffers(0),
 	  pbuffersizes(nullptr),
+	  pbufferids(nullptr),
 	  pbuffers(nullptr),
+	  nlistpages(0),
+	  firstbkgd(0),
+	  listpageids(nullptr),
+	  listpagecounts(nullptr),
+	  nfontbuffers(0),
+	  fontbuffers(nullptr),
 	  hcbkgds(nullptr),
 	  hccards(nullptr),
 	  hcbmaps(nullptr),
@@ -1802,21 +1783,27 @@ MCHcstak::MCHcstak(char *inname)
 
 MCHcstak::~MCHcstak()
 {
-	delete name;
-	delete script;
-	delete fullbuffer;
-	delete pages;
-	delete marks;
-	delete fonts;
-	delete atts;
+	delete[] name;
+	delete[] script;
+	delete[] fullbuffer;
+	delete[] pages;
+	delete[] marks;
+	delete[] fonts;
+	delete[] atts;
 	uint4 i;
 	for (i = 0 ; i < npbuffers ; i++)
-		delete pbuffers[i];
+		delete[] pbuffers[i];
 	if (pbuffers != NULL)
 	{
-		delete pbuffers;
-		delete pbuffersizes;
+		delete[] pbuffers;
+		delete[] pbuffersizes;
+		delete[] pbufferids;
 	}
+	delete[] listpageids;
+	delete[] listpagecounts;
+	for (i = 0 ; i < nfontbuffers ; i++)
+		delete[] fontbuffers[i];
+	delete[] fontbuffers;
 	while (hcbkgds != NULL)
 	{
 		MCHcbkgd *bgptr = hcbkgds->remove
@@ -1880,6 +1867,8 @@ uint4 MCHcstak::geticon(uint2 iid)
 MCHcbmap *MCHcstak::getbmap(uint4 bid)
 {
 	MCHcbmap *bptr = hcbmaps;
+	if (bptr == NULL)
+		return NULL;
 	do
 	{
 		if (bptr->id == bid)
@@ -1893,6 +1882,8 @@ MCHcbmap *MCHcstak::getbmap(uint4 bid)
 MCHcbmap *MCHcstak::removebmap(uint4 bid)
 {
 	MCHcbmap *bptr = getbmap(bid);
+	if (bptr == NULL)
+		return NULL;
 	return bptr->remove
 	       (hcbmaps);
 }
@@ -1900,6 +1891,8 @@ MCHcbmap *MCHcstak::removebmap(uint4 bid)
 MCHcbkgd *MCHcstak::getbkgd(uint4 bid)
 {
 	MCHcbkgd *bptr = hcbkgds;
+	if (bptr == NULL)
+		return NULL;
 	do
 	{
 		if (bptr->id == bid)
@@ -1939,261 +1932,538 @@ void MCHcstak::getatts(uint2 aid, const char *&font,
 	style = FA_DEFAULT_STYLE;
 }
 
+// Decode a BinHex 4.0 file into its data and resource forks. p_text is the
+// file from the ':' that starts the encoded data. Returns false if the data
+// is not well formed.
+static bool hc_decode_binhex(const uint1 *p_text, uint4 p_length, char *&r_name,
+                             uint1 *&r_data, uint4 &r_data_size, uint1 *&r_rsrc, uint4 &r_rsrc_size)
+{
+	static const char s_alphabet[] =
+		"!\"#$%&'()*+,-012345689@ABCDEFGHIJKLMNPQRSTUVXYZ[`abcdefhijklmpqr";
+	int1 t_value[256];
+	memset(t_value, -1, sizeof(t_value));
+	for (int i = 0 ; i < 64 ; i++)
+		t_value[(uint1)s_alphabet[i]] = (int1)i;
+
+	// 6-bit characters to 8-bit bytes
+	uint1 *t_packed = new (nothrow) uint1[p_length * 3 / 4 + 3];
+	if (t_packed == NULL)
+		return false;
+	uint4 t_packed_size = 0;
+	uint4 t_bits = 0;
+	uint4 t_nbits = 0;
+	bool t_closed = false;
+	for (uint4 i = 0 ; i < p_length ; i++)
+	{
+		uint1 c = p_text[i];
+		if (c == ':')
+		{
+			t_closed = true;
+			break;
+		}
+		if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
+			continue;
+		if (t_value[c] < 0)
+			break;
+		t_bits = (t_bits << 6) | (uint4)t_value[c];
+		t_nbits += 6;
+		if (t_nbits >= 8)
+		{
+			t_nbits -= 8;
+			t_packed[t_packed_size++] = uint1(t_bits >> t_nbits);
+		}
+	}
+	if (!t_closed)
+	{
+		delete[] t_packed;
+		return false;
+	}
+
+	// Run-length decoding: 0x90 n repeats the byte before it n times in all,
+	// 0x90 0 is a 0x90.
+	uint4 t_full_capacity = t_packed_size * 2 + 256;
+	uint1 *t_full = (uint1 *)malloc(t_full_capacity);
+	uint4 t_full_size = 0;
+	bool t_ok = t_full != NULL;
+	for (uint4 i = 0 ; t_ok && i < t_packed_size ; i++)
+	{
+		uint4 t_count = 1;
+		uint1 t_byte = t_packed[i];
+		if (t_byte == 0x90 && i + 1 < t_packed_size)
+		{
+			uint1 n = t_packed[++i];
+			if (n != 0)
+			{
+				if (t_full_size == 0)
+					continue;
+				t_byte = t_full[t_full_size - 1];
+				t_count = n - 1;
+			}
+		}
+		if (t_full_size + t_count > t_full_capacity)
+		{
+			t_full_capacity = (t_full_size + t_count) * 2;
+			uint1 *t_new = (uint1 *)realloc(t_full, t_full_capacity);
+			if (t_new == NULL)
+				t_ok = false;
+			else
+				t_full = t_new;
+		}
+		while (t_ok && t_count--)
+			t_full[t_full_size++] = t_byte;
+	}
+	delete[] t_packed;
+
+	// The header: name, version, type, creator, flags, the fork lengths and
+	// a CRC, then each fork followed by its CRC.
+	uint4 t_offset = 0;
+	if (t_ok && t_full_size > 0)
+		t_offset = 1 + t_full[0];
+	if (!t_ok || t_full_size < t_offset + 21)
+	{
+		free(t_full);
+		return false;
+	}
+	r_name = new (nothrow) char[t_full[0] + 1];
+	memcpy(r_name, &t_full[1], t_full[0]);
+	r_name[t_full[0]] = '\0';
+	t_offset += 1;
+	bool t_is_stack = memcmp(&t_full[t_offset], "STAK", 4) == 0;
+	t_offset += 10;
+	r_data_size = hc_get_uint4((const char *)&t_full[t_offset]);
+	r_rsrc_size = hc_get_uint4((const char *)&t_full[t_offset + 4]);
+	t_offset += 10;
+	if (!t_is_stack || r_data_size > t_full_size - t_offset)
+	{
+		free(t_full);
+		return false;
+	}
+	r_data = new (nothrow) uint1[r_data_size + 1];
+	memcpy(r_data, &t_full[t_offset], r_data_size);
+	t_offset += r_data_size + 2;
+	r_rsrc = NULL;
+	if (t_offset > t_full_size || r_rsrc_size > t_full_size - t_offset)
+		r_rsrc_size = 0;
+	if (r_rsrc_size != 0)
+	{
+		r_rsrc = new (nothrow) uint1[r_rsrc_size];
+		memcpy(r_rsrc, &t_full[t_offset], r_rsrc_size);
+	}
+	free(t_full);
+	return true;
+}
+
+// Read the resources HyperCard stacks keep in their resource fork: icons,
+// cursors and sounds. Every offset is checked against the fork.
+void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
+{
+	const char *t_fork = (const char *)p_fork;
+	if (p_size < 16)
+		return;
+	uint4 t_data_offset = hc_get_uint4(&t_fork[0]);
+	uint4 t_map_offset = hc_get_uint4(&t_fork[4]);
+	uint4 t_map_size = hc_get_uint4(&t_fork[12]);
+	if (t_data_offset > p_size || t_map_offset > p_size || t_map_size > p_size - t_map_offset || t_map_size < 30)
+	{
+		hcstat_append("Error: bad resource fork");
+		return;
+	}
+	const char *t_map = &t_fork[t_map_offset];
+	uint4 t_types_offset = hc_get_uint2(&t_map[24]);
+	uint4 t_names_offset = hc_get_uint2(&t_map[26]);
+	if (t_types_offset + 2 > t_map_size)
+		return;
+	const char *t_types = &t_map[t_types_offset];
+	uint2 typecount = uint2(hc_get_uint2(t_types) + 1);
+	iconx = icony = cursorx = cursory = 0;
+	for (uint2 i = 0 ; i < typecount ; i++)
+	{
+		uint4 t_entry = t_types_offset + 2 + i * 8;
+		if (t_entry + 8 > t_map_size)
+			break;
+		uint4 t_type = hc_get_uint4(&t_map[t_entry]);
+		uint4 count = uint4(uint2(hc_get_uint2(&t_map[t_entry + 4]) + 1));
+		uint4 t_refs = t_types_offset + hc_get_uint2(&t_map[t_entry + 6]);
+		for (uint4 j = 0 ; j < count ; j++)
+		{
+			uint4 t_ref = t_refs + j * 12;
+			if (t_ref + 12 > t_map_size)
+				break;
+			uint2 id = hc_get_uint2(&t_map[t_ref]);
+			uint2 soffset = hc_get_uint2(&t_map[t_ref + 2]);
+			uint4 offset = hc_get_uint4(&t_map[t_ref + 4]) & 0xFFFFFF;
+
+            MCNewAutoNameRef t_name;
+            uint4 t_name_at = t_names_offset + soffset;
+            if (soffset == UINT16_MAX || t_name_at >= t_map_size
+                || t_name_at + 1 + (uint1)t_map[t_name_at] > t_map_size)
+                t_name = kMCEmptyName;
+            else
+            {
+                // a Pascal string, converted from MacRoman as the names of
+                // the stack's objects are
+                uint1 t_length = (uint1)t_map[t_name_at];
+                char *t_raw = new (nothrow) char[t_length + 1];
+                memcpy(t_raw, &t_map[t_name_at + 1], t_length);
+                t_raw[t_length] = '\0';
+                char *t_converted = convert_string(t_raw);
+                delete[] t_raw;
+                if (!MCNameCreateWithNativeChars((const char_t *)t_converted, strlen(t_converted), &t_name))
+                    t_name = kMCEmptyName;
+                delete[] t_converted;
+            }
+
+			if (offset > p_size - t_data_offset || p_size - t_data_offset - offset < 4)
+				continue;
+			char *t_resource = (char *)&t_fork[t_data_offset + offset + 4];
+			uint4 t_length = hc_get_uint4(&t_fork[t_data_offset + offset]);
+			if (t_length > p_size - t_data_offset - offset - 4)
+				t_length = p_size - t_data_offset - offset - 4;
+			switch (t_type)
+			{
+			case HC_ICON:
+				{
+					MCHcbmap *newicon = new (nothrow) MCHcbmap;
+					newicon->appendto(icons);
+					newicon->icon(id, *t_name, t_resource, t_length);
+				}
+				break;
+			case HC_CURS:
+				{
+					MCHcbmap *newcurs = new (nothrow) MCHcbmap;
+					newcurs->appendto(cursors);
+					newcurs->cursor(id, *t_name, t_resource, t_length);
+				}
+				break;
+			case HC_SND:
+				{
+					MCHcsnd *newsnd = new (nothrow) MCHcsnd;
+					if (newsnd->import(id, *t_name, t_resource, t_length))
+						newsnd->appendto(snds);
+					else
+						delete newsnd;
+				}
+				break;
+			default:
+                {
+                    MCAutoStringRefAsCString t_name_str;
+                    /* UNCHECKED */ t_name_str.Lock(MCNameGetString(*t_name));
+                    hcstat_append("Not converting %4.4s id %5d \"%s\"",
+                                  (char *)&t_map[t_entry], id, *t_name_str);
+                }
+				break;
+			}
+		}
+	}
+}
+
+// Read a HyperCard stack: a bare data fork, a MacBinary file or a BinHex
+// 4.0 file. The whole file is read, and every block is checked against
+// the data fork before it is parsed.
 IO_stat MCHcstak::read(IO_handle stream)
 {
 	char header[HC_HEADER_SIZE];
-	uint4 boffset = 0;
-	uint4 roffset = 0;
-	uint4 rsize = 0;
-	HC_File_type filetype = HC_RAW;
-	uint4 *uint4buff = (uint4 *)header;
-	uint2 *uint2buff;
-	uint4 size;
 	if (IO_read(header, HC_HEADER_SIZE, stream) != IO_NORMAL)
 		return IO_ERROR;
-	swap_uint4(&uint4buff[1]);
-	if (uint4buff[1] == HC_STAK)
-	{
-		MCS_seek_set(stream, 0);
+
+	HC_File_type filetype;
+	if (hc_get_uint4(&header[4]) == HC_STAK)
 		filetype = HC_RAW;
+	else if (header[0] == '\0' && header[74] == '\0' && header[82] == '\0')
+	{
+		if (!strnequal(&header[65], "STAK", 4))
+			return IO_ERROR;
+		filetype = HC_MACBIN;
 	}
 	else
 	{
-		swap_uint4(&uint4buff[1]);
-		if (header[0] == '\0' && header[74] == '\0' && header[82] == '\0')
-		{
-			if (!strnequal(&header[65], "STAK", 4))
-				return IO_ERROR;
-			filetype = HC_MACBIN;
-			delete name;
-			name = new (nothrow) char[strlen(&header[2]) + 1];
-			strcpy(name, &header[2]);
-			uint1 *uint1ptr = (uint1 *)header;
-			roffset = uint1ptr[83] << 24 | uint1ptr[84] << 16
-			          | uint1ptr[85] << 8 | uint1ptr[86];
-			roffset += 128 + 127;
-			roffset &= 0xFFFFFF80;
-			rsize = uint1ptr[87] << 24 | uint1ptr[88] << 16
-			        | uint1ptr[89] << 8 | uint1ptr[90];
-			MCS_seek_set(stream, 128);
-		}
-		else
-		{
-			header[255] = '\0';
-			uint4 foffset;
-			if (MCU_offset("BinHex", header, foffset))
-			{
-				filetype = HC_BINHEX;
-				while(header[foffset] != ':')
-				{
-					foffset++;
-					if (header[foffset] == '\0')
-						return IO_ERROR;
-				}
-				MCS_seek_set(stream, ++foffset);
-				uint4 fsize = (uint4)MCS_fsize(stream) - foffset;
-				char *tbuffer = new (nothrow) char[fsize * 3 / 4];
-				uint1 *uint1ptr = (uint1 *)tbuffer;
-				uint1 byte;
-				uint2 tcount = 0;
-				uint1 tbuf[4];
-				uint4 tsize = fsize;
-				while (tsize--)
-				{
-					if (IO_read_uint1(&byte, stream) != IO_NORMAL)
-					{
-						delete[] tbuffer;
-						return IO_ERROR;
-					}
-					while ((byte == '\n' || byte == '\r') && tsize--)
-						if (IO_read_uint1(&byte, stream) != IO_NORMAL)
-						{
-							delete[] tbuffer;
-							return IO_ERROR;
-						}
-					if (byte == ':')
-						break;
-					tbuf[tcount++] = hqx[byte - '!'];
-					if (tcount == 4)
-					{
-						uint1ptr[boffset++] = uint1(tbuf[0] << 2 | tbuf[1] >> 4);
-						uint1ptr[boffset++] = uint1(tbuf[1] << 4 | tbuf[2] >> 2);
-						uint1ptr[boffset++] = uint1(tbuf[2] << 6 | tbuf[3]);
-						tcount = 0;
-					}
-				}
-				uint4 fullsize = fsize;
-				fullbuffer = new (nothrow) char[fullsize];
-				uint4 doffset = 0;
-				uint1 *eptr = uint1ptr + boffset;
-				while (uint1ptr < eptr)
-				{
-					uint1 t_byte = *uint1ptr++;
-					uint2 count = 1;
-					if (t_byte == 0x90 && *uint1ptr == 0)
-						uint1ptr++;
-					else
-						if (*uint1ptr == 0x90)
-						{
-							uint1ptr++;
-							count = *uint1ptr++;
-							if (count == 0)
-							{
-								fullbuffer[doffset++] = byte;
-								t_byte = 0x90;
-								if (*uint1ptr == 0x90)
-								{
-									uint1ptr++;
-									count = *uint1ptr++;
-									if (count < 2)
-										count = 2;
-								}
-								else
-									count = 1;
-							}
-						}
-					while (count--)
-						fullbuffer[doffset++] = t_byte;
-					if (doffset > fullsize - 256)
-					{
-						MCU_realloc((char **)&fullbuffer, fullsize,
-						            fullsize + fsize, sizeof(uint1));
-						fullsize += fsize;
-					}
-				}
-				uint1ptr = (uint1 *)fullbuffer;
-				delete name;
-				name = new (nothrow) char[uint1ptr[0] + 1];
-				strcpy(name, &tbuffer[1]);
-				delete[] tbuffer;
-
-				uint2 toffset = uint1ptr[0] + 2;
-				if (!strnequal(&fullbuffer[toffset], "STAK", 4))
-					return IO_ERROR;
-
-				toffset += 10;
-				roffset = uint1ptr[toffset] << 24 | uint1ptr[toffset + 1] << 16
-					| uint1ptr[toffset + 2] << 8 | (uint1ptr[toffset + 3] + 2);
-				toffset += 4;
-				rsize = uint1ptr[toffset] << 24 | uint1ptr[toffset + 1] << 16
-				        | uint1ptr[toffset + 2] << 8 | uint1ptr[toffset + 3];
-				memcpy(fullbuffer, &fullbuffer[uint1ptr[0] + 22], roffset + rsize);
-				boffset = 0;
-			}
-			else
-				return IO_ERROR;
-		}
+		header[255] = '\0';
+		uint4 foffset;
+		if (!MCU_offset("BinHex", header, foffset))
+			return IO_ERROR;
+		filetype = HC_BINHEX;
 	}
-	uint2 i;
+
+	uint4 t_file_size = (uint4)MCS_fsize(stream);
+	uint1 *t_file = new (nothrow) uint1[t_file_size + 1];
+	if (t_file == NULL)
+		return IO_ERROR;
+	MCS_seek_set(stream, 0);
+	if (IO_read(t_file, t_file_size, stream) != IO_NORMAL)
+	{
+		delete[] t_file;
+		return IO_ERROR;
+	}
+	t_file[t_file_size] = '\0';
+
+	const uint1 *t_data = NULL;
+	uint4 t_data_size = 0;
+	const uint1 *t_rsrc = NULL;
+	uint4 t_rsrc_size = 0;
+	uint1 *t_decoded_data = NULL;
+	uint1 *t_decoded_rsrc = NULL;
+	switch (filetype)
+	{
+	case HC_RAW:
+		t_data = t_file;
+		t_data_size = t_file_size;
+		break;
+	case HC_MACBIN:
+		{
+			delete[] name;
+			uint1 t_name_length = (uint1)header[1] > 63 ? 63 : (uint1)header[1];
+			name = new (nothrow) char[t_name_length + 1];
+			memcpy(name, &header[2], t_name_length);
+			name[t_name_length] = '\0';
+			t_data_size = hc_get_uint4(&header[83]);
+			t_rsrc_size = hc_get_uint4(&header[87]);
+			uint4 roffset = (128 + t_data_size + 127) & ~127U;
+			if (t_data_size > t_file_size - 128)
+				t_data_size = t_file_size - 128;
+			t_data = t_file + 128;
+			if (roffset >= t_file_size || t_rsrc_size > t_file_size - roffset)
+				t_rsrc_size = 0;
+			else
+				t_rsrc = t_file + roffset;
+		}
+		break;
+	case HC_BINHEX:
+		{
+			uint4 foffset;
+			MCU_offset("BinHex", header, foffset);
+			while (foffset < t_file_size && t_file[foffset] != ':')
+				foffset++;
+			char *t_name = NULL;
+			if (foffset >= t_file_size
+			    || !hc_decode_binhex(t_file + foffset + 1, t_file_size - foffset - 1, t_name,
+			                         t_decoded_data, t_data_size, t_decoded_rsrc, t_rsrc_size))
+			{
+				delete[] t_file;
+				return IO_ERROR;
+			}
+			delete[] name;
+			name = t_name;
+			t_data = t_decoded_data;
+			t_rsrc = t_decoded_rsrc;
+		}
+		break;
+	}
+
+	IO_stat t_stat = readblocks(t_data, t_data_size);
+
+	if (t_stat == IO_NORMAL)
+	{
+		if (t_rsrc != NULL && t_rsrc_size != 0)
+			readresources(t_rsrc, t_rsrc_size);
+#ifdef _MAC_DESKTOP
+		else if (filetype == HC_RAW)
+			t_stat = macreadresources();
+#endif
+	}
+
+	delete[] t_decoded_data;
+	delete[] t_decoded_rsrc;
+	delete[] t_file;
+	return t_stat;
+}
+
+// Parse the blocks of a data fork, up to the TAIL block.
+IO_stat MCHcstak::readblocks(const uint1 *p_data, uint4 p_size)
+{
+	uint4 boffset = 0;
 	uint4 type = 0;
-	char *t_buffer;
+	bool t_have_stack = false;
 	while (type != HC_TAIL)
 	{
-		if (filetype == HC_BINHEX)
+		if (boffset >= p_size || p_size - boffset < 8)
 		{
-			t_buffer = &fullbuffer[boffset];
-			uint2buff = (uint2 *)t_buffer;
-			uint4buff = (uint4 *)t_buffer;
-			type = swap_uint4(&uint4buff[1]);
-			size = swap_uint4(&uint4buff[0]);
-			boffset += size;
+			// Some stacks end without a TAIL block.
+			if (!t_have_stack)
+				return IO_ERROR;
+			hcstat_append("Warning: the stack ends without a TAIL block");
+			break;
 		}
-		else
+		// The top byte of a block's size can hold flags.
+		uint4 size = hc_get_uint4((const char *)&p_data[boffset]) & 0x00FFFFFF;
+		type = hc_get_uint4((const char *)&p_data[boffset + 4]);
+		if (type == HC_BUGS)
+			size = 512;
+		if (size < 8)
 		{
-			if (IO_read_uint4(&size, stream) != IO_NORMAL
-			        || IO_read_uint4(&type, stream) != IO_NORMAL)
+			if (!t_have_stack)
 				return IO_ERROR;
-			if (type == HC_BUGS)
-				size = 512;
-			fullbuffer = new (nothrow) char[size];
-			if (IO_read(&fullbuffer[8], size - 8, stream) != IO_NORMAL)
-				return IO_ERROR;
-			t_buffer = fullbuffer;
-			uint2buff = (uint2 *)t_buffer;
-			uint4buff = (uint4 *)t_buffer;
+			hcstat_append("Error: bad block size %d at offset %d", (int)size, (int)boffset);
+			break;
 		}
-		uint2 offset;
+		if (size > p_size - boffset)
+		{
+			if (!t_have_stack)
+				return IO_ERROR;
+			hcstat_append("Warning: the last block runs past the end of the stack");
+			size = p_size - boffset;
+		}
+
+		char *t_buffer = new (nothrow) char[size + HC_BLOCK_PADDING];
+		if (t_buffer == NULL)
+			return IO_ERROR;
+		memcpy(t_buffer, &p_data[boffset], size);
+		memset(&t_buffer[size], 0, HC_BLOCK_PADDING);
+		boffset += size;
+
+		if (!t_have_stack && type != HC_STAK)
+		{
+			delete[] t_buffer;
+			return IO_ERROR;
+		}
+
+		IO_stat t_stat = IO_NORMAL;
 		switch (type)
 		{
 		case HC_STAK:
-			version = t_buffer[108];
-			if (version > 2)
-				return IO_ERROR;
-			if (version == 0)
-				version = 1;
-			rect.width = swap_uint2(&uint2buff[221]);
-			rect.height = swap_uint2(&uint2buff[220]);
-			if (version == 1 || rect.width == 0 || rect.height == 0)
 			{
-				rect.width = 512;
-				rect.height = 342;
+				t_have_stack = true;
+				// The file format: 1 to 8 is HyperCard 1, 9 and 10 HyperCard 2.
+				uint4 t_format = hc_get_uint4(&t_buffer[16]);
+				if (t_format >= 1 && t_format <= 8)
+					version = 1;
+				else if (t_format == 9 || t_format == 10)
+					version = 2;
+				else
+				{
+					// An unknown format: go by the version of HyperCard that
+					// last changed the stack, as this importer always has.
+					version = uint1(t_buffer[108]);
+					if (version > 2)
+						t_stat = IO_ERROR;
+					if (version == 0)
+						version = 1;
+				}
+				firstbkgd = hc_get_uint4(&t_buffer[0x28]);
+				if (size > 0x1BC)
+				{
+					rect.width = hc_get_uint2(&t_buffer[0x1BA]);
+					rect.height = hc_get_uint2(&t_buffer[0x1B8]);
+				}
+				if (version == 1 || rect.width == 0 || rect.height == 0)
+				{
+					rect.width = 512;
+					rect.height = 342;
+				}
+				if (size > 1536)
+					script = convert_script(&t_buffer[1536]);
 			}
-			script = convert_script(&t_buffer[1536]);
 			break;
 		case HC_LIST:
-			if (version == 1)
-				pagesize = swap_uint2(&uint2buff[12]);
-			else
-				pagesize = swap_uint2(&uint2buff[14]);
+			{
+				uint4 t_shift = version == 1 ? 4 : 0;
+				pagesize = hc_get_uint2(&t_buffer[0x1C - t_shift]);
+				uint4 t_count = hc_get_uint4(&t_buffer[0x10 - t_shift]);
+				if (size >= 0x30 && t_count <= (size - 0x30) / 6)
+				{
+					delete[] listpageids;
+					delete[] listpagecounts;
+					nlistpages = t_count;
+					listpageids = new (nothrow) uint4[t_count + 1];
+					listpagecounts = new (nothrow) uint4[t_count + 1];
+					for (uint4 i = 0 ; i < t_count ; i++)
+					{
+						listpageids[i] = hc_get_uint4(&t_buffer[0x30 + i * 6]);
+						listpagecounts[i] = hc_get_uint2(&t_buffer[0x30 + i * 6 + 4]);
+					}
+				}
+			}
 			break;
 		case HC_PAGE:
 			MCU_realloc((char **)&pbuffers, npbuffers,
 			            npbuffers + 1, sizeof(char *));
 			MCU_realloc((char **)&pbuffersizes, npbuffers,
-			            npbuffers + 1, sizeof(uint2));
+			            npbuffers + 1, sizeof(uint4));
+			MCU_realloc((char **)&pbufferids, npbuffers,
+			            npbuffers + 1, sizeof(uint4));
 			pbuffersizes[npbuffers] = size;
-	        pbuffers[npbuffers] = new (nothrow) char[size];
-			memcpy(pbuffers[npbuffers++], t_buffer, size);
+			pbufferids[npbuffers] = hc_get_uint4(&t_buffer[8]);
+			pbuffers[npbuffers++] = t_buffer;
+			t_buffer = NULL;
 			break;
 		case HC_BKGD:
 			{
 				MCHcbkgd *newbkgd = new (nothrow) MCHcbkgd;
 				newbkgd->appendto(hcbkgds);
-				if (newbkgd->parse(buffer) != IO_NORMAL)
-					return IO_ERROR;
+				if (newbkgd->parse(t_buffer, size) != IO_NORMAL)
+				{
+					hcstat_append("Error: skipping a short BKGD block");
+					newbkgd->remove(hcbkgds);
+					delete newbkgd;
+				}
 			}
 			break;
 		case HC_CARD:
 			{
 				MCHccard *newcard = new (nothrow) MCHccard;
 				newcard->appendto(hccards);
-				if (newcard->parse(t_buffer) != IO_NORMAL)
-					return IO_ERROR;
+				if (newcard->parse(t_buffer, size) != IO_NORMAL)
+				{
+					hcstat_append("Error: skipping a short CARD block");
+					newcard->remove(hccards);
+					delete newcard;
+				}
 			}
 			break;
 		case HC_BMAP:
 			{
 				MCHcbmap *newbmap = new (nothrow) MCHcbmap;
 				newbmap->appendto(hcbmaps);
-				if (newbmap->parse(buffer) != IO_NORMAL)
-					return IO_ERROR;
+				if (newbmap->parse(t_buffer, size) != IO_NORMAL)
+				{
+					hcstat_append("Error: skipping a short BMAP block");
+					newbmap->remove(hcbmaps);
+					delete newbmap;
+				}
 			}
 			break;
 		case HC_STBL:
-			if ((natts = swap_uint2(&uint2buff[9])) != 0)
 			{
-				atts = new (nothrow) Hcatts[natts];
-				offset = 13;
-				for (i = 0 ; i < natts ; i++)
+				uint4 t_count = hc_get_uint2(&t_buffer[18]);
+				if (size < 24 || t_count > (size - 24) / 24)
+					t_count = size < 24 ? 0 : (size - 24) / 24;
+				if (t_count != 0)
 				{
-					atts[i].id = swap_uint2(&uint2buff[offset]);
-					atts[i].fid = swap_uint2(&uint2buff[offset + 5]);
-					atts[i].style = convert_style(swap_uint2(&uint2buff[offset + 6]));
-					atts[i].size = swap_uint2(&uint2buff[offset + 7]);
-					offset += 12;
+					delete[] atts;
+					natts = t_count;
+					atts = new (nothrow) Hcatts[natts];
+					for (uint4 i = 0 ; i < natts ; i++)
+					{
+						const char *t_entry = &t_buffer[24 + i * 24];
+						atts[i].id = hc_get_uint2(&t_entry[2]);
+						atts[i].fid = hc_get_uint2(&t_entry[12]);
+						atts[i].style = convert_style(hc_get_uint2(&t_entry[14]));
+						atts[i].size = hc_get_uint2(&t_entry[16]);
+					}
 				}
 			}
 			break;
 		case HC_FTBL:
-			if ((nfonts = swap_uint2(&uint2buff[9])) != 0)
 			{
-				fonts = new (nothrow) Hcfont[nfonts];
-				offset = 12;
-				for (i = 0 ; i < nfonts ; i++)
+				uint4 t_count = hc_get_uint2(&t_buffer[18]);
+				if (t_count != 0)
 				{
-					fonts[i].id = swap_uint2(&uint2buff[offset]);
-					fonts[i].name = convert_font(&t_buffer[(offset + 1) * 2]);
-					offset += (strlen(&t_buffer[(offset + 1) * 2]) + 4) >> 1;
+					// The font names are kept in the table's block, which
+					// lives as long as the importer does.
+					MCU_realloc((char **)&fontbuffers, nfontbuffers,
+					            nfontbuffers + 1, sizeof(char *));
+					fontbuffers[nfontbuffers++] = t_buffer;
+					delete[] fonts;
+					fonts = new (nothrow) Hcfont[t_count];
+					nfonts = 0;
+					uint4 offset = 24;
+					while (nfonts < t_count && offset + 2 < size)
+					{
+						fonts[nfonts].id = hc_get_uint2(&t_buffer[offset]);
+						fonts[nfonts].name = convert_font(&t_buffer[offset + 2]);
+						nfonts++;
+						offset += (strlen(&t_buffer[offset + 2]) + 4) & ~1U;
+					}
+					t_buffer = NULL;
 				}
 			}
 			break;
@@ -2206,99 +2476,11 @@ IO_stat MCHcstak::read(IO_handle stream)
 			break;
 		default:
 			hcstat_append("Error: unknown section type -> %x", type);
-
-			if (filetype == HC_BINHEX)
-				return IO_ERROR;
 			break;
 		}
-		if (filetype != HC_BINHEX)
-		{
-			delete fullbuffer;
-			fullbuffer = NULL;
-		}
-	}
-	if (filetype == HC_RAW || rsize == 0)
-	{
-#ifdef _MAC_DESKTOP
-		return macreadresources();
-#else
-			return IO_NORMAL;
-#endif
-	}
-	if (filetype == HC_MACBIN)
-	{
-		fullbuffer = new (nothrow) char[rsize];
-		MCS_seek_set(stream, roffset);
-		if (MCS_readfixed(fullbuffer, rsize, stream) != IO_NORMAL)
-			return IO_ERROR;
-	}
-	else
-		memcpy(fullbuffer, &fullbuffer[roffset], rsize);
-	iconx = icony = cursorx = cursory = 0;
-	t_buffer = fullbuffer;
-	uint4buff = (uint4 *)t_buffer;
-	char *rdata = &t_buffer[swap_uint4(&uint4buff[0])];
-	char *rheader = rdata + swap_uint4(&uint4buff[2]);
-	uint2 typecount = get_uint2(&rheader[28]) + 1;
-	char *strings = rheader + get_uint2(&rheader[26]);
-	char *objects = &rheader[typecount * 8 + 30];
-	for (i = 0 ; i < typecount ; i++)
-	{
-		uint4 t_type = get_uint4(&rheader[i * 8 + 30]);
-		uint2 count = get_uint2(&rheader[i * 8 + 34]) + 1;
-		while (count--)
-		{
-			uint2 id = get_uint2(objects);
-			uint2 soffset = get_uint2(&objects[2]);
-            
-            MCNewAutoNameRef t_name;
-            if (soffset == UINT16_MAX)
-                t_name = kMCEmptyName;
-            else
-            {
-                MCAutoStringRef t_name_string;
-                /* UNCHECKED */ MCStringCreateWithPascalString((unsigned char*)&strings[soffset], &t_name_string);
-                /* UNCHECKED */ MCNameCreate(*t_name_string, &t_name);
-            }
-            
-			uint4 offset = get_uint4(&objects[4]);
-			offset &= 0xFFFFFF;
-			switch (t_type)
-			{
-			case HC_ICON:
-				{
-					MCHcbmap *newicon = new (nothrow) MCHcbmap;
-					newicon->appendto(icons);
-					newicon->icon(id, *t_name, &rdata[offset + 4]);
-				}
-				break;
-			case HC_CURS:
-				{
-					MCHcbmap *newcurs = new (nothrow) MCHcbmap;
-					newcurs->appendto(cursors);
-					newcurs->cursor(id, *t_name, &rdata[offset + 4]);
-				}
-				break;
-			case HC_SND:
-				{
-					MCHcsnd *newsnd = new (nothrow) MCHcsnd;
-					if (newsnd->import(id, *t_name, &rdata[offset + 4]))
-						newsnd->appendto(snds);
-					else
-						delete newsnd;
-				}
-				break;
-			default:
-                {
-                    MCAutoStringRefAsCString t_name_str;
-                    /* UNCHECKED */ t_name_str.Lock(MCNameGetString(*t_name));
-                    hcstat_append("Not converting %4.4s id %5d \"%s\"",
-                                  (char *)&t_type, id, *t_name_str);
-                }
-				break;
-			}
-			objects += 12;
-		}
+		delete[] t_buffer;
+		if (t_stat != IO_NORMAL)
+			return t_stat;
 	}
 	return IO_NORMAL;
 }
@@ -2313,11 +2495,11 @@ MCStack *MCHcstak::build()
 	else
 		tname = name;
 	sptr->setname_cstring(tname);
-	delete name;
+	delete[] name;
 	if (script != NULL)
 	{
 		sptr -> setscript_cstring(script);
-		delete script;
+		delete[] script;
 		if (sptr->hlist != NULL)
 		{
 			delete sptr->hlist;
@@ -2329,45 +2511,73 @@ MCStack *MCHcstak::build()
 	// MW-2012-02-17: [[ LogFonts ]] Set the font attributes of the object.
 	sptr -> setfontattrs(MCSTR(HC_DEFAULT_TEXT_FONT), HC_DEFAULT_TEXT_SIZE, FA_DEFAULT_STYLE);
 	sptr->fontheight = heightfromsize(HC_DEFAULT_TEXT_SIZE);
+	// The card order: the PAGE blocks in the order the LIST block gives them,
+	// each with as many card ids as the LIST says it holds. Without a usable
+	// LIST, the PAGE blocks in the order of the file, each up to a zero id.
 	uint4 i;
-	for (i = 0 ; i < npbuffers ; i++)
+	bool t_listed = nlistpages != 0 && pagesize >= 8;
+	for (i = 0 ; t_listed && i < nlistpages ; i++)
 	{
-		buffer = pbuffers[i];
-		uint4 *uint4buff = (uint4 *)buffer;
-		MCU_realloc((char **)&pages, npages,
-		            npages + pbuffersizes[i] / pagesize + 1, sizeof(uint4));
-		MCU_realloc((char **)&marks, npages,
-		            npages + pbuffersizes[i] / pagesize + 1, sizeof(uint1));
-		uint2 offset = 0;
-		do
+		uint4 b;
+		for (b = 0 ; b < npbuffers ; b++)
+			if (pbufferids[b] == listpageids[i])
+				break;
+		if (b == npbuffers)
+			t_listed = false;
+	}
+	uint4 t_capacity = 0;
+	if (pagesize >= 8)
+		for (i = 0 ; i < npbuffers ; i++)
+			t_capacity += pbuffersizes[i] / pagesize + 1;
+	if (t_capacity != 0)
+	{
+		pages = new (nothrow) uint4[t_capacity];
+		marks = new (nothrow) uint1[t_capacity];
+	}
+	uint4 t_page_count = t_listed ? nlistpages : npbuffers;
+	for (uint4 p = 0 ; pages != NULL && marks != NULL && p < t_page_count ; p++)
+	{
+		uint4 b = p;
+		uint4 t_count = UINT32_MAX;
+		if (t_listed)
+		{
+			for (b = 0 ; pbufferids[b] != listpageids[p] ; b++)
+				;
+			t_count = listpagecounts[p];
+		}
+		const char *t_page = pbuffers[b];
+		for (uint4 k = 0 ; k < t_count && npages < t_capacity ; k++)
 		{
 			// MW-2008-02-12: [[ Bug 5232 ]] Crash when importing certain HC stack - just added
 			//   bounds checks.
-			if ((offset * (pagesize / 4) + 6) * 4 + 4 > pbuffersizes[i])
+			uint4 t_entry = 24 + k * pagesize;
+			if (t_entry + 5 > pbuffersizes[b])
 				break;
-
-			// MW-2008-02-27: [[ Bug 5977 ]] Originally adjusted for shorts.
-
-			if ((offset * pagesize + 28) + 1 > pbuffersizes[i])
+			uint4 t_id = hc_get_uint4(&t_page[t_entry]);
+			if (t_id == 0)
+			{
+				if (t_listed)
+					continue;
 				break;
-			pages[npages] = swap_uint4(&uint4buff[offset * (pagesize / 4) + 6]);
-			marks[npages] = buffer[offset * pagesize + 28] & 0x10;
-			offset++;
+			}
+			pages[npages] = t_id;
+			marks[npages] = t_page[t_entry + 4] & 0x10;
+			npages++;
 		}
-		while (pages[npages++] != 0
-		        && (offset - 1) * pagesize + 28 < pbuffersizes[i]);
-		npages--;
-		delete pbuffers[i];
 	}
+	for (i = 0 ; i < npbuffers ; i++)
+		delete[] pbuffers[i];
 	if (pbuffers != NULL)
 	{
 		npbuffers = 0;
-		delete pbuffers;
+		delete[] pbuffers;
 		pbuffers = NULL;
-		delete pbuffersizes;
+		delete[] pbuffersizes;
 		pbuffersizes = NULL;
+		delete[] pbufferids;
+		pbufferids = NULL;
 	}
-	if (pages == NULL)
+	if (npages == 0)
 		while (hccards != NULL)
 		{
 			MCHccard *cptr = hccards->remove
@@ -2379,7 +2589,7 @@ MCStack *MCHcstak::build()
 		}
 	else
 	{
-		for (i = 0 ; i < npages ; i++)
+		for (i = 0 ; i < npages && hccards != NULL ; i++)
 		{
 			MCHccard *cptr = hccards;
 			do
@@ -2399,11 +2609,31 @@ MCStack *MCHcstak::build()
 			}
 			while (cptr != hccards);
 		}
+		if (hccards != NULL)
+			hcstat_append("Warning: cards that are in no page were left out");
 	}
+	// The background order: HyperCard's own, the chain from the STAK
+	// block's first background through each one's next, so "bg 1" names the
+	// background it named in HyperCard. Backgrounds the chain misses (a
+	// broken stack) follow in the order of the file.
+	uint4 t_next = firstbkgd;
 	while (hcbkgds != NULL)
 	{
-		MCHcbkgd *bgptr = hcbkgds->remove
-		                  (hcbkgds);
+		MCHcbkgd *bgptr = hcbkgds;
+		if (t_next != 0)
+		{
+			do
+			{
+				if (bgptr->id == t_next)
+					break;
+				bgptr = bgptr->next();
+			}
+			while (bgptr != hcbkgds);
+			if (bgptr->id != t_next)
+				bgptr = hcbkgds;
+		}
+		bgptr->remove(hcbkgds);
+		t_next = bgptr->id == t_next ? bgptr->nextid : 0;
 		MCControl *newobj = bgptr->build(this, sptr);
 		newobj->setparent(sptr);
 		newobj->appendto(sptr->controls);
@@ -2486,9 +2716,18 @@ IO_stat hc_import(MCStringRef name, IO_handle stream, MCStack *&sptr)
 	maxid = 0;
 	MCValueAssign(MChcstat, kMCEmptyString);
 
-    char* t_name;
-    if(!MCStringConvertToCString(name, t_name))
+    char* t_cname;
+    if(!MCStringConvertToCString(name, t_cname))
 		return IO_ERROR;
+	// The importer frees its names with delete[], so hand it one from new[].
+	char *t_name = new (nothrow) char[strlen(t_cname) + 1];
+	if (t_name == NULL)
+	{
+		MCMemoryDeleteArray(t_cname);
+		return IO_ERROR;
+	}
+	strcpy(t_name, t_cname);
+	MCMemoryDeleteArray(t_cname);
 	
     MCHcstak *hcstak = new (nothrow) MCHcstak(t_name);
 	hcstat_append("Loading stack %s...", t_name);
@@ -2498,7 +2737,9 @@ IO_stat hc_import(MCStringRef name, IO_handle stream, MCStack *&sptr)
 		sptr = hcstak->build();
 	
 	delete hcstak;
-	if (!MClockerrors && MCStringGetLength(MChcstat) != startlen)
+	// Show the import log, if it says anything, only for a stack that was
+	// read: on an error sptr was never set.
+	if (stat == IO_NORMAL && !MClockerrors && MCStringGetLength(MChcstat) != startlen)
 	{
 		MCStack *tptr = MCdefaultstackptr->findstackname(MCN_hcstat);
 		if (tptr != NULL)

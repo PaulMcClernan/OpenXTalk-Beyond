@@ -119,6 +119,7 @@ licences are in `thirdparty/libfreetype/docs/`,
 | IANA time zone code and data | `extensions/libraries/timezone/tz/` (timezone library) | Public domain; some files BSD 3-clause; see [`tz/LICENSE`](extensions/libraries/timezone/tz/LICENSE) |
 | inih (Ben Hoyt) | `extensions/libraries/ini/inih/` (INI library) | BSD 3-clause, [`inih/LICENSE.txt`](extensions/libraries/ini/inih/LICENSE.txt) |
 | QR code generator (John Craig) | `extensions/script-libraries/qr/` | Public domain, stated in the file |
+| HyperCardPreview (Pierre Lorenzi) | its HyperCard test stacks, in `tests/lcs-input-files/hypercard/` (engine tests only; not installed); the HyperCard importer's bitmap decoding in `engine/src/hc.cpp` follows its `BitmapLoading.swift` | MIT, [`hypercard/LICENSE.txt`](tests/lcs-input-files/hypercard/LICENSE.txt) |
 
 ## The IDE
 
