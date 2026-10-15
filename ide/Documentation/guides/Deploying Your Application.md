@@ -494,8 +494,9 @@ as on the desktop. Where a browser does things its own way:
 so the engine draws them all itself, as the desktop engines draw a part
 that the system does not: in the `Windows 95` look and feel, in the
 colours of Windows' light theme (light grey stacks and buttons, white
-fields, a blue selection), whatever system the browser runs on. Data grids
-work as they do on the desktop.
+fields, a blue selection), whatever system the browser runs on and
+whichever colour scheme it is set to: `the systemAppearance` is `light`.
+Data grids work as they do on the desktop.
 * **Waiting.** `wait`, `wait until` and `wait with messages` work in any
 handler, and the page goes on running while the engine waits. The
 exception is a handler that the page's JavaScript calls (see
