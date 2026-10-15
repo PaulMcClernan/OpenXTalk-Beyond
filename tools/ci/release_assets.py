@@ -31,6 +31,10 @@ after it, as actions/download-artifact writes a named artifact:
   OXT-Beyond-linux-x86_64   build-linux.yml, job "Package linux-x86_64"
   OXT-Beyond-linux-arm64    build-linux.yml, job "Package linux-arm64"
 
+and writes one more folder itself, before assemble:
+
+  OXT-Beyond-plugins        tools/plugins/build-plugin-packages.py --release
+
 assemble checks each artifact folder of --artifacts:
 
   - its SHA256SUMS lists every other file of the folder once, and every
@@ -113,6 +117,14 @@ ASSETS = (
         '-linux-arm64.tar.xz',
         '-linux-arm64-binaries.tar.xz',
         '-linux-arm64-symbols.tar.xz',
+    )),
+    # The xTalk Assistant and the xTalk MCP Bridge as extension packages
+    # for other xTalks' IDEs (tools/plugins), built by the publish job
+    # itself (tools/plugins/build-plugin-packages.py --release): pure
+    # Python over ide/Extensions, the same bytes on any machine
+    ('OXT-Beyond-plugins', 'plugins', (
+        '-xtalk-assistant-plugin.lce',
+        '-mcp-bridge-plugin.lce',
     )),
 )
 

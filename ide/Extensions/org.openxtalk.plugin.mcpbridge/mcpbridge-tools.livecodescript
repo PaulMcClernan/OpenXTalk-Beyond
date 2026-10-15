@@ -276,9 +276,19 @@ end mcbServerClients
 
 -- The file the MCP server reads the port and token from:
 -- .oxt-beyond/mcp-bridge.json in the user's home folder (USERPROFILE on
--- Windows, HOME elsewhere), as Node's os.homedir() finds it
+-- Windows, HOME elsewhere), as Node's os.homedir() finds it. A package of
+-- the bridge in another xTalk's IDE (tools/plugins) writes the file its
+-- compatibility stack names instead (xtpcBridgeFile), one per IDE, and
+-- Claude is told it; OXT-Beyond's own copy has no such stack.
 function mcbInfoFilePath
-   local tHome
+   local tHome, tFile
+   if there is a stack "org.openxtalk.plugin.mcpbridge-compat" then
+      dispatch function "xtpcBridgeFile" to stack "org.openxtalk.plugin.mcpbridge-compat"
+      put the result into tFile
+      if it is "handled" and tFile is not empty then
+         return tFile
+      end if
+   end if
    if the platform is "Win32" then
       put $USERPROFILE into tHome
       replace backslash with slash in tHome
@@ -459,7 +469,7 @@ function mcbHandleLine pLine
    -- Stopped: nothing is read, and the assistant's libraries, which read
    -- JSON, may be gone
    if sToken is empty then
-      return mcbRefusal("null", "The bridge is turned off in OXT-Beyond.")
+      return mcbRefusal("null", "The bridge is turned off in " & mcbHostName() & ".")
    end if
    try
       put xtaJsonParse(pLine) into tRequest
@@ -476,7 +486,7 @@ function mcbHandleLine pLine
    end if
    if sToken is empty or xtaJsonType(xtaJsonMember(tRequest, "token")) is not "string" \
          or not mcbIsToken(xtaJsonText(xtaJsonMember(tRequest, "token"))) then
-      return mcbRefusal(tId, "The token is not the bridge's. Turn the bridge off and on again in OXT-Beyond, then try again.")
+      return mcbRefusal(tId, "The token is not the bridge's. Turn the bridge off and on again in " & mcbHostName() & ", then try again.")
    end if
    put xtaJsonText(xtaJsonMember(tRequest, "method")) into tMethod
    if tMethod is "hello" then
@@ -500,7 +510,7 @@ function mcbHandleLine pLine
    -- a second call, from another Claude app or after a reconnect, would
    -- start on the same journal
    if sBusy is true then
-      return mcbRefusal(tId, "OXT-Beyond is still busy with an earlier request (it may be waiting for the user to answer a question in OXT-Beyond, " & \
+      return mcbRefusal(tId, mcbHostName() & " is still busy with an earlier request (it may be waiting for the user to answer a question in " & mcbHostName() & ", " & \
             "or running code). Try again once that is done.")
    end if
    put true into sBusy
@@ -623,7 +633,7 @@ end mcbCallTool
 
 private function mcbFailed pError
    local tResult
-   put "The bridge failed in OXT-Beyond:" && line 1 of pError into tResult["text"]
+   put "The bridge failed in " & mcbHostName() & ":" && line 1 of pError into tResult["text"]
    put true into tResult["error"]
    return tResult
 end mcbFailed
@@ -646,14 +656,22 @@ end mcbResult
 -- pName under "mcpServers" that runs node with the server pServerPath,
 -- given the file's text now (pOld, empty for no file): every other entry
 -- and setting is kept as it was written, an older entry of that name is
--- replaced. An array with "text", or "problem" when pOld is not a JSON
--- object (the file is then left to the user).
-function mcbDesktopConfigText pOld, pName, pServerPath
+-- replaced. With pBridgeFile, the entry tells the server that file in
+-- OXT_MCP_BRIDGE_FILE (a package of the bridge in another xTalk's IDE;
+-- empty, as OXT-Beyond's own bridge gives it, leaves the server's own).
+-- An array with "text", or "problem" when pOld is not a JSON object (the
+-- file is then left to the user).
+function mcbDesktopConfigText pOld, pName, pServerPath, pBridgeFile
    local tResult, tEntry, tRoot, tServers, tIndex, tName, tText, tError, tParts
    mcbEnsureParts
    put mcbJsonString(pName) & ": {" & return & \
          "      " & mcbJsonString("command") & ": " & mcbJsonString("node") & "," & return & \
-         "      " & mcbJsonString("args") & ": [" & mcbJsonString(pServerPath) & "]" & return & "    }" into tEntry
+         "      " & mcbJsonString("args") & ": [" & mcbJsonString(pServerPath) & "]" into tEntry
+   if pBridgeFile is not empty then
+      put "," & return & "      " & mcbJsonString("env") & ": {" & mcbJsonString("OXT_MCP_BRIDGE_FILE") & ": " & \
+            mcbJsonString(pBridgeFile) & "}" after tEntry
+   end if
+   put return & "    }" after tEntry
    if word 1 to -1 of pOld is empty then
       put "{" & return & "  " & mcbJsonString("mcpServers") & ": {" & return & "    " & tEntry & return & "  }" & return & "}" & return into tResult["text"]
       return tResult
@@ -887,10 +905,10 @@ private function mcbToolGuide
       if tGuide is empty then
          put xtaSystemPrompt() into tGuide
       end if
-      put "How to write xTalk Script for OXT-Beyond. It was written for the xTalk Assistant, the IDE's own chat window, and " & \
+      put "How to write xTalk Script for " & mcbHostName() & ". It was written for the xTalk Assistant, the IDE's own chat window, and " & \
             "through this bridge some of it reads differently: there is no assistant window, Insert button or memory here; " & \
             "make_changes and edit_script change the stack as soon as the user allows the tool in this app; run_code asks the " & \
-            "user in OXT-Beyond before every run." & return & return & tGuide into tText
+            "user in " & mcbHostName() & " before every run." & return & return & tGuide into tText
       return mcbResult(tText, false)
    end if
    -- Sections 2 to 5 of the assistant's guide (the language, objects,
@@ -952,9 +970,9 @@ private function mcbToolListStacks
       put tLine & return after tText
    end repeat
    if tCount is 0 then
-      return mcbResult("The user has no stack of their own open in OXT-Beyond. make_changes can create one (a batch that begins with a change of kind stack).", false)
+      return mcbResult("The user has no stack of their own open in " & mcbHostName() & ". make_changes can create one (a batch that begins with a change of kind stack).", false)
    end if
-   put "The user's stacks open in OXT-Beyond:" & return before tText
+   put "The user's stacks open in " & mcbHostName() & ":" & return before tText
    delete the last char of tText
    return mcbResult(tText, false)
 end mcbToolListStacks
@@ -967,7 +985,7 @@ private function mcbToolContext
    local tWork, tText, tTop, tLine, tObject, tList, tEditor, tError, tState, tLast
    put mcbWorkStack() into tWork
    if tWork is empty then
-      put "The user has no stack of their own open in OXT-Beyond." into tText
+      put "The user has no stack of their own open in " & mcbHostName() & "." into tText
    else
       put "The user is working on the stack" && quote & the short name of tWork & quote & "." into tText
       put the topStack into tTop
@@ -1415,9 +1433,9 @@ private function mcbToolCheck pCode
    end if
    put xtaCheckScript(pCode, empty) into tCheck
    if tCheck["ok"] is true then
-      return mcbResult("The code compiles on OXT-Beyond's engine. That is not the same as doing what was asked.", false)
+      return mcbResult("The code compiles on " & mcbHostName() & "'s engine. That is not the same as doing what was asked.", false)
    end if
-   put "The code does not compile on OXT-Beyond's engine:" into tText
+   put "The code does not compile on " & mcbHostName() & "'s engine:" into tText
    repeat for each line tLine in tCheck["issues"]
       put return & "- " & tLine after tText
    end repeat
@@ -1664,7 +1682,7 @@ private function mcbToolSearchScripts pArguments
          end if
       end repeat
       if tStacks is empty then
-         return mcbResult("The user has no stack of their own open in OXT-Beyond.", true)
+         return mcbResult("The user has no stack of their own open in " & mcbHostName() & ".", true)
       end if
    else
       put mcbTarget(mcbArg(pArguments, "stack")) into tTarget
@@ -2031,7 +2049,7 @@ private function mcbToolRunCode pArguments
       replace return with ", " in tRisks
       put "It seems to use" && tRisks & ", and what it does there cannot be undone." & return into tDetail
    end if
-   put tRun["label"] & "." && "It can do anything OXT-Beyond can: run it only if you know what it does." & return & return after tDetail
+   put tRun["label"] & "." && "It can do anything " & mcbHostName() & " can: run it only if you know what it does." & return & return after tDetail
    put tRun["code"] after tDetail
    if tRun["handlers"] is not empty then
       put return & return & "With these handlers:" & return & tRun["handlers"] after tDetail
@@ -2165,3 +2183,20 @@ private function mcbUndo pEntry, pAsk
    put tUndone["summary"] & ". The stack is as it was before: read it again before changing it." into tResult["text"]
    return tResult
 end mcbUndo
+
+-- The IDE's name, where the user or the model reads it: "OXT-Beyond", or,
+-- in a package of the plugin installed in another xTalk's IDE, the name
+-- its compatibility stack gives (tools/plugins/plugin-compat.livecodescript.in)
+private function mcbHostName
+   local tStack, tName
+   repeat for each item tStack in "org.openxtalk.plugin.xtalkassistant-compat,org.openxtalk.plugin.mcpbridge-compat"
+      if there is a stack tStack then
+         dispatch function "xtpcHostName" to stack tStack
+         put the result into tName
+         if it is "handled" and tName is not empty then
+            return tName
+         end if
+      end if
+   end repeat
+   return "OXT-Beyond"
+end mcbHostName

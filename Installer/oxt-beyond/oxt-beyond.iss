@@ -139,6 +139,15 @@ LZMAUseSeparateProcess=yes
 ChangesAssociations=yes
 ; Always write a Setup log to %TEMP%, for bug reports.
 SetupLogging=yes
+; Install each file with the moment it was built, as UTC. Inno Setup's
+; default keeps the build machine's clock time and installs it as the
+; user's local time; the runner's clock is UTC, so west of UTC every file
+; was dated hours in the future (04:23 UTC for a release built at 00:23).
+; The IDE rebuilds an extension's cached dictionary when its source is
+; newer than the cache, so until the clock caught up it rebuilt all of
+; them, and built_api.js, at every launch: about 20 seconds without
+; answering after the IDE had started.
+TimeStampsInUTC=yes
 VersionInfoVersion={#NumericVersion}
 VersionInfoProductVersion={#NumericVersion}
 VersionInfoTextVersion={#AppVersion}
