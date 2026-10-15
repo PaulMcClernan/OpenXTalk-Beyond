@@ -416,11 +416,15 @@ Related lessons:
 
 ![](images/standalone-settings-html5.png)
 
-Figure 13 – Standalone Settings – HTML5
+Figure 13 – Standalone Settings – Web (HTML5)
 
 | &nbsp;| &nbsp;|
 |---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Build for HTML5**             | Build a standalone for HTML5                                                                                                                                                                                                                          |
+| **Title**                       | The page's title, which the browser shows in its tab, its history and its bookmarks. Empty: the stack's label or, without one, its name                                                                                                               |
+| **Icon**                        | An image that the browser shows as the page's icon, in its tab and its bookmarks: a PNG, ICO, SVG, GIF, JPEG or WebP file, which the standalone gets a copy of. **Use None** removes it                                                               |
+| **Background**                  | The colour of the page around the main stack: click the swatch or **Choose...** to change it. **Use White** puts back the page's own white                                                                                                            |
+| **Position**                    | Where the main stack is in the page: **Centered at the top** (the page's own place), **Centered in the window** of the browser, or **At the top left**                                                                                                |
 
 Almost every Internet-connected device has a web browser.  If your application
 can run in a browser, your app can be used anywhere and by anyone, without any
@@ -428,10 +432,14 @@ need to download or install it.
 
 An HTML5 standalone runs your stacks in a page of a web site, with
 OXT-Beyond's web engine: the engine built as WebAssembly, which browsers
-run. To try one, tick **Build for HTML5**, choose **Development → Test
-Target → _a browser_** from the menu bar, then **Development → Test** (or
-the **Test** button of the toolbar): the IDE builds the standalone, serves
-it from a web server on your own computer, and opens it in that browser.
+run. The **Web** pane of the Standalone Application Settings builds one:
+tick **Build for HTML5**, and set the page's title, icon, colour and the
+place of the main stack in it if you like. To try the standalone, choose
+**Development → Test Target → _a browser_** from the menu bar, then
+**Development → Test** (or the **Test** button of the toolbar): the IDE
+builds the standalone, serves it from a web server on your own computer,
+and opens it in that browser. On Linux, the menu lists whichever of
+Firefox, Google Chrome, Chromium and Microsoft Edge are installed.
 
 ##### Supported browsers
 
@@ -445,13 +453,15 @@ OXT-Beyond's own tests run the standalones in Chromium.
 
 ##### Contents of the HTML5 standalone
 
-The HTML5 standalone is a folder of four files, which a web site serves
-together:
+The HTML5 standalone is a folder of four files (five with an icon), which
+a web site serves together:
 
 * `<name>.html`, the page, named after the standalone (the **General**
-pane) and with the stack's label (or, without one, its name) as its
-title. It says "Loading..." until the engine starts, then shows the main
-stack.
+pane), with the **Title** of the **Web** pane as its title (or, without
+one, the stack's label or name) and the pane's other settings. It says
+"Loading..." until the engine starts, then shows the main stack.
+* `icon.<extension>`, the page's icon, a copy of the image that the
+**Icon** setting names.
 * `standalone-community-<version>.js` and
 `standalone-community-<version>.wasm`, the engine. They are the same for
 every standalone made with the same version of OXT-Beyond.
@@ -683,8 +693,8 @@ in it; put them outside `boot/`.
 
 ##### Advanced: Embedding an HTML5 standalone in a web page
 
-The page that the builder writes is a plain one, made for trying the
-standalone. To put the standalone in a page of your own, the page needs
+The page that the builder writes is a plain one, with the settings of the
+**Web** pane. To put the standalone in a page of your own, the page needs
 three things: a canvas, a JavaScript `Module` object, and the engine's
 script.
 

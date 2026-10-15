@@ -148,13 +148,14 @@ command revSaveAsEmscriptenStandalone pStack, pOutputFolder, pSettings
       
       ---------- Create HTML page
 
-      -- The engine's page, with the stack's title
+      -- OXT-Beyond: the engine's page, with its title and the page's
+      -- settings of the HTML5 pane (createHtmlPage)
       revStandaloneProgress "Preparing HTML page..."
 
       local tHtmlFile
       put tBuildFolder & slash & tName & ".html" into tHtmlFile
       logDebug "html", "Creating" && tHtmlFile && "from" && getHtmlTemplateFile()
-      createHtmlPage mapBinPath(getHtmlTemplateFile()), tHtmlFile, pStack
+      createHtmlPage mapBinPath(getHtmlTemplateFile()), tHtmlFile, pStack, pSettings, tBaseFolder
 
    catch tError
       if tError is empty then
@@ -326,13 +327,14 @@ end getWebExternals
 -- The HTML page
 ----------------------------------------------------------------
 
--- Write the page that loads the standalone: the engine's page, with
--- the stack's label (or, without one, its name) as the page's title
--- in place of @STACK_TITLE@. The page loads the engine's JavaScript,
--- which loads the engine's WebAssembly and standalone.zip, from the
--- page's own folder.
-private command createHtmlPage pTemplateFile, pHtmlFile, pStack
-   local tPage, tTitle
+-- OXT-Beyond: write the page that loads the standalone: the engine's page, with
+-- its title in place of @STACK_TITLE@ (the "emscripten,title" setting, or
+-- else the stack's label or, without one, its name) and the rest of the
+-- page's settings of the HTML5 pane (getPageHead()). The page loads the
+-- engine's JavaScript, which loads the engine's WebAssembly and
+-- standalone.zip, from the page's own folder.
+private command createHtmlPage pTemplateFile, pHtmlFile, pStack, pSettings, pBaseFolder
+   local tPage, tTitle, tHead, tOffset
 
    open file pTemplateFile for "UTF-8" text read
    if the result is not empty then
@@ -342,7 +344,10 @@ private command createHtmlPage pTemplateFile, pHtmlFile, pStack
    put it into tPage
    close file pTemplateFile
 
-   put the label of stack pStack into tTitle
+   put line 1 of pSettings["emscripten,title"] into tTitle
+   if tTitle is empty then
+      put the label of stack pStack into tTitle
+   end if
    if tTitle is empty then
       put the short name of stack pStack into tTitle
    end if
@@ -352,6 +357,19 @@ private command createHtmlPage pTemplateFile, pHtmlFile, pStack
    replace ">" with "&gt;" in tTitle
    replace "@STACK_TITLE@" with tTitle in tPage
 
+   -- The page's other settings go at the end of its head; without them the
+   -- page is the engine's as it is
+   set the itemDelimiter to slash
+   put getPageHead(pSettings, pBaseFolder, item 1 to -2 of pHtmlFile) into tHead
+   set the itemDelimiter to comma
+   if tHead is not empty then
+      put offset("</head>", tPage) into tOffset
+      if tOffset is 0 then
+         throw pTemplateFile & ": the page has no </head>"
+      end if
+      put tHead before char tOffset of tPage
+   end if
+
    open file pHtmlFile for "UTF-8" text write
    if the result is not empty then
       throw pHtmlFile & ":" && the result
@@ -359,6 +377,84 @@ private command createHtmlPage pTemplateFile, pHtmlFile, pStack
    write tPage to file pHtmlFile
    close file pHtmlFile
 end createHtmlPage
+
+-- OXT-Beyond: what the settings of the HTML5 pane add to the page's head
+-- (empty for none), each under the key "emscripten,<setting>":
+--    icon             an image file, relative to the stack's folder
+--                     (pBaseFolder) or not, which is copied into the
+--                     standalone's folder (pBuildFolder) as icon.<extension>
+--                     and is the page's icon
+--    backgroundColor  the page's colour, #RRGGBB; white when empty
+--    position         where the main stack is in the page: empty for
+--                     centered at the top (the page's own place), "center"
+--                     for centered in the browser's window, "topLeft" for at
+--                     the top left
+-- A setting that cannot be used is left out, with a warning.
+private function getPageHead pSettings, pBaseFolder, pBuildFolder
+   local tHead, tStyle, tIcon, tExtension, tColor, tLuminance
+
+   put pSettings["emscripten,icon"] into tIcon
+   if tIcon is not empty then
+      if there is a file (pBaseFolder & slash & tIcon) then
+         put pBaseFolder & slash before tIcon
+      end if
+      if there is a file tIcon then
+         set the itemDelimiter to "."
+         put toLower(the last item of tIcon) into tExtension
+         set the itemDelimiter to comma
+         if tExtension is not among the items of "png,ico,svg,gif,jpg,jpeg,webp" then
+            revStandaloneAddWarning "HTML5: the page's icon is not a PNG, ICO, SVG, GIF, JPEG or WebP image:" && tIcon
+         else
+            put url ("binfile:" & tIcon) into url ("binfile:" & pBuildFolder & "/icon." & tExtension)
+            if the result is not empty then
+               throw "could not copy the page's icon" && tIcon & ":" && the result
+            end if
+            put "<link rel=" & quote & "icon" & quote && "href=" & quote & "icon." & tExtension & quote & ">" after tHead
+         end if
+      else
+         revStandaloneAddWarning "HTML5: the page's icon does not exist:" && tIcon
+      end if
+   end if
+
+   put pSettings["emscripten,backgroundColor"] into tColor
+   if tColor is not empty then
+      if matchText(tColor, "^#[0-9A-Fa-f]{6}$") then
+         put "body{background-color:" & tColor & "}" after tStyle
+         -- the loading message in grey that can be read on the colour
+         put 0.299 * baseConvert(char 2 to 3 of tColor, 16, 10) + \
+               0.587 * baseConvert(char 4 to 5 of tColor, 16, 10) + \
+               0.114 * baseConvert(char 6 to 7 of tColor, 16, 10) into tLuminance
+         if tLuminance < 128 then
+            put "#status{color:#cccccc}" after tStyle
+         end if
+      else
+         revStandaloneAddWarning "HTML5: the page's colour is not #RRGGBB:" && tColor
+      end if
+   end if
+
+   switch pSettings["emscripten,position"]
+      case empty
+         break
+      case "center"
+         -- the window's height at least, with the stack in the middle of
+         -- it, or at the top when it is taller (margins of a flex item do
+         -- not go below 0)
+         put "body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}" & \
+               "#stack{margin:auto}" after tStyle
+         break
+      case "topLeft"
+         put "#stack{margin:0}" after tStyle
+         break
+      default
+         revStandaloneAddWarning "HTML5: unknown place of the stack in the page:" && pSettings["emscripten,position"]
+         break
+   end switch
+
+   if tStyle is not empty then
+      put "<style>" & tStyle & "</style>" after tHead
+   end if
+   return tHead
+end getPageHead
 
 ----------------------------------------------------------------
 -- Extra files from "copy files"

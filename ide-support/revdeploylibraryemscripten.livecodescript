@@ -315,10 +315,11 @@ private command __deployLaunchURLInBrowser pURL, pBrowser, pPrivateMode
    end if
 end __deployLaunchURLInBrowser
 
--- The type of a file of the standalone, for the Content-Type header:
+-- OXT-Beyond: the type of a file of the standalone, for the Content-Type header:
 -- a browser compiles the engine's WebAssembly as it downloads only
 -- when the server says it is application/wasm (otherwise the engine
--- falls back to downloading it first, with an error in the console).
+-- falls back to downloading it first, with an error in the console),
+-- and shows an SVG icon of the page only when it is image/svg+xml.
 --
 private function __deployContentType pPath
    set the itemDelimiter to "."
@@ -334,6 +335,20 @@ private function __deployContentType pPath
          return "application/zip"
       case "css"
          return "text/css"
+      -- the page's icon (the Web card's Icon setting)
+      case "png"
+         return "image/png"
+      case "ico"
+         return "image/x-icon"
+      case "svg"
+         return "image/svg+xml"
+      case "gif"
+         return "image/gif"
+      case "jpg"
+      case "jpeg"
+         return "image/jpeg"
+      case "webp"
+         return "image/webp"
       default
          return empty
    end switch
@@ -358,6 +373,7 @@ on deployEmscriptenNewHTTPRequest pSocketID, pRequest
    put sHTTPFileSpace & slash before tPath
    
    if there is a file tPath then
+      -- OXT-Beyond: with the file's type (__deployContentType)
       local tHeaders
       put __deployContentType(tPath) into tHeaders
       if tHeaders is not empty then
