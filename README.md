@@ -1548,10 +1548,11 @@ page (tick **Build for HTML5** in the standalone settings). Their
 engine, the standalone engine built from this repository with a current
 Emscripten into WebAssembly, is in every package, in
 `Runtime/Emscripten/js`. Stacks run in the browser as on the desktop:
-`wait`, the dialogs, files, URLs, the mouse, touch and the touch
-screen's keyboard, drag and drop, sound, the player, the browser
-widget, printing, `encrypt`, revXML, revZip, revDB with SQLite and
-revSpeech work, each in the browser's own way. What a browser does not
+`wait`, the dialogs, modal stacks, files, URLs, the mouse, touch and
+the touch screen's keyboard, drag and drop, sound, the player, the
+browser widget, printing, snapshots of the screen, `encrypt`, revXML,
+revZip, revDB with SQLite and revSpeech work, each in the browser's own
+way. What a browser does not
 let a page do (sockets, other programs, other externals) fails as it
 does on a desktop that cannot do it. The guide *Deploying Your
 Application* says what works, and how to put a standalone on a web

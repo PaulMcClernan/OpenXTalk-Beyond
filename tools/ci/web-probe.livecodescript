@@ -35,9 +35,10 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- into the field, holds Shift down, taps the button and drags a finger
 -- across the graphic, taps the field and types into it with a touch
 -- screen's keyboard, holds the mouse down on the graphic "Mouse Zone"
--- and clicks while its script waits for a click, and calls the handlers
--- that the stack's cJavascriptHandlers name: probeFromJS, probeReport and
--- probeUnfocus.
+-- and clicks while its script waits for a click, takes snapshots of the
+-- page and drags out the rectangle of one, clicks and types under a
+-- modal dialog and into it, and calls the handlers that the stack's
+-- cJavascriptHandlers name: probeFromJS, probeReport and probeUnfocus.
 --
 -- The checks run only in the web standalone: in the IDE, which opens the
 -- stack while it builds the standalone, openStack does nothing more.
@@ -721,6 +722,108 @@ command probeDrop pFiles
    put pFiles & ":" & url ("file:" & line 1 of pFiles) into sDrop
 end probeDrop
 
+-- web_check.py moves the mouse over the graphic and asks for snapshots of
+-- what the page shows, as the desktop engines take them of the screen
+-- (probeReport("snapshot")): of the graphic, by the stack's window; of
+-- the whole stack, by its rect on the screen, at half its size; of the
+-- graphic as a PNG; and the colour under the mouse. Each picture's size
+-- and the colours of points in it (the graphic's, then the card's), the
+-- PNG's first bytes and the mouseColor.
+private function probeSnapshots
+   local tWindow, tResult, tPng, tError
+   put the windowID of stack "WebProbe" into tWindow
+   try
+      import snapshot from rect (the rect of graphic "Probe Graphic" of stack "WebProbe") of window tWindow
+      put probeImage(50, 50) into tResult
+      import snapshot from rect (the rect of stack "WebProbe") at size 240,180
+      put "|" & probeImage(175, 45, 220, 160) after tResult
+      export snapshot from rect (the rect of graphic "Probe Graphic" of stack "WebProbe") of window tWindow to tPng as PNG
+      put "|" & (byte 2 to 4 of tPng) & "|" & the mouseColor after tResult
+   catch tError
+      put "error" && item 1 of tError after tResult
+   end try
+   return tResult
+end probeSnapshots
+
+-- The size of the last image and the colours of points in it (x, y, ...),
+-- then deletes it: 100x100:204,51,0
+private function probeImage
+   local tData, tResult, tOffset, tIndex
+   put the imageData of last image into tData
+   put the width of last image & "x" & the height of last image into tResult
+   repeat with tIndex = 1 to the paramCount div 2
+      put ((param(tIndex * 2) * the width of last image) + param(tIndex * 2 - 1)) * 4 into tOffset
+      put ":" & byteToNum(byte tOffset + 2 of tData) & comma & byteToNum(byte tOffset + 3 of tData) \
+            & comma & byteToNum(byte tOffset + 4 of tData) after tResult
+   end repeat
+   delete last image
+   return tResult
+end probeImage
+
+-- web_check.py drags out a rectangle on the graphic for "import snapshot"
+-- with no rectangle, which waits for it as on the desktop; then it
+-- cancels a second one with Escape, and the import fails
+-- (probeReport("snapshot-select"))
+command probeSnapshotSelect
+   local tResult, tError
+   try
+      import snapshot
+      put probeImage(40, 40) into tResult
+   catch tError
+      put "cancelled" into tResult
+   end try
+   probeInfo "snapshot-select", tResult
+end probeSnapshotSelect
+
+-- web_check.py opens a modal dialog (probeReport("modal")), clicks the
+-- button and the field under it and types, which must reach neither,
+-- then types into the dialog's field and clicks its OK button: the
+-- dialog's field's text, the clicks on the button meanwhile, and whether
+-- the field under it has the text it had. The dialog is a stack of its
+-- own, so that its keys do not come to this script.
+command probeModal
+   local tClicks, tText
+   if there is not a stack "Probe Dialog" then
+      create stack "Probe Dialog"
+      set the rect of stack "Probe Dialog" to 0,0,200,120
+      set the backgroundColor of stack "Probe Dialog" to "#DDDDDD"
+      set the script of stack "Probe Dialog" to "on openStack" & return \
+            & "   send" && quote & "probeDialogOpened" & quote && "to stack" && quote & "WebProbe" & quote && "in 0 milliseconds" & return \
+            & "end openStack"
+      create button "OK" in card 1 of stack "Probe Dialog"
+      set the rect of button "OK" of stack "Probe Dialog" to 50,40,150,70
+      set the script of button "OK" of stack "Probe Dialog" to "on mouseUp" & return \
+            & "   close stack" && quote & "Probe Dialog" & quote & return & "end mouseUp"
+      create field "Dialog Field" in card 1 of stack "Probe Dialog"
+      set the rect of field "Dialog Field" of stack "Probe Dialog" to 10,80,190,105
+      set the backgroundColor of field "Dialog Field" of stack "Probe Dialog" to "#FFFFFF"
+      set the lockText of field "Dialog Field" of stack "Probe Dialog" to false
+      set the traversalOn of field "Dialog Field" of stack "Probe Dialog" to true
+      set the defaultStack to "WebProbe"
+   end if
+   put sClicks into tClicks
+   put the text of field "Probe Field" of stack "WebProbe" into tText
+   modal stack "Probe Dialog"
+   probeInfo "modal", (the text of field "Dialog Field" of stack "Probe Dialog") & "|" & (sClicks - tClicks) \
+         & "|" & (the text of field "Probe Field" of stack "WebProbe" is tText)
+end probeModal
+
+-- Once the dialog is open where the engine put it: where its field and
+-- its OK button are on the screen
+command probeDialogOpened
+   probeInfo "modal-field-rect", probeDialogRect(the rect of field "Dialog Field" of stack "Probe Dialog")
+   probeInfo "modal-button-rect", probeDialogRect(the rect of button "OK" of stack "Probe Dialog")
+end probeDialogOpened
+
+-- A rect of the dialog's card, on the screen
+private function probeDialogRect pRect
+   local tLeft, tTop
+   put item 1 of the rect of stack "Probe Dialog" into tLeft
+   put item 2 of the rect of stack "Probe Dialog" into tTop
+   return (item 1 of pRect + tLeft) & comma & (item 2 of pRect + tTop) & comma \
+         & (item 3 of pRect + tLeft) & comma & (item 4 of pRect + tTop)
+end probeDialogRect
+
 on keyDown pKey
    put pKey after sKeys
    pass keyDown
@@ -750,9 +853,24 @@ end probeUnfocus
 -- Called from the page: what the user did, or with "keys", the keys that
 -- are down, with "drag", the drag on the graphic, with "dnd", the drag
 -- and drop between the fields and the text of the field it dropped on,
--- with "drop", the file dropped from outside the page, or with "mouse",
--- the loop while the mouse was down and the click after it
+-- with "drop", the file dropped from outside the page, with "mouse", the
+-- loop while the mouse was down and the click after it, or with
+-- "snapshot", the snapshots of the page (probeSnapshots). With
+-- "snapshot-select" and "modal" it starts probeSnapshotSelect and
+-- probeModal, which wait for the user: a handler that the page calls
+-- cannot.
 function probeReport pWhat
+   if pWhat is "snapshot" then
+      return probeSnapshots()
+   end if
+   if pWhat is "snapshot-select" or pWhat is "modal" then
+      if pWhat is "modal" then
+         send "probeModal" to me in 0 milliseconds
+      else
+         send "probeSnapshotSelect" to me in 0 milliseconds
+      end if
+      return "started"
+   end if
    if pWhat is "keys" then
       return the shiftKey & "|" & the keysDown
    end if

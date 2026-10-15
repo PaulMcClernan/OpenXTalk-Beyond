@@ -269,3 +269,13 @@ void
 MCStack::updatedocumentfilename()
 {
 }
+
+/* OXT-Beyond: a modal dialog disables the stacks under it
+ * (MCStacklist::enableformodal()), and a disabled stack then gets none of
+ * the page's mouse or key events (MCEmscriptenStackIsEnabled(), em-dc.cpp),
+ * as a disabled window gets none on the desktop. Its canvas stays as it
+ * is. */
+void
+MCStack::enablewindow(bool p_enable)
+{
+}

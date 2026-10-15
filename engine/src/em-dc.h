@@ -42,6 +42,13 @@ extern "C" bool MCEmscriptenHandleMousePosition(MCStack *p_stack, uint32_t p_tim
 extern "C" bool MCEmscriptenHandleMouseWheel(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, int32_t p_dh, int32_t p_dv);
 /* OXT-Beyond: whether a touch screen's keyboard comes up (em-event.js) */
 extern "C" void MCEmscriptenSetTextInput(bool p_active);
+/* OXT-Beyond: whether a stack takes the user's mouse and keys (not while a
+ * modal dialog is above it) */
+extern "C" bool MCEmscriptenStackIsEnabled(MCStack *p_stack);
+/* OXT-Beyond: the keyboard goes to the stack of the window p_to (to none
+ * if 0) when the stacks have it (p_from 0) or the window p_from has it
+ * (em-event.js) */
+extern "C" void MCEmscriptenPassKeyboard(uint32_t p_from, uint32_t p_to);
 /* OXT-Beyond: something dropped on a stack from outside the page */
 extern "C" bool MCEmscriptenHandleDrop(uint32_t p_window, uint32_t p_time, uint32_t p_modifiers, int32_t p_x, int32_t p_y, MCStringRef p_text, MCStringRef p_html, uint32_t p_drop);
 
@@ -175,6 +182,11 @@ public:
     /* OXT-Beyond: an unlocked field has the keyboard focus, or lost it: a
      * touch screen's keyboard comes up for it (em-event.js) */
     virtual void activateIME(Boolean activate);
+
+    /* OXT-Beyond: a snapshot of the page's stacks, as a desktop takes one
+     * of its screen; the user drags out the rectangle when it is not given
+     * (em-dc.js) */
+    virtual MCImageBitmap *snapshot(MCRectangle &r, uint4 window, MCStringRef displayname, MCPoint *size);
 
     /* Cursors: the canvases' CSS cursors */
     virtual void resetcursors();

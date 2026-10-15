@@ -138,7 +138,19 @@ Then:
    It holds the mouse down on the graphic "Mouse Zone", whose mouseDown
    loops while the mouse is down and then waits until the mouseClick: the
    loop must see the mouse move and its button go up, and the wait must
-   end on a click, with its clickLoc (probeReport("mouse")).
+   end on a click, with its clickLoc (probeReport("mouse")). With the
+   mouse over the graphic, the probe takes snapshots of the page: of the
+   graphic by the stack's window, of the whole stack by its rect on the
+   screen at half its size, and of the graphic as a PNG, which must have
+   the colours drawn, and the mouseColor must be the graphic's
+   (probeReport("snapshot")). Then "import snapshot" with no rectangle,
+   for which this script drags one out on the graphic over the page,
+   must take it, and a second must fail when Escape cancels it. It opens
+   a modal dialog (probeReport("modal")): a click on the button under it,
+   a click on the field under it and typing must reach neither, the
+   dialog's field must take what is typed into it, and its OK button must
+   close it; then typing must reach the field again, and a click the
+   button.
    Then it takes a screenshot of the stack and checks the colours of the
    card, the graphic and the image in it.
 
@@ -227,6 +239,23 @@ PROBE_DROP_REPORT = '/uploads/probe-drop.txt:dropped file'
 # keyDowns' keys and the two clicks on the button
 PROBE_SOFT_TEXT = ' d\u00e9\U0001F600'
 PROBE_SOFT_REPORT = 'abc%s|abc%sx|2' % (PROBE_SOFT_TEXT, PROBE_SOFT_TEXT)
+
+# What the probe's snapshots of the page report (probeReport("snapshot")):
+# the graphic's, by the stack's window, with the colour of its middle; the
+# whole stack's, by its rect on the screen at half its size, with the
+# colours of the graphic and the card in it; the first bytes of a PNG of
+# the graphic; and the mouseColor, with the mouse over the graphic
+PROBE_SNAPSHOTS = '100x100:204,51,0|240x180:204,51,0:51,102,204|PNG|204,51,0'
+
+# What "import snapshot" with no rectangle reports (probeSnapshotSelect)
+# when the rectangle dragged out is the graphic's, 10 points inside it,
+# with the colour of its middle; then when Escape cancels it
+PROBE_SNAPSHOT_SELECT = ('80x80:204,51,0', 'cancelled')
+
+# What the probe's modal dialog reports when its OK button closes it
+# (probeModal): its field's text, typed into it, the clicks on the button
+# under it meanwhile, and whether the field under it has the text it had
+PROBE_MODAL = 'ok|0|true'
 
 # The samples of the audio clip the probe plays, as the browser has them:
 # channels, rate, seconds and the tone's frequency (counted from where the
@@ -894,6 +923,27 @@ def touch_drag_ok(report, points):
             and points[0][0] < moved[0] <= points[-1][0] + 1 and abs(moved[1] - points[0][1]) <= 1)
 
 
+def snapshot_report_ok(report, wanted):
+    """Whether the probe's report of snapshots (PROBE_SNAPSHOTS,
+    PROBE_SNAPSHOT_SELECT) is the one wanted, each colour in it (red,
+    green, blue) within 8 of the colour wanted"""
+    split = lambda text: text.replace('|', ':').split(':')
+    got, want = split(report or ''), split(wanted)
+    if len(got) != len(want):
+        return False
+    for part, wanted_part in zip(got, want):
+        if wanted_part.count(',') == 2:
+            try:
+                colour = [int(n) for n in part.split(',')]
+            except ValueError:
+                return False
+            if len(colour) != 3 or any(abs(a - int(b)) > 8 for a, b in zip(colour, wanted_part.split(','))):
+                return False
+        elif part != wanted_part:
+            return False
+    return True
+
+
 def run_browser(url, version, work, timeout, url_path=None, browser_widget=None):
     """Open the page and check what the probe and the page do; url_path is
     what must load the probe's URLs, 'engine' or 'libURL' (None: either),
@@ -1175,6 +1225,87 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                         lines.append('a loop while the mouse was down saw it move and its button go up, and a wait '
                                      'for a click ended on the click (%.1f s)' % (time.time() - started))
                 page.mouse.click(*point(click))
+                # snapshots of what the page shows, as the desktop engines take
+                # them of the screen (probeReport("snapshot")): of the graphic by
+                # the stack's window, of the whole stack by its rect on the screen
+                # at half its size, of the graphic as a PNG, and the colour under
+                # the mouse, which is over the graphic
+                page.mouse.move(*at(info['graphic-rect']))
+                page.wait_for_timeout(300)
+                snapshots = page.evaluate(stack_js + '.probeReport("snapshot")')
+                if not snapshot_report_ok(snapshots, PROBE_SNAPSHOTS):
+                    problems.append('snapshots of the page, with the mouse over the graphic, reported %r, expected %r '
+                                    '(sizes and colours)' % (snapshots, PROBE_SNAPSHOTS))
+                else:
+                    lines.append('import snapshot, export snapshot and the mouseColor read what the page shows')
+                # "import snapshot" with no rectangle: the user drags one out over
+                # the page, here on the graphic, 10 points inside it; then Escape
+                # cancels a second one, and the import fails. Nothing of either
+                # is left on the page.
+                selector = '.oxt-snapshot-select'
+                graphic = parse_rect(info['graphic-rect'])
+                selected = []
+                for cancel in (False, True):
+                    page.evaluate(stack_js + '.probeReport("snapshot-select")')
+                    if not wait_for(lambda: page.locator(selector).count() > 0,
+                                    'the page asking for the rectangle of a snapshot', 10):
+                        break
+                    if cancel:
+                        page.keyboard.press('Escape')
+                    else:
+                        page.mouse.move(canvas['x'] + graphic[0] + 10, canvas['y'] + graphic[1] + 10)
+                        page.mouse.down()
+                        page.mouse.move(canvas['x'] + graphic[2] - 10, canvas['y'] + graphic[3] - 10, steps=5)
+                        page.mouse.up()
+                    if not wait_for(lambda: 'snapshot-select' in info, 'the probe\'s import snapshot ending', 10):
+                        break
+                    selected.append(info.pop('snapshot-select'))
+                left = page.locator(selector).count()
+                if (len(selected) != 2 or not snapshot_report_ok(selected[0], PROBE_SNAPSHOT_SELECT[0])
+                        or selected[1] != PROBE_SNAPSHOT_SELECT[1] or left):
+                    problems.append('import snapshot with a rectangle dragged out on the graphic, then with Escape, '
+                                    'reported %r, leaving %d of the page\'s selections, expected %r and none'
+                                    % (selected, left, list(PROBE_SNAPSHOT_SELECT)))
+                else:
+                    lines.append('import snapshot took the rectangle dragged out on the page, and Escape cancelled it')
+                # a modal dialog (probeReport("modal")): the stack under it takes
+                # neither the mouse nor the keys (a click on the button, a click
+                # on the field and typing), the dialog's field takes the keys,
+                # and its OK button closes it; then the keyboard is the field's
+                # again, where it was, and the button takes clicks
+                page.mouse.click(*at(info['field-rect']))
+                page.wait_for_timeout(200)
+                before = page.evaluate(stack_js + '.probeReport()')
+                clicks = len(probes.get('click', []))
+                centre = lambda rect: ((parse_rect(rect)[0] + parse_rect(rect)[2]) / 2,
+                                       (parse_rect(rect)[1] + parse_rect(rect)[3]) / 2)
+                page.evaluate(stack_js + '.probeReport("modal")')
+                modal, after = None, None
+                if wait_for(lambda: 'modal-button-rect' in info, 'the modal dialog opening', 10):
+                    page.mouse.click(*at(info['button-rect']))
+                    page.mouse.click(*at(info['field-rect']))
+                    page.keyboard.type('zz', delay=50)
+                    page.mouse.click(*centre(info['modal-field-rect']))
+                    page.keyboard.type('ok', delay=50)
+                    page.mouse.click(*centre(info['modal-button-rect']))
+                    if wait_for(lambda: 'modal' in info, 'the modal dialog closing', 10):
+                        modal = info['modal']
+                        page.wait_for_timeout(200)
+                        page.keyboard.type('k', delay=50)
+                        page.mouse.click(*at(info['button-rect']))
+                        wait_for(lambda: len(probes.get('click', [])) > clicks,
+                                 'the button\'s mouseUp after the modal dialog', 10)
+                        page.wait_for_timeout(200)
+                        after = page.evaluate(stack_js + '.probeReport()')
+                text, keys, clicked = (before.split('|') + ['', '', '0'])[:3]
+                wanted = '%sk|%sk|%d' % (text, keys, int(clicked or 0) + 1)
+                if (modal, after) != (PROBE_MODAL, wanted):
+                    problems.append('a modal dialog, with clicks and typing under it and typing into it, reported %r, '
+                                    'and the stack under it %r after it closed and more typing and a click, expected '
+                                    '%r and %r' % (modal, after, PROBE_MODAL, wanted))
+                else:
+                    lines.append('a modal dialog kept the mouse and the keys from the stack under it, and gave them '
+                                 'back when it closed')
                 # the files the probe wrote to /downloads: a text file, and the
                 # PDF that it printed
                 names = lambda: [name for name, _ in downloads]

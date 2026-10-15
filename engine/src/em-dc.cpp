@@ -37,6 +37,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "clipboard.h"
 #include "em-clipboard.h"
 #include "em-printer.h"
+#include "stacklst.h"
 
 #include <emscripten.h>
 
@@ -119,15 +120,57 @@ MCEmscriptenGetStackForWindow(Window p_window)
 	if (MCnoui) return nil;
 	
 	MCStack *t_stack = MCdispatcher->findstackd(p_window);
-	
+
 	return t_stack;
+}
+
+/* OXT-Beyond: whether a stack takes the user's mouse and keys. A modal
+ * dialog disables the stacks under it (MCStacklist::enableformodal(),
+ * which openwindow() and closewindow() call, as the Linux engine's do),
+ * and a disabled stack gets none of the page's mouse or key events, as a
+ * disabled window gets none on the desktop. em-event.js asks before it
+ * gives a stack the keyboard. */
+static bool MCEmscriptenStackTakesEvents(MCStack *p_stack)
+{
+	return p_stack == nil || !p_stack->getextendedstate(ECS_DISABLED_FOR_MODAL);
+}
+
+MC_DLLEXPORT_DEF bool
+MCEmscriptenStackIsEnabled(MCStack *p_stack)
+{
+	if (MCnoui || p_stack == nil)
+		return false;
+
+	return MCEmscriptenStackTakesEvents(p_stack);
+}
+
+/* OXT-Beyond: whether the system would make a stack's window the active
+ * one, which has the keyboard, when it opens: a toplevel stack's, a
+ * dialog's or a sheet's, not a palette's, a menu's or a tooltip's */
+static bool MCEmscriptenStackTakesKeyboard(MCStack *p_stack)
+{
+	switch (p_stack->getmode())
+	{
+	case WM_TOP_LEVEL:
+	case WM_TOP_LEVEL_LOCKED:
+	case WM_MODELESS:
+	case WM_MODAL:
+	case WM_SHEET:
+		return true;
+	default:
+		return false;
+	}
 }
 
 MC_DLLEXPORT_DEF
 bool MCEmscriptenHandleMousePress(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, MCMousePressState p_state, int32_t p_button)
 {
 	if (MCnoui) return false;
-	
+
+	/* OXT-Beyond: not on a stack under a modal dialog */
+	if (!MCEmscriptenStackTakesEvents(p_stack))
+		return true;
+
 	MCScreenDC *t_dc = static_cast<MCScreenDC *>(MCscreen);
 	t_dc->update_mouse_press_state(p_state, p_button);
 
@@ -145,6 +188,10 @@ bool MCEmscriptenHandleMouseWheel(MCStack *p_stack, uint32_t p_time, uint32_t p_
 {
 	if (MCnoui) return false;
 
+	/* OXT-Beyond: not on a stack under a modal dialog */
+	if (!MCEmscriptenStackTakesEvents(p_stack))
+		return true;
+
 	return MCEventQueuePostMouseWheel(p_stack, p_time, p_modifiers, p_dh, p_dv);
 }
 
@@ -158,7 +205,11 @@ MC_DLLEXPORT_DEF
 bool MCEmscriptenHandleMousePosition(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, int32_t p_x, int32_t p_y)
 {
 	if (MCnoui) return false;
-	
+
+	/* OXT-Beyond: not over a stack under a modal dialog */
+	if (!MCEmscriptenStackTakesEvents(p_stack))
+		return true;
+
 	MCScreenDC *t_dc = static_cast<MCScreenDC *>(MCscreen);
 	
 	MCPoint t_position = MCPointMake(p_x, p_y);
@@ -255,6 +306,13 @@ MCScreenDC::openwindow(Window p_window,
 
 	t_stack->view_configure(true);
 	t_stack->dirtyall();
+
+	/* OXT-Beyond: a modal dialog disables the stacks under it, as on the
+	 * desktop (lnxdcs.cpp), and the window that the system would make the
+	 * active one takes the keyboard when the stacks have it */
+	MCstacks->enableformodal(p_window, False);
+	if (MCEmscriptenStackTakesKeyboard(t_stack))
+		MCEmscriptenPassKeyboard(0, t_window);
 }
 
 void
@@ -262,7 +320,28 @@ MCScreenDC::closewindow(Window p_window)
 {
 	MCAssert(p_window);
 
+	/* OXT-Beyond: the stacks that a modal dialog disabled are enabled
+	 * again (the closing stack has left MCstacks), and when the closing
+	 * window has the keyboard, the window that the system would make the
+	 * active one now takes it */
+	MCstacks->enableformodal(p_window, True);
+	uint32_t t_next = 0;
+	MCStacknode *t_top = MCstacks->topnode();
+	MCStacknode *t_node = t_top;
+	while (t_node != nil && t_next == 0)
+	{
+		MCStack *t_stack = t_node->getstack();
+		if (t_stack->getw() != nil && t_stack->getw() != p_window &&
+		    t_stack->isvisible() && MCEmscriptenStackTakesKeyboard(t_stack) &&
+		    MCEmscriptenStackTakesEvents(t_stack))
+			t_next = reinterpret_cast<uint32_t>(t_stack->getw());
+		t_node = t_node->next();
+		if (t_node == t_top)
+			break;
+	}
+
 	uint32_t t_window = reinterpret_cast<uint32_t>(p_window);
+	MCEmscriptenPassKeyboard(t_window, t_next);
 	MCEmscriptenSetWindowVisible(t_window, false);
 }
 
@@ -1346,9 +1425,10 @@ public:
 			m_drop = 0;
 		}
 
-		/* The drop is over a stack's window, and no drag is going on */
+		/* The drop is over a stack's window, not one under a modal dialog,
+		 * and no drag is going on */
 		MCStack *t_stack = MCdispatcher->findstackd(m_window);
-		if (MCquit || t_stack == nil ||
+		if (MCquit || t_stack == nil || !MCEmscriptenStackTakesEvents(t_stack) ||
 		    MCdispatcher->isdragsource() || MCdispatcher->isdragtarget())
 			return;
 
@@ -1441,4 +1521,97 @@ MCEmscriptenHandleDrop(uint32_t p_window, uint32_t p_time, uint32_t p_modifiers,
 		return false;
 	}
 	return true;
+}
+
+/* ================================================================
+ * Snapshots of the screen
+ * ================================================================ */
+
+/* OXT-Beyond: the page's side of snapshots (em-dc.js) */
+extern "C" bool MCEmscriptenSnapshot(int32_t p_left, int32_t p_top, int32_t p_width, int32_t p_height,
+                                     int32_t p_out_width, int32_t p_out_height, void *r_pixels);
+extern "C" void MCEmscriptenSnapshotSelectBegin(void);
+extern "C" int32_t MCEmscriptenSnapshotSelectState(int32_t *r_rect, bool p_cancel);
+
+/* OXT-Beyond: a snapshot of the screen, which is the browser's viewport,
+ * as the desktop engines take one (import snapshot, export snapshot, the
+ * mouseColor): what the stacks' windows show in the rect <r>, of the
+ * window <p_window> unless it is 0, at the size <p_size> unless it is nil.
+ * The rest of the page, the browser widget's frames and the players'
+ * movies, which a page cannot read, are the page's background colour.
+ *
+ * As on Linux, with no rect and no window (r.x is -32768) the user drags
+ * out the rect on the page first, and a click takes the window under it;
+ * Escape cancels. A window's empty rect is the whole window. Nil if there
+ * is nothing to take, the user cancelled, or the engine cannot wait for
+ * the user (in a handler that the page called). */
+MCImageBitmap *
+MCScreenDC::snapshot(MCRectangle &r, uint4 p_window, MCStringRef p_display, MCPoint *p_size)
+{
+	/* The page is the only display */
+	if (p_display != nil && !MCStringIsEmpty(p_display))
+		return nil;
+
+	if (p_window == 0 && r.x == -32768)
+	{
+		if (!MCEmscriptenAsyncCanYield())
+			return nil;
+
+		MCEmscriptenSnapshotSelectBegin();
+		int32_t t_selected[4] = {0, 0, 0, 0};
+		int32_t t_state;
+		while ((t_state = MCEmscriptenSnapshotSelectState(t_selected, false)) == 0)
+		{
+			if (MCquit || MCscreen->wait(60.0, False, True))
+			{
+				t_state = MCEmscriptenSnapshotSelectState(t_selected, true);
+				break;
+			}
+		}
+		if (t_state != 1)
+			return nil;
+
+		r = MCU_make_rect(t_selected[0], t_selected[1],
+		                  t_selected[2] - t_selected[0], t_selected[3] - t_selected[1]);
+	}
+
+	MCRectangle t_rect = r;
+	if (p_window != 0)
+	{
+		Window t_window = reinterpret_cast<Window>(p_window);
+		if (MCdispatcher->findstackd(t_window) == nil)
+			return nil;
+
+		MCRectangle t_window_rect = MCEmscriptenGetWindowRect(p_window);
+		if (t_rect.width == 0 || t_rect.height == 0)
+			t_rect = MCU_make_rect(0, 0, t_window_rect.width, t_window_rect.height);
+		t_rect.x += t_window_rect.x;
+		t_rect.y += t_window_rect.y;
+	}
+
+	if (t_rect.width == 0 || t_rect.height == 0)
+		return nil;
+
+	uindex_t t_width = t_rect.width;
+	uindex_t t_height = t_rect.height;
+	if (p_size != nil)
+	{
+		t_width = MCMax(p_size->x, 1);
+		t_height = MCMax(p_size->y, 1);
+	}
+
+	MCImageBitmap *t_bitmap = nil;
+	if (!MCImageBitmapCreate(t_width, t_height, t_bitmap))
+		return nil;
+
+	/* Its rows are 4 bytes a pixel, as the page writes them */
+	if (t_bitmap->stride != t_width * 4 ||
+	    !MCEmscriptenSnapshot(t_rect.x, t_rect.y, t_rect.width, t_rect.height,
+	                          t_width, t_height, t_bitmap->data))
+	{
+		MCImageFreeBitmap(t_bitmap);
+		return nil;
+	}
+
+	return t_bitmap;
 }

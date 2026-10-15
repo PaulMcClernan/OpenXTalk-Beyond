@@ -472,8 +472,11 @@ a web server in its folder (for example `python3 -m http.server`) and open
 The web engine is the desktop engine, so stacks look and behave as they do
 on the desktop: cards, groups, controls and graphics, the message path,
 behaviors, script libraries, Builder extensions and widgets. Stacks other
-than the main stack open in their own floating windows in the page. Where
-a browser does things its own way:
+than the main stack open in their own floating windows in the page. A
+modal dialog (`modal`, or a stack opened as a dialog) keeps the mouse and
+the keys from the stacks under it until it closes, and then the keyboard
+goes back where it was, as on the desktop. Where a browser does things
+its own way:
 
 * **The look.** A browser has no look of its own for a stack's controls,
 so the engine draws them all itself, as the desktop engines draw a part
@@ -551,7 +554,13 @@ paths.
 * **The screen** is the browser's window: `the screenRect` is its size, a
 stack gets `desktopChanged` when it changes, and stacks draw at the
 screen's scale, so they stay sharp on high-resolution screens and when the
-page is zoomed.
+page is zoomed. `import snapshot` and `export snapshot` of the screen or of
+a stack's window take what the stacks show there, and `the mouseColor` is
+the colour under the mouse; the rest of the page, and the pages of the
+browser widget and movies of the player, which a page cannot read, are the
+page's background colour. With no rectangle, the user drags one out on the
+page, or clicks a stack to take its window, as on the desktop; Escape
+cancels, and the import fails.
 * **Sound.** `play` plays audio clips and WAV, AU and AIFF files, and
 `beep` beeps. A browser lets a page make sound only once the user has
 clicked or typed in it: until then, a sound waits, and one that ends

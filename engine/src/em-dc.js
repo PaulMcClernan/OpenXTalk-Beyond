@@ -17,7 +17,7 @@
  along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 mergeInto(LibraryManager.library, {
-	$LiveCodeDC__deps: ['$LiveCodeEvents', '$LiveCodeUtil'],
+	$LiveCodeDC__deps: ['$LiveCodeEvents', '$LiveCodeUtil', '$LiveCodeAsync'],
 	$LiveCodeDC: {
 		// true if ensureInit() has ever been run
 		_initialised: false,
@@ -461,8 +461,207 @@ mergeInto(LibraryManager.library, {
 				}
 			}
 		},
+
+		/*** Snapshots of the screen ***/
+
+		// OXT-Beyond: what the screen (the browser's viewport) shows in
+		// the rectangle <left>, <top>, <width>, <height>, drawn at
+		// <outWidth> x <outHeight> into <pixels> (RGBA, 4 bytes a pixel,
+		// all opaque): the stacks' windows, from the back, over the page's
+		// background colour. What a page cannot draw into a canvas (the
+		// rest of the page, the browser widget's frames and the players'
+		// movies) is that colour. False if the browser cannot draw it.
+		snapshot: function(left, top, width, height, outWidth, outHeight, pixels) {
+			var out = document.createElement('canvas');
+			out.width = outWidth;
+			out.height = outHeight;
+			var context = out.getContext('2d');
+			if (!context || width <= 0 || height <= 0) {
+				return false;
+			}
+
+			var background = '#ffffff';
+			[document.body, document.documentElement].some(function(element) {
+				var colour = element ? getComputedStyle(element).backgroundColor : '';
+				if (colour && colour != 'transparent' && !/^rgba\(.*,\s*0\)$/.test(colour)) {
+					background = colour;
+					return true;
+				}
+				return false;
+			});
+			context.fillStyle = background;
+			context.fillRect(0, 0, outWidth, outHeight);
+
+			// The main stack's window is under the others, which are in
+			// the order of their z-index
+			var canvases = [];
+			if (LiveCodeDC._assignedMainWindow && Module['canvas']) {
+				canvases.push(Module['canvas']);
+			}
+			LiveCodeDC._windowList['contents'].slice().sort(function(a, b) {
+				return Number(a.style.zIndex) - Number(b.style.zIndex);
+			}).forEach(function(element) {
+				var canvas = element.querySelector('canvas');
+				if (canvas) {
+					canvases.push(canvas);
+				}
+			});
+
+			var scaleX = outWidth / width;
+			var scaleY = outHeight / height;
+			canvases.forEach(function(canvas) {
+				var window = LiveCodeUtil.fetchObject(LiveCodeDC.getWindowIDForCanvas(canvas));
+				var rect = canvas.getBoundingClientRect();
+				if (!window || !window.visible || canvas.width == 0 || canvas.height == 0 ||
+					rect.width == 0 || rect.height == 0) {
+					return;
+				}
+				context.drawImage(canvas, 0, 0, canvas.width, canvas.height,
+								  (rect.left - left) * scaleX, (rect.top - top) * scaleY,
+								  rect.width * scaleX, rect.height * scaleY);
+			});
+
+			var data = context.getImageData(0, 0, outWidth, outHeight).data;
+			HEAPU8.set(data, pixels);
+			return true;
+		},
+
+		// OXT-Beyond: the rectangle that the user is dragging out for a
+		// snapshot (import snapshot with no rect): null when there is none,
+		// else its state, 'pending' until the button goes up ('done') or
+		// Escape cancels it ('cancelled')
+		_snapshotSelection: null,
+
+		// The user drags out a rectangle on the page, as on the desktop:
+		// the cursor is a crosshair over the whole page, which takes no
+		// other mouse events meanwhile
+		snapshotSelectBegin: function() {
+			var overlay = document.createElement('div');
+			overlay.className = 'oxt-snapshot-select';
+			overlay.style.cssText = 'position: fixed; left: 0; top: 0; right: 0; bottom: 0; ' +
+				'z-index: 2147483647; cursor: crosshair; touch-action: none;';
+			var box = document.createElement('div');
+			box.style.cssText = 'position: fixed; display: none; pointer-events: none; ' +
+				'border: 1px dashed #000000; outline: 1px dashed #ffffff;';
+			overlay.appendChild(box);
+			document.body.appendChild(overlay);
+
+			var selection = {'state': 'pending', 'rect': [0, 0, 0, 0]};
+			LiveCodeDC._snapshotSelection = selection;
+			var start = null;
+
+			var place = function(e) {
+				var x = Math.round(e.clientX), y = Math.round(e.clientY);
+				var rect = [Math.min(start[0], x), Math.min(start[1], y),
+							Math.max(start[0], x), Math.max(start[1], y)];
+				selection.rect = rect;
+				box.style.display = 'block';
+				box.style.left = rect[0] + 'px';
+				box.style.top = rect[1] + 'px';
+				box.style.width = (rect[2] - rect[0]) + 'px';
+				box.style.height = (rect[3] - rect[1]) + 'px';
+			};
+			var finish = function(state) {
+				if (selection.state != 'pending') {
+					return;
+				}
+				selection.state = state;
+				document.removeEventListener('keydown', key, true);
+				if (overlay.parentNode) {
+					overlay.parentNode.removeChild(overlay);
+				}
+
+				// A click, not a drag, takes the stack's window under it,
+				// or else the whole screen, as on Linux
+				var rect = selection.rect;
+				if (state == 'done' && rect[2] - rect[0] < 4 && rect[3] - rect[1] < 4) {
+					var under = document.elementFromPoint(rect[0], rect[1]);
+					var bounds = under && LiveCodeDC.getWindowIDForCanvas(under) != 0 ?
+						under.getBoundingClientRect() : null;
+					var display = LiveCodeDC.getDisplayRect();
+					selection.rect = bounds ?
+						[Math.round(bounds.left), Math.round(bounds.top),
+						 Math.round(bounds.right), Math.round(bounds.bottom)] :
+						[display.left, display.top, display.right, display.bottom];
+				}
+				LiveCodeAsync.resume();
+			};
+			selection.cancel = function() {
+				finish('cancelled');
+			};
+			var key = function(e) {
+				if (e.key == 'Escape') {
+					finish('cancelled');
+				}
+				e.preventDefault();
+				e.stopPropagation();
+			};
+
+			overlay.addEventListener('pointerdown', function(e) {
+				start = [Math.round(e.clientX), Math.round(e.clientY)];
+				overlay.setPointerCapture(e.pointerId);
+				place(e);
+				e.preventDefault();
+			});
+			overlay.addEventListener('pointermove', function(e) {
+				if (start) {
+					place(e);
+				}
+				e.preventDefault();
+			});
+			overlay.addEventListener('pointerup', function(e) {
+				if (start) {
+					place(e);
+					finish('done');
+				}
+				e.preventDefault();
+			});
+			overlay.addEventListener('pointercancel', function() {
+				finish('cancelled');
+			});
+			document.addEventListener('keydown', key, true);
+		},
+
+		// The selection's state: 0 while the user drags, 1 when it is done
+		// (its rect is in <r>: left, top, right, bottom), 2 when it was
+		// cancelled, as it is first if <cancel>. The selection is over once
+		// it is not 0.
+		snapshotSelectState: function(r, cancel) {
+			var selection = LiveCodeDC._snapshotSelection;
+			if (!selection) {
+				return 2;
+			}
+			if (cancel) {
+				selection.cancel();
+			}
+			if (selection.state == 'pending') {
+				return 0;
+			}
+			LiveCodeDC._snapshotSelection = null;
+			for (var i = 0; i < 4; i++) {
+				HEAP32[(r >> 2) + i] = selection.rect[i];
+			}
+			return selection.state == 'done' ? 1 : 2;
+		},
 	},
 	
+	// OXT-Beyond: snapshots of the screen (MCScreenDC::snapshot(),
+	// em-dc.cpp)
+	MCEmscriptenSnapshot__deps: ['$LiveCodeDC'],
+	MCEmscriptenSnapshot: function(pLeft, pTop, pWidth, pHeight, pOutWidth, pOutHeight, pPixels) {
+		return LiveCodeDC.snapshot(pLeft, pTop, pWidth, pHeight, pOutWidth, pOutHeight, pPixels);
+	},
+
+	MCEmscriptenSnapshotSelectBegin__deps: ['$LiveCodeDC'],
+	MCEmscriptenSnapshotSelectBegin: function() {
+		LiveCodeDC.snapshotSelectBegin();
+	},
+
+	MCEmscriptenSnapshotSelectState__deps: ['$LiveCodeDC'],
+	MCEmscriptenSnapshotSelectState: function(rRect, pCancel) {
+		return LiveCodeDC.snapshotSelectState(rRect, pCancel);
+	},
+
 	MCEmscriptenDCInitializeJS__deps: ['$LiveCodeDC'],
 	MCEmscriptenDCInitializeJS: function() {
 		LiveCodeDC.initialize();

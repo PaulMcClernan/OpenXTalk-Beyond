@@ -274,8 +274,37 @@ mergeInto(LibraryManager.library, {
 		// Focus events
 		// ----------------------------------------------------------------
 
+		// OXT-Beyond: whether <stack> takes the user's mouse and keys: not
+		// while a modal dialog is above it, as a disabled window takes none
+		// on the desktop (MCEmscriptenStackIsEnabled(), em-dc.cpp)
+		_stackEnabled: function(stack) {
+			return !!stack && Module.ccall('MCEmscriptenStackIsEnabled', 'number',
+										   ['number'], [stack]) != 0;
+		},
+
+		// OXT-Beyond: the keyboard goes to the stack of the window <to>
+		// (to none if 0) when the stacks have it (<from> 0) or the window
+		// <from> has it: the engine opened the window that the system
+		// would make the active one, or closed the one that had the
+		// keyboard. A page that has not given the stacks the keyboard
+		// keeps it.
+		passKeyboard: function(from, to) {
+			var target = LiveCodeEvents._inputtarget;
+			if (target == null)
+				return;
+			if (from != 0 && target !== LiveCodeDC.getWindowCanvas(from))
+				return;
+			var canvas = to != 0 ? LiveCodeDC.getWindowCanvas(to) : null;
+			if (canvas !== target)
+				LiveCodeEvents._setInputFocus(canvas);
+		},
+
 		// Wrapper for MCEventQueuePostKeyFocus()
 		_postKeyFocus: function(stack, owner) {
+			// OXT-Beyond: a stack under a modal dialog does not take the
+			// keyboard
+			if (owner && !LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostKeyFocus',
 						 'number', // bool
 						 ['number',  // MCStack *stack
@@ -685,6 +714,9 @@ mergeInto(LibraryManager.library, {
 
 		// Wrapper for MCEventQueuePostKeyPress()
 		_postKeyPress: function(stack, modifiers, char_code, key_code, key_state) {
+			// OXT-Beyond: none for a stack under a modal dialog
+			if (!LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostKeyPress',
 						 'number', // bool
 						 ['number',  // MCStack *stack
@@ -925,6 +957,9 @@ mergeInto(LibraryManager.library, {
 		// ----------------------------------------------------------------
 
 		_postImeCompose: function(stack, enabled, offset, chars, length) {
+			// OXT-Beyond: none for a stack under a modal dialog
+			if (!LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostImeCompose',
 						 'number',	/* bool */
 						 ['number',	/* MCStack* stack */
@@ -1168,6 +1203,11 @@ mergeInto(LibraryManager.library, {
 		// Wrapper for MCEventQueuePostMouseFocuse
 		_postMouseFocus: function(stack, time, inside)
 		{
+			// OXT-Beyond: none for a stack under a modal dialog
+			// (MCEmscriptenHandleMousePosition() and
+			// MCEmscriptenHandleMousePress() drop its others)
+			if (!LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostMouseFocus',
 						 'number', /* bool */
 						 ['number', /* MCStack *stack */
@@ -1218,8 +1258,10 @@ mergeInto(LibraryManager.library, {
 
 				case 'mousedown':
 					// In the case of mouse down, specifically request
-					// keyboard focus
-					LiveCodeEvents._setInputFocus(target);
+					// keyboard focus. OXT-Beyond: not for a stack under a
+					// modal dialog, whose press goes nowhere.
+					if (LiveCodeEvents._stackEnabled(stack))
+						LiveCodeEvents._setInputFocus(target);
 
 					LiveCodeEvents._postMousePosition(stack, e.timeStamp, mods, pos[0], pos[1]);
 					var state = LiveCodeEvents._encodeMouseState(e.type);
@@ -1809,6 +1851,13 @@ mergeInto(LibraryManager.library, {
 	MCEmscriptenSetTextInput__deps: ['$LiveCodeEvents'],
 	MCEmscriptenSetTextInput: function(active) {
 		LiveCodeEvents.setTextInput(!!active);
+	},
+
+	// OXT-Beyond: a window opened or closed (MCScreenDC::openwindow() and
+	// closewindow(), em-dc.cpp)
+	MCEmscriptenPassKeyboard__deps: ['$LiveCodeEvents'],
+	MCEmscriptenPassKeyboard: function(from, to) {
+		LiveCodeEvents.passKeyboard(from, to);
 	},
 
 	// OXT-Beyond: a drag that the engine started (MCScreenDC::dodragdrop(),
