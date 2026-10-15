@@ -34,8 +34,10 @@
 # (tools/ci/run_livecode_check.py compile --repo-layout).
 #
 # The jobs "Package linux-<arch>" then make the Linux package of each
-# architecture from its build's two artifacts and the documentation data
-# that the job Docs generates meanwhile (.github/workflows/docs.yml), on a
+# architecture from its build's two artifacts, the documentation data
+# that the job Docs generates meanwhile (.github/workflows/docs.yml) and
+# the web runtime that the job Web builds (.github/workflows/web.yml,
+# which also checks it in a headless browser), on a
 # plain ubuntu-24.04 runner of that architecture (whose glibc and OpenSSL 3
 # load every bundled xTalk extension, which the build's Ubuntu 20.04
 # container cannot), and upload, as the artifact OXT-Beyond-linux-<arch>
@@ -55,7 +57,9 @@
 # after testing the tarball as users get it, extracted to a neutral folder:
 # the headless smoke test (which loads and calls every bundled extension),
 # the IDE compile check run through the launcher, the IDE started through
-# the launcher on a screen (tools/ci/linux_ide_start.sh), ldd and the launcher's
+# the launcher on a screen (tools/ci/linux_ide_start.sh), an HTML5
+# standalone built by the IDE and opened in headless Chromium
+# (tools/ci/web_check.py), ldd and the launcher's
 # library list against every ELF file (tools/ci/check_linux_libraries.py),
 # desktop-file-validate, and the launcher, install.sh and uninstall.sh in
 # scratch home folders (tools/ci/test_linux_package.py). The runtime
@@ -811,6 +815,15 @@ jobs:
     with:
       artifact: OXT-Beyond-docs-linux
 
+  # The web runtime of the packages (web.yml), made while the engines
+  # build, and checked in a headless browser
+  web:
+    name: Web
+    uses: ./.github/workflows/web.yml
+    with:
+      artifact: OXT-Beyond-web-linux
+      check: true
+
   # The Linux packages, x86_64 and arm64, each from its build's artifacts
   # (see the header) and the documentation data, on a runner of its own
   # architecture. It waits for both build legs (a job cannot need one leg
@@ -825,7 +838,7 @@ jobs:
   # browser checks are the x86_64 leg's; its player check runs.
   package:
     name: Package linux-${{ matrix.arch }}
-    needs: [build, docs]
+    needs: [build, docs, web]
     if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.outputs.built-x86_64 == 'true' || needs.build.outputs.built-arm64 == 'true') }}
     strategy:
       fail-fast: false
@@ -849,6 +862,15 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           echo "::error::The job Docs did not succeed ($DOCS_RESULT): there is no documentation to package"
+          exit 1
+
+      # Likewise the job Web, whose result includes its browser check
+      - name: Check the web runtime job
+        if: ${{ needs.web.result != 'success' }}
+        env:
+          WEB_RESULT: ${{ needs.web.result }}
+        run: |
+          echo "::error::The job Web did not succeed ($WEB_RESULT): there is no web runtime to package"
           exit 1
 
       - name: Check out
@@ -876,6 +898,13 @@ jobs:
         with:
           name: OXT-Beyond-docs-linux
           path: ide/Documentation/html_viewer/resources/data
+
+      # package.py installs it in Runtime/Emscripten/js (OXT_WEB_RUNTIME)
+      - name: Download the web runtime
+        uses: actions/download-artifact@v8
+        with:
+          name: OXT-Beyond-web-linux
+          path: ${{ runner.temp }}/web-runtime
 
       # The runtime libraries the package needs, from the list the launcher
       # checks (Installer/linux/libraries.txt: every "core", "gui" and
@@ -995,6 +1024,7 @@ jobs:
         timeout-minutes: 45
         env:
           OXT_ASSETS_CACHE: ${{ github.workspace }}/prebuilt/fetched-assets
+          OXT_WEB_RUNTIME: ${{ runner.temp }}/web-runtime
           NO_EXTERNAL_ASSETS: ${{ github.ref_type != 'tag' && !inputs.release && (inputs.no_external_assets == true || vars.OXT_NO_EXTERNAL_ASSETS == '1') }}
           NO_XTALK_EXTENSIONS: ${{ github.ref_type != 'tag' && !inputs.release && (inputs.no_xtalk_extensions == true || vars.OXT_NO_XTALK_EXTENSIONS == '1') }}
           BUILD_NUMBER_INPUT: ${{ inputs.build-number }}
@@ -1151,6 +1181,33 @@ jobs:
         if: ${{ !cancelled() && env.OXT_ROOT != '' }}
         timeout-minutes: 10
         run: tools/ci/linux_ide_start.sh "$OXT_ROOT" "$RUNNER_TEMP/logs/ide-start" 90
+
+      # An HTML5 standalone, as a user makes one: tools/ci/web_check.py
+      # starts the package's IDE (on an Xvfb screen) with
+      # tools/ci/web-deploy.livecodescript, which builds a probe stack with
+      # the IDE's web builder (the package's web runtime, and the Internet
+      # library with its web driver); the standalone is then served on
+      # 127.0.0.1 and opened in headless Chromium, where the probe checks
+      # waits, timers, JavaScript, files, URLs and dialogs, and the check
+      # clicks, types and looks at what it draws. Playwright, pinned, in a
+      # virtual environment of its own, with the system libraries its
+      # Chromium needs. The probe's screenshot and the IDE's lines go with
+      # the logs.
+      - name: Web standalone check
+        if: ${{ !cancelled() && env.OXT_ROOT != '' }}
+        timeout-minutes: 20
+        env:
+          PLAYWRIGHT_VERSION: 1.56.0
+        run: |
+          python3 -m venv "$RUNNER_TEMP/playwright"
+          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
+          "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps chromium
+          status=0
+          "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_check.py --install "$OXT_ROOT" --platform "linux-$ARCH" \
+            --work "$RUNNER_TEMP/web-check" || status=$?
+          mkdir -p "$RUNNER_TEMP/logs/web-check"
+          cp "$RUNNER_TEMP"/web-check/*.png "$RUNNER_TEMP"/web-check/*.txt "$RUNNER_TEMP/logs/web-check/" 2> /dev/null || true
+          exit "$status"
 
       # The IDE's own windows, as a user sees them under the Adwaita GTK
       # theme, light and dark: tools/ci/ui_tour.py starts the package's IDE

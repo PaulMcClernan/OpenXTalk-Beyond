@@ -28,7 +28,9 @@
 #   1. writes the installed layout to dist/stage/OXT-Beyond-<ver> and the zips
 #      to dist (tools/ci/package-windows.ps1, which runs tools/oxt/package.py,
 #      with the documentation data that the job Docs generated before the
-#      build, .github/workflows/docs.yml;
+#      build, .github/workflows/docs.yml, and the web runtime that the job
+#      Web built, .github/workflows/web.yml, which the IDE builds HTML5
+#      standalones from;
 #      the archives of the external assets listed in
 #      tools/oxt/external-assets.json are cached from
 #      prebuilt/fetched-assets/*.zip, the files of the xTalk Suite
@@ -42,7 +44,9 @@
 #      tools/ci/ide-compile-baseline.txt (ide-compile-check.ps1),
 #   4. builds the installer (build-installer.ps1), and
 #   5. installs it per user, smoke-tests the installed program and
-#      uninstalls it (test-installer.ps1).
+#      uninstalls it (test-installer.ps1), and
+#   6. builds a web standalone with the staged IDE's web builder and opens
+#      it in headless Chromium (tools/ci/web_check.py --install).
 # Before the build, it checks the IDE's stack patches with
 # tools/ci/check_ide_stacks.py, which needs no build, and builds the prebuilt
 # third-party libraries from source (OpenSSL, curl, ICU and those of
@@ -178,9 +182,18 @@ jobs:
     with:
       artifact: OXT-Beyond-docs-windows
 
+  # The web runtime (web.yml), which the build job packages: from its
+  # cache when the engine's sources did not change, otherwise built before
+  # the build starts
+  web:
+    name: Web
+    uses: ./.github/workflows/web.yml
+    with:
+      artifact: OXT-Beyond-web-windows
+
   build:
     name: Build win-x86_64
-    needs: docs
+    needs: [docs, web]
     if: ${{ !cancelled() }}
     runs-on: windows-2022
     timeout-minutes: 300
@@ -215,6 +228,15 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           Write-Output "::error::The job Docs did not succeed ($env:DOCS_RESULT): there is no documentation to package"
+          exit 1
+
+      # Likewise the job Web
+      - name: Check the web runtime job
+        if: ${{ needs.web.result != 'success' }}
+        env:
+          WEB_RESULT: ${{ needs.web.result }}
+        run: |
+          Write-Output "::error::The job Web did not succeed ($env:WEB_RESULT): there is no web runtime to package"
           exit 1
 
       - name: Check out
@@ -533,6 +555,13 @@ jobs:
           name: OXT-Beyond-docs-windows
           path: ide/Documentation/html_viewer/resources/data
 
+      # package.py installs it in Runtime\Emscripten\js (OXT_WEB_RUNTIME)
+      - name: Download the web runtime
+        uses: actions/download-artifact@v8
+        with:
+          name: OXT-Beyond-web-windows
+          path: ${{ runner.temp }}/web-runtime
+
       # Writes dist/stage/OXT-Beyond-<ver> (the installed layout), the
       # portable, binaries and symbols zips and SHA256SUMS.
       #
@@ -560,6 +589,7 @@ jobs:
         timeout-minutes: 45
         env:
           OXT_ASSETS_CACHE: ${{ github.workspace }}\prebuilt\fetched-assets
+          OXT_WEB_RUNTIME: ${{ runner.temp }}\web-runtime
           NO_EXTERNAL_ASSETS: ${{ github.ref_type != 'tag' && !inputs.release && (inputs.no_external_assets == true || vars.OXT_NO_EXTERNAL_ASSETS == '1') }}
           NO_XTALK_EXTENSIONS: ${{ github.ref_type != 'tag' && !inputs.release && (inputs.no_xtalk_extensions == true || vars.OXT_NO_XTALK_EXTENSIONS == '1') }}
           # Also on main (a push, or a run by hand there), so that
@@ -780,6 +810,46 @@ jobs:
         env:
           URL: ${{ steps.ui_tour_upload.outputs.artifact-url }}
         run: python tools/ci/ui_tour_page.py "$env:RUNNER_TEMP\build-logs\ui-tour" --title "Windows x86_64" --summary --url="$env:URL"
+
+      # An HTML5 standalone, as a user makes one: tools/ci/web_check.py
+      # starts the staged IDE with tools/ci/web-deploy.livecodescript,
+      # which builds a probe stack with the IDE's web builder (the web
+      # runtime that package.py installed, and the Internet library with
+      # its web driver); the standalone is then served on 127.0.0.1 and
+      # opened in headless Chromium, where the probe checks waits, timers,
+      # JavaScript, files, URLs and dialogs, and the check clicks, types and
+      # looks at what it draws. Playwright, pinned, in a virtual environment
+      # of its own. The probe's screenshot and the IDE's lines go with the
+      # logs.
+      - name: Web standalone check
+        id: web_check
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        timeout-minutes: 20
+        env:
+          VERSION: ${{ steps.product.outputs.version }}
+          PLAYWRIGHT_VERSION: 1.56.0
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP 'playwright'
+          $work = Join-Path $env:RUNNER_TEMP 'web-check'
+          $logs = Join-Path $env:RUNNER_TEMP 'build-logs\web-check'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { throw 'python -m venv failed' }
+          $python = Join-Path $venv 'Scripts\python.exe'
+          & $python -m pip install --quiet "playwright==$env:PLAYWRIGHT_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'pip install playwright failed' }
+          & $python -m playwright install chromium
+          if ($LASTEXITCODE -ne 0) { throw 'playwright install chromium failed' }
+          try {
+            & $python tools/ci/web_check.py --install "dist/stage/OXT-Beyond-$env:VERSION" --platform win-x86_64 --work $work
+            $code = $LASTEXITCODE
+          }
+          finally {
+            New-Item -ItemType Directory -Force -Path $logs | Out-Null
+            Get-ChildItem -LiteralPath $work -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Extension -in '.png', '.txt' } |
+              Copy-Item -Destination $logs -Force
+          }
+          if ($code -ne 0) { throw "web_check.py failed with exit code $code" }
 
       - name: Collect logs
         id: collect_logs
