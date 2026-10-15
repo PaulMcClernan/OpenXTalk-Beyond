@@ -277,6 +277,30 @@ private command __deployLaunchURLInBrowser pURL, pBrowser, pPrivateMode
    end if
 end __deployLaunchURLInBrowser
 
+-- The type of a file of the standalone, for the Content-Type header:
+-- a browser compiles the engine's WebAssembly as it downloads only
+-- when the server says it is application/wasm (otherwise the engine
+-- falls back to downloading it first, with an error in the console).
+--
+private function __deployContentType pPath
+   set the itemDelimiter to "."
+   switch toLower(the last item of pPath)
+      case "html"
+      case "htm"
+         return "text/html; charset=utf-8"
+      case "js"
+         return "text/javascript"
+      case "wasm"
+         return "application/wasm"
+      case "zip"
+         return "application/zip"
+      case "css"
+         return "text/css"
+      default
+         return empty
+   end switch
+end __deployContentType
+
 -- Callback from the HTTP deamon.
 -- In this case we just want to serve the requested file
 -- if it exists in the temp file space.
@@ -296,7 +320,12 @@ on deployEmscriptenNewHTTPRequest pSocketID, pRequest
    put sHTTPFileSpace & slash before tPath
    
    if there is a file tPath then
-      httpdResponse pSocketID, 200, URL ("binfile:" & tPath)
+      local tHeaders
+      put __deployContentType(tPath) into tHeaders
+      if tHeaders is not empty then
+         put "Content-Type:" && tHeaders into tHeaders
+      end if
+      httpdResponse pSocketID, 200, URL ("binfile:" & tPath), tHeaders
    else
       set the itemDel to slash
       if the last item pRequest["resource"] is "stdio.html" and pRequest["method"] is "POST" then

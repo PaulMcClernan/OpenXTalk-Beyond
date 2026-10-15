@@ -16,13 +16,29 @@ details.
 You should have received a copy of the GNU General Public License
 along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 
--- Makes the startup data of a web standalone the way the IDE's web builder
--- does (storeDeployedStack in ide-support/
--- revsaveasemscriptenstandalone.livecodescript): a stack file is saved,
--- the startup script is made from the startup template, and
--- "_internal deploy emscripten" writes the data that the web engine reads
--- from /boot/__startup.data. tools/ci/web_check.py puts it into
--- standalone.zip with the template folder and opens the page in a browser.
+-- Makes a web standalone of the probe stack, for tools/ci/web_check.py,
+-- in one of two ways:
+--
+-- 1. Without the IDE: run with a development engine without a user
+--    interface, it makes the standalone's startup data the way the IDE's
+--    web builder does (storeDeployedStack in ide-support/
+--    revsaveasemscriptenstandalone.livecodescript): a stack file is saved,
+--    the startup script is made from the startup template, and
+--    "_internal deploy emscripten" writes the data that the web engine
+--    reads from /boot/__startup.data. web_check.py puts it into
+--    standalone.zip with the template folder.
+--       <engine> -ui tools/ci/web-deploy.livecodescript
+--
+-- 2. With the IDE: named on the IDE's command line, it is opened once the
+--    IDE has started (as tools/ci/ui-tour.livecodescript is), waits for
+--    the IDE to finish starting, and builds the standalone with the IDE's
+--    own web builder (revSaveAsEmscriptenStandalone, as Test does in
+--    ide-support/revdeploylibraryemscripten.livecodescript), with the
+--    standalone settings a new stack has: the builder searches the
+--    stack's scripts for the script libraries it needs (the probe's use
+--    of URLs brings in the Internet library and its web driver), and
+--    copies the engine and writes the page itself.
+--       <IDE engine> tools/ci/web-deploy.livecodescript
 --
 -- The stack is the probe stack: the script of
 -- tools/ci/web-probe.livecodescript (without its first line, the
@@ -30,19 +46,21 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- that the web engine reads them from a stack file: a button, a field, a
 -- filled graphic and a PNG image.
 --
--- Run with a development engine, without a user interface:
---    <engine> -ui tools/ci/web-deploy.livecodescript
 -- Environment:
 --    OXT_WEB_PROBE     the probe's script (tools/ci/web-probe.livecodescript)
---    OXT_WEB_TEMPLATE  the startup template
---                      (engine/rsrc/emscripten-startup-template.livecodescript)
---    OXT_WEB_VERSION   the web engine's version, which the startup script
---                      checks (the builder puts its own engine's there)
 --    OXT_WEB_STACK     where to save the stack file
---    OXT_WEB_OUTPUT    the startup data to write
+--    OXT_WEB_OUTPUT    1: the startup data to write; 2: the folder to build
+--                      the standalone in
+--    OXT_WEB_TEMPLATE  1: the startup template
+--                      (engine/rsrc/emscripten-startup-template.livecodescript)
+--    OXT_WEB_VERSION   1: the web engine's version, which the startup script
+--                      checks (the builder puts its own engine's there)
+--    OXT_WEB_LOG       2: the file for the lines below
 --
--- Writes "DEPLOY OK <output>" or "DEPLOY FAILED <reason>" and exits with 0
--- or 1.
+-- 1 writes "DEPLOY OK <output>" or "DEPLOY FAILED <reason>" to stdout and
+-- exits with 0 or 1. 2 writes "INFO <name> <value>" lines, then
+-- "BUILD OK <folder>" or "BUILD FAILED <reason>" and "DONE" to the log,
+-- and leaves the IDE running: web_check.py ends it.
 
 -- A 24x24 PNG, all of it the colour 0,170,0
 constant kGreenPNG = "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAHklEQVR42mNgWMVAHTRq0KhBowaNGjRq0KhBA28QADGLfpBqGLo1AAAAAElFTkSuQmCC"
@@ -99,6 +117,10 @@ private command makeProbeStack
    set the rect of image "Probe Image" to 300,200,324,224
 end makeProbeStack
 
+----------------------------------------------------------------
+-- 1. Without the IDE
+----------------------------------------------------------------
+
 -- The startup script, as getStartupScript in the builder makes it
 private function startupScript
    local tScript
@@ -145,3 +167,112 @@ on startup
    write "DEPLOY FAILED " & tResult & return to stdout
    quit 1
 end startup
+
+----------------------------------------------------------------
+-- 2. With the IDE
+----------------------------------------------------------------
+
+local sStarted
+
+on openStack
+   if sStarted is not true and the environment is "development" then
+      put true into sStarted
+      -- out of the way of the IDE's windows
+      hide me
+      send "webWhenStarted 0" to me in 1 second
+   end if
+   pass openStack
+end openStack
+
+-- Waits until the IDE has finished starting (home.livecodescript sets the
+-- cREVLaunching of stack "Home" while it opens its palettes), then a
+-- little more for their deferred messages
+on webWhenStarted pTries
+   local tLaunching
+   put false into tLaunching
+   if there is a stack "Home" then
+      put the cREVLaunching of stack "Home" into tLaunching
+   end if
+   if tLaunching is true and pTries < 240 then
+      send "webWhenStarted" && pTries + 1 to me in 500 milliseconds
+   else
+      send "webBuild" to me in 2 seconds
+   end if
+end webWhenStarted
+
+private command webLog pLine
+   replace return with " | " in pLine
+   put pLine & return after url ("binfile:" & $OXT_WEB_LOG)
+end webLog
+
+on webBuild
+   local tSettings, tFolder, tError
+   webLog "INFO version" && the version && the buildNumber
+   webLog "INFO platform" && the platform && the processor
+   webCatchErrors
+   try
+      makeProbeStack
+      save stack "WebProbe" as $OXT_WEB_STACK
+      if the result is not empty then
+         throw "cannot save the stack as" && $OXT_WEB_STACK & ":" && the result
+      end if
+      -- What Test does (deployDo): the stack's standalone settings with
+      -- their defaults, which a new stack has
+      put revSBGetSettings("WebProbe", true) into tSettings
+      put true into tSettings["Emscripten"]
+      webLog "INFO name" && tSettings["name"]
+      webLog "INFO inclusions" && tSettings["inclusions"]
+      put $OXT_WEB_OUTPUT into tFolder
+      if there is not a folder tFolder then
+         create folder tFolder
+      end if
+      dispatch "revSaveAsEmscriptenStandalone" to stack "revsaveasemscriptenstandalone" \
+            with "WebProbe", tFolder, tSettings
+      webLog "INFO files" && webFiles(tFolder)
+   catch tError
+   end try
+   if "revStandaloneProgress" is among the lines of the openStacks then
+      close stack "revStandaloneProgress"
+   end if
+   if tError is empty then
+      webLog "BUILD OK" && tFolder
+   else
+      webLog "BUILD FAILED" && tError
+   end if
+   webLog "DONE"
+end webBuild
+
+private function webFiles pFolder
+   local tFiles
+   put files(pFolder) into tFiles
+   filter tFiles without ".*"
+   sort tFiles
+   replace return with comma in tFiles
+   return tFiles
+end webFiles
+
+-- Errors in the IDE's scripts go to the log, not to the IDE's error dialog
+-- or the debugger (revTestEnvironment, as the IDE's test runner sets it)
+private command webCatchErrors
+   local tError, tDefault
+   try
+      dispatch "revSetTestEnvironment" to stack "Home" with true
+      put the defaultStack into tDefault
+      set the defaultStack to the short name of me
+      lock messages
+      create invisible button "oxt_web_errors"
+      set the script of it to "on errorDialog pError" & return & \
+            "   dispatch " & quote & "webScriptError" & quote & " to stack " & quote & the short name of me & quote & " with pError" & return & \
+            "end errorDialog"
+      insert the script of it into front
+      unlock messages
+      set the defaultStack to tDefault
+   catch tError
+      unlock messages
+      webLog "INFO catching errors:" && tError
+   end try
+end webCatchErrors
+
+on webScriptError pError
+   webLog "ERROR" && pError
+end webScriptError

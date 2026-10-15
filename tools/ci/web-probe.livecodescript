@@ -33,6 +33,9 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- it clicks the button (mouseUp writes "PROBE click PASS <count>"), types
 -- into the field, answers the dialogs, and calls the handlers that the
 -- stack's cJavascriptHandlers name: probeFromJS and probeReport.
+--
+-- The checks run only in the web standalone: in the IDE, which opens the
+-- stack while it builds the standalone, openStack does nothing more.
 
 local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder
 
@@ -54,6 +57,9 @@ end probeInfo
 
 on openStack
    local tStart, tElapsed
+   if the environment begins with "development" then
+      pass openStack
+   end if
    probeInfo "version", the version
    probeInfo "environment", the environment
    probeCheck "platform", the platform is "HTML5", the platform
@@ -153,15 +159,28 @@ command probeFiles
 end probeFiles
 
 command probeUrls
-   local tOrigin, tData, tResult, tDeadline
+   local tOrigin, tData, tResult, tDeadline, tLibUrl, tExpected
    do "window.location.origin" as "JavaScript"
    put the result into tOrigin
    probeInfo "origin", tOrigin
+
+   -- The IDE's builder adds the Internet library (libURL), with its web
+   -- driver, to a stack whose scripts use URLs: libURL then loads them,
+   -- as on the desktop. Without it, the engine does, as on iOS and
+   -- Android.
+   put probeUsesLibUrl() into tLibUrl
+   probeInfo "backscripts", probeBackScripts()
+   if tLibUrl then
+      probeInfo "url-path", "libURL"
+   else
+      probeInfo "url-path", "engine"
+   end if
 
    put url (tOrigin & "/probe-data.txt") into tData
    put the result into tResult
    probeCheck "url-get", tData is "probe data 123" and tResult is empty, "data=" & tData && "result=" & tResult
 
+   -- A post sends a form's data, as on the desktop
    post "a=1&b=2" to url (tOrigin & "/echo")
    put it into tData
    put the result into tResult
@@ -173,22 +192,58 @@ command probeUrls
    put url (tOrigin & "/store") into tData
    probeCheck "url-put", tData is "stored text" and tResult is empty, "data=" & tData && "result=" & tResult
 
-   -- As in LiveCode's HTML5 engine, a page that the server answers with an
-   -- error status (here 404) is loaded like any other: the data is the
-   -- page the server sent, and the result is empty
+   -- A page that the server answers with an error status (here 404) is
+   -- an error that comes with the page the server sent: libURL's result
+   -- is "error 404 Not Found", as on the desktop, and the engine's
+   -- "404 Not Found", as on iOS and Android
    put url (tOrigin & "/missing") into tData
    put the result into tResult
-   probeCheck "url-missing", tData is "not found" and tResult is empty, "data=" & tData && "result=" & tResult
+   if tLibUrl then
+      put "error 404 Not Found" into tExpected
+   else
+      put "404 Not Found" into tExpected
+   end if
+   probeCheck "url-missing", tData is "not found" and tResult is tExpected, "data=" & tData && "result=" & tResult
 
-   -- As on iOS and Android: the message gets the status "downloaded" and
-   -- the data
+   -- load url: libURL sends the message with the status "cached", and
+   -- the page is then in its cache, as on the desktop; the engine sends
+   -- "downloaded" and the page, as on iOS and Android
    put empty into sLoaded
+   put empty into sLoadedData
    load url (tOrigin & "/probe-data.txt") with message "probeLoaded"
    put the milliseconds + 10000 into tDeadline
    wait until sLoaded is not empty or the milliseconds > tDeadline with messages
-   probeCheck "url-load", sLoaded is "downloaded" and sLoadedData is "probe data 123", \
-         "status=" & sLoaded && "data=" & sLoadedData
+   if tLibUrl then
+      put url (tOrigin & "/probe-data.txt") into sLoadedData
+      probeCheck "url-load", sLoaded is "cached" and sLoadedData is "probe data 123", \
+            "status=" & sLoaded && "cached=" & sLoadedData
+   else
+      probeCheck "url-load", sLoaded is "downloaded" and sLoadedData is "probe data 123", \
+            "status=" & sLoaded && "data=" & sLoadedData
+   end if
 end probeUrls
+
+-- True when libURL loads URLs: its stack is in the back scripts
+private function probeUsesLibUrl
+   local tObject
+   repeat for each line tObject in the backScripts
+      if the short name of tObject is "revLibUrl" then
+         return true
+      end if
+   end repeat
+   return false
+end probeUsesLibUrl
+
+private function probeBackScripts
+   local tObject, tNames
+   repeat for each line tObject in the backScripts
+      if tNames is not empty then
+         put comma after tNames
+      end if
+      put the short name of tObject after tNames
+   end repeat
+   return tNames
+end probeBackScripts
 
 on probeLoaded pUrl, pStatus, pData
    put pStatus into sLoaded

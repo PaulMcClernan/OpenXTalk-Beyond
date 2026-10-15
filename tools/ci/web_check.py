@@ -15,15 +15,22 @@
 # You should have received a copy of the GNU General Public License
 # along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
 
-"""Build a web standalone from the web runtime and run it in a headless
+"""Build a web standalone of a probe stack and run it in a headless
 browser.
 
   python3 tools/ci/web_check.py --runtime DIR (--engine FILE | --engine-cache DIR)
       [--work DIR] [--timeout SECONDS] [--keep-serving]
+  python3 tools/ci/web_check.py (--install DIR | --package FILE | --bin DIR)
+      [--platform P] [--ide-timeout SECONDS] [--work DIR] [--timeout SECONDS]
+  python3 tools/ci/web_check.py --built DIR [--work DIR] [--timeout SECONDS]
 
---runtime is the web runtime: the folder that the IDE's web builder takes
-its files from (Runtime/Emscripten/js in an installed OXT-Beyond, and the
-web build's output in CI), which holds
+The probe stack is tools/ci/web-probe.livecodescript, with a button, a
+field, a graphic and a PNG image (tools/ci/web-deploy.livecodescript makes
+it). There are three ways to its standalone:
+
+--runtime, without the IDE. DIR is the web runtime: the folder that the
+IDE's web builder takes its files from (Runtime/Emscripten/js in an
+installed OXT-Beyond, and the web build's output in CI), which holds
 
   standalone-community-<version>.js and .wasm   the engine
   standalone-community-<version>.html           the page template
@@ -31,27 +38,39 @@ web build's output in CI), which holds
                                                 gets (its font)
   emscripten-startup-template.livecodescript    the startup script template
 
---engine is a development engine (LiveCode-Community) to deploy the stack
-with; --engine-cache downloads the Linux x86_64 engine of the OXT-Beyond
-release that tools/ci/build_docs.sh pins into that folder instead (checked
-against its SHA-256). Any engine can deploy for the web: the deploy command
-only writes the stack and the startup script.
+A development engine (--engine; or --engine-cache, which downloads the
+Linux x86_64 engine of the OXT-Beyond release that tools/ci/build_docs.sh
+pins into that folder, checked against its SHA-256) runs
+web-deploy.livecodescript with -ui: it saves the probe stack and writes its
+startup data with "_internal deploy emscripten", as the IDE's builder
+(ide-support/revsaveasemscriptenstandalone.livecodescript) does. Any engine
+can deploy for the web: the deploy command only writes the stack and the
+startup script. This script then makes the rest as the builder does:
+standalone.zip gets the template folder (without dotfiles) and
+boot/__startup.data, and the folder gets the engine's .js and .wasm and the
+page, WebProbe.html, with the stack's title in its <title>.
 
-1. The standalone, as the IDE's builder makes it
-   (ide-support/revsaveasemscriptenstandalone.livecodescript): the
-   development engine runs tools/ci/web-deploy.livecodescript, which saves
-   the probe stack (tools/ci/web-probe.livecodescript, with a button, a
-   field, a graphic and a PNG image) and writes its startup data with
-   "_internal deploy emscripten"; standalone.zip gets the template folder
-   (without dotfiles) and boot/__startup.data, and the folder gets the
-   engine's .js and .wasm and the page, WebProbe.html, with the stack's
-   title in its <title>.
+--install, --package or --bin, with the IDE's own web builder. The IDE
+starts as a user starts it, with web-deploy.livecodescript named on its
+command line (as tools/ci/ui_tour.py starts it; under xvfb-run on Linux
+without a DISPLAY). Once the IDE has started, the script builds the probe
+stack with revSaveAsEmscriptenStandalone and the standalone settings that
+a new stack has, and writes its lines to <work>/ide-build.txt. --install
+is an installed layout and --package a package to extract, which must hold
+the web runtime (Runtime/Emscripten/js in the tools folder); --bin is the
+build output of a repository checkout, whose IDE is the checkout's
+(repository mode) and whose web runtime is <checkout>/emscripten-bin.
 
-2. A web server on 127.0.0.1 serves the folder, and the requests the probe
-   makes: GET /probe-data.txt, POST /echo (which answers "POST
-   <Content-Type> <body>"), PUT and GET /store, and a 404.
+--built, a standalone of the probe stack that is already built: DIR holds
+its page, standalone.zip and the engine.
 
-3. Headless Chromium (Playwright) opens the page. The probe writes PROBE
+Then:
+
+1. A web server on 127.0.0.1 serves the standalone's folder, and the
+   requests the probe makes: GET /probe-data.txt, POST /echo (which
+   answers "POST <Content-Type> <body>"), PUT and GET /store, and a 404.
+
+2. Headless Chromium (Playwright) opens the page. The probe writes PROBE
    lines to the console (see web-probe.livecodescript): its checks of
    waits (in openStack, in handlers, nested, with messages, until a
    condition), "send ... in", "do ... as JavaScript", files, URLs (get,
@@ -63,6 +82,13 @@ only writes the stack and the startup script.
    probeFromJS(21) must return 42, and probeReport() "abc|abc|1". Then it
    takes a screenshot of the stack and checks the colours of the card, the
    graphic and the image in it.
+
+The URLs are loaded by the engine, or by the Internet library (libURL)
+when the standalone has it: the IDE's builder adds it, with its web
+driver, to a stack whose scripts use URLs. The probe reports which ("PROBE
+info url-path"), and each has results of its own for a missing page and a
+load (see web-probe.livecodescript). A standalone made without the IDE must
+use the engine, and one that the IDE made, libURL.
 
 Every check must pass, and nothing may reach the browser's error console
 or the page's error handler. The screenshot is written to
@@ -259,6 +285,111 @@ def make_standalone(runtime, js, wasm, html, startup_data, site):
         f.write(page)
 
 
+def built_files(site):
+    """(version, page) of a standalone's folder: its engine
+    (standalone-community-<version>.js and .wasm), standalone.zip and the
+    probe's page."""
+    if not os.path.isdir(site):
+        raise CheckError('%s is not a folder' % site)
+    names = sorted(os.listdir(site))
+    found = {}
+    for name in names:
+        m = re.match(r'^standalone-community-(.+)\.(js|wasm)$', name)
+        if m:
+            found.setdefault(m.group(1), set()).add(m.group(2))
+    complete = [v for v, kinds in found.items() if kinds == {'js', 'wasm'}]
+    if len(complete) != 1:
+        raise CheckError('%s must hold one engine, standalone-community-<version>.js and .wasm; it has %s'
+                         % (site, ', '.join(names) or 'nothing'))
+    for name in ('standalone.zip', STACK_NAME + '.html'):
+        if name not in names:
+            raise CheckError('%s has no %s; it has %s' % (site, name, ', '.join(names)))
+    return complete[0], os.path.join(site, STACK_NAME + '.html')
+
+
+def build_with_ide(args, work, timeout):
+    """Build the probe's standalone with the IDE's web builder (see the
+    header) into <work>/site. Returns (site, lines)."""
+    # the IDE is started as tools/ci/ui_tour.py starts it
+    import ui_tour
+    package, rlc = ui_tour.package, ui_tour.rlc
+    p = package.PLATFORMS[args.platform or rlc.default_platform()]
+    site = os.path.join(work, 'site')
+    shutil.rmtree(site, ignore_errors=True)
+    results = os.path.join(work, 'ide-build.txt')
+    if os.path.exists(results):
+        os.remove(results)
+    # the document the IDE opens; a copy, as ui_tour.py opens its script
+    document = os.path.join(work, 'oxt_web_deploy.livecodescript')
+    shutil.copyfile(DEPLOY_SCRIPT, document)
+    temp_dirs, lines, problems = [], [], []
+    try:
+        args.engine = None
+        try:
+            lay = rlc.find_layout(args, p, temp_dirs)
+        except rlc.CheckError as e:
+            raise CheckError(str(e))
+        log('Layout : %s' % lay.root)
+        log('Engine : %s' % lay.engine)
+
+        def path(x):
+            return x.replace('\\', '/')
+        env = dict(os.environ)
+        env.update(OXT_WEB_PROBE=path(PROBE_SCRIPT), OXT_WEB_STACK=path(os.path.join(work, STACK_NAME + '.livecode')),
+                   OXT_WEB_OUTPUT=path(site), OXT_WEB_LOG=path(results))
+        cmd = [lay.engine, document]
+        if p.family == 'linux':
+            # as ui_tour.py: without CEF (arm64) there is no browser widget
+            if 'LIVECODE_USE_CEF' not in env and \
+                    not os.path.isfile(os.path.join(lay.externals, 'CEF', 'libcef.so')):
+                env['LIVECODE_USE_CEF'] = '0'
+            if not env.get('DISPLAY'):
+                xvfb = shutil.which('xvfb-run')
+                if not xvfb:
+                    raise CheckError('no DISPLAY and no xvfb-run')
+                cmd = [xvfb, '-a', '-s', '-screen 0 1440x900x24'] + cmd
+        log('Running: %s' % ' '.join(cmd))
+        started = time.time()
+        progress = started
+        status = 'did not finish within %d seconds' % timeout
+        with open(os.path.join(work, 'ide-output.txt'), 'wb') as engine_log:
+            kw = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else \
+                {'start_new_session': True}
+            proc = subprocess.Popen(cmd, cwd=work, env=env, stdout=engine_log, stderr=subprocess.STDOUT, **kw)
+            try:
+                while time.time() - started < timeout:
+                    done = ui_tour.read_lines(results)
+                    if any(x.startswith('DONE') for x in done):
+                        status = None
+                        break
+                    if proc.poll() is not None:
+                        status = 'the IDE ended with exit status %s after %.0f s' % (
+                            proc.returncode, time.time() - started)
+                        break
+                    if time.time() - progress >= 15:
+                        progress = time.time()
+                        log('  after %.0f s: %s' % (progress - started, done[-1] if done else '(no lines yet)'))
+                    time.sleep(0.5)
+            finally:
+                ui_tour.stop(proc)
+        for line in ui_tour.read_lines(results):
+            log('  ide: %s' % line)
+            if line.startswith('BUILD FAILED') or line.startswith('ERROR'):
+                problems.append('the IDE\'s web build: %s' % line)
+        if status:
+            problems.append('the IDE\'s web build %s' % status)
+            for line in ui_tour.read_lines(os.path.join(work, 'ide-output.txt'))[-40:]:
+                log('  ide output: %s' % line)
+        else:
+            lines.append('the IDE built the standalone in %.0f s' % (time.time() - started))
+    finally:
+        for d in temp_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+    if problems:
+        raise CheckError('; '.join(problems))
+    return site, lines
+
+
 # ---------------------------------------------------------------------------
 # 2. The web server
 
@@ -325,9 +456,10 @@ def parse_rect(text):
     return parts
 
 
-def run_browser(url, version, work, timeout):
-    """Open the page and check what the probe and the page do. Returns
-    (problems, lines)."""
+def run_browser(url, version, work, timeout, url_path=None):
+    """Open the page and check what the probe and the page do; url_path is
+    what must load the probe's URLs, 'engine' or 'libURL' (None: either).
+    Returns (problems, lines)."""
     try:
         from playwright.sync_api import sync_playwright, Error as PlaywrightError
     except ImportError:
@@ -450,6 +582,12 @@ def run_browser(url, version, work, timeout):
                     problems.append('%s: %s %s' % (name, status, detail))
     if not probes.get('click'):
         problems.append('the click on the button did not reach its mouseUp handler')
+    if 'url-path' not in info:
+        problems.append('the probe did not report what loads its URLs (PROBE info url-path)')
+    elif url_path and info['url-path'] != url_path:
+        problems.append('the probe\'s URLs were loaded by %s, expected %s' % (info['url-path'], url_path))
+    else:
+        lines.append('the URLs were loaded by %s' % info['url-path'])
     if 'wait=refused' not in info.get('js-call', ''):
         problems.append('a wait in a handler called from the page did not fail as it must: %r'
                         % info.get('js-call'))
@@ -468,38 +606,65 @@ def run_browser(url, version, work, timeout):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--runtime', required=True, help='the web runtime folder')
-    group = ap.add_mutually_exclusive_group(required=True)
-    group.add_argument('--engine', help='a development engine (LiveCode-Community)')
-    group.add_argument('--engine-cache', help='download the pinned development engine into this folder')
+    ap.add_argument('--runtime', help='the web runtime folder: build without the IDE')
+    ap.add_argument('--engine', help='with --runtime: a development engine (LiveCode-Community)')
+    ap.add_argument('--engine-cache', help='with --runtime: download the pinned development engine into this folder')
+    ap.add_argument('--install', metavar='DIR', help='an installed OXT-Beyond: build with its IDE')
+    ap.add_argument('--package', metavar='FILE', help='a package to extract and build with its IDE')
+    ap.add_argument('--bin', dest='bin_dir', metavar='DIR',
+                    help='the build output of a repository checkout: build with the checkout\'s IDE')
+    ap.add_argument('--platform', help='with --install or --package: the layout (default: this machine\'s)')
+    ap.add_argument('--built', metavar='DIR', help='a standalone of the probe stack that is already built')
     ap.add_argument('--work', help='the work folder (default: a temporary folder)')
     ap.add_argument('--timeout', type=int, default=120, help='seconds for each step (default 120)')
+    ap.add_argument('--ide-timeout', type=int, default=600,
+                    help='seconds for the IDE to start and build (default 600)')
     ap.add_argument('--keep-serving', action='store_true', help='keep serving the page after the checks')
     args = ap.parse_args(argv)
+    modes = [x for x in ('runtime', 'ide', 'built')
+             if (args.install or args.package or args.bin_dir if x == 'ide' else getattr(args, x))]
+    if len(modes) != 1 or len([x for x in (args.install, args.package, args.bin_dir) if x]) > 1:
+        ap.error('pass one of --runtime, --install, --package, --bin and --built')
+    if (modes[0] == 'runtime') != bool(args.engine or args.engine_cache) or (args.engine and args.engine_cache):
+        ap.error('--runtime needs one of --engine and --engine-cache, and only --runtime takes them')
+    mode = modes[0]
 
     work = os.path.abspath(args.work) if args.work else tempfile.mkdtemp(prefix='oxt-web-check-')
     os.makedirs(work, exist_ok=True)
     problems, lines = [], []
     server = None
     try:
-        runtime = os.path.abspath(args.runtime)
-        version, js, wasm, html = runtime_files(runtime)
+        if mode == 'runtime':
+            runtime = os.path.abspath(args.runtime)
+            version, js, wasm, html = runtime_files(runtime)
+            engine = os.path.abspath(args.engine) if args.engine else fetch_engine(os.path.abspath(args.engine_cache))
+            log('Deploying with %s' % engine)
+            startup = deploy(engine, runtime, version, work, args.timeout)
+            site = os.path.join(work, 'site')
+            shutil.rmtree(site, ignore_errors=True)
+            make_standalone(runtime, js, wasm, html, startup, site)
+            url_path = 'engine'
+            lines.append('built without the IDE, from %s' % runtime)
+        elif mode == 'ide':
+            site, built = build_with_ide(args, work, args.ide_timeout)
+            lines += built
+            url_path = 'libURL'
+        else:
+            site = os.path.abspath(args.built)
+            url_path = None
+            lines.append('built before: %s' % site)
+        version, page = built_files(site)
+        js, wasm = [os.path.join(site, 'standalone-community-%s.%s' % (version, x)) for x in ('js', 'wasm')]
         log('Web engine %s: %s (%.1f MB), %s (%.1f MB)' % (
             version, os.path.basename(js), os.path.getsize(js) / 1e6, os.path.basename(wasm),
             os.path.getsize(wasm) / 1e6))
         lines.append('web engine %s: .wasm %.1f MB, .js %.0f kB' % (
             version, os.path.getsize(wasm) / 1e6, os.path.getsize(js) / 1e3))
-        engine = os.path.abspath(args.engine) if args.engine else fetch_engine(os.path.abspath(args.engine_cache))
-        log('Deploying with %s' % engine)
-        startup = deploy(engine, runtime, version, work, args.timeout)
-        site = os.path.join(work, 'site')
-        shutil.rmtree(site, ignore_errors=True)
-        make_standalone(runtime, js, wasm, html, startup, site)
         lines.append('standalone.zip %.1f kB' % (os.path.getsize(os.path.join(site, 'standalone.zip')) / 1e3))
         server = make_server(site)
-        url = 'http://127.0.0.1:%d/%s.html' % (server.server_address[1], STACK_NAME)
+        url = 'http://127.0.0.1:%d/%s' % (server.server_address[1], os.path.basename(page))
         log('Opening %s' % url)
-        p, l = run_browser(url, version, work, args.timeout)
+        p, l = run_browser(url, version, work, args.timeout, url_path)
         problems += p
         lines += l
         if args.keep_serving:
@@ -525,7 +690,8 @@ def main(argv=None):
             annotate('error', 'web check: ' + problem)
     else:
         log('PASSED')
-    summary('### Web standalone check\n\n' + ''.join('- %s\n' % x for x in lines)
+    title = {'runtime': 'without the IDE', 'ide': 'the IDE\'s builder', 'built': 'built before'}[mode]
+    summary('### Web standalone check (%s)\n\n' % title + ''.join('- %s\n' % x for x in lines)
             + ('\n**Failed:**\n\n' + ''.join('- %s\n' % x for x in problems) if problems else '\nAll checks passed.\n')
             + '\n')
     return 1 if problems else 0

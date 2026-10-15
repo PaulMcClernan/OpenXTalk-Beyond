@@ -94,6 +94,33 @@ mergeInto(LibraryManager.library, {
 			             [sentLength, callbackPtr, contextPtr]);
 		},
 
+		// A response with an error status: the page the server sent,
+		// then the error
+		_postStatusHttpError: function(data, errorString,
+		                               callbackPtr, contextPtr) {
+			var dataStack = new Uint8Array(data);
+			var dataLength = dataStack.length;
+			var dataPtr = Module._malloc(dataLength *
+			                             dataStack.BYTES_PER_ELEMENT);
+			Module.HEAPU8.set(dataStack, dataPtr);
+			var errorPtr = LiveCodeUtil.stringToUTF16(errorString);
+			var errorLength = errorString.length;
+
+			Module.ccall('MCEmscriptenUrlCallbackHttpError',
+			             null,
+			             ['number', // const byte_t *p_data
+			              'number', // uint32_t p_data_length
+			              'number', // const unichar_t *p_error
+			              'number', // uint32_t p_error_length
+			              'number', // MCSystemUrlCallback p_callback
+			              'number'], // void *p_context
+			             [dataPtr, dataLength, errorPtr, errorLength,
+			              callbackPtr, contextPtr]);
+
+			Module._free(dataPtr);
+			Module._free(errorPtr);
+		},
+
 		_postStatusError: function(errorString, callbackPtr, contextPtr) {
 			var errorPtr = LiveCodeUtil.stringToUTF16(errorString);
 			var errorLength = errorString.length;
@@ -197,6 +224,25 @@ mergeInto(LibraryManager.library, {
 			xhr.addEventListener("load", function(e) {
 				clearLoadendHandler();
 				LiveCodeAsync.resume(function() {
+					// As on iOS and Android, a response with an error
+					// status is an error, "<status> <reason>", that
+					// comes after the page the server sent (which a put
+					// does not follow)
+					if (xhr.status >= 400) {
+						var error = (xhr.status + " " +
+						             LiveCodeUtil.httpReason(xhr)).trim();
+						if (isPut) {
+							LiveCodeUrl._postStatusError(error,
+							                             callbackPtr,
+							                             contextPtr);
+						} else {
+							LiveCodeUrl._postStatusHttpError(xhr.response,
+							                                 error,
+							                                 callbackPtr,
+							                                 contextPtr);
+						}
+						return;
+					}
 					if (isPut) {
 						LiveCodeUrl._postStatusUploaded(dataLength,
 						                                callbackPtr,

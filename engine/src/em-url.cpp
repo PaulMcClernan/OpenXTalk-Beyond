@@ -198,6 +198,33 @@ MCEmscriptenUrlCallbackFinished(const byte_t *p_data,
 	p_callback(p_context, kMCSystemUrlStatusFinished, nil);
 }
 
+/* A response with an error status (400 or more): the page that the
+ * server sent, then the error, "<status> <reason>", as on iOS and
+ * Android */
+extern "C" MC_DLLEXPORT_DEF void
+MCEmscriptenUrlCallbackHttpError(const byte_t *p_data,
+                                 uint32_t p_data_length,
+                                 const unichar_t *p_error,
+                                 uint32_t p_error_length,
+                                 MCSystemUrlCallback p_callback,
+                                 void *p_context)
+{
+	MCAutoDataRef t_data;
+	if (!MCDataCreateWithBytes(p_data, p_data_length, &t_data))
+	{
+		t_data = kMCEmptyData;
+	}
+
+	MCAutoStringRef t_error;
+	if (!MCStringCreateWithChars(p_error, p_error_length, &t_error))
+	{
+		t_error = kMCEmptyString;
+	}
+
+	p_callback(p_context, kMCSystemUrlStatusLoading, *t_data);
+	p_callback(p_context, kMCSystemUrlStatusError, *t_error);
+}
+
 extern "C" MC_DLLEXPORT_DEF void
 MCEmscriptenUrlCallbackError(const unichar_t *p_error,
                              uint32_t p_error_length,

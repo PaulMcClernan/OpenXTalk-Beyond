@@ -143,17 +143,15 @@ command revSaveAsEmscriptenStandalone pStack, pOutputFolder, pSettings
       end repeat
       
       ---------- Create HTML page
-      
-      -- FIXME just copies the Emscripten-generated page into place
+
+      -- The engine's page, with the stack's title
       revStandaloneProgress "Preparing HTML page..."
-      
+
       local tHtmlFile
       put tBuildFolder & slash & tName & ".html" into tHtmlFile
-      logDebug "html", "Creating" && tHtmlFile
-      logDebug "html", "Copying" && getHtmlTemplateFile()
-      revSBCopyFileToFile mapBinPath(getHtmlTemplateFile()), tHtmlFile, \
-            "revStandaloneProgressCallback", the long id of me
-      
+      logDebug "html", "Creating" && tHtmlFile && "from" && getHtmlTemplateFile()
+      createHtmlPage mapBinPath(getHtmlTemplateFile()), tHtmlFile, pStack
+
    catch tError
       if tError is empty then
          put "an unknown error occurred" into tError
@@ -262,6 +260,44 @@ private function getStartupScript pGeneratedStartupScript
    replace "@STARTUP_SCRIPT@" with pGeneratedStartupScript in tScript
    return tScript
 end getStartupScript
+
+----------------------------------------------------------------
+-- The HTML page
+----------------------------------------------------------------
+
+-- Write the page that loads the standalone: the engine's page, with
+-- the stack's label (or, without one, its name) as the page's title
+-- in place of @STACK_TITLE@. The page loads the engine's JavaScript,
+-- which loads the engine's WebAssembly and standalone.zip, from the
+-- page's own folder.
+private command createHtmlPage pTemplateFile, pHtmlFile, pStack
+   local tPage, tTitle
+
+   open file pTemplateFile for "UTF-8" text read
+   if the result is not empty then
+      throw pTemplateFile & ":" && the result
+   end if
+   read from file pTemplateFile until end
+   put it into tPage
+   close file pTemplateFile
+
+   put the label of stack pStack into tTitle
+   if tTitle is empty then
+      put the short name of stack pStack into tTitle
+   end if
+   -- The title is text in the page, not markup
+   replace "&" with "&amp;" in tTitle
+   replace "<" with "&lt;" in tTitle
+   replace ">" with "&gt;" in tTitle
+   replace "@STACK_TITLE@" with tTitle in tPage
+
+   open file pHtmlFile for "UTF-8" text write
+   if the result is not empty then
+      throw pHtmlFile & ":" && the result
+   end if
+   write tPage to file pHtmlFile
+   close file pHtmlFile
+end createHtmlPage
 
 ----------------------------------------------------------------
 -- Extra files from "copy files"
@@ -494,16 +530,13 @@ function revGetEmscriptenFiles
 end revGetEmscriptenFiles
 
 -- Return a number-indexed array of engine files that need to be
--- copied into the standalone output folder.
+-- copied into the standalone output folder: the engine of this
+-- version (the startup script checks that it is the IDE's), its
+-- JavaScript and the WebAssembly code that the JavaScript loads.
 private function getEngineFiles
    local tFiles
-   
-   -- Engine JavaScript
-   --put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".js") into tFiles[1]
-   put mapBinPath("standalone-community-9.6.3.js") into tFiles[1] 
-   -- Memory initialisation file
-   --put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".html.mem") into tFiles[2]
-   put mapBinPath("standalone-community-9.6.3.js") into tFiles[2] 
+   put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".js") into tFiles[1]
+   put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".wasm") into tFiles[2]
    return tFiles
 end getEngineFiles
 
