@@ -118,6 +118,11 @@ bool MCEmscriptenShowDocument(MCStringRef p_path);
 #define kMCEmscriptenUploadsFolder "/uploads"
 #define kMCEmscriptenDownloadsFolder "/downloads"
 
+/* A file or folder of the engine's file system changed: the home folder,
+ * which the browser keeps between visits, is written back to the
+ * browser's storage soon after (em-system.js) */
+extern "C" void MCEmscriptenStorageChanged(void);
+
 /* ---------------------------------------------------------------- */
 
 class MCScreenDC: public MCUIDC

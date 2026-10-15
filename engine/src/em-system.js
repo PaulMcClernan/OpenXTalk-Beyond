@@ -248,6 +248,131 @@ mergeInto(LibraryManager.library, {
 		{{{ makeSetValue('r_length', '0', 'host.length', 'i32') }}};
 	},
 
+	// The home folder (/livecode, which holds the documents, desktop,
+	// preferences and support folders) is kept in the browser's storage
+	// for the page's site (IndexedDB), so that what a stack writes there
+	// is still there on its next visit, as on the desktop. The rest of
+	// the engine's file system (/tmp, /downloads, /uploads, the
+	// standalone's own folder) starts afresh with each visit.
+	//
+	// A page that does not want it sets Module.livecodePersistent to
+	// false. Without the browser's storage (a private window may refuse
+	// it), the home folder is not kept, and nothing else changes.
+	$LiveCodeStorage__deps: ['$FS'],
+	$LiveCodeStorage__postset: 'LiveCodeStorage.install();',
+	$LiveCodeStorage: {
+		_folder: '/livecode',
+
+		// True once the folder's files are loaded from the browser's
+		// storage: only then are its files written back, as writing an
+		// unloaded folder back would delete what was kept
+		_loaded: false,
+
+		// The pending write (a timer), and whether one is under way and
+		// another is wanted after it
+		_timer: null,
+		_writing: false,
+		_again: false,
+
+		// The folder is loaded before the engine starts
+		install: function() {
+			var preRun = Module['preRun'] || [];
+			if (typeof preRun == 'function') {
+				preRun = [preRun];
+			}
+			preRun.push(LiveCodeStorage._load);
+			Module['preRun'] = preRun;
+		},
+
+		_load: function() {
+			var idbfs = FS.filesystems && FS.filesystems['IDBFS'];
+			if (Module['livecodePersistent'] === false || !idbfs ||
+				typeof indexedDB == 'undefined') {
+				return;
+			}
+			try {
+				FS.mkdir(LiveCodeStorage._folder);
+				FS.mount(idbfs, {}, LiveCodeStorage._folder);
+			} catch (e) {
+				return;
+			}
+
+			Module['addRunDependency']('livecodeStorage');
+			var finished = false;
+			var timer;
+			var finish = function(error) {
+				if (finished) {
+					return;
+				}
+				finished = true;
+				clearTimeout(timer);
+				if (error) {
+					console.warn('The home folder will not be kept: ' + error);
+				} else {
+					LiveCodeStorage._loaded = true;
+					// What is not yet written goes when the page goes
+					window.addEventListener('pagehide', LiveCodeStorage.flush);
+					document.addEventListener('visibilitychange', function() {
+						if (document.visibilityState == 'hidden') {
+							LiveCodeStorage.flush();
+						}
+					});
+				}
+				Module['removeRunDependency']('livecodeStorage');
+			};
+			// The engine starts without it if the storage does not answer
+			timer = setTimeout(function() {
+				finish('the browser\'s storage did not answer');
+			}, 10000);
+			try {
+				FS.syncfs(true, function(error) {
+					finish(error);
+				});
+			} catch (e) {
+				finish(e);
+			}
+		},
+
+		// A file or folder of the engine's changed: the home folder is
+		// written back soon, with whatever else changes meanwhile
+		changed: function() {
+			if (!LiveCodeStorage._loaded || LiveCodeStorage._timer !== null) {
+				return;
+			}
+			LiveCodeStorage._timer = setTimeout(LiveCodeStorage.flush, 200);
+		},
+
+		flush: function() {
+			if (LiveCodeStorage._timer !== null) {
+				clearTimeout(LiveCodeStorage._timer);
+				LiveCodeStorage._timer = null;
+			}
+			if (!LiveCodeStorage._loaded) {
+				return;
+			}
+			if (LiveCodeStorage._writing) {
+				LiveCodeStorage._again = true;
+				return;
+			}
+			LiveCodeStorage._writing = true;
+			FS.syncfs(false, function(error) {
+				LiveCodeStorage._writing = false;
+				if (error) {
+					console.warn('The home folder could not be kept: ' + error);
+				}
+				if (LiveCodeStorage._again) {
+					LiveCodeStorage._again = false;
+					LiveCodeStorage.flush();
+				}
+			});
+		},
+	},
+
+	MCEmscriptenStorageChanged__deps: ['$LiveCodeStorage'],
+	MCEmscriptenStorageChanged: function() {
+		LiveCodeStorage.changed();
+	},
+
 });
 
 /*

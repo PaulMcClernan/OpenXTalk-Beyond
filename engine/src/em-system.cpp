@@ -305,6 +305,19 @@ MCEmscriptenSystem::GetEnv(MCStringRef p_name,
  * Filesystem interface
  * ---------------------------------------------------------------- */
 
+/* Tells the page when a file or folder changes, so that the home folder
+ * is kept (em-system.js); a file written tells it when it is closed
+ * (em-filehandle.cpp). Returns p_changed. */
+static bool
+MCEmscriptenSystemChanged(bool p_changed)
+{
+	if (p_changed)
+	{
+		MCEmscriptenStorageChanged();
+	}
+	return p_changed;
+}
+
 Boolean
 MCEmscriptenSystem::CreateFolder(MCStringRef p_path)
 {
@@ -315,7 +328,7 @@ MCEmscriptenSystem::CreateFolder(MCStringRef p_path)
 	}
 
 	errno = 0;
-	return (0 == mkdir(*t_path_sys, 0777));
+	return MCEmscriptenSystemChanged(0 == mkdir(*t_path_sys, 0777));
 }
 
 Boolean
@@ -328,7 +341,7 @@ MCEmscriptenSystem::DeleteFolder(MCStringRef p_path)
 	}
 
 	errno = 0;
-	return (0 == rmdir(*t_path_sys));
+	return MCEmscriptenSystemChanged(0 == rmdir(*t_path_sys));
 }
 
 Boolean
@@ -341,7 +354,7 @@ MCEmscriptenSystem::DeleteFile(MCStringRef p_path)
 	}
 
 	errno = 0;
-	return (0 == unlink(*t_path_sys));
+	return MCEmscriptenSystemChanged(0 == unlink(*t_path_sys));
 }
 
 Boolean
@@ -359,7 +372,7 @@ MCEmscriptenSystem::RenameFileOrFolder(MCStringRef p_old_name,
 	}
 
 	errno = 0;
-	return (0 == rename(*t_path_old, *t_path_new));
+	return MCEmscriptenSystemChanged(0 == rename(*t_path_old, *t_path_new));
 }
 
 /* As on Linux: save stack moves the stack file it replaces aside
@@ -793,7 +806,7 @@ MCEmscriptenSystem::ChangePermissions(MCStringRef p_path, uint16_t p_mask)
 	}
 
 	errno = 0;
-	return (0 == chmod(*t_path_sys, p_mask));
+	return MCEmscriptenSystemChanged(0 == chmod(*t_path_sys, p_mask));
 }
 
 uint16_t
@@ -870,6 +883,10 @@ MCEmscriptenSystem::OpenFile(MCStringRef p_path,
 		{
 			free(t_real_path);
 		}
+
+		/* Opening a file for writing empties it: it has changed */
+		return new MCEmscriptenFileHandle(t_fd, nil,
+		                                  p_mode == kMCOpenFileModeWrite);
 	}
 
 	return new MCEmscriptenFileHandle(t_fd);

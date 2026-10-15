@@ -70,6 +70,20 @@ MCRectangle MCEmscriptenGetDisplayRect()
 	return MCRectangleMake(t_left, t_top, t_right - t_left, t_bottom - t_top);
 }
 
+/* The browser's window changed size, or its pixels did (a zoom, or the
+ * window moved to another screen): the screen is the part of the page
+ * that the window shows, so the stacks hear desktopChanged, as the
+ * desktop's do when the screens change */
+extern "C" MC_DLLEXPORT_DEF bool
+MCEmscriptenHandleScreenChanged()
+{
+	if (MCscreen == nil || !MCdefaultstackptr)
+		return false;
+
+	MCscreen->delaymessage(MCdefaultstackptr->getcurcard(), MCM_desktop_changed);
+	return true;
+}
+
 /* ================================================================
  * Initialization / Finalization
  * ================================================================ */
@@ -212,9 +226,9 @@ MCScreenDC::openwindow(Window p_window,
 
 	t_stack->setextendedstate(false, ECS_DONTDRAW);
 
-	/* Set up view to match window, as far as possible */
-	/* FIXME Implement HiDPI support */
-
+	/* Set up view to match window, as far as possible. The window's rect
+	 * is in points (CSS pixels); its canvas has as many pixels as the
+	 * device has there (MCStack::view_device_updatewindow()). */
 	MCEmscriptenSetWindowRect(t_window, t_stack->view_getrect());
 
 	t_stack->view_configure(true);
@@ -268,8 +282,7 @@ bool
 MCScreenDC::platform_getwindowgeometry(Window p_window,
                                        MCRectangle & r_rect)
 {
-	/* FIXME Implement HiDPI support */
-
+	/* In points (CSS pixels), whatever the device's pixel scale */
 	uint32_t t_window = reinterpret_cast<uint32_t>(p_window);
 	r_rect = MCEmscriptenGetWindowRect(t_window);
 	return true;

@@ -38,8 +38,8 @@ MCEmscriptenFileHandle::MCEmscriptenFileHandle(int t_fd,
                                                MCStringRef p_download,
                                                bool p_written)
 	: m_fd(t_fd), m_eof(false),
-	  m_download(MCValueRetain(p_download)), m_written(p_written),
-	  m_failed(false)
+	  m_download(p_download != nil ? MCValueRetain(p_download) : nil),
+	  m_written(p_written), m_failed(false)
 {
 }
 
@@ -47,6 +47,15 @@ MCEmscriptenFileHandle::~MCEmscriptenFileHandle()
 {
 	if (m_fd != -1)
 	{
+		/* A file written to is changed now. Emscripten's file system
+		 * does not change a file's time when it only empties it, and the
+		 * browser's storage keeps the files whose time changed
+		 * (em-system.js). */
+		if (m_written)
+		{
+			futimens(m_fd, NULL);
+		}
+
 		errno = 0;
 		if (0 != close(m_fd))
 		{
@@ -56,6 +65,13 @@ MCEmscriptenFileHandle::~MCEmscriptenFileHandle()
 		}
 
 		m_fd = -1;
+	}
+
+	/* A file written changed the engine's file system, and the browser
+	 * keeps the home folder's files (em-system.js) */
+	if (m_written)
+	{
+		MCEmscriptenStorageChanged();
 	}
 
 	/* A file written under /downloads goes to the user, unless writing

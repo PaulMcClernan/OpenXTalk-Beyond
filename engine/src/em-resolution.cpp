@@ -91,7 +91,11 @@ MCEmscriptenHandleDevicePixelRatioChanged()
 	if (t_scale != s_emscripten_device_scale)
 	{
 		s_emscripten_device_scale = t_scale;
-		MCResPlatformHandleScaleChange();
+
+		/* The engine's pixel scale is the device's, when pixel scaling
+		 * is on: the stacks' windows are reopened at it, and draw with
+		 * the browser's new number of pixels to a point */
+		MCResSetPixelScale(t_scale);
 	}
 
 	return true;

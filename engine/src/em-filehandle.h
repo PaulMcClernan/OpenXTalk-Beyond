@@ -32,11 +32,12 @@ public:
 	 * taking ownership of it.*/
 	MCEmscriptenFileHandle(int p_fd);
 
-	/* The same, for a file under kMCEmscriptenDownloadsFolder opened
-	 * for writing: p_download is its path, and the file is given to the
-	 * user as a download when it is closed, if it has been written to
-	 * (p_written: it already has been, being truncated when it was
-	 * opened). */
+	/* The same, for a file opened for writing. When it is closed, if it
+	 * has been written to (p_written: it already has been, being
+	 * truncated when it was opened), the page is told that the engine's
+	 * files changed (MCEmscriptenStorageChanged), and a file under
+	 * kMCEmscriptenDownloadsFolder, whose path p_download is (else nil),
+	 * is given to the user as a download. */
 	MCEmscriptenFileHandle(int p_fd, MCStringRef p_download, bool p_written);
 
 	virtual ~MCEmscriptenFileHandle();
@@ -67,6 +68,7 @@ protected:
 
 	/* The file's path if it is a download (see above), else nil */
 	MCStringRef m_download;
+	/* True if the file has been written to, and if writing failed */
 	bool m_written;
 	bool m_failed;
 };

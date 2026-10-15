@@ -134,6 +134,10 @@ for option in ['pre-js', 'shell-file', 'js-library']:
         for value in options[option]:
             command += ['--' + option, value]
 
+# The browser's storage (IndexedDB) as a file system, which keeps the home
+# folder between visits (em-system.js)
+command += ['-lidbfs.js']
+
 # Run emcc
 # --------
 

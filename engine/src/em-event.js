@@ -140,8 +140,10 @@ mergeInto(LibraryManager.library, {
 			});
 
 			// Add listener for changes to device pixel ratio
-			var matchQuery = "(resolution: " + window.devicePixelRatio + "dppx)";
-			window.matchMedia(matchQuery).addListener(LiveCodeEvents._handleDevicePixelRatioChanged);
+			LiveCodeEvents._watchDevicePixelRatio();
+
+			// The screen is the browser's window: desktopChanged
+			window.addEventListener('resize', LiveCodeEvents._handleScreenResize);
 
 			LiveCodeEvents._initialised = true;
 		},
@@ -1173,6 +1175,27 @@ mergeInto(LibraryManager.library, {
 		// UI events
 		// ----------------------------------------------------------------
 		
+		// The query matches the device pixel ratio of the moment, so it
+		// sees one change (a zoom, or the window moved to another screen):
+		// each change watches for the next with a query of its own
+		_watchDevicePixelRatio: function() {
+			var query = window.matchMedia('(resolution: ' + window.devicePixelRatio + 'dppx)');
+			var changed = function() {
+				if (query.removeEventListener) {
+					query.removeEventListener('change', changed);
+				} else {
+					query.removeListener(changed);
+				}
+				LiveCodeEvents._handleDevicePixelRatioChanged();
+				LiveCodeEvents._watchDevicePixelRatio();
+			};
+			if (query.addEventListener) {
+				query.addEventListener('change', changed);
+			} else {
+				query.addListener(changed);
+			}
+		},
+
 		_handleDevicePixelRatioChanged: function() {
 			LiveCodeAsync.delay(function() {
 				Module.ccall('MCEmscriptenHandleDevicePixelRatioChanged',
@@ -1181,6 +1204,25 @@ mergeInto(LibraryManager.library, {
 								[])
 			});
 			LiveCodeAsync.resume();
+			LiveCodeEvents._handleScreenResize();
+		},
+
+		// A window being resized changes its size many times a second:
+		// the stacks hear of it once it has stopped for a moment
+		_screenTimer: null,
+
+		_handleScreenResize: function() {
+			clearTimeout(LiveCodeEvents._screenTimer);
+			LiveCodeEvents._screenTimer = setTimeout(function() {
+				LiveCodeEvents._screenTimer = null;
+				LiveCodeAsync.delay(function() {
+					Module.ccall('MCEmscriptenHandleScreenChanged',
+								 'number', /* bool */
+								 [],
+								 []);
+				});
+				LiveCodeAsync.resume();
+			}, 100);
 		},
 
 		// prevent context menu popup on right-click
