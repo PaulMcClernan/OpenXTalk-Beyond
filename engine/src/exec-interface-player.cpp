@@ -380,6 +380,9 @@ void MCPlayer::GetLoadedTime(MCExecContext& ctxt, double& r_loaded_time)
 {
 #ifdef FEATURE_PLATFORM_PLAYER
 	r_loaded_time = getmovieloadedtime();
+#elif defined(__EMSCRIPTEN__)
+	// OXT-Beyond: how much of the movie the page has loaded
+	r_loaded_time = web_getloadedtime();
 #else
     r_loaded_time = 0;
 #endif
@@ -724,13 +727,15 @@ void MCPlayer::SetBorderWidth(MCExecContext& ctxt, uinteger_t width)
 
 void MCPlayer::SetVisible(MCExecContext& ctxt, uinteger_t part, bool setting)
 {
-#ifndef FEATURE_PLATFORM_PLAYER
+#if !defined(FEATURE_PLATFORM_PLAYER) && !defined(__EMSCRIPTEN__)
     uint4 oldflags = flags;
 #endif
 	MCControl::SetVisible(ctxt, part, setting);
     
     // PM-2015-07-01: [[ Bug 15191 ]] Keep the LC 6.7 behaviour in non-platform player, to make the video layer to hide 
-#ifndef FEATURE_PLATFORM_PLAYER
+    // OXT-Beyond: the web engine's player hides its video element as the
+    // Mac and Windows players hide theirs, and plays on
+#if !defined(FEATURE_PLATFORM_PLAYER) && !defined(__EMSCRIPTEN__)
     if (flags != oldflags && !(flags & F_VISIBLE))
         playstop();
 #endif

@@ -75,7 +75,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probeObjects"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeObjects"
       try
          dispatch tCheck to me
       catch tError
@@ -340,7 +340,37 @@ private function probeLittleEndian pValue, pBytes
    return tBytes
 end probeLittleEndian
 
+-- A player, with the audio clip's WAV file: the page plays it in a video
+-- element of its own, and the player has its duration in milliseconds and,
+-- at its end, sends playStopped, as on the desktop. Its playLoudness is 0,
+-- so the browser plays it before the user's first click (a browser plays
+-- a muted movie without one).
+command probePlayer
+   local tResult, tDuration, tScale, tStart, tDeadline, tElapsed
+   put empty into sPlayStopped
+   create player "probe-player"
+   set the playLoudness of player "probe-player" to 0
+   set the filename of player "probe-player" to specialFolderPath("temporary") & "/probe-sound.wav"
+   put the result into tResult
+   put the duration of player "probe-player" into tDuration
+   put the timeScale of player "probe-player" into tScale
+   put the milliseconds into tStart
+   start player "probe-player"
+   put tStart + 5000 into tDeadline
+   wait until sPlayStopped is not empty or the milliseconds > tDeadline with messages
+   put the milliseconds - tStart into tElapsed
+   delete player "probe-player"
+   probeCheck "player", tResult is empty and tScale is 1000 and abs(tDuration - 300) <= 20 \
+         and sPlayStopped is "probe-player" and tElapsed >= 250, \
+         "result=" & tResult && "duration=" & tDuration && "scale=" & tScale \
+         && "stopped=" & sPlayStopped && tElapsed & " ms"
+end probePlayer
+
+-- An audio clip names itself; a player sends it with no parameter
 on playStopped pName
+   if pName is empty then
+      put the short name of the target into pName
+   end if
    put pName into sPlayStopped
 end playStopped
 

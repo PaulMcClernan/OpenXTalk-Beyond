@@ -271,8 +271,8 @@ Work left for later. 458 notes, by part of the repository:
 - [engine/src/dskw32.cpp:623](engine/src/dskw32.cpp#L623) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:633](engine/src/dskw32.cpp#L633) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:3031](engine/src/dskw32.cpp#L3031) TODO: set end of file...
-- [engine/src/em-dc.js:146](engine/src/em-dc.js#L146) TODO - handle cleanup of embedded canvas
-- [engine/src/em-dc.js:370](engine/src/em-dc.js#L370) TODO - implement
+- [engine/src/em-dc.js:150](engine/src/em-dc.js#L150) TODO - handle cleanup of embedded canvas
+- [engine/src/em-dc.js:374](engine/src/em-dc.js#L374) TODO - implement
 - [engine/src/em-event.js:771](engine/src/em-event.js#L771) TODO - reenable alt key detection
 - [engine/src/em-util.js:304](engine/src/em-util.js#L304) TODO - support more value types
 - [engine/src/em-util.js:332](engine/src/em-util.js#L332) TODO - for now, treat functions as objects but we may wish to differentiate them later

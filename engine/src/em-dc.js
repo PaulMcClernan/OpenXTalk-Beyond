@@ -55,6 +55,10 @@ mergeInto(LibraryManager.library, {
 		},
 		
 		containerRemoveElement: function(container, element) {
+			// OXT-Beyond: an element that is not in the container stays out
+			if (element.parentNode !== container['element']) {
+				return;
+			}
 			this.containerRaiseElement(container, element);
 			container['element'].removeChild(element);
 			container['maxZIndex']--;

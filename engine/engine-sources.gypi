@@ -795,6 +795,8 @@
 			'src/em-native-layer.h',
 			'src/em-native-layer.cpp',
 			'src/em-osspec-misc.cpp',
+			'src/em-player.cpp',
+			'src/em-player.js',
 			'src/em-osspec-network.cpp',
 			'src/em-preamble.js',
 			'src/em-resolution.cpp',

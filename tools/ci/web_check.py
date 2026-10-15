@@ -79,8 +79,8 @@ Then:
    script clicks, typing "Ada" into the ask dialog's field, the standard
    folders, a file written to /downloads (which must reach the browser as
    a download), the address, randomBytes, the modifier keys, the cursor
-   and an audio clip that it plays (the samples the browser was given
-   must be the clip's). When the probe writes "PROBE ready", this script
+   an audio clip that it plays (the samples the browser was given must be
+   the clip's) and a player that plays the clip's file. When the probe writes "PROBE ready", this script
    clicks the button, types "abc" into the field, and calls the stack's
    handlers from the page (document.liveCode.findStackWithName):
    probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
@@ -138,7 +138,7 @@ PROBE_CHECKS = (
     'platform', 'wait-openstack', 'wait-handler', 'wait-nested', 'wait-until', 'send-in-time',
     'javascript', 'file-roundtrip', 'standalone-folder', 'url-get', 'url-post', 'url-put',
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
-    'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'objects',
+    'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'objects',
 )
 
 # The file the probe writes to /downloads, which the browser must download

@@ -82,7 +82,13 @@ MCNativeLayerEmscripten::MCNativeLayerEmscripten(MCObject *p_object, MCJSObjectR
 MCNativeLayerEmscripten::~MCNativeLayerEmscripten()
 {
 	if (m_element)
+	{
+		// OXT-Beyond: take the element out of the page, as the Mac and
+		// Windows layers take their views out of the window
+		if (isAttached())
+			doDetach();
 		MCValueRelease(m_element);
+	}
 }
 
 void MCNativeLayerEmscripten::doAttach()

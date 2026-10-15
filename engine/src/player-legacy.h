@@ -34,6 +34,12 @@ struct MCPlayerOffscreenBuffer;
 
 typedef MCObjectProxy<MCPlayer>::Handle MCPlayerHandle;
 
+#ifdef __EMSCRIPTEN__
+// OXT-Beyond: the web engine's player, a <video> element of the page
+// (em-player.cpp)
+struct MCWebPlayer;
+#endif
+
 // SN-2014-07-23: [[ Bug 12893 ]] MCControl must be the first class inherited
 //  since we use &MCControl::kPropertyTable
 class MCPlayer : public MCControl, public MCMixinObjectHandle<MCPlayer>, public MCPlayerInterface
@@ -95,6 +101,10 @@ private:
 
 #endif
 	MCPlayerHandle nextplayer;
+
+#ifdef __EMSCRIPTEN__
+	MCWebPlayer *m_web;
+#endif
     
 	static MCPropertyInfo kProperties[];
 	static MCObjectPropertyTable kPropertyTable;
@@ -430,6 +440,37 @@ public:
 	
 	pid_t getpid(void);
 	void  shutdown(void);
+#endif
+
+#ifdef __EMSCRIPTEN__
+	// OXT-Beyond: the web engine's player (em-player.cpp)
+	bool web_create(void);
+	void web_release(void);
+	bool web_haselement(void);
+	Boolean web_prepare(void);
+	void web_fitmovie(void);
+	Boolean web_playpause(Boolean on);
+	void web_playstep(int p_direction);
+	void web_playstop(void);
+	MCPlayerDuration web_getduration(void);
+	MCPlayerDuration web_gettimescale(void);
+	MCPlayerDuration web_getmoviecurtime(void);
+	MCPlayerDuration web_getloadedtime(void);
+	void web_setcurtime(MCPlayerDuration p_time);
+	void web_setselection(void);
+	void web_setlooping(Boolean p_loop);
+	void web_setplayrate(void);
+	Boolean web_ispaused(void);
+	void web_showcontroller(Boolean p_show);
+	void web_setloudness(uint2 p_loudness);
+	uint2 web_getloudness(void);
+	MCRectangle web_getpreferredrect(void);
+	void web_synccallbacks(void);
+	void web_handleevent(uint32_t p_event);
+	static MCPlayer *web_find(uint32_t p_id);
+
+	// The video is inside the player's border
+	virtual MCRectangle GetNativeViewRect(const MCRectangle &p_object_rect);
 #endif
     
 	////////// PROPERTY SUPPORT METHODS
