@@ -52,6 +52,7 @@ words, is in the [README](README.md#the-ide) and on the
 - Let web standalones start and stop using font files (#108)
 - Say in the guide that web standalones keep the light colours (#108)
 - Version 0.2.6-rc.5, with its changelog (#108)
+- Write the web dialogs' icons as escapes, so their source stays ASCII (#108)
 
 ## 0.2.6-rc.4 (2026-10-14, pre-release)
 

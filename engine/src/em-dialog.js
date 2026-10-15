@@ -89,8 +89,10 @@ mergeInto(LibraryManager.library, {
         kChoose: 4,
         kSave: 5,
 
-        // The types of an answer dialog (kMCAnswerDialogType*)
-        _icons: ['', 'ℹ', '?', '!', '✖'],
+        // The icons of an answer dialog by its type (0: none, then
+        // kMCAnswerDialogType* plus one): information (U+2139), question,
+        // warning and error (U+2716)
+        _icons: ['', '\u2139', '?', '!', '\u2716'],
 
         // Open dialogs by id: {open, button, text}
         _dialogs: {},
