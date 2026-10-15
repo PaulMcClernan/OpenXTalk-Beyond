@@ -44,7 +44,9 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- tools/ci/web-probe.livecodescript (without its first line, the
 -- script-only stack's header), with the controls that the probe uses, so
 -- that the web engine reads them from a stack file: a button, a field, a
--- filled graphic and a PNG image.
+-- filled graphic and a PNG image. The standalone has the browser widget,
+-- which the probe makes when it runs: 1 is given its module (and that of
+-- the library it uses), and 2 names it in the standalone settings.
 --
 -- Environment:
 --    OXT_WEB_PROBE     the probe's script (tools/ci/web-probe.livecodescript)
@@ -55,6 +57,9 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --                      (engine/rsrc/emscripten-startup-template.livecodescript)
 --    OXT_WEB_VERSION   1: the web engine's version, which the startup script
 --                      checks (the builder puts its own engine's there)
+--    OXT_WEB_MODULES   1: the extensions the standalone loads: their
+--                      module.lcm files, one a line, each after those it
+--                      uses (2: the builder finds them itself)
 --    OXT_WEB_LOG       2: the file for the lines below
 --
 -- 1 writes "DEPLOY OK <output>" or "DEPLOY FAILED <reason>" to stdout and
@@ -151,6 +156,11 @@ on startup
       -- no externals
       put empty into tParams["engine"]
       put empty into tParams["externals"]
+      -- the extensions, which load before the stack (as the builder lists
+      -- them: their module.lcm files, one a line, in the order they load)
+      if $OXT_WEB_MODULES is not empty then
+         put $OXT_WEB_MODULES into tParams["modules"]
+      end if
       _internal deploy emscripten tParams
       put the result into tResult
    catch tError
@@ -220,14 +230,27 @@ on webBuild
       -- their defaults, which a new stack has
       put revSBGetSettings("WebProbe", true) into tSettings
       put true into tSettings["Emscripten"]
+      -- The probe makes a browser widget when it runs: the extension is
+      -- named in the settings, as for a stack whose cards have none yet
+      -- (the builder finds the widgets on its cards itself)
+      if "com.livecode.widget.browser" is not among the lines of tSettings["extensions"] then
+         if tSettings["extensions"] is not empty then
+            put return after tSettings["extensions"]
+         end if
+         put "com.livecode.widget.browser" after tSettings["extensions"]
+      end if
       webLog "INFO name" && tSettings["name"]
       webLog "INFO inclusions" && tSettings["inclusions"]
+      webLog "INFO extensions" && tSettings["extensions"]
+      webLog "INFO browser-extension-loaded" && \
+            ("com.livecode.widget.browser" is among the lines of the loadedExtensions)
       put $OXT_WEB_OUTPUT into tFolder
       if there is not a folder tFolder then
          create folder tFolder
       end if
       dispatch "revSaveAsEmscriptenStandalone" to stack "revsaveasemscriptenstandalone" \
             with "WebProbe", tFolder, tSettings
+      webLog "INFO warnings" && revStandaloneGetWarnings()
       webLog "INFO files" && webFiles(tFolder)
    catch tError
    end try

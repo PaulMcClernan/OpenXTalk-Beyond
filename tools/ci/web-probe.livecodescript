@@ -39,6 +39,7 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- stack while it builds the standalone, openStack does nothing more.
 
 local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder, sPlayStopped
+local sBrowserCalls, sBrowserEvents
 
 private command probeLine pText
    write "PROBE " & pText & return to stdout
@@ -75,7 +76,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeObjects"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects"
       try
          dispatch tCheck to me
       catch tError
@@ -373,6 +374,102 @@ on playStopped pName
    end if
    put pName into sPlayStopped
 end playStopped
+
+-- A browser widget, which the standalone has (web_check.py includes it):
+-- the page shows it in a frame. Its htmlText's script calls a handler of
+-- its javascriptHandlers, with a number, a string, an array and an object;
+-- then it loads a page of the site, as the widget reports (the page calls
+-- the handler too), and JavaScript that the stack sends to the page (do
+-- ... in widget) calls it once more.
+command probeBrowser
+   local tStart, tDeadline, tUrl, tHtml, tWanted, tElapsed, tExtensions
+   put empty into sBrowserCalls
+   put empty into sBrowserEvents
+   -- The standalone has the browser widget's extension unless the IDE that
+   -- built it had none (on Linux without CEF the IDE leaves the browser
+   -- widget out); web_check.py then expects this line, not the check
+   put the loadedExtensions into tExtensions
+   replace return with comma in tExtensions
+   probeInfo "extensions", tExtensions
+   if "com.livecode.widget.browser" is not among the items of tExtensions then
+      probeInfo "browser-widget", "not loaded"
+      exit probeBrowser
+   end if
+   put the milliseconds into tStart
+   put tStart + 20000 into tDeadline
+   create widget "Probe Browser" as "com.livecode.widget.browser"
+   if there is not a widget "Probe Browser" then
+      probeCheck "browser", false, "no browser widget: " & the result
+      exit probeBrowser
+   end if
+   set the rect of widget "Probe Browser" to 20,120,260,300
+   set the javascriptHandlers of widget "Probe Browser" to "probeBrowserCall"
+   set the htmlText of widget "Probe Browser" to "<!DOCTYPE html><html><body>" & \
+         "<script>liveCode.probeBrowserCall(21, 'web', [1, 2], {k: 'v'})</script></body></html>"
+   wait until the number of lines of sBrowserCalls >= 1 or the milliseconds > tDeadline with messages
+   set the url of widget "Probe Browser" to "probe-page.html"
+   wait until the number of lines of sBrowserCalls >= 2 and "complete" is among the words of sBrowserEvents \
+         or the milliseconds > tDeadline with messages
+   put the url of widget "Probe Browser" into tUrl
+   put the htmlText of widget "Probe Browser" into tHtml
+   do "liveCode.probeBrowserCall('do', 6 * 7)" in widget "Probe Browser"
+   wait until the number of lines of sBrowserCalls >= 3 or the milliseconds > tDeadline with messages
+   put the milliseconds - tStart into tElapsed
+   delete widget "Probe Browser"
+   put "21|web|1,2|k=v" & return & "page|Probe Page" & return & "do|42" into tWanted
+   replace return with " / " in sBrowserCalls
+   replace return with " / " in tWanted
+   probeCheck "browser", sBrowserCalls is tWanted and tUrl ends with "/probe-page.html" \
+         and sBrowserEvents is ("begin complete") and "Probe Page" is in tHtml, \
+         "calls=" & sBrowserCalls && "events=" & sBrowserEvents && "url=" & tUrl && tElapsed & " ms"
+end probeBrowser
+
+-- The page calls this (the javascriptHandlers): each call is a line of the
+-- values it was given, an array as its elements or keys and elements
+on probeBrowserCall
+   local tLine, tIndex, tValue, tKey, tKeys
+   repeat with tIndex = 1 to the paramCount
+      put param(tIndex) into tValue
+      if tIndex > 1 then
+         put "|" after tLine
+      end if
+      if tValue is an array then
+         put the keys of tValue into tKeys
+         sort tKeys
+         repeat for each line tKey in tKeys
+            if tKey is not line 1 of tKeys then
+               put comma after tLine
+            end if
+            if tKey is a number then
+               put tValue[tKey] after tLine
+            else
+               put tKey & "=" & tValue[tKey] after tLine
+            end if
+         end repeat
+      else
+         put tValue after tLine
+      end if
+   end repeat
+   if sBrowserCalls is not empty then
+      put return after sBrowserCalls
+   end if
+   put tLine after sBrowserCalls
+end probeBrowserCall
+
+-- The widget's messages for the page of the site
+on browserNavigateBegin pUrl
+   if sBrowserEvents is not empty then
+      put space after sBrowserEvents
+   end if
+   put "begin" after sBrowserEvents
+end browserNavigateBegin
+
+on browserNavigateComplete pUrl
+   if sBrowserEvents is not empty then
+      put space after sBrowserEvents
+   end if
+   put "complete" after sBrowserEvents
+end browserNavigateComplete
 
 command probeObjects
    probeCheck "objects", there is a button "Probe Button" and there is a field "Probe Field" \

@@ -43,12 +43,14 @@ Linux x86_64 engine of the OXT-Beyond release that tools/ci/build_docs.sh
 pins into that folder, checked against its SHA-256) runs
 web-deploy.livecodescript with -ui: it saves the probe stack and writes its
 startup data with "_internal deploy emscripten", as the IDE's builder
-(ide-support/revsaveasemscriptenstandalone.livecodescript) does. Any engine
-can deploy for the web: the deploy command only writes the stack and the
-startup script. This script then makes the rest as the builder does:
-standalone.zip gets the template folder (without dotfiles) and
-boot/__startup.data, and the folder gets the engine's .js and .wasm and the
-page, WebProbe.html, with the stack's title in its <title>.
+(ide-support/revsaveasemscriptenstandalone.livecodescript) does, with the
+modules of the browser widget and the library it uses from the engine's
+packaged_extensions. Any engine can deploy for the web: the deploy command
+only writes the stack, the modules and the startup script. This script
+then makes the rest as the builder does: standalone.zip gets the template
+folder (without dotfiles) and boot/__startup.data, and the folder gets the
+engine's .js and .wasm and the page, WebProbe.html, with the stack's title
+in its <title>.
 
 --install, --package or --bin, with the IDE's own web builder. The IDE
 starts as a user starts it, with web-deploy.livecodescript named on its
@@ -68,7 +70,8 @@ Then:
 
 1. A web server on 127.0.0.1 serves the standalone's folder, and the
    requests the probe makes: GET /probe-data.txt, POST /echo (which
-   answers "POST <Content-Type> <body>"), PUT and GET /store, and a 404.
+   answers "POST <Content-Type> <body>"), PUT and GET /store, a 404, and
+   GET /probe-page.html, the page that its browser widget loads.
 
 2. Headless Chromium (Playwright) opens the page. The probe writes PROBE
    lines to the console (see web-probe.livecodescript): its checks of
@@ -78,11 +81,16 @@ Then:
    (answer, answer with two buttons, ask), whose default buttons this
    script clicks, typing "Ada" into the ask dialog's field, the standard
    folders, a file written to /downloads (which must reach the browser as
-   a download), the address, randomBytes, the modifier keys, the cursor
+   a download), the address, randomBytes, the modifier keys, the cursor,
    an audio clip that it plays (the samples the browser was given must be
-   the clip's) and a player that plays the clip's file. When the probe writes "PROBE ready", this script
-   clicks the button, types "abc" into the field, and calls the stack's
-   handlers from the page (document.liveCode.findStackWithName):
+   the clip's), a player that plays the clip's file, and a browser widget
+   (its htmlText, a page of the site and "do ... in widget" each call a
+   handler of its javascriptHandlers). An IDE without CEF (Linux arm64)
+   has no browser widget, so neither has the standalone that it builds:
+   the probe then writes "PROBE info browser-widget not loaded" instead of
+   that check. When the probe writes "PROBE ready", this script clicks the
+   button, types "abc" into the field, and calls the stack's handlers from
+   the page (document.liveCode.findStackWithName):
    probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
    probeReport("keys"), with Shift held down, "down|65505". Then it takes
    a screenshot of the stack and checks the colours of the card, the
@@ -138,8 +146,17 @@ PROBE_CHECKS = (
     'platform', 'wait-openstack', 'wait-handler', 'wait-nested', 'wait-until', 'send-in-time',
     'javascript', 'file-roundtrip', 'standalone-folder', 'url-get', 'url-post', 'url-put',
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
-    'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'objects',
+    'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
 )
+
+# The page of the site that the probe's browser widget loads
+PROBE_PAGE = ('<!DOCTYPE html><html><head><title>Probe Page</title></head><body>'
+              '<script>liveCode.probeBrowserCall("page", document.title)</script></body></html>')
+
+# The extensions that a standalone made without the IDE gets, from the
+# development engine's packaged_extensions, each after those it uses: the
+# browser widget, which the probe makes
+PROBE_EXTENSIONS = ('com.livecode.library.widgetutils', 'com.livecode.widget.browser')
 
 # The file the probe writes to /downloads, which the browser must download
 PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
@@ -277,13 +294,16 @@ def fetch_engine(cache):
 # ---------------------------------------------------------------------------
 # 1. The standalone
 
-def deploy(engine, runtime, version, work, timeout):
-    """Write <work>/__startup.data with the development engine."""
+def deploy(engine, runtime, version, work, timeout, modules=()):
+    """Write <work>/__startup.data with the development engine; modules are
+    the module.lcm files of the extensions to include, each after those it
+    uses."""
     stack = os.path.join(work, STACK_NAME + '.livecode')
     output = os.path.join(work, '__startup.data')
     env = dict(os.environ)
     env.update(OXT_WEB_PROBE=PROBE_SCRIPT, OXT_WEB_STACK=stack, OXT_WEB_OUTPUT=output, OXT_WEB_VERSION=version,
-               OXT_WEB_TEMPLATE=os.path.join(runtime, 'emscripten-startup-template.livecodescript'))
+               OXT_WEB_TEMPLATE=os.path.join(runtime, 'emscripten-startup-template.livecodescript'),
+               OXT_WEB_MODULES='\n'.join(modules))
     try:
         r = subprocess.run([engine, '-ui', DEPLOY_SCRIPT], cwd=work, env=env, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE, timeout=timeout)
@@ -299,6 +319,18 @@ def deploy(engine, runtime, version, work, timeout):
         why = next((x for x in out if x.startswith('DEPLOY FAILED')), 'exit status %s, no DEPLOY line' % r.returncode)
         raise CheckError('deploying the probe stack failed: %s' % why)
     return output
+
+
+def engine_modules(engine):
+    """The module.lcm files of PROBE_EXTENSIONS in the development engine's
+    packaged_extensions."""
+    modules = []
+    for name in PROBE_EXTENSIONS:
+        module = os.path.join(os.path.dirname(engine), 'packaged_extensions', name, 'module.lcm')
+        if not os.path.isfile(module):
+            raise CheckError('the engine has no %s' % module)
+        modules.append(module)
+    return modules
 
 
 def make_standalone(runtime, js, wasm, html, startup_data, site):
@@ -349,7 +381,9 @@ def built_files(site):
 
 def build_with_ide(args, work, timeout):
     """Build the probe's standalone with the IDE's web builder (see the
-    header) into <work>/site. Returns (site, lines)."""
+    header) into <work>/site. Returns (site, lines, browser): browser is
+    whether the IDE had the browser widget, which an IDE without CEF (Linux
+    arm64) leaves out, and so its builder (None: it did not say)."""
     # the IDE is started as tools/ci/ui_tour.py starts it
     import ui_tour
     package, rlc = ui_tour.package, ui_tour.rlc
@@ -380,8 +414,10 @@ def build_with_ide(args, work, timeout):
         cmd = [lay.engine, document]
         if p.family == 'linux':
             # as ui_tour.py: without CEF (arm64) there is no browser widget
-            if 'LIVECODE_USE_CEF' not in env and \
-                    not os.path.isfile(os.path.join(lay.externals, 'CEF', 'libcef.so')):
+            # (a build folder, whose externals are at its top, has CEF in
+            # its Externals folder)
+            cef = os.path.join(lay.root, 'Externals') if lay.kind == 'development' else lay.externals
+            if 'LIVECODE_USE_CEF' not in env and not os.path.isfile(os.path.join(cef, 'CEF', 'libcef.so')):
                 env['LIVECODE_USE_CEF'] = '0'
             if not env.get('DISPLAY'):
                 xvfb = shutil.which('xvfb-run')
@@ -412,10 +448,13 @@ def build_with_ide(args, work, timeout):
                     time.sleep(0.5)
             finally:
                 ui_tour.stop(proc)
+        browser = None
         for line in ui_tour.read_lines(results):
             log('  ide: %s' % line)
             if line.startswith('BUILD FAILED') or line.startswith('ERROR'):
                 problems.append('the IDE\'s web build: %s' % line)
+            if line.startswith('INFO browser-extension-loaded '):
+                browser = line.split()[-1] == 'true'
         if status:
             problems.append('the IDE\'s web build %s' % status)
             for line in ui_tour.read_lines(os.path.join(work, 'ide-output.txt'))[-40:]:
@@ -427,7 +466,7 @@ def build_with_ide(args, work, timeout):
             shutil.rmtree(d, ignore_errors=True)
     if problems:
         raise CheckError('; '.join(problems))
-    return site, lines
+    return site, lines, browser
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +504,8 @@ def make_server(site):
                 return self.reply(200, stored.get('store', ''))
             if self.path == '/missing':
                 return self.reply(404, 'not found')
+            if self.path == '/probe-page.html':
+                return self.reply(200, PROBE_PAGE, 'text/html; charset=utf-8')
             return super().do_GET()
 
         def do_POST(self):
@@ -496,9 +537,11 @@ def parse_rect(text):
     return parts
 
 
-def run_browser(url, version, work, timeout, url_path=None):
+def run_browser(url, version, work, timeout, url_path=None, browser_widget=None):
     """Open the page and check what the probe and the page do; url_path is
-    what must load the probe's URLs, 'engine' or 'libURL' (None: either).
+    what must load the probe's URLs, 'engine' or 'libURL' (None: either),
+    and browser_widget whether the standalone must have the browser widget
+    (None: the probe's check of it may also be left out, when it has none).
     Returns (problems, lines)."""
     try:
         from playwright.sync_api import sync_playwright, Error as PlaywrightError
@@ -663,7 +706,18 @@ def run_browser(url, version, work, timeout, url_path=None):
                 problems.append('the interactive checks failed: %s' % e)
         browser.close()
 
-    for name in PROBE_CHECKS:
+    checks = list(PROBE_CHECKS)
+    if info.get('browser-widget') == 'not loaded':
+        # The probe leaves its check out when the standalone has no browser
+        # widget: right when the IDE that built it had none
+        checks.remove('browser')
+        if browser_widget:
+            problems.append('the standalone has no browser widget: its extension is not loaded (the '
+                            'extensions are %s)' % (info.get('extensions') or 'none'))
+        else:
+            lines.append('the browser widget was not checked: the IDE has none here (no CEF), and so '
+                         'neither has the standalone')
+    for name in checks:
         results = probes.get(name)
         if not results:
             problems.append('the probe did not report the check %s' % name)
@@ -671,7 +725,7 @@ def run_browser(url, version, work, timeout, url_path=None):
             if status != 'PASS':
                 problems.append('%s: %s %s' % (name, status, detail))
     for name, results in sorted(probes.items()):
-        if name not in PROBE_CHECKS and name not in ('ready', 'click'):
+        if name not in checks and name not in ('ready', 'click'):
             for status, detail in results:
                 if status != 'PASS':
                     problems.append('%s: %s %s' % (name, status, detail))
@@ -734,19 +788,21 @@ def main(argv=None):
             version, js, wasm, html = runtime_files(runtime)
             engine = os.path.abspath(args.engine) if args.engine else fetch_engine(os.path.abspath(args.engine_cache))
             log('Deploying with %s' % engine)
-            startup = deploy(engine, runtime, version, work, args.timeout)
+            startup = deploy(engine, runtime, version, work, args.timeout, engine_modules(engine))
             site = os.path.join(work, 'site')
             shutil.rmtree(site, ignore_errors=True)
             make_standalone(runtime, js, wasm, html, startup, site)
             url_path = 'engine'
+            browser_widget = True
             lines.append('built without the IDE, from %s' % runtime)
         elif mode == 'ide':
-            site, built = build_with_ide(args, work, args.ide_timeout)
+            site, built, browser_widget = build_with_ide(args, work, args.ide_timeout)
             lines += built
             url_path = 'libURL'
         else:
             site = os.path.abspath(args.built)
             url_path = None
+            browser_widget = None
             lines.append('built before: %s' % site)
         version, page = built_files(site)
         js, wasm = [os.path.join(site, 'standalone-community-%s.%s' % (version, x)) for x in ('js', 'wasm')]
@@ -759,7 +815,7 @@ def main(argv=None):
         server = make_server(site)
         url = 'http://127.0.0.1:%d/%s' % (server.server_address[1], os.path.basename(page))
         log('Opening %s' % url)
-        p, l = run_browser(url, version, work, args.timeout, url_path)
+        p, l = run_browser(url, version, work, args.timeout, url_path, browser_widget)
         problems += p
         lines += l
         if args.keep_serving:

@@ -47,6 +47,12 @@ mergeInto(LibraryManager.library, {
 		},
 		
 		containerAddElement: function(container, element) {
+			// OXT-Beyond: an element already in the container stays where
+			// it is (the engine can attach a native layer twice, and moving
+			// a frame in the page reloads it)
+			if (container['contents'].indexOf(element) != -1) {
+				return;
+			}
 			element.style.position = 'absolute';
 			element.style.zIndex = container['maxZIndex'];
 			container['maxZIndex']++;
@@ -69,11 +75,12 @@ mergeInto(LibraryManager.library, {
 		},
 		
 		containerRaiseElement: function(container, element) {
-			var zIndex = element.style.zIndex;
+			// OXT-Beyond: compared as numbers (style values are strings)
+			var zIndex = Number(element.style.zIndex);
 			for (var i = 0, l = container['contents'].length; i < l; i++)
 			{
 				var otherElement = container['contents'][i];
-				if (otherElement.style.zIndex > zIndex)
+				if (Number(otherElement.style.zIndex) > zIndex)
 				{
 					otherElement.style.zIndex--;
 				}
@@ -370,8 +377,30 @@ mergeInto(LibraryManager.library, {
 		nativeElementPlaceAbove: function(pElementID, pAboveElementID, pWindowID) {
 			var tWindow = LiveCodeUtil.fetchObject(pWindowID);
 			var tElement = LiveCodeUtil.fetchObject(pElementID);
-			var tAboveElement = LiveCodeUtil.fetchObject(pAboveElementID);
-			/* TODO - implement */
+			var tAboveElement = pAboveElementID ? LiveCodeUtil.fetchObject(pAboveElementID) : null;
+			// OXT-Beyond: put the element just above the given one (or at the
+			// bottom when there is none) by renumbering the stacking order of
+			// the window's elements. The elements stay where they are in the
+			// page, because moving a frame in the page reloads it.
+			if (!tWindow || !tElement)
+			{
+				return;
+			}
+			var tContents = tWindow.container['contents'];
+			if (tContents.indexOf(tElement) == -1)
+			{
+				return;
+			}
+			var tOrdered = tContents.slice().sort(function(a, b) {
+				return Number(a.style.zIndex) - Number(b.style.zIndex);
+			});
+			tOrdered.splice(tOrdered.indexOf(tElement), 1);
+			var tIndex = tAboveElement ? tOrdered.indexOf(tAboveElement) + 1 : 0;
+			tOrdered.splice(tIndex, 0, tElement);
+			for (var i = 0; i < tOrdered.length; i++)
+			{
+				tOrdered[i].style.zIndex = i + 1;
+			}
 		},
 		
 		_monitorResize: function(element, callback) {

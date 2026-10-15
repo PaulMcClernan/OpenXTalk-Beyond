@@ -52,6 +52,8 @@
 				'src/libbrowser_nsvalue.mm',
 				
 				'src/libbrowser_android.cpp',
+
+				'src/libbrowser_em.cpp',
 				
 				'src/libbrowser_lnx_factories.cpp',
 				'src/libbrowser_win_factories.cpp',
@@ -164,6 +166,7 @@
 					{
 						'sources!':
 						[
+							'src/libbrowser_em.cpp',
 							'src/libbrowser_em_factories.cpp',
 						],
 					},

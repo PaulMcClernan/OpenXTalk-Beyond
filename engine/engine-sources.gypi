@@ -768,6 +768,7 @@
 			# Group "Desktop - Emscripten"
 			'src/em-async.h',
 			'src/em-async.js',
+			'src/em-browser.js',
 			'src/em-clipboard.h',
 			'src/em-clipboard.cpp',
 			'src/em-clipboard.js',
