@@ -16,9 +16,8 @@ for more details.
 You should have received a copy of the GNU General Public License
 along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
-on TestSetup
-   TestSkipIf "platform", "HTML5"
-end TestSetup
+-- OXT-Beyond: these run in the web engine (HTML5) too, which links OpenSSL
+-- into itself; they used to skip there
 
 on TestRSA
    

@@ -77,7 +77,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals,probeCiphers"
       try
          dispatch tCheck to me
       catch tError
@@ -528,6 +528,29 @@ command probeExternals
    probeCheck "database-error", tText begins with "revdberr," and tText contains "no such table", tText
    revCloseDatabase tDB
 end probeExternals
+
+-- encrypt, decrypt and the cipherNames, with the OpenSSL that the web
+-- engine links into itself. The values are the desktop engines'.
+command probeCiphers
+   local tKey, tIV, tData, tResult, tNames
+   put "0123456789abcdef" into tKey
+   put "fedcba9876543210" into tIV
+   encrypt "Hello, web" using "aes-128-cbc" with key tKey and iv tIV at 128 bit
+   put base64Encode(it) into tData
+   put the result into tResult
+   decrypt base64Decode(tData) using "aes-128-cbc" with key tKey and iv tIV at 128 bit
+   probeCheck "encrypt", tData is "CPUtnmCm2X43Wjx2WV6Qtg==" and tResult is empty and it is "Hello, web", \
+         "encrypted=" & tData && "decrypted=" & it && "result=" & tResult
+   -- Blowfish, one of the ciphers of OpenSSL's legacy provider, with a
+   -- key made from a password and a salt
+   encrypt "Hello, web" using "bf-cbc" with password "secret" and salt "12345678"
+   put base64Encode(it) into tData
+   probeCheck "encrypt-legacy", tData is "U2FsdGVkX18xMjM0NTY3OLwmsv4iuE4cuOXag9W4z6s=", \
+         "encrypted=" & tData && "result=" & the result
+   put the cipherNames into tNames
+   probeCheck "cipher-names", "aes-256-cbc,256" is among the lines of tNames \
+         and "bf-cbc,128" is among the lines of tNames, the number of lines of tNames && "ciphers"
+end probeCiphers
 
 command probeClicked
    add 1 to sClicks

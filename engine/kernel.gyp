@@ -115,6 +115,32 @@
 					},
 				],
 				[
+					# OXT-Beyond: a browser loads no libraries, so the web
+					# engine links OpenSSL into itself, as the server engine
+					# does (kernel-server.gyp), rather than the stubs that
+					# load it (src/mcssl.cpp). The stubs would define its
+					# functions a second time.
+					'OS == "emscripten"',
+					{
+						'dependencies!':
+						[
+							'../thirdparty/libopenssl/libopenssl.gyp:libopenssl_stubs',
+						],
+
+						'dependencies':
+						[
+							'../prebuilt/libopenssl.gyp:libopenssl',
+						],
+
+						'defines':
+						[
+							# The OpenSSL API that libopenssl_stubs asks
+							# for, as on the desktop
+							'OPENSSL_API_COMPAT=0x10100000L',
+						],
+					},
+				],
+				[
 					'OS == "mac"',
 					{
 						'defines':

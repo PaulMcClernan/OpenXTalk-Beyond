@@ -115,6 +115,11 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #define FEATURE_PLATFORM_URL 1
 
+// OXT-Beyond: the web engine has OpenSSL's ciphers, for encrypt, decrypt,
+// the cipherNames and RSA (mcssl.cpp), but no sockets for SSL to secure,
+// which MCSSL would build (opensslsocket.cpp)
+#define MCSSL_CRYPTO
+
 #endif
 
 //////////////////////////////////////////////////////////////////////

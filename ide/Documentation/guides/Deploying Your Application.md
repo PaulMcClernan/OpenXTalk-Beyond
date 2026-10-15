@@ -554,6 +554,12 @@ revDB with its SQLite driver work as on the desktop, on the files of the
 engine's file system. Include them as on the desktop, on the
 **Inclusions** pane or by letting the builder search for them. A database
 in the home folder is kept between visits, as any file there is.
+* **Encryption.** `encrypt` and `decrypt`, with a cipher or with RSA
+keys, and `the cipherNames` work as on the desktop: the engine has OpenSSL
+in it, so the **SSL & Encryption** inclusion is not needed. It has every
+cipher of the desktop engines but the four `aes-...-cbc-hmac-sha...`
+ones, which need an x86 processor's AES instructions. `md5Digest`,
+`sha1Digest`, `messageDigest` and `randomBytes` work too.
 * **JavaScript.** `do <script> as "JavaScript"` runs JavaScript in the
 page, and `the result` is its value. The page calls the handlers that a
 stack's `cJavascriptHandlers` property lists, one handler name a line:
@@ -579,9 +585,6 @@ revBrowser (the browser widget works) nor the video grabber; and revDB's
 drivers other than SQLite, because MySQL, PostgreSQL and ODBC talk to
 their servers through sockets. The builder warns about each one that a
 stack includes. Builder extensions work.
-* `encrypt` and `decrypt` put "ssl library not found" into `the result`,
-and `the cipherNames` throws an error. `md5Digest`, `sha1Digest`,
-`messageDigest` and `randomBytes` work.
 * Printing: the print commands put "printing failed" into `the result`.
 * Drag and drop.
 * `the systemVersion` and `the machine` are empty, and `the processor` is
@@ -692,9 +695,9 @@ Here's a complete page for an HTML5 standalone:
 
 ##### Advanced: Speeding up engine download
 
-The engine's `.wasm` file is about 21 MB, and the archive about 4 MB (the
+The engine's `.wasm` file is about 23 MB, and the archive about 4 MB (the
 font is most of it). Web servers can send them compressed, which browsers
-unpack as they arrive: compressed with gzip, the engine is about 8 MB and
+unpack as they arrive: compressed with gzip, the engine is about 8.3 MB and
 the archive about 2 MB. Most hosting compresses by itself; on a server of
 your own, turn compression on for `.wasm`, `.js` and `.zip` files, or
 compress them once with `gzip` and have the server send those files:

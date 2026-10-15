@@ -37,9 +37,10 @@
 #     its own): a commit that changes none of them builds nothing;
 #   - the Emscripten SDK, with the system libraries that emcc builds the
 #     first time they are linked;
-#   - the libraries that build-web.sh builds (ICU and the Thirdparty
-#     libraries for the web, ICU, libz and libffi for the build's host
-#     tools), keyed like the build workflows' prebuilt libraries;
+#   - the libraries that build-web.sh builds (OpenSSL, ICU and the
+#     Thirdparty libraries for the web, ICU, libz and libffi for the
+#     build's host tools), keyed like the build workflows' prebuilt
+#     libraries;
 #   - ccache's cache of the engine's compiled files.
 #
 # The input artifact names the artifact, which holds the runtime folder's

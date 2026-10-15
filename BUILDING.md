@@ -2599,6 +2599,15 @@ driver reports SQL errors with C++ exceptions, so it and the SQLite
 library are compiled to catch them, and the engine is linked with
 exception catching on; the engine's own code is not.
 
+OpenSSL is linked into the web engine too, for `encrypt`, `decrypt` and
+`the cipherNames`, rather than loaded as `revsecurity`
+([`engine/kernel.gyp`](engine/kernel.gyp)). It is built for the web
+without what a browser cannot do and what the engine does not use there
+([`prebuilt/scripts/build-openssl.sh`](prebuilt/scripts/build-openssl.sh)),
+and the web engine has OpenSSL's ciphers without the sockets that SSL
+secures (`MCSSL_CRYPTO` in
+[`engine/src/sysdefs.h`](engine/src/sysdefs.h)).
+
 It is built on Linux by
 [`tools/ci/build-web.sh`](tools/ci/build-web.sh), which the job "Web" of
 every build workflow ([`.github/workflows/web.yml`](.github/workflows/web.yml))
@@ -2635,7 +2644,7 @@ Emscripten (3.10). These are its steps:
    ```
 
    The first run builds the libraries that no server publishes, in
-   `prebuilt/`: ICU and the Thirdparty libraries for the web
+   `prebuilt/`: OpenSSL, ICU and the Thirdparty libraries for the web
    (`prebuilt/lib/emscripten/js`), and ICU, libz and libffi for the
    build's own tools, which run on Linux (`prebuilt/lib/linux/<arch>`;
    libz and libffi in a build folder `build-linux-<arch>` configured for

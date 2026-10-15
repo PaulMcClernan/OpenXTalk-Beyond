@@ -94,7 +94,11 @@ Then:
    error for a missing table must reach the script as revDB's error (SQLite
    throws a C++ exception for it). The builder includes them because the
    probe's scripts use them, and web-deploy.livecodescript names them when
-   it builds without the IDE. When the probe writes "PROBE ready", this
+   it builds without the IDE. Then encrypt and decrypt, with the OpenSSL
+   that the web engine links: AES with a key and an IV, and Blowfish (of
+   OpenSSL's legacy provider) with a password and a salt, which must give
+   the desktop engines' bytes, and the cipherNames. When the probe writes
+   "PROBE ready", this
    script clicks the button, types "abc" into the field, and calls the
    stack's handlers from the page (document.liveCode.findStackWithName):
    probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
@@ -158,6 +162,7 @@ PROBE_CHECKS = (
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
     'xml', 'xslt', 'zip', 'database', 'database-error',
+    'encrypt', 'encrypt-legacy', 'cipher-names',
 )
 
 # The page of the site that the probe's browser widget loads

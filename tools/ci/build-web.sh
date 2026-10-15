@@ -45,14 +45,15 @@
 # <emsdk>/emsdk_env.sh does) or named by EMSDK. .github/workflows/web.yml
 # runs it in an Ubuntu 22.04 container, which has both Pythons.
 #
-# The libraries: the engine links ICU and the Thirdparty libraries built
-# with Emscripten (prebuilt/lib/emscripten/js), and the build's host tools
-# (lc-compile, and the others that make the engine's sources) link ICU,
-# libz and libffi built for Linux (prebuilt/lib/linux/<arch>). No server
-# publishes these, so this script builds the ones that are missing:
-# ICU and the Thirdparty libraries with prebuilt/build-libraries.sh (ICU's
-# source is the only download), libz and libffi in a Linux build folder,
-# build-linux-<arch>, which is configured for nothing else. The build runs
+# The libraries: the engine links OpenSSL, ICU and the Thirdparty libraries
+# built with Emscripten (prebuilt/lib/emscripten/js), and the build's host
+# tools (lc-compile, and the others that make the engine's sources) link
+# ICU, libz and libffi built for Linux (prebuilt/lib/linux/<arch>). No
+# server publishes these, so this script builds the ones that are missing:
+# OpenSSL, ICU and the Thirdparty libraries with
+# prebuilt/build-libraries.sh (OpenSSL's and ICU's sources are the only
+# downloads), libz and libffi in a Linux build folder, build-linux-<arch>,
+# which is configured for nothing else. The build runs
 # prebuilt/fetch-libraries.sh, which would look for tarballs that nobody
 # publishes, so this script sets PREBUILT_SKIP_FETCH=1. A second run, or a
 # run with prebuilt's library folders restored from a cache (web.yml),
@@ -192,18 +193,27 @@ else
 	(cd prebuilt && PREBUILT_BUILD_LIBS=thirdparty ./build-libraries.sh emscripten js)
 fi
 
+# 4. OpenSSL for the web, for encrypt and decrypt (build-openssl.sh, which
+# names its libraries libcustomcrypto and libcustomssl, as on Linux)
+if hasLibraries "${LIB_WEB}" libcustomcrypto libcustomssl && [ -f "${PREBUILT}/include/openssl/evp.h" ] ; then
+	echo "OpenSSL for the web: already built"
+else
+	echo "OpenSSL: building it for the web"
+	(cd prebuilt && MAKEFLAGS="-j${JOBS}" PREBUILT_BUILD_LIBS=openssl ./build-libraries.sh emscripten js)
+fi
+
 if [ -z "${OUT}" ] ; then
 	echo "The libraries are built."
 	exit 0
 fi
 
-# 4. The engine: config-emscripten, then javascriptify, which links the
+# 5. The engine: config-emscripten, then javascriptify, which links the
 # engine's object with its JavaScript libraries into the .js and .wasm and
 # writes the page (engine/engine.gyp)
 make config-emscripten
 BUILDTYPE=Release emmake make -C build-emscripten/livecode javascriptify -j"${JOBS}"
 
-# 5. The runtime folder
+# 6. The runtime folder
 BUILT="${REPO}/build-emscripten/livecode/out/Release"
 mkdir -p "${OUT}"
 for EXT in js wasm html ; do
