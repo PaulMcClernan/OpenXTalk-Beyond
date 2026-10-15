@@ -52,6 +52,38 @@ extern "C" void MCEmscriptenPassKeyboard(uint32_t p_from, uint32_t p_to);
 /* OXT-Beyond: something dropped on a stack from outside the page */
 extern "C" bool MCEmscriptenHandleDrop(uint32_t p_window, uint32_t p_time, uint32_t p_modifiers, int32_t p_x, int32_t p_y, MCStringRef p_text, MCStringRef p_html, uint32_t p_drop);
 
+/* OXT-Beyond: the frame of a window other than the main stack's, as a
+ * desktop gives a window its decorations (MCStack::sethints(),
+ * em-stack.cpp; em-dc.js): none, a title bar, or a palette's narrower
+ * one, with a close box or not, and edges that resize the window or not.
+ * Each window is in a layer, which the page keeps above the layers before
+ * it. */
+enum MCEmscriptenWindowFrame
+{
+	kMCEmscriptenWindowFrameNone,
+	kMCEmscriptenWindowFrameTitle,
+	kMCEmscriptenWindowFrameUtility,
+};
+enum MCEmscriptenWindowLayer
+{
+	kMCEmscriptenWindowLayerNormal,
+	kMCEmscriptenWindowLayerPalette,
+	kMCEmscriptenWindowLayerModal,
+	kMCEmscriptenWindowLayerPopup,
+};
+extern "C" void MCEmscriptenSetWindowFrame(uint32_t p_window_id, int32_t p_frame, bool p_close, bool p_resizable, int32_t p_layer);
+/* The title in a window's title bar */
+extern "C" void MCEmscriptenSetWindowTitle(uint32_t p_window_id, const unichar_t *p_title, size_t p_length);
+/* Whether the user can move, resize and close a window: not while a
+ * modal dialog is above it */
+extern "C" void MCEmscriptenSetWindowEnabled(uint32_t p_window_id, bool p_enabled);
+/* The sizes that the user can resize a window to */
+extern "C" void MCEmscriptenSetWindowSizeLimits(uint32_t p_window_id, int32_t p_min_width, int32_t p_min_height, int32_t p_max_width, int32_t p_max_height);
+/* Where a window is with its frame (its rect when it has none) */
+extern "C" void MCEmscriptenGetWindowFrameRect(uint32_t p_window_id, int32_t *r_left, int32_t *r_top, int32_t *r_right, int32_t *r_bottom);
+/* The user clicked the close box of a window's frame */
+extern "C" bool MCEmscriptenHandleWindowClose(uint32_t p_window);
+
 extern "C" uint32_t MCEmscriptenCreateWindow();
 extern "C" void MCEmscriptenDestroyWindow(uint32_t p_window_id);
 extern "C" void MCEmscriptenRaiseWindow(uint32_t p_window_id);
@@ -66,6 +98,8 @@ extern "C" void MCEmscriptenSyncCanvasSize(uint32_t p_window_id, uint32_t p_widt
 
 MCRectangle MCEmscriptenGetWindowRect(uint32_t p_window_id);
 void MCEmscriptenSetWindowRect(uint32_t p_window_id, const MCRectangle &p_rect);
+/* OXT-Beyond: where the window is with its frame */
+MCRectangle MCEmscriptenGetWindowFrameRect(uint32_t p_window_id);
 
 /* ----------------------------------------------------------------
  * The page's dialogs (em-dialog.js)
@@ -187,6 +221,9 @@ public:
      * of its screen; the user drags out the rectangle when it is not given
      * (em-dc.js) */
     virtual MCImageBitmap *snapshot(MCRectangle &r, uint4 window, MCStringRef displayname, MCPoint *size);
+
+    /* OXT-Beyond: a stack's title, in its window's title bar (em-dc.js) */
+    virtual void setname(Window window, MCStringRef newname);
 
     /* Cursors: the canvases' CSS cursors */
     virtual void resetcursors();

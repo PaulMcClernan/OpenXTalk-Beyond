@@ -66,6 +66,14 @@ void MCEmscriptenSetWindowRect(uint32_t p_window_id, const MCRectangle &p_rect)
 	MCEmscriptenSetWindowRect(p_window_id, p_rect.x, p_rect.y, p_rect.x + p_rect.width, p_rect.y + p_rect.height);
 }
 
+MCRectangle MCEmscriptenGetWindowFrameRect(uint32_t p_window_id)
+{
+	int32_t t_left, t_top, t_right, t_bottom;
+	MCEmscriptenGetWindowFrameRect(p_window_id, &t_left, &t_top, &t_right, &t_bottom);
+
+	return MCRectangleMake(t_left, t_top, t_right - t_left, t_bottom - t_top);
+}
+
 MCRectangle MCEmscriptenGetDisplayRect()
 {
 	uint32_t t_left, t_top, t_right, t_bottom;
@@ -359,6 +367,19 @@ MCScreenDC::raisewindow(Window p_window)
 {
 	uint32_t t_window = reinterpret_cast<uint32_t>(p_window);
 	MCEmscriptenRaiseWindow(t_window);
+}
+
+/* OXT-Beyond: a stack's title (or name) is in its window's title bar, as
+ * on the desktop. The main stack's window is the page's canvas, which has
+ * none: the page's own title is the stack's when it is built. */
+void
+MCScreenDC::setname(Window p_window, MCStringRef p_name)
+{
+	MCAutoStringRefAsUTF16String t_name;
+	if (p_window == nil || !t_name.Lock(p_name))
+		return;
+
+	MCEmscriptenSetWindowTitle(reinterpret_cast<uint32_t>(p_window), t_name.Ptr(), t_name.Size());
 }
 
 uintptr_t
@@ -1514,6 +1535,58 @@ MCEmscriptenHandleDrop(uint32_t p_window, uint32_t p_time, uint32_t p_modifiers,
 			MCEmscriptenDropRelease(p_drop);
 		return false;
 	}
+
+	if (!MCEventQueuePostCustom(t_event))
+	{
+		t_event->Destroy();
+		return false;
+	}
+	return true;
+}
+
+/* ================================================================
+ * Window frames
+ * ================================================================ */
+
+/* OXT-Beyond: the user clicked the close box in the title bar of a stack's
+ * window (em-dc.js): the stack hears closeStackRequest and closes unless
+ * it handles it, as when the user closes a window on the desktop */
+class MCEmscriptenWindowCloseEvent: public MCCustomEvent
+{
+public:
+	MCEmscriptenWindowCloseEvent(Window p_window)
+		: m_window(p_window)
+	{
+	}
+
+	virtual void Destroy(void)
+	{
+		delete this;
+	}
+
+	virtual void Dispatch(void)
+	{
+		/* Not after the stack's window went, nor while a drag is going
+		 * on: the stack might be its source or its target */
+		if (MCquit || MCdispatcher->findstackd(m_window) == nil ||
+		    MCdispatcher->isdragsource() || MCdispatcher->isdragtarget())
+			return;
+
+		MCdispatcher->wclose(m_window);
+	}
+
+private:
+	Window m_window;
+};
+
+MC_DLLEXPORT_DEF bool
+MCEmscriptenHandleWindowClose(uint32_t p_window)
+{
+	MCEmscriptenWindowCloseEvent *t_event = nil;
+	if (!MCnoui)
+		t_event = new (nothrow) MCEmscriptenWindowCloseEvent(reinterpret_cast<Window>(p_window));
+	if (t_event == nil)
+		return false;
 
 	if (!MCEventQueuePostCustom(t_event))
 	{

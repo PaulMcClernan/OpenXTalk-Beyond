@@ -150,7 +150,10 @@ Then:
    a click on the field under it and typing must reach neither, the
    dialog's field must take what is typed into it, and its OK button must
    close it; then typing must reach the field again, and a click the
-   button.
+   button. It opens a palette (probeReport("window")): the page must give
+   its window a title bar with its title, a drag by the title bar must
+   move it (moveStack), and a click on the title bar's close box must
+   close it (closeStackRequest, closeStack).
    Then it takes a screenshot of the stack and checks the colours of the
    card, the graphic and the image in it.
 
@@ -256,6 +259,31 @@ PROBE_SNAPSHOT_SELECT = ('80x80:204,51,0', 'cancelled')
 # (probeModal): its field's text, typed into it, the clicks on the button
 # under it meanwhile, and whether the field under it has the text it had
 PROBE_MODAL = 'ok|0|true'
+
+# The title of the probe's palette (probeWindow), which its window's title
+# bar shows, and how far this script drags it by the title bar
+PROBE_WINDOW_TITLE = 'Probe Palette'
+PROBE_WINDOW_DRAG = (40, 20)
+
+# The title bar and close box of the window whose title bar shows <title>
+# (em-dc.js): their rects in the page, the frame's class names, and
+# whether the window is shown; null when no window shows it
+WINDOW_FRAME_JS = '''(title) => {
+    const window = Array.from(document.querySelectorAll('.oxt-window')).find(function(element) {
+        const label = element.querySelector('.oxt-window-label');
+        return label && label.textContent == title;
+    });
+    if (!window) {
+        return null;
+    }
+    const rect = function(element) {
+        const r = element.getBoundingClientRect();
+        return [r.left, r.top, r.right, r.bottom];
+    };
+    return {title: rect(window.querySelector('.oxt-window-title')),
+            close: rect(window.querySelector('.oxt-window-close')),
+            classes: window.className, shown: window.style.display != 'none'};
+}'''
 
 # The samples of the audio clip the probe plays, as the browser has them:
 # channels, rate, seconds and the tone's frequency (counted from where the
@@ -1306,6 +1334,47 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                 else:
                     lines.append('a modal dialog kept the mouse and the keys from the stack under it, and gave them '
                                  'back when it closed')
+                # a palette (probeReport("window")): the page gives its window a
+                # title bar with its title, which the user drags to move it
+                # (moveStack), and a close box, which closes it
+                # (closeStackRequest, closeStack)
+                page.evaluate(stack_js + '.probeReport("window")')
+                window_problem = None
+                if wait_for(lambda: 'window-rect' in info, 'the palette opening', 10):
+                    frame = page.evaluate(WINDOW_FRAME_JS, PROBE_WINDOW_TITLE)
+                    start = parse_rect(info['window-rect'])
+                    moved = ','.join(str(start[i] + PROBE_WINDOW_DRAG[i % 2]) for i in range(4))
+                    if not frame or not frame['shown'] or 'oxt-window-utility' not in frame['classes']:
+                        window_problem = ('the page shows no palette\'s title bar with the title %r: %r'
+                                          % (PROBE_WINDOW_TITLE, frame))
+                    else:
+                        grab = (frame['title'][0] + 30, (frame['title'][1] + frame['title'][3]) / 2)
+                        page.mouse.move(*grab)
+                        page.mouse.down()
+                        page.mouse.move(grab[0] + PROBE_WINDOW_DRAG[0], grab[1] + PROBE_WINDOW_DRAG[1], steps=5)
+                        page.mouse.up()
+                        if not wait_for(lambda: info.get('window-moved') == moved,
+                                        'the palette\'s moveStack to %s' % moved, 10):
+                            window_problem = ('a drag by the palette\'s title bar moved it to %r, expected %s'
+                                              % (info.get('window-moved'), moved))
+                        else:
+                            close = page.evaluate(WINDOW_FRAME_JS, PROBE_WINDOW_TITLE)['close']
+                            page.mouse.click((close[0] + close[2]) / 2, (close[1] + close[3]) / 2)
+                            if not wait_for(lambda: 'window-closed' in info, 'the palette closing', 10):
+                                window_problem = ('a click on the palette\'s close box sent %s, and closed it %s'
+                                                  % ('closeStackRequest' if 'window-request' in info else 'nothing',
+                                                     'window-closed' in info))
+                            elif 'window-request' not in info or page.evaluate(
+                                    WINDOW_FRAME_JS, PROBE_WINDOW_TITLE)['shown']:
+                                window_problem = ('the palette closed without closeStackRequest, or its window '
+                                                  'stayed: %r' % page.evaluate(WINDOW_FRAME_JS, PROBE_WINDOW_TITLE))
+                else:
+                    window_problem = 'the palette did not open'
+                if window_problem:
+                    problems.append(window_problem)
+                else:
+                    lines.append('a palette\'s title bar showed its title, moved it when dragged, and closed it '
+                                 'with its close box')
                 # the files the probe wrote to /downloads: a text file, and the
                 # PDF that it printed
                 names = lambda: [name for name, _ in downloads]

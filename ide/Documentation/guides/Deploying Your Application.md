@@ -472,11 +472,21 @@ a web server in its folder (for example `python3 -m http.server`) and open
 The web engine is the desktop engine, so stacks look and behave as they do
 on the desktop: cards, groups, controls and graphics, the message path,
 behaviors, script libraries, Builder extensions and widgets. Stacks other
-than the main stack open in their own floating windows in the page. A
-modal dialog (`modal`, or a stack opened as a dialog) keeps the mouse and
-the keys from the stacks under it until it closes, and then the keyboard
-goes back where it was, as on the desktop. Where a browser does things
-its own way:
+than the main stack open in their own windows in the page, each with a
+title bar that shows the stack's title, as on the desktop: the user moves
+a window by its title bar, resizes a resizable stack by its right and
+bottom edges (within its `minWidth`, `maxWidth`, `minHeight` and
+`maxHeight`), and closes it with the close box, which sends
+`closeStackRequest` first. A click brings a window to the front, palettes
+stay above the other stacks (unless `the raisePalettes` is false), dialogs
+above those, and menus above all. As on Linux, a window has no title bar
+when its `decorations` leave out the title or give it a shape, and `the
+effective rect` of a stack includes its title bar. The main stack's window
+is the page itself, with no title bar. A page can restyle the title bars:
+their class names start with `oxt-window`. A modal dialog (`modal`, or a
+stack opened as a dialog) keeps the mouse and the keys from the stacks
+under it until it closes, and then the keyboard goes back where it was,
+as on the desktop. Where a browser does things its own way:
 
 * **The look.** A browser has no look of its own for a stack's controls,
 so the engine draws them all itself, as the desktop engines draw a part

@@ -329,6 +329,10 @@ mergeInto(LibraryManager.library, {
 					LiveCodeEvents._inputtarget = pTarget;
 					LiveCodeEvents._postKeyFocus(LiveCodeEvents._getStackForCanvas(pTarget), true);
 				}
+
+				// OXT-Beyond: the window with the keyboard looks active
+				// (em-dc.js)
+				LiveCodeDC.setActiveWindow(LiveCodeDC.getWindowIDForCanvas(pTarget));
 			}
 
 			if (LiveCodeEvents._inputelement != null)
@@ -1258,10 +1262,16 @@ mergeInto(LibraryManager.library, {
 
 				case 'mousedown':
 					// In the case of mouse down, specifically request
-					// keyboard focus. OXT-Beyond: not for a stack under a
-					// modal dialog, whose press goes nowhere.
+					// keyboard focus. OXT-Beyond: the stack's window comes
+					// to the front of its layer too, as a click brings a
+					// window to the front on the desktop (em-dc.js); not
+					// for a stack under a modal dialog, whose press goes
+					// nowhere.
 					if (LiveCodeEvents._stackEnabled(stack))
+					{
+						LiveCodeDC.raiseWindow(LiveCodeDC.getWindowIDForCanvas(target));
 						LiveCodeEvents._setInputFocus(target);
+					}
 
 					LiveCodeEvents._postMousePosition(stack, e.timeStamp, mods, pos[0], pos[1]);
 					var state = LiveCodeEvents._encodeMouseState(e.type);

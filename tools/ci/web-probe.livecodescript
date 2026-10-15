@@ -37,7 +37,8 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- screen's keyboard, holds the mouse down on the graphic "Mouse Zone"
 -- and clicks while its script waits for a click, takes snapshots of the
 -- page and drags out the rectangle of one, clicks and types under a
--- modal dialog and into it, and calls the handlers that the stack's
+-- modal dialog and into it, drags a palette by its title bar and closes
+-- it with its close box, and calls the handlers that the stack's
 -- cJavascriptHandlers name: probeFromJS, probeReport and probeUnfocus.
 --
 -- The checks run only in the web standalone: in the IDE, which opens the
@@ -808,6 +809,43 @@ command probeModal
          & "|" & (the text of field "Probe Field" of stack "WebProbe" is tText)
 end probeModal
 
+-- web_check.py opens a palette (probeReport("window")), drags it by the
+-- title bar that the page gives its window, and clicks the title bar's
+-- close box: the palette's moveStack and closeStackRequest, and its
+-- closeStack, report each (probeWindowSaw). It opens below this stack,
+-- so that it covers none of it.
+command probeWindow
+   if there is not a stack "Probe Palette" then
+      create stack "Probe Palette"
+      set the title of stack "Probe Palette" to "Probe Palette"
+      set the rect of stack "Probe Palette" to 20,420,180,500
+      set the backgroundColor of stack "Probe Palette" to "#33AA55"
+      set the script of stack "Probe Palette" to "on moveStack" & return \
+            & "   dispatch" && quote & "probeWindowSaw" & quote && "to stack" && quote & "WebProbe" & quote \
+            && "with" && quote & "moved" & quote & ", the rect of me" & return \
+            & "end moveStack" & return \
+            & "on closeStackRequest" & return \
+            & "   dispatch" && quote & "probeWindowSaw" & quote && "to stack" && quote & "WebProbe" & quote \
+            && "with" && quote & "request" & quote & return \
+            & "   pass closeStackRequest" & return \
+            & "end closeStackRequest" & return \
+            & "on closeStack" & return \
+            & "   dispatch" && quote & "probeWindowSaw" & quote && "to stack" && quote & "WebProbe" & quote \
+            && "with" && quote & "closed" & quote & return \
+            & "end closeStack"
+      set the defaultStack to "WebProbe"
+   end if
+   palette stack "Probe Palette"
+   set the defaultStack to "WebProbe"
+   probeInfo "window-rect", the rect of stack "Probe Palette"
+end probeWindow
+
+-- What the palette heard: "PROBE info window-moved" with its rect after
+-- each move, then "window-request" and "window-closed"
+command probeWindowSaw pWhat, pRect
+   probeInfo "window-" & pWhat, pRect
+end probeWindowSaw
+
 -- Once the dialog is open where the engine put it: where its field and
 -- its OK button are on the screen
 command probeDialogOpened
@@ -858,10 +896,14 @@ end probeUnfocus
 -- "snapshot", the snapshots of the page (probeSnapshots). With
 -- "snapshot-select" and "modal" it starts probeSnapshotSelect and
 -- probeModal, which wait for the user: a handler that the page calls
--- cannot.
+-- cannot. With "window" it opens the palette (probeWindow).
 function probeReport pWhat
    if pWhat is "snapshot" then
       return probeSnapshots()
+   end if
+   if pWhat is "window" then
+      send "probeWindow" to me in 0 milliseconds
+      return "started"
    end if
    if pWhat is "snapshot-select" or pWhat is "modal" then
       if pWhat is "modal" then

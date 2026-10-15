@@ -30,8 +30,8 @@ Code its authors knew to be wrong or incomplete. 66 notes, by part of the reposi
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
 - [engine/src/dispatch.cpp:1574](engine/src/dispatch.cpp#L1574) FIXME This is horrible
 - [engine/src/em-dc-mainloop.cpp:46](engine/src/em-dc-mainloop.cpp#L46) FIXME these functions are pretty much the same for every X_init()
-- [engine/src/em-event.js:488](engine/src/em-event.js#L488) FIXME Maybe this should be done in the engine?
-- [engine/src/em-event.js:687](engine/src/em-event.js#L687) FIXME not supported
+- [engine/src/em-event.js:492](engine/src/em-event.js#L492) FIXME Maybe this should be done in the engine?
+- [engine/src/em-event.js:691](engine/src/em-event.js#L691) FIXME not supported
 - [engine/src/em-filehandle.cpp:126](engine/src/em-filehandle.cpp#L126) FIXME Figure out why this is needed
 - [engine/src/em-filehandle.cpp:151](engine/src/em-filehandle.cpp#L151) FIXME Figure out why this is a success
 - [engine/src/em-filehandle.cpp:210](engine/src/em-filehandle.cpp#L210) FIXME figure out why this is a success
@@ -270,8 +270,8 @@ Work left for later. 457 notes, by part of the repository:
 - [engine/src/dskw32.cpp:623](engine/src/dskw32.cpp#L623) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:633](engine/src/dskw32.cpp#L633) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:3031](engine/src/dskw32.cpp#L3031) TODO: set end of file...
-- [engine/src/em-dc.js:157](engine/src/em-dc.js#L157) TODO - handle cleanup of embedded canvas
-- [engine/src/em-event.js:859](engine/src/em-event.js#L859) TODO - reenable alt key detection
+- [engine/src/em-dc.js:169](engine/src/em-dc.js#L169) TODO - handle cleanup of embedded canvas
+- [engine/src/em-event.js:863](engine/src/em-event.js#L863) TODO - reenable alt key detection
 - [engine/src/em-util.js:304](engine/src/em-util.js#L304) TODO - support more value types
 - [engine/src/em-util.js:332](engine/src/em-util.js#L332) TODO - for now, treat functions as objects but we may wish to differentiate them later
 - [engine/src/exec-engine.cpp:519](engine/src/exec-engine.cpp#L519) TODO - create as list?

@@ -115,6 +115,10 @@ mergeInto(LibraryManager.library, {
 				windowElement = document.createElement('div');
 				windowElement.style.display = 'none';
 				windowElement.style.position = 'fixed';
+				// OXT-Beyond: its frame (see setWindowFrame()), under
+				// the canvas
+				windowElement.className = 'oxt-window';
+				var frame = LiveCodeDC._createFrame(windowElement);
 				canvas = document.createElement('canvas');
 				canvas.style.setProperty('position', 'absolute');
 				canvas.style.setProperty('left', '0px');
@@ -134,8 +138,16 @@ mergeInto(LibraryManager.library, {
 				'container': this.containerCreate(windowElement, 1),
 				'rect': rect,
 				'visible':false,
+				// OXT-Beyond: its frame's parts (none for the main window),
+				// whether its stack takes the user's mouse and keys (not
+				// under a modal dialog), and the sizes it can be resized to
+				'frame': mainWindow ? null : frame,
+				'enabled': true,
+				'sizeLimits': [0, 0, 32767, 32767],
 			});
 			
+			if (!mainWindow)
+				LiveCodeDC._attachFrame(tWindowID);
 			canvas.dataset.lcWindowId = tWindowID;
 			LiveCodeEvents.addEventListeners(canvas);
 			LiveCodeDC._monitorResize(canvas, function() {
@@ -170,6 +182,8 @@ mergeInto(LibraryManager.library, {
 			if (window && !window.mainWindow)
 			{
 				this.containerRaiseElement(this._windowList, window.element);
+				// OXT-Beyond: in its layer (see _restack())
+				LiveCodeDC._restack();
 			}
 		},
 		
@@ -197,11 +211,51 @@ mergeInto(LibraryManager.library, {
 		  
 			return null;
 		},
+
+		// OXT-Beyond: where the window is with its frame (see
+		// setWindowFrame()), as the desktop's window is with its
+		// decorations: its canvas's rect when it has none
+		getWindowFrameRect: function(pID) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (!window) {
+				return {'left': 0, 'top': 0, 'right': 0, 'bottom': 0};
+			}
+			var rect = window.canvas.getBoundingClientRect();
+			var frame = window.frame;
+			if (!frame || !window.visible || frame.border.style.display == 'none') {
+				return rect;
+			}
+			var border = frame.border.getBoundingClientRect();
+			return {'left': Math.min(rect.left, border.left), 'top': Math.min(rect.top, border.top),
+					'right': Math.max(rect.right, border.right),
+					'bottom': Math.max(rect.bottom, border.bottom)};
+		},
+
+		// OXT-Beyond: the window that a part of the page is in (its canvas,
+		// its frame, or a native layer in it), or 0
+		_windowIDForElement: function(element) {
+			for (; element && element.dataset; element = element.parentElement) {
+				if (element.dataset.lcWindowId) {
+					return Number(element.dataset.lcWindowId);
+				}
+				if (element.dataset.lcLayerWindowId) {
+					return Number(element.dataset.lcLayerWindowId);
+				}
+				if (element.classList.contains('oxt-window')) {
+					return LiveCodeDC.getWindowIDForCanvas(element.querySelector('canvas'));
+				}
+			}
+			return 0;
+		},
 		
 		setWindowVisible: function(pID, pVisible) {
 			var window = LiveCodeUtil.fetchObject(pID);
 			if (window)
 			{
+				// OXT-Beyond: a window that is shown comes to the front, as
+				// a desktop's window manager brings a window that opens
+				if (pVisible && !window.visible && !window.mainWindow)
+					LiveCodeDC.raiseWindow(pID);
 				window.visible = pVisible;
 				if (!window.mainWindow)
 				{
@@ -462,6 +516,269 @@ mergeInto(LibraryManager.library, {
 			}
 		},
 
+		/*** Window frames ***/
+
+		// OXT-Beyond: the window of a stack other than the main stack
+		// (whose window is the page's canvas) has a frame, as a desktop
+		// gives a window its decorations (MCStack::sethints(),
+		// em-stack.cpp): a border, a title bar above the stack with its
+		// title and a close box, which the user drags to move the window,
+		// and, for a resizable stack, edges outside its right and bottom
+		// sides that resize it. A press on the frame raises the window and
+		// gives it the keyboard, as a press on the stack does, unless a
+		// modal dialog is above it. Each window is in a layer (ordinary
+		// windows, palettes, modal dialogs, menus and tooltips), which the
+		// page keeps above the layers before it. A page can restyle the
+		// frames: their class names start with "oxt-window".
+		_frameStyled: false,
+
+		_addFrameStyles: function() {
+			if (LiveCodeDC._frameStyled) {
+				return;
+			}
+			LiveCodeDC._frameStyled = true;
+			var style = document.createElement('style');
+			style.textContent =
+				'.oxt-window-border{position:absolute;left:-1px;top:-31px;right:-1px;bottom:-1px;' +
+				'border:1px solid #8c8c8c;box-shadow:0 6px 24px rgba(0,0,0,0.3);pointer-events:none}' +
+				'.oxt-window-title{position:absolute;left:0;right:0;top:-30px;height:30px;display:flex;' +
+				'background:#ffffff;color:#999999;' +
+				'font:12px/30px "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;cursor:default;' +
+				'user-select:none;-webkit-user-select:none;touch-action:none;overflow:hidden}' +
+				'.oxt-window-label{flex:1;min-width:0;padding:0 10px;white-space:nowrap;overflow:hidden;' +
+				'text-overflow:ellipsis}' +
+				'.oxt-window-close{flex:none;width:46px;text-align:center;font-size:14px}' +
+				'.oxt-window-active>.oxt-window-title{color:#000000}' +
+				'.oxt-window-close:hover{background:#e81123;color:#ffffff}' +
+				'.oxt-window-disabled .oxt-window-close:hover{background:none;color:inherit}' +
+				'.oxt-window-utility>.oxt-window-border{top:-23px}' +
+				'.oxt-window-utility>.oxt-window-title{top:-22px;height:22px;line-height:22px;font-size:11px}' +
+				'.oxt-window-utility .oxt-window-label{padding:0 6px}' +
+				'.oxt-window-utility .oxt-window-close{width:28px;font-size:11px}' +
+				'.oxt-window-edge{position:absolute;touch-action:none}' +
+				'.oxt-window-edge-right{top:0;right:-6px;width:6px;height:100%;cursor:ew-resize}' +
+				'.oxt-window-edge-bottom{left:0;bottom:-6px;width:100%;height:6px;cursor:ns-resize}' +
+				'.oxt-window-edge-corner{right:-10px;bottom:-10px;width:12px;height:12px;cursor:nwse-resize}';
+			document.head.appendChild(style);
+		},
+
+		// The parts of a frame, in the window's element, under its canvas:
+		// hidden until the engine says what the window has
+		_createFrame: function(windowElement) {
+			LiveCodeDC._addFrameStyles();
+			var part = function(className, parent) {
+				var element = document.createElement('div');
+				element.className = className;
+				element.style.display = 'none';
+				parent.appendChild(element);
+				return element;
+			};
+			var frame = {};
+			frame.border = part('oxt-window-border', windowElement);
+			frame.title = part('oxt-window-title', windowElement);
+			frame.label = part('oxt-window-label', frame.title);
+			frame.label.style.display = '';
+			frame.close = part('oxt-window-close', frame.title);
+			frame.close.textContent = '\u2715';
+			frame.edges = ['right', 'bottom', 'corner'].map(function(edge) {
+				var element = part('oxt-window-edge oxt-window-edge-' + edge, windowElement);
+				element.oxtEdge = edge;
+				return element;
+			});
+			return frame;
+		},
+
+		// The user moves the window by its title bar, resizes it by its
+		// edges and closes it with its close box
+		_attachFrame: function(pID) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			var frame = window.frame;
+			var drag = null;
+
+			var press = function(e, kind) {
+				e.preventDefault();
+				e.stopPropagation();
+				if (e.button != 0 || !window.enabled) {
+					return;
+				}
+				LiveCodeDC._activateWindow(pID);
+				drag = {'kind': kind, 'pointer': e.pointerId, 'x': e.clientX, 'y': e.clientY,
+						'rect': window.rect};
+				e.currentTarget.setPointerCapture(e.pointerId);
+			};
+			var move = function(e) {
+				if (!drag || e.pointerId != drag.pointer) {
+					return;
+				}
+				e.preventDefault();
+				var dx = Math.round(e.clientX - drag.x);
+				var dy = Math.round(e.clientY - drag.y);
+				var rect = drag.rect;
+				if (drag.kind == 'move') {
+					LiveCodeDC._dragWindow(pID, rect.left + dx, rect.top + dy);
+				} else {
+					LiveCodeDC._resizeWindow(pID,
+											 rect.right - rect.left + (drag.kind != 'bottom' ? dx : 0),
+											 rect.bottom - rect.top + (drag.kind != 'right' ? dy : 0));
+				}
+			};
+			var end = function(e) {
+				if (drag && e.pointerId == drag.pointer) {
+					drag = null;
+				}
+			};
+
+			[frame.title].concat(frame.edges).forEach(function(element) {
+				element.addEventListener('pointerdown', function(e) {
+					if (frame.close.contains(e.target)) {
+						return;
+					}
+					press(e, element.oxtEdge || 'move');
+				});
+				element.addEventListener('pointermove', move);
+				element.addEventListener('pointerup', end);
+				element.addEventListener('pointercancel', end);
+			});
+
+			frame.close.addEventListener('pointerdown', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				if (e.button == 0 && window.enabled) {
+					LiveCodeDC._activateWindow(pID);
+				}
+			});
+			frame.close.addEventListener('click', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				if (window.enabled) {
+					LiveCodeAsync.delay(function() {
+						Module.ccall('MCEmscriptenHandleWindowClose', 'number', ['number'], [pID]);
+					});
+					LiveCodeAsync.resume();
+				}
+			});
+		},
+
+		// A press on a window's frame: it comes to the front of its layer,
+		// and its stack gets the keyboard
+		_activateWindow: function(pID) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (!window) {
+				return;
+			}
+			LiveCodeDC.raiseWindow(pID);
+			LiveCodeAsync.delay(function() {
+				LiveCodeEvents._setInputFocus(window.canvas);
+			});
+			LiveCodeAsync.resume();
+		},
+
+		// The user drags the window by its title bar to <left>, <top> (where
+		// its stack is): its title bar stays on the screen, with some of it
+		// to grab. The engine hears of the move as of the page moving a
+		// window (_monitorResize()), and sends moveStack.
+		_dragWindow: function(pID, pLeft, pTop) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			var display = LiveCodeDC.getDisplayRect();
+			var width = window.rect.right - window.rect.left;
+			var height = window.rect.bottom - window.rect.top;
+			var left = Math.max(Math.min(pLeft, display.right - 40), display.left + 40 - width);
+			var top = Math.max(Math.min(pTop, display.bottom), display.top + window.frame.title.offsetHeight);
+			LiveCodeDC.setWindowRect(pID, left, top, left + width, top + height);
+		},
+
+		// The user resizes the window by its edges to <width> x <height>,
+		// within the stack's sizes (setWindowSizeLimits()). The engine hears
+		// of it as of the page resizing a window, and sends resizeStack.
+		_resizeWindow: function(pID, pWidth, pHeight) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			var limits = window.sizeLimits;
+			var width = Math.max(Math.min(pWidth, limits[2]), limits[0], 1);
+			var height = Math.max(Math.min(pHeight, limits[3]), limits[1], 1);
+			LiveCodeDC.setWindowRect(pID, window.rect.left, window.rect.top,
+									 window.rect.left + width, window.rect.top + height);
+		},
+
+		// What the window's frame has (MCStack::sethints()): <kind> 0, no
+		// frame; 1, a title bar; 2, a palette's narrower one; a close box if
+		// <close>; edges that resize it if <resizable>. <layer> is its layer:
+		// 0, ordinary windows; 1, palettes; 2, modal dialogs; 3, menus and
+		// tooltips.
+		setWindowFrame: function(pID, pKind, pClose, pResizable, pLayer) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (!window || !window.frame) {
+				return;
+			}
+			var frame = window.frame;
+			var show = function(element, visible) {
+				element.style.display = visible ? '' : 'none';
+			};
+			show(frame.border, pKind != 0);
+			show(frame.title, pKind != 0);
+			show(frame.close, pKind != 0 && pClose);
+			frame.edges.forEach(function(edge) {
+				show(edge, pKind != 0 && pResizable);
+			});
+			window.element.classList.toggle('oxt-window-utility', pKind == 2);
+			if (window.element.oxtLayer !== pLayer) {
+				window.element.oxtLayer = pLayer;
+				LiveCodeDC._restack();
+			}
+		},
+
+		// The window whose stack has the keyboard looks active, as the
+		// desktop's active window does, and the others' titles are grey
+		// (LiveCodeEvents._setInputFocus())
+		setActiveWindow: function(pID) {
+			var active = LiveCodeUtil.fetchObject(pID);
+			LiveCodeDC._windowList['contents'].forEach(function(element) {
+				element.classList.toggle('oxt-window-active', !!active && element === active.element);
+			});
+		},
+
+		// The stack's title, in its title bar
+		setWindowTitle: function(pID, pTitle) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (window && window.frame) {
+				window.frame.label.textContent = pTitle;
+			}
+		},
+
+		// Whether the window's stack takes the user's mouse and keys: not
+		// while a modal dialog is above it (MCStack::enablewindow())
+		setWindowEnabled: function(pID, pEnabled) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (window) {
+				window.enabled = !!pEnabled;
+				// (the main stack's element is the page's own)
+				if (window.frame) {
+					window.element.classList.toggle('oxt-window-disabled', !pEnabled);
+				}
+			}
+		},
+
+		// The sizes that the user can resize the window to
+		setWindowSizeLimits: function(pID, pMinWidth, pMinHeight, pMaxWidth, pMaxHeight) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (window) {
+				window.sizeLimits = [pMinWidth, pMinHeight, pMaxWidth, pMaxHeight];
+			}
+		},
+
+		// The windows in the order of their layers, each layer's in the
+		// order they had
+		_restack: function() {
+			var list = LiveCodeDC._windowList;
+			var ordered = list['contents'].slice().sort(function(a, b) {
+				return ((a.oxtLayer || 0) - (b.oxtLayer || 0)) ||
+					(Number(a.style.zIndex) - Number(b.style.zIndex));
+			});
+			for (var i = 0; i < ordered.length; i++) {
+				ordered[i].style.zIndex = i + 1;
+			}
+			list['maxZIndex'] = ordered.length + 1;
+		},
+
 		/*** Snapshots of the screen ***/
 
 		// OXT-Beyond: what the screen (the browser's viewport) shows in
@@ -511,6 +828,12 @@ mergeInto(LibraryManager.library, {
 			var scaleY = outHeight / height;
 			canvases.forEach(function(canvas) {
 				var window = LiveCodeUtil.fetchObject(LiveCodeDC.getWindowIDForCanvas(canvas));
+				if (window && window.visible && window.frame) {
+					context.save();
+					context.setTransform(scaleX, 0, 0, scaleY, -left * scaleX, -top * scaleY);
+					LiveCodeDC._drawFrame(context, window.frame);
+					context.restore();
+				}
 				var rect = canvas.getBoundingClientRect();
 				if (!window || !window.visible || canvas.width == 0 || canvas.height == 0 ||
 					rect.width == 0 || rect.height == 0) {
@@ -524,6 +847,75 @@ mergeInto(LibraryManager.library, {
 			var data = context.getImageData(0, 0, outWidth, outHeight).data;
 			HEAPU8.set(data, pixels);
 			return true;
+		},
+
+		// OXT-Beyond: a window's frame in a snapshot, as the page shows it
+		// (in the page's coordinates): its title bar, with its title cut
+		// short as the page cuts it, its close box and its border. The
+		// border's shadow is left out.
+		_drawFrame: function(context, frame) {
+			var shown = function(element) {
+				return element.style.display != 'none';
+			};
+			var font = function(style) {
+				return style.fontStyle + ' ' + style.fontWeight + ' ' + style.fontSize + ' ' +
+					style.fontFamily;
+			};
+			if (!shown(frame.border)) {
+				return;
+			}
+
+			if (shown(frame.title)) {
+				var title = frame.title.getBoundingClientRect();
+				context.fillStyle = getComputedStyle(frame.title).backgroundColor;
+				context.fillRect(title.left, title.top, title.width, title.height);
+
+				var label = frame.label.getBoundingClientRect();
+				var labelStyle = getComputedStyle(frame.label);
+				var padLeft = parseFloat(labelStyle.paddingLeft) || 0;
+				var room = label.width - padLeft - (parseFloat(labelStyle.paddingRight) || 0);
+				context.save();
+				context.beginPath();
+				context.rect(label.left, label.top, label.width, label.height);
+				context.clip();
+				context.font = font(labelStyle);
+				context.fillStyle = labelStyle.color;
+				context.textBaseline = 'middle';
+				var text = frame.label.textContent;
+				if (context.measureText(text).width > room) {
+					while (text.length > 0 && context.measureText(text + '\u2026').width > room) {
+						text = text.slice(0, -1);
+					}
+					text += '\u2026';
+				}
+				context.fillText(text, label.left + padLeft, label.top + label.height / 2);
+				context.restore();
+
+				if (shown(frame.close)) {
+					var close = frame.close.getBoundingClientRect();
+					var closeStyle = getComputedStyle(frame.close);
+					context.save();
+					context.fillStyle = closeStyle.backgroundColor;
+					context.fillRect(close.left, close.top, close.width, close.height);
+					context.font = font(closeStyle);
+					context.fillStyle = closeStyle.color;
+					context.textAlign = 'center';
+					context.textBaseline = 'middle';
+					context.fillText(frame.close.textContent, close.left + close.width / 2,
+									 close.top + close.height / 2);
+					context.restore();
+				}
+			}
+
+			var border = frame.border.getBoundingClientRect();
+			var borderStyle = getComputedStyle(frame.border);
+			var line = parseFloat(borderStyle.borderTopWidth) || 0;
+			if (line > 0) {
+				context.strokeStyle = borderStyle.borderTopColor;
+				context.lineWidth = line;
+				context.strokeRect(border.left + line / 2, border.top + line / 2,
+								   border.width - line, border.height - line);
+			}
 		},
 
 		// OXT-Beyond: the rectangle that the user is dragging out for a
@@ -551,6 +943,7 @@ mergeInto(LibraryManager.library, {
 			var start = null;
 
 			var place = function(e) {
+				selection.control = e.ctrlKey;
 				var x = Math.round(e.clientX), y = Math.round(e.clientY);
 				var rect = [Math.min(start[0], x), Math.min(start[1], y),
 							Math.max(start[0], x), Math.max(start[1], y)];
@@ -572,12 +965,19 @@ mergeInto(LibraryManager.library, {
 				}
 
 				// A click, not a drag, takes the stack's window under it,
-				// or else the whole screen, as on Linux
+				// or else the whole screen, as on Linux: with its frame when
+				// the click is on the frame or the Control key is down
 				var rect = selection.rect;
 				if (state == 'done' && rect[2] - rect[0] < 4 && rect[3] - rect[1] < 4) {
 					var under = document.elementFromPoint(rect[0], rect[1]);
-					var bounds = under && LiveCodeDC.getWindowIDForCanvas(under) != 0 ?
-						under.getBoundingClientRect() : null;
+					var id = LiveCodeDC._windowIDForElement(under);
+					var bounds = null;
+					if (id != 0) {
+						var onFrame = LiveCodeDC.getWindowIDForCanvas(under) != id &&
+							!(under.dataset && under.dataset.lcLayerWindowId);
+						bounds = onFrame || selection.control ?
+							LiveCodeDC.getWindowFrameRect(id) : LiveCodeDC.getWindowRect(id);
+					}
 					var display = LiveCodeDC.getDisplayRect();
 					selection.rect = bounds ?
 						[Math.round(bounds.left), Math.round(bounds.top),
@@ -660,6 +1060,37 @@ mergeInto(LibraryManager.library, {
 	MCEmscriptenSnapshotSelectState__deps: ['$LiveCodeDC'],
 	MCEmscriptenSnapshotSelectState: function(rRect, pCancel) {
 		return LiveCodeDC.snapshotSelectState(rRect, pCancel);
+	},
+
+	// OXT-Beyond: the frames of the stacks' windows (MCStack::sethints(),
+	// em-stack.cpp, and MCScreenDC::setname(), em-dc.cpp)
+	MCEmscriptenSetWindowFrame__deps: ['$LiveCodeDC'],
+	MCEmscriptenSetWindowFrame: function(pWindowID, pKind, pClose, pResizable, pLayer) {
+		LiveCodeDC.setWindowFrame(pWindowID, pKind, pClose, pResizable, pLayer);
+	},
+
+	MCEmscriptenSetWindowTitle__deps: ['$LiveCodeDC', '$LiveCodeUtil'],
+	MCEmscriptenSetWindowTitle: function(pWindowID, pTitle, pLength) {
+		LiveCodeDC.setWindowTitle(pWindowID, LiveCodeUtil.stringFromUTF16(pTitle, pLength));
+	},
+
+	MCEmscriptenSetWindowEnabled__deps: ['$LiveCodeDC'],
+	MCEmscriptenSetWindowEnabled: function(pWindowID, pEnabled) {
+		LiveCodeDC.setWindowEnabled(pWindowID, pEnabled);
+	},
+
+	MCEmscriptenSetWindowSizeLimits__deps: ['$LiveCodeDC'],
+	MCEmscriptenSetWindowSizeLimits: function(pWindowID, pMinWidth, pMinHeight, pMaxWidth, pMaxHeight) {
+		LiveCodeDC.setWindowSizeLimits(pWindowID, pMinWidth, pMinHeight, pMaxWidth, pMaxHeight);
+	},
+
+	MCEmscriptenGetWindowFrameRect__deps: ['$LiveCodeDC'],
+	MCEmscriptenGetWindowFrameRect: function(pWindowID, rLeft, rTop, rRight, rBottom) {
+		var rect = LiveCodeDC.getWindowFrameRect(pWindowID);
+		{{{ makeSetValue('rLeft', '0', 'rect.left', 'i32') }}};
+		{{{ makeSetValue('rTop', '0', 'rect.top', 'i32') }}};
+		{{{ makeSetValue('rRight', '0', 'rect.right', 'i32') }}};
+		{{{ makeSetValue('rBottom', '0', 'rect.bottom', 'i32') }}};
 	},
 
 	MCEmscriptenDCInitializeJS__deps: ['$LiveCodeDC'],
