@@ -66,7 +66,7 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 to 0.2.6-rc.5 are test releases (pre-releases) of
+lists. 0.2.6-rc.1 to 0.2.6-rc.6 are test releases (pre-releases) of
 the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
 plan in the Claude desktop app or Claude Code, build stacks in the IDE
 (see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
@@ -75,8 +75,9 @@ plan in the Claude desktop app or Claude Code, build stacks in the IDE
 fixes and plugin packages in
 [0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins),
 and of web standalones in
-[0.2.6-rc.5](#026-rc5-web-standalones); 0.2.5 stays the main download
-until it has held up.
+[0.2.6-rc.5](#026-rc5-web-standalones) and
+[0.2.6-rc.6](#026-rc6-the-web-panes-page-settings); 0.2.5 stays the
+main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1352,6 +1353,30 @@ difference from 0.2.5. It has been tested on Linux, the IDE's side
 against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
+
+#### 0.2.6-rc.6: the Web pane's page settings
+
+OXT-Beyond 0.2.6-rc.6, a test release, has everything in 0.2.6-rc.5,
+whose release was withdrawn: its Standalone Settings still sent you to
+Webtalk, a separate project, for web standalones, and on Linux, **Test**
+could freeze the IDE. The **Web** pane of the Standalone Settings now
+builds an HTML5 standalone: tick **Build for HTML5**, and set the page's
+**Title**, its **Icon** (an image that the browser shows in its tab and
+bookmarks), its **Background** colour and the **Position** of the main
+stack in the page. A stack without these settings gets the same page
+as in 0.2.6-rc.5. The guide *Deploying Your Application* describes
+them.
+
+On Linux, **Development > Test** with a browser as the Test Target no
+longer holds the IDE until that browser quits, so the page loads, and
+the Test Target menu lists Chromium and Microsoft Edge when they are
+installed, and only the browsers that are. Also on Linux, a period
+typed while a handler runs, or into a file dialog that it opened, no
+longer stops the handler; Control-period or Control-Break does, as the
+dictionary says and as on Windows. That is the one change a script can
+see. Pull request
+[#109](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/109)
+lists every difference from 0.2.6-rc.5.
 
 #### 0.2.6-rc.5: web standalones
 
