@@ -13,46 +13,44 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 
 | Marker | Notes |
 | --- | --- |
-| [FIXME](#fixme) | 71 |
+| [FIXME](#fixme) | 69 |
 | [HACK](#hack) | 33 |
 | [TODO](#todo) | 458 |
 
 ## FIXME
 
-Code its authors knew to be wrong or incomplete. 71 notes, by part of the repository:
+Code its authors knew to be wrong or incomplete. 69 notes, by part of the repository:
 
-[engine](#fixme-engine) (38), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [ide](#fixme-ide) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide-support](#fixme-ide-support) (1), [util](#fixme-util) (1)
+[engine](#fixme-engine) (36), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [ide](#fixme-ide) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide-support](#fixme-ide-support) (1), [util](#fixme-util) (1)
 
 <a id="fixme-engine"></a>
 
-### FIXME: engine (38)
+### FIXME: engine (36)
 
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
 - [engine/src/dispatch.cpp:1574](engine/src/dispatch.cpp#L1574) FIXME This is horrible
 - [engine/src/em-dc-mainloop.cpp:46](engine/src/em-dc-mainloop.cpp#L46) FIXME these functions are pretty much the same for every X_init()
-- [engine/src/em-dc.cpp:198](engine/src/em-dc.cpp#L198) FIXME Implement HiDPI support
-- [engine/src/em-dc.cpp:253](engine/src/em-dc.cpp#L253) FIXME Implement HiDPI support
-- [engine/src/em-event.js:359](engine/src/em-event.js#L359) FIXME Maybe this should be done in the engine?
-- [engine/src/em-event.js:549](engine/src/em-event.js#L549) FIXME not supported
-- [engine/src/em-filehandle.cpp:86](engine/src/em-filehandle.cpp#L86) FIXME Figure out why this is needed
-- [engine/src/em-filehandle.cpp:111](engine/src/em-filehandle.cpp#L111) FIXME Figure out why this is a success
-- [engine/src/em-filehandle.cpp:168](engine/src/em-filehandle.cpp#L168) FIXME figure out why this is a success
+- [engine/src/em-dc.cpp:216](engine/src/em-dc.cpp#L216) FIXME Implement HiDPI support
+- [engine/src/em-dc.cpp:271](engine/src/em-dc.cpp#L271) FIXME Implement HiDPI support
+- [engine/src/em-event.js:418](engine/src/em-event.js#L418) FIXME Maybe this should be done in the engine?
+- [engine/src/em-event.js:617](engine/src/em-event.js#L617) FIXME not supported
+- [engine/src/em-filehandle.cpp:110](engine/src/em-filehandle.cpp#L110) FIXME Figure out why this is needed
+- [engine/src/em-filehandle.cpp:135](engine/src/em-filehandle.cpp#L135) FIXME Figure out why this is a success
+- [engine/src/em-filehandle.cpp:194](engine/src/em-filehandle.cpp#L194) FIXME figure out why this is a success
 - [engine/src/em-main.cpp:81](engine/src/em-main.cpp#L81) FIXME should probably be UTF-8
 - [engine/src/em-main.cpp:104](engine/src/em-main.cpp#L104) FIXME should probably be UTF-8
 - [engine/src/em-preamble.js:57](engine/src/em-preamble.js#L57) FIXME Should this be moved into the engine?
 - [engine/src/em-preamble.js:81](engine/src/em-preamble.js#L81) FIXME Can we cache the capsule locally?
 - [engine/src/em-standalone.js:43](engine/src/em-standalone.js#L43) FIXME maybe this needs a helper function in LiveCodeUtil
-- [engine/src/em-system.cpp:328](engine/src/em-system.cpp#L328) FIXME Implement BackupFile
-- [engine/src/em-system.cpp:338](engine/src/em-system.cpp#L338) FIXME Implement UnbackupFile()
-- [engine/src/em-system.cpp:348](engine/src/em-system.cpp#L348) FIXME Implement CreateAlias() using symlink(2)
-- [engine/src/em-system.cpp:359](engine/src/em-system.cpp#L359) FIXME Implement ResolveAlias() using readlink(2)
-- [engine/src/em-system.cpp:369](engine/src/em-system.cpp#L369) FIXME use get_current_dir_name() once it's available in Emscripten's
-- [engine/src/em-system.cpp:465](engine/src/em-system.cpp#L465) FIXME use scandirat() once it's available in emscripten's libc
-- [engine/src/em-system.cpp:652](engine/src/em-system.cpp#L652) FIXME Implement GetFreeDiskSpace()
-- [engine/src/em-system.cpp:661](engine/src/em-system.cpp#L661) FIXME Implement GetDevices()
-- [engine/src/em-system.cpp:670](engine/src/em-system.cpp#L670) FIXME Implement GetDrives()
-- [engine/src/em-system.cpp:796](engine/src/em-system.cpp#L796) FIXME Implement OpenDevice()
-- [engine/src/em-system.cpp:830](engine/src/em-system.cpp#L830) FIXME Implement ResolvePath()
+- [engine/src/em-system.cpp:385](engine/src/em-system.cpp#L385) FIXME Implement CreateAlias() using symlink(2)
+- [engine/src/em-system.cpp:396](engine/src/em-system.cpp#L396) FIXME Implement ResolveAlias() using readlink(2)
+- [engine/src/em-system.cpp:406](engine/src/em-system.cpp#L406) FIXME use get_current_dir_name() once it's available in Emscripten's
+- [engine/src/em-system.cpp:502](engine/src/em-system.cpp#L502) FIXME use scandirat() once it's available in emscripten's libc
+- [engine/src/em-system.cpp:715](engine/src/em-system.cpp#L715) FIXME Implement GetFreeDiskSpace()
+- [engine/src/em-system.cpp:724](engine/src/em-system.cpp#L724) FIXME Implement GetDevices()
+- [engine/src/em-system.cpp:733](engine/src/em-system.cpp#L733) FIXME Implement GetDrives()
+- [engine/src/em-system.cpp:889](engine/src/em-system.cpp#L889) FIXME Implement OpenDevice()
+- [engine/src/em-system.cpp:923](engine/src/em-system.cpp#L923) FIXME Implement ResolvePath()
 - [engine/src/em-theme.cpp:48](engine/src/em-theme.cpp#L48) FIXME not yet implemented
 - [engine/src/em-url.js:59](engine/src/em-url.js#L59) FIXME maybe this needs a helper function in LiveCodeUtil
 - [engine/src/em-url.js:303](engine/src/em-url.js#L303) FIXME this isn't quite correct; we don't correctly
@@ -276,8 +274,8 @@ Work left for later. 458 notes, by part of the repository:
 - [engine/src/dskw32.cpp:633](engine/src/dskw32.cpp#L633) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:3031](engine/src/dskw32.cpp#L3031) TODO: set end of file...
 - [engine/src/em-dc.js:146](engine/src/em-dc.js#L146) TODO - handle cleanup of embedded canvas
-- [engine/src/em-dc.js:297](engine/src/em-dc.js#L297) TODO - implement
-- [engine/src/em-event.js:598](engine/src/em-event.js#L598) TODO - reenable alt key detection
+- [engine/src/em-dc.js:410](engine/src/em-dc.js#L410) TODO - implement
+- [engine/src/em-event.js:769](engine/src/em-event.js#L769) TODO - reenable alt key detection
 - [engine/src/em-util.js:304](engine/src/em-util.js#L304) TODO - support more value types
 - [engine/src/em-util.js:332](engine/src/em-util.js#L332) TODO - for now, treat functions as objects but we may wish to differentiate them later
 - [engine/src/exec-engine.cpp:519](engine/src/exec-engine.cpp#L519) TODO - create as list?

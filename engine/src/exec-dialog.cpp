@@ -387,6 +387,40 @@ void MCDialogExecAnswerNotify(MCExecContext &ctxt, integer_t p_type, MCStringRef
         ctxt.SetItToEmpty();
 		ctxt.SetTheResultToValue(MCN_cancel);
     }
+#elif defined(__EMSCRIPTEN__)
+	/* The web engine's dialog (a dialog of the page, em-dc.cpp) gives it
+	 * and the result what the desktop's answer dialog gives them: with no
+	 * buttons it has an OK button, and it has no icon unless one is
+	 * asked for. */
+	uint32_t t_type;
+	switch(p_type)
+	{
+	case AT_ERROR: t_type = kMCAnswerDialogTypeError; break;
+	case AT_QUESTION: t_type = kMCAnswerDialogTypeQuestion; break;
+	case AT_WARNING: t_type = kMCAnswerDialogTypeWarning; break;
+	case AT_INFORMATION: t_type = kMCAnswerDialogTypeInformation; break;
+	default: t_type = kMCAnswerDialogTypePlain; break;
+	}
+
+	MCStringRef t_ok = MCSTR("OK");
+	if (p_button_count == 0)
+	{
+		p_buttons = &t_ok;
+		p_button_count = 1;
+	}
+
+	int32_t t_result;
+	t_result = MCscreen->popupanswerdialog(p_buttons, p_button_count, t_type, p_title, p_prompt, false);
+	if (t_result >= 0 && uindex_t(t_result) < p_button_count)
+	{
+		ctxt.SetItToValue(p_buttons[t_result]);
+		ctxt.SetTheResultToEmpty();
+	}
+	else
+	{
+		ctxt.SetItToEmpty();
+		ctxt.SetTheResultToValue(MCN_cancel);
+	}
 #else
 	uint32_t t_type;
 	switch(p_type)
@@ -516,7 +550,7 @@ void MCDialogExecAskQuestion(MCExecContext& ctxt, int p_type, MCStringRef p_prom
 
 void MCDialogExecAskPassword(MCExecContext& ctxt, bool p_clear, MCStringRef p_prompt, MCStringRef p_answer, bool p_hint_answer, MCStringRef p_title, bool p_as_sheet)
 {
-#ifndef _MOBILE
+#if !defined(_MOBILE) && !defined(__EMSCRIPTEN__)
 	MCStringRef t_args[3];
 	t_args[0] = p_title;
 	t_args[1] = p_prompt;

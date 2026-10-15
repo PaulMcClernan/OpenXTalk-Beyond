@@ -190,6 +190,64 @@ mergeInto(LibraryManager.library, {
 		LiveCodeSystem.finalize();
 	},
 
+	// launch url: opens <url> in a new tab of the browser (mailto:, tel:
+	// and the like in the application that answers them), relative to
+	// the page if it is relative. Returns 0 if it is refused (not a URL,
+	// or a javascript:, data: or vbscript: URL, which would run in or
+	// stand for the page), 1 if it opened, and 2 if the page asks the
+	// user first (em-dialog.js).
+	MCEmscriptenSystemLaunchUrl__deps: ['$LiveCodeDialog', '$LiveCodeUtil'],
+	MCEmscriptenSystemLaunchUrl: function(url, url_length) {
+		var text = LiveCodeUtil.stringFromUTF16(url, url_length);
+		var target;
+		try {
+			target = new URL(text, document.baseURI);
+		} catch (e) {
+			return 0;
+		}
+		var scheme = target.protocol.toLowerCase();
+		if (scheme == 'javascript:' || scheme == 'data:' || scheme == 'vbscript:') {
+			return 0;
+		}
+		var href = target.href;
+		var tab = scheme == 'http:' || scheme == 'https:' || scheme == 'ftp:' ||
+			scheme == 'blob:' || scheme == 'file:';
+		var open = function() {
+			if (tab) {
+				var opened = window.open(href, '_blank');
+				if (!opened) {
+					return false;
+				}
+				try {
+					opened.opener = null;
+				} catch (e) {
+				}
+				return true;
+			}
+			// The browser hands the link to an application, and the page
+			// stays
+			var link = document.createElement('a');
+			link.href = href;
+			link.rel = 'noopener';
+			link.style.display = 'none';
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			return true;
+		};
+		return LiveCodeDialog.openWithClick(open, 'Open this link?', href);
+	},
+
+	// The name of the machine the page comes from (its host), as UTF-16
+	// that the engine frees
+	MCEmscriptenSystemGetHostName__deps: ['$LiveCodeUtil'],
+	MCEmscriptenSystemGetHostName: function(r_chars, r_length) {
+		var host = (typeof location != 'undefined' && location.hostname) || 'localhost';
+		var chars = LiveCodeUtil.stringToUTF16(host);
+		{{{ makeSetValue('r_chars', '0', 'chars', 'i32') }}};
+		{{{ makeSetValue('r_length', '0', 'host.length', 'i32') }}};
+	},
+
 });
 
 /*

@@ -65,11 +65,16 @@ void MCSecurityEvalCipherNames(MCExecContext& ctxt, MCStringRef& r_names)
 
 void MCSecurityEvalRandomBytes(MCExecContext& ctxt, uinteger_t p_byte_count, MCDataRef& r_bytes)
 {
+	// The web engine has no SSL library, and needs none for this: its
+	// random bytes come from the browser's crypto.getRandomValues()
+	// (Emscripten's /dev/urandom).
+#ifndef __EMSCRIPTEN__
 	if (!InitSSLCrypt())
 	{
 		ctxt.LegacyThrow(EE_SECURITY_NOLIBRARY);
 		return;
 	}
+#endif
 
 	if (MCSRandomData (p_byte_count, r_bytes))
 	{

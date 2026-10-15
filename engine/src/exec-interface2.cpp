@@ -525,8 +525,9 @@ void MCInterfaceSetLookAndFeel(MCExecContext& ctxt, intenum_t p_value)
 			 oldtheme->getthemeid() != LF_NATIVEMAC &&
 			 oldtheme->getthemeid() != LF_NATIVEGTK))
 		{
+			// The web engine has no native theme (nil)
 			MCcurtheme = MCThemeCreateNative();
-			if (MCcurtheme->load())
+			if (MCcurtheme != NULL && MCcurtheme->load())
 			{
 				if (oldtheme != NULL)
 					oldtheme -> unload();

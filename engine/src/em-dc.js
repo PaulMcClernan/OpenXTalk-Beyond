@@ -230,14 +230,128 @@ mergeInto(LibraryManager.library, {
 		},
 		
 		getWindowIDForCanvas: function(pCanvas) {
-			if (pCanvas.dataset.lcWindowId)
+			if (pCanvas && pCanvas.dataset && pCanvas.dataset.lcWindowId)
 				return Number(pCanvas.dataset.lcWindowId);
-			console.debug("canvas not found");
 			return 0;
 		},
 		
+		// The screen is the browser's viewport: the part of the page that
+		// it shows, without its scrollbars
 		getDisplayRect: function() {
-			return {'left':0, 'top':0, 'right':document.body.clientWidth, 'bottom':document.body.clientHeight};
+			var root = document.documentElement;
+			return {'left':0, 'top':0,
+					'right':root.clientWidth || window.innerWidth,
+					'bottom':root.clientHeight || window.innerHeight};
+		},
+
+		/*** Cursors ***/
+
+		// The CSS cursor of each cursor, by id: a standard cursor's name,
+		// or an image's url()
+		_cursors: {},
+		_nextCursor: 1,
+
+		// The CSS cursors of the engine's standard cursors, in the order of
+		// enum Pixmap_ids (parsedef.h): none, arrow, brush, spray, eraser,
+		// bucket, busy, cross, hand, ibeam, lr, pencil, dropper, plus,
+		// watch, help, busy1 to busy8, dragtext, dragclone, dragrefuse,
+		// sizev, sizeh. The last is a hand: the constant hand is 28
+		// (lextable.cpp), which is sizeh's place, and the cursor image 28
+		// that the desktop shows there is a hand.
+		_standardCursors: ['none', 'default', 'crosshair', 'crosshair', 'crosshair', 'crosshair',
+			'wait', 'crosshair', 'pointer', 'text', 'ew-resize', 'crosshair', 'crosshair',
+			'cell', 'wait', 'help', 'wait', 'wait', 'wait', 'wait', 'wait', 'wait', 'wait', 'wait',
+			'grabbing', 'copy', 'no-drop', 'ns-resize', 'pointer'],
+
+		createStandardCursor: function(index) {
+			var id = LiveCodeDC._nextCursor++;
+			LiveCodeDC._cursors[id] = LiveCodeDC._standardCursors[index] || 'default';
+			return id;
+		},
+
+		// A cursor from an image: <pixels> is premultiplied RGBA, <stride>
+		// bytes a row
+		createCustomCursor: function(pixels, width, height, stride, xhot, yhot) {
+			var canvas = document.createElement('canvas');
+			canvas.width = width;
+			canvas.height = height;
+			var context = canvas.getContext('2d');
+			if (!context || width == 0 || height == 0) {
+				return LiveCodeDC.createStandardCursor(1);
+			}
+			var image = context.createImageData(width, height);
+			var data = image.data;
+			for (var y = 0; y < height; y++) {
+				for (var x = 0; x < width; x++) {
+					var from = pixels + y * stride + x * 4;
+					var to = (y * width + x) * 4;
+					var alpha = HEAPU8[from + 3];
+					if (alpha == 0) {
+						continue;
+					}
+					data[to] = Math.min(255, Math.round(HEAPU8[from] * 255 / alpha));
+					data[to + 1] = Math.min(255, Math.round(HEAPU8[from + 1] * 255 / alpha));
+					data[to + 2] = Math.min(255, Math.round(HEAPU8[from + 2] * 255 / alpha));
+					data[to + 3] = alpha;
+				}
+			}
+			context.putImageData(image, 0, 0);
+			var id = LiveCodeDC._nextCursor++;
+			LiveCodeDC._cursors[id] = 'url("' + canvas.toDataURL('image/png') + '") ' +
+				Math.max(0, Math.min(xhot, width - 1)) + ' ' +
+				Math.max(0, Math.min(yhot, height - 1)) + ', auto';
+			return id;
+		},
+
+		freeCursor: function(id) {
+			delete LiveCodeDC._cursors[id];
+		},
+
+		setWindowCursor: function(pID, id) {
+			var canvas = LiveCodeDC.getWindowCanvas(pID);
+			if (canvas) {
+				canvas.style.cursor = LiveCodeDC._cursors[id] || 'default';
+			}
+		},
+
+		/*** Beep ***/
+
+		_audio: null,
+
+		// A tone of <pitch> Hz for <duration> ms, at <loudness> percent.
+		// Browsers let a page make a sound once the user has clicked or
+		// typed in it.
+		beep: function(pitch, duration, loudness) {
+			var AudioContext = window.AudioContext || window.webkitAudioContext;
+			if (!AudioContext || duration <= 0 || loudness <= 0 || pitch <= 0) {
+				return;
+			}
+			try {
+				if (!LiveCodeDC._audio) {
+					LiveCodeDC._audio = new AudioContext();
+				}
+				var audio = LiveCodeDC._audio;
+				if (audio.state == 'suspended') {
+					audio.resume();
+				}
+				var start = audio.currentTime;
+				var length = duration / 1000;
+				var fade = Math.min(0.005, length / 4);
+				var level = 0.25 * Math.min(loudness, 100) / 100;
+				var oscillator = audio.createOscillator();
+				var gain = audio.createGain();
+				oscillator.type = 'sine';
+				oscillator.frequency.value = Math.min(pitch, 20000);
+				gain.gain.setValueAtTime(0, start);
+				gain.gain.linearRampToValueAtTime(level, start + fade);
+				gain.gain.setValueAtTime(level, start + length - fade);
+				gain.gain.linearRampToValueAtTime(0, start + length);
+				oscillator.connect(gain);
+				gain.connect(audio.destination);
+				oscillator.start(start);
+				oscillator.stop(start + length);
+			} catch (e) {
+			}
 		},
 		
 		/*** Native Layer API ***/
@@ -245,7 +359,6 @@ mergeInto(LibraryManager.library, {
 			var tElement = LiveCodeUtil.fetchObject(pElementID);
 			if (tElement)
 			{
-				console.log('set rect of element ' + pElementID + ' to {' + pLeft + ',' + pTop + ',' + pRight + ',' + pBottom + ')');
 				tElement.style.setProperty('left', pLeft + 'px', 'important');
 				tElement.style.setProperty('top', pTop + 'px', 'important');
 				tElement.style.setProperty('width', pRight - pLeft + 'px', 'important');
@@ -355,9 +468,7 @@ mergeInto(LibraryManager.library, {
 
 	MCEmscriptenCreateWindow__deps: ['$LiveCodeDC'],
 	MCEmscriptenCreateWindow: function() {
-		var window = LiveCodeDC.createWindow();
-		console.debug("Created window: " + window);
-		return window;
+		return LiveCodeDC.createWindow();
 	},
 	
 	MCEmscriptenDestroyWindow__deps: ['$LiveCodeDC'],
@@ -439,5 +550,30 @@ mergeInto(LibraryManager.library, {
 	MCEmscriptenElementPlaceAbove__deps: ['$LiveCodeDC'],
 	MCEmscriptenElementPlaceAbove: function(p_element, p_above, p_container) {
 		LiveCodeDC.nativeElementPlaceAbove(p_element, p_above, p_container);
+	},
+
+	MCEmscriptenCreateStandardCursor__deps: ['$LiveCodeDC'],
+	MCEmscriptenCreateStandardCursor: function(p_index) {
+		return LiveCodeDC.createStandardCursor(p_index);
+	},
+
+	MCEmscriptenCreateCustomCursor__deps: ['$LiveCodeDC'],
+	MCEmscriptenCreateCustomCursor: function(p_pixels, p_width, p_height, p_stride, p_xhot, p_yhot) {
+		return LiveCodeDC.createCustomCursor(p_pixels, p_width, p_height, p_stride, p_xhot, p_yhot);
+	},
+
+	MCEmscriptenFreeCursor__deps: ['$LiveCodeDC'],
+	MCEmscriptenFreeCursor: function(p_cursor) {
+		LiveCodeDC.freeCursor(p_cursor);
+	},
+
+	MCEmscriptenSetWindowCursor__deps: ['$LiveCodeDC'],
+	MCEmscriptenSetWindowCursor: function(p_window_id, p_cursor) {
+		LiveCodeDC.setWindowCursor(p_window_id, p_cursor);
+	},
+
+	MCEmscriptenBeep__deps: ['$LiveCodeDC'],
+	MCEmscriptenBeep: function(p_pitch, p_duration, p_loudness) {
+		LiveCodeDC.beep(p_pitch, p_duration, p_loudness);
 	},
 });

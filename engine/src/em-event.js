@@ -18,7 +18,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 mergeInto(LibraryManager.library, {
 
-	$LiveCodeEvents__deps: ['$LiveCodeAsync', '$LiveCodeDC', '$LiveCodeUtil'],
+	$LiveCodeEvents__deps: ['$LiveCodeAsync', '$LiveCodeDC', '$LiveCodeUtil', '$LiveCodeClipboard'],
 	$LiveCodeEvents: {
 
 		// true if ensureInit() has ever been run
@@ -52,6 +52,8 @@ mergeInto(LibraryManager.library, {
 				['mouseleave', LiveCodeEvents._handleMouseEvent],
 
 				['contextmenu', LiveCodeEvents._handleContextMenu],
+
+				['wheel', LiveCodeEvents._handleWheelEvent],
 			];
 
 			var mapLength = mapping.length;
@@ -71,6 +73,10 @@ mergeInto(LibraryManager.library, {
 				['compositionstart', LiveCodeEvents._handleComposition],
 				['compositionupdate', LiveCodeEvents._handleComposition],
 				['compositionend', LiveCodeEvents._handleComposition],
+
+				['copy', LiveCodeEvents._handleCopyEvent],
+				['cut', LiveCodeEvents._handleCopyEvent],
+				['paste', LiveCodeEvents._handlePasteEvent],
 			];
 
 			var mapLength = mapping.length;
@@ -107,9 +113,12 @@ mergeInto(LibraryManager.library, {
 				return;
 			}
 
+			LiveCodeEvents._isMac = /^(Mac|iPhone|iPad|iPod)/.test(navigator.platform || '');
+
 			// Add document event listeners to track mouse events outside canvas
 			document.addEventListener("mouseup", LiveCodeEvents._handleDocumentMouseEvent);
 			document.addEventListener("mousemove", LiveCodeEvents._handleDocumentMouseEvent);
+			window.addEventListener("blur", LiveCodeEvents._handleWindowBlur);
 			
 			// Create the hidden input element
 			var tInput = document.createElement('input');
@@ -158,13 +167,63 @@ mergeInto(LibraryManager.library, {
 			var window = LiveCodeDC.getWindowIDForCanvas(pCanvas);
 			if (window == 0)
 			{
-				console.log('failed to find window for canvas');
 				return null;
 			}
 			return LiveCodeEvents._getStackForWindow(window);
 		},
 
+		// True in a browser on a Mac (or an iPad), where Cmd is the
+		// command key (set by initialize(): this object is built when
+		// the engine is linked, with no browser around it)
+		_isMac: false,
+
+		// The modifier keys that are down, as the latest key, mouse or
+		// wheel event of the page says (the shiftKey, the commandKey and
+		// the like): 1 Shift, 2 Alt, 4 Ctrl, 8 Meta (Cmd on a Mac), 16
+		// Caps Lock
+		_modifierKeys: 0,
+
+		// The keys that are down (the keysDown): {key_code: true}
+		_keysDown: {},
+
+		_trackModifiers: function(e) {
+			if (typeof e.shiftKey != 'boolean') {
+				return;
+			}
+			var keys = (e.shiftKey ? 1 : 0) | (e.altKey ? 2 : 0) |
+				(e.ctrlKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+			if (e.getModifierState && e.getModifierState('CapsLock')) {
+				keys |= 16;
+			}
+			LiveCodeEvents._modifierKeys = keys;
+		},
+
+		// The page lost the keyboard: the keys that are down go up for it
+		_handleWindowBlur: function() {
+			LiveCodeEvents._modifierKeys &= 16;
+			LiveCodeEvents._keysDown = {};
+		},
+
+		// The engine's modifiers that are down (MCScreenDC::querymods()):
+		// 1 shift, 2 alt, 4 its command key (Ctrl, or Cmd on a Mac), 8 its
+		// other one (Meta, or Ctrl on a Mac), 16 caps lock
+		getModifierKeys: function() {
+			var keys = LiveCodeEvents._modifierKeys;
+			if (LiveCodeEvents._isMac) {
+				keys = (keys & ~12) | ((keys & 4) << 1) | ((keys & 8) >> 1);
+			}
+			return keys;
+		},
+
+		// The engine's modifiers. On a Mac, Cmd is the engine's command
+		// (control) key and Ctrl its other one, as in the desktop engine
+		// on a Mac, so that Cmd+C copies and the commandKey is Cmd.
 		_encodeModifiers: function(pShift, pAlt, pCtrl, pMeta) {
+			if (LiveCodeEvents._isMac) {
+				var tCtrl = pCtrl;
+				pCtrl = pMeta;
+				pMeta = tCtrl;
+			}
 			return Module.ccall('MCEmscriptenEventEncodeModifiers', 'number',
 								['number', 'number', 'number', 'number'],
 								[pShift, pAlt, pCtrl, pMeta]);
@@ -396,7 +455,16 @@ mergeInto(LibraryManager.library, {
 			//
 			// Not all of these keycodes are actually understood by
 			// the engine, but they're all included for completeness.
+			// The modifier keys, left or right, as on Linux
+			var right = keyboardEvent.location === 2;
 			switch (keyName) {
+
+				// Modifier Keys
+			case 'Shift':    return right ? 0xffe2 : 0xffe1; // XK_Shift_R, XK_Shift_L
+			case 'Control':  return right ? 0xffe4 : 0xffe3; // XK_Control_R, XK_Control_L
+			case 'CapsLock': return 0xffe5; // XK_Caps_Lock
+			case 'Meta':     return right ? 0xffe8 : 0xffe7; // XK_Meta_R, XK_Meta_L
+			case 'Alt':      return right ? 0xffea : 0xffe9; // XK_Alt_R, XK_Alt_L
 
 				// Special Key Values
 			case 'Unidentified':	return 0;
@@ -571,7 +639,6 @@ mergeInto(LibraryManager.library, {
 				}
 			}
 
-			console.debug('Don\'t know how to decode key: ' + keyboardEvent.key);
 			return 0;
 		},
 
@@ -587,7 +654,111 @@ mergeInto(LibraryManager.library, {
 						 [stack, modifiers, char_code, key_code, key_state]);
 		},
 
+		// True if the key is the command key's (Cmd on a Mac, else Ctrl)
+		// with <e>, without Alt (Ctrl+Alt is AltGr, which types)
+		_isCommandKey: function(e) {
+			return (LiveCodeEvents._isMac ? e.metaKey : e.ctrlKey) && !e.altKey;
+		},
+
+		// The command key's shortcuts that the browser keeps: reload, new
+		// tab or window, close, quit and the address bar
+		_browserKeys: {'r': true, 't': true, 'w': true, 'n': true, 'q': true, 'l': true},
+
+		// True if the browser should not act on the key itself, so that
+		// it goes to the stacks alone, as on the desktop: Tab (which would
+		// take the keyboard out of the stacks), the page keys (which would
+		// scroll the page) and the command key's shortcuts. Copy, cut and
+		// paste keep the browser's action, for its clipboard events, and
+		// so do the browser's own shortcuts and its developer tools.
+		_keepFromBrowser: function(e) {
+			if (e.key == 'Tab' || e.key == 'PageUp' || e.key == 'PageDown') {
+				return true;
+			}
+			if (!LiveCodeEvents._isCommandKey(e) || typeof e.key != 'string' || e.key.length != 1) {
+				return false;
+			}
+			var key = e.key.toLowerCase();
+			if (key < 'a' || key > 'z' || key == 'c' || key == 'x' || key == 'v' ||
+				LiveCodeEvents._browserKeys[key]) {
+				return false;
+			}
+			if (e.shiftKey && (key == 'i' || key == 'j')) {
+				return false;
+			}
+			return true;
+		},
+
+		// The paste key (Ctrl+V, Cmd+V), held back until the paste event
+		// that follows it has put what is pasted on the engine's
+		// clipboard: {'event', 'timer'}
+		_heldPaste: null,
+
+		// Keys pressed with Cmd on a Mac, whose keyup the browser does not
+		// send while Cmd is down: they go up with Cmd. {key_code: [stack,
+		// char_code]}
+		_commandKeysDown: {},
+
 		_handleKeyboardEvent: function(e) {
+			// ignore key events during IME composing
+			if (e.isComposing || e.keyCode === 229)
+				return false;
+
+			LiveCodeEvents._trackModifiers(e);
+			var code = LiveCodeEvents._encodeKeyboardKeyCode(e);
+			if (code !== 0) {
+				if (e.type == 'keydown') {
+					LiveCodeEvents._keysDown[code] = true;
+				} else if (e.type == 'keyup') {
+					delete LiveCodeEvents._keysDown[code];
+				}
+			}
+
+			if (e.type == 'keydown' && LiveCodeEvents._keepFromBrowser(e)) {
+				e.preventDefault();
+			}
+
+			var key = typeof e.key == 'string' ? e.key.toLowerCase() : '';
+			var command = LiveCodeEvents._isCommandKey(e);
+			if (e.type == 'keydown' && command && (key == 'c' || key == 'x')) {
+				// a copy event after this key takes what the engine copies
+				LiveCodeClipboard.beginKey();
+			}
+
+			// Hold the paste key back for its paste event; not for long,
+			// as there is none if the browser has nothing to paste
+			if (e.type == 'keydown' && command && key == 'v' && !e.repeat) {
+				LiveCodeEvents._releaseHeldPaste();
+				var held = {'event': e, 'timer': null};
+				held.timer = setTimeout(function() {
+					if (LiveCodeEvents._heldPaste === held) {
+						LiveCodeEvents._releaseHeldPaste();
+					}
+				}, 300);
+				LiveCodeEvents._heldPaste = held;
+				return false;
+			}
+
+			// The keys after it (its keyup) follow it
+			LiveCodeEvents._releaseHeldPaste();
+
+			LiveCodeEvents._postKeyboardEvent(e);
+			LiveCodeAsync.resume();
+
+			return false;
+		},
+
+		_releaseHeldPaste: function() {
+			var held = LiveCodeEvents._heldPaste;
+			if (!held) {
+				return;
+			}
+			LiveCodeEvents._heldPaste = null;
+			clearTimeout(held.timer);
+			LiveCodeEvents._postKeyboardEvent(held.event);
+			LiveCodeAsync.resume();
+		},
+
+		_postKeyboardEvent: function(e) {
 			LiveCodeAsync.delay(function() {
 
 				const kKeyStateDown = 0;
@@ -606,10 +777,6 @@ mergeInto(LibraryManager.library, {
 				// Ignore alt key presses
 				if (e.key == 'Alt')
 					return;
-				
-				// ignore key events during IME composing
-				if (e.isComposing || e.keyCode === 229)
-					return;
 
 				// ignore events for non-lc elements
 				if (!stack)
@@ -621,6 +788,17 @@ mergeInto(LibraryManager.library, {
 					char_code = LiveCodeEvents._encodeKeyboardCharCode(e);
 					key_code = LiveCodeEvents._encodeKeyboardKeyCode(e);
 					LiveCodeEvents._postKeyPress(stack, mods, char_code, key_code, kKeyStateUp);
+					delete LiveCodeEvents._commandKeysDown[key_code];
+
+					// Cmd goes up: so do the keys pressed with it
+					if (e.key == 'Meta' && LiveCodeEvents._isMac) {
+						var down = LiveCodeEvents._commandKeysDown;
+						LiveCodeEvents._commandKeysDown = {};
+						Object.keys(down).forEach(function(code) {
+							delete LiveCodeEvents._keysDown[code];
+							LiveCodeEvents._postKeyPress(down[code][0], mods, down[code][1], Number(code), kKeyStateUp);
+						});
+					}
 					break;
 				case 'keydown':
 					char_code = LiveCodeEvents._encodeKeyboardCharCode(e);
@@ -631,18 +809,57 @@ mergeInto(LibraryManager.library, {
 						LiveCodeEvents._postKeyPress(stack, mods, char_code, key_code, kKeyStateUp);
 
 					LiveCodeEvents._postKeyPress(stack, mods, char_code, key_code, kKeyStateDown);
+
+					if (e.metaKey && e.key != 'Meta' && LiveCodeEvents._isMac) {
+						LiveCodeEvents._commandKeysDown[key_code] = [stack, char_code];
+					}
 					break;
 				default:
-					console.debug('Unexpected keyboard event type: ' + e.type);
 					return;
 				}
 
 				// Clear text input field after capturing key event
 				LiveCodeEvents._inputelement.value = "";
 			});
-			LiveCodeAsync.resume();
+		},
 
-			return false;
+		// ----------------------------------------------------------------
+		// Clipboard events
+		// ----------------------------------------------------------------
+
+		_handleCopyEvent: function(e) {
+			LiveCodeClipboard.handleCopy(e);
+		},
+
+		_handlePasteEvent: function(e) {
+			var held = LiveCodeEvents._heldPaste;
+			if (held) {
+				// the paste event is here: no need for the timer
+				clearTimeout(held.timer);
+			}
+			LiveCodeClipboard.handlePaste(e, function() {
+				if (held) {
+					if (LiveCodeEvents._heldPaste === held) {
+						LiveCodeEvents._releaseHeldPaste();
+					}
+				} else {
+					// The browser's Paste (from its menu): the engine
+					// pastes with its paste key
+					LiveCodeEvents._postPasteKey();
+				}
+			});
+		},
+
+		_postPasteKey: function() {
+			LiveCodeAsync.delay(function() {
+				var stack = LiveCodeEvents._getStackForCanvas(LiveCodeEvents._inputtarget);
+				if (!stack)
+					return;
+				var mods = LiveCodeEvents._encodeModifiers(false, false, !LiveCodeEvents._isMac, LiveCodeEvents._isMac);
+				var kKeyStatePressed = 2;
+				LiveCodeEvents._postKeyPress(stack, mods, 0x76, 0x76, kKeyStatePressed);
+			});
+			LiveCodeAsync.resume();
 		},
 
 		// ----------------------------------------------------------------
@@ -661,7 +878,6 @@ mergeInto(LibraryManager.library, {
 		},
 
 		_handleInput: function(inputEvent) {
-			console.debug('Input event: ' + inputEvent.type + ' ' + inputEvent.data);
 		},
 
 		_stringToUTF16: function(string) {
@@ -678,7 +894,6 @@ mergeInto(LibraryManager.library, {
 				if (!stack)
 					return;
 
-				console.log('composition event: ' + compositionEvent.type + " '" + compositionEvent.data + "'");
 				var encodedString;
 				var chars, length;
 				switch (compositionEvent.type) {
@@ -798,6 +1013,7 @@ mergeInto(LibraryManager.library, {
 		},
 		
 		_handleMouseEvent: function(e) {
+			LiveCodeEvents._trackModifiers(e);
 			LiveCodeAsync.delay(function () {
 
 				var target = LiveCodeEvents._eventTarget(e);
@@ -874,7 +1090,6 @@ mergeInto(LibraryManager.library, {
 					break;
 
 				default:
-					console.debug('Unexpected mouse event type: ' + e.type);
 					return;
 				}
 
@@ -883,6 +1098,67 @@ mergeInto(LibraryManager.library, {
 
 			// Prevent event from propagating
 			e.preventDefault();
+			return false;
+		},
+
+		// The wheel's movement not yet given to the engine, in pixels
+		_wheel: {'x': 0, 'y': 0},
+
+		// One click of a mouse's wheel, in pixels (Chrome's and Edge's
+		// deltaY for one; Firefox's three lines are about as much)
+		_wheelStep: 100,
+
+		// The wheel scrolls the field or group under the mouse, as on the
+		// desktop: the engine gets one wheel key (XK_WheelDown ...) per
+		// click of the wheel, and a trackpad's small moves add up to one.
+		// The engine's movements are the other way round from the page's,
+		// as a Mac's are: a positive dv (XK_WheelDown, rawKeyDown 65309)
+		// shows what is above, where a positive deltaY shows what is below.
+		_handleWheelEvent: function(e) {
+			LiveCodeEvents._trackModifiers(e);
+			var scale = e.deltaMode == 1 ? 40 : (e.deltaMode == 2 ? 800 : 1);
+			var wheel = LiveCodeEvents._wheel;
+			var step = LiveCodeEvents._wheelStep;
+
+			// a change of direction starts again
+			if (e.deltaX * wheel.x < 0)
+				wheel.x = 0;
+			if (e.deltaY * wheel.y < 0)
+				wheel.y = 0;
+			wheel.x += e.deltaX * scale;
+			wheel.y += e.deltaY * scale;
+
+			var clicks = [];
+			while (Math.abs(wheel.y) >= step) {
+				var down = wheel.y > 0 ? 1 : -1;
+				wheel.y -= down * step;
+				clicks.push([0, -down]);
+			}
+			while (Math.abs(wheel.x) >= step) {
+				var right = wheel.x > 0 ? 1 : -1;
+				wheel.x -= right * step;
+				clicks.push([-right, 0]);
+			}
+
+			// The page does not scroll under the stacks
+			e.preventDefault();
+
+			if (clicks.length == 0)
+				return false;
+
+			var target = e.target;
+			LiveCodeAsync.delay(function() {
+				var stack = LiveCodeEvents._getStackForCanvas(target);
+				if (!stack)
+					return;
+				var mods = LiveCodeEvents._encodeModifiers(e.shiftKey, e.altKey, e.ctrlKey, e.metaKey);
+				clicks.forEach(function(click) {
+					Module.ccall('MCEmscriptenHandleMouseWheel', 'number',
+								 ['number', 'number', 'number', 'number', 'number'],
+								 [stack, e.timeStamp, mods, click[0], click[1]]);
+				});
+			});
+			LiveCodeAsync.resume();
 			return false;
 		},
 		
@@ -931,7 +1207,6 @@ mergeInto(LibraryManager.library, {
 				var stack = LiveCodeEvents._getStackForWindow(window);
 				if (stack == 0)
 				{
-					console.log('could not find stack for window ' + window);
 					return
 				}
 				LiveCodeEvents._postWindowReshape(stack, 1.0);
@@ -949,6 +1224,23 @@ mergeInto(LibraryManager.library, {
 	MCEmscriptenEventFinalizeJS__deps: ['$LiveCodeEvents'],
 	MCEmscriptenEventFinalizeJS: function() {
 		LiveCodeEvents.finalize();
+	},
+
+	// The modifier keys that are down (see getModifierKeys)
+	MCEmscriptenGetModifierKeys__deps: ['$LiveCodeEvents'],
+	MCEmscriptenGetModifierKeys: function() {
+		return LiveCodeEvents.getModifierKeys();
+	},
+
+	// The codes of the keys that are down, at most <max> of them into
+	// <codes> (uint32_t); returns how many there are
+	MCEmscriptenGetKeysDown__deps: ['$LiveCodeEvents'],
+	MCEmscriptenGetKeysDown: function(codes, max) {
+		var down = Object.keys(LiveCodeEvents._keysDown);
+		for (var i = 0; i < down.length && i < max; i++) {
+			{{{ makeSetValue('codes', 'i * 4', 'Number(down[i])', 'i32') }}};
+		}
+		return down.length;
 	},
 
 });

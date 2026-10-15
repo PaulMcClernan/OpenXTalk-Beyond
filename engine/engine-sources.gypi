@@ -770,6 +770,7 @@
 			'src/em-async.js',
 			'src/em-clipboard.h',
 			'src/em-clipboard.cpp',
+			'src/em-clipboard.js',
 			'src/em-dc-mainloop.cpp',
 			'src/em-dc.h',
 			'src/em-dc.cpp',

@@ -74,14 +74,18 @@ Then:
    lines to the console (see web-probe.livecodescript): its checks of
    waits (in openStack, in handlers, nested, with messages, until a
    condition), "send ... in", "do ... as JavaScript", files, URLs (get,
-   post, put, load with message, a missing page) and the browser dialogs
-   (answer, answer with two buttons, ask), which this script accepts,
-   giving "Ada" to the prompt. When the probe writes "PROBE ready", this
-   script clicks the button, types "abc" into the field, and calls the
-   stack's handlers from the page (document.liveCode.findStackWithName):
-   probeFromJS(21) must return 42, and probeReport() "abc|abc|1". Then it
-   takes a screenshot of the stack and checks the colours of the card, the
-   graphic and the image in it.
+   post, put, load with message, a missing page), the page's dialogs
+   (answer, answer with two buttons, ask), whose default buttons this
+   script clicks, typing "Ada" into the ask dialog's field, the standard
+   folders, a file written to /downloads (which must reach the browser as
+   a download), the address, randomBytes, the modifier keys and the
+   cursor. When the probe writes "PROBE ready", this script clicks the
+   button, types "abc" into the field, and calls the stack's handlers
+   from the page (document.liveCode.findStackWithName): probeFromJS(21)
+   must return 42, probeReport() "abc|abc|1", and probeReport("keys"),
+   with Shift held down, "down|65505". Then it takes a screenshot of the
+   stack and checks the colours of the card, the graphic and the image in
+   it.
 
 The URLs are loaded by the engine, or by the Internet library (libURL)
 when the standalone has it: the IDE's builder adds it, with its web
@@ -132,8 +136,12 @@ PROMPT_ANSWER = 'Ada'
 PROBE_CHECKS = (
     'platform', 'wait-openstack', 'wait-handler', 'wait-nested', 'wait-until', 'send-in-time',
     'javascript', 'file-roundtrip', 'standalone-folder', 'url-get', 'url-post', 'url-put',
-    'url-missing', 'url-load', 'answer-confirm', 'ask', 'objects',
+    'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
+    'address', 'random-bytes', 'modifiers', 'cursor', 'objects',
 )
+
+# The file the probe writes to /downloads, which the browser must download
+PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
 
 # Colours in the screenshot, at points of the card (the probe's stack is
 # 480x360; see web-deploy.livecodescript)
@@ -465,7 +473,7 @@ def run_browser(url, version, work, timeout, url_path=None):
     except ImportError:
         raise CheckError('the Python package playwright is missing (pip install playwright, then '
                          'python3 -m playwright install chromium)')
-    problems, lines, console, page_errors = [], [], [], []
+    problems, lines, console, page_errors, downloads = [], [], [], [], []
     probes = {}
     info = {}
 
@@ -489,6 +497,31 @@ def run_browser(url, version, work, timeout, url_path=None):
         else:
             dialog.accept()
 
+    def answer_page_dialog():
+        # The page's dialogs (em-dialog.js), which the engine's answer and
+        # ask show: the default button, after "Ada" in the field if any
+        dialog = page.locator('.oxt-dialog')
+        if dialog.count() == 0 or not dialog.first.is_visible():
+            return
+        dialog = dialog.first
+        message = dialog.locator('.oxt-dialog-message')
+        message = message.first.text_content() if message.count() else ''
+        buttons = dialog.locator('.oxt-dialog-button').all_text_contents()
+        field = dialog.locator('input')
+        log('  page dialog: %r %r%s' % (message, buttons, ' (with a field)' if field.count() else ''))
+        if field.count():
+            field.first.fill(PROMPT_ANSWER)
+        dialog.locator('.oxt-dialog-default').click(timeout=5000)
+
+    def on_download(download):
+        try:
+            with open(download.path(), 'rb') as f:
+                content = f.read()
+        except (OSError, PlaywrightError) as e:
+            content = 'unreadable: %s' % e
+        log('  download %s: %r' % (download.suggested_filename, content[:80]))
+        downloads.append((download.suggested_filename, content))
+
     def on_page_error(error):
         page_errors.append(str(error))
         log('  page error: %s' % error)
@@ -500,15 +533,20 @@ def run_browser(url, version, work, timeout, url_path=None):
                 return True
             if page_errors:
                 return False
+            try:
+                answer_page_dialog()
+            except PlaywrightError as e:
+                log('  could not answer a page dialog: %s' % e)
             page.wait_for_timeout(100)
         problems.append('%s did not happen within %d seconds' % (what, seconds))
         return False
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={'width': 800, 'height': 600})
+        page = browser.new_page(viewport={'width': 800, 'height': 600}, accept_downloads=True)
         page.on('console', on_console)
         page.on('dialog', on_dialog)
+        page.on('download', on_download)
         page.on('pageerror', on_page_error)
         started = time.time()
         page.goto(url)
@@ -550,6 +588,22 @@ def run_browser(url, version, work, timeout, url_path=None):
                                     'clicks: \'abc|abc|1\'' % (report,))
                 else:
                     lines.append('a click, typing and calls from the page reached the stack')
+                # the shiftKey and the keysDown, with Shift held down
+                page.keyboard.down('Shift')
+                page.wait_for_timeout(100)
+                keys = page.evaluate("document.liveCode.findStackWithName('%s').probeReport('keys')" % STACK_NAME)
+                page.keyboard.up('Shift')
+                if keys != 'down|65505':
+                    problems.append('probeReport("keys") returned %r with Shift held down, expected the shiftKey '
+                                    'and the keysDown: \'down|65505\'' % (keys,))
+                else:
+                    lines.append('the shiftKey and the keysDown saw Shift held down')
+                # the file the probe wrote to /downloads
+                if wait_for(lambda: downloads, 'the download of %s' % PROBE_DOWNLOAD[0], 10):
+                    if downloads != [PROBE_DOWNLOAD]:
+                        problems.append('the browser downloaded %r, expected %r' % (downloads, [PROBE_DOWNLOAD]))
+                    else:
+                        lines.append('the file written to /downloads reached the browser as a download')
                 # the colours drawn
                 shot = os.path.join(work, STACK_NAME + '.png')
                 page.screenshot(path=shot, clip=dict(x=canvas['x'], y=canvas['y'],

@@ -28,10 +28,11 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --    PROBE <check> FAIL <detail>
 --    PROBE info <name> <value>
 --
--- The checks run from openStack on, with nobody acting. Then the probe
--- writes "PROBE ready", and web_check.py does what a user and a page do:
--- it clicks the button (mouseUp writes "PROBE click PASS <count>"), types
--- into the field, answers the dialogs, and calls the handlers that the
+-- The checks run from openStack on, with nobody acting but web_check.py,
+-- which answers the page's dialogs as they come. Then the probe writes
+-- "PROBE ready", and web_check.py does what a user and a page do: it
+-- clicks the button (mouseUp writes "PROBE click PASS <count>"), types
+-- into the field, holds Shift down, and calls the handlers that the
 -- stack's cJavascriptHandlers name: probeFromJS and probeReport.
 --
 -- The checks run only in the web standalone: in the IDE, which opens the
@@ -74,7 +75,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeObjects"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeObjects"
       try
          dispatch tCheck to me
       catch tError
@@ -251,15 +252,52 @@ on probeLoaded pUrl, pStatus, pData
 end probeLoaded
 
 command probeDialogs
-   -- The browser's own dialogs: web_check.py accepts each one, and gives
-   -- "Ada" to the prompt
+   -- The page's dialogs, which stand in for the desktop's: web_check.py
+   -- clicks each one's default button (the last), typing "Ada" into the
+   -- ask dialog's field. As on the desktop, it is the button clicked, and
+   -- "OK" for an answer dialog without buttons.
    answer "Hello from the probe"
-   probeInfo "answer", it
+   probeCheck "answer", it is "OK", it
    answer "Go on?" with "Cancel" or "OK"
    probeCheck "answer-confirm", it is "OK", it
    ask "What is your name?" with "nobody"
-   probeCheck "ask", it is "Ada", it
+   probeCheck "ask", it is "Ada" and the result is empty, it && "result=" & the result
 end probeDialogs
+
+command probeSystem
+   local tFolder, tMissing, tHost, tCursor
+   -- The standard folders, which the engine makes in its file system
+   repeat for each item tFolder in "home,documents,desktop,preferences,support"
+      if there is not a folder specialFolderPath(tFolder) then
+         put tFolder & "=" & specialFolderPath(tFolder) & space after tMissing
+      end if
+   end repeat
+   probeCheck "folders", tMissing is empty and specialFolderPath("downloads") is "/downloads", \
+         "missing=" & tMissing && "downloads=" & specialFolderPath("downloads")
+
+   -- A file written to /downloads goes to the user as a download, which
+   -- web_check.py checks
+   put "download me" into url "file:/downloads/probe-download.txt"
+   probeCheck "download-written", the result is empty, the result
+
+   -- The address is the page's host and the program's name
+   do "window.location.hostname" as "JavaScript"
+   put the result into tHost
+   probeCheck "address", the address begins with (tHost & ":"), the address
+   probeCheck "random-bytes", the length of randomBytes(16) is 16, the length of randomBytes(16)
+
+   -- No key is down yet; web_check.py holds Shift down later
+   probeCheck "modifiers", the shiftKey is "up" and the keysDown is empty, \
+         "shiftKey=" & the shiftKey && "keysDown=" & the keysDown
+
+   -- The cursor is the canvas's CSS cursor
+   set the lockCursor to true
+   set the cursor to hand
+   do "document.getElementById('canvas').style.cursor" as "JavaScript"
+   put the result into tCursor
+   set the lockCursor to false
+   probeCheck "cursor", tCursor is "pointer", tCursor
+end probeSystem
 
 command probeObjects
    probeCheck "objects", there is a button "Probe Button" and there is a field "Probe Field" \
@@ -296,7 +334,11 @@ function probeFromJS pValue
    return pValue * 2
 end probeFromJS
 
--- Called from the page: what the user did
-function probeReport
+-- Called from the page: what the user did, or with "keys", the keys that
+-- are down
+function probeReport pWhat
+   if pWhat is "keys" then
+      return the shiftKey & "|" & the keysDown
+   end if
    return the text of field "Probe Field" & "|" & sKeys & "|" & sClicks
 end probeReport

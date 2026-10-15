@@ -20,6 +20,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "em-filehandle.h"
 #include "em-util.h"
+#include "em-dc.h"
 
 #include "parsedef.h"
 #include "globals.h"
@@ -28,7 +29,17 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include <unistd.h>
 
 MCEmscriptenFileHandle::MCEmscriptenFileHandle(int t_fd)
-	: m_fd(t_fd), m_eof(false)
+	: m_fd(t_fd), m_eof(false),
+	  m_download(nil), m_written(false), m_failed(false)
+{
+}
+
+MCEmscriptenFileHandle::MCEmscriptenFileHandle(int t_fd,
+                                               MCStringRef p_download,
+                                               bool p_written)
+	: m_fd(t_fd), m_eof(false),
+	  m_download(MCValueRetain(p_download)), m_written(p_written),
+	  m_failed(false)
 {
 }
 
@@ -45,6 +56,19 @@ MCEmscriptenFileHandle::~MCEmscriptenFileHandle()
 		}
 
 		m_fd = -1;
+	}
+
+	/* A file written under /downloads goes to the user, unless writing
+	 * it failed (a stack whose save failed is put back as it was) */
+	if (m_download != nil)
+	{
+		if (m_written && !m_failed)
+		{
+			MCEmscriptenDownloadFile(m_download);
+		}
+
+		MCValueRelease(m_download);
+		m_download = nil;
 	}
 }
 
@@ -152,6 +176,8 @@ MCEmscriptenFileHandle::Write(const void *p_buffer,
 	size_t t_total = 0;
 	ssize_t t_written = 0;
 
+	m_written = true;
+
 	while (t_total < p_length)
 	{
 		errno = 0;
@@ -175,6 +201,7 @@ MCEmscriptenFileHandle::Write(const void *p_buffer,
 				continue;
 			}
 
+			m_failed = true;
 			return false;
 		}
 
@@ -182,6 +209,7 @@ MCEmscriptenFileHandle::Write(const void *p_buffer,
 		{
 			/* successfully writing but making no progress is weird --
 			 * treat it as an error */
+			m_failed = true;
 			return false;
 		}
 
@@ -268,6 +296,7 @@ MCEmscriptenFileHandle::Truncate()
 	}
 
 	/* Truncate to the current file position */
+	m_written = true;
 	return (0 == ftruncate(m_fd, t_length));
 }
 

@@ -32,6 +32,8 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "dispatch.h"
 #include "globals.h"
 #include "graphics_util.h"
+#include "image.h"
+#include "imagebitmap.h"
 
 #include <emscripten.h>
 
@@ -117,6 +119,14 @@ bool MCEmscriptenHandleMousePress(MCStack *p_stack, uint32_t p_time, uint32_t p_
 	return true;
 }
 
+MC_DLLEXPORT_DEF
+bool MCEmscriptenHandleMouseWheel(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, int32_t p_dh, int32_t p_dv)
+{
+	if (MCnoui) return false;
+
+	return MCEventQueuePostMouseWheel(p_stack, p_time, p_modifiers, p_dh, p_dv);
+}
+
 static inline MCPoint MCEmscriptenWindowToGlobalLoc(MCStack *p_stack, const MCPoint &p_loc)
 {
 	MCRectangle t_window_rect = p_stack->view_getrect();
@@ -139,8 +149,16 @@ bool MCEmscriptenHandleMousePosition(MCStack *p_stack, uint32_t p_time, uint32_t
 	return true;
 }
 
+/* The beep's defaults, as the Windows engine's */
+#define kMCEmscriptenBeepPitch 440
+#define kMCEmscriptenBeepDuration 100
+#define kMCEmscriptenBeepLoudness 100
+
 MCScreenDC::MCScreenDC()
-	: m_main_window(nil), m_mouse_button_state(0)
+	: m_main_window(nil), m_mouse_button_state(0),
+	  m_beep_pitch(kMCEmscriptenBeepPitch),
+	  m_beep_duration(kMCEmscriptenBeepDuration),
+	  m_beep_loudness(kMCEmscriptenBeepLoudness)
 {
 	m_mouse_position = MCPointMake(-1,-1);
 }
@@ -326,17 +344,22 @@ MCScreenDC::wait(real64_t p_duration,
 			                              t_exit_time - t_current_time);
 
 			/* Check if the requested wait duration has already
-			 * elapsed */
+			 * elapsed. A pending message that fell due while the
+			 * engine handled the last one does not end the wait, as
+			 * it does not on the desktop: it is handled next (a wait
+			 * that ended on it lost the message, when the browser ran
+			 * the engine's timer late). */
 			if (!t_done)
 			{
-				t_done = (t_sleep_time <= 0);
+				t_done = (t_exit_time - t_current_time <= 0);
 			}
 
 			/* There's still some waiting required, so give up running the
 			 * engine for now and wait for an event or timeout from the
-			 * browser */
+			 * browser: no time at all if a message is due, which keeps
+			 * the page answering while the messages run */
 			if (!t_done &&
-			    MCEmscriptenAsyncYield(t_sleep_time))
+			    MCEmscriptenAsyncYield(MCMax(t_sleep_time, 0.0)))
 			{
 				t_done = p_accept_any_event;
 			}
@@ -382,14 +405,205 @@ MCScreenDC::wait(real64_t p_duration,
  * Ask/answer
  * ================================================================ */
 
-// These functions are implemented in javascript
+// These functions are implemented in javascript (em-dialog.js)
 extern "C" int32_t MCEmscriptenDialogShowAlert(const unichar_t* p_message, size_t p_message_length);
 extern "C" bool MCEmscriptenDialogShowConfirm(const unichar_t* p_message, size_t p_message_length);
 extern "C" int32_t MCEmscriptenDialogShowPrompt(const unichar_t* p_message, size_t p_message_length, const unichar_t* p_default, size_t p_default_length, unichar_t** r_result, size_t* r_result_length);
 
+extern "C" uint32_t MCEmscriptenDialogOpen(uint32_t p_kind, uint32_t p_type, const unichar_t *p_title, size_t p_title_length, const unichar_t *p_message, size_t p_message_length, const unichar_t *p_buttons, size_t p_buttons_length, const unichar_t *p_text, size_t p_text_length);
+extern "C" uint32_t MCEmscriptenDialogPickFiles(const unichar_t *p_title, size_t p_title_length, const unichar_t *p_message, size_t p_message_length, bool p_multiple, bool p_folder, const unichar_t *p_accept, size_t p_accept_length, const unichar_t *p_labels, size_t p_labels_length);
+extern "C" bool MCEmscriptenDialogIsOpen(uint32_t p_id);
+extern "C" int32_t MCEmscriptenDialogGetButton(uint32_t p_id);
+extern "C" bool MCEmscriptenDialogGetText(uint32_t p_id, unichar_t **r_text, size_t *r_text_length);
+extern "C" void MCEmscriptenDialogRelease(uint32_t p_id);
+extern "C" bool MCEmscriptenOfferDownload(const unichar_t *p_path, size_t p_path_length);
+extern "C" bool MCEmscriptenOpenDocument(const unichar_t *p_path, size_t p_path_length);
+
+/* Waits until the dialog <p_id> of the page is closed, then reads what
+ * it returned and forgets it. The engine goes on running its timers
+ * and answering the page's events meanwhile, as in the modal loop of a
+ * desktop dialog; the dialog covers the stacks' windows, so they get
+ * no clicks. A click on one of its buttons resumes the engine. */
+static void
+MCEmscriptenDialogWait(uint32_t p_id, int32_t &r_button, MCStringRef *r_text)
+{
+	while (!MCquit && MCEmscriptenDialogIsOpen(p_id))
+	{
+		if (MCscreen->wait(60.0, True, True))
+			break;
+	}
+
+	/* Closed by quitting (or a wait that could not yield): cancelled */
+	if (MCEmscriptenDialogIsOpen(p_id))
+		r_button = -1;
+	else
+		r_button = MCEmscriptenDialogGetButton(p_id);
+
+	if (r_text != nil)
+	{
+		unichar_t *t_chars = nil;
+		size_t t_length = 0;
+		if (r_button < 0 ||
+		    !MCEmscriptenDialogGetText(p_id, &t_chars, &t_length) ||
+		    !MCStringCreateWithCharsAndRelease(t_chars, t_length, *r_text))
+		{
+			*r_text = MCValueRetain(kMCEmptyString);
+		}
+	}
+
+	MCEmscriptenDialogRelease(p_id);
+}
+
+/* Converts nil to empty and locks the string as UTF-16 */
+static bool
+MCEmscriptenDialogLock(MCAutoStringRefAsUTF16String &x_u16, MCStringRef p_string)
+{
+	return x_u16.Lock(p_string != nil ? p_string : kMCEmptyString);
+}
+
+bool
+MCEmscriptenShowDialog(MCEmscriptenDialogKind p_kind,
+                       uint32_t p_type,
+                       MCStringRef p_title,
+                       MCStringRef p_message,
+                       MCStringRef *p_buttons,
+                       uindex_t p_button_count,
+                       MCStringRef p_text,
+                       int32_t &r_button,
+                       MCStringRef *r_text)
+{
+	if (!MCEmscriptenAsyncCanYield())
+		return false;
+
+	/* The buttons' labels, one per line */
+	MCAutoListRef t_list;
+	MCAutoStringRef t_labels;
+	if (!MCListCreateMutable('\n', &t_list))
+		return false;
+	for (uindex_t i = 0; i < p_button_count; i++)
+	{
+		MCAutoStringRef t_label;
+		if (!MCStringMutableCopy(p_buttons[i], &t_label) ||
+		    !MCStringFindAndReplaceChar(*t_label, '\n', ' ', kMCStringOptionCompareExact) ||
+		    !MCListAppend(*t_list, *t_label))
+			return false;
+	}
+	if (!MCListCopyAsString(*t_list, &t_labels))
+		return false;
+
+	MCAutoStringRefAsUTF16String t_title_u16, t_message_u16, t_labels_u16, t_text_u16;
+	if (!MCEmscriptenDialogLock(t_title_u16, p_title) ||
+	    !MCEmscriptenDialogLock(t_message_u16, p_message) ||
+	    !MCEmscriptenDialogLock(t_labels_u16, *t_labels) ||
+	    !MCEmscriptenDialogLock(t_text_u16, p_text))
+		return false;
+
+	uint32_t t_id = MCEmscriptenDialogOpen(p_kind, p_type,
+	                                       t_title_u16.Ptr(), t_title_u16.Size(),
+	                                       t_message_u16.Ptr(), t_message_u16.Size(),
+	                                       t_labels_u16.Ptr(), t_labels_u16.Size(),
+	                                       t_text_u16.Ptr(), t_text_u16.Size());
+
+	MCEmscriptenDialogWait(t_id, r_button, r_text);
+	return true;
+}
+
+bool
+MCEmscriptenPickFiles(MCStringRef p_title,
+                      MCStringRef p_message,
+                      bool p_multiple,
+                      bool p_folder,
+                      MCStringRef p_accept,
+                      MCStringRef &r_paths)
+{
+	if (!MCEmscriptenAsyncCanYield())
+		return false;
+
+	/* The labels of the buttons of the dialog that asks for a click to
+	 * open the browser's file picker, when it needs one (UTF-8, for the
+	 * ellipsis) */
+	const char *t_labels_utf8;
+	if (p_folder)
+		t_labels_utf8 = "Cancel\nChoose Folder\u2026";
+	else if (p_multiple)
+		t_labels_utf8 = "Cancel\nChoose Files\u2026";
+	else
+		t_labels_utf8 = "Cancel\nChoose File\u2026";
+	MCAutoStringRef t_labels;
+	if (!MCStringCreateWithBytes(reinterpret_cast<const byte_t *>(t_labels_utf8), strlen(t_labels_utf8),
+	                             kMCStringEncodingUTF8, false, &t_labels))
+		return false;
+
+	MCAutoStringRefAsUTF16String t_title_u16, t_message_u16, t_accept_u16, t_labels_u16;
+	if (!MCEmscriptenDialogLock(t_title_u16, p_title) ||
+	    !MCEmscriptenDialogLock(t_message_u16, p_message) ||
+	    !MCEmscriptenDialogLock(t_accept_u16, p_accept) ||
+	    !MCEmscriptenDialogLock(t_labels_u16, *t_labels))
+		return false;
+
+	uint32_t t_id = MCEmscriptenDialogPickFiles(t_title_u16.Ptr(), t_title_u16.Size(),
+	                                            t_message_u16.Ptr(), t_message_u16.Size(),
+	                                            p_multiple, p_folder,
+	                                            t_accept_u16.Ptr(), t_accept_u16.Size(),
+	                                            t_labels_u16.Ptr(), t_labels_u16.Size());
+
+	int32_t t_button;
+	MCAutoStringRef t_paths;
+	MCEmscriptenDialogWait(t_id, t_button, &(&t_paths));
+
+	if (t_button >= 0 && !MCStringIsEmpty(*t_paths))
+		r_paths = MCValueRetain(*t_paths);
+	else
+		r_paths = nil;
+	return true;
+}
+
+bool
+MCEmscriptenDownloadFile(MCStringRef p_path)
+{
+	MCAutoStringRefAsUTF16String t_path_u16;
+	return t_path_u16.Lock(p_path) &&
+		MCEmscriptenOfferDownload(t_path_u16.Ptr(), t_path_u16.Size());
+}
+
+bool
+MCEmscriptenShowDocument(MCStringRef p_path)
+{
+	MCAutoStringRefAsUTF16String t_path_u16;
+	return t_path_u16.Lock(p_path) &&
+		MCEmscriptenOpenDocument(t_path_u16.Ptr(), t_path_u16.Size());
+}
+
 int32_t
 MCScreenDC::popupanswerdialog(MCStringRef *p_buttons, uint32_t p_button_count, uint32_t p_type, MCStringRef p_title, MCStringRef p_message, bool p_blocking)
 {
+    /* A dialog of the page, with its title, icon and buttons, when the
+     * engine can wait for it. The answer command passes the type
+     * kMCAnswerDialogTypePlain for no icon. */
+    uint32_t t_icon = 0;
+    if (p_type <= kMCAnswerDialogTypeError)
+        t_icon = p_type + 1;
+
+    MCStringRef t_ok = MCSTR("OK");
+    MCStringRef *t_buttons = p_buttons;
+    uint32_t t_button_count = p_button_count;
+    if (t_button_count == 0)
+    {
+        t_buttons = &t_ok;
+        t_button_count = 1;
+    }
+
+    int32_t t_button;
+    if (MCEmscriptenShowDialog(kMCEmscriptenDialogKindAnswer, t_icon, p_title, p_message, t_buttons, t_button_count, kMCEmptyString, t_button, nil))
+    {
+        if (t_button >= int32_t(p_button_count))
+            return p_button_count == 0 ? 0 : -1;
+        return t_button;
+    }
+
+    /* Otherwise the browser's own alert() or confirm(), which block the
+     * page until they are answered. */
+
     // Default to returning an unsuccessful result
     int32_t t_result = -1;
     
@@ -437,10 +651,26 @@ MCScreenDC::popupanswerdialog(MCStringRef *p_buttons, uint32_t p_button_count, u
 bool
 MCScreenDC::popupaskdialog(uint32_t p_type, MCStringRef p_title, MCStringRef p_message, MCStringRef p_initial, bool p_hint, MCStringRef& r_result)
 {
+    /* A dialog of the page, when the engine can wait for it; ask
+     * password's field shows dots for what is typed. */
+    MCStringRef t_buttons[2] = { MCSTR("Cancel"), MCSTR("OK") };
+    int32_t t_button;
+    MCAutoStringRef t_text;
+    if (MCEmscriptenShowDialog(p_type == AT_PASSWORD ? kMCEmscriptenDialogKindPassword : kMCEmscriptenDialogKindAsk,
+                               p_hint ? 1 : 0, p_title, p_message, t_buttons, 2,
+                               p_initial, t_button, &(&t_text)))
+    {
+        if (t_button != 1)
+            return false;
+        r_result = MCValueRetain(*t_text);
+        return true;
+    }
+
+    /* Otherwise the browser's own prompt() */
     MCAutoStringRefAsUTF16String t_message_u16;
     MCAutoStringRefAsUTF16String t_default_u16;
     t_message_u16.Lock(p_message);
-    t_default_u16.Lock(p_initial);
+    t_default_u16.Lock(p_initial != nil ? p_initial : kMCEmptyString);
     
     unichar_t* t_result;
     size_t t_result_length;
@@ -453,6 +683,216 @@ MCScreenDC::popupaskdialog(uint32_t p_type, MCStringRef p_title, MCStringRef p_m
     return true;
 }
 
+bool
+MCScreenDC::hasfeature(MCPlatformFeature p_feature)
+{
+	switch (p_feature)
+	{
+	/* answer file, answer folder, ask file and answer color use the
+	 * page's dialogs and the browser's file picker (MCA_file ... in
+	 * em-osspec-misc.cpp) */
+	case PLATFORM_FEATURE_OS_FILE_DIALOGS:
+	case PLATFORM_FEATURE_OS_COLOR_DIALOGS:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* ================================================================
+ * Cursors
+ * ================================================================ */
+
+// Implemented in em-dc.js
+extern "C" uint32_t MCEmscriptenCreateStandardCursor(uint32_t p_index);
+extern "C" uint32_t MCEmscriptenCreateCustomCursor(const void *p_pixels, uint32_t p_width, uint32_t p_height, uint32_t p_stride, int32_t p_xhot, int32_t p_yhot);
+extern "C" void MCEmscriptenFreeCursor(uint32_t p_cursor);
+extern "C" void MCEmscriptenSetWindowCursor(uint32_t p_window, uint32_t p_cursor);
+
+/* A cursor is a CSS cursor that em-dc.js keeps */
+struct MCCursor
+{
+	uint32_t id;
+};
+
+static MCCursorRef
+MCEmscriptenNewCursor(uint32_t p_id)
+{
+	MCCursorRef t_cursor = new (nothrow) MCCursor;
+	if (t_cursor == nil)
+	{
+		MCEmscriptenFreeCursor(p_id);
+		return nil;
+	}
+	t_cursor->id = p_id;
+	return t_cursor;
+}
+
+void
+MCScreenDC::resetcursors()
+{
+	// Make sure no stacks reference one of the standard cursors
+	MCdispatcher -> clearcursors();
+
+	/* Browsers show colour cursors with alpha, up to 128 pixels square */
+	MCcursormaxsize = 128;
+	MCcursorcanbealpha = MCcursorcanbecolor = True;
+	MCcursorbwonly = False;
+
+	for (uindex_t i = 0; i < PI_NCURSORS; i++)
+	{
+		freecursor(MCcursors[i]);
+		MCcursors[i] = nil;
+
+		/* The stacks' cursor images (ids 1 to 28), if any, as on the
+		 * desktop; else the browser's cursors */
+		MCImage *t_image = (MCImage *)MCdispatcher->getobjid(CT_IMAGE, i);
+		if (t_image != nil)
+			MCcursors[i] = t_image->createcursor();
+		if (MCcursors[i] == nil)
+			MCcursors[i] = MCEmscriptenNewCursor(MCEmscriptenCreateStandardCursor(i));
+	}
+}
+
+void
+MCScreenDC::setcursor(Window w, MCCursorRef c)
+{
+	// Disable cursor setting when we are a drag-target
+	if (MCdispatcher -> isdragtarget())
+		return;
+
+	if (c == nil)
+		c = MCcursors[PI_ARROW];
+
+	MCEmscriptenSetWindowCursor(reinterpret_cast<uint32_t>(w), c != nil ? c->id : 0);
+}
+
+MCCursorRef
+MCScreenDC::createcursor(MCImageBitmap *p_image, int2 p_xhot, int2 p_yhot)
+{
+	if (p_image == nil)
+		return nil;
+
+	return MCEmscriptenNewCursor(MCEmscriptenCreateCustomCursor(p_image->data, p_image->width, p_image->height, p_image->stride, p_xhot, p_yhot));
+}
+
+void
+MCScreenDC::freecursor(MCCursorRef c)
+{
+	if (c == nil)
+		return;
+
+	MCEmscriptenFreeCursor(c->id);
+	delete c;
+}
+
+/* ================================================================
+ * Beep
+ * ================================================================ */
+
+// Implemented in em-dc.js
+extern "C" void MCEmscriptenBeep(int32_t p_pitch, int32_t p_duration, int32_t p_loudness);
+
+void
+MCScreenDC::beep()
+{
+	MCEmscriptenBeep(m_beep_pitch, m_beep_duration, m_beep_loudness);
+}
+
+void
+MCScreenDC::getbeep(uint4 p_property, int4& r_value)
+{
+	switch (p_property)
+	{
+	case P_BEEP_LOUDNESS:
+		r_value = m_beep_loudness;
+		break;
+	case P_BEEP_PITCH:
+		r_value = m_beep_pitch;
+		break;
+	case P_BEEP_DURATION:
+		r_value = m_beep_duration;
+		break;
+	default:
+		r_value = 0;
+		break;
+	}
+}
+
+/* -1 restores the default, as on the desktop */
+void
+MCScreenDC::setbeep(uint4 p_property, int4 p_value)
+{
+	switch (p_property)
+	{
+	case P_BEEP_LOUDNESS:
+		m_beep_loudness = p_value < 0 ? kMCEmscriptenBeepLoudness : MCMin(p_value, 100);
+		break;
+	case P_BEEP_PITCH:
+		m_beep_pitch = p_value < 0 ? kMCEmscriptenBeepPitch : p_value;
+		break;
+	case P_BEEP_DURATION:
+		m_beep_duration = p_value < 0 ? kMCEmscriptenBeepDuration : p_value;
+		break;
+	}
+}
+
+/* ================================================================
+ * Keyboard state
+ * ================================================================ */
+
+// Implemented in em-event.js
+extern "C" uint32_t MCEmscriptenGetModifierKeys(void);
+extern "C" uint32_t MCEmscriptenGetKeysDown(uint32_t *r_codes, uint32_t p_max);
+
+/* As on the desktop, the keys that are down now: the page's latest key,
+ * mouse or wheel event says, and the browser tells a page nothing more */
+uint2
+MCScreenDC::querymods()
+{
+	if (lockmods)
+	{
+		return MCmodifierstate;
+	}
+
+	uint32_t t_keys = MCEmscriptenGetModifierKeys();
+	uint2 t_state = 0;
+	if ((t_keys & 1) != 0)
+		t_state |= MS_SHIFT;
+	if ((t_keys & 2) != 0)
+		t_state |= MS_MOD1;
+	if ((t_keys & 4) != 0)
+		t_state |= MS_CONTROL;
+	if ((t_keys & 8) != 0)
+		t_state |= MS_MOD2;
+	if ((t_keys & 16) != 0)
+		t_state |= MS_CAPS_LOCK;
+
+	return t_state;
+}
+
+bool
+MCScreenDC::getkeysdown(MCListRef& r_list)
+{
+	uint32_t t_codes[32];
+	uint32_t t_count = MCEmscriptenGetKeysDown(t_codes, 32);
+
+	MCAutoListRef t_list;
+	if (!MCListCreateMutable(',', &t_list))
+	{
+		return false;
+	}
+
+	for (uint32_t i = 0; i < t_count && i < 32; i++)
+	{
+		if (!MCListAppendUnsignedInteger(*t_list, t_codes[i]))
+		{
+			return false;
+		}
+	}
+
+	return MCListCopy(*t_list, r_list);
+}
 
 void
 MCScreenDC::update_mouse_press_state(MCMousePressState p_state, int32_t p_button)

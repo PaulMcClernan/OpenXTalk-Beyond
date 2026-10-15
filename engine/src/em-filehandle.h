@@ -32,6 +32,13 @@ public:
 	 * taking ownership of it.*/
 	MCEmscriptenFileHandle(int p_fd);
 
+	/* The same, for a file under kMCEmscriptenDownloadsFolder opened
+	 * for writing: p_download is its path, and the file is given to the
+	 * user as a download when it is closed, if it has been written to
+	 * (p_written: it already has been, being truncated when it was
+	 * opened). */
+	MCEmscriptenFileHandle(int p_fd, MCStringRef p_download, bool p_written);
+
 	virtual ~MCEmscriptenFileHandle();
 
 	virtual void Close(void);
@@ -57,6 +64,11 @@ public:
 protected:
 	int m_fd;
 	bool m_eof;
+
+	/* The file's path if it is a download (see above), else nil */
+	MCStringRef m_download;
+	bool m_written;
+	bool m_failed;
 };
 
 #endif /* !__MC_EMSCRIPTEN_FILE_HANDLE_H__ */
