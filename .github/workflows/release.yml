@@ -25,7 +25,8 @@
 #   publish   runs only when every job of the three builds has passed (or
 #             was not needed). It downloads those four artifacts, from
 #             this run or from main's build (not the logs or the
-#             per-architecture build outputs), checks each against its
+#             per-architecture build outputs), builds the plugin packages
+#             for other xTalks' IDEs (tools/plugins), checks each against its
 #             SHA256SUMS and the release's file list, writes one combined
 #             SHA256SUMS (tools/ci/release_assets.py) and the release notes
 #             (tools/ci/release_notes.py), then creates the release as a
@@ -417,6 +418,18 @@ jobs:
           path: ${{ runner.temp }}/artifacts/OXT-Beyond-linux-arm64
           run-id: ${{ needs.prepare.outputs.linux-run || github.run_id }}
           github-token: ${{ needs.prepare.outputs.linux-run != '' && github.token || '' }}
+
+      # The xTalk Assistant and the xTalk MCP Bridge as extension packages
+      # for other xTalks' IDEs (LiveCode Community 9, HyperXTalk,
+      # OpenXTalk): built here from this commit's ide/Extensions, with
+      # the release's version, into a folder of the same shape as a
+      # downloaded artifact (its SHA256SUMS too), so that the next step
+      # checks them as it checks the platforms' packages
+      - name: Build the plugin packages
+        run: |
+          python3 tools/plugins/build-plugin-packages.py --release --version "$VERSION" \
+            --out "$RUNNER_TEMP/artifacts/OXT-Beyond-plugins"
+          python3 tools/plugins/build-plugin-packages.py --check "$RUNNER_TEMP"/artifacts/OXT-Beyond-plugins/*.lce
 
       # Each artifact against its own SHA256SUMS and the release's file
       # list (none missing, none extra, the xTalk sources zip once), then

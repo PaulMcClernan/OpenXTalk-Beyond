@@ -66,13 +66,15 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 to 0.2.6-rc.3 are test releases (pre-releases) of
+lists. 0.2.6-rc.1 to 0.2.6-rc.4 are test releases (pre-releases) of
 the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
 plan in the Claude desktop app or Claude Code, build stacks in the IDE
 (see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
 [0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
-[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)); 0.2.5 stays
-the main download until it has held up.
+[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), and of the
+fixes and plugin packages in
+[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins);
+0.2.5 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -206,6 +208,7 @@ version, for example `0.1.0`:
 | 64-bit ARM Linux with glibc 2.31 or later (from 0.2.4-rc.2) | `OXT-Beyond-<version>-linux-arm64.tar.xz` | The same program folder for 64-bit ARM, such as a Raspberry Pi 3, 4 or 5 on a 64-bit system, without the browser widget (see [Linux (64-bit ARM)](#linux-64-bit-arm)). |
 | | `OXT-Beyond-<version>-linux-arm64-binaries.tar.xz` | Only the built engine, externals and tools (`linux-arm64-bin`), as for x86-64. |
 | | `OXT-Beyond-<version>-linux-arm64-symbols.tar.xz` | Debug symbols (`.dbg`), for developers. |
+| Other xTalks' IDEs (LiveCode Community 9, HyperXTalk, OpenXTalk) | `OXT-Beyond-<version>-xtalk-assistant-plugin.lce`, `OXT-Beyond-<version>-mcp-bridge-plugin.lce` | The xTalk Assistant and the xTalk MCP Bridge as extension packages, to install with that IDE's Extension Manager (see [tools/plugins](tools/plugins/README.md)). OXT-Beyond has both built in. Experimental. |
 | All | `OXT-Beyond-<version>-xtalk-sources.zip` | Every file of the bundled xTalk Suite extensions as the release took it from their repositories, so that it can be rebuilt without them. |
 | All | `SHA256SUMS` | SHA-256 checksums of all the files above. |
 
@@ -1345,6 +1348,40 @@ difference from 0.2.5. It has been tested on Linux, the IDE's side
 against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
+
+#### 0.2.6-rc.4: HyperCard import, a quick start on Windows and plugins
+
+OXT-Beyond 0.2.6-rc.4 fixes two things, and changes nothing an existing
+script sees:
+
+- Importing a HyperCard stack no longer crashes the engine. Cards come
+  in HyperCard's order with their backgrounds, pictures, icons, cursors,
+  sounds and styled text, from HyperCard 1 and 2 stacks and from
+  MacBinary and BinHex files; a file that is not a HyperCard stack gives
+  the same error as before.
+- Windows: the installer dates the files it installs correctly. West of
+  UTC they were dated hours in the future (four in New York), and until
+  the clock caught up the IDE rebuilt its whole dictionary at every
+  launch: it stopped answering for about 20 seconds after it had
+  started, which Windows reported as a hang. Every Windows release
+  before this one did it for the first hours after it was installed.
+
+It also brings the xTalk Assistant and the xTalk MCP Bridge to other
+xTalks' IDEs (LiveCode Community 9, HyperXTalk and OpenXTalk): each
+release now carries both as extension packages
+(`OXT-Beyond-<version>-xtalk-assistant-plugin.lce` and
+`OXT-Beyond-<version>-mcp-bridge-plugin.lce`), which that IDE's
+Extension Manager installs into Development > Plugins (see
+[tools/plugins](tools/plugins/README.md)). They are experimental:
+checked as the Extension Manager checks a package, but not yet tried in
+those IDEs. In another IDE the bridge has its own server in Claude
+(`livecode`, `hyperxtalk` or `openxtalk`), so it and OXT-Beyond can
+both be bridged on one computer. OXT-Beyond's built-in copies work as
+before. Nothing else differs from 0.2.6-rc.3.
+
+An earlier 0.2.6-rc.4, published on 14 October and withdrawn the same
+evening, also kept the Linux clipboard after quitting and tidied old
+notes; those changes are not in this one.
 
 #### 0.2.6-rc.3: setting up the Claude desktop app
 
