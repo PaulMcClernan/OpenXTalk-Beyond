@@ -581,8 +581,13 @@ mergeInto(LibraryManager.library, {
             var paths = LiveCodeDialog._downloads;
             LiveCodeDialog._downloads = null;
             for (var i = 0; i < paths.length; i++) {
-                var info = FS.analyzePath(paths[i]);
-                if (info.exists && info.object && !FS.isDir(info.object.mode)) {
+                // (FS.stat throws for a file that is not there)
+                var stat = null;
+                try {
+                    stat = FS.stat(paths[i]);
+                } catch (e) {
+                }
+                if (stat && !FS.isDir(stat.mode)) {
                     LiveCodeDialog._download(paths[i]);
                 }
             }
