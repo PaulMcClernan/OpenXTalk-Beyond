@@ -1527,8 +1527,10 @@ dialogs, the standard folders, a download, sound, the player, the
 browser widget, the externals that the web engine has, encryption,
 speech and printing, and writes what it finds to the browser's console;
 the check then clicks, types, taps and drags a finger in the stack,
-calls its handlers from the page, and looks at what it draws. Every
-check must pass, and nothing may reach the browser's error console. It
+drags and drops, types with a touch screen's keyboard, holds the mouse
+down in a loop that asks for it, calls the stack's handlers from the
+page, and looks at what it draws. Every check must pass, and nothing may
+reach the browser's error console. It
 needs Python 3.8 or later and [Playwright](https://playwright.dev/python/)
 with its Chromium:
 

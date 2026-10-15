@@ -1548,11 +1548,13 @@ page (tick **Build for HTML5** in the standalone settings). Their
 engine, the standalone engine built from this repository with a current
 Emscripten into WebAssembly, is in every package, in
 `Runtime/Emscripten/js`. Stacks run in the browser as on the desktop:
-`wait`, the dialogs, files, URLs, sound, the player and the browser
-widget work, each in the browser's own way. What a browser does not let
-a page do (sockets, other programs, externals) fails as it does on a
-desktop that cannot do it. The guide *Deploying
-Your Application* says what works, and how to put a standalone on a web
+`wait`, the dialogs, files, URLs, the mouse, touch and the touch
+screen's keyboard, drag and drop, sound, the player, the browser
+widget, printing, `encrypt`, revXML, revZip, revDB with SQLite and
+revSpeech work, each in the browser's own way. What a browser does not
+let a page do (sockets, other programs, other externals) fails as it
+does on a desktop that cannot do it. The guide *Deploying Your
+Application* says what works, and how to put a standalone on a web
 site.
 
 Changes made in this repository to build it: the `thirdparty` and `ide`
@@ -1676,10 +1678,10 @@ Known limitations, in rough order of importance:
    or use the portable zip, if you need them. Plan: keep that state in
    the user's own folders.
 12. HTML5 standalones are new. They are tested automatically in
-   Chromium only, not yet in Firefox, Safari or a phone's browser.
-   Besides what a browser does not allow, printing, drag and drop and
-   `encrypt` are not done yet. Their font, which came with LiveCode's
-   HTML5 standalones, has a licence that needs review (see
+   Chromium only, not yet in Firefox, Safari or a phone's browser (the
+   touch screen's keyboard is checked with a stand-in for a phone's).
+   Their font, which came with LiveCode's HTML5 standalones, has a
+   licence that needs review (see
    [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#still-to-review)).
 
 Done since 0.0.1: the extensions of the xTalk Suite are built in, taken
