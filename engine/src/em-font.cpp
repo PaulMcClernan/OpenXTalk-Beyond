@@ -111,6 +111,43 @@ bool MCEmscriptenCustomFontsLoad()
 	return t_success;
 }
 
+/* OXT-Beyond: "start using font file" (MCScreenDC::loadfont(), em-dc.cpp).
+ * The file's font joins those of the standalone's folder, as on the
+ * desktop, where the engine reads the file again whenever it makes a font
+ * from it. Its handle is the font in the list. */
+bool MCEmscriptenCustomFontLoadFile(MCStringRef p_path, void *&r_handle)
+{
+	FT_Library t_ft_library;
+	t_ft_library = nil;
+	if (FT_Init_FreeType(&t_ft_library) != 0)
+		return false;
+
+	MCCustomFont *t_font;
+	t_font = nil;
+	bool t_success;
+	t_success = MCEmscriptenCreateCustomFontFromPath(p_path, t_ft_library, t_font);
+	FT_Done_FreeType(t_ft_library);
+	if (!t_success)
+		return false;
+
+	MCCustomFontListAddFont(t_font);
+	r_handle = t_font;
+	return true;
+}
+
+/* OXT-Beyond: "stop using font file" (MCScreenDC::unloadfont()): the
+ * font that "start using font file" loaded (its handle) leaves the list */
+bool MCEmscriptenCustomFontUnloadFile(void *p_handle)
+{
+	MCCustomFont *t_font;
+	t_font = static_cast<MCCustomFont *>(p_handle);
+	if (t_font == nil || !MCCustomFontListRemoveFont(t_font))
+		return false;
+
+	MCCustomFontDelete(t_font);
+	return true;
+}
+
 
 bool MCEmscriptenListFontFamilies(MCListRef& r_names)
 {

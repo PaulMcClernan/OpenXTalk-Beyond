@@ -44,6 +44,8 @@ bool MCCustomFontCreate(MCStringRef p_path, MCStringRef p_name, MCStringRef p_fa
 void MCCustomFontDelete(MCCustomFont* p_custom_font);
 
 void MCCustomFontListAddFont(MCCustomFont *p_font);
+/* OXT-Beyond: takes a font out of the list (customfont.cpp) */
+bool MCCustomFontListRemoveFont(MCCustomFont *p_font);
 bool MCCustomFontListLookupFontByName(MCStringRef p_name, MCCustomFont* &r_font);
 bool MCCustomFontListLookupFontByFamilyAndStyle(MCStringRef p_family, bool p_bold, bool p_italic, MCCustomFont* &r_font);
 bool MCCustomFontListLookupFont(MCStringRef p_name, bool p_bold, bool p_italic, MCCustomFont* &r_font);

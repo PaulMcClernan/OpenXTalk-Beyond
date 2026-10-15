@@ -22,6 +22,11 @@ void MCEmscriptenCustomFontsFinalize();
 
 bool MCEmscriptenCustomFontsLoad();
 
+/* OXT-Beyond: "start using font file" and "stop using font file"
+ * (em-font.cpp) */
+bool MCEmscriptenCustomFontLoadFile(MCStringRef p_path, void *&r_handle);
+bool MCEmscriptenCustomFontUnloadFile(void *p_handle);
+
 bool MCEmscriptenListFontFamilies(MCListRef& r_names);
 bool MCEmscriptenListFontsForFamily(MCStringRef p_family, uint32_t p_fsize, MCListRef& r_styles);
 

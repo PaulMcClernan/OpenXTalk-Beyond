@@ -637,6 +637,11 @@ what the handler returns. Builder extensions call JavaScript with the
 * **Fonts.** Text is drawn with Droid Sans, which every standalone has.
 Font files listed one by one on the **Copy Files** pane (not in a folder)
 are loaded when the standalone starts, and their fonts are used by name.
+`start using font file` loads a font file of the engine's file system
+(one in a folder of the **Copy Files** pane, or one that the stack
+downloaded or wrote) until `stop using font file`, as on the desktop;
+`globally` makes no difference, because the page is the only place that
+the font is used.
 
 ##### What a stack cannot do in a browser
 

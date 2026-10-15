@@ -76,16 +76,17 @@ Then:
 2. Headless Chromium (Playwright) opens the page. The probe writes PROBE
    lines to the console (see web-probe.livecodescript): its checks of
    waits (in openStack, in handlers, nested, with messages, until a
-   condition), "send ... in", "do ... as JavaScript", files, URLs (get,
-   post, put, load with message, a missing page), the page's dialogs
-   (answer, answer with two buttons, ask), whose default buttons this
-   script clicks, typing "Ada" into the ask dialog's field, the standard
-   folders, a file written to /downloads (which must reach the browser as
-   a download), the address, randomBytes, the modifier keys, the cursor,
-   an audio clip that it plays (the samples the browser was given must be
-   the clip's), a player that plays the clip's file, and a browser widget
-   (its htmlText, a page of the site and "do ... in widget" each call a
-   handler of its javascriptHandlers). An IDE without CEF (Linux arm64)
+   condition), "send ... in", "do ... as JavaScript", files, a font file
+   that it starts and stops using, URLs (get, post, put, load with
+   message, a missing page), the page's dialogs (answer, answer with two
+   buttons, ask), whose default buttons this script clicks, typing "Ada"
+   into the ask dialog's field, the standard folders, a file written to
+   /downloads (which must reach the browser as a download), the address,
+   randomBytes, the modifier keys, the cursor, an audio clip that it plays
+   (the samples the browser was given must be the clip's), a player that
+   plays the clip's file, and a browser widget (its htmlText, a page of
+   the site and "do ... in widget" each call a handler of its
+   javascriptHandlers). An IDE without CEF (Linux arm64)
    has no browser widget, so neither has the standalone that it builds:
    the probe then writes "PROBE info browser-widget not loaded" instead of
    that check. Last come the externals that the web engine has: an XML
@@ -209,7 +210,7 @@ PROMPT_ANSWER = 'Ada'
 # The checks the probe makes before it is ready, in its order
 PROBE_CHECKS = (
     'platform', 'wait-openstack', 'wait-handler', 'wait-nested', 'wait-until', 'send-in-time',
-    'javascript', 'file-roundtrip', 'standalone-folder', 'url-get', 'url-post', 'url-put',
+    'javascript', 'file-roundtrip', 'standalone-folder', 'font-file', 'url-get', 'url-post', 'url-put',
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
     'xml', 'xslt', 'zip', 'database', 'database-error',

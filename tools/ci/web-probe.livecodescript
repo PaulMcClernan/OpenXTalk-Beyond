@@ -159,11 +159,23 @@ command probeJavaScript
 end probeJavaScript
 
 command probeFiles
-   local tData
+   local tData, tStarted, tStopped
    put "hello web" into url "file:/tmp/probe.txt"
    put url "file:/tmp/probe.txt" into tData
    probeCheck "file-roundtrip", tData is "hello web", tData
    probeCheck "standalone-folder", there is a file "/boot/standalone/DroidSansCombined.ttf", the defaultFolder
+
+   -- A font file that the stack starts using (a copy of the standalone's
+   -- font) is in use until the stack stops using it; a missing one is not
+   put url "binfile:/boot/standalone/DroidSansCombined.ttf" into url "binfile:/tmp/probe-font.ttf"
+   start using font file "/tmp/probe-font.ttf"
+   put the result & "|" & the fontFilesInUse into tStarted
+   stop using font file "/tmp/probe-font.ttf"
+   put the result & "|" & the fontFilesInUse into tStopped
+   start using font file "/tmp/probe-no-font.ttf"
+   probeCheck "font-file", tStarted is "|/tmp/probe-font.ttf" and tStopped is "|" \
+         and the result is "can't load font file", \
+         "started=" & tStarted && "stopped=" & tStopped && "missing=" & the result
 end probeFiles
 
 command probeUrls

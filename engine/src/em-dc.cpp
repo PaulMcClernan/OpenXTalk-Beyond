@@ -37,6 +37,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "clipboard.h"
 #include "em-clipboard.h"
 #include "em-printer.h"
+#include "em-font.h"
 #include "stacklst.h"
 
 #include <emscripten.h>
@@ -380,6 +381,22 @@ MCScreenDC::setname(Window p_window, MCStringRef p_name)
 		return;
 
 	MCEmscriptenSetWindowTitle(reinterpret_cast<uint32_t>(p_window), t_name.Ptr(), t_name.Size());
+}
+
+/* OXT-Beyond: "start using font file": the font of a file in the engine's
+ * file system is used by name, as on the desktop. A page has no fonts but
+ * its own, so "globally" makes no difference here. */
+bool
+MCScreenDC::loadfont(MCStringRef p_path, bool p_globally, void*& r_loaded_font_handle)
+{
+	return MCEmscriptenCustomFontLoadFile(p_path, r_loaded_font_handle);
+}
+
+/* OXT-Beyond: "stop using font file" */
+bool
+MCScreenDC::unloadfont(MCStringRef p_path, bool p_globally, void *p_loaded_font_handle)
+{
+	return MCEmscriptenCustomFontUnloadFile(p_loaded_font_handle);
 }
 
 uintptr_t

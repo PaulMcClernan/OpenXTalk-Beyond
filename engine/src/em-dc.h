@@ -229,6 +229,11 @@ public:
     /* OXT-Beyond: a stack's title, in its window's title bar (em-dc.js) */
     virtual void setname(Window window, MCStringRef newname);
 
+    /* OXT-Beyond: "start using font file" and "stop using font file"
+     * (em-font.cpp) */
+    virtual bool loadfont(MCStringRef p_path, bool p_globally, void*& r_loaded_font_handle);
+    virtual bool unloadfont(MCStringRef p_path, bool p_globally, void *r_loaded_font_handle);
+
     /* Cursors: the canvases' CSS cursors */
     virtual void resetcursors();
     virtual void setcursor(Window w, MCCursorRef c);
