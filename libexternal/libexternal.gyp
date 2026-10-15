@@ -94,4 +94,145 @@
 			},
 		},
 	],
+
+	# OXT-Beyond: the copies of libExternal for the externals that the web
+	# engine links into itself (engine/src/em-externals.cpp), one for each,
+	# with its names renamed for that external (src/external-static.h)
+	'conditions':
+	[
+		[
+			'OS == "emscripten"',
+			{
+				'targets':
+				[
+				{
+					'target_name': 'libExternal-static-revxml',
+					'type': 'static_library',
+
+					'dependencies':
+					[
+						'../libcore/libcore.gyp:libCore',
+					],
+
+					'include_dirs':
+					[
+						'include',
+						'src',
+					],
+
+					'defines':
+					[
+						'EXTERNAL_STATIC_PREFIX=revxml',
+					],
+
+					'cflags':
+					[
+						'-include', 'external-static.h',
+					],
+
+					'sources':
+					[
+						'src/external.c',
+						'src/unxsupport.cpp',
+					],
+				},
+				{
+					'target_name': 'libExternal-static-revzip',
+					'type': 'static_library',
+
+					'dependencies':
+					[
+						'../libcore/libcore.gyp:libCore',
+					],
+
+					'include_dirs':
+					[
+						'include',
+						'src',
+					],
+
+					'defines':
+					[
+						'EXTERNAL_STATIC_PREFIX=revzip',
+					],
+
+					'cflags':
+					[
+						'-include', 'external-static.h',
+					],
+
+					'sources':
+					[
+						'src/external.c',
+						'src/unxsupport.cpp',
+					],
+				},
+				{
+					'target_name': 'libExternal-static-revdb',
+					'type': 'static_library',
+
+					'dependencies':
+					[
+						'../libcore/libcore.gyp:libCore',
+					],
+
+					'include_dirs':
+					[
+						'include',
+						'src',
+					],
+
+					'defines':
+					[
+						'EXTERNAL_STATIC_PREFIX=revdb',
+					],
+
+					'cflags':
+					[
+						'-include', 'external-static.h',
+					],
+
+					'sources':
+					[
+						'src/external.c',
+						'src/unxsupport.cpp',
+					],
+				},
+				{
+					'target_name': 'libExternal-static-dbsqlite',
+					'type': 'static_library',
+
+					'dependencies':
+					[
+						'../libcore/libcore.gyp:libCore',
+					],
+
+					'include_dirs':
+					[
+						'include',
+						'src',
+					],
+
+					'defines':
+					[
+						'EXTERNAL_STATIC_PREFIX=dbsqlite',
+					],
+
+					'cflags':
+					[
+						'-include', 'external-static.h',
+					],
+
+					# A database driver calls no external interface: it uses
+					# the support functions, and has MCSupportLibraryLoad and
+					# the others of its own (revdb/src/dbdrivercommon.cpp)
+					'sources':
+					[
+						'src/unxsupport.cpp',
+					],
+				},
+				],
+			},
+		],
+	],
 }

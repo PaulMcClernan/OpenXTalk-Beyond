@@ -2585,6 +2585,20 @@ the browser, whose events and timers resume it. What a stack can and
 cannot do in a browser is in the guide
 [Deploying Your Application](ide/Documentation/guides/Deploying%20Your%20Application.md).
 
+A browser loads no libraries, so the externals that the web engine runs,
+revXML, revZip, revDB and revDB's SQLite driver, are linked into it, and
+registered by name before it starts
+([`engine/src/em-externals.cpp`](engine/src/em-externals.cpp)): the
+engine and revDB find them by the names they load them by. Every external
+has its own copy of libexternal, so each one is compiled with
+[`libexternal/src/external-static.h`](libexternal/src/external-static.h)
+(and revDB and its driver with
+[`revdb/src/dbdriver-static.h`](revdb/src/dbdriver-static.h)), which
+gives the names they would all define a prefix of their own. The SQLite
+driver reports SQL errors with C++ exceptions, so it and the SQLite
+library are compiled to catch them, and the engine is linked with
+exception catching on; the engine's own code is not.
+
 It is built on Linux by
 [`tools/ci/build-web.sh`](tools/ci/build-web.sh), which the job "Web" of
 every build workflow ([`.github/workflows/web.yml`](.github/workflows/web.yml))

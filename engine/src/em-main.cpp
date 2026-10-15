@@ -29,6 +29,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "dispatch.h"
 
 #include "em-font.h"
+#include "em-externals.h"
 
 #include <unistd.h>
 
@@ -61,6 +62,9 @@ platform_main(int argc, char *argv[], char *envp[])
     {
 		MCEmscriptenBootError("Core System initialisation");
     }
+	/* OXT-Beyond: the externals linked into the engine, which a standalone
+	 * loads by name */
+	MCEmscriptenRegisterExternals();
 	if (!MCScriptInitialize())
 	{
 		MCEmscriptenBootError("LCB VM initialisation");

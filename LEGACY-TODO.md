@@ -35,8 +35,8 @@ Code its authors knew to be wrong or incomplete. 66 notes, by part of the reposi
 - [engine/src/em-filehandle.cpp:126](engine/src/em-filehandle.cpp#L126) FIXME Figure out why this is needed
 - [engine/src/em-filehandle.cpp:151](engine/src/em-filehandle.cpp#L151) FIXME Figure out why this is a success
 - [engine/src/em-filehandle.cpp:210](engine/src/em-filehandle.cpp#L210) FIXME figure out why this is a success
-- [engine/src/em-main.cpp:81](engine/src/em-main.cpp#L81) FIXME should probably be UTF-8
-- [engine/src/em-main.cpp:104](engine/src/em-main.cpp#L104) FIXME should probably be UTF-8
+- [engine/src/em-main.cpp:85](engine/src/em-main.cpp#L85) FIXME should probably be UTF-8
+- [engine/src/em-main.cpp:108](engine/src/em-main.cpp#L108) FIXME should probably be UTF-8
 - [engine/src/em-preamble.js:57](engine/src/em-preamble.js#L57) FIXME Should this be moved into the engine?
 - [engine/src/em-preamble.js:81](engine/src/em-preamble.js#L81) FIXME Can we cache the capsule locally?
 - [engine/src/em-standalone.js:43](engine/src/em-standalone.js#L43) FIXME maybe this needs a helper function in LiveCodeUtil

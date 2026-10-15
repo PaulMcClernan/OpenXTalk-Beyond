@@ -43,6 +43,13 @@ settings = {
     # The engine only runs in web pages
     'ENVIRONMENT': 'web',
 
+    # C++ exceptions are caught where code was compiled to catch them. The
+    # engine is not (-fno-exceptions), but revDB's SQLite driver catches
+    # what the SQLite library throws on an SQL error (revdb/revdb.gyp,
+    # thirdparty/libsqlite/libsqlite.gyp); without this, a throw aborts the
+    # engine.
+    'DISABLE_EXCEPTION_CATCHING': 0,
+
     # Runtime functions that the engine's JavaScript (em-*.js) and the page
     # call through Module
     'EXPORTED_RUNTIME_METHODS': [

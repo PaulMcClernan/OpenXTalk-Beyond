@@ -780,6 +780,8 @@
 			'src/em-event.h',
 			'src/em-event.cpp',
 			'src/em-event.js',
+			'src/em-externals.h',
+			'src/em-externals.cpp',
 			'src/em-sound.js',
 			'src/em-filehandle.h',
 			'src/em-filehandle.cpp',

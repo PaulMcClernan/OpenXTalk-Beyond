@@ -1344,9 +1344,25 @@ private function revSBMobileExternalsList pPlatform
    return the keys of tListA
 end revSBMobileExternalsList
 
+-- OXT-Beyond: the externals that the web engine links into itself, as it
+-- can load no others (engine/src/em-externals.cpp), and the database
+-- driver it links in for revDB
+private function revSBEmscriptenExternalsList
+   return "XML" & return & "Database" & return & "Revolution Zip"
+end revSBEmscriptenExternalsList
+
+private function revSBEmscriptenDatabaseDriversList
+   return "SQLite"
+end revSBEmscriptenDatabaseDriversList
+
 -- Check in the IDE and user-defined externals locations for 
 -- Externals.txt files
 function revSBExternalsList pPlatform
+   -- OXT-Beyond: the web engine has its externals in itself
+   if pPlatform is "Emscripten" then
+      return revSBEmscriptenExternalsList()
+   end if
+   
    if not revEnvironmentIsInstalled() then
       return revSBExternalsBuildList(pPlatform)
    end if
@@ -1468,6 +1484,11 @@ private function revSBMobileDatabaseDriversList pPlatform
 end revSBMobileDatabaseDriversList
 
 function revSBDatabaseDriversList pPlatform
+   -- OXT-Beyond: the web engine has its database driver in itself
+   if pPlatform is "Emscripten" then
+      return revSBEmscriptenDatabaseDriversList()
+   end if
+   
    if not revEnvironmentIsInstalled() then
       return revSBDatabaseDriversBuildList(pPlatform)
    end if

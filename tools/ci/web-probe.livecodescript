@@ -77,7 +77,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals"
       try
          dispatch tCheck to me
       catch tError
@@ -481,6 +481,53 @@ command probeObjects
    probeInfo "graphic-rect", the rect of graphic "Probe Graphic"
    probeInfo "image-rect", the rect of image "Probe Image"
 end probeObjects
+
+-- revXML, revZip and revDB with its SQLite driver, which the web engine
+-- links into itself (engine/src/em-externals.cpp). The IDE's builder
+-- includes them for a stack whose scripts use them, as this one's do, and
+-- web-deploy.livecodescript names them when it builds without the IDE.
+command probeExternals
+   local tTree, tStyleTree, tStyle, tText, tZip, tData, tOut, tResult, tDB, tId, tName
+   put revXMLCreateTree("<root><item id='1'>Hello</item><item id='2'>World</item></root>", false, true, false) into tTree
+   put revXMLNodeContents(tTree, "root/item[2]") & comma & revXMLAttribute(tTree, "root/item[1]", "id") \
+         & comma & revXMLNumberOfChildren(tTree, "root", "item", 0) into tText
+   probeCheck "xml", tTree is a number and tText is "World,1,2", "tree=" & tTree && "values=" & tText
+
+   put revXMLCreateTree("<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>" & \
+         "<xsl:output method='text'/><xsl:template match='/'>" & \
+         "<xsl:for-each select='root/item'><xsl:value-of select='.'/>;</xsl:for-each>" & \
+         "</xsl:template></xsl:stylesheet>", false, true, false) into tStyleTree
+   put xsltLoadStylesheet(tStyleTree) into tStyle
+   put xsltApplyStylesheet(tTree, tStyle) into tText
+   probeCheck "xslt", tText is "Hello;World;", tText
+   revXMLDeleteTree tStyleTree
+   revXMLDeleteTree tTree
+
+   put "/tmp/probe.zip" into tZip
+   put "zipped" && the milliseconds into tData
+   revZipOpenArchive tZip, "write"
+   revZipAddItemWithData tZip, "folder/a.txt", "tData"
+   revZipCloseArchive tZip
+   put the result into tResult
+   revZipOpenArchive tZip, "read"
+   put revZipEnumerateItems(tZip) into tText
+   revZipExtractItemToVariable tZip, "folder/a.txt", "tOut"
+   revZipCloseArchive tZip
+   probeCheck "zip", tResult is empty and line 1 of tText is "folder/a.txt" and tOut is tData, \
+         "result=" & tResult && "items=" & line 1 of tText && "extracted=" & tOut
+
+   put revOpenDatabase("sqlite", "/tmp/probe.db") into tDB
+   revExecuteSQL tDB, "CREATE TABLE t (id INTEGER, name TEXT)"
+   put 1 into tId
+   put "one" into tName
+   revExecuteSQL tDB, "INSERT INTO t VALUES (:1, :2)", "tId", "tName"
+   put revDataFromQuery(",", ";", tDB, "SELECT * FROM t") into tText
+   probeCheck "database", tDB is a number and tText is "1,one", "connection=" & tDB && "data=" & tText
+   -- SQLite reports an error with a C++ exception, which revDB catches
+   put revDataFromQuery(",", ";", tDB, "SELECT * FROM nosuch") into tText
+   probeCheck "database-error", tText begins with "revdberr," and tText contains "no such table", tText
+   revCloseDatabase tDB
+end probeExternals
 
 command probeClicked
    add 1 to sClicks

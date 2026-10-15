@@ -186,10 +186,16 @@ on startup
       put startupScript() into tParams["startup_script"]
       put $OXT_WEB_STACK into tParams["stackfile"]
       put $OXT_WEB_OUTPUT into tParams["output"]
-      -- as the builder: the deploy command needs the key, and the web has
-      -- no externals
+      -- as the builder: the deploy command needs the key
       put empty into tParams["engine"]
-      put empty into tParams["externals"]
+      -- the externals the standalone loads, as the builder names those of
+      -- the web engine's that a stack uses: the probe's use them all
+      -- (probeExternals), the tests none
+      if $OXT_WEB_KIND is "tests" then
+         put empty into tParams["externals"]
+      else
+         put "revxml" & return & "revzip" & return & "revdb" into tParams["externals"]
+      end if
       -- the extensions, which load before the stack (as the builder lists
       -- them: their module.lcm files, one a line, in the order they load)
       if $OXT_WEB_MODULES is not empty then

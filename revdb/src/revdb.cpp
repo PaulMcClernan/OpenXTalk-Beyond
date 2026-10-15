@@ -177,6 +177,11 @@ DBList connectionlist;
 
 #define simpleparse(a,b,c) (((b > a) | (c < a))?True:False)
 
+// OXT-Beyond: Emscripten's string.h declares a strlwr of its own
+#if defined(__EMSCRIPTEN__)
+#define strlwr revdb_strlwr
+#endif
+
 static char *strlwr(char *str)
 {
     while (*str)

@@ -353,3 +353,13 @@ MCSLibraryAndroidSetNativeLibPath(MCStringRef p_path)
                   p_path);
 }
 #endif
+
+#if defined(__EMSCRIPTEN__)
+/* OXT-Beyond: the libraries the web engine links into itself
+ * (system-library-emscripten.hpp) */
+MC_DLLEXPORT_DEF void
+MCSLibraryRegisterStatic(MCSLibraryStaticInfo& p_info)
+{
+    __MCSLibraryHandleEmscripten::Register(p_info);
+}
+#endif

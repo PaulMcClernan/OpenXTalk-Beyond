@@ -311,6 +311,13 @@
 						'dependencies':
 						[
 							'<@(thirdparty_libs_fonts)',
+							# OXT-Beyond: the libraries of revXML, revZip and
+							# revDB's SQLite driver, which the web engine links
+							# (no MySQL: a browser has no sockets)
+							'thirdparty/libsqlite/libsqlite.gyp:libsqlite',
+							'thirdparty/libxml/libxml.gyp:libxml',
+							'thirdparty/libxslt/libxslt.gyp:libxslt',
+							'thirdparty/libzip/libzip.gyp:libzip',
 						],
 					},
 				],

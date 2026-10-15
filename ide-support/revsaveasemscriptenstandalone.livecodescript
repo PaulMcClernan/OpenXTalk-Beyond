@@ -67,6 +67,10 @@ command revSaveAsEmscriptenStandalone pStack, pOutputFolder, pSettings
    local tDeploy
    -- Update the deploy params with script library and extension inclusions
    revSBUpdateDeployParams pStack, "emscripten", pSettings, tDeploy
+   
+   -- OXT-Beyond: the externals the standalone loads at startup, of those
+   -- the web engine has
+   put getWebExternals(pSettings) into tDeploy["externals"]
 
    local tError
    try
@@ -201,9 +205,6 @@ private command storeDeployedStack pZip, pDeployPath, pBuildFolder, pMainStack, 
    put tTempDeployPath into pDeployParams["output"]
    put empty into pDeployParams["engine"]
 
-   // Externals are not yet supported in emscripten builds
-   put empty into pDeployParams["externals"]
-
    ---------- Perform standalone deployment
    logDebug "deploy", "Deploying standalone"
    
@@ -260,6 +261,66 @@ private function getStartupScript pGeneratedStartupScript
    replace "@STARTUP_SCRIPT@" with pGeneratedStartupScript in tScript
    return tScript
 end getStartupScript
+
+----------------------------------------------------------------
+-- Externals
+----------------------------------------------------------------
+
+-- OXT-Beyond: the externals of the web engine. A browser loads no
+-- libraries, so the web engine links into itself the externals that can
+-- run in a browser (engine/src/em-externals.cpp): revXML, revZip, and revDB
+-- with its SQLite driver. A standalone loads the ones its settings include
+-- by name, as a desktop standalone loads its own; revDB finds its SQLite
+-- driver in the engine.
+constant kWebExternals = "revxml,revzip,revdb"
+constant kWebDatabaseDrivers = "SQLite"
+
+-- The names of the externals that the standalone loads at startup: those
+-- of the web engine that the settings include (the XML, Revolution Zip and
+-- Database inclusions). A warning names each other external or database
+-- driver the settings include, which a browser cannot run.
+private function getWebExternals pSettings
+   local tMapping, tName, tExternals
+   put revSBExternalsMapping() into tMapping
+   repeat for each line tLibrary in pSettings["scriptLibraries"]
+      -- An external's inclusion is its title in the mapping, as
+      -- "revxml XML"; other inclusions are script libraries
+      put empty into tName
+      repeat for each item tItem in tMapping
+         if word 2 to -1 of tItem is tLibrary then
+            put word 1 of tItem into tName
+            exit repeat
+         end if
+      end repeat
+      if tName is empty then
+         next repeat
+      end if
+      if tName is among the items of kWebExternals then
+         if tExternals is not empty then
+            put return after tExternals
+         end if
+         put tName after tExternals
+      else
+         revStandaloneAddWarning "HTML5:" && tLibrary && "is not available in a browser"
+      end if
+   end repeat
+   
+   repeat for each line tExternal in pSettings["externals"]
+      revStandaloneAddWarning "HTML5: the external" && tExternal && "is not available in a browser"
+   end repeat
+   
+   repeat for each line tDriver in pSettings["databaseDrivers"]
+      if tDriver is not among the items of kWebDatabaseDrivers then
+         revStandaloneAddWarning "HTML5: the" && tDriver && "database driver is not available in a browser"
+      end if
+   end repeat
+   
+   local tLog
+   put tExternals into tLog
+   replace return with comma in tLog
+   logDebug "externals", "Loading" && quote & tLog & quote
+   return tExternals
+end getWebExternals
 
 ----------------------------------------------------------------
 -- The HTML page

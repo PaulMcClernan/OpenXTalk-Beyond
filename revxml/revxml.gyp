@@ -126,4 +126,55 @@
 			},
 		},
 	],
+
+	# OXT-Beyond: revXML for the web engine, which links it into itself
+	# (engine/src/em-externals.cpp). Its names, and those of its copy of
+	# libExternal, are renamed for it (libexternal/src/external-static.h).
+	'conditions':
+	[
+		[
+			'OS == "emscripten"',
+			{
+				'targets':
+				[
+					{
+						'target_name': 'external-revxml-static',
+						'type': 'static_library',
+
+						'dependencies':
+						[
+							'../libexternal/libexternal.gyp:libExternal-static-revxml',
+							'../prebuilt/thirdparty.gyp:thirdparty_prebuilt_xml',
+							'../prebuilt/thirdparty.gyp:thirdparty_prebuilt_xslt',
+							'../prebuilt/thirdparty.gyp:thirdparty_prebuilt_z',
+						],
+
+						'include_dirs':
+						[
+							'../libexternal/include',
+							'../libexternal/src',
+							'src',
+						],
+
+						'defines':
+						[
+							'EXTERNAL_STATIC_PREFIX=revxml',
+							# its POSIX code
+							'_LINUX',
+						],
+
+						'cflags':
+						[
+							'-include', 'external-static.h',
+						],
+
+						'sources':
+						[
+							'<@(revxml_sources)',
+						],
+					},
+				],
+			},
+		],
+	],
 }

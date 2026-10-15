@@ -269,6 +269,20 @@
 					},
 				],
 				[
+					# OXT-Beyond: the externals that the web engine links into
+					# itself (src/em-externals.cpp)
+					'OS == "emscripten"',
+					{
+						'dependencies':
+						[
+							'../revxml/revxml.gyp:external-revxml-static',
+							'../revzip/revzip.gyp:external-revzip-static',
+							'../revdb/revdb.gyp:external-revdb-static',
+							'../revdb/revdb.gyp:dbsqlite-static',
+						],
+					},
+				],
+				[
 					'OS == "mac"',
 					{
 						'product_name': 'Standalone-Community',

@@ -88,9 +88,15 @@ Then:
    handler of its javascriptHandlers). An IDE without CEF (Linux arm64)
    has no browser widget, so neither has the standalone that it builds:
    the probe then writes "PROBE info browser-widget not loaded" instead of
-   that check. When the probe writes "PROBE ready", this script clicks the
-   button, types "abc" into the field, and calls the stack's handlers from
-   the page (document.liveCode.findStackWithName):
+   that check. Last come the externals that the web engine has: an XML
+   tree read with revXML and transformed with XSLT, a zip archive written
+   and read back with revZip, and an SQLite database with revDB, whose
+   error for a missing table must reach the script as revDB's error (SQLite
+   throws a C++ exception for it). The builder includes them because the
+   probe's scripts use them, and web-deploy.livecodescript names them when
+   it builds without the IDE. When the probe writes "PROBE ready", this
+   script clicks the button, types "abc" into the field, and calls the
+   stack's handlers from the page (document.liveCode.findStackWithName):
    probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
    probeReport("keys"), with Shift held down, "down|65505". It taps the
    button with a finger, which must be one more click (the browser makes
@@ -151,6 +157,7 @@ PROBE_CHECKS = (
     'javascript', 'file-roundtrip', 'standalone-folder', 'url-get', 'url-post', 'url-put',
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
+    'xml', 'xslt', 'zip', 'database', 'database-error',
 )
 
 # The page of the site that the probe's browser widget loads

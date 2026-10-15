@@ -83,6 +83,18 @@
 									],
 								},
 							],
+							[
+								# OXT-Beyond: sqlitedataset throws on an SQL
+								# error, and Emscripten catches nothing that
+								# was not compiled to be caught
+								'OS == "emscripten"',
+								{
+									'cflags_cc':
+									[
+										'-fexceptions',
+									],
+								},
+							],
 						],
 						
 						'msvs_settings':
