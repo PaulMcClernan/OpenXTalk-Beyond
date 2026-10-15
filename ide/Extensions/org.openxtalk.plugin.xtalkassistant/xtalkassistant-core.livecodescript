@@ -1456,7 +1456,7 @@ end xtaReadGuide
 -- form (2.5: this engine's and and or stop early, by engine/src/operator.cpp).
 function xtaSystemPrompt
    local tPrompt
-   put "You are the xTalk Assistant inside " & xtaHostName() & ", a free development environment" && \
+   put "You are the xTalk Assistant inside OXT-Beyond, a free development environment" && \
          "that continues OpenXTalk Lite and LiveCode Community 9.x. Its users build" && \
          "programs from stacks, cards and controls (buttons, fields, graphics, images," && \
          "groups, widgets) and script them in xTalk Script, the English-like language" && \
@@ -1705,10 +1705,10 @@ function xtaCheckBlocks pBlocks, pDeclared
    end if
    if tCount is 1 then
       put "Compile check: the code does not compile (" & tFirst & ")." into tResult["summary"]
-      put "Compile check: your block of xTalk Script does not compile on " & xtaHostName() & "." into tLine
+      put "Compile check: your block of xTalk Script does not compile on OXT-Beyond." into tLine
    else
       put "Compile check:" && tFailed && "of" && tCount && "blocks of code do not compile (" & tFirst & ")." into tResult["summary"]
-      put "Compile check:" && tFailed && "of your" && tCount && "blocks of xTalk Script do not compile on " & xtaHostName() & "." into tLine
+      put "Compile check:" && tFailed && "of your" && tCount && "blocks of xTalk Script do not compile on OXT-Beyond." into tLine
    end if
    put tLine & return & tReport & "Answer with every block again, corrected and whole." into tResult["report"]
    return tResult
@@ -2842,20 +2842,3 @@ function xtaWithoutMemoryBlocks pText
    end repeat
    return word 1 to -1 of tOut
 end xtaWithoutMemoryBlocks
-
--- The IDE's name, where the user or the model reads it: "OXT-Beyond", or,
--- in a package of the plugin installed in another xTalk's IDE, the name
--- its compatibility stack gives (tools/plugins/plugin-compat.livecodescript.in)
-private function xtaHostName
-   local tStack, tName
-   repeat for each item tStack in "org.openxtalk.plugin.xtalkassistant-compat,org.openxtalk.plugin.mcpbridge-compat"
-      if there is a stack tStack then
-         dispatch function "xtpcHostName" to stack tStack
-         put the result into tName
-         if it is "handled" and tName is not empty then
-            return tName
-         end if
-      end if
-   end repeat
-   return "OXT-Beyond"
-end xtaHostName
