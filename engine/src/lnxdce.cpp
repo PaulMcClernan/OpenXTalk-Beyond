@@ -141,9 +141,16 @@ Boolean MCScreenDC::abortkey()
 			if (tptr->event->type == GDK_KEY_PRESS)
 			{
 				GdkEventKey *kpevent = (GdkEventKey*)tptr->event;
-				if ((kpevent->state & GDK_CONTROL_MASK
-				     && kpevent->keyval == XK_Break) ||
-				    kpevent->keyval == 0x2e /*XK_period*/)
+				/* OXT-Beyond: the abort key is Control-period or
+				 * Control-Break, as on Windows (w32dce.cpp) and as the
+				 * dictionary's allowInterrupts says. Control applied to
+				 * Break only, so a period alone stopped the running
+				 * handler: one typed while it ran, or into a GTK file
+				 * dialog it had opened (gdk_event_fn queues the dialog's
+				 * keys here too), once the dialog had returned. */
+				if ((kpevent->state & GDK_CONTROL_MASK) &&
+				    (kpevent->keyval == XK_Break ||
+				     kpevent->keyval == 0x2e /*XK_period*/))
 				{
 					abort = True;
 					tptr->remove
