@@ -96,6 +96,21 @@
 			[
 				'<@(engine_security_source_files)',
 			],
+
+			'conditions':
+			[
+				[
+					# OXT-Beyond: the web engine links OpenSSL itself
+					# (kernel.gyp), so it has no stubs to link
+					'OS == "emscripten"',
+					{
+						'dependencies!':
+						[
+							'../thirdparty/libopenssl/libopenssl.gyp:libopenssl_stubs',
+						],
+					},
+				],
+			],
 		},
 
 	],

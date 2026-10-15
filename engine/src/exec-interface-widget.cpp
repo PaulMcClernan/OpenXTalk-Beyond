@@ -23,18 +23,30 @@
 
 #include "exec-interface.h"
 
+// OXT-Beyond: a widget whose extension is not loaded has no instance; these
+// commands do nothing for it, as the widget's other actions do, rather than
+// posting to no instance (which crashed the engine)
 void MCInterfaceExecGoBackInWidget(MCExecContext& ctxt, MCWidget *p_widget)
 {
+	if (p_widget->getwidget() == nil)
+		return;
+
 	MCWidgetPost(p_widget->getwidget(), MCNAME("OnGoBack"), kMCEmptyProperList);
 }
 
 void MCInterfaceExecGoForwardInWidget(MCExecContext& ctxt, MCWidget *p_widget)
 {
+	if (p_widget->getwidget() == nil)
+		return;
+
 	MCWidgetPost(p_widget->getwidget(), MCNAME("OnGoForward"), kMCEmptyProperList);
 }
 
 void MCInterfaceExecLaunchUrlInWidget(MCExecContext& ctxt, MCStringRef p_url, MCWidget *p_widget)
 {
+	if (p_widget->getwidget() == nil)
+		return;
+
 	MCAutoProperListRef t_list;
 	
 	if (!MCProperListCreate((MCValueRef*)&p_url, 1, &t_list))
@@ -45,6 +57,9 @@ void MCInterfaceExecLaunchUrlInWidget(MCExecContext& ctxt, MCStringRef p_url, MC
 
 void MCInterfaceExecDoInWidget(MCExecContext& ctxt, MCStringRef p_script, MCWidget *p_widget)
 {
+	if (p_widget->getwidget() == nil)
+		return;
+
 	MCAutoProperListRef t_list;
 	
 	if (!MCProperListCreate((MCValueRef*)&p_script, 1, &t_list))

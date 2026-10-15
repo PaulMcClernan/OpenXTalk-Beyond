@@ -66,15 +66,17 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 to 0.2.6-rc.4 are test releases (pre-releases) of
+lists. 0.2.6-rc.1 to 0.2.6-rc.5 are test releases (pre-releases) of
 the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
 plan in the Claude desktop app or Claude Code, build stacks in the IDE
 (see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
 [0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
-[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), and of the
+[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), of the
 fixes and plugin packages in
-[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins);
-0.2.5 stays the main download until it has held up.
+[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins),
+and of web standalones in
+[0.2.6-rc.5](#026-rc5-web-standalones); 0.2.5 stays the main download
+until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -91,7 +93,9 @@ fixes and plugin packages in
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
   engines for them, and a release asset (`oxt-runtimes-0.2.5-rc.2.zip`)
-  brings each platform's runtimes into the other packages. The Android
+  brings each platform's runtimes into the other packages. The web
+  engine of HTML5 standalones, which every package carries, is built
+  from this repository too (see [The engine](#the-engine)). The Android
   runtime, though, is still OpenXTalk Lite 1.15's (stock LiveCode 9.6.3
   builds as Tom Perry shipped them), carried over unchanged in that
   asset. Only the macOS package has the macOS runtimes, there are no iOS
@@ -1349,6 +1353,52 @@ against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
 
+#### 0.2.6-rc.5: web standalones
+
+OXT-Beyond 0.2.6-rc.5, a test release, makes HTML5 standalones work.
+The IDE builds a stack into a web page that runs in a current browser
+from any web server: tick **Build for HTML5** in the Standalone
+Settings, and **Test** serves it from your own computer and opens it in
+your browser. Its engine is the standalone engine built from this
+repository into WebAssembly with a current Emscripten, and every
+package carries it. LiveCode's last HTML5 engine could not `wait` in
+most handlers and had no dialogs, sound, player, browser widget,
+externals, `encrypt`, printing or drag and drop; this one has them all,
+each in the browser's own way:
+
+- `wait` works everywhere but in a handler that the page's JavaScript
+  calls. `answer`, `ask`, `ask password` and `answer color` show
+  dialogs in the page, `answer file` shows the browser's file picker,
+  and a file written to `/downloads` (where `ask file` puts it) reaches
+  you as a download.
+- URLs, the mouse, touch and a touch screen's keyboard, drag and drop,
+  sound, the player, the browser widget, printing (to the browser's
+  print dialog or to a PDF), snapshots of the screen, `encrypt`,
+  revXML, revZip, revDB with SQLite and revSpeech work.
+- Stacks other than the main stack open in windows with title bars,
+  which the user moves, resizes and closes; modal dialogs, palettes,
+  `blendLevel` and `ignoreMouseEvents` work as on the desktop.
+- Controls are drawn in the "Windows 95" look with Windows' light
+  colours, not LiveCode's old Motif look, and `start using font file`
+  loads fonts.
+
+What a browser does not let a page do (sockets, `shell()` and other
+programs, other externals, dragging out of the page) fails as it does
+on a desktop that cannot do it, and windows cannot be minimized or
+maximized. The guide *Deploying Your Application* says what works and
+how, and pull request
+[#108](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/108)
+lists what differs from LiveCode 9.6.3's HTML5 engine. Each package's
+automatic tests build an HTML5 standalone and check it in Chromium;
+it has not yet been tried in Firefox, Safari or a phone's browser.
+
+On the desktop, one change can be seen by a script, and it is a crash
+fix: `do ... in widget`, `go back in widget`, `go forward in widget`
+and `launch url ... in widget` crashed the engine for a widget whose
+extension is not loaded, and now do nothing, as the widget's other
+actions already did. Apart from HTML5 standalones and that fix,
+nothing differs from 0.2.6-rc.4.
+
 #### 0.2.6-rc.4: HyperCard import, a quick start on Windows and plugins
 
 OXT-Beyond 0.2.6-rc.4 fixes two things, and changes nothing an existing
@@ -1541,6 +1591,22 @@ shipped 1.15 engines do; that broke scripts written for LiveCode, whose
 patterns stopped matching case while the `caseSensitive` was false (its
 default), so it was reverted.
 
+**HTML5 standalones.** The IDE makes standalones that run in a web
+page (tick **Build for HTML5** in the standalone settings). Their
+engine, the standalone engine built from this repository with a current
+Emscripten into WebAssembly, is in every package, in
+`Runtime/Emscripten/js`. Stacks run in the browser as on the desktop:
+`wait`, the dialogs, windows with title bars, modal stacks, files,
+URLs, the mouse, touch and
+the touch screen's keyboard, drag and drop, sound, the player, the
+browser widget, printing, snapshots of the screen, `encrypt`, revXML,
+revZip, revDB with SQLite and revSpeech work, each in the browser's own
+way. What a browser does not
+let a page do (sockets, other programs, other externals) fails as it
+does on a desktop that cannot do it. The guide *Deploying Your
+Application* says what works, and how to put a standalone on a web
+site.
+
 Changes made in this repository to build it: the `thirdparty` and `ide`
 submodules are ordinary folders in the repository, the prebuilt
 third-party libraries are built from source (only LiveCode's CEF 74
@@ -1574,7 +1640,10 @@ Linux and macOS are built by their CI workflows: BUILDING.md describes
 their steps in [Building on Linux](BUILDING.md#12-building-on-linux) and
 [Building on macOS](BUILDING.md#13-building-on-macos), and how a
 release is made from a tag in
-[Making a release](BUILDING.md#10-making-a-release).
+[Making a release](BUILDING.md#10-making-a-release). The web engine of
+HTML5 standalones is built on Linux, as
+[Building the web engine](BUILDING.md#14-building-the-web-engine)
+describes.
 
 ## Repository layout
 
@@ -1594,7 +1663,7 @@ release is made from a tag in
 | `tools/oxt/` | Python tools that map an installed OpenXTalk Lite folder to the repository and back (`layout.py`), stage OXT-Beyond's installed layout (`package.py`), fetch the external assets listed in `external-assets.json`, pin, fetch and build the xTalk Suite extensions listed in `xtalk-extensions.json` (`xtalk_extensions.py`), and write the text dictionary's entries (`text_dictionary.py`). See [tools/oxt/README.md](tools/oxt/README.md). |
 | `Installer/oxt-beyond/` | The Inno Setup script of the installer, the scripts that make its images, and the icon's source art. |
 | `tools/ci/` | PowerShell, Python and shell scripts used by CI to install components, build, generate the dictionary and the guides (`build_docs.sh`), check, package, smoke-test, compile-check the IDE, run the engine tests of `tests/` (and trace a Windows crash), build and test the installer, join and sign the macOS app, test the Linux package, and assemble a release and its notes. |
-| `.github/workflows/` | The GitHub Actions workflows: `build-windows.yml`, `build-macos.yml` and `build-linux.yml` build, package and test each platform on every push to `main` and every pull request into it; `docs.yml`, which each of them calls, generates the dictionary and the guides; `release.yml` builds all three from a `v` tag and publishes the release; `tag-release.yml` tags `main` and starts it; `runtimes.yml` makes the standalone runtimes asset; `media-check.yml` checks the browser and player in a published release. |
+| `.github/workflows/` | The GitHub Actions workflows: `build-windows.yml`, `build-macos.yml` and `build-linux.yml` build, package and test each platform on every push to `main` and every pull request into it; `docs.yml`, which each of them calls, generates the dictionary and the guides, and `web.yml`, which each of them calls too, builds the web runtime; `release.yml` builds all three from a `v` tag and publishes the release; `tag-release.yml` tags `main` and starts it; `runtimes.yml` makes the standalone runtimes asset; `media-check.yml` checks the browser and player in a published release. |
 | `Installer/package.txt`, `builder/` | LiveCode's packaging manifest (the packager follows its rules for Windows, Linux and macOS) and LiveCode's build tools, whose docs builder makes the dictionary and the guides (its installer builder is not used). |
 | `tests/`, `engine/exec-tests/` and others | Upstream test suites; CI runs those of `tests/` (see [Engine tests](BUILDING.md#engine-tests)). |
 
@@ -1658,6 +1727,12 @@ Known limitations, in rough order of importance:
    come with OXT-Beyond, and edits to the built-in image libraries. Install for the current user only,
    or use the portable zip, if you need them. Plan: keep that state in
    the user's own folders.
+12. HTML5 standalones are new. They are tested automatically in
+   Chromium only, not yet in Firefox, Safari or a phone's browser (the
+   touch screen's keyboard is checked with a stand-in for a phone's).
+   Their font, which came with LiveCode's HTML5 standalones, has a
+   licence that needs review (see
+   [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#still-to-review)).
 
 Done since 0.0.1: the extensions of the xTalk Suite are built in, taken
 from their own repositories at pinned commits (see

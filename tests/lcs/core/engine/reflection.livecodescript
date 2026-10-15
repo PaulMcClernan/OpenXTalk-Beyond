@@ -54,7 +54,8 @@ on TestRevEffectiveAvailableHandlersChainedBehavior
 end TestRevEffectiveAvailableHandlersChainedBehavior
 
 on TestRevEffectiveAvailableHandlersBlockedBehavior
-	TestSkipIf "platform", "HTML5"
+	-- OXT-Beyond: runs on the web too, whose engine saves stacks to its
+	-- own file system and makes temporary names
 	-- Behaviors can only become 'blocked' when deserialized. Therefore, we
 	-- do this by creating a new behavior and user of the behavior, copying the
 	-- user to the clipboard (which serializes), then deleting both, and then
@@ -137,10 +138,7 @@ on TestRevEffectiveScriptDescriptionChainedBehavior
 end TestRevEffectiveScriptDescriptionChainedBehavior
 
 on TestRevEffectiveScriptDescriptionBlockedBehavior
-   if the platform is "HTML5" then
-      TestSkip "ignores blocked behaviors", "SKIP on HTML5 no writable file system"
-      exit TestRevEffectiveScriptDescriptionBlockedBehavior
-   end if
+	-- OXT-Beyond: runs on the web too (see above)
 	-- Behaviors can only become 'blocked' when deserialized. Therefore, we
 	-- do this by creating a new behavior and user of the behavior, copying the
 	-- user to the clipboard (which serializes), then deleting both, and then

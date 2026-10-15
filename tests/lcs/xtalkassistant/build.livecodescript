@@ -348,6 +348,9 @@ end TestUndoTakesLaterEntriesFirst
 
 on TestCheckpointBringsAStackBack
    local tStack, tFile, tCheckpoint, tProblem, tDump
+   -- The folder of the checkpoints is made the user's alone with chmod,
+   -- through shell()
+   TestSkipIfNot "shell"
    put TestUserStack() into tStack
    -- A stack never saved, then one saved in a file
    put xtaStackDump(tStack) into tDump
@@ -443,6 +446,8 @@ end TestRunPlanRefusesMistakes
 
 on TestRunOnTheStackCanBeUndone
    local tStack, tDump, tRun, tRan, tUndone, tEntries
+   -- A run on the stack saves a checkpoint first (shell(), as above)
+   TestSkipIfNot "shell"
    put TestUserStack() into tStack
    put xtaStackDump(tStack) into tDump
    put TestRunPlan("{`code`:`put the short name of me\nput 3 into field \`Notes\`\ncreate button \`Made by code\``,`where`:`stack`}", tStack) into tRun
@@ -512,9 +517,15 @@ on TestDebugStateWhenPaused
          "end xtaTestSetPlan" & return & \
          "function xtaTestPaused" & return & "return sState" & return & "end xtaTestPaused" & return & \
          "function xtaTestPausedPlan" & return & "return sPlan" & return & "end xtaTestPausedPlan" into tStub
+   -- A frontscript, as the IDE's debugger is (revdebuggerlibrary inserts
+   -- itself into front): while a script is paused the engine sends no
+   -- message to the objects in the paused stack's window, and to their
+   -- libraries and backscripts, but a frontscript sees it first. A stack
+   -- with no window (an engine run with -ui) would not show the
+   -- difference; the web engine's stacks all have one.
    create invisible stack "revXtaTestDebugger"
    set the script of stack "revXtaTestDebugger" to tStub
-   start using stack "revXtaTestDebugger"
+   insert the script of stack "revXtaTestDebugger" into front
    xtaTestSetPlan TestJson("{`changes`:[{`action`:`set`,`object`:" & the id of tButton & ",`script`:`on mouseUp\nend mouseUp`}]}"), tStack
    -- Sent as the Message Box sends what is typed into it, from a stack
    -- of the IDE's, which the user's handlers then follow
@@ -540,6 +551,8 @@ end TestDebugStateWhenPaused
 
 on TestCleanupLeavesNothing
    local tStack, tApplied, tRan
+   -- A run on the stack saves a checkpoint first (shell(), as above)
+   TestSkipIfNot "shell"
    put TestUserStack() into tStack
    put xtaBuildApply(TestPlan("{`changes`:[{`action`:`delete`,`object`:" & the id of button "Go" of card 1 of tStack & "}]}", tStack)) into tApplied
    TestAssert "applied", tApplied["ok"] is true

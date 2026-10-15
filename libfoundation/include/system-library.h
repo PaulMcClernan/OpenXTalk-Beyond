@@ -165,6 +165,41 @@ struct MCSLibraryStaticLibInfo
 #endif
 
 /* ================================================================
+ * Static binding (web)
+ * ================================================================ */
+
+/* OXT-Beyond: a browser loads no libraries, so the web engine links into
+ * itself the libraries it would load by name (the externals it runs) and
+ * registers each one, with the symbols that are looked up in it, before it
+ * starts (engine/src/em-externals.cpp). As on iOS, a registered library is
+ * found by the name of its file without the folder and the extension:
+ * "<folder>/revxml.so" finds the library registered as "revxml". */
+
+#ifdef __EMSCRIPTEN__
+
+struct MCSLibraryStaticExport
+{
+    const char *symbol;
+    void *address;
+};
+
+struct MCSLibraryStaticInfo
+{
+    /* The next registered library (set by MCSLibraryRegisterStatic) */
+    MCSLibraryStaticInfo *__next;
+    const char *name;
+    /* The symbols, ended by an entry whose symbol is nullptr */
+    const MCSLibraryStaticExport *exports;
+};
+
+/* Register the given statically linked library and its symbols. The record
+ * passed as p_info must exist until the foundation library is shut down. */
+MC_DLLEXPORT void
+MCSLibraryRegisterStatic(MCSLibraryStaticInfo& p_info);
+
+#endif
+
+/* ================================================================
  * Library API initialization
  * ================================================================ */
 

@@ -67,6 +67,10 @@ command revSaveAsEmscriptenStandalone pStack, pOutputFolder, pSettings
    local tDeploy
    -- Update the deploy params with script library and extension inclusions
    revSBUpdateDeployParams pStack, "emscripten", pSettings, tDeploy
+   
+   -- OXT-Beyond: the externals the standalone loads at startup, of those
+   -- the web engine has
+   put getWebExternals(pSettings) into tDeploy["externals"]
 
    local tError
    try
@@ -143,17 +147,15 @@ command revSaveAsEmscriptenStandalone pStack, pOutputFolder, pSettings
       end repeat
       
       ---------- Create HTML page
-      
-      -- FIXME just copies the Emscripten-generated page into place
+
+      -- The engine's page, with the stack's title
       revStandaloneProgress "Preparing HTML page..."
-      
+
       local tHtmlFile
       put tBuildFolder & slash & tName & ".html" into tHtmlFile
-      logDebug "html", "Creating" && tHtmlFile
-      logDebug "html", "Copying" && getHtmlTemplateFile()
-      revSBCopyFileToFile mapBinPath(getHtmlTemplateFile()), tHtmlFile, \
-            "revStandaloneProgressCallback", the long id of me
-      
+      logDebug "html", "Creating" && tHtmlFile && "from" && getHtmlTemplateFile()
+      createHtmlPage mapBinPath(getHtmlTemplateFile()), tHtmlFile, pStack
+
    catch tError
       if tError is empty then
          put "an unknown error occurred" into tError
@@ -202,9 +204,6 @@ private command storeDeployedStack pZip, pDeployPath, pBuildFolder, pMainStack, 
    put tTempStackPath into pDeployParams["stackfile"]
    put tTempDeployPath into pDeployParams["output"]
    put empty into pDeployParams["engine"]
-
-   // Externals are not yet supported in emscripten builds
-   put empty into pDeployParams["externals"]
 
    ---------- Perform standalone deployment
    logDebug "deploy", "Deploying standalone"
@@ -262,6 +261,104 @@ private function getStartupScript pGeneratedStartupScript
    replace "@STARTUP_SCRIPT@" with pGeneratedStartupScript in tScript
    return tScript
 end getStartupScript
+
+----------------------------------------------------------------
+-- Externals
+----------------------------------------------------------------
+
+-- OXT-Beyond: the externals of the web engine. A browser loads no
+-- libraries, so the web engine links into itself the externals that can
+-- run in a browser (engine/src/em-externals.cpp): revXML, revZip, revDB
+-- with its SQLite driver, and revSpeech with the browser's speech. A
+-- standalone loads the ones its settings include by name, as a desktop
+-- standalone loads its own; revDB finds its SQLite driver in the engine.
+constant kWebExternals = "revxml,revzip,revdb,revspeech"
+constant kWebDatabaseDrivers = "SQLite"
+
+-- The names of the externals that the standalone loads at startup: those
+-- of the web engine that the settings include (the XML, Revolution Zip,
+-- Database and Speech inclusions). A warning names each other external or
+-- database driver the settings include, which a browser cannot run.
+private function getWebExternals pSettings
+   local tMapping, tName, tExternals
+   put revSBExternalsMapping() into tMapping
+   repeat for each line tLibrary in pSettings["scriptLibraries"]
+      -- An external's inclusion is its title in the mapping, as
+      -- "revxml XML"; other inclusions are script libraries
+      put empty into tName
+      repeat for each item tItem in tMapping
+         if word 2 to -1 of tItem is tLibrary then
+            put word 1 of tItem into tName
+            exit repeat
+         end if
+      end repeat
+      if tName is empty then
+         next repeat
+      end if
+      if tName is among the items of kWebExternals then
+         if tExternals is not empty then
+            put return after tExternals
+         end if
+         put tName after tExternals
+      else
+         revStandaloneAddWarning "HTML5:" && tLibrary && "is not available in a browser"
+      end if
+   end repeat
+   
+   repeat for each line tExternal in pSettings["externals"]
+      revStandaloneAddWarning "HTML5: the external" && tExternal && "is not available in a browser"
+   end repeat
+   
+   repeat for each line tDriver in pSettings["databaseDrivers"]
+      if tDriver is not among the items of kWebDatabaseDrivers then
+         revStandaloneAddWarning "HTML5: the" && tDriver && "database driver is not available in a browser"
+      end if
+   end repeat
+   
+   local tLog
+   put tExternals into tLog
+   replace return with comma in tLog
+   logDebug "externals", "Loading" && quote & tLog & quote
+   return tExternals
+end getWebExternals
+
+----------------------------------------------------------------
+-- The HTML page
+----------------------------------------------------------------
+
+-- Write the page that loads the standalone: the engine's page, with
+-- the stack's label (or, without one, its name) as the page's title
+-- in place of @STACK_TITLE@. The page loads the engine's JavaScript,
+-- which loads the engine's WebAssembly and standalone.zip, from the
+-- page's own folder.
+private command createHtmlPage pTemplateFile, pHtmlFile, pStack
+   local tPage, tTitle
+
+   open file pTemplateFile for "UTF-8" text read
+   if the result is not empty then
+      throw pTemplateFile & ":" && the result
+   end if
+   read from file pTemplateFile until end
+   put it into tPage
+   close file pTemplateFile
+
+   put the label of stack pStack into tTitle
+   if tTitle is empty then
+      put the short name of stack pStack into tTitle
+   end if
+   -- The title is text in the page, not markup
+   replace "&" with "&amp;" in tTitle
+   replace "<" with "&lt;" in tTitle
+   replace ">" with "&gt;" in tTitle
+   replace "@STACK_TITLE@" with tTitle in tPage
+
+   open file pHtmlFile for "UTF-8" text write
+   if the result is not empty then
+      throw pHtmlFile & ":" && the result
+   end if
+   write tPage to file pHtmlFile
+   close file pHtmlFile
+end createHtmlPage
 
 ----------------------------------------------------------------
 -- Extra files from "copy files"
@@ -494,16 +591,13 @@ function revGetEmscriptenFiles
 end revGetEmscriptenFiles
 
 -- Return a number-indexed array of engine files that need to be
--- copied into the standalone output folder.
+-- copied into the standalone output folder: the engine of this
+-- version (the startup script checks that it is the IDE's), its
+-- JavaScript and the WebAssembly code that the JavaScript loads.
 private function getEngineFiles
    local tFiles
-   
-   -- Engine JavaScript
-   --put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".js") into tFiles[1]
-   put mapBinPath("standalone-community-9.6.3.js") into tFiles[1] 
-   -- Memory initialisation file
-   --put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".html.mem") into tFiles[2]
-   put mapBinPath("standalone-community-9.6.3.js") into tFiles[2] 
+   put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".js") into tFiles[1]
+   put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".wasm") into tFiles[2]
    return tFiles
 end getEngineFiles
 

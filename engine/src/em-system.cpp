@@ -16,12 +16,18 @@ for more details.
 You should have received a copy of the GNU General Public License
 along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
+#include "prefix.h"
+
 #include "em-system.h"
 #include "em-javascript.h"
 #include "em-filehandle.h"
 #include "em-util.h"
+#include "em-dc.h"
 
 #include "filedefs.h"
+#include "objdefs.h"
+#include "text.h"
+#include "mcutility.h"
 #include "mcstring.h"
 #include "osspec.h"
 #include "globals.h"
@@ -31,9 +37,14 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "variable.h"
 
 #include <foundation-system.h>
+#include <foundation-unicode.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <iconv.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <emscripten.h>
@@ -44,6 +55,8 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 extern "C" bool MCEmscriptenSystemInitializeJS(void);
 extern "C" void MCEmscriptenSystemFinalizeJS(void);
+extern "C" int32_t MCEmscriptenSystemLaunchUrl(const unichar_t *p_url, size_t p_url_length);
+extern "C" void MCEmscriptenSystemGetHostName(unichar_t **r_chars, uint32_t *r_length);
 
 /* ================================================================
  * System abstraction layer
@@ -55,6 +68,10 @@ extern "C" void MCEmscriptenSystemFinalizeJS(void);
 #define kMCEmscriptenStandardFolderFonts "/boot/fonts"
 #define kMCEmscriptenStandardFolderTemporary "/tmp"
 #define kMCEmscriptenStandardFolderHome "/livecode"
+#define kMCEmscriptenStandardFolderDocuments "/livecode/Documents"
+#define kMCEmscriptenStandardFolderDesktop "/livecode/Desktop"
+#define kMCEmscriptenStandardFolderPreferences "/livecode/Preferences"
+#define kMCEmscriptenStandardFolderSupport "/livecode/Support"
 
 /* ----------------------------------------------------------------
  * Utility functions
@@ -114,6 +131,27 @@ MCEmscriptenSystem::Initialize()
 {
 	IO_stdout = OpenFd(1, kMCOpenFileModeWrite);
 	IO_stderr = OpenFd(2, kMCOpenFileModeWrite);
+
+	/* The folders that scripts keep files in: the user's (as on Linux,
+	 * with the preferences and support folders of the Mac and Windows),
+	 * the folder of the files the user gives the page, and the folder
+	 * whose files the page gives the user (em-dc.h). They exist for as
+	 * long as the page is open. */
+	static const char * const kFolders[] =
+	{
+		kMCEmscriptenStandardFolderHome,
+		kMCEmscriptenStandardFolderDocuments,
+		kMCEmscriptenStandardFolderDesktop,
+		kMCEmscriptenStandardFolderPreferences,
+		kMCEmscriptenStandardFolderSupport,
+		kMCEmscriptenUploadsFolder,
+		kMCEmscriptenDownloadsFolder,
+	};
+	for (size_t i = 0; i < sizeof(kFolders) / sizeof(kFolders[0]); ++i)
+	{
+		/* EEXIST when the standalone brought it */
+		mkdir(kFolders[i], 0777);
+	}
 
 	MCEmscriptenSystemInitializeJS();
 	return true;
@@ -197,8 +235,19 @@ MCEmscriptenSystem::GetMachine(MCStringRef & r_string)
 bool
 MCEmscriptenSystem::GetAddress(MCStringRef & r_address)
 {
-	MCEmscriptenNotImplemented();
-	return false;
+	/* As on Linux: the machine's name (the page's host), a colon and
+	 * the engine's path */
+	unichar_t *t_chars = nil;
+	uint32_t t_length = 0;
+	MCEmscriptenSystemGetHostName(&t_chars, &t_length);
+
+	MCAutoStringRef t_host;
+	if (!MCStringCreateWithCharsAndRelease(t_chars, t_length, &t_host))
+	{
+		return false;
+	}
+
+	return MCStringFormat(r_address, "%@:%@", *t_host, MCcmd);
 }
 
 MCServiceInterface *
@@ -264,6 +313,19 @@ MCEmscriptenSystem::GetEnv(MCStringRef p_name,
  * Filesystem interface
  * ---------------------------------------------------------------- */
 
+/* Tells the page when a file or folder changes, so that the home folder
+ * is kept (em-system.js); a file written tells it when it is closed
+ * (em-filehandle.cpp). Returns p_changed. */
+static bool
+MCEmscriptenSystemChanged(bool p_changed)
+{
+	if (p_changed)
+	{
+		MCEmscriptenStorageChanged();
+	}
+	return p_changed;
+}
+
 Boolean
 MCEmscriptenSystem::CreateFolder(MCStringRef p_path)
 {
@@ -274,7 +336,7 @@ MCEmscriptenSystem::CreateFolder(MCStringRef p_path)
 	}
 
 	errno = 0;
-	return (0 == mkdir(*t_path_sys, 0777));
+	return MCEmscriptenSystemChanged(0 == mkdir(*t_path_sys, 0777));
 }
 
 Boolean
@@ -287,7 +349,7 @@ MCEmscriptenSystem::DeleteFolder(MCStringRef p_path)
 	}
 
 	errno = 0;
-	return (0 == rmdir(*t_path_sys));
+	return MCEmscriptenSystemChanged(0 == rmdir(*t_path_sys));
 }
 
 Boolean
@@ -300,7 +362,7 @@ MCEmscriptenSystem::DeleteFile(MCStringRef p_path)
 	}
 
 	errno = 0;
-	return (0 == unlink(*t_path_sys));
+	return MCEmscriptenSystemChanged(0 == unlink(*t_path_sys));
 }
 
 Boolean
@@ -318,27 +380,23 @@ MCEmscriptenSystem::RenameFileOrFolder(MCStringRef p_old_name,
 	}
 
 	errno = 0;
-	return (0 == rename(*t_path_old, *t_path_new));
+	return MCEmscriptenSystemChanged(0 == rename(*t_path_old, *t_path_new));
 }
 
+/* As on Linux: save stack moves the stack file it replaces aside
+ * ("<name>~") while it writes the new one, and back if that fails */
 Boolean
 MCEmscriptenSystem::BackupFile(MCStringRef p_old_name,
                                MCStringRef p_new_name)
 {
-	/* FIXME Implement BackupFile */
-	/* function not implemented */
-	SetErrno(ENOSYS);
-	return false;
+	return RenameFileOrFolder(p_old_name, p_new_name);
 }
 
 Boolean
 MCEmscriptenSystem::UnbackupFile(MCStringRef p_old_name,
                                  MCStringRef p_new_name)
 {
-	/* FIXME Implement UnbackupFile() */
-	/* function not implemented */
-	SetErrno(ENOSYS);
-	return false;
+	return RenameFileOrFolder(p_old_name, p_new_name);
 }
 
 Boolean
@@ -626,6 +684,32 @@ MCEmscriptenSystem::GetStandardFolder(MCNameRef p_type,
 	{
 		t_path_chars = kMCEmscriptenStandardFolderHome;
 	}
+	else if (MCNameIsEqualToCaseless(p_type, MCN_documents))
+	{
+		t_path_chars = kMCEmscriptenStandardFolderDocuments;
+	}
+	else if (MCNameIsEqualToCaseless(p_type, MCN_desktop))
+	{
+		t_path_chars = kMCEmscriptenStandardFolderDesktop;
+	}
+	else if (MCNameIsEqualToCaseless(p_type, MCN_preferences))
+	{
+		t_path_chars = kMCEmscriptenStandardFolderPreferences;
+	}
+	else if (MCNameIsEqualToCaseless(p_type, MCN_support))
+	{
+		t_path_chars = kMCEmscriptenStandardFolderSupport;
+	}
+	else if (MCStringIsEqualToCString(MCNameGetString(p_type), "downloads",
+	                                  kMCStringOptionCompareCaseless))
+	{
+		t_path_chars = kMCEmscriptenDownloadsFolder;
+	}
+	else if (MCStringIsEqualToCString(MCNameGetString(p_type), "uploads",
+	                                  kMCStringOptionCompareCaseless))
+	{
+		t_path_chars = kMCEmscriptenUploadsFolder;
+	}
 	else
 	{
 		/* We don't know anything about the requested folder */
@@ -730,7 +814,7 @@ MCEmscriptenSystem::ChangePermissions(MCStringRef p_path, uint16_t p_mask)
 	}
 
 	errno = 0;
-	return (0 == chmod(*t_path_sys, p_mask));
+	return MCEmscriptenSystemChanged(0 == chmod(*t_path_sys, p_mask));
 }
 
 uint16_t
@@ -779,6 +863,40 @@ MCEmscriptenSystem::OpenFile(MCStringRef p_path,
 		return NULL;
 	}
 
+	/* A file opened for writing under /downloads goes to the user when
+	 * it is closed (em-filehandle.cpp). Its path is the one open() found,
+	 * with no "..", ".", "//" or symbolic link left in it. */
+	if (p_mode != kMCOpenFileModeRead)
+	{
+		char *t_real_path = realpath(*t_path_sys, NULL);
+		if (t_real_path != NULL &&
+		    0 == strncmp(t_real_path, kMCEmscriptenDownloadsFolder "/",
+		                 strlen(kMCEmscriptenDownloadsFolder "/")))
+		{
+			MCAutoStringRef t_download;
+			bool t_have_download =
+				MCStringCreateWithBytes(reinterpret_cast<const byte_t *>(t_real_path),
+				                        strlen(t_real_path),
+				                        kMCStringEncodingUTF8, false,
+				                        &t_download);
+			free(t_real_path);
+
+			if (t_have_download)
+			{
+				return new MCEmscriptenFileHandle(t_fd, *t_download,
+				                                  p_mode == kMCOpenFileModeWrite);
+			}
+		}
+		else
+		{
+			free(t_real_path);
+		}
+
+		/* Opening a file for writing empties it: it has changed */
+		return new MCEmscriptenFileHandle(t_fd, nil,
+		                                  p_mode == kMCOpenFileModeWrite);
+	}
+
 	return new MCEmscriptenFileHandle(t_fd);
 }
 
@@ -801,10 +919,29 @@ MCEmscriptenSystem::OpenDevice(MCStringRef p_path,
 bool
 MCEmscriptenSystem::GetTemporaryFileName(MCStringRef & r_tmp_name)
 {
-	/* Never implement GetTemporaryFileName(). No-one should use it
-	 * anyway due to inherent race conditions, and it should be
-	 * removed from the language eventually. */
-	return false;
+	/* OXT-Beyond: a name in /tmp that no file has, as the Linux engine
+	 * makes it (dsklnx.cpp), which the tempname gives. Before, it was
+	 * never implemented, and the tempname was empty: a script that saved
+	 * a stack or exported to a file the tempname named failed. The
+	 * engine is the page's only program, so nothing can take the name
+	 * before the script uses it. */
+	char t_filename[] = "/tmp/prefXXXXXX";
+	int t_fd = mkstemp(t_filename);
+	bool t_success = t_fd != -1;
+
+	if (t_success)
+	{
+		close(t_fd);
+		t_success = unlink(t_filename) == 0;
+	}
+
+	if (t_success)
+		t_success = MCStringCreateWithSysString(t_filename, r_tmp_name);
+
+	if (!t_success)
+		r_tmp_name = MCValueRetain(kMCEmptyString);
+
+	return t_success;
 }
 
 bool
@@ -995,6 +1132,10 @@ MCEmscriptenSystem::ShortFilePath(MCStringRef p_path,
  * Text codecs
  * ---------------------------------------------------------------- */
 
+/* OXT-Beyond: between UTF-16 and a single-byte charset, a byte to a
+ * character and back, as the Linux engine converts (dsklnx.cpp), for
+ * uniEncode and uniDecode with a language. Before, nothing was converted,
+ * and they gave empty. */
 uint32_t
 MCEmscriptenSystem::TextConvert(const void *p_string,
                                 uint32_t p_string_length,
@@ -1003,8 +1144,76 @@ MCEmscriptenSystem::TextConvert(const void *p_string,
                                 uint32_t p_from_charset,
                                 uint32_t p_to_charset)
 {
-	MCEmscriptenNotImplemented();
-	return 0;
+	uint32_t t_used = 0;
+	if (p_to_charset == LCH_UNICODE)
+	{
+		if (p_buffer_length == 0)
+			t_used = p_string_length * 2;
+		else
+		{
+			const unsigned char *t_input = (const unsigned char *)p_string;
+			uint16_t *t_output = (uint16_t *)r_buffer;
+			uint32_t t_count = MCU_min(p_string_length, p_buffer_length / 2);
+			for (uint32_t i = 0; i < t_count; ++i)
+				t_output[i] = t_input[i];
+			t_used = t_count * 2;
+		}
+	}
+	else if (p_from_charset == LCH_UNICODE)
+	{
+		if (p_buffer_length == 0)
+			t_used = p_string_length / 2;
+		else
+		{
+			const uint16_t *t_input = (const uint16_t *)p_string;
+			unsigned char *t_output = (unsigned char *)r_buffer;
+			uint32_t t_count = MCU_min(p_string_length / 2, p_buffer_length);
+			for (uint32_t i = 0; i < t_count; ++i)
+				t_output[i] = (unsigned char)t_input[i];
+			t_used = t_count;
+		}
+	}
+	return t_used;
+}
+
+/* OXT-Beyond: text in a Windows or Mac code page to UTF-16, for the RTF
+ * reader, which reads the text of each font in its charset (\ansi,
+ * \ansicpg, \mac, \fcharset). As the Linux engine converts (dsklnx.cpp),
+ * with iconv: the page's C library (musl) has the Windows and DOS code
+ * pages, and those of Japan, China, Korea and Taiwan, but not MacRoman,
+ * which comes from libfoundation's table here, nor Johab (1361), whose
+ * text is left out. Before, nothing was converted, and setting the
+ * rtfText of a field left it empty. */
+static iconv_t
+em_fetch_converter(const char *p_encoding)
+{
+	struct ConverterRecord
+	{
+		const char *encoding;
+		iconv_t converter;
+	};
+	static ConverterRecord s_records[32];
+	static uint32_t s_record_count = 0;
+
+	for (uint32_t i = 0; i < s_record_count; ++i)
+		if (s_records[i].encoding == p_encoding)
+			return s_records[i].converter;
+
+	/* UTF-16LE, so that iconv puts no byte order mark first (as Linux's) */
+	iconv_t t_converter = iconv_open("UTF-16LE", p_encoding);
+	if (s_record_count < sizeof(s_records) / sizeof(s_records[0]))
+	{
+		s_records[s_record_count].encoding = p_encoding;
+		s_records[s_record_count].converter = t_converter;
+		s_record_count += 1;
+	}
+	else if (t_converter != (iconv_t)-1)
+	{
+		/* Never kept: there are fewer code pages than records */
+		iconv_close(t_converter);
+		t_converter = (iconv_t)-1;
+	}
+	return t_converter;
 }
 
 bool
@@ -1015,8 +1224,108 @@ MCEmscriptenSystem::TextConvertToUnicode(uint32_t p_input_encoding,
                                          uint32_t & p_output_length,
                                          uint32_t & r_used)
 {
-	MCEmscriptenNotImplemented();
-	return false;
+	if (p_input_length == 0)
+	{
+		r_used = 0;
+		return true;
+	}
+
+	if (p_output_length == 0)
+	{
+		r_used = p_input_length * 4;
+		return false;
+	}
+
+	/* MacRoman: a character a byte */
+	if (p_input_encoding >= kMCTextEncodingMacNative &&
+	    p_input_encoding < kMCTextEncodingWindowsNative)
+	{
+		if (p_output_length < p_input_length * 2)
+		{
+			r_used = p_input_length * 2;
+			return false;
+		}
+		const char_t *t_input = (const char_t *)p_input;
+		unichar_t *t_output = (unichar_t *)p_output;
+		for (uint32_t i = 0; i < p_input_length; ++i)
+			t_output[i] = unichar_t(MCUnicodeMapFromNative_MacRoman(t_input[i]));
+		r_used = p_input_length * 2;
+		return true;
+	}
+
+	const char *t_encoding = nullptr;
+	if (p_input_encoding >= kMCTextEncodingWindowsNative)
+	{
+		static const struct { uint32_t codepage; const char *encoding; } s_codepage_map[] =
+		{
+			{437, "CP437" },
+			{850, "CP850" },
+			{932, "CP932" },
+			{949, "CP949" },
+			{1361, "CP1361" },
+			{936, "CP936" },
+			{950, "CP950" },
+			{1253, "WINDOWS-1253" },
+			{1254, "WINDOWS-1254" },
+			{1258, "WINDOWS-1258" },
+			{1255, "WINDOWS-1255" },
+			{1256, "WINDOWS-1256" },
+			{1257, "WINDOWS-1257" },
+			{1251, "WINDOWS-1251" },
+			{874, "CP874" },
+			{1250, "WINDOWS-1250" },
+			{1252, "WINDOWS-1252" },
+		};
+
+		for (uint32_t i = 0; i < sizeof(s_codepage_map) / sizeof(s_codepage_map[0]); ++i)
+			if (s_codepage_map[i].codepage == p_input_encoding - kMCTextEncodingWindowsNative)
+			{
+				t_encoding = s_codepage_map[i].encoding;
+				break;
+			}
+	}
+
+	/* No converter: nothing comes out, as on Linux */
+	iconv_t t_converter = (iconv_t)-1;
+	if (t_encoding != nullptr)
+		t_converter = em_fetch_converter(t_encoding);
+	if (t_converter == (iconv_t)-1)
+	{
+		r_used = 0;
+		return true;
+	}
+
+	char *t_in_bytes = (char *)p_input;
+	size_t t_in_bytes_left = p_input_length;
+	char *t_out_bytes = (char *)p_output;
+	size_t t_out_bytes_left = p_output_length;
+
+	iconv(t_converter, nullptr, nullptr, &t_out_bytes, &t_out_bytes_left);
+
+	while (iconv(t_converter, &t_in_bytes, &t_in_bytes_left, &t_out_bytes, &t_out_bytes_left) == (size_t)-1)
+	{
+		/* Not room enough, or too little for U+FFFD below: the caller
+		 * asks again with room enough for any of these code pages */
+		if (errno == E2BIG || t_out_bytes_left < 2)
+		{
+			r_used = 4 * p_input_length;
+			return false;
+		}
+
+		/* A byte the code page has no character for, or a character
+		 * cut off at the end: U+FFFD for it, and on with the next.
+		 * (Linux's engine stops, and its RTF reader then takes what
+		 * the rest of its buffer held.) */
+		t_out_bytes[0] = char(0xFD);
+		t_out_bytes[1] = char(0xFF);
+		t_out_bytes += 2;
+		t_out_bytes_left -= 2;
+		t_in_bytes += 1;
+		t_in_bytes_left -= 1;
+	}
+
+	r_used = p_output_length - t_out_bytes_left;
+	return true;
 }
 
 /* ----------------------------------------------------------------
@@ -1084,16 +1393,65 @@ MCEmscriptenSystem::IsInteractiveConsole(int p_fd)
  * Miscellanous
  * ---------------------------------------------------------------- */
 
+/* A file of the engine's file system opens in a new tab of the
+ * browser, which shows what it can show (a picture, a PDF, a text, a
+ * page) and downloads the rest */
 void
 MCEmscriptenSystem::LaunchDocument(MCStringRef p_document)
 {
-	/* Successfully do nothing */
+	MCAutoStringRef t_path;
+	if (!MCS_resolvepath(p_document, &t_path) || !FileExists(*t_path))
+	{
+		/* As on the Mac */
+		MCresult->sets("can't open file");
+		return;
+	}
+
+	if (!MCEmscriptenShowDocument(*t_path))
+	{
+		MCresult->sets("no association");
+	}
 }
 
+/* A URL opens in a new tab of the browser, and a file: URL names a file
+ * of the engine's file system (as on the Mac, it is not URL-encoded).
+ * The browser opens a tab only while the page answers a click or a key:
+ * without one (a handler that a timer sent), the page asks the user,
+ * and its Open button opens it (em-system.js). */
 void
-MCEmscriptenSystem::LaunchUrl(MCStringRef p_document)
+MCEmscriptenSystem::LaunchUrl(MCStringRef p_url)
 {
-	MCresult -> sets("no association");
+	if (MCStringBeginsWithCString(p_url, (const char_t *) "file:",
+	                              kMCStringOptionCompareCaseless))
+	{
+		uindex_t t_start = 5;
+		if (MCStringBeginsWithCString(p_url, (const char_t *) "file:///",
+		                              kMCStringOptionCompareCaseless))
+		{
+			t_start = 7;
+		}
+
+		MCAutoStringRef t_path;
+		if (!MCStringCopySubstring(p_url,
+		                           MCRangeMakeMinMax(t_start, MCStringGetLength(p_url)),
+		                           &t_path))
+		{
+			MCresult->sets("no association");
+			return;
+		}
+
+		LaunchDocument(*t_path);
+		return;
+	}
+
+	MCAutoStringRefAsUTF16String t_url_u16;
+	if (!t_url_u16.Lock(p_url) ||
+	    0 == MCEmscriptenSystemLaunchUrl(t_url_u16.Ptr(), t_url_u16.Size()))
+	{
+		/* javascript: and data: URLs are refused, as is what is not a
+		 * URL */
+		MCresult->sets("no association");
+	}
 }
 
 bool
@@ -1140,7 +1498,27 @@ MCEmscriptenSystem::DoAlternateLanguage(MCStringRef p_script,
 		return;
 	}
 
-	MCresult->setvalueref(*t_result);
+	/* OXT-Beyond: the result is the script's value when it is a string, a
+	 * number, a boolean, binary data (a Uint8Array), or undefined or null
+	 * (empty), as the dictionary says; a JavaScript array, object or
+	 * function is not supported, and gives "execution error". Before, the
+	 * result held the engine's own value for it, a list or an object that
+	 * a script could not use: comparing the result with anything threw an
+	 * error. */
+	switch (MCValueGetTypeCode(*t_result))
+	{
+		case kMCValueTypeCodeNull:
+		case kMCValueTypeCodeBoolean:
+		case kMCValueTypeCodeNumber:
+		case kMCValueTypeCodeName:
+		case kMCValueTypeCodeString:
+		case kMCValueTypeCodeData:
+			MCresult->setvalueref(*t_result);
+			break;
+		default:
+			MCresult->sets("execution error");
+			break;
+	}
 }
 
 bool

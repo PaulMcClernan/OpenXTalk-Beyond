@@ -2907,7 +2907,9 @@ void MCStack::applyupdates(void)
 
 	view_apply_updates();
 
-#if defined(_DESKTOP)
+	// OXT-Beyond: and in the web engine, whose windows have an opacity too
+	// (em-stack.cpp)
+#if defined(_DESKTOP) || defined(__EMSCRIPTEN__)
 	// MW-2011-11-03: [[ Bug 9852 ]] If the previous blendlevel value is not the current
 	//   one perform an update.
 	if (window != nil && old_blendlevel != blendlevel)

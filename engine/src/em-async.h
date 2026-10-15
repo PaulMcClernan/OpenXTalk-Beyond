@@ -38,6 +38,16 @@ extern "C" {
  */
 int MCEmscriptenAsyncYield(real64_t p_timeout_s = -1);
 
+/* Test whether the engine can yield to the browser now.
+ *
+ * Returns zero while JavaScript has called into the engine: from a
+ * resume hook (the engine's stack is saved) or from JavaScript that the
+ * engine itself called (a JavaScript frame cannot be saved).
+ *
+ * Defined in em-async.js
+ */
+bool MCEmscriptenAsyncCanYield(void);
+
 /* Continue running the engine's main loop on receipt of an event.
  *
  * Returns when the engine next yields.

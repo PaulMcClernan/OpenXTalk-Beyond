@@ -127,9 +127,6 @@ X_initialize_mcappcodepath(const X_init_options& p_options)
                           nullptr);
 }
 
-// Important: This function is on the emterpreter whitelist. If its
-// signature function changes, the mangled name must be updated in
-// em-whitelist.json
 bool
 X_init(const X_init_options& p_options)
 {
@@ -139,9 +136,6 @@ X_init(const X_init_options& p_options)
 
 	/* ---------- Set up global variables */
 	X_clear_globals();
-
-	/* No blocking during initialization */
-	++MCwaitdepth;
 
 	MCswapbytes = MCEmscriptenIsLittleEndian();
 	MCtruemcstring = MCtruestring;
@@ -223,11 +217,9 @@ X_init(const X_init_options& p_options)
 		goto error_cleanup;
 	}
 
-	--MCwaitdepth;
 	return true;
 
  error_cleanup:
-	--MCwaitdepth;
 	return false;
 }
 

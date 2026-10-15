@@ -326,6 +326,19 @@
 						],
 					},
 				],
+				[
+					# A web build merges in its build settings, -std among
+					# them, at this late stage for both of its toolsets
+					# (config/emscripten.gypi), after cflags_cc above; so
+					# C++17 is asked for again here, where it comes last.
+					'OS == "emscripten"',
+					{
+						'cflags_cc':
+						[
+							'-std=c++17',
+						],
+					},
+				],
 			],
 			
 			'link_settings':

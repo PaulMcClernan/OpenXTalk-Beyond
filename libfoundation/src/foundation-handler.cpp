@@ -305,6 +305,150 @@ cleanup:
         MCValueRelease(t_value_args[i]);
 }
 
+#if defined(__EMSCRIPTEN__)
+
+/* OXT-Beyond: libffi makes a handler's function pointer by writing code at
+ * run time, which WebAssembly cannot do (foundation-ffi-js.cpp). On the web
+ * the function pointer is a JavaScript function that the engine adds to its
+ * function table instead: called from C, it stores its arguments as a
+ * libffi closure is given them, and runs the handler through
+ * MCHandlerEmscriptenInvoke. */
+
+#include <emscripten.h>
+
+EM_JS_DEPS(foundation_handler_js,
+           "$addFunction,$removeFunction,$stackSave,$stackAlloc,$stackRestore,$getValue,$setValue,$UTF8ToString");
+
+/* The function of the handler <p_handler> with the WebAssembly signature
+ * <p_signature> (the return type, then each parameter's: v, i, j, f or d)
+ * and the libffi layout <p_cif> */
+EM_JS(void *, __MCHandlerEmscriptenCreateFunction, (const char *p_signature, void *p_cif, void *p_handler), {
+	var signature = UTF8ToString(p_signature);
+	var types = { 'i': 'i32', 'j': 'i64', 'f': 'float', 'd': 'double' };
+	var func = function() {
+		// An 8-byte slot for each argument, the array of their addresses,
+		// and 8 bytes for the result, on the C stack
+		var count = signature.length - 1;
+		var stack = stackSave();
+		try {
+			var slots = stackAlloc(count * 12 + 16);
+			var argv = slots + count * 8;
+			var result = (argv + count * 4 + 7) & ~7;
+			for (var i = 0; i < count; i++) {
+				setValue(slots + i * 8, arguments[i], types[signature[i + 1]]);
+				setValue(argv + i * 4, slots + i * 8, '*');
+			}
+			setValue(result, 0, 'i64');
+			_MCHandlerEmscriptenInvoke(p_cif, result, argv, p_handler);
+			if (signature[0] != 'v') {
+				return getValue(result, types[signature[0]]);
+			}
+		} finally {
+			stackRestore(stack);
+		}
+	};
+	return addFunction(func, signature);
+});
+
+EM_JS(void, __MCHandlerEmscriptenDestroyFunction, (void *p_function), {
+	removeFunction(p_function);
+});
+
+/* The code of a WebAssembly type for libffi's <p_type> */
+static bool __MCHandlerEmscriptenTypeCode(ffi_type *p_type, bool p_is_return, char& r_code)
+{
+    switch (p_type->type)
+    {
+        case FFI_TYPE_VOID:
+            r_code = 'v';
+            return p_is_return;
+        case FFI_TYPE_INT:
+        case FFI_TYPE_UINT8:
+        case FFI_TYPE_SINT8:
+        case FFI_TYPE_UINT16:
+        case FFI_TYPE_SINT16:
+        case FFI_TYPE_UINT32:
+        case FFI_TYPE_SINT32:
+        case FFI_TYPE_POINTER:
+            r_code = 'i';
+            return true;
+        case FFI_TYPE_UINT64:
+        case FFI_TYPE_SINT64:
+            r_code = 'j';
+            return true;
+        case FFI_TYPE_FLOAT:
+            r_code = 'f';
+            return true;
+        case FFI_TYPE_DOUBLE:
+            r_code = 'd';
+            return true;
+        default:
+            // Structures and long doubles
+            return false;
+    }
+}
+
+/* Runs the handler <p_handler> with the arguments <p_args>, as a libffi
+ * closure does, putting its result in <x_ret>: an integer smaller than a word
+ * is returned in a whole word */
+extern "C" EMSCRIPTEN_KEEPALIVE
+void MCHandlerEmscriptenInvoke(ffi_cif *p_cif, void *x_ret, void **p_args, void *p_handler)
+{
+    union
+    {
+        uint64_t word;
+        double real;
+        void *pointer;
+    } t_value;
+    t_value.word = 0;
+
+    __exec_closure(p_cif, &t_value, p_args, p_handler);
+
+    switch (p_cif->rtype->type)
+    {
+        case FFI_TYPE_VOID:
+            break;
+        case FFI_TYPE_UINT8:
+            *(uint32_t *)x_ret = *(uint8_t *)&t_value;
+            break;
+        case FFI_TYPE_SINT8:
+            *(int32_t *)x_ret = *(int8_t *)&t_value;
+            break;
+        case FFI_TYPE_UINT16:
+            *(uint32_t *)x_ret = *(uint16_t *)&t_value;
+            break;
+        case FFI_TYPE_SINT16:
+            *(int32_t *)x_ret = *(int16_t *)&t_value;
+            break;
+        default:
+            MCMemoryCopy(x_ret, &t_value, MCMin(p_cif->rtype->size, sizeof(t_value)));
+            break;
+    }
+}
+
+/* The function pointer of the handler <self>, whose layout is <p_cif> */
+static bool __MCHandlerEmscriptenFunctionPtr(MCHandlerRef self, ffi_cif *p_cif, void*& r_function_ptr)
+{
+    // As __exec_closure, at most 16 parameters
+    char t_signature[18];
+    if (p_cif->nargs > 16 ||
+        !__MCHandlerEmscriptenTypeCode(p_cif->rtype, true, t_signature[0]))
+        return MCErrorThrowGeneric(MCSTR("this handler type cannot be a function pointer on the web"));
+    for (unsigned i = 0; i < p_cif->nargs; i++)
+    {
+        if (!__MCHandlerEmscriptenTypeCode(p_cif->arg_types[i], false, t_signature[i + 1]))
+            return MCErrorThrowGeneric(MCSTR("this handler type cannot be a function pointer on the web"));
+    }
+    t_signature[p_cif->nargs + 1] = '\0';
+
+    r_function_ptr = __MCHandlerEmscriptenCreateFunction(t_signature, p_cif, self);
+    if (r_function_ptr == nil)
+        return MCErrorThrowOutOfMemory();
+    return true;
+}
+
+#endif
+
 #if defined(__ANDROID__)
 
 /* For some reason the current version / config of libffi on newer versions of
@@ -407,6 +551,14 @@ bool MCHandlerGetFunctionPtrWithAbi(MCHandlerRef self, MCHandlerAbiKind p_abi_ki
 	if (!MCHandlerTypeInfoGetLayoutType(self->typeinfo, t_abi, (void*&)t_cif))
 		return false;
 
+#if defined(__EMSCRIPTEN__)
+	/* OXT-Beyond: the web has one ABI, and no libffi closures */
+	if (!__MCHandlerEmscriptenFunctionPtr(self, t_cif, self->function_ptr))
+		return false;
+	r_function_ptr = self->function_ptr;
+	return true;
+#endif
+
 	void *t_closure, *t_function_ptr;
 	t_closure = ffi_closure_alloc(sizeof(ffi_closure), &t_function_ptr);
 	if (t_closure == nil)
@@ -469,8 +621,14 @@ bool MCHandlerGetFunctionPtr(MCHandlerRef self, void*& r_function_ptr)
 
 void __MCHandlerDestroy(__MCHandler *self)
 {
+#if defined(__EMSCRIPTEN__)
+    /* OXT-Beyond: the function that stood for the handler on the web */
+    if (self -> function_ptr != nil)
+        __MCHandlerEmscriptenDestroyFunction(self -> function_ptr);
+#else
     if (self -> function_ptr != nil)
         ffi_closure_free(self -> closure);
+#endif
 
 #ifdef __HAS_MULTIPLE_ABIS__
 	/* Free any closures created with the non-default ABI. */

@@ -80,6 +80,21 @@ void MCCustomFontListAddFont(MCCustomFont *p_font)
 	p_font->next = nil;
 }
 
+/* OXT-Beyond: takes <p_font> out of the list, which then no longer owns
+ * it; false when it is not in the list (em-font.cpp, for "stop using font
+ * file") */
+bool MCCustomFontListRemoveFont(MCCustomFont *p_font)
+{
+	MCCustomFont **t_link = &s_custom_font_list;
+	while (*t_link != nil && *t_link != p_font)
+		t_link = &(*t_link)->next;
+	if (*t_link == nil)
+		return false;
+	*t_link = p_font->next;
+	p_font->next = nil;
+	return true;
+}
+
 bool MCCustomFontListGetNames(MCStringRef& r_names)
 {
 	bool t_success;

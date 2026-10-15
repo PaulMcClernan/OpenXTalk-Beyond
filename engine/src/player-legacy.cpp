@@ -84,6 +84,9 @@ MCPlayer::MCPlayer()
 {	
 	flags |= F_TRAVERSAL_ON;
 	nextplayer = nil;
+#ifdef __EMSCRIPTEN__
+	m_web = nil;
+#endif
 	rect.width = rect.height = 128;
 	filename = MCValueRetain(kMCEmptyString);
 	istmpfile = False;
@@ -116,6 +119,9 @@ MCPlayer::MCPlayer()
 MCPlayer::MCPlayer(const MCPlayer &sref) : MCControl(sref)
 {
 	nextplayer = nil;
+#ifdef __EMSCRIPTEN__
+	m_web = nil;
+#endif
 	filename = MCValueRetain(sref.filename);
 	istmpfile = False;
 	scale = 1.0;
@@ -153,6 +159,9 @@ MCPlayer::~MCPlayer()
 	if ( m_player != NULL )
 		delete m_player ;
 #endif
+#ifdef __EMSCRIPTEN__
+	web_release();
+#endif
     
 	MCValueRelease(filename);
 	MCValueRelease(userCallbackStr);
@@ -176,8 +185,16 @@ MCRectangle MCPlayer::getactiverect(void)
 void MCPlayer::open()
 {
 	MCControl::open();
+#ifdef __EMSCRIPTEN__
+	// As the Mac and Windows players do, the page loads the movie when the
+	// player opens, so it shows its first frame (play videoClip prepares
+	// its player once it has placed it)
+	if (!disposable)
+		prepare(kMCEmptyString);
+#else
 	if (flags & F_ALWAYS_BUFFER && !isbuffering())
 		prepare(kMCEmptyString);
+#endif
 }
 
 void MCPlayer::close()
@@ -359,6 +376,10 @@ void MCPlayer::applyrect(const MCRectangle &nrect)
 {
 #if defined(X11)
 	x11_setrect(nrect);
+#elif defined(__EMSCRIPTEN__)
+	// The page's video element follows the rect (as the native layer of
+	// the player, MCObject::setrect moves it)
+	rect = nrect;
 #endif
 }
 
@@ -370,6 +391,22 @@ void MCPlayer::timer(MCNameRef mptr, MCParameter *params)
         x11_controllertick();
         return;
     }
+#endif
+#ifdef __EMSCRIPTEN__
+    // The page plays the movie as the Mac and Windows players do, and so
+    // sends playStarted and currentTimeChanged as they do
+    if (MCNameIsEqualToCaseless(mptr, MCM_play_started))
+        state &= ~CS_PAUSED;
+    else if (MCNameIsEqualToCaseless(mptr, MCM_current_time_changed))
+    {
+        // The time when the message is sent, and another may follow
+        if (params != nil)
+        {
+            state &= ~CS_CTC_PENDING;
+            params -> setn_argument(getmoviecurtime());
+        }
+    }
+    else
 #endif
     if (MCNameIsEqualToCaseless(mptr, MCM_play_stopped))
     {
@@ -532,6 +569,8 @@ MCPlayerDuration MCPlayer::getduration() //get movie duration/length
 {
 #if defined(X11)
 	return x11_getduration();
+#elif defined(__EMSCRIPTEN__)
+	return web_getduration();
 #else
 	return 0;
 #endif
@@ -541,6 +580,8 @@ MCPlayerDuration MCPlayer::gettimescale() //get moive time scale
 {
 #if defined(X11) //X11 stuff
 	return x11_gettimescale();
+#elif defined(__EMSCRIPTEN__)
+	return web_gettimescale();
 #else
 	return 0;
 #endif
@@ -550,6 +591,8 @@ MCPlayerDuration MCPlayer::getmoviecurtime()
 {
 #if defined(X11)
 	return x11_getmoviecurtime();
+#elif defined(__EMSCRIPTEN__)
+	return web_getmoviecurtime();
 #else
 	return 0;
 #endif
@@ -560,6 +603,8 @@ void MCPlayer::setcurtime(MCPlayerDuration newtime, bool notify)
 	lasttime = newtime;
 #if defined(X11)
 	x11_setcurtime(newtime);
+#elif defined(__EMSCRIPTEN__)
+	web_setcurtime(newtime);
 #endif
 }
 
@@ -567,6 +612,8 @@ void MCPlayer::setselection(bool notify)
 {
 #if defined(X11)
 	x11_setselection();
+#elif defined(__EMSCRIPTEN__)
+	web_setselection();
 #endif
 }
 
@@ -574,6 +621,8 @@ void MCPlayer::setlooping(Boolean loop)
 {
 #if defined(X11)
 	x11_setlooping(loop);
+#elif defined(__EMSCRIPTEN__)
+	web_setlooping(loop);
 #endif
 }
 
@@ -581,6 +630,20 @@ void MCPlayer::setplayrate()
 {
 #if defined(X11)
 	x11_setplayrate();
+#elif defined(__EMSCRIPTEN__)
+	// As the Mac and Windows players do, a playRate that plays a paused
+	// movie sends playStarted, and one that pauses it playPaused (the page
+	// plays no rate below zero, so that rate pauses too)
+	if (web_haselement())
+	{
+		web_setplayrate();
+		if (rate > 0 && getstate(CS_PAUSED))
+			timer(MCM_play_started, nil);
+		else if (rate <= 0 && !getstate(CS_PAUSED))
+			timer(MCM_play_paused, nil);
+		setstate(rate <= 0, CS_PAUSED);
+		return;
+	}
 #endif
     
 	if (rate != 0)
@@ -607,6 +670,8 @@ void MCPlayer::playselection(Boolean play)
 {
 #if defined(X11)
 	x11_playselection(play);
+#elif defined(__EMSCRIPTEN__)
+	web_setselection();
 #endif
 }
 
@@ -614,6 +679,8 @@ Boolean MCPlayer::ispaused()
 {
 #if defined(X11)
 	return x11_ispaused();
+#elif defined(__EMSCRIPTEN__)
+	return web_ispaused();
 #else
 	return True;
 #endif
@@ -623,6 +690,8 @@ void MCPlayer::showcontroller(Boolean show)
 {
 #if defined(X11)
 	x11_showcontroller(show);
+#elif defined(__EMSCRIPTEN__)
+	web_showcontroller(show);
 #endif
 }
 
@@ -638,6 +707,8 @@ Boolean MCPlayer::prepare(MCStringRef options)
 
 #ifdef X11
 	ok = x11_prepare();
+#elif defined(__EMSCRIPTEN__)
+	ok = web_prepare();
 #endif
     
 	if (ok)
@@ -681,6 +752,18 @@ Boolean MCPlayer::playpause(Boolean on)
     
 #if defined(X11)
 	ok = x11_playpause(on);
+#elif defined(__EMSCRIPTEN__)
+	ok = web_playpause(on);
+
+	// As the Mac and Windows players do, playing a paused movie sends
+	// playStarted, and pausing a playing one playPaused
+	if (ok)
+	{
+		if (getstate(CS_PAUSED) && !on)
+			timer(MCM_play_started, nil);
+		else if (!getstate(CS_PAUSED) && on)
+			timer(MCM_play_paused, nil);
+	}
 #endif
 	
 	if (ok)
@@ -696,6 +779,8 @@ void MCPlayer::playstepforward()
     
 #if defined(X11)
 	x11_playstepforward();
+#elif defined(__EMSCRIPTEN__)
+	web_playstep(1);
 #endif
 }
 
@@ -706,6 +791,8 @@ void MCPlayer::playstepback()
 	
 #if defined(X11)
 	x11_playstepback();
+#elif defined(__EMSCRIPTEN__)
+	web_playstep(-1);
 #endif
 }
 
@@ -722,6 +809,12 @@ Boolean MCPlayer::playstop()
 		
 #if defined(X11)
 	needmessage = x11_playstop();
+#elif defined(__EMSCRIPTEN__)
+	// As the Mac and Windows players do, a player sends playStopped when
+	// its movie ends, not when it is unloaded (its card closes, or its
+	// filename changes); the card still hears of the end of a videoClip
+	web_playstop();
+	needmessage = disposable;
 #endif
     
 	freetmp();
@@ -786,6 +879,8 @@ MCRectangle MCPlayer::getpreferredrect()
     
 #if defined(X11)
 	return x11_getpreferredrect();
+#elif defined(__EMSCRIPTEN__)
+	return web_getpreferredrect();
 #else
 	MCRectangle t_bounds;
 	MCU_set_rect(t_bounds, 0, 0, 0, 0);
@@ -798,6 +893,8 @@ uint2 MCPlayer::getloudness()
 	if (getstate(CS_PREPARED))
 #if defined(X11)
     loudness = x11_getloudness();
+#elif defined(__EMSCRIPTEN__)
+    loudness = web_getloudness();
 #else
     loudness = loudness;
 #endif
@@ -809,6 +906,8 @@ void MCPlayer::setloudness()
 	if (state & CS_PREPARED)
 #if defined(X11)
     x11_setloudness(loudness);
+#elif defined(__EMSCRIPTEN__)
+    web_setloudness(loudness);
 #else
 	loudness = loudness;
 #endif
@@ -985,6 +1084,9 @@ uinteger_t MCPlayer::gettrackcount()
 void MCPlayer::setcallbacks(MCStringRef p_callbacks)
 {
     MCValueAssign(userCallbackStr, p_callbacks);
+#ifdef __EMSCRIPTEN__
+    web_synccallbacks();
+#endif
 }
 
 // End of property setters/getters

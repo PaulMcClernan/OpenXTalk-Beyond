@@ -48,7 +48,9 @@ void MCSecurityEvalCipherNames(MCExecContext& ctxt, MCStringRef& r_names)
 	MCAutoListRef t_list;
 	MCAutoStringRef t_error;
 
-#ifdef MCSSL
+	// OXT-Beyond: also with the ciphers alone, as the web engine has them
+	// (sysdefs.h)
+#if defined(MCSSL) || defined(MCSSL_CRYPTO)
 	if (SSL_ciphernames(&t_list, &t_error))
 	{
 		if (*t_error != nil)

@@ -739,9 +739,6 @@ IO_stat MCDispatch::startup(void)
 #define kMCEmscriptenBootStackFilename "/boot/standalone/__boot.livecode"
 #define kMCEmscriptenStartupCapsuleFilename "/boot/__startup.data"
 
-// Important: This function is on the emterpreter whitelist. If its
-// signature function changes, the mangled name must be updated in
-// em-whitelist.json
 IO_stat
 MCDispatch::startup()
 {

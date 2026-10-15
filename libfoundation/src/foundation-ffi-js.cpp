@@ -21,18 +21,12 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include <stdio.h>
 #include <assert.h>
 
-/* Alignment of Emscripten function pointers in its function pointer
- * array. */
-#define FUNCTION_POINTER_ALIGNMENT 2
-
-/* Alignment of Emscripten data pointers */
-#define DATA_POINTER_ALIGNMENT 4
-
 /* ================================================================
  * Helper functions
  * ================================================================ */
 
-/* Map libffi type descriptors to LLVM IR type descriptors. */
+/* Map libffi type descriptors to the type names that the runtime's
+ * getValue() and setValue() take. */
 static const char *
 ffi_map_to_llvm_ir(ffi_type *p_type) {
 	if (p_type == &ffi_type_void)
@@ -55,6 +49,59 @@ ffi_map_to_llvm_ir(ffi_type *p_type) {
 	abort(); /* Should never be reached */
 	return NULL;
 };
+
+/* Call the function at p_fn in the WebAssembly function table, from
+ * JavaScript: JavaScript can call a function of any signature, reading
+ * each argument from the argument values array.  (An i64 is a BigInt in
+ * JavaScript, as the function takes it.)
+ *
+ * The engine cannot yield to the browser while a JavaScript function is
+ * on its stack (em-async.js), so the call is counted as a call into the
+ * engine from JavaScript, as calls from a page are: a wait inside it
+ * returns at once. */
+EM_JS_DEPS(foundation_ffi_js,
+           "$getWasmTableEntry,$getValue,$setValue,$UTF8ToString");
+
+EM_JS(void, __MCFfiCallJS, (void *p_fn,
+                            int p_nargs,
+                            void *x_rvalue,
+                            void **x_avalues,
+                            const char *p_rvalue_type,
+                            const char **p_avalue_types), {
+	var func = getWasmTableEntry(p_fn);
+
+	// Each value in the argument values array is a pointer to the
+	// location where the actual argument value is stored.
+	var args = [];
+	for (var i = 0; i < p_nargs; ++i) {
+		var type = UTF8ToString(getValue(p_avalue_types + i * 4, '*'));
+		args.push(getValue(getValue(x_avalues + i * 4, '*'), type));
+	}
+
+	var callStack = null;
+	if (typeof Asyncify != 'undefined') {
+		callStack = Asyncify.exportCallStack;
+		callStack.push('ffi_call');
+	}
+	var result;
+	try {
+		result = func.apply(null, args);
+	} finally {
+		if (callStack) {
+			callStack.pop();
+		}
+	}
+
+	if (p_rvalue_type) {
+		// As in libffi, an integer smaller than a word is returned
+		// in a whole word.
+		var type = UTF8ToString(p_rvalue_type);
+		if (type == 'i8' || type == 'i16') {
+			type = 'i32';
+		}
+		setValue(x_rvalue, result, type);
+	}
+});
 
 /* ================================================================
  * Emscripten-specific implementations of libffi functions
@@ -81,97 +128,26 @@ ffi_call(ffi_cif *p_cif,
 	 * setValue(). */
 	const char *t_rvalue_type_ir = ffi_map_to_llvm_ir(p_cif->rtype);
 
-	const char *t_avalue_types_ir[p_cif->nargs];
+	const char *t_avalue_types_ir[p_cif->nargs + 1];
 	for (unsigned i = 0; i < p_cif->nargs; ++i)
 	{
 		t_avalue_types_ir[i] = ffi_map_to_llvm_ir(p_cif->arg_types[i]);
 	}
 
-	/* Marshal the function and dispatch it, in JavaScript */
-	EM_ASM_({
-			// ---------- Sensible names for arguments
-			var fn = $0;
-			var nargs = $1;
-			var rvalue_ptr = $2;
-			var avalue_ptr = $3;
-			var rvalue_type_ptr = $4;
-			var avalue_types_ptr = $5;
+	__MCFfiCallJS(reinterpret_cast<void *>(p_fn), int(p_cif->nargs),
+	              x_rvalue, x_avalues,
+	              t_rvalue_type_ir, t_avalue_types_ir);
+}
 
-			var DATA_POINTER_ALIGNMENT = $6;
-			var FUNCTION_POINTER_ALIGNMENT = $7;
-
-			var pointer_stringify = Module.Pointer_stringify;
-			var getValue = Module.getValue;
-			var setValue = Module.setValue;
-
-			var stack = 0;
-
-			// ---------- Get JavaScript function
-			// Compute the correct index into the Emscripten runtime
-			// function pointer array.
-			var index = fn / FUNCTION_POINTER_ALIGNMENT - 1;
-
-			// Get the actual JavaScript function
-			var func = Module.Runtime.functionPointers[index];
-
-			/*DEBUG // (no way to hide this behind an #ifdef, unfortunately)
-			// Get the function name
-			var DBG_func_name;
-			for (var key in Module) {
-				if (Module.hasOwnProperty(key) && Module[key] == func) {
-					DBG_func_name = key;
-				}
-			}
-			var DBG_func_args = [];
-			*/
-
-			// ---------- Marshal arguments
-			var func_args = [];
-			for (var i = 0; i < nargs; ++i) {
-				var arg_type_ptr = avalue_types_ptr + i * DATA_POINTER_ALIGNMENT;
-				var arg_val_ptr = avalue_ptr + i * DATA_POINTER_ALIGNMENT;
-				var arg_type = pointer_stringify(getValue(arg_type_ptr, "*"));
-
-				// Each value in the argument values array is a
-				// pointer to the location where the actual argument
-				// value is stored.
-				var arg_val = getValue(getValue(arg_val_ptr, "*"), arg_type);
-
-				func_args.push(arg_val);
-
-				/*DEBUG
-				DBG_func_args.push('(' + arg_type + ')' + arg_val.toString(16));
-				*/
-			}
-
-			var ret_type = null;
-			if (rvalue_type_ptr != 0) {
-				ret_type = pointer_stringify(rvalue_type_ptr);
-			}
-
-			/*DEBUG
-			console.error('ffi_call: ' + fn.toString(16) + '=' + DBG_func_name +
-			              ' ' + DBG_func_args);
-			*/
-
-			// ---------- Invoke
-			stack = Module.Runtime.stackSave();
-			var func_retval = func.apply(null, func_args);
-			Module.Runtime.stackRestore(stack);
-
-			// ---------- Store return value
-			if (ret_type) {
-				// the rvalue_ptr is a pointer to a location in which
-				// the return value should be saved
-				setValue(getValue(rvalue_ptr, "*"), func_retval, ret_type);
-			}
-		},
-		/* 0 */ int(p_fn),
-		/* 1 */ int(p_cif->nargs),
-		/* 2 */ int(x_rvalue),
-		/* 3 */ int(x_avalues),
-		/* 4 */ t_rvalue_type_ir,
-		/* 5 */ t_avalue_types_ir,
-		/* 6 */ DATA_POINTER_ALIGNMENT,
-		/* 7 */ FUNCTION_POINTER_ALIGNMENT);
+/* A libffi closure needs code made at run time, which WebAssembly cannot
+ * do, so making one fails. A handler's function pointer (a callback) is a
+ * JavaScript function in the function table instead (foundation-handler.cpp). */
+extern "C" ffi_status
+ffi_prep_closure_loc(ffi_closure *p_closure,
+                     ffi_cif *p_cif,
+                     void (*p_fun)(ffi_cif *, void *, void **, void *),
+                     void *p_user_data,
+                     void *p_codeloc)
+{
+	return FFI_BAD_ABI;
 }

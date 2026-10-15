@@ -6,8 +6,9 @@
 #   "Package mac-universal" (macos-15) joins the two builds into one
 #   universal build output with lipo (tools/ci/merge_universal.py, dSYM
 #   bundles included), stages OXT-Beyond.app from it with the external
-#   assets, the xTalk Suite extensions and the documentation data that the
-#   job Docs generates meanwhile (.github/workflows/docs.yml;
+#   assets, the xTalk Suite extensions, the documentation data that the
+#   job Docs generates meanwhile (.github/workflows/docs.yml) and the web
+#   runtime that the job Web builds (.github/workflows/web.yml;
 #   tools/oxt/package.py --platform mac-universal), signs it ad hoc from
 #   the inside out
 #   (tools/ci/sign_mac_app.py), checks that every Mach-O file of macOS code
@@ -37,8 +38,10 @@
 #   packaged Standalone-blank.app with the engine's deploy command, signed
 #   as the IDE signs one, and run, and a standalone built from each
 #   Windows and Linux runtime of the package and checked as a file of its
-#   format and architecture (tools/ci/standalone_check.py). It also
-#   extracts the zip and verifies its signature.
+#   format and architecture (tools/ci/standalone_check.py), and an HTML5
+#   standalone built by the IDE and opened in headless Chromium
+#   (tools/ci/web_check.py). It also extracts the zip and verifies its
+#   signature.
 #
 # The artifact is uploaded before the test jobs run, so a release has to
 # need both the package and the test jobs: .github/workflows/release.yml
@@ -130,6 +133,9 @@ on:
       - 'tools/ci/ide-compile-baseline-linux.txt'
       - 'tools/ci/linux_ide_start.sh'
       - 'tools/ci/test_linux_package.py'
+      - 'tools/ci/web-tests-baseline.txt'
+      - 'tools/ci/web-tests.livecodescript'
+      - 'tools/ci/web_tests.py'
       - 'tools/ci/win_crashtrace.py'
   pull_request:
     branches: [ main ]
@@ -528,6 +534,13 @@ jobs:
     with:
       artifact: OXT-Beyond-docs-macos
 
+  # The web runtime of the package (web.yml), made while the engines build
+  web:
+    name: Web
+    uses: ./.github/workflows/web.yml
+    with:
+      artifact: OXT-Beyond-web-macos
+
   # One universal OXT-Beyond.app from the two builds, signed ad hoc, as a
   # disk image, a zip and the merged build output with its symbols. Every
   # path below is under $RUNNER_TEMP (/Users/runner/work/_temp): no folder
@@ -535,7 +548,7 @@ jobs:
   # repository mode (tools/oxt/package.py repository_mode_trap).
   package:
     name: Package mac-universal
-    needs: [build, docs]
+    needs: [build, docs, web]
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: macos-15
     timeout-minutes: 90
@@ -552,6 +565,15 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           echo "::error::The job Docs did not succeed ($DOCS_RESULT): there is no documentation to package"
+          exit 1
+
+      # Likewise the job Web
+      - name: Check the web runtime job
+        if: ${{ needs.web.result != 'success' }}
+        env:
+          WEB_RESULT: ${{ needs.web.result }}
+        run: |
+          echo "::error::The job Web did not succeed ($WEB_RESULT): there is no web runtime to package"
           exit 1
 
       - name: Check out
@@ -622,6 +644,13 @@ jobs:
           name: OXT-Beyond-docs-macos
           path: ide/Documentation/html_viewer/resources/data
 
+      # package.py installs it in Runtime/Emscripten/js (OXT_WEB_RUNTIME)
+      - name: Download the web runtime
+        uses: actions/download-artifact@v8
+        with:
+          name: OXT-Beyond-web-macos
+          path: ${{ runner.temp }}/web-runtime
+
       # Both tarballs of a build unpack as Release/: the symbols go over the
       # build products, which puts every dSYM next to its binary. The two
       # architectures go into folders of their own.
@@ -684,6 +713,7 @@ jobs:
       # Redistributable; package.py warns about it.
       - name: Stage OXT-Beyond.app
         env:
+          OXT_WEB_RUNTIME: ${{ runner.temp }}/web-runtime
           NO_EXTERNAL_ASSETS: ${{ github.ref_type != 'tag' && !inputs.release && vars.OXT_NO_EXTERNAL_ASSETS == '1' }}
           NO_XTALK_EXTENSIONS: ${{ github.ref_type != 'tag' && !inputs.release && vars.OXT_NO_XTALK_EXTENSIONS == '1' }}
         run: |
@@ -1033,6 +1063,33 @@ jobs:
         run: |
           python3 tools/ci/media_check.py --install "$RUNNER_TEMP/oxt-test" --platform mac-universal \
             --log "$LOGS/media-check.log"
+
+      # An HTML5 standalone, as a user makes one: tools/ci/web_check.py
+      # starts the app's IDE with tools/ci/web-deploy.livecodescript, which
+      # builds a probe stack with the IDE's web builder (the app's web
+      # runtime, and the Internet library with its web driver); the
+      # standalone is then served on 127.0.0.1 and opened in headless
+      # Chromium, where the probe checks waits, timers, JavaScript, files,
+      # URLs and dialogs, and the check clicks, types and looks at what it
+      # draws. Playwright, pinned, in a virtual environment of its own. The
+      # probe's screenshot and the IDE's lines go with the logs. Last, as
+      # the browser and player check: a question macOS puts on the screen
+      # about Python stays there.
+      - name: Web standalone check
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        env:
+          PLAYWRIGHT_VERSION: 1.56.0
+        run: |
+          python3 -m venv "$RUNNER_TEMP/playwright"
+          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
+          "$RUNNER_TEMP/playwright/bin/python" -m playwright install chromium
+          status=0
+          "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_check.py --install "$RUNNER_TEMP/oxt-test" \
+            --platform mac-universal --work "$RUNNER_TEMP/web-check" || status=$?
+          mkdir -p "$LOGS/web-check"
+          cp "$RUNNER_TEMP"/web-check/*.png "$RUNNER_TEMP"/web-check/*.txt "$LOGS/web-check/" 2> /dev/null || true
+          exit "$status"
 
       - name: Upload logs
         if: always()

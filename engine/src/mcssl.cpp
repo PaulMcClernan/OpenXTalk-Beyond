@@ -34,6 +34,13 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "license.h"
 
+// OXT-Beyond: in this file, which holds both, the ciphers of an engine that
+// has no SSL sockets (MCSSL_CRYPTO, sysdefs.h) are built as MCSSL's. Its
+// certificate functions are built too, and nothing calls them.
+#if defined(MCSSL_CRYPTO) && !defined(MCSSL)
+#define MCSSL
+#endif
+
 #ifdef MCSSL
 #include <openssl/evp.h>
 #include <openssl/err.h>
@@ -83,7 +90,9 @@ Boolean load_crypto_symbols()
 #ifdef MCSSL
 
 // MW-2009-07-21: Weakly link only on non-MacOSX platforms.
-#if !defined(_SERVER)
+// OXT-Beyond: and not on the web, whose engine links OpenSSL into itself
+// because a browser loads no libraries (engine/kernel.gyp)
+#if !defined(_SERVER) && !defined(__EMSCRIPTEN__)
 	if (!initialise_weak_link_crypto())
 		return False;
 	if (!initialise_weak_link_ssl())
@@ -685,7 +694,8 @@ void ShutdownSSL()
 #ifdef MCSSL
 	if (cryptinited)
 	{
-#if !defined(_SERVER)
+		// OXT-Beyond: none on the web (load_crypto_symbols)
+#if !defined(_SERVER) && !defined(__EMSCRIPTEN__)
 		finalise_weak_link_crypto();
 		finalise_weak_link_ssl();
 #endif

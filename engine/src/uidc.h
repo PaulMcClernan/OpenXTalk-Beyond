@@ -308,7 +308,10 @@ enum
 	kMCAnswerDialogTypeInformation,
 	kMCAnswerDialogTypeQuestion,
 	kMCAnswerDialogTypeWarning,
-	kMCAnswerDialogTypeError
+	kMCAnswerDialogTypeError,
+	/* No icon: the web engine's answer without an icon type (mobile's
+	 * gets kMCAnswerDialogTypeInformation) */
+	kMCAnswerDialogTypePlain
 };
 
 //

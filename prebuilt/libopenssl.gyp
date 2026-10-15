@@ -147,6 +147,22 @@
 						},
 					],
 					[
+						# OXT-Beyond: the web engine's (scripts/build-openssl.sh)
+						'toolset_os == "emscripten"',
+						{
+							'library_dirs':
+							[
+								'lib/emscripten/js',
+							],
+
+							'libraries':
+							[
+								'-lcustomssl',
+								'-lcustomcrypto',
+							],
+						},
+					],
+					[
 						'toolset_os == "win"',
 						{
 							'library_dirs':

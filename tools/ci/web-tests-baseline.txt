@@ -1,0 +1,6 @@
+# Web test suite (tools/ci/web_tests.py): LiveCode Script tests known to
+# fail in the web engine, run in a web standalone in a headless browser.
+# One "lcs: <test>" per line; "? " before it: fails only sometimes; text
+# after " #" is a comment. A test that needs what a page cannot have (a
+# socket, another program, the IDE) skips there, through the test
+# library's requirements (tests/_testlib.livecodescript), and is not here.

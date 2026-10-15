@@ -602,6 +602,8 @@ void MCS_posttourl(MCObject *p_target, MCDataRef p_data, MCStringRef p_url)
 		t_state . object = t_obj;
 		t_state . post_sent = 0;
 		t_state . post_length = MCDataGetLength(p_data);
+		// The total length is not known until the response begins
+		t_state . total = -1;
         MCDataCreateMutable(0, t_state . data);
         
 		t_success = MCSystemPostUrl(*t_processed, p_data, MCDataGetLength(p_data), MCS_posturl_callback, &t_state);
@@ -673,6 +675,8 @@ void MCS_putintourl(MCObject *p_target, MCDataRef p_data, MCStringRef p_url)
 	MCAutoStringRef t_processed;
 	MCObjectHandle t_obj = nil;
 	MCSPutUrlState t_state;
+	// The callback assigns an error to this, releasing what it held
+	t_state.error = nil;
 	
 	t_success = MCSystemProcessUrl(p_url, kMCSystemUrlOperationStrip, &t_processed);
 	if (t_success)
@@ -704,6 +708,8 @@ void MCS_putintourl(MCObject *p_target, MCDataRef p_data, MCStringRef p_url)
 		else
 			MCresult->setvalueref(t_state.error);
 	}
+
+	MCValueRelease(t_state.error);
 }
 
 //////////

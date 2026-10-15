@@ -23,7 +23,18 @@
 #                          built locally (build-libraries.sh,
 #                          build-libraries-windows.ps1) and only noted; one
 #                          with an entry is checked like a download.
+#   PREBUILT_SKIP_FETCH=1  Fetch nothing: the libraries are already in
+#                          prebuilt/lib, bin, include and share, built
+#                          there by build-libraries.sh without packaging
+#                          them (tools/ci/build-web.sh). Every build runs
+#                          this script, since gyp names its outputs relative
+#                          to the build folder, where they never appear.
 # The folder variables also accept Windows paths (C:\...).
+
+if [ "${PREBUILT_SKIP_FETCH}" = "1" ] ; then
+	echo "Not fetching prebuilt libraries (PREBUILT_SKIP_FETCH=1)"
+	exit 0
+fi
 
 # Libraries to fetch
 PLATFORMS=( mac linux win32 android ios emscripten )
@@ -38,7 +49,7 @@ LIBS_mac=( Thirdparty OpenSSL ICU )
 LIBS_ios=( Thirdparty OpenSSL ICU )
 LIBS_win32=( Thirdparty OpenSSL Curl ICU CEF )
 LIBS_linux=( Thirdparty OpenSSL Curl ICU CEF )
-LIBS_emscripten=( Thirdparty ICU )
+LIBS_emscripten=( Thirdparty OpenSSL ICU )
 
 SUBPLATFORMS_ios=(iPhoneSimulator11.2 iPhoneSimulator12.1 iPhoneSimulator13.2 iPhoneSimulator14.4 iPhoneSimulator14.5 iPhoneOS11.2 iPhoneOS12.1 iPhoneOS13.2 iPhoneOS14.4 iPhoneOS14.5)
 SUBPLATFORMS_win32=(v141_static_release)

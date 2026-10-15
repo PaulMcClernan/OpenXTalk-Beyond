@@ -619,6 +619,13 @@ on TestRepeat pDesc, pHandler, pTarget, pTimeOut, pParamsArray
 end TestRepeat
 
 command TestRunStack pOptions, pStackFilePath, pArgs
+	-- OXT-Beyond: a browser starts no other programs, so the web engine
+	-- has no shell() to run the stack in an engine of its own with: the
+	-- test skips there
+	if the platform is "HTML5" then
+		throw "SKIP test runs a stack in another engine, which a browser cannot start"
+	end if
+
 	local tEnginePath
 	set the itemDelimiter to ":"
 	-- The address is <host>:<engine path>; on Windows the path has a colon
@@ -692,11 +699,22 @@ private function __MeetsRequirements pRequirement, pOptions
          return true
          break
       case "clipboard"
-      case "wait"
       case "security"
          return the platform is not "HTML5"
+      -- OXT-Beyond: the web engine waits, as the desktop's do, and writes
+      -- files to its own file system in the page; LiveCode's could
+      -- neither. (A handler that the page's JavaScript calls cannot wait,
+      -- but no test runs in one.)
+      case "wait"
+         return true
       case "write"
-         return the platform is not "HTML5" and ("disk" is in the securityPermissions or the secureMode is false)
+         return "disk" is in the securityPermissions or the secureMode is false
+      -- OXT-Beyond: a page can neither listen on a port nor open a
+      -- socket of its own, nor start another program: the web engine
+      -- fetches URLs, but has no sockets and no shell()
+      case "sockets"
+      case "shell"
+         return the platform is not "HTML5"
       case "ui"
          return not (the environment ends with "command line")
       case "desktop"

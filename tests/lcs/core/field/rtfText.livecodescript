@@ -90,10 +90,9 @@ end testRtfExport
 // Tests
 ////////////////////////////////////////////////////////////////////////////////
 
+-- OXT-Beyond: these run on the web too, whose engine reads the text of
+-- RTF in its code page (LiveCode's bug 16545)
 on TestSetup
-   if the platform is "HTML5" then
-      return "SKIP bug 16545"
-   end if
 end TestSetup
 
 // Test backgroundColour on its own

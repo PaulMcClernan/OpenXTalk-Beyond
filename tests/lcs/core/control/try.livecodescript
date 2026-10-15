@@ -58,7 +58,8 @@ on TestTryNoCatchWithError
 end TestTryNoCatchWithError
 
 on TestTryMultipleEvents
-   if the environment is "command line" or the platform is "HTML5" then
+   -- OXT-Beyond: runs on the web too, whose engine types keys
+   if the environment is "command line" then
       TestSkip "Try execution context", "no type command available"
       return empty
    end if

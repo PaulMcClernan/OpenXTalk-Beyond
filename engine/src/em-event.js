@@ -18,7 +18,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 mergeInto(LibraryManager.library, {
 
-	$LiveCodeEvents__deps: ['$LiveCodeAsync', '$LiveCodeDC', '$LiveCodeUtil'],
+	$LiveCodeEvents__deps: ['$LiveCodeAsync', '$LiveCodeDC', '$LiveCodeUtil', '$LiveCodeClipboard', '$LiveCodeDialog'],
 	$LiveCodeEvents: {
 
 		// true if ensureInit() has ever been run
@@ -52,6 +52,13 @@ mergeInto(LibraryManager.library, {
 				['mouseleave', LiveCodeEvents._handleMouseEvent],
 
 				['contextmenu', LiveCodeEvents._handleContextMenu],
+
+				['wheel', LiveCodeEvents._handleWheelEvent],
+
+				['touchstart', LiveCodeEvents._handleTouchEvent],
+				['touchmove', LiveCodeEvents._handleTouchEvent],
+				['touchend', LiveCodeEvents._handleTouchEvent],
+				['touchcancel', LiveCodeEvents._handleTouchEvent],
 			];
 
 			var mapLength = mapping.length;
@@ -71,6 +78,10 @@ mergeInto(LibraryManager.library, {
 				['compositionstart', LiveCodeEvents._handleComposition],
 				['compositionupdate', LiveCodeEvents._handleComposition],
 				['compositionend', LiveCodeEvents._handleComposition],
+
+				['copy', LiveCodeEvents._handleCopyEvent],
+				['cut', LiveCodeEvents._handleCopyEvent],
+				['paste', LiveCodeEvents._handlePasteEvent],
 			];
 
 			var mapLength = mapping.length;
@@ -81,8 +92,9 @@ mergeInto(LibraryManager.library, {
 
 		addEventListeners: function(pElement)
 		{
+			// (not passive: the handlers stop what the browser would do)
 			LiveCodeEvents._eventForEach(function(type, handler) {
-				pElement.addEventListener(type, handler, true);
+				pElement.addEventListener(type, handler, {capture: true, passive: false});
 			});
 
 			// Make sure the canvas is treated as focusable...
@@ -91,6 +103,10 @@ mergeInto(LibraryManager.library, {
 			// Force the canvas to use a normal mouse cursor by
 			// default
 			pElement.style.cursor = 'default';
+
+			// A touch on a stack is the stack's: the browser neither
+			// scrolls nor zooms the page for it
+			pElement.style.touchAction = 'none';
 		},
 		
 		removeEventListeners: function(pElement)
@@ -107,9 +123,18 @@ mergeInto(LibraryManager.library, {
 				return;
 			}
 
+			LiveCodeEvents._isMac = /^(Mac|iPhone|iPad|iPod)/.test(navigator.platform || '');
+
 			// Add document event listeners to track mouse events outside canvas
 			document.addEventListener("mouseup", LiveCodeEvents._handleDocumentMouseEvent);
 			document.addEventListener("mousemove", LiveCodeEvents._handleDocumentMouseEvent);
+			window.addEventListener("blur", LiveCodeEvents._handleWindowBlur);
+
+			// OXT-Beyond: drops from outside the page on the stacks'
+			// windows (_handleDrop())
+			document.addEventListener('dragenter', LiveCodeEvents._handleDrop);
+			document.addEventListener('dragover', LiveCodeEvents._handleDrop);
+			document.addEventListener('drop', LiveCodeEvents._handleDrop);
 			
 			// Create the hidden input element
 			var tInput = document.createElement('input');
@@ -123,6 +148,23 @@ mergeInto(LibraryManager.library, {
 			tInput.style.setProperty('width', '1px', 'important');
 			tInput.style.setProperty('height', '1px', 'important');
 
+			// OXT-Beyond: a touch screen's keyboard comes up for the
+			// input only while an unlocked field has the focus
+			// (setTextInput()), and types into the stacks what its keys
+			// say: no corrections and no capitals of its own (the input is
+			// emptied after each key, so each would start a sentence). Its
+			// text is big enough that Safari does not zoom the page in to
+			// it when it has the focus.
+			tInput.style.setProperty('font-size', '16px', 'important');
+			tInput.inputMode = 'none';
+			tInput.autocomplete = 'off';
+			tInput.setAttribute('autocorrect', 'off');
+			tInput.setAttribute('autocapitalize', 'off');
+			tInput.spellcheck = false;
+			if (navigator.virtualKeyboard && 'virtualKeyboardPolicy' in tInput) {
+				tInput.virtualKeyboardPolicy = 'manual';
+			}
+
 			LiveCodeEvents._inputelement = tInput;
 			document.body.appendChild(tInput);
 
@@ -131,8 +173,10 @@ mergeInto(LibraryManager.library, {
 			});
 
 			// Add listener for changes to device pixel ratio
-			var matchQuery = "(resolution: " + window.devicePixelRatio + "dppx)";
-			window.matchMedia(matchQuery).addListener(LiveCodeEvents._handleDevicePixelRatioChanged);
+			LiveCodeEvents._watchDevicePixelRatio();
+
+			// The screen is the browser's window: desktopChanged
+			window.addEventListener('resize', LiveCodeEvents._handleScreenResize);
 
 			LiveCodeEvents._initialised = true;
 		},
@@ -158,13 +202,69 @@ mergeInto(LibraryManager.library, {
 			var window = LiveCodeDC.getWindowIDForCanvas(pCanvas);
 			if (window == 0)
 			{
-				console.log('failed to find window for canvas');
 				return null;
 			}
 			return LiveCodeEvents._getStackForWindow(window);
 		},
 
+		// True in a browser on a Mac (or an iPad), where Cmd is the
+		// command key (set by initialize(): this object is built when
+		// the engine is linked, with no browser around it)
+		_isMac: false,
+
+		// The modifier keys that are down, as the latest key, mouse or
+		// wheel event of the page says (the shiftKey, the commandKey and
+		// the like): 1 Shift, 2 Alt, 4 Ctrl, 8 Meta (Cmd on a Mac), 16
+		// Caps Lock
+		_modifierKeys: 0,
+
+		// The keys that are down (the keysDown): {key_code: true}
+		_keysDown: {},
+
+		_trackModifiers: function(e) {
+			if (typeof e.shiftKey != 'boolean') {
+				return;
+			}
+			var keys = (e.shiftKey ? 1 : 0) | (e.altKey ? 2 : 0) |
+				(e.ctrlKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+			if (e.getModifierState && e.getModifierState('CapsLock')) {
+				keys |= 16;
+			}
+			LiveCodeEvents._modifierKeys = keys;
+		},
+
+		// The page lost the keyboard: the keys that are down go up for it.
+		// OXT-Beyond: a drag ends there too, as the page may not hear its
+		// button go up.
+		_handleWindowBlur: function() {
+			LiveCodeEvents._modifierKeys &= 16;
+			LiveCodeEvents._keysDown = {};
+			if (LiveCodeEvents._drag && !LiveCodeEvents._drag.cancel) {
+				LiveCodeEvents._drag.cancel = LiveCodeEvents.kDragCancelLost;
+				LiveCodeAsync.resume();
+			}
+		},
+
+		// The engine's modifiers that are down (MCScreenDC::querymods()):
+		// 1 shift, 2 alt, 4 its command key (Ctrl, or Cmd on a Mac), 8 its
+		// other one (Meta, or Ctrl on a Mac), 16 caps lock
+		getModifierKeys: function() {
+			var keys = LiveCodeEvents._modifierKeys;
+			if (LiveCodeEvents._isMac) {
+				keys = (keys & ~12) | ((keys & 4) << 1) | ((keys & 8) >> 1);
+			}
+			return keys;
+		},
+
+		// The engine's modifiers. On a Mac, Cmd is the engine's command
+		// (control) key and Ctrl its other one, as in the desktop engine
+		// on a Mac, so that Cmd+C copies and the commandKey is Cmd.
 		_encodeModifiers: function(pShift, pAlt, pCtrl, pMeta) {
+			if (LiveCodeEvents._isMac) {
+				var tCtrl = pCtrl;
+				pCtrl = pMeta;
+				pMeta = tCtrl;
+			}
 			return Module.ccall('MCEmscriptenEventEncodeModifiers', 'number',
 								['number', 'number', 'number', 'number'],
 								[pShift, pAlt, pCtrl, pMeta]);
@@ -174,8 +274,37 @@ mergeInto(LibraryManager.library, {
 		// Focus events
 		// ----------------------------------------------------------------
 
+		// OXT-Beyond: whether <stack> takes the user's mouse and keys: not
+		// while a modal dialog is above it, as a disabled window takes none
+		// on the desktop (MCEmscriptenStackIsEnabled(), em-dc.cpp)
+		_stackEnabled: function(stack) {
+			return !!stack && Module.ccall('MCEmscriptenStackIsEnabled', 'number',
+										   ['number'], [stack]) != 0;
+		},
+
+		// OXT-Beyond: the keyboard goes to the stack of the window <to>
+		// (to none if 0) when the stacks have it (<from> 0) or the window
+		// <from> has it: the engine opened the window that the system
+		// would make the active one, or closed the one that had the
+		// keyboard. A page that has not given the stacks the keyboard
+		// keeps it.
+		passKeyboard: function(from, to) {
+			var target = LiveCodeEvents._inputtarget;
+			if (target == null)
+				return;
+			if (from != 0 && target !== LiveCodeDC.getWindowCanvas(from))
+				return;
+			var canvas = to != 0 ? LiveCodeDC.getWindowCanvas(to) : null;
+			if (canvas !== target)
+				LiveCodeEvents._setInputFocus(canvas);
+		},
+
 		// Wrapper for MCEventQueuePostKeyFocus()
 		_postKeyFocus: function(stack, owner) {
+			// OXT-Beyond: a stack under a modal dialog does not take the
+			// keyboard
+			if (owner && !LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostKeyFocus',
 						 'number', // bool
 						 ['number',  // MCStack *stack
@@ -200,6 +329,10 @@ mergeInto(LibraryManager.library, {
 					LiveCodeEvents._inputtarget = pTarget;
 					LiveCodeEvents._postKeyFocus(LiveCodeEvents._getStackForCanvas(pTarget), true);
 				}
+
+				// OXT-Beyond: the window with the keyboard looks active
+				// (em-dc.js)
+				LiveCodeDC.setActiveWindow(LiveCodeDC.getWindowIDForCanvas(pTarget));
 			}
 
 			if (LiveCodeEvents._inputelement != null)
@@ -215,7 +348,7 @@ mergeInto(LibraryManager.library, {
 					(e.type == 'blur' || e.type == 'focusout') &&
 					LiveCodeEvents._getStackForCanvas(e.relatedTarget) == null)
 				{
-					_setInputFocus(null);
+					LiveCodeEvents._setInputFocus(null);
 					return;
 				}
 
@@ -396,7 +529,16 @@ mergeInto(LibraryManager.library, {
 			//
 			// Not all of these keycodes are actually understood by
 			// the engine, but they're all included for completeness.
+			// The modifier keys, left or right, as on Linux
+			var right = keyboardEvent.location === 2;
 			switch (keyName) {
+
+				// Modifier Keys
+			case 'Shift':    return right ? 0xffe2 : 0xffe1; // XK_Shift_R, XK_Shift_L
+			case 'Control':  return right ? 0xffe4 : 0xffe3; // XK_Control_R, XK_Control_L
+			case 'CapsLock': return 0xffe5; // XK_Caps_Lock
+			case 'Meta':     return right ? 0xffe8 : 0xffe7; // XK_Meta_R, XK_Meta_L
+			case 'Alt':      return right ? 0xffea : 0xffe9; // XK_Alt_R, XK_Alt_L
 
 				// Special Key Values
 			case 'Unidentified':	return 0;
@@ -571,12 +713,14 @@ mergeInto(LibraryManager.library, {
 				}
 			}
 
-			console.debug('Don\'t know how to decode key: ' + keyboardEvent.key);
 			return 0;
 		},
 
 		// Wrapper for MCEventQueuePostKeyPress()
 		_postKeyPress: function(stack, modifiers, char_code, key_code, key_state) {
+			// OXT-Beyond: none for a stack under a modal dialog
+			if (!LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostKeyPress',
 						 'number', // bool
 						 ['number',  // MCStack *stack
@@ -587,7 +731,128 @@ mergeInto(LibraryManager.library, {
 						 [stack, modifiers, char_code, key_code, key_state]);
 		},
 
+		// True if the key is the command key's (Cmd on a Mac, else Ctrl)
+		// with <e>, without Alt (Ctrl+Alt is AltGr, which types)
+		_isCommandKey: function(e) {
+			return (LiveCodeEvents._isMac ? e.metaKey : e.ctrlKey) && !e.altKey;
+		},
+
+		// The command key's shortcuts that the browser keeps: reload, new
+		// tab or window, close, quit and the address bar
+		_browserKeys: {'r': true, 't': true, 'w': true, 'n': true, 'q': true, 'l': true},
+
+		// True if the browser should not act on the key itself, so that
+		// it goes to the stacks alone, as on the desktop: Tab (which would
+		// take the keyboard out of the stacks), the page keys (which would
+		// scroll the page) and the command key's shortcuts. Copy, cut and
+		// paste keep the browser's action, for its clipboard events, and
+		// so do the browser's own shortcuts and its developer tools.
+		_keepFromBrowser: function(e) {
+			if (e.key == 'Tab' || e.key == 'PageUp' || e.key == 'PageDown') {
+				return true;
+			}
+			if (!LiveCodeEvents._isCommandKey(e) || typeof e.key != 'string' || e.key.length != 1) {
+				return false;
+			}
+			var key = e.key.toLowerCase();
+			if (key < 'a' || key > 'z' || key == 'c' || key == 'x' || key == 'v' ||
+				LiveCodeEvents._browserKeys[key]) {
+				return false;
+			}
+			if (e.shiftKey && (key == 'i' || key == 'j')) {
+				return false;
+			}
+			return true;
+		},
+
+		// The paste key (Ctrl+V, Cmd+V), held back until the paste event
+		// that follows it has put what is pasted on the engine's
+		// clipboard: {'event', 'timer'}
+		_heldPaste: null,
+
+		// Keys pressed with Cmd on a Mac, whose keyup the browser does not
+		// send while Cmd is down: they go up with Cmd. {key_code: [stack,
+		// char_code]}
+		_commandKeysDown: {},
+
 		_handleKeyboardEvent: function(e) {
+			// OXT-Beyond: the text that a key the stacks get types into the
+			// input is theirs already (_handleInput())
+			LiveCodeEvents._keyTyped = e.type == 'keydown' && !(e.isComposing || e.keyCode === 229);
+
+			// ignore key events during IME composing
+			if (e.isComposing || e.keyCode === 229)
+				return false;
+
+			LiveCodeEvents._trackModifiers(e);
+			var code = LiveCodeEvents._encodeKeyboardKeyCode(e);
+			if (code !== 0) {
+				if (e.type == 'keydown') {
+					LiveCodeEvents._keysDown[code] = true;
+				} else if (e.type == 'keyup') {
+					delete LiveCodeEvents._keysDown[code];
+				}
+			}
+
+			// OXT-Beyond: in a drag the keys are the drag's, as in a
+			// desktop's drag loop: Escape cancels it, and the modifier
+			// keys (tracked above) can change what a drop would do
+			if (LiveCodeEvents._drag) {
+				if (e.type == 'keydown' && e.key == 'Escape' &&
+					!LiveCodeEvents._drag.cancel) {
+					LiveCodeEvents._drag.cancel = LiveCodeEvents.kDragCancelEscape;
+				}
+				e.preventDefault();
+				LiveCodeAsync.resume();
+				return false;
+			}
+
+			if (e.type == 'keydown' && LiveCodeEvents._keepFromBrowser(e)) {
+				e.preventDefault();
+			}
+
+			var key = typeof e.key == 'string' ? e.key.toLowerCase() : '';
+			var command = LiveCodeEvents._isCommandKey(e);
+			if (e.type == 'keydown' && command && (key == 'c' || key == 'x')) {
+				// a copy event after this key takes what the engine copies
+				LiveCodeClipboard.beginKey();
+			}
+
+			// Hold the paste key back for its paste event; not for long,
+			// as there is none if the browser has nothing to paste
+			if (e.type == 'keydown' && command && key == 'v' && !e.repeat) {
+				LiveCodeEvents._releaseHeldPaste();
+				var held = {'event': e, 'timer': null};
+				held.timer = setTimeout(function() {
+					if (LiveCodeEvents._heldPaste === held) {
+						LiveCodeEvents._releaseHeldPaste();
+					}
+				}, 300);
+				LiveCodeEvents._heldPaste = held;
+				return false;
+			}
+
+			// The keys after it (its keyup) follow it
+			LiveCodeEvents._releaseHeldPaste();
+
+			LiveCodeEvents._postKeyboardEvent(e);
+			LiveCodeAsync.resume();
+
+			return false;
+		},
+
+		_releaseHeldPaste: function() {
+			var held = LiveCodeEvents._heldPaste;
+			if (!held) {
+				return;
+			}
+			LiveCodeEvents._heldPaste = null;
+			clearTimeout(held.timer);
+			LiveCodeEvents._postKeyboardEvent(held.event);
+			LiveCodeAsync.resume();
+		},
+
+		_postKeyboardEvent: function(e) {
 			LiveCodeAsync.delay(function() {
 
 				const kKeyStateDown = 0;
@@ -606,20 +871,28 @@ mergeInto(LibraryManager.library, {
 				// Ignore alt key presses
 				if (e.key == 'Alt')
 					return;
-				
-				// ignore key events during IME composing
-				if (e.isComposing || e.keyCode === 229)
-					return;
 
 				// ignore events for non-lc elements
 				if (!stack)
 					return;
 
+				var char_code, key_code;
 				switch (e.type) {
 				case 'keyup':
 					char_code = LiveCodeEvents._encodeKeyboardCharCode(e);
 					key_code = LiveCodeEvents._encodeKeyboardKeyCode(e);
 					LiveCodeEvents._postKeyPress(stack, mods, char_code, key_code, kKeyStateUp);
+					delete LiveCodeEvents._commandKeysDown[key_code];
+
+					// Cmd goes up: so do the keys pressed with it
+					if (e.key == 'Meta' && LiveCodeEvents._isMac) {
+						var down = LiveCodeEvents._commandKeysDown;
+						LiveCodeEvents._commandKeysDown = {};
+						Object.keys(down).forEach(function(code) {
+							delete LiveCodeEvents._keysDown[code];
+							LiveCodeEvents._postKeyPress(down[code][0], mods, down[code][1], Number(code), kKeyStateUp);
+						});
+					}
 					break;
 				case 'keydown':
 					char_code = LiveCodeEvents._encodeKeyboardCharCode(e);
@@ -630,18 +903,57 @@ mergeInto(LibraryManager.library, {
 						LiveCodeEvents._postKeyPress(stack, mods, char_code, key_code, kKeyStateUp);
 
 					LiveCodeEvents._postKeyPress(stack, mods, char_code, key_code, kKeyStateDown);
+
+					if (e.metaKey && e.key != 'Meta' && LiveCodeEvents._isMac) {
+						LiveCodeEvents._commandKeysDown[key_code] = [stack, char_code];
+					}
 					break;
 				default:
-					console.debug('Unexpected keyboard event type: ' + e.type);
 					return;
 				}
 
 				// Clear text input field after capturing key event
 				LiveCodeEvents._inputelement.value = "";
 			});
-			LiveCodeAsync.resume();
+		},
 
-			return false;
+		// ----------------------------------------------------------------
+		// Clipboard events
+		// ----------------------------------------------------------------
+
+		_handleCopyEvent: function(e) {
+			LiveCodeClipboard.handleCopy(e);
+		},
+
+		_handlePasteEvent: function(e) {
+			var held = LiveCodeEvents._heldPaste;
+			if (held) {
+				// the paste event is here: no need for the timer
+				clearTimeout(held.timer);
+			}
+			LiveCodeClipboard.handlePaste(e, function() {
+				if (held) {
+					if (LiveCodeEvents._heldPaste === held) {
+						LiveCodeEvents._releaseHeldPaste();
+					}
+				} else {
+					// The browser's Paste (from its menu): the engine
+					// pastes with its paste key
+					LiveCodeEvents._postPasteKey();
+				}
+			});
+		},
+
+		_postPasteKey: function() {
+			LiveCodeAsync.delay(function() {
+				var stack = LiveCodeEvents._getStackForCanvas(LiveCodeEvents._inputtarget);
+				if (!stack)
+					return;
+				var mods = LiveCodeEvents._encodeModifiers(false, false, !LiveCodeEvents._isMac, LiveCodeEvents._isMac);
+				var kKeyStatePressed = 2;
+				LiveCodeEvents._postKeyPress(stack, mods, 0x76, 0x76, kKeyStatePressed);
+			});
+			LiveCodeAsync.resume();
 		},
 
 		// ----------------------------------------------------------------
@@ -649,6 +961,9 @@ mergeInto(LibraryManager.library, {
 		// ----------------------------------------------------------------
 
 		_postImeCompose: function(stack, enabled, offset, chars, length) {
+			// OXT-Beyond: none for a stack under a modal dialog
+			if (!LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostImeCompose',
 						 'number',	/* bool */
 						 ['number',	/* MCStack* stack */
@@ -659,8 +974,134 @@ mergeInto(LibraryManager.library, {
 						 [stack, enabled, offset, chars, length]);
 		},
 
+		// OXT-Beyond: whether the last key down went to the stacks
+		_keyTyped: false,
+
+		// OXT-Beyond: text that comes with no key the stacks get: a touch
+		// screen's keyboard (whose keys are "Unidentified"), dictation or
+		// an emoji picker. The stacks get it a character at a time, as keys
+		// that type it, as a phone's engine gives them what its keyboard
+		// types; a key that the stacks got typed its own text, and a
+		// composition's text goes as an IME's (_handleComposition()). A
+		// correction, which would replace text that the input no longer
+		// has, is not typed.
 		_handleInput: function(inputEvent) {
-			console.debug('Input event: ' + inputEvent.type + ' ' + inputEvent.data);
+			var input = LiveCodeEvents._inputelement;
+			if (inputEvent.type == 'input') {
+				// The input keeps no text but a composition's
+				if (!inputEvent.isComposing && input && inputEvent.target == input) {
+					input.value = '';
+				}
+				return;
+			}
+
+			var typed = LiveCodeEvents._keyTyped;
+			LiveCodeEvents._keyTyped = false;
+			if (typed || inputEvent.isComposing) {
+				return;
+			}
+
+			var kKeyStatePressed = 2;
+			var keys = [];
+			switch (inputEvent.inputType) {
+			case 'insertText':
+				Array.from(inputEvent.data || '').forEach(function(ch) {
+					var code = ch.codePointAt(0);
+					if (code == 0x0a || code == 0x0d) {
+						keys.push([0, 0xff0d]);
+					} else if (code == 0x09) {
+						keys.push([0, 0xff09]);
+					} else if (code >= 0x20 && code < 0x7f || code >= 0xa0 && code <= 0xff) {
+						keys.push([code, code]);
+					} else if (code > 0xff) {
+						keys.push([code, code | 0x1000000]);
+					}
+				});
+				break;
+			case 'insertLineBreak':
+			case 'insertParagraph':
+				keys.push([0, 0xff0d]);
+				break;
+			case 'deleteContentBackward':
+				keys.push([0, 0xff08]);
+				break;
+			case 'deleteContentForward':
+				keys.push([0, 0xffff]);
+				break;
+			default:
+				return;
+			}
+			if (keys.length == 0) {
+				return;
+			}
+
+			LiveCodeAsync.delay(function() {
+				var stack = LiveCodeEvents._getStackForCanvas(LiveCodeEvents._inputtarget);
+				if (!stack) {
+					return;
+				}
+				keys.forEach(function(key) {
+					LiveCodeEvents._postKeyPress(stack, 0, key[0], key[1], kKeyStatePressed);
+				});
+			});
+			LiveCodeAsync.resume();
+		},
+
+		// OXT-Beyond: a touch screen's keyboard, which comes up while an
+		// unlocked field has the focus, as on a phone: the engine says
+		// when (MCScreenDC::activateIME(), em-dc.cpp). A browser brings
+		// the keyboard up only for a touch that has ended (or a key or a
+		// click), so it comes up when the next touch ends (_touchEnded()):
+		// at the end of the touch that put the focus in the field, or of
+		// the first touch after a script did. A mouse click brings up none:
+		// a computer with a mouse and a touch screen has a keyboard too.
+		_textInput: false,
+		_keyboardShown: false,
+
+		setTextInput: function(active) {
+			var input = LiveCodeEvents._inputelement;
+			if (!input || active == LiveCodeEvents._textInput) {
+				return;
+			}
+			LiveCodeEvents._textInput = active;
+			LiveCodeEvents._keyboardShown = false;
+			input.inputMode = active ? 'text' : 'none';
+			if (!active) {
+				LiveCodeEvents._keyboard(false);
+			}
+		},
+
+		// Brings up or puts away a touch screen's keyboard for the input:
+		// with the VirtualKeyboard API (Chrome), or by focusing the input
+		// again, which brings up the keyboard of its inputmode
+		_keyboard: function(show) {
+			var input = LiveCodeEvents._inputelement;
+			if (!input || document.activeElement !== input || !navigator.maxTouchPoints) {
+				return;
+			}
+			if (input.virtualKeyboardPolicy == 'manual') {
+				if (show) {
+					navigator.virtualKeyboard.show();
+				} else {
+					navigator.virtualKeyboard.hide();
+				}
+				return;
+			}
+			input.blur();
+			input.focus({preventScroll: true});
+		},
+
+		// A touch ended: the keyboard comes up, if a field has the focus.
+		// The VirtualKeyboard API brings it up again after each touch (it
+		// may have been put away, and it does not flicker); focusing the
+		// input again brings it up once.
+		_touchEnded: function() {
+			var input = LiveCodeEvents._inputelement;
+			if (LiveCodeEvents._textInput && input &&
+				(!LiveCodeEvents._keyboardShown || input.virtualKeyboardPolicy == 'manual')) {
+				LiveCodeEvents._keyboardShown = true;
+				LiveCodeEvents._keyboard(true);
+			}
 		},
 
 		_stringToUTF16: function(string) {
@@ -677,7 +1118,6 @@ mergeInto(LibraryManager.library, {
 				if (!stack)
 					return;
 
-				console.log('composition event: ' + compositionEvent.type + " '" + compositionEvent.data + "'");
 				var encodedString;
 				var chars, length;
 				switch (compositionEvent.type) {
@@ -767,6 +1207,11 @@ mergeInto(LibraryManager.library, {
 		// Wrapper for MCEventQueuePostMouseFocuse
 		_postMouseFocus: function(stack, time, inside)
 		{
+			// OXT-Beyond: none for a stack under a modal dialog
+			// (MCEmscriptenHandleMousePosition() and
+			// MCEmscriptenHandleMousePress() drop its others)
+			if (!LiveCodeEvents._stackEnabled(stack))
+				return;
 			Module.ccall('MCEventQueuePostMouseFocus',
 						 'number', /* bool */
 						 ['number', /* MCStack *stack */
@@ -797,6 +1242,8 @@ mergeInto(LibraryManager.library, {
 		},
 		
 		_handleMouseEvent: function(e) {
+			LiveCodeEvents._trackModifiers(e);
+			LiveCodeEvents._trackPointer(e);
 			LiveCodeAsync.delay(function () {
 
 				var target = LiveCodeEvents._eventTarget(e);
@@ -815,8 +1262,16 @@ mergeInto(LibraryManager.library, {
 
 				case 'mousedown':
 					// In the case of mouse down, specifically request
-					// keyboard focus
-					LiveCodeEvents._setInputFocus(target);
+					// keyboard focus. OXT-Beyond: the stack's window comes
+					// to the front of its layer too, as a click brings a
+					// window to the front on the desktop (em-dc.js); not
+					// for a stack under a modal dialog, whose press goes
+					// nowhere.
+					if (LiveCodeEvents._stackEnabled(stack))
+					{
+						LiveCodeDC.raiseWindow(LiveCodeDC.getWindowIDForCanvas(target));
+						LiveCodeEvents._setInputFocus(target);
+					}
 
 					LiveCodeEvents._postMousePosition(stack, e.timeStamp, mods, pos[0], pos[1]);
 					var state = LiveCodeEvents._encodeMouseState(e.type);
@@ -873,7 +1328,6 @@ mergeInto(LibraryManager.library, {
 					break;
 
 				default:
-					console.debug('Unexpected mouse event type: ' + e.type);
 					return;
 				}
 
@@ -882,6 +1336,67 @@ mergeInto(LibraryManager.library, {
 
 			// Prevent event from propagating
 			e.preventDefault();
+			return false;
+		},
+
+		// The wheel's movement not yet given to the engine, in pixels
+		_wheel: {'x': 0, 'y': 0},
+
+		// One click of a mouse's wheel, in pixels (Chrome's and Edge's
+		// deltaY for one; Firefox's three lines are about as much)
+		_wheelStep: 100,
+
+		// The wheel scrolls the field or group under the mouse, as on the
+		// desktop: the engine gets one wheel key (XK_WheelDown ...) per
+		// click of the wheel, and a trackpad's small moves add up to one.
+		// The engine's movements are the other way round from the page's,
+		// as a Mac's are: a positive dv (XK_WheelDown, rawKeyDown 65309)
+		// shows what is above, where a positive deltaY shows what is below.
+		_handleWheelEvent: function(e) {
+			LiveCodeEvents._trackModifiers(e);
+			var scale = e.deltaMode == 1 ? 40 : (e.deltaMode == 2 ? 800 : 1);
+			var wheel = LiveCodeEvents._wheel;
+			var step = LiveCodeEvents._wheelStep;
+
+			// a change of direction starts again
+			if (e.deltaX * wheel.x < 0)
+				wheel.x = 0;
+			if (e.deltaY * wheel.y < 0)
+				wheel.y = 0;
+			wheel.x += e.deltaX * scale;
+			wheel.y += e.deltaY * scale;
+
+			var clicks = [];
+			while (Math.abs(wheel.y) >= step) {
+				var down = wheel.y > 0 ? 1 : -1;
+				wheel.y -= down * step;
+				clicks.push([0, -down]);
+			}
+			while (Math.abs(wheel.x) >= step) {
+				var right = wheel.x > 0 ? 1 : -1;
+				wheel.x -= right * step;
+				clicks.push([-right, 0]);
+			}
+
+			// The page does not scroll under the stacks
+			e.preventDefault();
+
+			if (clicks.length == 0)
+				return false;
+
+			var target = e.target;
+			LiveCodeAsync.delay(function() {
+				var stack = LiveCodeEvents._getStackForCanvas(target);
+				if (!stack)
+					return;
+				var mods = LiveCodeEvents._encodeModifiers(e.shiftKey, e.altKey, e.ctrlKey, e.metaKey);
+				clicks.forEach(function(click) {
+					Module.ccall('MCEmscriptenHandleMouseWheel', 'number',
+								 ['number', 'number', 'number', 'number', 'number'],
+								 [stack, e.timeStamp, mods, click[0], click[1]]);
+				});
+			});
+			LiveCodeAsync.resume();
 			return false;
 		},
 		
@@ -893,9 +1408,364 @@ mergeInto(LibraryManager.library, {
 		},
 
 		// ----------------------------------------------------------------
+		// Drag and drop
+		// ----------------------------------------------------------------
+
+		// OXT-Beyond: a drag that the engine started follows the mouse
+		// until its button goes up (MCScreenDC::dodragdrop(), em-dc.cpp).
+		// Meanwhile the keys are the drag's, the cursor says what a drop
+		// would do, and the drag's image follows the pointer.
+
+		// Where the pointer is in the page's viewport: [clientX, clientY]
+		_pointer: null,
+
+		// The drag, or null: {'cancel', 'image', 'xoffset', 'yoffset',
+		// 'style', 'cursor'}. Its image is a canvas, if it has one, whose
+		// top left is xoffset, yoffset from the pointer; its style makes
+		// the cursor over the whole page the drag's.
+		_drag: null,
+
+		// Why a drag was cancelled: Escape (its button is still down), or
+		// the page lost the mouse
+		kDragCancelEscape: 1,
+		kDragCancelLost: 2,
+
+		// The cursors that say what a drop would do: none, then the
+		// engine's drag actions (uidc.h): move, copy and link
+		_dragCursors: {0: 'no-drop', 1: 'grabbing', 2: 'copy', 4: 'alias'},
+
+		_trackPointer: function(e) {
+			if (typeof e.clientX != 'number') {
+				return;
+			}
+			LiveCodeEvents._pointer = [e.clientX, e.clientY];
+			var drag = LiveCodeEvents._drag;
+			if (drag && drag.image) {
+				drag.image.style.left = (e.clientX - drag.xoffset) + 'px';
+				drag.image.style.top = (e.clientY - drag.yoffset) + 'px';
+			}
+		},
+
+		dragBegin: function(pixels, width, height, stride, xoffset, yoffset) {
+			LiveCodeEvents.dragEnd();
+
+			var drag = {'cancel': 0, 'image': null, 'xoffset': xoffset, 'yoffset': yoffset,
+						'style': document.createElement('style'), 'cursor': null};
+			document.head.appendChild(drag.style);
+
+			if (pixels && width > 0 && height > 0) {
+				var image = LiveCodeDC.canvasFromPixels(pixels, width, height, stride);
+				if (image) {
+					image.style.position = 'fixed';
+					image.style.width = width + 'px';
+					image.style.height = height + 'px';
+					image.style.pointerEvents = 'none';
+					image.style.zIndex = 2147483647;
+					image.style.opacity = 0.75;
+					document.body.appendChild(image);
+					drag.image = image;
+				}
+			}
+
+			LiveCodeEvents._drag = drag;
+			if (LiveCodeEvents._pointer) {
+				LiveCodeEvents._trackPointer({'clientX': LiveCodeEvents._pointer[0],
+											  'clientY': LiveCodeEvents._pointer[1]});
+			}
+			LiveCodeEvents.dragSetCursor('grabbing');
+		},
+
+		dragSetCursor: function(cursor) {
+			var drag = LiveCodeEvents._drag;
+			if (drag && drag.cursor != cursor) {
+				drag.cursor = cursor;
+				drag.style.textContent = 'html, html * { cursor: ' + cursor + ' !important; }';
+			}
+		},
+
+		dragEnd: function() {
+			var drag = LiveCodeEvents._drag;
+			if (!drag) {
+				return;
+			}
+			LiveCodeEvents._drag = null;
+			if (drag.style.parentNode) {
+				drag.style.parentNode.removeChild(drag.style);
+			}
+			if (drag.image && drag.image.parentNode) {
+				drag.image.parentNode.removeChild(drag.image);
+			}
+		},
+
+		// The stack window under the pointer, or null (_windowAt())
+		dragTarget: function() {
+			var pointer = LiveCodeEvents._pointer;
+			if (!pointer) {
+				return null;
+			}
+			return LiveCodeEvents._windowAt(document.elementFromPoint(pointer[0], pointer[1]),
+											pointer[0], pointer[1]);
+		},
+
+		// The stack window that <element> is part of (its canvas, or a
+		// native layer over it): {'window', 'x', 'y'}, x, y being where
+		// <clientX>, <clientY> is in its canvas (as for the mouse's
+		// events: _encodeMouseCoordinates()), or null if it is in none
+		_windowAt: function(element, clientX, clientY) {
+			for (; element; element = element.parentElement) {
+				var dataset = element.dataset || {};
+				var id = Number(dataset.lcWindowId || dataset.lcLayerWindowId || 0);
+				if (id) {
+					var canvas = LiveCodeDC.getWindowCanvas(id);
+					if (!canvas) {
+						return null;
+					}
+					var rect = canvas.getBoundingClientRect();
+					return {'window': id,
+							'x': (clientX - rect.left - canvas.clientLeft + canvas.scrollLeft) | 0,
+							'y': (clientY - rect.top - canvas.clientTop + canvas.scrollTop) | 0};
+				}
+			}
+			return null;
+		},
+
+		// ----------------------------------------------------------------
+		// Drops from outside the page
+		// ----------------------------------------------------------------
+
+		// OXT-Beyond: files and folders, text and HTML can be dragged
+		// from outside the page and dropped on a stack. The browser shows
+		// what a drag carries only when it is dropped, so the stack hears
+		// of the drag then (MCEmscriptenHandleDrop(), em-dc.cpp), and
+		// meanwhile the page says that a drop would copy.
+
+		// The drops whose files and folders are being copied into
+		// /uploads (LiveCodeDialog.storeDropped()): id: the copies'
+		// paths, one per line, or null until they are copied
+		_drops: {},
+		_nextDrop: 1,
+
+		// Whether a drag carries what a stack takes
+		_dropCarries: function(data) {
+			var types = data && data.types ? Array.prototype.slice.call(data.types) : [];
+			return ['Files', 'text/plain', 'text/uri-list', 'text/html'].some(function(type) {
+				return types.indexOf(type) >= 0;
+			});
+		},
+
+		_handleDrop: function(e) {
+			var data = e.dataTransfer;
+			var target = LiveCodeEvents._windowAt(e.target, e.clientX, e.clientY);
+			if (!target || !LiveCodeEvents._dropCarries(data)) {
+				return;
+			}
+
+			// The stack takes the drag (the browser would open a file
+			// dropped on the page)
+			e.preventDefault();
+
+			if (e.type != 'drop') {
+				// A drop copies, if the drag lets it
+				var allowed = (data.effectAllowed || 'all').toLowerCase();
+				if (allowed == 'all' || allowed == 'uninitialized' || allowed.indexOf('copy') >= 0) {
+					data.dropEffect = 'copy';
+				} else if (allowed.indexOf('move') >= 0) {
+					data.dropEffect = 'move';
+				} else if (allowed.indexOf('link') >= 0) {
+					data.dropEffect = 'link';
+				}
+				return;
+			}
+
+			LiveCodeEvents._trackModifiers(e);
+			var mods = LiveCodeEvents._encodeModifiers(e.shiftKey, e.altKey, e.ctrlKey, e.metaKey);
+
+			// The text, or else the links (one a line: text/uri-list has
+			// comments too)
+			var text = data.getData('text/plain');
+			if (!text) {
+				text = data.getData('text/uri-list').split(/\r?\n/).filter(function(line) {
+					return line != '' && line.charAt(0) != '#';
+				}).join('\n');
+			}
+			var html = data.getData('text/html');
+
+			// The files and folders, which are copied into /uploads first
+			var dropped = [];
+			var items = data.items ? Array.prototype.slice.call(data.items) : [];
+			items.forEach(function(item) {
+				if (item.kind != 'file') {
+					return;
+				}
+				var entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+				var file = entry ? null : item.getAsFile();
+				if (entry || file) {
+					dropped.push(entry || file);
+				}
+			});
+			if (items.length == 0 && data.files) {
+				dropped = Array.prototype.slice.call(data.files);
+			}
+			var drop = 0;
+			if (dropped.length > 0) {
+				drop = LiveCodeEvents._nextDrop++;
+				LiveCodeEvents._drops[drop] = null;
+				LiveCodeDialog.storeDropped(dropped).then(function(paths) {
+					if (drop in LiveCodeEvents._drops) {
+						LiveCodeEvents._drops[drop] = paths;
+						LiveCodeAsync.resume();
+					}
+				});
+			}
+
+			if (!text && !html && !drop) {
+				return;
+			}
+
+			LiveCodeAsync.delay(function() {
+				Module.ccall('MCEmscriptenHandleDrop', 'number',
+							 ['number', /* Window window */
+							  'number', /* uint32_t time */
+							  'number', /* uint32_t modifiers */
+							  'number', 'number', /* int32_t x, y */
+							  'number', 'number', /* MCStringRef text, html */
+							  'number'], /* uint32_t drop */
+							 [target.window, e.timeStamp, mods, target.x, target.y,
+							  text ? LiveCodeUtil.stringToMCStringRef(text) : 0,
+							  html ? LiveCodeUtil.stringToMCStringRef(html) : 0,
+							  drop]);
+			});
+			LiveCodeAsync.resume();
+		},
+
+		// ----------------------------------------------------------------
+		// Touch events
+		// ----------------------------------------------------------------
+
+		// A touch screen drives the mouse, as a desktop's does: the first
+		// finger to touch a stack is the mouse with its button down
+		// (mouseDown, mouseMove as it moves, and mouseUp when it lifts, or
+		// mouseRelease when the browser cancels the touch), and the
+		// fingers that touch while it is down do nothing. The browser
+		// does nothing of its own with a touch on a stack: no scrolling or
+		// zooming, and none of the mouse events that it makes up for a
+		// tap, which would come after the touch's and repeat them. The
+		// mouse stays where the finger left it, until a finger touches
+		// another stack or the mouse moves.
+
+		// The touch that is the mouse while it is down (its identifier),
+		// and the canvas of the stack touched last
+		_touchId: null,
+		_touchCanvas: null,
+
+		_handleTouchEvent: function(e) {
+			e.preventDefault();
+
+			var touch = null;
+			for (var i = 0; i < e.changedTouches.length; i++) {
+				var t = e.changedTouches[i];
+				if (e.type == 'touchstart' ?
+					LiveCodeEvents._touchId == null :
+					t.identifier == LiveCodeEvents._touchId) {
+					touch = t;
+					break;
+				}
+			}
+			if (touch == null) {
+				return false;
+			}
+
+			// The mouse event that the touch is (a touch's events all go to
+			// the canvas that it started on)
+			var mouse = function(type, target) {
+				return {
+					type: type,
+					target: target || e.target,
+					clientX: touch.clientX,
+					clientY: touch.clientY,
+					timeStamp: e.timeStamp,
+					button: 0,
+					shiftKey: e.shiftKey,
+					altKey: e.altKey,
+					ctrlKey: e.ctrlKey,
+					metaKey: e.metaKey,
+					// a touch does not change the Caps Lock
+					getModifierState: function(key) {
+						return key == 'CapsLock' && (LiveCodeEvents._modifierKeys & 16) != 0;
+					},
+					preventDefault: function() {},
+				};
+			};
+
+			switch (e.type) {
+			case 'touchstart':
+				LiveCodeEvents._touchId = touch.identifier;
+				// The mouse leaves the stack touched last, and comes to
+				// this one
+				if (LiveCodeEvents._touchCanvas != null &&
+					LiveCodeEvents._touchCanvas != e.target) {
+					LiveCodeEvents._handleMouseEvent(mouse('mouseleave', LiveCodeEvents._touchCanvas));
+				}
+				LiveCodeEvents._touchCanvas = e.target;
+				LiveCodeEvents._handleMouseEvent(mouse('mouseenter'));
+				LiveCodeEvents._handleMouseEvent(mouse('mousedown'));
+				break;
+
+			case 'touchmove':
+				LiveCodeEvents._handleMouseEvent(mouse('mousemove'));
+				break;
+
+			case 'touchend':
+				LiveCodeEvents._touchId = null;
+				LiveCodeEvents._handleMouseEvent(mouse('mouseup'));
+				LiveCodeEvents._touchEnded();
+				break;
+
+			case 'touchcancel':
+				// No click: the button is let go as when the mouse is
+				// released away from what it pressed
+				LiveCodeEvents._touchId = null;
+				LiveCodeAsync.delay(function() {
+					var target = LiveCodeEvents._eventTarget(mouse('mousemove'));
+					var stack = LiveCodeEvents._getStackForCanvas(target);
+					if (stack) {
+						var mods = LiveCodeEvents._encodeModifiers(e.shiftKey, e.altKey, e.ctrlKey, e.metaKey);
+						LiveCodeEvents._postMousePress(stack, e.timeStamp, mods,
+													   LiveCodeEvents._encodeMouseState('mouserelease'), 0);
+					}
+					LiveCodeEvents._releaseFocus();
+				});
+				LiveCodeAsync.resume();
+				break;
+			}
+			return false;
+		},
+
+		// ----------------------------------------------------------------
 		// UI events
 		// ----------------------------------------------------------------
 		
+		// The query matches the device pixel ratio of the moment, so it
+		// sees one change (a zoom, or the window moved to another screen):
+		// each change watches for the next with a query of its own
+		_watchDevicePixelRatio: function() {
+			var query = window.matchMedia('(resolution: ' + window.devicePixelRatio + 'dppx)');
+			var changed = function() {
+				if (query.removeEventListener) {
+					query.removeEventListener('change', changed);
+				} else {
+					query.removeListener(changed);
+				}
+				LiveCodeEvents._handleDevicePixelRatioChanged();
+				LiveCodeEvents._watchDevicePixelRatio();
+			};
+			if (query.addEventListener) {
+				query.addEventListener('change', changed);
+			} else {
+				query.addListener(changed);
+			}
+		},
+
 		_handleDevicePixelRatioChanged: function() {
 			LiveCodeAsync.delay(function() {
 				Module.ccall('MCEmscriptenHandleDevicePixelRatioChanged',
@@ -904,6 +1774,25 @@ mergeInto(LibraryManager.library, {
 								[])
 			});
 			LiveCodeAsync.resume();
+			LiveCodeEvents._handleScreenResize();
+		},
+
+		// A window being resized changes its size many times a second:
+		// the stacks hear of it once it has stopped for a moment
+		_screenTimer: null,
+
+		_handleScreenResize: function() {
+			clearTimeout(LiveCodeEvents._screenTimer);
+			LiveCodeEvents._screenTimer = setTimeout(function() {
+				LiveCodeEvents._screenTimer = null;
+				LiveCodeAsync.delay(function() {
+					Module.ccall('MCEmscriptenHandleScreenChanged',
+								 'number', /* bool */
+								 [],
+								 []);
+				});
+				LiveCodeAsync.resume();
+			}, 100);
 		},
 
 		// prevent context menu popup on right-click
@@ -930,7 +1819,6 @@ mergeInto(LibraryManager.library, {
 				var stack = LiveCodeEvents._getStackForWindow(window);
 				if (stack == 0)
 				{
-					console.log('could not find stack for window ' + window);
 					return
 				}
 				LiveCodeEvents._postWindowReshape(stack, 1.0);
@@ -948,6 +1836,108 @@ mergeInto(LibraryManager.library, {
 	MCEmscriptenEventFinalizeJS__deps: ['$LiveCodeEvents'],
 	MCEmscriptenEventFinalizeJS: function() {
 		LiveCodeEvents.finalize();
+	},
+
+	// The modifier keys that are down (see getModifierKeys)
+	MCEmscriptenGetModifierKeys__deps: ['$LiveCodeEvents'],
+	MCEmscriptenGetModifierKeys: function() {
+		return LiveCodeEvents.getModifierKeys();
+	},
+
+	// The codes of the keys that are down, at most <max> of them into
+	// <codes> (uint32_t); returns how many there are
+	MCEmscriptenGetKeysDown__deps: ['$LiveCodeEvents'],
+	MCEmscriptenGetKeysDown: function(codes, max) {
+		var down = Object.keys(LiveCodeEvents._keysDown);
+		for (var i = 0; i < down.length && i < max; i++) {
+			{{{ makeSetValue('codes', 'i * 4', 'Number(down[i])', 'i32') }}};
+		}
+		return down.length;
+	},
+
+	// OXT-Beyond: whether an unlocked field has the keyboard focus: a touch
+	// screen's keyboard comes up for it (MCScreenDC::activateIME(),
+	// em-dc.cpp)
+	MCEmscriptenSetTextInput__deps: ['$LiveCodeEvents'],
+	MCEmscriptenSetTextInput: function(active) {
+		LiveCodeEvents.setTextInput(!!active);
+	},
+
+	// OXT-Beyond: a window opened or closed (MCScreenDC::openwindow() and
+	// closewindow(), em-dc.cpp)
+	MCEmscriptenPassKeyboard__deps: ['$LiveCodeEvents'],
+	MCEmscriptenPassKeyboard: function(from, to) {
+		LiveCodeEvents.passKeyboard(from, to);
+	},
+
+	// OXT-Beyond: a drag that the engine started (MCScreenDC::dodragdrop(),
+	// em-dc.cpp). Its image, if it has one, is <pixels>: premultiplied
+	// RGBA, <stride> bytes a row; the pointer is <xoffset>, <yoffset> from
+	// its top left.
+	MCEmscriptenDragBegin__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragBegin: function(pixels, width, height, stride, xoffset, yoffset) {
+		LiveCodeEvents.dragBegin(pixels, width, height, stride, xoffset, yoffset);
+	},
+
+	// The window of the stack that the pointer is over (0 if none), and
+	// where in it the pointer is (<r_x>, <r_y>: int32_t)
+	MCEmscriptenDragGetTarget__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragGetTarget: function(r_x, r_y) {
+		var target = LiveCodeEvents.dragTarget();
+		if (!target) {
+			return 0;
+		}
+		{{{ makeSetValue('r_x', '0', 'target.x', 'i32') }}};
+		{{{ makeSetValue('r_y', '0', 'target.y', 'i32') }}};
+		return target.window;
+	},
+
+	// Why the drag was cancelled: 0 if it was not, 1 Escape (its button
+	// is still down), 2 the page lost the mouse
+	MCEmscriptenDragGetCancel__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragGetCancel: function() {
+		return LiveCodeEvents._drag ? LiveCodeEvents._drag.cancel : 0;
+	},
+
+	// What a drop would do (an engine drag action, or 0 for none): the
+	// cursor shows it
+	MCEmscriptenDragSetAction__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragSetAction: function(action) {
+		LiveCodeEvents.dragSetCursor(LiveCodeEvents._dragCursors[action] || 'no-drop');
+	},
+
+	MCEmscriptenDragEnd__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragEnd: function() {
+		LiveCodeEvents.dragEnd();
+	},
+
+	// OXT-Beyond: whether the files and folders of the drop <drop> from
+	// outside the page (MCEmscriptenHandleDrop(), em-dc.cpp) are still
+	// being copied
+	MCEmscriptenDropIsPending__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDropIsPending: function(drop) {
+		return LiveCodeEvents._drops[drop] === null;
+	},
+
+	// The paths of their copies, one per line (UTF-16, which the engine
+	// frees); false if there are none. The drop is forgotten.
+	MCEmscriptenDropGetFiles__deps: ['$LiveCodeEvents', '$LiveCodeUtil'],
+	MCEmscriptenDropGetFiles: function(drop, r_paths, r_length) {
+		var paths = LiveCodeEvents._drops[drop];
+		delete LiveCodeEvents._drops[drop];
+		if (!paths) {
+			return false;
+		}
+		var buffer = LiveCodeUtil.stringToUTF16(paths);
+		{{{ makeSetValue('r_paths', '0', 'buffer', 'i32') }}};
+		{{{ makeSetValue('r_length', '0', 'paths.length', 'i32') }}};
+		return true;
+	},
+
+	// Forgets the drop <drop>, whose files are not wanted
+	MCEmscriptenDropRelease__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDropRelease: function(drop) {
+		delete LiveCodeEvents._drops[drop];
 	},
 
 });

@@ -1068,6 +1068,7 @@ private function TestStartServer pStatus, pBody
    put "HTTP/1.1" && pStatus & crlf & "Content-Type: application/json" & crlf & \
          "Content-Length:" && the number of bytes of tBytes & crlf & "Connection: close" & crlf & crlf & tBytes into sResponse
    put empty into sRequest
+   TestSkipIfNot "sockets"
    accept connections on port 0 with message "xtaTestServerAccept"
    return it
 end TestStartServer

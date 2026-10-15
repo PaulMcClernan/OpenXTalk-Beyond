@@ -79,4 +79,53 @@
 			},
 		},
 	],
+
+	# OXT-Beyond: revSpeech for the web engine, which links it into itself
+	# (engine/src/em-externals.cpp), with the browser's speech synthesis
+	# (src/emscriptenspeech.cpp). Its names, and those of its copy of
+	# libExternal, are renamed for it (libexternal/src/external-static.h).
+	'conditions':
+	[
+		[
+			'OS == "emscripten"',
+			{
+				'targets':
+				[
+					{
+						'target_name': 'external-revspeech-static',
+						'type': 'static_library',
+
+						'dependencies':
+						[
+							'../libexternal/libexternal.gyp:libExternal-static-revspeech',
+						],
+
+						'include_dirs':
+						[
+							'../libexternal/include',
+							'../libexternal/src',
+							'src',
+						],
+
+						'defines':
+						[
+							'EXTERNAL_STATIC_PREFIX=revspeech',
+						],
+
+						'cflags':
+						[
+							'-include', 'external-static.h',
+						],
+
+						'sources':
+						[
+							'src/revspeech.h',
+							'src/revspeech.cpp',
+							'src/emscriptenspeech.cpp',
+						],
+					},
+				],
+			},
+		],
+	],
 }

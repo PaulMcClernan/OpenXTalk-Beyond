@@ -19,14 +19,22 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 mergeInto(LibraryManager.library, {
 
 	// This class is used to emulate a synchronous LiveCode main loop
-	// using emscripten's emterpreter
-	$LiveCodeAsync__deps: ['$EmterpreterAsync'],
+	// using Emscripten's Asyncify.  When the engine has nothing to do
+	// it yields (MCEmscriptenAsyncYield()): Asyncify saves the
+	// WebAssembly call stack and returns to the browser.  An event
+	// (resume()) or a timeout restores the stack, and the engine
+	// carries on from the point where it yielded.  (LiveCode's HTML5
+	// engine did the same with the Emterpreter, which only ran a short
+	// list of functions, so the engine could only yield from its main
+	// loop; Asyncify instruments the whole engine, so a wait can yield
+	// from inside a handler too.)
+	$LiveCodeAsync__deps: ['$Asyncify'],
 	$LiveCodeAsync: {
 		// true if ensureInit() has ever been run
 		_initialised: false,
 
-		// A function that's called to resume the LiveCode main
-		// loop.
+		// Asyncify's function that resumes the LiveCode main loop,
+		// while the engine is paused.
 		_continuation: null,
 
 		// List of hooks to be run before every resume
@@ -51,19 +59,22 @@ mergeInto(LibraryManager.library, {
 			LiveCodeAsync._initialised = true;
 
 			LiveCodeAsync.addResumeHook(function () {
-				// Run pre-resume callbacks
-				LiveCodeAsync._preResume.forEach(function (c) { c(); });
-				// Reset pre-resume callback list
+				// Run pre-resume callbacks.  Take the list first: a
+				// callback that delays another closure runs it at
+				// once (the engine is no longer paused).
+				var preResume = LiveCodeAsync._preResume;
 				LiveCodeAsync._preResume = [];
+				preResume.forEach(function (c) { c(); });
 			});
 		},
 
 		_resumeTimeout: function() {
+			LiveCodeAsync._timeoutHandle = null;
 			LiveCodeAsync._fromTimeout = true;
 			LiveCodeAsync.resume();
 		},
 
-		// Resume the main loop
+		// Resume the main loop.  Returns when the engine next yields.
 		resume: function(delayed) {
 			LiveCodeAsync._ensureInit();
 
@@ -88,18 +99,20 @@ mergeInto(LibraryManager.library, {
 			LiveCodeAsync._timeoutHandle = null;
 			LiveCodeAsync._continuation = null;
 
-			// Resume the state, calling the resume callbacks.  The
-			// closure passed to the resume() continuation runs after
-			// the emterpreter stack has been restored, but before
-			// EmterpreterAsync.handle() "returns".  The return value
-			// of the closure determines the apparent return value of
-			// EmterpreterAsync.handle().
-			resume(function (){
-				// Run pre-resume hooks
-				LiveCodeAsync._runHooks()
-
-				return !LiveCodeAsync.isTimedOut();
-			});
+			// Run the pre-resume hooks.  The engine's stack is still
+			// saved, so the hooks can call into the engine (to post
+			// events, or to run a handler), but the engine cannot
+			// yield from those calls (canYield() is false).  The
+			// engine resumes even if a hook throws.
+			try {
+				LiveCodeAsync._runHooks();
+			} finally {
+				// Restore the engine's stack.  The engine runs until
+				// it next yields, and then this returns.  The value
+				// is what MCEmscriptenAsyncYield() returns: non-zero
+				// unless the resume is due to the timeout.
+				resume(LiveCodeAsync.isTimedOut() ? 0 : 1);
+			}
 		},
 
 		// Yield the main loop; save the execution state and return to
@@ -112,17 +125,15 @@ mergeInto(LibraryManager.library, {
 		pause: function(timeout) {
 			LiveCodeAsync._ensureInit();
 
-			// Suspend execution.  Note that pause() might be called
-			// multiple times for a single yield from the engine, but
-			// the closure passed to EmterpreterAsync.handle() will
-			// only be called once.  This means that all the work
-			// needs to be done in the closure.
-			return EmterpreterAsync.handle(function(resume) {
+			// Suspend execution.  Asyncify calls this function a
+			// second time when it restores the stack; the closure
+			// passed to Asyncify.handleSleep() is only called the
+			// first time, so all the work needs to be done in it.
+			return Asyncify.handleSleep(function(resume) {
 
 				// Can't yield recursively
 				assert(!LiveCodeAsync._continuation);
 				assert(!LiveCodeAsync._timeoutHandle);
-				assert(!LiveCodeAsync._inPreResume);
 
 				LiveCodeAsync._continuation = resume;
 
@@ -140,6 +151,18 @@ mergeInto(LibraryManager.library, {
 		// Test whether the engine is currently paused
 		isPaused: function() {
 			return (!!LiveCodeAsync._continuation);
+		},
+
+		// Test whether the engine can yield now.  Asyncify can only
+		// save the engine's stack when nothing but the engine is on
+		// it: not while its stack is already saved (a call into the
+		// engine from a resume hook), and not when JavaScript that the
+		// engine called has called back into the engine (a JavaScript
+		// frame cannot be saved).
+		canYield: function() {
+			return Asyncify.state === Asyncify.State.Normal &&
+				!Asyncify.currData &&
+				Asyncify.exportCallStack.length === 1;
 		},
 
 		// Test whether the engine is currently being resumed from a
@@ -200,11 +223,18 @@ mergeInto(LibraryManager.library, {
 
 	// Yield for up to <timeout> seconds
 	MCEmscriptenAsyncYield__deps: ['$LiveCodeAsync'],
+	MCEmscriptenAsyncYield__async: true,
 	MCEmscriptenAsyncYield: function(timeout) {
 		if (!isFinite(timeout)) {
 			timeout = -1;
 		}
 		return LiveCodeAsync.pause(timeout*1000);
+	},
+
+	// Test whether the engine can yield now
+	MCEmscriptenAsyncCanYield__deps: ['$LiveCodeAsync'],
+	MCEmscriptenAsyncCanYield: function() {
+		return LiveCodeAsync.canYield();
 	},
 
 	// Resume the engine on event

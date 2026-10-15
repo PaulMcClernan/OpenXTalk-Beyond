@@ -52,11 +52,14 @@
 				'src/libbrowser_nsvalue.mm',
 				
 				'src/libbrowser_android.cpp',
+
+				'src/libbrowser_em.cpp',
 				
 				'src/libbrowser_lnx_factories.cpp',
 				'src/libbrowser_win_factories.cpp',
 				'src/libbrowser_osx_factories.cpp',
 				'src/libbrowser_ios_factories.cpp',
+				'src/libbrowser_em_factories.cpp',
 			],
 			
 			'target_conditions':
@@ -154,6 +157,17 @@
 						'sources!':
 						[
 							'src/libbrowser_android.cpp',
+						],
+					},
+				],
+
+				[
+					'toolset_os != "emscripten"',
+					{
+						'sources!':
+						[
+							'src/libbrowser_em.cpp',
+							'src/libbrowser_em_factories.cpp',
 						],
 					},
 				],

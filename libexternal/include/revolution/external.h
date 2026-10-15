@@ -535,7 +535,14 @@ extern void GetXScreenHandle(void **r_screen, int *r_success);
 // External declaration macros
 //
 
-#ifdef __cplusplus
+#if defined(EXTERNAL_STATIC_PREFIX)
+
+// OXT-Beyond: an external linked into a program with others (the web engine,
+// libexternal/src/external-static.h) is referenced by the program itself,
+// with getXtable's own type, which the linker checks there
+#define EXTERNAL_REFERENCE_LIBRARY
+
+#elif defined(__cplusplus)
 
 #define EXTERNAL_REFERENCE_LIBRARY \
   extern "C" void getXtable(void); \

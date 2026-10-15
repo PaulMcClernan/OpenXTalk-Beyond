@@ -1,9 +1,9 @@
 # Compiling LiveCode to JavaScript for HTML5
 
 > **Note:** This page comes from upstream LiveCode and is not maintained
-> for OXT-Beyond, which builds for Windows, macOS and Linux but not for
-> HTML5. The instructions below have not been checked against this
-> repository. To build OXT-Beyond, see [BUILDING.md](../../BUILDING.md).
+> for OXT-Beyond. Its instructions are for Emscripten 1.35, with which
+> this repository no longer builds. OXT-Beyond's web engine is described
+> in [Building the web engine](../../BUILDING.md#14-building-the-web-engine).
 
 ![LiveCode Community Logo](http://livecode.com/wp-content/uploads/2015/02/livecode-logo.png)
 

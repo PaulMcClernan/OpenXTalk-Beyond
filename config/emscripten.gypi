@@ -37,9 +37,15 @@
 				},
 			],
 			[
+				# An executable for the web is linked in two steps: gyp links
+				# its objects and libraries into one relocatable WebAssembly
+				# object (-r), and engine.gyp's javascriptify target links
+				# that into the .js and .wasm files with the JavaScript
+				# libraries and the link settings.
 				'_toolset == "target" and _type == "executable"',
 				{
-					'product_extension': 'bc',
+					'product_extension': 'o',
+					'ldflags': [ '-r', ],
 				},
 			],
 		],

@@ -80,23 +80,14 @@ Module['preRun'].push(function() {
 
 	// FIXME Can we cache the capsule locally?
 
-	if (!Module['livecodeStandaloneRequest']) {
-		var xhr = new XMLHttpRequest();
+	// OXT-Beyond: the engine waits for the capsule's request whether this
+	// makes it or the page has (Module['livecodeStandaloneRequest']); it
+	// waited for ever for a request that the page had made, and for a
+	// download that failed
+	var xhr = Module['livecodeStandaloneRequest'];
 
-		xhr.addEventListener('load', function(e) {
-			if (xhr.status !== 200 && xhr.status !== 0) {
-				throw 'Could not download LiveCode standalone';
-			}
-
-			if (!xhr.response ||
-			    typeof xhr.response !== 'object' ||
-			    !xhr.response.byteLength) {
-				throw 'Bad result when downloading LiveCode standalone';
-			}
-
-			// Unblock running the engine
-			Module['removeRunDependency']('livecodeStandalone');
-		});
+	if (!xhr) {
+		xhr = new XMLHttpRequest();
 
 		xhr.open("GET", standalone);
 		xhr.responseType = "arraybuffer";
@@ -104,5 +95,30 @@ Module['preRun'].push(function() {
 
 		// Save the request in the Module object for future reference.
 		Module['livecodeStandaloneRequest'] = xhr;
+	}
+
+	var loaded = function() {
+		if (xhr.status !== 200 && xhr.status !== 0) {
+			throw 'Could not download LiveCode standalone';
+		}
+
+		if (!xhr.response ||
+		    typeof xhr.response !== 'object' ||
+		    !xhr.response.byteLength) {
+			throw 'Bad result when downloading LiveCode standalone';
+		}
+
+		// Unblock running the engine
+		Module['removeRunDependency']('livecodeStandalone');
+	};
+
+	// (a request the page made may have finished already)
+	if (xhr.readyState === 4) {
+		loaded();
+	} else {
+		xhr.addEventListener('load', loaded);
+		xhr.addEventListener('error', function() {
+			throw 'Could not download LiveCode standalone';
+		});
 	}
 });

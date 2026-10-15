@@ -222,7 +222,7 @@ end TestSpecialFolderPath
 
 
 on TestTempName
-   TestSkipIf "platform", "HTML5"
+   -- OXT-Beyond: runs on the web too, whose engine makes temporary names
    local tPath
    put tempname() into tPath
    

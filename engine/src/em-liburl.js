@@ -145,7 +145,7 @@ mergeInto(LibraryManager.library, {
         requestGetStatus: function(request) {
 			var xhr = LiveCodeUtil.fetchObject(request);
             if (xhr) {
-                return xhr.statusText;
+                return LiveCodeUtil.httpReason(xhr);
             }
         },
         requestGetStatusCode: function(request) {

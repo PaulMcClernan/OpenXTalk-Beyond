@@ -829,4 +829,117 @@
 			},
 		},
 	],
+
+	# OXT-Beyond: revDB and its SQLite driver for the web engine, which links
+	# them into itself (engine/src/em-externals.cpp). Their names, and those
+	# of their copies of libExternal and of the code they share, are renamed
+	# for each (src/dbdriver-static.h).
+	'conditions':
+	[
+		[
+			'OS == "emscripten"',
+			{
+				'targets':
+				[
+					{
+						'target_name': 'external-revdb-static',
+						'type': 'static_library',
+
+						'dependencies':
+						[
+							'../libcore/libcore.gyp:libCore',
+							'../libexternal/libexternal.gyp:libExternal-static-revdb',
+						],
+
+						'include_dirs':
+						[
+							'../libexternal/include',
+							'../libexternal/src',
+							'src',
+						],
+
+						'defines':
+						[
+							'REVDB_BUILD',
+							'EXTERNAL_STATIC_PREFIX=revdb',
+							# its POSIX code
+							'_LINUX',
+						],
+
+						'cflags':
+						[
+							'-include', 'dbdriver-static.h',
+						],
+
+						'sources':
+						[
+							'src/revdb.h',
+							'src/revdbapi.h',
+							'src/database.h',
+							'src/dbcursor.h',
+							'src/dbdriver.h',
+							'src/unxsupport.h',
+							'src/large_buffer.h',
+							'src/revdb.cpp',
+							'src/unxsupport.cpp',
+							'src/database.cpp',
+							'src/dbdrivercommon.cpp',
+						],
+					},
+					{
+						'target_name': 'dbsqlite-static',
+						'type': 'static_library',
+
+						'dependencies':
+						[
+							'../libexternal/libexternal.gyp:libExternal-static-dbsqlite',
+							'../prebuilt/thirdparty.gyp:thirdparty_prebuilt_sqlite',
+						],
+
+						'include_dirs':
+						[
+							'../libexternal/include',
+							'../libexternal/src',
+							'src',
+						],
+
+						'defines':
+						[
+							'EXTERNAL_STATIC_PREFIX=dbsqlite',
+							# its POSIX code
+							'_LINUX',
+						],
+
+						'cflags':
+						[
+							'-include', 'dbdriver-static.h',
+						],
+
+						# The SQLite library throws on an SQL error, which the
+						# driver catches
+						'cflags_cc':
+						[
+							'-fexceptions',
+						],
+
+						'cflags_cc!':
+						[
+							'-fno-exceptions',
+						],
+
+						'cflags!':
+						[
+							# Error in ../../thirdparty/libsqlite/include/qry_dat.h
+							'-Werror=return-type',
+						],
+
+						'sources':
+						[
+							'<@(dbsqlite_sources)',
+						],
+					},
+				],
+			},
+		],
+	],
 }

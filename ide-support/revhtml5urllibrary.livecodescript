@@ -144,6 +144,16 @@ command ulExtHandleRequest pUrl, pAction, pHeaders, pPostData, pProxyUrl
       exit ulExtHandleRequest
    end if
 
+   -- As libURL's own driver on the desktop: a post or a put sends a
+   -- form's data unless the httpHeaders give the type of the data (the
+   -- browser would otherwise send "text/plain;charset=UTF-8")
+   if tMethod is among the words of "POST PUT" and not __ulExtHasHeader(pHeaders, "Content-Type") then
+      if pHeaders is not empty and the last char of pHeaders is not return then
+         put return after pHeaders
+      end if
+      put "Content-Type: application/x-www-form-urlencoded" after pHeaders
+   end if
+
    __ulExtXMLHTTPSetHeaders tRequest, pHeaders
    if the result is not empty then
       __ulExtSetURLStatus pURL, "error", the result, false
@@ -168,7 +178,14 @@ command ulExtHandleRequest pUrl, pAction, pHeaders, pPostData, pProxyUrl
       exit ulExtHandleRequest
    end if
 
-   if the result is not empty then
+   -- As libURL's own driver on the desktop: a response with an error
+   -- status is an error, "error <status> <reason>", that comes with the
+   -- page the server sent; a request that failed is an error too
+   if not tAsync then
+      put __ulExtRequestError(tRequest, tResult) into tResult
+   end if
+
+   if tResult is not empty then
       __ulExtSetURLStatus pURL, "error", tResult, false
    else
       ulExtSetErrorStatus pUrl, empty
@@ -351,10 +368,7 @@ on ulExtXMLHTTPCallback pRequest, pURL, pEvent, pLoaded, pTotal
       case "error"
          if ulExtIsLoadReq(pUrl) then
             local tError
-            put __ulExtXMLHTTPGetStatus(pRequest) into tError
-            if tError is empty then
-               put "Request failed" &&  __ulExtXMLHTTPGetStatusCode(pRequest) into tError
-            end if
+            put __ulExtRequestError(pRequest, "Request failed") into tError
             __ulExtSetURLStatus pURL, "error", tError, true
 
             -- even though the request failed, still store any response from the server
@@ -390,6 +404,40 @@ on ulExtXMLHTTPCallback pRequest, pURL, pEvent, pLoaded, pTotal
 end ulExtXMLHTTPCallback
 
 --------------------------------------------------------------------------------
+
+-- True if the header lines pHeaders have a header called pName
+private function __ulExtHasHeader pHeaders, pName
+   local tHeader
+   set the itemDel to ":"
+   repeat for each line tHeader in pHeaders
+      if word 1 to -1 of item 1 of tHeader is pName then
+         return true
+      end if
+   end repeat
+   return false
+end __ulExtHasHeader
+
+-- The error of a request, as libURL's own driver words it: for a
+-- response with a status that is not a success (2xx),
+-- "error <status> <reason>"; for a request that failed with pFailure,
+-- "error <pFailure>"; empty for a success
+private function __ulExtRequestError pRequest, pFailure
+   local tStatus
+   put __ulExtXMLHTTPGetStatusCode(pRequest) into tStatus
+   if tStatus is an integer and tStatus > 0 then
+      if tStatus >= 200 and tStatus <= 299 then
+         return empty
+      end if
+      return word 1 to -1 of ("error" && tStatus && __ulExtXMLHTTPGetStatus(pRequest))
+   end if
+   if pFailure is empty then
+      return empty
+   end if
+   if word 1 of pFailure is "error" then
+      return pFailure
+   end if
+   return "error" && pFailure
+end __ulExtRequestError
 
 private command __ulExtSetURLStatus pURL, pStatus, pMessage, pSendCallback
    if pStatus is "error" then

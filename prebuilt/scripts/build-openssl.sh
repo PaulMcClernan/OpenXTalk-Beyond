@@ -102,6 +102,24 @@ function buildOpenSSL {
 				SPEC="iphoneos-cross"
 			fi
 			;;
+		emscripten)
+			# OXT-Beyond: the web engine's, which links it into itself for
+			# encrypt, decrypt and the cipherNames: 32-bit WebAssembly in C
+			# (no assembler), made smaller (-Os), compiled by Emscripten's
+			# tools, which are named here with no cross-compiler prefix.
+			# Without what a browser cannot do (load modules, engines,
+			# locked memory, the console, the kernel's crypto devices,
+			# sockets), and without what the engine does not use, which
+			# would only make every web standalone bigger: elliptic curves,
+			# DSA, DH, the post-quantum algorithms, CMS, time stamps, OCSP,
+			# certificate transparency, CMP, SRP, HTTP and compression.
+			# Every cipher stays, as the cipherNames lists them.
+			CONFIGURE_CC_FOR_TARGET=0
+			SPEC="linux-generic32"
+			EXTRA_OPTIONS="no-asm no-pic no-dso no-engine no-secure-memory no-ui-console no-afalgeng no-devcryptoeng no-sock"
+			EXTRA_OPTIONS+=" no-ec no-dsa no-dh no-ml-kem no-ml-dsa no-slh-dsa no-cms no-ts no-ocsp no-ct no-cmp no-srp no-http no-comp"
+			EXTRA_OPTIONS+=" CC=emcc CXX=em++ AR=emar RANLIB=emranlib CROSS_COMPILE= -Os"
+			;;
 	esac
 
 	# Utility for displaying platform name

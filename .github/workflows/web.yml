@@ -1,0 +1,386 @@
+# Copyright (C) 2026 OXT-Beyond contributors.
+#
+# This file is part of OXT-Beyond.
+#
+# OXT-Beyond is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License v3 as published by the Free
+# Software Foundation.
+#
+# OXT-Beyond is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
+
+
+# Builds the web (HTML5) runtime: the web engine of the checkout, built
+# with Emscripten into WebAssembly, and the templates that the IDE's web
+# builder makes HTML5 standalones from (tools/ci/build-web.sh says what
+# the folder holds and how it is built). Every build workflow calls this
+# one and installs the artifact in its packages (tools/oxt/package.py
+# --web-runtime, in Runtime/Emscripten/js), so that the IDE of every
+# platform builds HTML5 standalones with the same engine.
+#
+# The job runs in an Ubuntu 22.04 container: the newest Ubuntu that has
+# both the Python 2.7 that gyp and config.py need and a Python 3 new
+# enough for Emscripten (3.10). The Emscripten SDK is the version in
+# config/emscripten-version, from emsdk's tag of that name, checked against
+# the commit pinned below.
+#
+# Caches (the GitHub Actions cache), each filled again by the job when it
+# misses:
+#   - the runtime, keyed by the git trees of every top-level folder it can
+#     be built from (all but the IDE's, the documentation's, the tests',
+#     the installers' and CI's, whose tools/ci/build-web.sh is keyed on
+#     its own): a commit that changes none of them builds nothing;
+#   - the Emscripten SDK, with the system libraries that emcc builds the
+#     first time they are linked;
+#   - the libraries that build-web.sh builds (OpenSSL, ICU and the
+#     Thirdparty libraries for the web, ICU, libz and libffi for the
+#     build's host tools), keyed like the build workflows' prebuilt
+#     libraries;
+#   - ccache's cache of the engine's compiled files.
+#
+# The input artifact names the artifact, which holds the runtime folder's
+# files. It must be unique in the run: release.yml calls the three build
+# workflows in one run, so each of them names its own. With the input
+# check, a second job opens a web standalone made from the runtime in a
+# headless browser (tools/ci/web_check.py --runtime, without the IDE);
+# build-linux.yml asks for it, and every package job checks the IDE's web
+# builder on its own package.
+
+name: Web
+
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: The name of the artifact, unique in the run
+        type: string
+        required: true
+      check:
+        description: Also open a standalone made from the runtime in a headless browser
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Web runtime
+    runs-on: ubuntu-24.04
+    # Ubuntu 22.04 through Google's mirror of Docker Hub, as build-linux.yml
+    # takes its image
+    container:
+      image: mirror.gcr.io/library/ubuntu:22.04
+    timeout-minutes: 150
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      # The packages the first step installs (part of its cache key)
+      BUILD_PKGS: >-
+        build-essential gcc g++ make perl bison flex gawk pkg-config
+        python2 python3 git curl ca-certificates
+        bzip2 xz-utils zstd zip unzip file ccache
+      EMSDK: /opt/emsdk
+      # The commit of emsdk's tag for config/emscripten-version: a tag can
+      # be moved, a commit cannot. A new version needs both.
+      EMSDK_COMMIT: 35ff8a6d150541276abbc6bae512ca90bcfbe220
+      CCACHE_DIR: /opt/ccache
+      CCACHE_MAXSIZE: 2G
+    steps:
+      # As in build-linux.yml: the packages come from a cache that main's
+      # runs write once a month
+      - name: Compute the build tools cache key
+        id: apt-key
+        run: |
+          hash=$(printf '%s\n' 'mirror.gcr.io/library/ubuntu:22.04' "$BUILD_PKGS" | sha256sum | cut -c1-16)
+          echo "key=apt-jammy-web-$(date -u +%Y-%m)-${hash}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the build tools' packages
+        id: apt-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            /var/cache/apt/archives/*.deb
+            /var/lib/apt/lists
+          key: ${{ steps.apt-key.outputs.key }}
+
+      - name: Install build tools
+        env:
+          CACHE_HIT: ${{ steps.apt-cache.outputs.cache-hit }}
+        run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          if [ "$CACHE_HIT" != true ]; then
+            apt-get -o Acquire::Retries=3 update
+          fi
+          # shellcheck disable=SC2086 # BUILD_PKGS is a list
+          apt-get -o Acquire::Retries=3 install -y --no-install-recommends $BUILD_PKGS
+          # gyp and config.py run "python", which must be Python 2.7. Ubuntu
+          # 22.04 has no python-is-python2 (20.04 did), only python2.
+          ln -sf /usr/bin/python2 /usr/local/bin/python
+          gcc --version | sed -n 1p
+          python --version
+          python3 --version
+          echo "Processors: $(nproc)"
+
+      - name: Save the build tools' packages to the cache
+        if: steps.apt-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            /var/cache/apt/archives/*.deb
+            /var/lib/apt/lists
+          key: ${{ steps.apt-key.outputs.key }}
+
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Mark the workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # runtime: the runtime's cache key (see the header); libraries: the
+      # one of the libraries build-web.sh builds, from what they are built
+      # with (the prebuilt scripts and versions, the vendored thirdparty/
+      # tree, the gyp settings, Emscripten's version and build-web.sh)
+      - name: Compute the cache keys
+        id: keys
+        run: |
+          version=$(head -n 1 config/emscripten-version | tr -d '[:space:]')
+          if [ -z "$version" ]; then echo "::error::config/emscripten-version is empty"; exit 1; fi
+          echo "Emscripten $version"
+          echo "emscripten=$version" >> "$GITHUB_OUTPUT"
+          sources=$(git ls-tree HEAD | awk -F '\t' '$2 !~ /^(ide|ide-support|docs|tests|tools|Installer|\.github|.*\.md)$/' |
+                      sha256sum | cut -c1-16)
+          script=$(git rev-parse HEAD:tools/ci/build-web.sh | cut -c1-12)
+          echo "runtime=web-runtime-jammy-${sources}-${script}" >> "$GITHUB_OUTPUT"
+          scripts=$(cat prebuilt/versions/* prebuilt/scripts/*.sh prebuilt/scripts/*.inc \
+                        prebuilt/build-libraries.sh prebuilt/*.gyp config/*.gypi \
+                        config/emscripten-version tools/ci/build-web.sh | sha256sum | cut -c1-16)
+          thirdparty=$(git rev-parse HEAD:thirdparty | cut -c1-12)
+          echo "libraries=prebuilt-web-jammy-${scripts}-${thirdparty}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the runtime
+        id: runtime-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: web-runtime
+          key: ${{ steps.keys.outputs.runtime }}
+
+      - name: Restore the Emscripten SDK
+        id: emsdk-cache
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: /opt/emsdk
+          key: emsdk-jammy-${{ steps.keys.outputs.emscripten }}-${{ env.EMSDK_COMMIT }}
+
+      - name: Install the Emscripten SDK
+        if: steps.runtime-cache.outputs.cache-hit != 'true' && steps.emsdk-cache.outputs.cache-hit != 'true'
+        env:
+          VERSION: ${{ steps.keys.outputs.emscripten }}
+        run: |
+          git clone --depth 1 --branch "$VERSION" https://github.com/emscripten-core/emsdk.git "$EMSDK"
+          commit=$(git -C "$EMSDK" rev-parse HEAD)
+          if [ "$commit" != "$EMSDK_COMMIT" ]; then
+            echo "::error::emsdk's tag $VERSION is commit $commit, not $EMSDK_COMMIT (EMSDK_COMMIT in web.yml)"
+            exit 1
+          fi
+          "$EMSDK/emsdk" install "$VERSION"
+          "$EMSDK/emsdk" activate "$VERSION"
+
+      - name: Restore the libraries
+        id: libraries-cache
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            prebuilt/lib
+            prebuilt/bin
+            prebuilt/include
+            prebuilt/share
+          key: ${{ steps.keys.outputs.libraries }}
+
+      # A step of its own, so that the libraries are kept whether the
+      # engine then builds or not
+      - name: Build the libraries
+        id: libraries
+        if: steps.runtime-cache.outputs.cache-hit != 'true' && steps.libraries-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 90
+        run: |
+          # shellcheck disable=SC1091 # the SDK's own script
+          source "$EMSDK/emsdk_env.sh"
+          tools/ci/build-web.sh --libraries
+
+      - name: Save the libraries to the cache
+        if: steps.libraries.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            prebuilt/lib
+            prebuilt/bin
+            prebuilt/include
+            prebuilt/share
+          key: ${{ steps.keys.outputs.libraries }}
+
+      # The newest cache of any commit: what did not change compiles from
+      # it
+      - name: Restore the compiler cache
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: /opt/ccache
+          key: ccache-web-jammy-${{ github.sha }}
+          restore-keys: ccache-web-jammy-
+
+      - name: Build the web runtime
+        id: build
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 120
+        run: |
+          # shellcheck disable=SC1091 # the SDK's own script
+          source "$EMSDK/emsdk_env.sh"
+          ccache --zero-stats
+          # emcc runs its compiler through ccache
+          EM_COMPILER_WRAPPER=ccache tools/ci/build-web.sh web-runtime
+          ccache --show-stats
+
+      # Also after a failed build: what compiled is kept for the next run
+      - name: Save the compiler cache
+        if: ${{ !cancelled() && (steps.build.outcome == 'success' || steps.build.outcome == 'failure') }}
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: /opt/ccache
+          key: ccache-web-jammy-${{ github.sha }}
+
+      # After the build, which has added the system libraries it links to
+      # the SDK's own cache
+      - name: Save the Emscripten SDK to the cache
+        if: steps.build.outcome == 'success' && steps.emsdk-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: /opt/emsdk
+          key: emsdk-jammy-${{ steps.keys.outputs.emscripten }}-${{ env.EMSDK_COMMIT }}
+
+      - name: Save the runtime to the cache
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: web-runtime
+          key: ${{ steps.keys.outputs.runtime }}
+
+      - name: List the runtime
+        run: |
+          find web-runtime -type f | LC_ALL=C sort | while read -r f; do
+            printf '%12s  %s\n' "$(stat -c %s "$f")" "$f"
+          done
+
+      # A path in the workspace: in a container job runner.temp names the
+      # host's folder, which the upload action does not see
+      - name: Upload the runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact }}
+          path: web-runtime/
+          if-no-files-found: error
+          # As long as the build artifacts it is packaged with, for a
+          # package job run again later
+          retention-days: 30
+
+      - name: Upload the build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact }}-logs
+          path: |
+            prebuilt/build/**/config.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # A web standalone of tools/ci/web-probe.livecodescript, made from the
+  # runtime without the IDE, opened in headless Chromium (Playwright) and
+  # checked (tools/ci/web_check.py, which says what it checks). The
+  # standalone's startup data is written by the Linux x86_64 engine of the
+  # OXT-Beyond release that tools/ci/build_docs.sh pins, so that this job
+  # needs no desktop build.
+  check:
+    name: Web runtime check
+    needs: build
+    if: inputs.check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download the runtime
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact }}
+          path: ${{ runner.temp }}/web-runtime
+
+      # The engine's "core" libraries, as docs.yml installs them
+      - name: Install the engine's libraries
+        run: |
+          installed() { dpkg-query -W -f='${Status}\n' "$1" 2> /dev/null | grep -qx 'install ok installed'; }
+          pkgs=()
+          while read -r soname use deb rpm rest; do
+            case $soname in ''|'#'*) continue ;; esac
+            [ "$use" = core ] || continue
+            if installed "${deb}t64"; then
+              deb="${deb}t64"
+            elif ! installed "$deb" && apt-cache show --no-all-versions "${deb}t64" > /dev/null 2>&1; then
+              deb="${deb}t64"
+            fi
+            case " ${pkgs[*]} " in *" $deb "*) ;; *) pkgs+=("$deb") ;; esac
+          done < Installer/linux/libraries.txt
+          missing=()
+          for p in "${pkgs[@]}"; do installed "$p" || missing+=("$p"); done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Installing: ${missing[*]}"
+            sudo apt-get -o Acquire::Retries=3 update
+            sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends "${missing[@]}"
+          else
+            echo "Already installed: ${pkgs[*]}"
+          fi
+
+      # Playwright, pinned, in a virtual environment of its own, with its
+      # Chromium and the system libraries that Chromium needs
+      - name: Install Playwright and Chromium
+        env:
+          PLAYWRIGHT_VERSION: 1.56.0
+        run: |
+          python3 -m venv "$RUNNER_TEMP/playwright"
+          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
+          "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps chromium
+
+      - name: Check the runtime in the browser
+        timeout-minutes: 15
+        run: |
+          "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_check.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check"
+
+      - name: Upload the check's files
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact }}-check
+          path: ${{ runner.temp }}/web-check
+          if-no-files-found: ignore
+          retention-days: 14
