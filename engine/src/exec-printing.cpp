@@ -38,6 +38,10 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "exec.h"
 
+#if defined(__EMSCRIPTEN__)
+#include "em-printer.h"
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 
 static MCExecSetTypeElementInfo _kMCPrintingPrinterFeaturesElementInfo[] =
@@ -633,6 +637,17 @@ void MCPrintingExecPrintCardIntoRect(MCExecContext& ctxt, MCCard *p_card, MCRect
 
 void MCPrintingExecOpenPrintingToDestination(MCExecContext& ctxt, MCStringRef p_destination, MCStringRef p_filename, MCArrayRef p_options)
 {
+#if defined(__EMSCRIPTEN__)
+	// OXT-Beyond: a web standalone has no revpdfprinter library to load: its
+	// own printer writes the PDF (em-printer.cpp)
+	if (MCStringIsEqualToCString(p_destination, "pdf", kMCCompareCaseless) &&
+		MCEmscriptenPDFPrinterCreate(p_filename, p_options, MCprinter))
+	{
+		MCPrintingExecOpenPrinting(ctxt);
+		return;
+	}
+#endif
+
 	if (MCCustomPrinterCreate(p_destination, p_filename, p_options, (MCCustomPrinter*&)MCprinter))
     {
 		MCPrintingExecOpenPrinting(ctxt);

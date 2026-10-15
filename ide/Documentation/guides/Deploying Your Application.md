@@ -583,6 +583,22 @@ desktop. A browser speaks only once the user has clicked or typed in the
 page, as it plays sound, and it does not tell a voice's gender:
 `revSpeechVoices("male")` and `revSpeechVoices("female")` list the
 voices whose names say so.
+* **Printing.** `open printing`, `print`, `print break`, `cancel
+printing` and `close printing` work, with the page settings (`the
+printPaperSize`, `the printPaperOrientation`, `the printMargins`, `the
+printPaperScale` and the layout properties) as on the desktop. When
+printing closes, the browser's print dialog opens with the pages, and the
+user prints them or saves them as a PDF there: a browser does not let a
+page print without it, so `answer printer` and `answer page setup` return
+at once, as if OK was clicked, and the number of copies, collation and
+two-sided printing are chosen in the dialog. The paper is US Letter or A4,
+as the browser's language has it, and `the printerName` is empty. Each
+page is a picture of it at 300 dots an inch, so the text of a PDF of it
+cannot be searched or copied. `open printing to pdf`, and `the
+printerOutput` set to `file:` and a path, write a PDF of the pages'
+pictures, with the links, anchors and bookmarks of `print link`, `print
+anchor` and `print bookmark` and the document information of `with
+options`. A PDF written into `/downloads` reaches the user as a download.
 * **JavaScript.** `do <script> as "JavaScript"` runs JavaScript in the
 page, and `the result` is its value. The page calls the handlers that a
 stack's `cJavascriptHandlers` property lists, one handler name a line:
@@ -608,7 +624,6 @@ revBrowser (the browser widget works) nor the video grabber; and revDB's
 drivers other than SQLite, because MySQL, PostgreSQL and ODBC talk to
 their servers through sockets. The builder warns about each one that a
 stack includes. Builder extensions work.
-* Printing: the print commands put "printing failed" into `the result`.
 * Dragging out of the page: a drag that a stack starts cannot be dropped
 on another application.
 * `the systemVersion` and `the machine` are empty, and `the processor` is

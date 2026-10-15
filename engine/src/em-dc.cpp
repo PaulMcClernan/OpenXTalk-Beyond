@@ -36,6 +36,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "imagebitmap.h"
 #include "clipboard.h"
 #include "em-clipboard.h"
+#include "em-printer.h"
 
 #include <emscripten.h>
 
@@ -728,9 +729,20 @@ MCScreenDC::hasfeature(MCPlatformFeature p_feature)
 	case PLATFORM_FEATURE_OS_FILE_DIALOGS:
 	case PLATFORM_FEATURE_OS_COLOR_DIALOGS:
 		return true;
+	/* OXT-Beyond: answer printer and answer page setup are the browser's
+	 * print dialog, which opens when the pages print (em-printer.cpp) */
+	case PLATFORM_FEATURE_OS_PRINT_DIALOGS:
+		return true;
 	default:
 		return false;
 	}
+}
+
+/* OXT-Beyond: the browser prints the pages (em-printer.cpp) */
+MCPrinter *
+MCScreenDC::createprinter(void)
+{
+	return MCEmscriptenPrinterCreate();
 }
 
 /* ================================================================

@@ -104,7 +104,17 @@ Then:
    the one named in Japanese with a speed, pitch and volume, and speaks a
    text with an e acute and a euro sign, which the browser must be asked to
    say with that voice at the Web Speech API's rate, pitch and volume for
-   those (3, 0.5 and 0.5). When the probe writes "PROBE ready", this
+   those (3, 0.5 and 0.5). Then it prints: two pages to the browser, the
+   first landscape, which the browser must be asked to print once, each
+   page's picture on paper of its size (in the frame that prints, this
+   script's print() stands in for the print dialog, and Chromium's PDF of
+   that frame's document must have the two pages at their sizes); a job
+   that it cancels, which prints nothing; with "open printing to pdf", a
+   PDF in /downloads, which must reach the browser as a download and have
+   the two pages' pictures, a link to a URL, an anchor and a link to it,
+   two bookmarks and the document information that the probe gave; and
+   with the printerOutput set to "file:", a PDF of a page in its documents
+   folder. When the probe writes "PROBE ready", this
    script clicks the button, types "abc" into the field, and calls the
    stack's handlers from the page (document.liveCode.findStackWithName):
    probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
@@ -157,6 +167,7 @@ import threading
 import time
 import urllib.request
 import zipfile
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
@@ -176,7 +187,7 @@ PROBE_CHECKS = (
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
     'xml', 'xslt', 'zip', 'database', 'database-error',
-    'encrypt', 'encrypt-legacy', 'cipher-names', 'speech',
+    'encrypt', 'encrypt-legacy', 'cipher-names', 'speech', 'print',
 )
 
 # The page of the site that the probe's browser widget loads
@@ -279,6 +290,58 @@ window.__oxtSpeech = [];
   window.SpeechSynthesisUtterance = SpeechSynthesisUtterance;
 })();
 ''' % json.dumps(PROBE_VOICES)
+
+# The pages that the probe prints (probePrint), to the browser and to its
+# PDF: US Letter (headless Chromium's language is en-US), at 300 dots an
+# inch, with the colours at points of them, in points from their top left.
+# The first has the card (480x360) where the layout puts it, at 72,72; the
+# second has it at half its size, into 0,0,240,180.
+PROBE_PRINT_SIZE = (612, 792)
+PROBE_PRINT_PIXELS = (2550, 3300)
+# The probe prints the browser's first page landscape (a browser that lays
+# out a page on the paper of the page before it puts the second on two)
+PROBE_BROWSER_SIZES = (PROBE_PRINT_SIZE[::-1], PROBE_PRINT_SIZE)
+PROBE_PRINT_PAGES = (
+    (('paper', (36, 36), (255, 255, 255)),
+     ('card', (512, 392), (0x33, 0x66, 0xCC)),
+     ('graphic', (422, 162), (0xCC, 0x33, 0x00)),
+     ('image', (384, 284), (0, 170, 0))),
+    (('card', (220, 160), (0x33, 0x66, 0xCC)),
+     ('graphic', (175, 45), (0xCC, 0x33, 0x00)),
+     ('image', (156, 106), (0, 170, 0)),
+     ('paper', (400, 400), (255, 255, 255))),
+)
+# The PDF that the probe prints to /downloads, with the link, the anchor
+# (where its link on the second page goes) and the bookmarks it makes, in
+# the PDF's points from the page's bottom left, and its document
+# information
+PROBE_PDF = 'probe.pdf'
+PROBE_PDF_URI = 'https://example.com/probe'
+PROBE_PDF_INFO = {'Title': 'Probe PDF', 'Author': 'OXT-Beyond \u00e9'}
+
+# Records what the page asks the browser to print. The frame that prints
+# (em-printer.js) runs this too, as every frame of the page does, and its
+# print() keeps a copy of each page's picture, with the page's size, and
+# of the frame's document, instead of opening the print dialog.
+PRINT_HOOK = r'''
+if (window === window.top) {
+  window.__oxtPrints = [];
+} else {
+  window.print = function() {
+    const pages = Array.from(document.querySelectorAll('.oxt-page')).map(function(page) {
+      const image = page.querySelector('img');
+      const canvas = window.top.document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      return {width: image.style.width, height: image.style.height, src: image.getAttribute('src'),
+              canvas: canvas};
+    });
+    window.top.__oxtPrints.push({title: document.title, pages: pages,
+                                 html: '<!DOCTYPE html>' + document.documentElement.outerHTML});
+  };
+}
+'''
 
 # Colours in the screenshot, at points of the card (the probe's stack is
 # 480x360; see web-deploy.livecodescript)
@@ -631,6 +694,147 @@ def parse_rect(text):
     return parts
 
 
+def pdf_text(text):
+    """A PDF text string as the web engine writes it: UTF-16BE after its
+    byte order mark, in hexadecimal"""
+    return b'<' + ('\ufeff' + text).encode('utf-16-be').hex().upper().encode() + b'>'
+
+
+def pdf_objects(data):
+    """The objects of a PDF that the web engine wrote (em-printer.cpp), by
+    number, as their bytes, found through its cross-reference table, which
+    must be right; and its trailer"""
+    end = re.search(rb'startxref\n(\d+)\n%%EOF\n$', data)
+    if not data.startswith(b'%PDF-1.4\n') or not end:
+        raise CheckError('it is not a PDF of the web engine\'s: %r ... %r' % (data[:16], data[-32:]))
+    xref = int(end.group(1))
+    lines = data[xref:].split(b'\n')
+    header = lines[1].split() if len(lines) > 1 else []
+    if lines[0] != b'xref' or len(header) != 2 or header[0] != b'0' or not header[1].isdigit():
+        raise CheckError('startxref does not point to a cross-reference table')
+    count = int(header[1])
+    offsets = {}
+    for number in range(1, count):
+        entry = lines[2 + number] + b'\n'
+        if len(entry) != 20 or not entry.endswith(b' 00000 n \n'):
+            raise CheckError('the cross-reference entry of object %d is %r' % (number, entry))
+        offsets[number] = int(entry[:10])
+        if not data.startswith(b'%d 0 obj\n' % number, offsets[number]):
+            raise CheckError('the cross-reference table puts object %d at %d, where %r is'
+                             % (number, offsets[number], data[offsets[number]:offsets[number] + 16]))
+    starts = sorted(offsets.values()) + [xref]
+    objects = {number: data[offset:starts[starts.index(offset) + 1]] for number, offset in offsets.items()}
+    trailer = data[data.index(b'trailer', xref):]
+    return objects, trailer
+
+
+def pdf_ref(text, key):
+    """The number of the object that <key> of a dictionary refers to"""
+    found = re.search(rb'/' + key + rb' (\d+) 0 R', text)
+    if not found:
+        raise CheckError('no /%s in %r' % (key.decode(), text[:200]))
+    return int(found.group(1))
+
+
+def check_pdf(data):
+    """The problems with the PDF that the probe printed: its two pages, each a
+    picture with the colours of PROBE_PRINT_PAGES, the link of each (to
+    PROBE_PDF_URI, and to the anchor "Probe", which a link to "probe"
+    finds), the anchor, the bookmarks (the second a child of the first) and
+    the document information"""
+    problems = []
+    objects, trailer = pdf_objects(data)
+    catalog = objects[pdf_ref(trailer, b'Root')]
+    kids = re.search(rb'/Kids \[([^\]]*)\]', objects[pdf_ref(catalog, b'Pages')]).group(1)
+    pages = [int(n) for n in re.findall(rb'(\d+) 0 R', kids)]
+    if len(pages) != len(PROBE_PRINT_PAGES):
+        return ['it has %d pages, expected %d' % (len(pages), len(PROBE_PRINT_PAGES))]
+    media_box = b'/MediaBox [0 0 %d %d]' % PROBE_PRINT_SIZE
+    for number, (page, points) in enumerate(zip(pages, PROBE_PRINT_PAGES), 1):
+        if media_box not in objects[page]:
+            problems.append('page %d is not %r: %r' % (number, media_box, objects[page][:200]))
+        image = objects[pdf_ref(objects[page], b'Im0')]
+        width = int(re.search(rb'/Width (\d+)', image).group(1))
+        height = int(re.search(rb'/Height (\d+)', image).group(1))
+        length = int(objects[pdf_ref(image, b'Length')].split(b'\n')[1])
+        start = image.index(b'>>\nstream\n') + len(b'>>\nstream\n')
+        pixels = zlib.decompress(image[start:start + length])
+        if (width, height) != PROBE_PRINT_PIXELS or len(pixels) != width * height * 3:
+            problems.append('page %d\'s picture is %dx%d with %d bytes, expected %dx%d in RGB'
+                            % ((number, width, height, len(pixels)) + PROBE_PRINT_PIXELS))
+            continue
+        for name, (x, y), want in points:
+            at = (int(y * height / PROBE_PRINT_SIZE[1]) * width + int(x * width / PROBE_PRINT_SIZE[0])) * 3
+            got = tuple(pixels[at:at + 3])
+            if any(abs(a - b) > 8 for a, b in zip(got, want)):
+                problems.append('page %d of the PDF has the %s at %s in %s, expected %s'
+                                % (number, name, (x, y), got, want))
+    # the links: to the URI on the first page, to the anchor on the second
+    links = [b'/Rect [72 360 552 720] /Border [0 0 0] /A << /S /URI /URI <%s> >>'
+             % PROBE_PDF_URI.encode().hex().upper().encode(),
+             b'/Rect [0 692 100 792] /Border [0 0 0] /A << /S /GoTo /D <%s> >>' % b'Probe'.hex().upper().encode()]
+    for number, (page, link) in enumerate(zip(pages, links), 1):
+        annotations = re.search(rb'/Annots \[(\d+) 0 R\]', objects[page])
+        if not annotations or link not in objects[int(annotations.group(1))]:
+            problems.append('page %d does not have the link %r' % (number, link))
+    # the anchor, on the first page
+    anchor = b'<%s> [%d 0 R /XYZ 72 720 null]' % (b'Probe'.hex().upper().encode(), pages[0])
+    names = re.search(rb'/Names << /Dests (\d+) 0 R >>', catalog)
+    if not names or anchor not in objects[int(names.group(1))]:
+        problems.append('the PDF does not have the anchor %r' % anchor)
+    # the bookmarks: "Probe card" on the first page, with "Second page" (on
+    # the second) in it
+    try:
+        outlines = objects[pdf_ref(catalog, b'Outlines')]
+        first = objects[pdf_ref(outlines, b'First')]
+        child = objects[pdf_ref(first, b'First')]
+        if (b'/Count 2' not in outlines or pdf_text('Probe card') not in first or b'/Count 1' not in first
+                or (b'/Dest [%d 0 R /XYZ 72 720 null]' % pages[0]) not in first
+                or pdf_text('Second page') not in child
+                or (b'/Dest [%d 0 R /XYZ 0 792 null]' % pages[1]) not in child):
+            problems.append('the bookmarks are not "Probe card" with "Second page" in it: %r %r %r'
+                            % (outlines, first, child))
+    except CheckError as e:
+        problems.append('the PDF does not have its bookmarks: %s' % e)
+    # the document information
+    info = objects[pdf_ref(trailer, b'Info')]
+    for key, value in PROBE_PDF_INFO.items():
+        if b'/%s %s' % (key.encode(), pdf_text(value)) not in info:
+            problems.append('the document information does not have the %s %r: %r' % (key, value, info))
+    return problems
+
+
+def printed_paper(browser, html):
+    """The paper, in points, of the pages that Chromium prints a document on,
+    in their order: <html>, as the frame that prints a web standalone's
+    pages (em-printer.js) has it, printed to a PDF in a page of its own (a
+    description of what went wrong instead, as a string)"""
+    page = None
+    try:
+        page = browser.new_page()
+        page.set_content(html)
+        pdf = page.pdf(prefer_css_page_size=True, print_background=True)
+        # the page objects of the PDF (Chromium's are not compressed), from
+        # its catalog's page tree
+        objects = dict((int(m.group(1)), m.group(2)) for m in
+                       re.finditer(rb'(?m)^(\d+) 0 obj\s*(<<.*?)(?:\bstream\b|\bendobj\b)', pdf, re.S))
+
+        def pages(number):
+            body = objects[number]
+            if re.search(rb'/Type\s*/Pages\b', body):
+                kids = re.search(rb'/Kids\s*\[([^\]]*)\]', body).group(1)
+                return [paper for kid in re.findall(rb'(\d+)\s+0\s+R', kids) for paper in pages(int(kid))]
+            left, bottom, right, top = (float(v) for v in re.search(rb'/MediaBox\s*\[([^\]]*)\]', body).group(1).split())
+            return [[round(right - left), round(top - bottom)]]
+        root = int(re.search(rb'trailer\s*<<.*?/Root\s+(\d+)\s+0\s+R', pdf, re.S).group(1))
+        return pages(int(re.search(rb'/Pages\s+(\d+)\s+0\s+R', objects[root]).group(1)))
+    except Exception as e:
+        return 'none: %s' % e
+    finally:
+        if page:
+            page.close()
+
+
 def touch_drag_ok(report, points):
     """Whether the probe's report of a drag across its graphic
     (probeReport("drag"): "down@x,y move@x,y up@x,y", each with the mouse's
@@ -744,6 +948,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
         page.on('pageerror', on_page_error)
         page.add_init_script(SOUND_HOOK)
         page.add_init_script(SPEECH_HOOK)
+        page.add_init_script(PRINT_HOOK)
         started = time.time()
         page.goto(url)
         if not wait_for(lambda: 'version' in info, 'the engine starting (PROBE info version)', timeout):
@@ -866,12 +1071,73 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                                         'expected %r' % (dropped, PROBE_DROP_REPORT))
                     else:
                         lines.append('a file dropped from outside the page reached the stack as its copy in /uploads')
-                # the file the probe wrote to /downloads
-                if wait_for(lambda: downloads, 'the download of %s' % PROBE_DOWNLOAD[0], 10):
-                    if downloads != [PROBE_DOWNLOAD]:
-                        problems.append('the browser downloaded %r, expected %r' % (downloads, [PROBE_DOWNLOAD]))
+                # the files the probe wrote to /downloads: a text file, and the
+                # PDF that it printed
+                names = lambda: [name for name, _ in downloads]
+                if wait_for(lambda: PROBE_DOWNLOAD[0] in names() and PROBE_PDF in names(),
+                            'the downloads of %s and %s' % (PROBE_DOWNLOAD[0], PROBE_PDF), 10):
+                    if sorted(names()) != sorted([PROBE_DOWNLOAD[0], PROBE_PDF]):
+                        problems.append('the browser downloaded %r, expected %s and %s'
+                                        % (names(), PROBE_DOWNLOAD[0], PROBE_PDF))
+                    elif PROBE_DOWNLOAD not in downloads:
+                        problems.append('the browser downloaded %r, expected %r' % (downloads, PROBE_DOWNLOAD))
                     else:
                         lines.append('the file written to /downloads reached the browser as a download')
+                    pdf = dict(downloads)[PROBE_PDF]
+                    with open(os.path.join(work, PROBE_PDF), 'wb') as f:
+                        f.write(pdf)
+                    try:
+                        pdf_problems = check_pdf(pdf)
+                    except (CheckError, IndexError, ValueError, KeyError, zlib.error) as e:
+                        pdf_problems = ['it could not be read: %s' % e]
+                    if pdf_problems:
+                        problems.extend('the PDF that the probe printed: %s' % p for p in pdf_problems)
+                    else:
+                        lines.append('open printing to pdf wrote a PDF of %d bytes with the pages, link, anchor, '
+                                     'bookmarks and document information printed, which reached the browser as '
+                                     'a download (%s ms)' % (len(pdf), info.get('pdf-ms')))
+                # what the probe printed: the browser was asked to print its two
+                # pages once, with their pictures, the first landscape; the
+                # frame's document, with the pictures in it, is as the browser
+                # printed it
+                prints = page.evaluate('''(points) => window.__oxtPrints.map(function(job) {
+                    let html = job.html;
+                    job.pages.forEach(function(page) {
+                        html = html.split(page.src).join(page.canvas.toDataURL('image/png'));
+                    });
+                    return {title: job.title, html: html, pages: job.pages.map(function(page, i) {
+                        const c = page.canvas;
+                        const scale = [c.width / parseFloat(page.width), c.height / parseFloat(page.height)];
+                        return {size: page.width + ' ' + page.height, pixels: [c.width, c.height],
+                                colours: (points[i] || []).map(function(point) {
+                                    const data = c.getContext('2d').getImageData(Math.floor(point[0] * scale[0]),
+                                        Math.floor(point[1] * scale[1]), 1, 1).data;
+                                    return Array.from(data.slice(0, 3));
+                                })};
+                    })};
+                })''', [[list(point) for _, point, _ in points] for points in PROBE_PRINT_PAGES])
+                sizes = ['%dpt %dpt' % size for size in PROBE_BROWSER_SIZES]
+                pixels = [[size[0] * 300 // 72, size[1] * 300 // 72] for size in PROBE_BROWSER_SIZES]
+                if (len(prints) != 1 or prints[0]['title'] != STACK_TITLE
+                        or [p['size'] for p in prints[0]['pages']] != sizes
+                        or [p['pixels'] for p in prints[0]['pages']] != pixels):
+                    problems.append('the browser was asked to print %r, expected one job, %r, of pages of %s, with '
+                                    'pictures of %s' % ([dict((k, v) for k, v in job.items() if k != 'html')
+                                                          for job in prints], STACK_TITLE, sizes, pixels))
+                else:
+                    wrong = ['page %d has the %s at %s in %s, expected %s' % (number, name, point, tuple(got), want)
+                             for number, (printed, points) in enumerate(zip(prints[0]['pages'], PROBE_PRINT_PAGES), 1)
+                             for (name, point, want), got in zip(points, printed['colours'])
+                             if any(abs(a - b) > 8 for a, b in zip(got, want))]
+                    paper = printed_paper(browser, prints[0]['html'])
+                    if paper != [list(size) for size in PROBE_BROWSER_SIZES]:
+                        wrong.append('the browser printed the frame\'s document on paper of %s, expected %s'
+                                     % (paper, [list(size) for size in PROBE_BROWSER_SIZES]))
+                    if wrong:
+                        problems.extend('the browser was asked to print: %s' % w for w in wrong)
+                    else:
+                        lines.append('the browser was asked to print the two pages that the probe printed, with '
+                                     'their pictures, each on paper of its size (%s ms)' % info.get('print-ms'))
                 # the samples of the audio clip that the probe played
                 sounds = page.evaluate('window.__oxtSounds')
                 if (len(sounds) != 1

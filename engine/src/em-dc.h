@@ -164,8 +164,11 @@ public:
     virtual bool popupaskdialog(uint32_t p_type, MCStringRef p_title, MCStringRef p_message, MCStringRef p_initial, bool p_hint, MCStringRef& r_result);
 
     /* The page's dialogs stand in for the system's file and color
-     * dialogs */
+     * dialogs, and the browser's print dialog for its print dialogs */
     virtual bool hasfeature(MCPlatformFeature p_feature);
+
+    /* OXT-Beyond: the browser prints (em-printer.cpp) */
+    virtual MCPrinter *createprinter(void);
 
     /* Cursors: the canvases' CSS cursors */
     virtual void resetcursors();

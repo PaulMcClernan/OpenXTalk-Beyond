@@ -77,7 +77,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals,probeCiphers,probeSpeech"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals,probeCiphers,probeSpeech,probePrint"
       try
          dispatch tCheck to me
       catch tError
@@ -589,6 +589,72 @@ command probeSpeech
          && "male=" & tMale && "japanese=" & (line 3 of tVoices is tJapanese) \
          && "speaking=" & tSpeaking && "volume=" & tVolume && "stopped=" & tStopped
 end probeSpeech
+
+-- Printing. The browser prints the pages that the stack prints, in a frame
+-- of the page whose print() web_check.py's hook records, with the size of
+-- each page and its pixels: two pages here, the card where the layout puts
+-- it (at 72,72), and the card at half its size in the page's top left.
+-- Printing that is cancelled prints nothing. open printing to pdf writes a
+-- PDF, which goes to the user as a download, being in /downloads:
+-- web_check.py reads its pages, link, anchor, bookmarks and document
+-- information. With the printerOutput set to a file, printing writes a PDF
+-- there.
+command probePrint
+   local tSettings, tAnswer, tStart, tPrinted, tCancelled, tOptions, tPdf, tFile, tFileResult, tData
+   put the printerName & "|" & the printPaperSize & "|" & the printRectangle & "|" & \
+         the printerFeatures & "|" & the printerOutput into tSettings
+   -- The browser's dialog comes when the pages print: answer printer goes on
+   answer printer
+   put it & "|" & the result into tAnswer
+
+   -- The first page is landscape and the second portrait, taller: the
+   -- browser prints pages of different sizes each on its own paper
+   put the milliseconds into tStart
+   set the printPaperOrientation to "landscape"
+   open printing
+   print this card
+   print break
+   set the printPaperOrientation to "portrait"
+   print this card into 0,0,240,180
+   close printing
+   put the result into tPrinted
+   probeInfo "print-ms", the milliseconds - tStart
+
+   open printing
+   print this card
+   cancel printing
+   close printing
+   put the result into tCancelled
+
+   put the milliseconds into tStart
+   put "Probe PDF" into tOptions["title"]
+   put "OXT-Beyond" && numToCodepoint(233) into tOptions["Author"]
+   open printing to pdf specialFolderPath("downloads") & "/probe.pdf" with options tOptions
+   print anchor "Probe" at 72,72
+   print link to url "https://example.com/probe" with rect 72,72,552,432
+   print bookmark "Probe card" at 72,72
+   print this card
+   print break
+   print link to anchor "probe" with rect 0,0,100,100
+   print bookmark "Second page" with level 2
+   print this card into 0,0,240,180
+   close printing
+   put the result into tPdf
+   probeInfo "pdf-ms", the milliseconds - tStart
+
+   put specialFolderPath("documents") & "/probe-output.pdf" into tFile
+   set the printerOutput to "file:" & tFile
+   print this card
+   put the result into tFileResult
+   set the printerOutput to "device"
+   put url ("binfile:" & tFile) into tData
+
+   probeCheck "print", tSettings is "|612,792|0,0,612,792|color|device" and tAnswer is "|" \
+         and tPrinted is empty and tCancelled is "Cancel" and tPdf is empty and tFileResult is empty \
+         and byte 1 to 8 of tData is "%PDF-1.4" and "/Count 1" is in tData, \
+         "settings=" & tSettings && "answer=" & tAnswer && "printed=" & tPrinted && "cancelled=" & tCancelled \
+         && "pdf=" & tPdf && "file=" & tFileResult && byte 1 to 8 of tData
+end probePrint
 
 command probeClicked
    add 1 to sClicks

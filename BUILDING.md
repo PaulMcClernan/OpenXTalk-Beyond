@@ -1523,12 +1523,13 @@ standalone of a probe stack,
 [`tools/ci/web-probe.livecodescript`](tools/ci/web-probe.livecodescript),
 serves it on 127.0.0.1 and opens it in headless Chromium. The probe
 checks waits, timers, `do ... as "JavaScript"`, files, URLs, the page's
-dialogs, the standard folders, a download, sound, the player and the
-browser widget, and writes what it finds to the browser's console; the
-check then clicks, types, taps and drags a finger in the stack, calls
-its handlers from the page, and looks at what it draws. Every check must
-pass, and nothing may reach the browser's error console. It needs
-Python 3.8 or later and [Playwright](https://playwright.dev/python/)
+dialogs, the standard folders, a download, sound, the player, the
+browser widget, the externals that the web engine has, encryption,
+speech and printing, and writes what it finds to the browser's console;
+the check then clicks, types, taps and drags a finger in the stack,
+calls its handlers from the page, and looks at what it draws. Every
+check must pass, and nothing may reach the browser's error console. It
+needs Python 3.8 or later and [Playwright](https://playwright.dev/python/)
 with its Chromium:
 
 ```sh
@@ -2576,8 +2577,8 @@ HTML5 standalones run the web engine: the standalone engine built with
 [Emscripten](https://emscripten.org) into WebAssembly, which browsers
 run. Most of its code for the web is in `engine/src/em-*.cpp`, and in
 `engine/src/em-*.js` the JavaScript for what a browser does its own way
-(events, dialogs, files, URLs, sound, the player and the browser
-widget), which
+(events, dialogs, files, URLs, sound, the player, the browser widget and
+printing), which
 [`util/emscripten-javascriptify.py`](util/emscripten-javascriptify.py)
 links with the engine. The engine waits with Asyncify: while a handler
 waits, the engine saves its WebAssembly stack and hands control back to
