@@ -13,25 +13,25 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 
 | Marker | Notes |
 | --- | --- |
-| [FIXME](#fixme) | 74 |
+| [FIXME](#fixme) | 71 |
 | [HACK](#hack) | 33 |
-| [TODO](#todo) | 459 |
+| [TODO](#todo) | 458 |
 
 ## FIXME
 
-Code its authors knew to be wrong or incomplete. 74 notes, by part of the repository:
+Code its authors knew to be wrong or incomplete. 71 notes, by part of the repository:
 
-[engine](#fixme-engine) (40), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [ide](#fixme-ide) (2), [ide-support](#fixme-ide-support) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [util](#fixme-util) (1)
+[engine](#fixme-engine) (38), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [ide](#fixme-ide) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide-support](#fixme-ide-support) (1), [util](#fixme-util) (1)
 
 <a id="fixme-engine"></a>
 
-### FIXME: engine (40)
+### FIXME: engine (38)
 
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
-- [engine/src/dispatch.cpp:1577](engine/src/dispatch.cpp#L1577) FIXME This is horrible
+- [engine/src/dispatch.cpp:1574](engine/src/dispatch.cpp#L1574) FIXME This is horrible
 - [engine/src/em-dc-mainloop.cpp:46](engine/src/em-dc-mainloop.cpp#L46) FIXME these functions are pretty much the same for every X_init()
-- [engine/src/em-dc.cpp:190](engine/src/em-dc.cpp#L190) FIXME Implement HiDPI support
-- [engine/src/em-dc.cpp:245](engine/src/em-dc.cpp#L245) FIXME Implement HiDPI support
+- [engine/src/em-dc.cpp:198](engine/src/em-dc.cpp#L198) FIXME Implement HiDPI support
+- [engine/src/em-dc.cpp:253](engine/src/em-dc.cpp#L253) FIXME Implement HiDPI support
 - [engine/src/em-event.js:359](engine/src/em-event.js#L359) FIXME Maybe this should be done in the engine?
 - [engine/src/em-event.js:549](engine/src/em-event.js#L549) FIXME not supported
 - [engine/src/em-filehandle.cpp:86](engine/src/em-filehandle.cpp#L86) FIXME Figure out why this is needed
@@ -39,8 +39,6 @@ Code its authors knew to be wrong or incomplete. 74 notes, by part of the reposi
 - [engine/src/em-filehandle.cpp:168](engine/src/em-filehandle.cpp#L168) FIXME figure out why this is a success
 - [engine/src/em-main.cpp:81](engine/src/em-main.cpp#L81) FIXME should probably be UTF-8
 - [engine/src/em-main.cpp:104](engine/src/em-main.cpp#L104) FIXME should probably be UTF-8
-- [engine/src/em-preamble-overlay.js:29](engine/src/em-preamble-overlay.js#L29) FIXME Massive amounts of hardcoded styling that can't be customized
-- [engine/src/em-preamble-overlay.js:90](engine/src/em-preamble-overlay.js#L90) FIXME internationalise this text
 - [engine/src/em-preamble.js:57](engine/src/em-preamble.js#L57) FIXME Should this be moved into the engine?
 - [engine/src/em-preamble.js:81](engine/src/em-preamble.js#L81) FIXME Can we cache the capsule locally?
 - [engine/src/em-standalone.js:43](engine/src/em-standalone.js#L43) FIXME maybe this needs a helper function in LiveCodeUtil
@@ -55,9 +53,9 @@ Code its authors knew to be wrong or incomplete. 74 notes, by part of the reposi
 - [engine/src/em-system.cpp:670](engine/src/em-system.cpp#L670) FIXME Implement GetDrives()
 - [engine/src/em-system.cpp:796](engine/src/em-system.cpp#L796) FIXME Implement OpenDevice()
 - [engine/src/em-system.cpp:830](engine/src/em-system.cpp#L830) FIXME Implement ResolvePath()
-- [engine/src/em-theme.cpp:37](engine/src/em-theme.cpp#L37) FIXME not yet implemented
+- [engine/src/em-theme.cpp:48](engine/src/em-theme.cpp#L48) FIXME not yet implemented
 - [engine/src/em-url.js:59](engine/src/em-url.js#L59) FIXME maybe this needs a helper function in LiveCodeUtil
-- [engine/src/em-url.js:185](engine/src/em-url.js#L185) FIXME this isn't quite correct; we don't correctly
+- [engine/src/em-url.js:303](engine/src/em-url.js#L303) FIXME this isn't quite correct; we don't correctly
 - [engine/src/funcs.h:1118](engine/src/funcs.h#L1118) class MCNativeCharToNum : public MCUnaryFunctionCtxt<MCStringRef, uinteger_t, MCStringsEvalNativeCharToNum, EE_CHARTONUM_BADSOURCE, PE_CHARTONUM_BADPARAM> //...
 - [engine/src/funcs.h:1133](engine/src/funcs.h#L1133) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1141](engine/src/funcs.h#L1141) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
@@ -121,13 +119,6 @@ Code its authors knew to be wrong or incomplete. 74 notes, by part of the reposi
 - [ide/Toolset/libraries/revidelibrary.8.livecodescript:11330](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11330) FIXME There is some inconsistency in the guide's files that we
 - [ide/Toolset/palettes/script editor/behaviors/revseleftbarbehavior.livecodescript:20](ide/Toolset/palettes/script%20editor/behaviors/revseleftbarbehavior.livecodescript#L20) FIXME What happens when the space is to short to show the filter field?
 
-<a id="fixme-ide-support"></a>
-
-### FIXME: ide-support (2)
-
-- [ide-support/revsaveasemscriptenstandalone.livecodescript:33](ide-support/revsaveasemscriptenstandalone.livecodescript#L33) FIXME
-- [ide-support/revsaveasemscriptenstandalone.livecodescript:147](ide-support/revsaveasemscriptenstandalone.livecodescript#L147) FIXME just copies the Emscripten-generated page into place
-
 <a id="fixme-libscript"></a>
 
 ### FIXME: libscript (2)
@@ -140,6 +131,12 @@ Code its authors knew to be wrong or incomplete. 74 notes, by part of the reposi
 ### FIXME: builder (1)
 
 - [builder/docs_builder.livecodescript:382](builder/docs_builder.livecodescript#L382) FIXME This has to be kept in sync with the installer manifest, probably
+
+<a id="fixme-ide-support"></a>
+
+### FIXME: ide-support (1)
+
+- [ide-support/revsaveasemscriptenstandalone.livecodescript:33](ide-support/revsaveasemscriptenstandalone.livecodescript#L33) FIXME
 
 <a id="fixme-util"></a>
 
@@ -228,13 +225,13 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 
 ## TODO
 
-Work left for later. 459 notes, by part of the repository:
+Work left for later. 458 notes, by part of the repository:
 
-[engine](#todo-engine) (269), [libfoundation](#todo-libfoundation) (47), [tests](#todo-tests) (20), [revbrowser](#todo-revbrowser) (19), [ide](#todo-ide) (18), [toolchain](#todo-toolchain) (14), [extensions](#todo-extensions) (12), [libgraphics](#todo-libgraphics) (12), [libscript](#todo-libscript) (12), [libbrowser](#todo-libbrowser) (10), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [ide-support](#todo-ide-support) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
+[engine](#todo-engine) (268), [libfoundation](#todo-libfoundation) (47), [tests](#todo-tests) (20), [revbrowser](#todo-revbrowser) (19), [ide](#todo-ide) (18), [toolchain](#todo-toolchain) (14), [extensions](#todo-extensions) (12), [libgraphics](#todo-libgraphics) (12), [libscript](#todo-libscript) (12), [libbrowser](#todo-libbrowser) (10), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [ide-support](#todo-ide-support) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
 
 <a id="todo-engine"></a>
 
-### TODO: engine (269)
+### TODO: engine (268)
 
 - [engine/exec-tests/filters/EvalUniDecode.test:35](engine/exec-tests/filters/EvalUniDecode.test#L35) TODO - add this platform :)
 - [engine/exec-tests/filters/EvalUniEncode.test:35](engine/exec-tests/filters/EvalUniEncode.test#L35) TODO - add this platform :)
@@ -244,7 +241,6 @@ Work left for later. 459 notes, by part of the repository:
 - [engine/exec-tests/text/EvalFontNames.test:11](engine/exec-tests/text/EvalFontNames.test#L11) TODO - check for standard fonts on other platforms
 - [engine/exec-tests/text/EvalFontSizes.test:10](engine/exec-tests/text/EvalFontSizes.test#L10) TODO - test font sizes on other platforms
 - [engine/exec-tests/text/EvalFontStyles.test:8](engine/exec-tests/text/EvalFontStyles.test#L8) TODO - test font sizes on other platforms
-- [engine/rsrc/emscripten-html-template.html:220](engine/rsrc/emscripten-html-template.html#L220) TODO: do not warn on ok events like simulating an infinite loop or exitStatus
 - [engine/src/block.cpp:2353](engine/src/block.cpp#L2353) else if (!IsMacLF()) // TODO: if platform reverses selected text
 - [engine/src/browser.lcb:221](engine/src/browser.lcb#L221) TODO - replace literal values with constants when possible
 - [engine/src/browser.lcb:240](engine/src/browser.lcb#L240) TODO - replace literal values with constants when possible
@@ -267,8 +263,8 @@ Work left for later. 459 notes, by part of the repository:
 - [engine/src/desktop.cpp:659](engine/src/desktop.cpp#L659) PLATFORM-TODO: Should we do more than this? i.e. Should the dragDrop
 - [engine/src/dispatch.cpp:255](engine/src/dispatch.cpp#L255) TODO[19681]: This can be removed when all engine messages are sent with
 - [engine/src/dispatch.cpp:305](engine/src/dispatch.cpp#L305) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/dispatch.cpp:1571](engine/src/dispatch.cpp#L1571) PLATFORM-TODO: This is needed at the moment to make sure that we don't
-- [engine/src/dispatch.cpp:1909](engine/src/dispatch.cpp#L1909) TODO: what about other 'special' chars added by unicode?
+- [engine/src/dispatch.cpp:1568](engine/src/dispatch.cpp#L1568) PLATFORM-TODO: This is needed at the moment to make sure that we don't
+- [engine/src/dispatch.cpp:1906](engine/src/dispatch.cpp#L1906) TODO: what about other 'special' chars added by unicode?
 - [engine/src/dskmac.cpp:790](engine/src/dskmac.cpp#L790) TODO Check whether the double path resolution is an issue
 - [engine/src/dskmac.cpp:1186](engine/src/dskmac.cpp#L1186) TODO assign relevant error code
 - [engine/src/dskmac.cpp:1208](engine/src/dskmac.cpp#L1208) TODO assign relevant error code
@@ -452,10 +448,10 @@ Work left for later. 459 notes, by part of the repository:
 - [engine/src/stackcache.cpp:210](engine/src/stackcache.cpp#L210) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackcache.cpp:272](engine/src/stackcache.cpp#L272) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackfileformat.cpp:25](engine/src/stackfileformat.cpp#L25) TODO: change this, and comparisons for version >= 7000 / 5500, etc
-- [engine/src/sysdefs.h:1386](engine/src/sysdefs.h#L1386) TODO[C++11] MCObject *object = nullptr;
-- [engine/src/sysdefs.h:1387](engine/src/sysdefs.h#L1387) TODO[C++11] uint32_t part_id = 0;
-- [engine/src/sysdefs.h:1391](engine/src/sysdefs.h#L1391) TODO[C++11] constexpr MCObjectPtr() = default;
-- [engine/src/sysdefs.h:1393](engine/src/sysdefs.h#L1393) TODO[C++11] constexpr
+- [engine/src/sysdefs.h:1393](engine/src/sysdefs.h#L1393) TODO[C++11] MCObject *object = nullptr;
+- [engine/src/sysdefs.h:1394](engine/src/sysdefs.h#L1394) TODO[C++11] uint32_t part_id = 0;
+- [engine/src/sysdefs.h:1398](engine/src/sysdefs.h#L1398) TODO[C++11] constexpr MCObjectPtr() = default;
+- [engine/src/sysdefs.h:1400](engine/src/sysdefs.h#L1400) TODO[C++11] constexpr
 - [engine/src/sysspec.cpp:1734](engine/src/sysspec.cpp#L1734) TODO Change to MCDataRef or change Shell to MCStringRef
 - [engine/src/text-line.cpp:322](engine/src/text-line.cpp#L322) TODO: implement
 - [engine/src/text-pane.cpp:190](engine/src/text-pane.cpp#L190) TODO: examine the list of blocks in the paragraph for paragraph breaks
@@ -761,8 +757,8 @@ Work left for later. 459 notes, by part of the repository:
 
 ### TODO: prebuilt (2)
 
-- [prebuilt/fetch-libraries.sh:451](prebuilt/fetch-libraries.sh#L451) TODO[2017-03-03] Our official architecture name (as used in
-- [prebuilt/fetch-libraries.sh:466](prebuilt/fetch-libraries.sh#L466) TODO[2017-02-17] Monkey-patch in a "Fast" prebuilt
+- [prebuilt/fetch-libraries.sh:462](prebuilt/fetch-libraries.sh#L462) TODO[2017-03-03] Our official architecture name (as used in
+- [prebuilt/fetch-libraries.sh:477](prebuilt/fetch-libraries.sh#L477) TODO[2017-02-17] Monkey-patch in a "Fast" prebuilt
 
 <a id="todo-revdb"></a>
 
