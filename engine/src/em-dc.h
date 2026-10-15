@@ -83,6 +83,10 @@ extern "C" void MCEmscriptenSetWindowSizeLimits(uint32_t p_window_id, int32_t p_
 extern "C" void MCEmscriptenGetWindowFrameRect(uint32_t p_window_id, int32_t *r_left, int32_t *r_top, int32_t *r_right, int32_t *r_bottom);
 /* The user clicked the close box of a window's frame */
 extern "C" bool MCEmscriptenHandleWindowClose(uint32_t p_window);
+/* OXT-Beyond: a window's opacity (0 to 255), and whether it lets the
+ * mouse through to what is under it (em-dc.js) */
+extern "C" void MCEmscriptenSetWindowOpacity(uint32_t p_window_id, uint32_t p_level);
+extern "C" void MCEmscriptenSetWindowIgnoresMouse(uint32_t p_window_id, bool p_ignore);
 
 extern "C" uint32_t MCEmscriptenCreateWindow();
 extern "C" void MCEmscriptenDestroyWindow(uint32_t p_window_id);

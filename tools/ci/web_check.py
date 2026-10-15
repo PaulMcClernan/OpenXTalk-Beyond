@@ -151,9 +151,11 @@ Then:
    dialog's field must take what is typed into it, and its OK button must
    close it; then typing must reach the field again, and a click the
    button. It opens a palette (probeReport("window")): the page must give
-   its window a title bar with its title, a drag by the title bar must
-   move it (moveStack), and a click on the title bar's close box must
-   close it (closeStackRequest, closeStack).
+   its window a title bar with its title and make it as see-through as
+   its blendLevel says, a click on its close box must go through it while
+   its ignoreMouseEvents is true, a drag by the title bar must move it
+   (moveStack), and a click on the title bar's close box must close it
+   (closeStackRequest, closeStack).
    Then it takes a screenshot of the stack and checks the colours of the
    card, the graphic and the image in it.
 
@@ -261,13 +263,15 @@ PROBE_SNAPSHOT_SELECT = ('80x80:204,51,0', 'cancelled')
 PROBE_MODAL = 'ok|0|true'
 
 # The title of the probe's palette (probeWindow), which its window's title
-# bar shows, and how far this script drags it by the title bar
+# bar shows, its window's opacity in the page (a blendLevel of 40), and
+# how far this script drags it by the title bar
 PROBE_WINDOW_TITLE = 'Probe Palette'
+PROBE_WINDOW_OPACITY = '0.6'
 PROBE_WINDOW_DRAG = (40, 20)
 
 # The title bar and close box of the window whose title bar shows <title>
-# (em-dc.js): their rects in the page, the frame's class names, and
-# whether the window is shown; null when no window shows it
+# (em-dc.js): their rects in the page, the frame's class names, whether
+# the window is shown, and its opacity; null when no window shows it
 WINDOW_FRAME_JS = '''(title) => {
     const window = Array.from(document.querySelectorAll('.oxt-window')).find(function(element) {
         const label = element.querySelector('.oxt-window-label');
@@ -282,7 +286,8 @@ WINDOW_FRAME_JS = '''(title) => {
     };
     return {title: rect(window.querySelector('.oxt-window-title')),
             close: rect(window.querySelector('.oxt-window-close')),
-            classes: window.className, shown: window.style.display != 'none'};
+            classes: window.className, shown: window.style.display != 'none',
+            opacity: window.style.opacity};
 }'''
 
 # The samples of the audio clip the probe plays, as the browser has them:
@@ -1337,16 +1342,35 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                 # a palette (probeReport("window")): the page gives its window a
                 # title bar with its title, which the user drags to move it
                 # (moveStack), and a close box, which closes it
-                # (closeStackRequest, closeStack)
+                # (closeStackRequest, closeStack); the window is as see-through
+                # as the palette's blendLevel says, and a click goes through it
+                # while its ignoreMouseEvents is true
                 page.evaluate(stack_js + '.probeReport("window")')
                 window_problem = None
                 if wait_for(lambda: 'window-rect' in info, 'the palette opening', 10):
                     frame = page.evaluate(WINDOW_FRAME_JS, PROBE_WINDOW_TITLE)
                     start = parse_rect(info['window-rect'])
                     moved = ','.join(str(start[i] + PROBE_WINDOW_DRAG[i % 2]) for i in range(4))
+                    if frame and frame['shown'] and frame['opacity'] == PROBE_WINDOW_OPACITY:
+                        ignoring = page.evaluate(stack_js + '.probeReport("window-ignore")')
+                        page.mouse.click((frame['close'][0] + frame['close'][2]) / 2,
+                                         (frame['close'][1] + frame['close'][3]) / 2)
+                        page.wait_for_timeout(500)
+                        heeding = page.evaluate(stack_js + '.probeReport("window-heed")')
                     if not frame or not frame['shown'] or 'oxt-window-utility' not in frame['classes']:
                         window_problem = ('the page shows no palette\'s title bar with the title %r: %r'
                                           % (PROBE_WINDOW_TITLE, frame))
+                    elif frame['opacity'] != PROBE_WINDOW_OPACITY:
+                        window_problem = ('the palette, with a blendLevel of 40, has the opacity %r in the page, '
+                                          'expected %s' % (frame['opacity'], PROBE_WINDOW_OPACITY))
+                    elif (str(ignoring).lower(), str(heeding).lower()) != ('true', 'false') or \
+                            'window-request' in info or \
+                            not page.evaluate(WINDOW_FRAME_JS, PROBE_WINDOW_TITLE)['shown']:
+                        window_problem = ('with the palette\'s ignoreMouseEvents set to %r, then back to %r, a '
+                                          'click on its close box between them sent closeStackRequest: %s; the '
+                                          'palette is shown: %s'
+                                          % (ignoring, heeding, 'window-request' in info,
+                                             page.evaluate(WINDOW_FRAME_JS, PROBE_WINDOW_TITLE)['shown']))
                     else:
                         grab = (frame['title'][0] + 30, (frame['title'][1] + frame['title'][3]) / 2)
                         page.mouse.move(*grab)
@@ -1374,7 +1398,8 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                     problems.append(window_problem)
                 else:
                     lines.append('a palette\'s title bar showed its title, moved it when dragged, and closed it '
-                                 'with its close box')
+                                 'with its close box; its blendLevel made it see-through, and a click went through '
+                                 'it while its ignoreMouseEvents was true')
                 # the files the probe wrote to /downloads: a text file, and the
                 # PDF that it printed
                 names = lambda: [name for name, _ in downloads]

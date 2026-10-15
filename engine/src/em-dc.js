@@ -558,7 +558,8 @@ mergeInto(LibraryManager.library, {
 				'.oxt-window-edge{position:absolute;touch-action:none}' +
 				'.oxt-window-edge-right{top:0;right:-6px;width:6px;height:100%;cursor:ew-resize}' +
 				'.oxt-window-edge-bottom{left:0;bottom:-6px;width:100%;height:6px;cursor:ns-resize}' +
-				'.oxt-window-edge-corner{right:-10px;bottom:-10px;width:12px;height:12px;cursor:nwse-resize}';
+				'.oxt-window-edge-corner{right:-10px;bottom:-10px;width:12px;height:12px;cursor:nwse-resize}' +
+				'.oxt-ignores-mouse,.oxt-ignores-mouse *{pointer-events:none!important}';
 			document.head.appendChild(style);
 		},
 
@@ -757,6 +758,29 @@ mergeInto(LibraryManager.library, {
 			}
 		},
 
+		// OXT-Beyond: the window's opacity (0 to 255), from its stack's
+		// blendLevel. The whole window is see-through, with its frame and
+		// the stack's players and browser widgets, as on the desktop: for
+		// the main stack, that is the page's element that holds its canvas.
+		setWindowOpacity: function(pID, pLevel) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (window) {
+				window.opacity = Math.max(0, Math.min(pLevel, 255)) / 255;
+				window.element.style.opacity = window.opacity < 1 ? String(window.opacity) : '';
+			}
+		},
+
+		// OXT-Beyond: whether the window lets the mouse through to what is
+		// under it in the page (its stack's ignoreMouseEvents): the whole
+		// window, as the opacity, whatever its parts ask for themselves
+		setWindowIgnoresMouse: function(pID, pIgnore) {
+			var window = LiveCodeUtil.fetchObject(pID);
+			if (window) {
+				LiveCodeDC._addFrameStyles();
+				window.element.classList.toggle('oxt-ignores-mouse', !!pIgnore);
+			}
+		},
+
 		// The sizes that the user can resize the window to
 		setWindowSizeLimits: function(pID, pMinWidth, pMinHeight, pMaxWidth, pMaxHeight) {
 			var window = LiveCodeUtil.fetchObject(pID);
@@ -828,20 +852,39 @@ mergeInto(LibraryManager.library, {
 			var scaleY = outHeight / height;
 			canvases.forEach(function(canvas) {
 				var window = LiveCodeUtil.fetchObject(LiveCodeDC.getWindowIDForCanvas(canvas));
-				if (window && window.visible && window.frame) {
-					context.save();
-					context.setTransform(scaleX, 0, 0, scaleY, -left * scaleX, -top * scaleY);
-					LiveCodeDC._drawFrame(context, window.frame);
-					context.restore();
-				}
-				var rect = canvas.getBoundingClientRect();
-				if (!window || !window.visible || canvas.width == 0 || canvas.height == 0 ||
-					rect.width == 0 || rect.height == 0) {
+				if (!window || !window.visible) {
 					return;
 				}
-				context.drawImage(canvas, 0, 0, canvas.width, canvas.height,
-								  (rect.left - left) * scaleX, (rect.top - top) * scaleY,
-								  rect.width * scaleX, rect.height * scaleY);
+
+				// A see-through window (setWindowOpacity()) is drawn whole
+				// into a layer of its own, which then goes over the rest as
+				// see-through as the page shows it
+				var layer = context;
+				if (window.opacity != null && window.opacity < 1) {
+					var scratch = document.createElement('canvas');
+					scratch.width = outWidth;
+					scratch.height = outHeight;
+					layer = scratch.getContext('2d') || context;
+				}
+
+				if (window.frame) {
+					layer.save();
+					layer.setTransform(scaleX, 0, 0, scaleY, -left * scaleX, -top * scaleY);
+					LiveCodeDC._drawFrame(layer, window.frame);
+					layer.restore();
+				}
+				var rect = canvas.getBoundingClientRect();
+				if (canvas.width != 0 && canvas.height != 0 && rect.width != 0 && rect.height != 0) {
+					layer.drawImage(canvas, 0, 0, canvas.width, canvas.height,
+									(rect.left - left) * scaleX, (rect.top - top) * scaleY,
+									rect.width * scaleX, rect.height * scaleY);
+				}
+
+				if (layer !== context) {
+					context.globalAlpha = window.opacity;
+					context.drawImage(layer.canvas, 0, 0);
+					context.globalAlpha = 1;
+				}
 			});
 
 			var data = context.getImageData(0, 0, outWidth, outHeight).data;
@@ -1082,6 +1125,16 @@ mergeInto(LibraryManager.library, {
 	MCEmscriptenSetWindowSizeLimits__deps: ['$LiveCodeDC'],
 	MCEmscriptenSetWindowSizeLimits: function(pWindowID, pMinWidth, pMinHeight, pMaxWidth, pMaxHeight) {
 		LiveCodeDC.setWindowSizeLimits(pWindowID, pMinWidth, pMinHeight, pMaxWidth, pMaxHeight);
+	},
+
+	MCEmscriptenSetWindowOpacity__deps: ['$LiveCodeDC'],
+	MCEmscriptenSetWindowOpacity: function(pWindowID, pLevel) {
+		LiveCodeDC.setWindowOpacity(pWindowID, pLevel);
+	},
+
+	MCEmscriptenSetWindowIgnoresMouse__deps: ['$LiveCodeDC'],
+	MCEmscriptenSetWindowIgnoresMouse: function(pWindowID, pIgnore) {
+		LiveCodeDC.setWindowIgnoresMouse(pWindowID, pIgnore);
 	},
 
 	MCEmscriptenGetWindowFrameRect__deps: ['$LiveCodeDC'],

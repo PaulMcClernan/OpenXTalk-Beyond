@@ -48,6 +48,11 @@ MCStack::realize()
 	uint32_t t_window = MCEmscriptenCreateWindow();
 	window = reinterpret_cast<Window>(t_window);
 
+	/* OXT-Beyond: the window's opacity, and whether it lets the mouse
+	 * through, as the desktop's (desktop-stack.cpp) */
+	setopacity(blendlevel * 255 / 100);
+	updateignoremouseevents();
+
 	/* By default, don't draw anything */
 	setextendedstate(true, ECS_DONTDRAW);
 }
@@ -332,9 +337,15 @@ MCStack::clearscroll()
 {
 }
 
+/* OXT-Beyond: a stack whose ignoreMouseEvents is true lets the mouse
+ * through its window to what is under it in the page, as on the desktop
+ * (em-dc.js) */
 void
 MCStack::updateignoremouseevents()
 {
+	if (window != nil)
+		MCEmscriptenSetWindowIgnoresMouse(reinterpret_cast<uint32_t>(window),
+		                                  getextendedstate(ECS_IGNORE_MOUSE_EVENTS));
 }
 
 void
@@ -342,9 +353,13 @@ MCStack::destroywindowshape()
 {
 }
 
+/* OXT-Beyond: the stack's blendLevel makes its window see-through, as on
+ * the desktop (em-dc.js) */
 void
 MCStack::setopacity(unsigned char p_level)
 {
+	if (window != nil)
+		MCEmscriptenSetWindowOpacity(reinterpret_cast<uint32_t>(window), p_level);
 }
 
 void

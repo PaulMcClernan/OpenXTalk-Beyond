@@ -809,7 +809,9 @@ command probeModal
          & "|" & (the text of field "Probe Field" of stack "WebProbe" is tText)
 end probeModal
 
--- web_check.py opens a palette (probeReport("window")), drags it by the
+-- web_check.py opens a palette (probeReport("window")), see-through by
+-- its blendLevel, clicks through it while its ignoreMouseEvents is true
+-- (probeReport("window-ignore") and "window-heed"), drags it by the
 -- title bar that the page gives its window, and clicks the title bar's
 -- close box: the palette's moveStack and closeStackRequest, and its
 -- closeStack, report each (probeWindowSaw). It opens below this stack,
@@ -833,6 +835,7 @@ command probeWindow
             & "   dispatch" && quote & "probeWindowSaw" & quote && "to stack" && quote & "WebProbe" & quote \
             && "with" && quote & "closed" & quote & return \
             & "end closeStack"
+      set the blendLevel of stack "Probe Palette" to 40
       set the defaultStack to "WebProbe"
    end if
    palette stack "Probe Palette"
@@ -896,7 +899,8 @@ end probeUnfocus
 -- "snapshot", the snapshots of the page (probeSnapshots). With
 -- "snapshot-select" and "modal" it starts probeSnapshotSelect and
 -- probeModal, which wait for the user: a handler that the page calls
--- cannot. With "window" it opens the palette (probeWindow).
+-- cannot. With "window" it opens the palette (probeWindow), and with
+-- "window-ignore" and "window-heed" sets the palette's ignoreMouseEvents.
 function probeReport pWhat
    if pWhat is "snapshot" then
       return probeSnapshots()
@@ -904,6 +908,10 @@ function probeReport pWhat
    if pWhat is "window" then
       send "probeWindow" to me in 0 milliseconds
       return "started"
+   end if
+   if pWhat is "window-ignore" or pWhat is "window-heed" then
+      set the ignoreMouseEvents of stack "Probe Palette" to (pWhat is "window-ignore")
+      return the ignoreMouseEvents of stack "Probe Palette"
    end if
    if pWhat is "snapshot-select" or pWhat is "modal" then
       if pWhat is "modal" then

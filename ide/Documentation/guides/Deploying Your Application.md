@@ -481,8 +481,10 @@ bottom edges (within its `minWidth`, `maxWidth`, `minHeight` and
 stay above the other stacks (unless `the raisePalettes` is false), dialogs
 above those, and menus above all. As on Linux, a window has no title bar
 when its `decorations` leave out the title or give it a shape, and `the
-effective rect` of a stack includes its title bar. The main stack's window
-is the page itself, with no title bar. A page can restyle the title bars:
+effective rect` of a stack includes its title bar. A stack's `blendLevel`
+makes its window see-through, and a stack whose `ignoreMouseEvents` is true
+lets the mouse through its window to what is under it. The main stack's
+window is the page itself, with no title bar. A page can restyle the title bars:
 their class names start with `oxt-window`. A modal dialog (`modal`, or a
 stack opened as a dialog) keeps the mouse and the keys from the stacks
 under it until it closes, and then the keyboard goes back where it was,
@@ -653,6 +655,10 @@ their servers through sockets. The builder warns about each one that a
 stack includes. Builder extensions work.
 * Dragging out of the page: a drag that a stack starts cannot be dropped
 on another application.
+* Window shapes, minimizing and maximizing: a stack's `windowShape` takes
+its window's title bar away but leaves the window a rectangle, and a title
+bar has only a close box, so the user cannot minimize or maximize a
+window. Setting `the iconic` of a stack changes nothing in the page.
 * `the systemVersion` and `the machine` are empty, and `the processor` is
 `js`; `the platform` is `HTML5`. To know the browser, ask it:
 `do "navigator.userAgent" as "JavaScript"`.
