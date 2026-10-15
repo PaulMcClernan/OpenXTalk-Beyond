@@ -14,28 +14,6 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
-## 0.2.6-rc.4 (2026-10-14, pre-release)
-
-- Fix HyperCard stack import (#103)
-- More HyperCard stacks for the import test (#103)
-- Plugin packages: the xTalk Assistant and MCP Bridge for other xTalks (#104)
-- Plugin packages: build them, compile them on LCC 9.6.3, upload them (#104)
-- Plugin packages: the editor stand-in's field is made in its stack; find LCC 9.6.3 (#104)
-- Plugin packages: compile on LCC 9.6.3 only where a copy of it is named (#104)
-- Plugin packages: name the IDE they run in; a server path that survives upgrades (#104)
-- Plugin packages: attach both to every GitHub release (#104)
-- Plugin packages: one MCP server per IDE (#104)
-- Plugin packages: the server-name test keeps the bridge file before its diagnostic (#104)
-- Linux: keep the clipboard after quitting, when a clipboard manager runs (#105)
-- Windows: replace the stale end-of-file note for ended processes, with a test (#105)
-- IDE and LEGACY-TODO.md: answer or drop notes that were done or not notes (#105)
-- Version 0.2.6-rc.4, with its changelog (#105)
-- Linux clipboard: pass the targets as GTK 2's header declares them (#105)
-- CHANGELOG: list the GTK 2 build fix for the Linux clipboard (#105)
-- rc.4 takes in the plugin packages of #104 (#105)
-- Linux clipboard: find the clipboard manager, which is another process (#105)
-- Linux clipboard: leave the saved clipboard to the manager as the engine quits (#105)
-
 ## 0.2.6-rc.3 (2026-10-13, pre-release)
 
 - xTalk MCP Bridge: Add to Claude Desktop writes Claude's settings file; clearer setup (#102)

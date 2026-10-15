@@ -98,6 +98,7 @@ on mouseUp
 end mouseUp
 
 command popupExtensionStandaloneSettings pId, pClickLoc
+   -- TODO: Fetch existing value!
    set the behavior of the long id of widget "Settings" of me \
          to the long id of stack revIDEPaletteResourcePath("behaviors/revinspectoreditorbehavior.livecodescript", the long ID of stack "revInspector")
    set the rowLabel of me to the cLabel of me && "Standalone Settings"

@@ -66,15 +66,13 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 to 0.2.6-rc.4 are test releases (pre-releases) of
+lists. 0.2.6-rc.1 to 0.2.6-rc.3 are test releases (pre-releases) of
 the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
 plan in the Claude desktop app or Claude Code, build stacks in the IDE
 (see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
 [0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
-[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), and of the
-fixes and plugin packages in
-[0.2.6-rc.4](#026-rc4-hypercard-import-the-linux-clipboard-and-plugins);
-0.2.5 stays the main download until it has held up.
+[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)); 0.2.5 stays
+the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1348,41 +1346,6 @@ difference from 0.2.5. It has been tested on Linux, the IDE's side
 against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
-
-#### 0.2.6-rc.4: HyperCard import, the Linux clipboard and plugins
-
-OXT-Beyond 0.2.6-rc.4 fixes two things that never worked, and changes
-nothing an existing script sees:
-
-- Importing a HyperCard stack no longer crashes the engine. Cards come
-  in HyperCard's order with their backgrounds, pictures, icons, cursors,
-  sounds and styled text, from HyperCard 1 and 2 stacks and from
-  MacBinary and BinHex files; a file that is not a HyperCard stack gives
-  the same error as before.
-- Linux: what you copy in OXT-Beyond, or in a standalone, stays on the
-  clipboard after it quits, when the desktop runs a clipboard manager
-  that keeps the clipboard (GNOME's and Xfce's do); it went with the
-  application before. Without one, nothing changes. Linux standalones
-  made from the Windows and macOS packages get this once the runtimes
-  for the other platforms are built again.
-
-It also brings the xTalk Assistant and the xTalk MCP Bridge to other
-xTalks' IDEs (LiveCode Community 9, HyperXTalk and OpenXTalk): each
-release now carries both as extension packages
-(`OXT-Beyond-<version>-xtalk-assistant-plugin.lce` and
-`OXT-Beyond-<version>-mcp-bridge-plugin.lce`), which that IDE's
-Extension Manager installs into Development > Plugins (see
-[tools/plugins](tools/plugins/README.md)). They are experimental:
-checked as the Extension Manager checks a package, but not yet tried in
-those IDEs. In another IDE the bridge has its own server in Claude
-(`livecode`, `hyperxtalk` or `openxtalk`), so it and OXT-Beyond can
-both be bridged on one computer. OXT-Beyond's built-in copies work as
-before.
-
-The rest is upkeep: a test that `read from process ... until EOF` ends
-on every platform once the process has finished, and
-[LEGACY-TODO.md](LEGACY-TODO.md) without the notes that turned out to be
-done or not notes at all. Nothing else differs from 0.2.6-rc.3.
 
 #### 0.2.6-rc.3: setting up the Claude desktop app
 
