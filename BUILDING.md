@@ -7,9 +7,11 @@ released for macOS (one universal app for Apple Silicon and Intel) and
 Linux x86-64, by their CI workflows; [Building on Linux](#12-building-on-linux)
 and [Building on macOS](#13-building-on-macos) describe what those
 workflows do, and [Making a release](#10-making-a-release) how one tag
-releases all three. The upstream LiveCode instructions for other
-platforms are still in `docs/development/`, but they are not maintained
-for this project.
+releases all three. Every package also has the web engine, which runs
+the HTML5 standalones that the IDE makes; it is built on Linux, and
+[Building the web engine](#14-building-the-web-engine) describes it.
+The upstream LiveCode instructions for other platforms are still in
+`docs/development/`, but they are not maintained for this project.
 
 The engine build needs a legacy toolchain: the Visual Studio 2017 C++
 compiler (toolset v141, installed as an optional part of Visual Studio
@@ -41,6 +43,7 @@ Contents:
 11. [Working on the IDE](#11-working-on-the-ide)
 12. [Building on Linux](#12-building-on-linux)
 13. [Building on macOS](#13-building-on-macos)
+14. [Building the web engine](#14-building-the-web-engine)
 
 ## 1. Quick reference
 
@@ -764,7 +767,12 @@ are left alone.
 - **the external assets**, see [below](#external-assets);
 - **the xTalk Suite extensions** in `Extensions\`, fetched from their
   repositories at pinned commits and built with this build's
-  `lc-compile`, see [below](#xtalk-suite-extensions).
+  `lc-compile`, see [below](#xtalk-suite-extensions);
+- **the web runtime** in `Runtime\Emscripten\js\`, from which the IDE
+  makes HTML5 standalones: the folder that `tools/ci/build-web.sh`
+  writes (see [Building the web engine](#14-building-the-web-engine)),
+  named by the environment variable `OXT_WEB_RUNTIME`. Without it the
+  package has no web runtime, and the IDE offers no HTML5 standalones.
 
 Some build outputs are deliberately not installed: the `.pdb` files,
 LiveCode's own installer engine (`installer.exe`), the server engine and
@@ -786,8 +794,9 @@ python tools\oxt\package.py --repo . --bin win-x86_64-bin --out dist\stage
 It takes `--build-number N`, `--assets-cache DIR`,
 `--no-external-assets`, `--no-xtalk-extensions`, `--vc-redist DIR`,
 `--xtalk-cache DIR`, `--offline` (use cached assets and extension files
-only), `--eol lf|crlf|keep`, `--summary-json FILE` and the comparison
-options below.
+only), `--eol lf|crlf|keep`, `--web-runtime DIR` (instead of
+`OXT_WEB_RUNTIME`), `--summary-json FILE` and the comparison options
+below.
 
 **Comparing with OpenXTalk Lite 1.15.** The staged layout is meant to
 contain every file of OpenXTalk Lite 1.15 that is not part of the IDE,
@@ -828,7 +837,10 @@ differences are:
   code and data) may differ from 1.15's, lack the shared libraries that
   1.15's Linux runtimes bundled in `lib\`, or have new files.
   `Runtime\Android`, carried over unchanged, is still compared byte for
-  byte.
+  byte;
+- with a web runtime, `Runtime\Emscripten\js` is this repository's web
+  engine: files that the reference has there and it lacks are intended
+  missing, and the files it adds are intended additions.
 
 Build outputs are staged as this repository builds them, so some of
 them differ from Tom Perry's binaries in 1.15 even where the paths
@@ -1504,6 +1516,51 @@ python3 tools/ci/browser_wm_check.py --install <folder> --shots <folder>
 
 The Linux build runs it on its package after the browser and player check.
 
+### Web standalone check
+
+[`tools/ci/web_check.py`](tools/ci/web_check.py) makes an HTML5
+standalone of a probe stack,
+[`tools/ci/web-probe.livecodescript`](tools/ci/web-probe.livecodescript),
+serves it on 127.0.0.1 and opens it in headless Chromium. The probe
+checks waits, timers, `do ... as "JavaScript"`, files, URLs, the page's
+dialogs, the standard folders, a download, sound, the player and the
+browser widget, and writes what it finds to the browser's console; the
+check then clicks, types, taps and drags a finger in the stack, calls
+its handlers from the page, and looks at what it draws. Every check must
+pass, and nothing may reach the browser's error console. It needs
+Python 3.8 or later and [Playwright](https://playwright.dev/python/)
+with its Chromium:
+
+```sh
+python3 -m pip install playwright==1.56.0
+python3 -m playwright install --with-deps chromium
+python3 tools/ci/web_check.py --install <folder> --platform linux-x86_64
+python3 tools/ci/web_check.py --runtime <web runtime> --engine-cache <folder>
+```
+
+`--install <folder>` (or `--package <file>`) makes the standalone with
+the layout's own IDE, as a user does: the IDE starts with
+[`tools/ci/web-deploy.livecodescript`](tools/ci/web-deploy.livecodescript)
+named on its command line (under `xvfb-run` on Linux without a
+`DISPLAY`), which builds the probe stack with the IDE's web builder. `--bin
+<folder>` does the same with a clone's IDE (repository mode), whose web
+runtime is the clone's `emscripten-bin`. `--runtime <folder>` needs no
+IDE: a development engine writes the standalone's startup data as the
+web builder does, and the script puts the rest together; the engine is
+`--engine <file>`, or the Linux x86-64 engine of the release that
+`tools/ci/build_docs.sh` pins, downloaded into the `--engine-cache`
+folder. `--built <folder>` opens a probe standalone that is already built,
+and `--keep-serving` keeps the server running after the checks, to open
+the page in a browser of your own. The work folder (`--work`) gets the
+stack's screenshot and the IDE's lines. An IDE without CEF (Linux arm64)
+has no browser widget, so neither has what it builds: the check then
+accepts the probe's report that the widget is not there, but only when
+the IDE said so too.
+
+The jobs that make the packages run it on them (`--install`), and the
+Linux build's job "Web runtime check" on the web runtime alone
+(`--runtime`).
+
 ### IDE screenshots
 
 [`tools/ci/ui_tour.py`](tools/ci/ui_tour.py) looks at the IDE's own
@@ -1896,7 +1953,8 @@ It follows this guide:
    and Windows SDK 10.0.17763.0, and checks the result with
    `tools/ci/verify-build.ps1`.
 5. It packages with `tools/ci/package-windows.ps1`, with the
-   documentation of the job Docs: the installed layout
+   documentation of the job Docs and the web runtime of the job Web
+   (both below): the installed layout
    in `dist\stage\OXT-Beyond-<ver>` and the portable, binaries and
    symbols zips. The external assets' archives are cached from
    `prebuilt\fetched-assets\*.zip` between runs, keyed on the manifest. They
@@ -1925,7 +1983,9 @@ It follows this guide:
    [engine tests](#engine-tests) on the build output, builds
    the [installer](#installer) and [tests it](#test-the-installer):
    install for the current user, smoke test of the installed program,
-   uninstall.
+   uninstall. Then the [web standalone check](#web-standalone-check)
+   makes an HTML5 standalone with the staged IDE and opens it in
+   headless Chromium.
 
 It uploads four artifacts:
 
@@ -2011,6 +2071,23 @@ uploads it as the artifact `OXT-Beyond-docs-<windows|linux|macos>`
 (30 days), which the jobs that package put into their checkout. The
 Windows build waits for it before it starts; the Linux and macOS
 package jobs need it. When it fails, they fail too.
+
+Each build workflow also runs the job "Web"
+([`.github/workflows/web.yml`](.github/workflows/web.yml)), which builds
+the web runtime in an Ubuntu 22.04 container (see
+[Building the web engine](#14-building-the-web-engine)) and uploads it
+as the artifact `OXT-Beyond-web-<windows|linux|macos>` (30 days); the
+jobs that package install it in `Runtime/Emscripten/js` (with
+`OXT_WEB_RUNTIME`), and fail when it failed, as for the job Docs. It
+takes the runtime from the Actions cache when nothing it is built from
+changed (the top-level folders and files of the repository but `ide`,
+`ide-support`, `docs`, `tests`, `tools`, `Installer`, `.github` and the
+Markdown files, and `tools/ci/build-web.sh`), so a commit that changes
+only those builds nothing; otherwise it takes the libraries, the
+Emscripten SDK and ccache's cache of the compiled files from the cache,
+and builds the engine. In the Linux workflow it also runs the
+[web standalone check](#web-standalone-check) on the runtime, in the job
+"Web runtime check".
 
 The Linux and macOS builds also upload their build outputs, without the
 build's own tools (GENTLE among them, which may not be redistributed;
@@ -2449,3 +2526,101 @@ have been run on those runners only.
    build's own tools, GENTLE among them, in neither), and the job
    "Package mac-universal" joins the two architectures into one
    universal app, as described in [macOS app](#macos-app).
+
+## 14. Building the web engine
+
+HTML5 standalones run the web engine: the standalone engine built with
+[Emscripten](https://emscripten.org) into WebAssembly, which browsers
+run. Most of its code for the web is in `engine/src/em-*.cpp`, and in
+`engine/src/em-*.js` the JavaScript for what a browser does its own way
+(events, dialogs, files, URLs, sound, the player and the browser
+widget), which
+[`util/emscripten-javascriptify.py`](util/emscripten-javascriptify.py)
+links with the engine. The engine waits with Asyncify: while a handler
+waits, the engine saves its WebAssembly stack and hands control back to
+the browser, whose events and timers resume it. What a stack can and
+cannot do in a browser is in the guide
+[Deploying Your Application](ide/Documentation/guides/Deploying%20Your%20Application.md).
+
+It is built on Linux by
+[`tools/ci/build-web.sh`](tools/ci/build-web.sh), which the job "Web" of
+every build workflow ([`.github/workflows/web.yml`](.github/workflows/web.yml))
+runs in an `ubuntu:22.04` container: the newest Ubuntu that has both the
+Python 2.7 that gyp and `config.py` need and a Python 3 new enough for
+Emscripten (3.10). These are its steps:
+
+1. **Tools** (as root in the container): the compilers and tools of the
+   Linux build, without its libraries, and the Emscripten SDK of the
+   version in `config/emscripten-version`:
+
+   ```sh
+   apt-get update
+   apt-get install -y --no-install-recommends \
+     build-essential gcc g++ make perl bison flex gawk pkg-config \
+     python2 python3 git curl ca-certificates bzip2 xz-utils zstd zip unzip file
+   ln -sf /usr/bin/python2 /usr/local/bin/python
+   version=$(head -n 1 config/emscripten-version)
+   git clone --depth 1 --branch "$version" https://github.com/emscripten-core/emsdk.git /opt/emsdk
+   /opt/emsdk/emsdk install "$version"
+   /opt/emsdk/emsdk activate "$version"
+   source /opt/emsdk/emsdk_env.sh
+   ```
+
+   (Ubuntu 22.04 has no `python-is-python2`, so `python` is linked by
+   hand. A tag can be moved, so `web.yml` checks that the tag is the
+   commit it pins in `EMSDK_COMMIT`; a new Emscripten version needs
+   both.)
+
+2. **Build:**
+
+   ```sh
+   tools/ci/build-web.sh web-runtime
+   ```
+
+   The first run builds the libraries that no server publishes, in
+   `prebuilt/`: ICU and the Thirdparty libraries for the web
+   (`prebuilt/lib/emscripten/js`), and ICU, libz and libffi for the
+   build's own tools, which run on Linux (`prebuilt/lib/linux/<arch>`;
+   libz and libffi in a build folder `build-linux-<arch>` configured for
+   nothing else). A later run builds only the engine, and
+   `tools/ci/build-web.sh --libraries` only the libraries. The script
+   sets `PREBUILT_SKIP_FETCH=1`, because the build would otherwise look
+   for archives of those libraries (see [Settings](#settings)), and
+   `WEB_JOBS` sets how many jobs make runs at once (by default, one for
+   each processor). It writes the web runtime into the folder that it
+   is given, which must be new or empty:
+
+   | File | Contents |
+   | --- | --- |
+   | `standalone-community-<version>.js`, `.wasm` | The engine. `<version>` is `BUILD_SHORT_VERSION` in the file `version` (`9.7.1-OXT`), which is how the IDE's web builder asks for it. |
+   | `standalone-community-<version>.html` | The page of a standalone, from `engine/rsrc/emscripten-html-template.html`. |
+   | `emscripten-standalone-template/` | The files every standalone gets: the font it draws text with. |
+   | `emscripten-startup-template.livecodescript` | The template of a standalone's startup script. |
+
+3. **Check** it with the [web standalone check](#web-standalone-check):
+
+   ```sh
+   python3 tools/ci/web_check.py --runtime web-runtime --engine-cache /tmp/oxt-engine
+   ```
+
+4. **Package:** `tools/oxt/package.py` installs the runtime in
+   `Runtime/Emscripten/js`, where the installed IDE's web builder
+   ([`ide-support/revsaveasemscriptenstandalone.livecodescript`](ide-support/revsaveasemscriptenstandalone.livecodescript))
+   takes it from, when `OXT_WEB_RUNTIME` names it (see
+   [Package](#package)). Every platform's package gets the same web
+   runtime. The IDE run from a clone (repository mode) takes the engine
+   and the page from `emscripten-bin` instead, and the templates from
+   `engine/rsrc`: to make HTML5 standalones with it, copy the three
+   engine files there.
+
+After a change to the engine, the build folder that the script
+configured (`make config-emscripten`) builds the engine again by
+itself, which compiles only what changed:
+
+```sh
+source /opt/emsdk/emsdk_env.sh
+export PREBUILT_SKIP_FETCH=1
+BUILDTYPE=Release emmake make -C build-emscripten/livecode javascriptify -j"$(nproc)"
+```
+
+The engine and the page are in `build-emscripten/livecode/out/Release`.

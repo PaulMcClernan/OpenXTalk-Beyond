@@ -91,7 +91,9 @@ fixes and plugin packages in
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
   engines for them, and a release asset (`oxt-runtimes-0.2.5-rc.2.zip`)
-  brings each platform's runtimes into the other packages. The Android
+  brings each platform's runtimes into the other packages. The web
+  engine of HTML5 standalones, which every package carries, is built
+  from this repository too (see [The engine](#the-engine)). The Android
   runtime, though, is still OpenXTalk Lite 1.15's (stock LiveCode 9.6.3
   builds as Tom Perry shipped them), carried over unchanged in that
   asset. Only the macOS package has the macOS runtimes, there are no iOS
@@ -1541,6 +1543,18 @@ shipped 1.15 engines do; that broke scripts written for LiveCode, whose
 patterns stopped matching case while the `caseSensitive` was false (its
 default), so it was reverted.
 
+**HTML5 standalones.** The IDE makes standalones that run in a web
+page (tick **Build for HTML5** in the standalone settings). Their
+engine, the standalone engine built from this repository with a current
+Emscripten into WebAssembly, is in every package, in
+`Runtime/Emscripten/js`. Stacks run in the browser as on the desktop:
+`wait`, the dialogs, files, URLs, sound, the player and the browser
+widget work, each in the browser's own way. What a browser does not let
+a page do (sockets, other programs, externals) fails as it does on a
+desktop that cannot do it. The guide *Deploying
+Your Application* says what works, and how to put a standalone on a web
+site.
+
 Changes made in this repository to build it: the `thirdparty` and `ide`
 submodules are ordinary folders in the repository, the prebuilt
 third-party libraries are built from source (only LiveCode's CEF 74
@@ -1574,7 +1588,10 @@ Linux and macOS are built by their CI workflows: BUILDING.md describes
 their steps in [Building on Linux](BUILDING.md#12-building-on-linux) and
 [Building on macOS](BUILDING.md#13-building-on-macos), and how a
 release is made from a tag in
-[Making a release](BUILDING.md#10-making-a-release).
+[Making a release](BUILDING.md#10-making-a-release). The web engine of
+HTML5 standalones is built on Linux, as
+[Building the web engine](BUILDING.md#14-building-the-web-engine)
+describes.
 
 ## Repository layout
 
@@ -1594,7 +1611,7 @@ release is made from a tag in
 | `tools/oxt/` | Python tools that map an installed OpenXTalk Lite folder to the repository and back (`layout.py`), stage OXT-Beyond's installed layout (`package.py`), fetch the external assets listed in `external-assets.json`, pin, fetch and build the xTalk Suite extensions listed in `xtalk-extensions.json` (`xtalk_extensions.py`), and write the text dictionary's entries (`text_dictionary.py`). See [tools/oxt/README.md](tools/oxt/README.md). |
 | `Installer/oxt-beyond/` | The Inno Setup script of the installer, the scripts that make its images, and the icon's source art. |
 | `tools/ci/` | PowerShell, Python and shell scripts used by CI to install components, build, generate the dictionary and the guides (`build_docs.sh`), check, package, smoke-test, compile-check the IDE, run the engine tests of `tests/` (and trace a Windows crash), build and test the installer, join and sign the macOS app, test the Linux package, and assemble a release and its notes. |
-| `.github/workflows/` | The GitHub Actions workflows: `build-windows.yml`, `build-macos.yml` and `build-linux.yml` build, package and test each platform on every push to `main` and every pull request into it; `docs.yml`, which each of them calls, generates the dictionary and the guides; `release.yml` builds all three from a `v` tag and publishes the release; `tag-release.yml` tags `main` and starts it; `runtimes.yml` makes the standalone runtimes asset; `media-check.yml` checks the browser and player in a published release. |
+| `.github/workflows/` | The GitHub Actions workflows: `build-windows.yml`, `build-macos.yml` and `build-linux.yml` build, package and test each platform on every push to `main` and every pull request into it; `docs.yml`, which each of them calls, generates the dictionary and the guides, and `web.yml`, which each of them calls too, builds the web runtime; `release.yml` builds all three from a `v` tag and publishes the release; `tag-release.yml` tags `main` and starts it; `runtimes.yml` makes the standalone runtimes asset; `media-check.yml` checks the browser and player in a published release. |
 | `Installer/package.txt`, `builder/` | LiveCode's packaging manifest (the packager follows its rules for Windows, Linux and macOS) and LiveCode's build tools, whose docs builder makes the dictionary and the guides (its installer builder is not used). |
 | `tests/`, `engine/exec-tests/` and others | Upstream test suites; CI runs those of `tests/` (see [Engine tests](BUILDING.md#engine-tests)). |
 
@@ -1658,6 +1675,12 @@ Known limitations, in rough order of importance:
    come with OXT-Beyond, and edits to the built-in image libraries. Install for the current user only,
    or use the portable zip, if you need them. Plan: keep that state in
    the user's own folders.
+12. HTML5 standalones are new. They are tested automatically in
+   Chromium only, not yet in Firefox, Safari or a phone's browser.
+   Besides what a browser does not allow, printing, drag and drop and
+   `encrypt` are not done yet. Their font, which came with LiveCode's
+   HTML5 standalones, has a licence that needs review (see
+   [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#still-to-review)).
 
 Done since 0.0.1: the extensions of the xTalk Suite are built in, taken
 from their own repositories at pinned commits (see

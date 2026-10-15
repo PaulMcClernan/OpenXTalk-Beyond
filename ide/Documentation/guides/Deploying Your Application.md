@@ -426,195 +426,268 @@ Almost every Internet-connected device has a web browser.  If your application
 can run in a browser, your app can be used anywhere and by anyone, without any
 need to download or install it.
 
-Related lessons:
-
-* [How Do I Put My First App On the Web](http://lessons.livecode.com/m/4071/l/800867-how-do-i-put-my-first-app-on-the-web)
+An HTML5 standalone runs your stacks in a page of a web site, with
+OXT-Beyond's web engine: the engine built as WebAssembly, which browsers
+run. To try one, tick **Build for HTML5**, choose **Development → Test
+Target → _a browser_** from the menu bar, then **Development → Test** (or
+the **Test** button of the toolbar): the IDE builds the standalone, serves
+it from a web server on your own computer, and opens it in that browser.
 
 ##### Supported browsers
 
-The following browsers are supported:
+The engine needs one of these browsers, or a newer version:
 
-* [Mozilla Firefox](https://www.mozilla.org/firefox/new/) 40.0 (or newer)
-* [Google Chrome](https://www.google.com/chrome/) 44 (or newer)
-* [Safari for Mac](https://support.apple.com/HT204416) 9.0 (or newer)
+* [Google Chrome](https://www.google.com/chrome/) or Microsoft Edge 85
+* [Mozilla Firefox](https://www.mozilla.org/firefox/new/) 79
+* Safari 15, on macOS, iOS and iPadOS
 
-##### HTML5 engine features
-
-The HTML5 engine in this release has a limited range of features.
-You can:
-
-* deploy single or multiple stack applications with embedded resources. Stacks
-other than the main stack will open in their own floating container windows.
-* use most of the engine's built-in controls and graphics capabilities.
-* read and write temporary files in a special virtual filesystem (which is
-erased when the user navigates away from the page)
-* use Builder widgets and extensions
-* interact with JavaScript code in the web page using `do <script> as "JavaScript"`
-* call JavaScript Builder widgets and extensions using the
-com.livecode.emscripten module
-* implement widgets by embedding DOM elements as native layers
-* perform basic networking operations using the **load** command
-
-Several important features are not yet supported:
-
-* multimedia (the "player" control)
-
-Two important unsupported features are unlikely to be added in the near future:
-
-* operations that need to pause the script while something happens
-  (e.g. `wait 10`)
-* externals (including revdb)
+OXT-Beyond's own tests run the standalones in Chromium.
 
 ##### Contents of the HTML5 standalone
 
-The HTML5 standalone contains four files:
+The HTML5 standalone is a folder of four files, which a web site serves
+together:
 
-* A standalone archive, named `standalone.zip` by default.  This file contains
-your application and all of the resources that it depends on.  When the engine
-runs, the filesystem that's visible to the engine (e.g. via the `open file`
-syntax) is based on the contents of the standalone archive.
+* `<name>.html`, the page, named after the standalone (the **General**
+pane) and with the stack's label (or, without one, its name) as its
+title. It says "Loading..." until the engine starts, then shows the main
+stack.
+* `standalone-community-<version>.js` and
+`standalone-community-<version>.wasm`, the engine. They are the same for
+every standalone made with the same version of OXT-Beyond.
+* `standalone.zip`, your application: the stacks, the extensions and
+script libraries they use, the files of the **Copy Files** pane, and the
+font that the engine draws text with.
 
-* The engine itself, which consists of two files.  The `.js` file contains the
-engine's executable code, and the `.html.mem` file contains essential data
-that's needed for the engine to run.  These files are always the same, and only
-change when the IDE is upgraded.
+A browser runs the page only from a web server (an `http://` or `https://`
+address), not from a file on the disk. Any web server will do. If it sends
+the `.wasm` file with the type `application/wasm`, as most do, the browser
+starts compiling the engine while it downloads; otherwise it waits for the
+whole file. To try a standalone on your own computer without the IDE, run
+a web server in its folder (for example `python3 -m http.server`) and open
+`http://localhost:8000/<name>.html`.
 
-* A test HTML page.  This can be opened in a browser and will correctly prepare,
-download and start your HTML5 app in a convenient test environment.
+##### What a stack can do in a browser
+
+The web engine is the desktop engine, so stacks look and behave as they do
+on the desktop: cards, groups, controls and graphics, the message path,
+behaviors, script libraries, Builder extensions and widgets. Stacks other
+than the main stack open in their own floating windows in the page. Where
+a browser does things its own way:
+
+* **Waiting.** `wait`, `wait until` and `wait with messages` work in any
+handler, and the page goes on running while the engine waits. The
+exception is a handler that the page's JavaScript calls (see
+**JavaScript** below): the page is waiting for its answer, so it cannot
+wait in turn, and a `wait` there throws an error, which `try` can catch.
+* **Dialogs.** `answer`, `ask`, `ask password` and `answer color` show
+dialogs in the page, which wait for the user, and give `it` and `the
+result` as on the desktop. In a handler that the page calls, the browser's
+own dialogs are used instead. A page can restyle the dialogs: their class
+names start with `oxt-dialog`.
+* **Files.** The file commands and functions (`open file`, `read`, `write`,
+`file:` and `binfile:` URLs, `the files`, `create folder` and the rest)
+work on the engine's own file system, which is in the page, not on the
+user's disk:
+  * `specialFolderPath("resources")` is `/boot/standalone`, where the files
+of the **Copy Files** pane are, and is the `defaultFolder` when the
+standalone starts.
+  * `specialFolderPath("home")` is `/livecode`, with the `documents`,
+`desktop`, `preferences` and `support` folders in it. The browser keeps
+this folder for the web site, so what a stack writes there is still there
+on the user's next visit, in the same browser. (A page can turn this off;
+see **The Module object** below.)
+  * `specialFolderPath("temporary")` is `/tmp`. It, and every folder but
+the home folder, starts afresh on each visit.
+  * `answer file`, `answer files` and `answer folder` show the browser's
+file picker. The files that the user picks are copied into `/uploads`
+(`specialFolderPath("uploads")`), and `it` has the copies' paths.
+  * `ask file` gives a path in `/downloads` (`specialFolderPath("downloads")`).
+A file written there goes to the user as a download when it is closed.
+* **URLs.** `get url`, `put ... into url`, `post`, `load url` and the
+Internet library's commands use the browser's own requests. A browser
+lets a page read from its own web site, and from other sites only when
+they allow it (with CORS headers); a request that the browser refuses
+fails as one to a server that cannot be reached.
+* **Links.** `launch url` opens an `http` or `https` address in a new tab,
+and gives a `mailto:` or `tel:` link to the application that answers it;
+it refuses `javascript:` and `data:` addresses. `launch document` opens a
+file of the engine's file system in a tab. A browser opens a tab only just
+after the user has clicked or typed, so at other times the page asks the
+user first.
+* **Keyboard, mouse and touch.** Keys, modifier keys (Cmd is the command
+key on a Mac), the mouse, its wheel and the standard cursors work as on
+the desktop, and the copy, cut and paste keys use the system clipboard. On a
+touch screen, a finger on a stack is the mouse: touching presses the mouse
+button, moving moves the mouse, and lifting lets the button go, so taps
+click and fingers drag.
+* **The screen** is the browser's window: `the screenRect` is its size, a
+stack gets `desktopChanged` when it changes, and stacks draw at the
+screen's scale, so they stay sharp on high-resolution screens and when the
+page is zoomed.
+* **Sound.** `play` plays audio clips and WAV, AU and AIFF files, and
+`beep` beeps. A browser lets a page make sound only once the user has
+clicked or typed in it: until then, a sound waits, and one that ends
+before then is not heard, although the stack is told that it played.
+* **The player** plays the movies and sounds that the browser can play
+(MP4, WebM and MP3 in current browsers), from the engine's file system or
+an address, with the browser's own controller. Its `timeScale` is 1000. A
+browser starts a movie with sound only once the user has clicked or typed
+in the page; a movie whose `playLoudness` is 0 starts at once.
+* **The browser widget** shows a page of the stack's own web site, its
+`htmlText`, or a file of the engine's file system, with its messages, `do
+... in widget` and the page's calls to its `javascriptHandlers`, as on the
+desktop. It shows a page of another web site only if that site lets other
+sites show its pages; the engine then knows only the address it gave the
+widget, `do ... in widget` does nothing, and the page calls a handler with
+`window.parent.postMessage({liveCode: "handlerName", parameters: [1, 2]}, "*")`.
+* **Builder extensions and widgets** work, including foreign handlers with
+callbacks. A native library built for a desktop system cannot be loaded.
+* **JavaScript.** `do <script> as "JavaScript"` runs JavaScript in the
+page, and `the result` is its value. The page calls the handlers that a
+stack's `cJavascriptHandlers` property lists, one handler name a line:
+`document.liveCode.findStackWithName("My Stack").myHandler(1, 2)` returns
+what the handler returns. Builder extensions call JavaScript with the
+`com.livecode.emscripten` module.
+* **Fonts.** Text is drawn with Droid Sans, which every standalone has.
+Font files listed one by one on the **Copy Files** pane (not in a folder)
+are loaded when the standalone starts, and their fonts are used by name.
+
+##### What a stack cannot do in a browser
+
+A browser does not let a page do some of what a desktop application does,
+and some features are not done yet. They fail as they do on a desktop that
+cannot do them:
+
+* Sockets: `open socket` puts "not supported" into `the result`, and
+`accept` does nothing. Use URLs to talk to servers.
+* Other programs: `shell()` throws an error, and `open process` does
+nothing.
+* Externals, so neither databases (revDB) nor revXML, revZip, revSpeech or
+the video grabber. Builder extensions work.
+* `encrypt` and `decrypt` put "ssl library not found" into `the result`,
+and `the cipherNames` throws an error. `md5Digest`, `sha1Digest`,
+`messageDigest` and `randomBytes` work.
+* Printing: the print commands put "printing failed" into `the result`.
+* Drag and drop.
+* `the systemVersion` and `the machine` are empty, and `the processor` is
+`js`; `the platform` is `HTML5`. To know the browser, ask it:
+`do "navigator.userAgent" as "JavaScript"`.
 
 ##### Advanced: HTML5 standalone filesystem
 
-JavaScript applications running in a browser don't have access to the host
-system's filesystem.  Instead, the filesystem-related features, such
-as `open file`, use a virtual filesystem (VFS) that exists only in memory.  This
-filesystem is initialised before the engine starts, and is reset and its content
-discarded when the engine stops (when the user closes the browser view or
-navigates to a different page).
+When the engine starts, it unpacks `standalone.zip` into its file system,
+from its root:
 
-During engine startup, the VFS is populated from the contents of the
-`standalone.zip` file that's created by the HTML5 deployment process.  All of
-the initial files are stored in `/boot/` in the VFS.
+* `/boot/__startup.data`: the stacks, extensions and startup script.
+* `/boot/standalone/`: the files of the **Copy Files** pane, and the font
+(`DroidSansCombined.ttf`).
 
-There are several special files & directories in the `/boot/` directory:
-
-* `/boot/__startup.data`: the standalone data including the mainstack,
-extensions and auxiliary stackfiles and startup script.
-* `/boot/fonts/basefont.ttf`: the font used by the engine
-* `/boot/standalone/`: the `defaultFolder` when the engine starts, and the
-location where additional assets selected using the "Copy files" page of the
-standalone builder are placed
-
-In general, if you wish to add new files or directories to the `standalone.zip`
-archive, it is best to add them outside the `/boot/` directory tree.
+Files that you add to the archive yourself are unpacked too, at their paths
+in it; put them outside `boot/`.
 
 ##### Advanced: Embedding an HTML5 standalone in a web page
 
-The default HTML5 page provided by the HTML5 standalone builder is designed for
-testing and debugging purposes.  However, you may want to embed the standalone
-engine in a more visually appealing page.  To do this, you require three
-elements: 1) a canvas, 2) a JavaScript `Module` object, and 3) an HTML
-`<script>` element that downloads the engine.
+The page that the builder writes is a plain one, made for trying the
+standalone. To put the standalone in a page of your own, the page needs
+three things: a canvas, a JavaScript `Module` object, and the engine's
+script.
 
 ##### The canvas
 
-The engine renders into a HTML5 `<canvas>` element contained within a `<div>`
-element. There are some important considerations when creating the canvas &
-div:
+The engine draws the main stack in an HTML5 `<canvas>` element inside a
+`<div>` element:
 
-* both the canvas and div must have absolutely no border, or mouse coordinate
-calculations will be incorrect
+* neither may have a border or padding, or the mouse will be off by as
+much
+* the engine sets their size to the stack's, so don't set it with HTML or
+CSS
+* the canvas should be the only element in the div, where the engine adds
+the elements of widgets and players
+* the canvas needs an id, so that the page can give it to the engine
 
-* they will be automatically resized by the engine to match the size of your
-stack, so don't attempt to set their size using HTML or CSS
+The smallest canvas is:
 
-* the canvas should be the only element within the containing div, which may be
-used to hold additional elements as native layers are added to the app.
+    <div><canvas id="canvas" style="border: 0 none; padding: 0; outline: none;" oncontextmenu="event.preventDefault();"></canvas></div>
 
-* the canvas needs to be easily uniquely identifiable, so that the engine can
-find it.
-
-The absolute minimum canvas element would look something like this:
-
-    <div><canvas style="border: 0px none;" id="canvas" oncontextmenu="event.preventDefault();"></canvas></div>
-
-By default, most web browsers will indicate when the canvas has focus by
-displaying a highlighted outline.  This helps users identify which part of
-the web page is capturing their key presses.  You can usually disable this
-outline by adding `outline: none;` to the canvas's CSS styles.
+`outline: none` hides the outline that most browsers draw around the
+element that has the keyboard focus.
 
 ##### The Module object
 
-The top-level JavaScript `Module` object contains the parameters that control
-how the engine runs.  At minimum, you need only specify the `Module.canvas`,
-which should be your canvas element.
+The top-level JavaScript `Module` object tells the engine how to run. It
+needs only the canvas:
 
-The absolute minimum `Module` object declaration would look something like:
-
-    <script type="text/javascript">
-    var Module = {
-      canvas: document.getElementById('canvas'),
-    };
+    <script>
+      var Module = {
+        canvas: document.getElementById('canvas'),
+      };
     </script>
+
+These are the other things that it can have:
+
+* `print` and `printErr`: functions that get each line that the stack
+writes to stdout and stderr (`write ... to stdout`). Without them, the
+lines go to the browser's console.
+* `setStatus`: a function that gets "Running..." as the engine starts, and
+empty text once it has started.
+* `livecodeStandalone`: the name of the standalone archive (by default
+`standalone.zip`).
+* `livecodeStandalonePrefixURL`: put before that name to make the
+archive's address, for an archive in another folder or on another site.
+* `locateFile`: a function that takes the name of a file that the engine
+needs (its `.wasm` file, and the archive) and returns its address. When
+it is there, `livecodeStandalonePrefixURL` is not used.
+* `livecodeStandaloneRequest`: a request for the archive that the page has
+already started, so that the archive downloads while the engine's script
+does: an `XMLHttpRequest` whose `responseType` is `"arraybuffer"`. The
+engine starts once it has arrived.
+* `livecodePersistent`: `false` to start the home folder afresh on every
+visit, instead of keeping it in the browser.
+
+See also Emscripten's
+[Module object documentation](https://emscripten.org/docs/api_reference/module.html).
 
 ##### Engine download
 
-The engine is quite a large JavaScript file, so it's downloaded asynchronously
-in order to let the rest of the page finish loading and start being displayed.
+The engine's script loads the engine's `.wasm` file from its own folder,
+and the archive from the page's folder. The browser downloads it while the
+rest of the page loads:
 
-Quite straightforwardly:
+    <script async src="standalone-community-<version>.js"></script>
 
-    <script async type="text/javascript" src="standalone-<version>.js"></script>
-
-Make sure to replace `<version>` as appropriate.
+Make sure to replace `<version>` with the version in the engine's file
+names.
 
 ##### Bringing it all together
 
-Here's the complete skeleton web page for an HTML5 standalone:
+Here's a complete page for an HTML5 standalone:
 
+    <!doctype html>
     <html>
-       <body>
-          <div>
-             <canvas style="border: 0px none;" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-          </div>
-
-         <script type="text/javascript">
-           var Module = { canvas: document.getElementById('canvas')  };
-         </script>
-        <script async type="text/javascript" src="standalone-community.js"></script>
+      <body>
+        <div>
+          <canvas id="canvas" style="border: 0 none; padding: 0; outline: none;" oncontextmenu="event.preventDefault()"></canvas>
+        </div>
+        <script>
+          var Module = { canvas: document.getElementById('canvas') };
+        </script>
+        <script async src="standalone-community-9.7.1-OXT.js"></script>
       </body>
     </html>
 
 ##### Advanced: Speeding up engine download
 
-Currently, the engine files are almost 30 MB, which is a lot to download before
-the engine can start.  It is possible to speed up the download by enabling
-deflate compression in the web server configuration.
-
-Enabling deflate compression reduces the total download size to around 6.3 MB.
-It's recommended to pre-compress the engine with `gzip`, and then configure your
-web server to serve the pre-compressed files.
+The engine's `.wasm` file is about 17 MB, and the archive about 4 MB (the
+font is most of it). Web servers can send them compressed, which browsers
+unpack as they arrive: compressed with gzip, the engine is about 6.5 MB and
+the archive about 2 MB. Most hosting compresses by itself; on a server of
+your own, turn compression on for `.wasm`, `.js` and `.zip` files, or
+compress them once with `gzip` and have the server send those files:
 
 * For the Apache web server, configure `mod_deflate` to serve [pre-compressed content](https://httpd.apache.org/docs/2.4/mod/mod_deflate.html#precompressed)
-* For the NGINX web server, add [`gzip_static on;`](https://www.nginx.com/resources/admin-guide/compression-and-decompression/#send)
+* For the NGINX web server, add [`gzip_static on;`](https://nginx.org/en/docs/http/ngx_http_gzip_static_module.html)
 to your configuration.
-
-##### Advanced: Customizing the Module object
-
-There are a number of engine-specific `Module` attributes that you can modify
-to affect how the engine behaves:
-
-* `Module.livecodeStandalone`: the filename of the standalone archive (default
-`standalone.zip`)
-* `Module.livecodeStandalonePrefixURL`: Prepended to the standalone archive
-filename to construct its full URL (default empty)
-* `Module.livecodeStandaloneRequest`: If you assign a network request to this
-attribute (before the engine runs), then it will use that request for the
-standalone archive instead of automatically starting a download for you. This
-means that you can, in your HTML, fire off a request for the standalone before
-the engine script actually arrives.  For this to work, the network request
-should be an `XMLHttpRequest` with its `responseType` set to `arraybuffer`.
-
-See also Emscripten's [Module object documentation](https://kripken.github.io/emscripten-site/docs/api_reference/module.html).
 
 #### Bug Reports
 

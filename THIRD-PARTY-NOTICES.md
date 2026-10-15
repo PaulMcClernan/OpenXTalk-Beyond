@@ -32,6 +32,7 @@ Contents:
 - [The IDE](#the-ide)
 - [xTalk Suite extensions](#xtalk-suite-extensions)
 - [Standalone runtimes for other platforms](#standalone-runtimes-for-other-platforms)
+- [The web runtime](#the-web-runtime)
 - [The macOS app](#the-macos-app)
 - [The Linux x86-64 package](#the-linux-x86-64-package)
 - [Files OpenXTalk Lite shipped that OXT-Beyond does not](#files-openxtalk-lite-shipped-that-oxt-beyond-does-not)
@@ -104,7 +105,8 @@ licence text are in `thirdparty/`.
 | libpq (from PostgreSQL) | 9.4.5 | `dbpostgresql.dll` | PostgreSQL licence | [`thirdparty/libpq/docs/COPYRIGHT`](thirdparty/libpq/docs/COPYRIGHT) |
 
 Not used by the Windows build, although present in `thirdparty/`:
-FreeType, HarfBuzz and expat (Android, Linux and HTML5 builds only), and
+FreeType, HarfBuzz and expat (Android, Linux and HTML5 builds only; see
+[The web runtime](#the-web-runtime) for the web engine's), and
 iODBC (the Windows ODBC driver uses the system `odbc32.dll`). Their
 licences are in `thirdparty/libfreetype/docs/`,
 `thirdparty/libexpat/NOTICE` and `thirdparty/libiodbc/docs/`.
@@ -472,6 +474,23 @@ OpenXTalk Lite 1.15's runtimes, unchanged (LiveCode 9.6.3 builds for
 32-bit Windows, and Linux runtimes with shared libraries of other
 projects in their `lib/`), which had no Windows x86-64 runtime.
 
+## The web runtime
+
+Every package also carries the web runtime, from which the IDE makes
+HTML5 standalones, in `Runtime/Emscripten/js/` (in the macOS app,
+`Contents/Tools/Runtime/Emscripten/js/`). Every HTML5 standalone
+contains its engine and its font. It is built from this repository, in
+the Ubuntu 22.04 container of `.github/workflows/web.yml`, with
+Emscripten 6.0.12 (the version in `config/emscripten-version`); every
+platform's package has the same files.
+
+| Where it ends up | What it is | Licence |
+| --- | --- | --- |
+| `standalone-community-<version>.wasm` and `.js` | The web engine, built from this repository, with these libraries built for the web: zlib, libpng, giflib, libjpeg, PCRE, Skia and libffi (see [Libraries built from `thirdparty/`](#libraries-built-from-thirdparty)), ICU 78.3 (see [Prebuilt libraries](#prebuilt-libraries)), and FreeType 2.10.4 and HarfBuzz 0.9.28 from `thirdparty/`, which draw its text | GPLv3 with the permission in [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md); the libraries as listed in those sections; FreeType: the FreeType License or GPLv2, at your choice ([`thirdparty/libfreetype/docs/`](thirdparty/libfreetype/docs/)); HarfBuzz: the MIT-style licence in its file headers (`thirdparty/libharfbuzz/src/`) |
+| the same two files | Emscripten's runtime: the JavaScript that Emscripten writes around the engine, and the system libraries that it links into it (its C library, based on musl; libc++ and libc++abi; compiler-rt; dlmalloc) | Emscripten: MIT or the University of Illinois/NCSA Open Source License, at your choice ([upstream](https://github.com/emscripten-core/emscripten/blob/6.0.12/LICENSE)); musl: MIT; libc++, libc++abi and compiler-rt: Apache License 2.0 with LLVM Exceptions; dlmalloc: public domain |
+| `standalone-community-<version>.html`, `emscripten-startup-template.livecodescript` | A standalone's page and the template of its startup script, from `engine/rsrc/` | GPLv3 |
+| `emscripten-standalone-template/boot/standalone/DroidSansCombined.ttf` | The font that HTML5 standalones draw text with, as LiveCode's HTML5 standalones had it: Droid Sans ("Digitized data copyright © 2006, Google Corporation", version 1.00 build 107, made by Ascender Corporation), with Chinese, Japanese and Korean characters added (presumably from Droid Sans Fallback) | Google published the Droid fonts under the Apache License 2.0, but this file's own licence field holds Ascender Corporation's licence for its commercial fonts; see [Still to review](#still-to-review). "Droid" is a trademark of Google. |
+
 ## The macOS app
 
 `OXT-Beyond-<version>-mac-universal.dmg` and `-mac-universal.zip` hold
@@ -680,6 +699,7 @@ has been in the LiveCode Community tree since upstream. Its licence,
 | gyp | `gyp/` | BSD 3-clause | Generates the Visual Studio projects. [`gyp/LICENSE`](gyp/LICENSE) |
 | Google Test | `libcpptest/googletest` (submodule) | BSD 3-clause | C++ unit tests only. |
 | Cygwin, Python, Perl, Visual Studio, Inno Setup, Chocolatey | installed separately | their own licences | See [BUILDING.md](BUILDING.md). Inno Setup's code is part of the setup program (see [The installer](#the-installer)). |
+| The Emscripten SDK (Emscripten, LLVM, Binaryen, Node.js) | installed separately | their own licences | Builds the web engine (see [BUILDING.md](BUILDING.md#14-building-the-web-engine)); what it puts into the engine is listed in [The web runtime](#the-web-runtime). |
 
 ## Still to review
 
@@ -710,6 +730,14 @@ has been in the LiveCode Community tree since upstream. Its licence,
   asks for.
 - **Droid Sans Mono** is under the Apache License 2.0, but the licence
   text is not shipped next to the font.
+- **`DroidSansCombined.ttf`**, the font of every HTML5 standalone (see
+  [The web runtime](#the-web-runtime)), came with LiveCode's HTML5
+  standalones. Its licence field is not the Apache License 2.0 under
+  which Google published the Droid fonts, but Ascender Corporation's
+  licence for its commercial fonts, which allows use "on up to five
+  personal computers" and no copying. Whether this file may be
+  distributed under the Apache License, or should be replaced by a font
+  whose licence is clear, needs a decision by the maintainer.
 - **`neville-segments.mp4`**, the examples whose authors are not
   recorded, and **`Documentation/linked_files/`** (the sample stacks and
   zip archives from LiveCode's lessons and samples): authors and terms
