@@ -1,0 +1,11 @@
+# Standalone Settings, the Web (HTML5) card: OpenXTalk Lite saved a note
+# about Webtalk, an interpreter of its own, in the card's text field, in
+# place of what the card is for. The card's behavior
+# (revstandalonesettingsemscriptenbehavior.livecodescript) fills the field
+# each time the card opens, with what the HTML5 standalone is and how to
+# test it, so the field is saved empty.
+file: Toolset/palettes/standalone settings/revstandalonesettings.8.rev
+object: field "emscriptenDeploymentInfoLabel" of card "Emscripten"
+property: htmlText
+from: <p>There is currently an independent project called Webtalk, which is a hypertalk interpreter in a web browser. Eventually, converter options will exist in this tab. Until then, please visit webtalk.tsites.co.uk</p>
+to: <p></p>
