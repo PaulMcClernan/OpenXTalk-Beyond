@@ -184,6 +184,19 @@ MCScreenDC::~MCScreenDC()
 Boolean
 MCScreenDC::open()
 {
+	/* OXT-Beyond: the colours of Windows 10's light theme, as the Windows
+	 * engine sets them when it starts (MCWin32UpdateSystemColors, and the
+	 * hilite colour that it reads from the registry) and as the web theme
+	 * gives them to controls (em-theme.cpp): the background of a stack
+	 * with none of its own, and the hiliteColor and accent colour, which
+	 * data grids and selected text show. They were the engine's own
+	 * defaults: mid grey (#C0C0C0) and navy. */
+	background_pixel.red = background_pixel.green = background_pixel.blue = 0xF0F0;
+	MChilitecolor.red = 0x0000;
+	MChilitecolor.green = 0x7878;
+	MChilitecolor.blue = 0xD7D7;
+	MCaccentcolor = MChilitecolor;
+
 	return
 		MCEmscriptenJSInitialize() &&
 		MCEmscriptenEventInitialize() &&

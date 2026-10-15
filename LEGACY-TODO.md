@@ -13,19 +13,19 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 
 | Marker | Notes |
 | --- | --- |
-| [FIXME](#fixme) | 67 |
+| [FIXME](#fixme) | 66 |
 | [HACK](#hack) | 33 |
 | [TODO](#todo) | 457 |
 
 ## FIXME
 
-Code its authors knew to be wrong or incomplete. 67 notes, by part of the repository:
+Code its authors knew to be wrong or incomplete. 66 notes, by part of the repository:
 
-[engine](#fixme-engine) (34), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [ide](#fixme-ide) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide-support](#fixme-ide-support) (1), [util](#fixme-util) (1)
+[engine](#fixme-engine) (33), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [ide](#fixme-ide) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide-support](#fixme-ide-support) (1), [util](#fixme-util) (1)
 
 <a id="fixme-engine"></a>
 
-### FIXME: engine (34)
+### FIXME: engine (33)
 
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
 - [engine/src/dispatch.cpp:1574](engine/src/dispatch.cpp#L1574) FIXME This is horrible
@@ -40,16 +40,15 @@ Code its authors knew to be wrong or incomplete. 67 notes, by part of the reposi
 - [engine/src/em-preamble.js:57](engine/src/em-preamble.js#L57) FIXME Should this be moved into the engine?
 - [engine/src/em-preamble.js:81](engine/src/em-preamble.js#L81) FIXME Can we cache the capsule locally?
 - [engine/src/em-standalone.js:43](engine/src/em-standalone.js#L43) FIXME maybe this needs a helper function in LiveCodeUtil
-- [engine/src/em-system.cpp:398](engine/src/em-system.cpp#L398) FIXME Implement CreateAlias() using symlink(2)
-- [engine/src/em-system.cpp:409](engine/src/em-system.cpp#L409) FIXME Implement ResolveAlias() using readlink(2)
-- [engine/src/em-system.cpp:419](engine/src/em-system.cpp#L419) FIXME use get_current_dir_name() once it's available in Emscripten's
-- [engine/src/em-system.cpp:515](engine/src/em-system.cpp#L515) FIXME use scandirat() once it's available in emscripten's libc
-- [engine/src/em-system.cpp:728](engine/src/em-system.cpp#L728) FIXME Implement GetFreeDiskSpace()
-- [engine/src/em-system.cpp:737](engine/src/em-system.cpp#L737) FIXME Implement GetDevices()
-- [engine/src/em-system.cpp:746](engine/src/em-system.cpp#L746) FIXME Implement GetDrives()
-- [engine/src/em-system.cpp:906](engine/src/em-system.cpp#L906) FIXME Implement OpenDevice()
-- [engine/src/em-system.cpp:940](engine/src/em-system.cpp#L940) FIXME Implement ResolvePath()
-- [engine/src/em-theme.cpp:48](engine/src/em-theme.cpp#L48) FIXME not yet implemented
+- [engine/src/em-system.cpp:406](engine/src/em-system.cpp#L406) FIXME Implement CreateAlias() using symlink(2)
+- [engine/src/em-system.cpp:417](engine/src/em-system.cpp#L417) FIXME Implement ResolveAlias() using readlink(2)
+- [engine/src/em-system.cpp:427](engine/src/em-system.cpp#L427) FIXME use get_current_dir_name() once it's available in Emscripten's
+- [engine/src/em-system.cpp:523](engine/src/em-system.cpp#L523) FIXME use scandirat() once it's available in emscripten's libc
+- [engine/src/em-system.cpp:736](engine/src/em-system.cpp#L736) FIXME Implement GetFreeDiskSpace()
+- [engine/src/em-system.cpp:745](engine/src/em-system.cpp#L745) FIXME Implement GetDevices()
+- [engine/src/em-system.cpp:754](engine/src/em-system.cpp#L754) FIXME Implement GetDrives()
+- [engine/src/em-system.cpp:914](engine/src/em-system.cpp#L914) FIXME Implement OpenDevice()
+- [engine/src/em-system.cpp:967](engine/src/em-system.cpp#L967) FIXME Implement ResolvePath()
 - [engine/src/em-url.js:59](engine/src/em-url.js#L59) FIXME maybe this needs a helper function in LiveCodeUtil
 - [engine/src/em-url.js:303](engine/src/em-url.js#L303) FIXME this isn't quite correct; we don't correctly
 - [engine/src/funcs.h:1118](engine/src/funcs.h#L1118) class MCNativeCharToNum : public MCUnaryFunctionCtxt<MCStringRef, uinteger_t, MCStringsEvalNativeCharToNum, EE_CHARTONUM_BADSOURCE, PE_CHARTONUM_BADPARAM> //...
@@ -559,7 +558,7 @@ Work left for later. 457 notes, by part of the repository:
 - [tests/_testlib.livecodescript:73](tests/_testlib.livecodescript#L73) case "TODO"
 - [tests/_testlib.livecodescript:74](tests/_testlib.livecodescript#L74) return "TODO"
 - [tests/_testlib.livecodescript:310](tests/_testlib.livecodescript#L310) _TestOutput pExpectTrue, pDescription, "TODO", pReasonBroken
-- [tests/_testlib.livecodescript:707](tests/_testlib.livecodescript#L707) TODO: make externals tests work in standalone test builder
+- [tests/_testlib.livecodescript:725](tests/_testlib.livecodescript#L725) TODO: make externals tests work in standalone test builder
 - [tests/_testrunner.lcb:341](tests/_testrunner.lcb#L341) Check for a diagnostic mode (TODO or SKIP)
 - [tests/_testrunner.lcb:350](tests/_testrunner.lcb#L350) if 1 is the first offset of " TODO" in tLineElements[2] then
 - [tests/lcb/stdlib/char.lcb:277](tests/lcb/stdlib/char.lcb#L277) test diagnostic "TODO 'y' is not in 'xyz'"
