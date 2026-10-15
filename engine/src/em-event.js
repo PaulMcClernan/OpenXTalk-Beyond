@@ -148,6 +148,23 @@ mergeInto(LibraryManager.library, {
 			tInput.style.setProperty('width', '1px', 'important');
 			tInput.style.setProperty('height', '1px', 'important');
 
+			// OXT-Beyond: a touch screen's keyboard comes up for the
+			// input only while an unlocked field has the focus
+			// (setTextInput()), and types into the stacks what its keys
+			// say: no corrections and no capitals of its own (the input is
+			// emptied after each key, so each would start a sentence). Its
+			// text is big enough that Safari does not zoom the page in to
+			// it when it has the focus.
+			tInput.style.setProperty('font-size', '16px', 'important');
+			tInput.inputMode = 'none';
+			tInput.autocomplete = 'off';
+			tInput.setAttribute('autocorrect', 'off');
+			tInput.setAttribute('autocapitalize', 'off');
+			tInput.spellcheck = false;
+			if (navigator.virtualKeyboard && 'virtualKeyboardPolicy' in tInput) {
+				tInput.virtualKeyboardPolicy = 'manual';
+			}
+
 			LiveCodeEvents._inputelement = tInput;
 			document.body.appendChild(tInput);
 
@@ -723,6 +740,10 @@ mergeInto(LibraryManager.library, {
 		_commandKeysDown: {},
 
 		_handleKeyboardEvent: function(e) {
+			// OXT-Beyond: the text that a key the stacks get types into the
+			// input is theirs already (_handleInput())
+			LiveCodeEvents._keyTyped = e.type == 'keydown' && !(e.isComposing || e.keyCode === 229);
+
 			// ignore key events during IME composing
 			if (e.isComposing || e.keyCode === 229)
 				return false;
@@ -914,7 +935,134 @@ mergeInto(LibraryManager.library, {
 						 [stack, enabled, offset, chars, length]);
 		},
 
+		// OXT-Beyond: whether the last key down went to the stacks
+		_keyTyped: false,
+
+		// OXT-Beyond: text that comes with no key the stacks get: a touch
+		// screen's keyboard (whose keys are "Unidentified"), dictation or
+		// an emoji picker. The stacks get it a character at a time, as keys
+		// that type it, as a phone's engine gives them what its keyboard
+		// types; a key that the stacks got typed its own text, and a
+		// composition's text goes as an IME's (_handleComposition()). A
+		// correction, which would replace text that the input no longer
+		// has, is not typed.
 		_handleInput: function(inputEvent) {
+			var input = LiveCodeEvents._inputelement;
+			if (inputEvent.type == 'input') {
+				// The input keeps no text but a composition's
+				if (!inputEvent.isComposing && input && inputEvent.target == input) {
+					input.value = '';
+				}
+				return;
+			}
+
+			var typed = LiveCodeEvents._keyTyped;
+			LiveCodeEvents._keyTyped = false;
+			if (typed || inputEvent.isComposing) {
+				return;
+			}
+
+			var kKeyStatePressed = 2;
+			var keys = [];
+			switch (inputEvent.inputType) {
+			case 'insertText':
+				Array.from(inputEvent.data || '').forEach(function(ch) {
+					var code = ch.codePointAt(0);
+					if (code == 0x0a || code == 0x0d) {
+						keys.push([0, 0xff0d]);
+					} else if (code == 0x09) {
+						keys.push([0, 0xff09]);
+					} else if (code >= 0x20 && code < 0x7f || code >= 0xa0 && code <= 0xff) {
+						keys.push([code, code]);
+					} else if (code > 0xff) {
+						keys.push([code, code | 0x1000000]);
+					}
+				});
+				break;
+			case 'insertLineBreak':
+			case 'insertParagraph':
+				keys.push([0, 0xff0d]);
+				break;
+			case 'deleteContentBackward':
+				keys.push([0, 0xff08]);
+				break;
+			case 'deleteContentForward':
+				keys.push([0, 0xffff]);
+				break;
+			default:
+				return;
+			}
+			if (keys.length == 0) {
+				return;
+			}
+
+			LiveCodeAsync.delay(function() {
+				var stack = LiveCodeEvents._getStackForCanvas(LiveCodeEvents._inputtarget);
+				if (!stack) {
+					return;
+				}
+				keys.forEach(function(key) {
+					LiveCodeEvents._postKeyPress(stack, 0, key[0], key[1], kKeyStatePressed);
+				});
+			});
+			LiveCodeAsync.resume();
+		},
+
+		// OXT-Beyond: a touch screen's keyboard, which comes up while an
+		// unlocked field has the focus, as on a phone: the engine says
+		// when (MCScreenDC::activateIME(), em-dc.cpp). A browser brings
+		// the keyboard up only for a touch that has ended (or a key or a
+		// click), so it comes up when the next touch ends (_touchEnded()):
+		// at the end of the touch that put the focus in the field, or of
+		// the first touch after a script did. A mouse click brings up none:
+		// a computer with a mouse and a touch screen has a keyboard too.
+		_textInput: false,
+		_keyboardShown: false,
+
+		setTextInput: function(active) {
+			var input = LiveCodeEvents._inputelement;
+			if (!input || active == LiveCodeEvents._textInput) {
+				return;
+			}
+			LiveCodeEvents._textInput = active;
+			LiveCodeEvents._keyboardShown = false;
+			input.inputMode = active ? 'text' : 'none';
+			if (!active) {
+				LiveCodeEvents._keyboard(false);
+			}
+		},
+
+		// Brings up or puts away a touch screen's keyboard for the input:
+		// with the VirtualKeyboard API (Chrome), or by focusing the input
+		// again, which brings up the keyboard of its inputmode
+		_keyboard: function(show) {
+			var input = LiveCodeEvents._inputelement;
+			if (!input || document.activeElement !== input || !navigator.maxTouchPoints) {
+				return;
+			}
+			if (input.virtualKeyboardPolicy == 'manual') {
+				if (show) {
+					navigator.virtualKeyboard.show();
+				} else {
+					navigator.virtualKeyboard.hide();
+				}
+				return;
+			}
+			input.blur();
+			input.focus({preventScroll: true});
+		},
+
+		// A touch ended: the keyboard comes up, if a field has the focus.
+		// The VirtualKeyboard API brings it up again after each touch (it
+		// may have been put away, and it does not flicker); focusing the
+		// input again brings it up once.
+		_touchEnded: function() {
+			var input = LiveCodeEvents._inputelement;
+			if (LiveCodeEvents._textInput && input &&
+				(!LiveCodeEvents._keyboardShown || input.virtualKeyboardPolicy == 'manual')) {
+				LiveCodeEvents._keyboardShown = true;
+				LiveCodeEvents._keyboard(true);
+			}
 		},
 
 		_stringToUTF16: function(string) {
@@ -1518,6 +1666,7 @@ mergeInto(LibraryManager.library, {
 			case 'touchend':
 				LiveCodeEvents._touchId = null;
 				LiveCodeEvents._handleMouseEvent(mouse('mouseup'));
+				LiveCodeEvents._touchEnded();
 				break;
 
 			case 'touchcancel':
@@ -1652,6 +1801,14 @@ mergeInto(LibraryManager.library, {
 			{{{ makeSetValue('codes', 'i * 4', 'Number(down[i])', 'i32') }}};
 		}
 		return down.length;
+	},
+
+	// OXT-Beyond: whether an unlocked field has the keyboard focus: a touch
+	// screen's keyboard comes up for it (MCScreenDC::activateIME(),
+	// em-dc.cpp)
+	MCEmscriptenSetTextInput__deps: ['$LiveCodeEvents'],
+	MCEmscriptenSetTextInput: function(active) {
+		LiveCodeEvents.setTextInput(!!active);
 	},
 
 	// OXT-Beyond: a drag that the engine started (MCScreenDC::dodragdrop(),

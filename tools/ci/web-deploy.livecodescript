@@ -106,7 +106,7 @@ private command makeProbeStack
    set the backgroundColor of tStack to "#3366CC"
    set the script of tStack to tScript
    -- The handlers that the page can call (document.liveCode.findStackWithName)
-   set the cJavascriptHandlers of tStack to "probeFromJS" & return & "probeReport"
+   set the cJavascriptHandlers of tStack to "probeFromJS" & return & "probeReport" & return & "probeUnfocus"
    set the defaultStack to "WebProbe"
 
    create button "Probe Button"

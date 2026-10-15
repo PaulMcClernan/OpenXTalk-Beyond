@@ -33,8 +33,9 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- "PROBE ready", and web_check.py does what a user and a page do: it
 -- clicks the button (mouseUp writes "PROBE click PASS <count>"), types
 -- into the field, holds Shift down, taps the button and drags a finger
--- across the graphic, and calls the handlers that the stack's
--- cJavascriptHandlers name: probeFromJS and probeReport.
+-- across the graphic, taps the field and types into it with a touch
+-- screen's keyboard, and calls the handlers that the stack's
+-- cJavascriptHandlers name: probeFromJS, probeReport and probeUnfocus.
 --
 -- The checks run only in the web standalone: in the IDE, which opens the
 -- stack while it builds the standalone, openStack does nothing more.
@@ -714,6 +715,12 @@ function probeFromJS pValue
    probeLine "info js-call value=" & pValue && "wait=" & tWaited
    return pValue * 2
 end probeFromJS
+
+-- Called from the page: the field loses the keyboard focus, so a touch
+-- screen's keyboard goes away
+command probeUnfocus
+   focus on nothing
+end probeUnfocus
 
 -- Called from the page: what the user did, or with "keys", the keys that
 -- are down, with "drag", the drag on the graphic, with "dnd", the drag

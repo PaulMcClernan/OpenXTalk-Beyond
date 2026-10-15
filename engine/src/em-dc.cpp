@@ -745,6 +745,15 @@ MCScreenDC::createprinter(void)
 	return MCEmscriptenPrinterCreate();
 }
 
+/* OXT-Beyond: an unlocked field has the keyboard focus (or lost it), as
+ * on a phone, where its keyboard then comes up (or goes away): a touch
+ * screen's keyboard comes up when the touch that focused it ends */
+void
+MCScreenDC::activateIME(Boolean p_activate)
+{
+	MCEmscriptenSetTextInput(p_activate);
+}
+
 /* ================================================================
  * Cursors
  * ================================================================ */

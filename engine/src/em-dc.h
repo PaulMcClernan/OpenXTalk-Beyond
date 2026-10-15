@@ -40,6 +40,8 @@ extern "C" MCStack *MCEmscriptenGetStackForWindow(Window p_window);
 extern "C" bool MCEmscriptenHandleMousePress(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, MCMousePressState p_state, int32_t p_button);
 extern "C" bool MCEmscriptenHandleMousePosition(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, int32_t p_x, int32_t p_y);
 extern "C" bool MCEmscriptenHandleMouseWheel(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, int32_t p_dh, int32_t p_dv);
+/* OXT-Beyond: whether a touch screen's keyboard comes up (em-event.js) */
+extern "C" void MCEmscriptenSetTextInput(bool p_active);
 /* OXT-Beyond: something dropped on a stack from outside the page */
 extern "C" bool MCEmscriptenHandleDrop(uint32_t p_window, uint32_t p_time, uint32_t p_modifiers, int32_t p_x, int32_t p_y, MCStringRef p_text, MCStringRef p_html, uint32_t p_drop);
 
@@ -169,6 +171,10 @@ public:
 
     /* OXT-Beyond: the browser prints (em-printer.cpp) */
     virtual MCPrinter *createprinter(void);
+
+    /* OXT-Beyond: an unlocked field has the keyboard focus, or lost it: a
+     * touch screen's keyboard comes up for it (em-event.js) */
+    virtual void activateIME(Boolean activate);
 
     /* Cursors: the canvases' CSS cursors */
     virtual void resetcursors();

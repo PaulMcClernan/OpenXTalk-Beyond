@@ -129,9 +129,14 @@ Then:
    over it must say that a drop copies. It drops a file on the graphic
    "Drop Zone" as if from another application (through Chromium's DevTools
    protocol), which must get the path of its copy in /uploads, with the
-   file's text (probeReport("drop")). Then it takes a screenshot of the
-   stack and checks the colours of the card, the graphic and the image in
-   it.
+   file's text (probeReport("drop")). It taps the field with a finger,
+   which must bring up a touch screen's keyboard when the touch ends (the
+   page gets a VirtualKeyboard API of this script's, as headless Chromium
+   has none), and types into it with that keyboard: text with no keys of
+   its own and a Backspace, which must reach the field as keys, and the
+   keyboard must go away when the field loses the focus (probeUnfocus).
+   Then it takes a screenshot of the stack and checks the colours of the
+   card, the graphic and the image in it.
 
 The URLs are loaded by the engine, or by the Internet library (libURL)
 when the standalone has it: the IDE's builder adds it, with its web
@@ -210,6 +215,14 @@ PROBE_DND = 'start|enter|drop:dropped text|end:copy|dropped text'
 # what the probe reports: its copy's path and text (probeReport("drop"))
 PROBE_DROP = ('probe-drop.txt', 'dropped file')
 PROBE_DROP_REPORT = '/uploads/probe-drop.txt:dropped file'
+
+# What a touch screen's keyboard types into the field after a tap on it:
+# text with no keys of its own, as an IME commits it (with a character
+# beyond Unicode's first 65536), then "x", which a Backspace deletes; and
+# what the probe then reports (probeReport()): the field's text, the
+# keyDowns' keys and the two clicks on the button
+PROBE_SOFT_TEXT = ' d\u00e9\U0001F600'
+PROBE_SOFT_REPORT = 'abc%s|abc%sx|2' % (PROBE_SOFT_TEXT, PROBE_SOFT_TEXT)
 
 # The samples of the audio clip the probe plays, as the browser has them:
 # channels, rate, seconds and the tone's frequency (counted from where the
@@ -341,6 +354,24 @@ if (window === window.top) {
                                  html: '<!DOCTYPE html>' + document.documentElement.outerHTML});
   };
 }
+'''
+
+# A touch screen's keyboard for the page: headless Chromium has none, so
+# the page gets a VirtualKeyboard API (Chrome's) of this script's, which
+# records what the page asks of it
+KEYBOARD_HOOK = r'''
+(function() {
+  window.__oxtKeyboard = [];
+  const keyboard = {
+    show: function() { window.__oxtKeyboard.push('show'); },
+    hide: function() { window.__oxtKeyboard.push('hide'); },
+    overlaysContent: false,
+    boundingRect: new DOMRect(0, 0, 0, 0),
+    addEventListener: function() {},
+    removeEventListener: function() {},
+  };
+  Object.defineProperty(navigator, 'virtualKeyboard', {value: keyboard, configurable: true});
+})();
 '''
 
 # Colours in the screenshot, at points of the card (the probe's stack is
@@ -949,6 +980,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
         page.add_init_script(SOUND_HOOK)
         page.add_init_script(SPEECH_HOOK)
         page.add_init_script(PRINT_HOOK)
+        page.add_init_script(KEYBOARD_HOOK)
         started = time.time()
         page.goto(url)
         if not wait_for(lambda: 'version' in info, 'the engine starting (PROBE info version)', timeout):
@@ -1071,6 +1103,40 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                                         'expected %r' % (dropped, PROBE_DROP_REPORT))
                     else:
                         lines.append('a file dropped from outside the page reached the stack as its copy in /uploads')
+                # a touch screen's keyboard: it comes up when a tap on the field
+                # ends, what it types reaches the field as keys (text with no keys
+                # of its own, as Playwright's insert_text and an IME commit it, and
+                # a Backspace), and it goes away when the field loses the focus;
+                # the hidden input that takes the keys asks for no keyboard
+                # meanwhile (its inputmode)
+                stack_js = "document.liveCode.findStackWithName('%s')" % STACK_NAME
+                input_mode = 'document.activeElement ? document.activeElement.inputMode : null'
+                page.evaluate(stack_js + '.probeUnfocus()')
+                unfocused_mode = page.evaluate(input_mode)
+                page.evaluate('window.__oxtKeyboard = []')
+                page.touchscreen.tap(*at(info['field-rect']))
+                page.wait_for_timeout(300)
+                tapped = page.evaluate('window.__oxtKeyboard.slice()')
+                tapped_mode = page.evaluate(input_mode)
+                page.keyboard.insert_text(PROBE_SOFT_TEXT + 'x')
+                page.evaluate('''() => document.activeElement.dispatchEvent(new InputEvent('beforeinput',
+                    {inputType: 'deleteContentBackward', bubbles: true, cancelable: true}))''')
+                page.wait_for_timeout(300)
+                typed = page.evaluate(stack_js + '.probeReport()')
+                page.evaluate(stack_js + '.probeUnfocus()')
+                put_away = page.evaluate('window.__oxtKeyboard.slice()')
+                if (unfocused_mode, tapped, tapped_mode, typed, put_away) != ('none', ['show'], 'text', PROBE_SOFT_REPORT,
+                                                                              ['show', 'hide']):
+                    problems.append('a touch screen\'s keyboard: with no field focused the input asked for the keyboard '
+                                    '%r; a tap on the field asked the keyboard for %r and the input for %r; after the '
+                                    'keyboard typed %r and a Backspace the probe reported %r; and when the field lost '
+                                    'the focus the keyboard had been asked for %r; expected \'none\', [\'show\'], '
+                                    '\'text\', %r and [\'show\', \'hide\']'
+                                    % (unfocused_mode, tapped, tapped_mode, PROBE_SOFT_TEXT + 'x', typed, put_away,
+                                       PROBE_SOFT_REPORT))
+                else:
+                    lines.append('a tap on the field brought up a touch screen\'s keyboard, which typed into it, and '
+                                 'it went away when the field lost the focus')
                 # the files the probe wrote to /downloads: a text file, and the
                 # PDF that it printed
                 names = lambda: [name for name, _ in downloads]

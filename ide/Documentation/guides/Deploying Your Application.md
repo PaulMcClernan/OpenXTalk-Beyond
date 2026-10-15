@@ -526,7 +526,12 @@ key on a Mac), the mouse, its wheel and the standard cursors work as on
 the desktop, and the copy, cut and paste keys use the system clipboard. On a
 touch screen, a finger on a stack is the mouse: touching presses the mouse
 button, moving moves the mouse, and lifting lets the button go, so taps
-click and fingers drag.
+click and fingers drag. The touch screen's keyboard comes up while an
+unlocked field has the focus, as on a phone: when the touch that put the
+focus there ends (a browser brings it up only for a touch), or the next
+touch after a script did, and it goes away when the field loses the
+focus. What it types reaches the field as keys, with their `keyDown`
+messages, and so does text from dictation or an emoji picker.
 * **Drag and drop** between the controls and stacks of the page works as
 on the desktop: `dragStart`, `the dragData`, `dragEnter`, `dragMove`,
 `dragLeave`, `dragDrop` and `dragEnd`, `the dragImage` and the engine's
