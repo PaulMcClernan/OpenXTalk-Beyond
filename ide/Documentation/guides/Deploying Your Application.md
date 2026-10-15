@@ -523,10 +523,13 @@ after the user has clicked or typed, so at other times the page asks the
 user first.
 * **Keyboard, mouse and touch.** Keys, modifier keys (Cmd is the command
 key on a Mac), the mouse, its wheel and the standard cursors work as on
-the desktop, and the copy, cut and paste keys use the system clipboard. On a
-touch screen, a finger on a stack is the mouse: touching presses the mouse
-button, moving moves the mouse, and lifting lets the button go, so taps
-click and fingers drag. The touch screen's keyboard comes up while an
+the desktop, and the copy, cut and paste keys use the system clipboard.
+`the mouse`, `the mouseLoc` and `the mouseClick` follow the page's
+events, also in a loop that asks for them without waiting (`repeat while
+the mouse is down`), as on the desktop. On a touch screen, a finger on a
+stack is the mouse: touching presses the mouse button, moving moves the
+mouse, and lifting lets the button go, so taps click and fingers drag.
+The touch screen's keyboard comes up while an
 unlocked field has the focus, as on a phone: when the touch that put the
 focus there ends (a browser brings it up only for a touch), or the next
 touch after a script did, and it goes away when the field loses the

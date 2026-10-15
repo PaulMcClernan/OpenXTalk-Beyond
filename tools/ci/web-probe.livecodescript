@@ -34,14 +34,16 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- clicks the button (mouseUp writes "PROBE click PASS <count>"), types
 -- into the field, holds Shift down, taps the button and drags a finger
 -- across the graphic, taps the field and types into it with a touch
--- screen's keyboard, and calls the handlers that the stack's
--- cJavascriptHandlers name: probeFromJS, probeReport and probeUnfocus.
+-- screen's keyboard, holds the mouse down on the graphic "Mouse Zone"
+-- and clicks while its script waits for a click, and calls the handlers
+-- that the stack's cJavascriptHandlers name: probeFromJS, probeReport and
+-- probeUnfocus.
 --
 -- The checks run only in the web standalone: in the IDE, which opens the
 -- stack while it builds the standalone, openStack does nothing more.
 
 local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder, sPlayStopped
-local sBrowserCalls, sBrowserEvents, sDrag, sDnd, sDrop
+local sBrowserCalls, sBrowserEvents, sDrag, sDnd, sDrop, sMouseLoop
 
 private command probeLine pText
    write "PROBE " & pText & return to stdout
@@ -484,6 +486,7 @@ command probeObjects
    probeInfo "drag-source-rect", the rect of field "Drag Source"
    probeInfo "drag-target-rect", the rect of field "Drag Target"
    probeInfo "drop-zone-rect", the rect of graphic "Drop Zone"
+   probeInfo "mouse-zone-rect", the rect of graphic "Mouse Zone"
 end probeObjects
 
 -- revXML, revZip and revDB with its SQLite driver, which the web engine
@@ -679,6 +682,28 @@ on mouseMove pX, pY
    pass mouseMove
 end mouseMove
 
+-- web_check.py holds the mouse down on the graphic "Mouse Zone", whose
+-- mouseDown calls this, moves it and lets it go, then clicks: a loop that
+-- asks for the mouse until its button goes up, as old stacks drag things,
+-- then a wait for a click, which no message is sent for. sMouseLoop gets
+-- how many times the loop ran, the last mouseLoc it saw, whether the
+-- button went up before the deadline, the clickLoc, and whether the click
+-- came before the deadline. (Without the page's events coming in while
+-- the loop runs, it would never see the button go up.)
+command probeMouseLoop
+   local tDeadline, tCount, tLoc
+   put the milliseconds + 10000 into tDeadline
+   put 0 into tCount
+   repeat while the mouse is down and the milliseconds < tDeadline
+      add 1 to tCount
+      put the mouseLoc into tLoc
+   end repeat
+   put (tCount > 1) & "|" & tLoc & "|" & (the milliseconds < tDeadline) into sMouseLoop
+   put the milliseconds + 10000 into tDeadline
+   wait until the mouseClick or the milliseconds > tDeadline
+   put "|" & the clickLoc & "|" & (the milliseconds <= tDeadline) after sMouseLoop
+end probeMouseLoop
+
 -- web_check.py drags the field "Drag Source" onto the field "Drag
 -- Target", whose scripts call this with dragStart, dragEnter, dragDrop
 -- and dragEnd: sDnd gets each
@@ -724,8 +749,9 @@ end probeUnfocus
 
 -- Called from the page: what the user did, or with "keys", the keys that
 -- are down, with "drag", the drag on the graphic, with "dnd", the drag
--- and drop between the fields and the text of the field it dropped on, or
--- with "drop", the file dropped from outside the page
+-- and drop between the fields and the text of the field it dropped on,
+-- with "drop", the file dropped from outside the page, or with "mouse",
+-- the loop while the mouse was down and the click after it
 function probeReport pWhat
    if pWhat is "keys" then
       return the shiftKey & "|" & the keysDown
@@ -738,6 +764,9 @@ function probeReport pWhat
    end if
    if pWhat is "drop" then
       return sDrop
+   end if
+   if pWhat is "mouse" then
+      return sMouseLoop
    end if
    return the text of field "Probe Field" & "|" & sKeys & "|" & sClicks
 end probeReport

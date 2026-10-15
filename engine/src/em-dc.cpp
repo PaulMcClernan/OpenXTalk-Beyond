@@ -987,14 +987,55 @@ MCScreenDC::update_mouse_position(const MCPoint &p_position, MCStack *p_stack)
 	return t_changed;
 }
 
+/* OXT-Beyond: the page's events reach the engine only while it waits, so
+ * a script that asks about the mouse again and again without waiting (a
+ * "repeat while the mouse is down" loop) waits a little each time, as the
+ * Linux and Windows engines do when it asks again within 9 ms (lnxdce.cpp,
+ * w32dce.cpp): the button going up and where the mouse is come in, and the
+ * stacks are drawn, but no message is sent. Before, such a loop never saw
+ * the button go up, and the page stopped answering. A handler that the
+ * page calls cannot wait, and gets what the engine knows. */
+static bool
+MCEmscriptenWaitForMouse(real64_t &x_last_time)
+{
+	real64_t t_interval = 9.0 / 1000.0;
+	real64_t t_time = MCS_time();
+	bool t_quit = false;
+	if (t_time - x_last_time < t_interval && MCEmscriptenAsyncCanYield())
+		t_quit = MCscreen->wait(t_interval, False, False);
+	x_last_time = t_time;
+	return t_quit;
+}
+
 Boolean
 MCScreenDC::getmouse(uint2 p_button, Boolean& r_abort)
 {
+	static real64_t s_last_time = 0.0;
+	r_abort = MCEmscriptenWaitForMouse(s_last_time);
+	if (r_abort)
+		return False;
+
 	// return recorded mouse button state
 	if (p_button < 32)
 		return (m_mouse_button_state & (1 << p_button)) != 0;
-		
+
 	return false;
+}
+
+/* OXT-Beyond: whether the mouse was clicked, and the click not yet sent
+ * to the stacks: the click is taken from the event queue, as the Windows
+ * engine takes it when it draws its windows itself (w32dce.cpp). Before,
+ * the mouseClick was always false on the web, so "wait until the
+ * mouseClick" never ended. */
+Boolean
+MCScreenDC::getmouseclick(uint2 p_button, Boolean& r_abort)
+{
+	static real64_t s_last_time = 0.0;
+	r_abort = MCEmscriptenWaitForMouse(s_last_time);
+	if (r_abort)
+		return False;
+
+	return MCEventQueueGetMouseClick(p_button);
 }
 
 void

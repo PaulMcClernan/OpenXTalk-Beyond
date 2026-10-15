@@ -135,6 +135,10 @@ Then:
    has none), and types into it with that keyboard: text with no keys of
    its own and a Backspace, which must reach the field as keys, and the
    keyboard must go away when the field loses the focus (probeUnfocus).
+   It holds the mouse down on the graphic "Mouse Zone", whose mouseDown
+   loops while the mouse is down and then waits until the mouseClick: the
+   loop must see the mouse move and its button go up, and the wait must
+   end on a click, with its clickLoc (probeReport("mouse")).
    Then it takes a screenshot of the stack and checks the colours of the
    card, the graphic and the image in it.
 
@@ -1137,6 +1141,40 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                 else:
                     lines.append('a tap on the field brought up a touch screen\'s keyboard, which typed into it, and '
                                  'it went away when the field lost the focus')
+                # a loop in mouseDown that asks for the mouse until its button
+                # goes up, then a wait for a click (probeMouseLoop): the page's
+                # events must reach the engine while the loop runs, or it never
+                # sees the button go up or the click (it gives up on each after
+                # 10 seconds). The click is the script's: no message is sent
+                # for it, nor for the button going up before it, as on the
+                # desktop; a click on the card after it puts the button up for
+                # the engine.
+                zone = parse_rect(info['mouse-zone-rect'])
+                start = ((zone[0] + zone[2]) // 2, (zone[1] + zone[3]) // 2)
+                end = (start[0] + 20, start[1] + 10)
+                click = (zone[2] + 10, zone[1] + 10)
+                point = lambda p: (canvas['x'] + p[0], canvas['y'] + p[1])
+                started = time.time()
+                page.mouse.move(*point(start))
+                page.mouse.down()
+                page.wait_for_timeout(200)
+                page.mouse.move(*point(end), steps=4)
+                page.wait_for_timeout(200)
+                page.mouse.up()
+                page.wait_for_timeout(200)
+                page.mouse.click(*point(click))
+                report_mouse = lambda: page.evaluate(stack_js + '.probeReport("mouse")')
+                if wait_for(lambda: report_mouse().count('|') == 4, 'the probe\'s mouse loop and click', 30):
+                    looped = report_mouse()
+                    wanted = 'true|%d,%d|true|%d,%d|true' % (end + click)
+                    if looped != wanted:
+                        problems.append('a loop while the mouse was down, then a wait for a click, reported %r (the '
+                                        'loop ran more than once, the last mouseLoc it saw, the button went up in '
+                                        'time, the clickLoc, the click came in time), expected %r' % (looped, wanted))
+                    else:
+                        lines.append('a loop while the mouse was down saw it move and its button go up, and a wait '
+                                     'for a click ended on the click (%.1f s)' % (time.time() - started))
+                page.mouse.click(*point(click))
                 # the files the probe wrote to /downloads: a text file, and the
                 # PDF that it printed
                 names = lambda: [name for name, _ in downloads]

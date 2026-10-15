@@ -166,6 +166,14 @@ private command makeProbeStack
          "on dragEnter" & return & "   if the dragData[" & quote & "files" & quote & "] is not empty then" & return & \
          "      set the dragAction to" && quote & "copy" & quote & return & "   end if" & return & "end dragEnter" & return & \
          "on dragDrop" & return & "   probeDrop the dragData[" & quote & "files" & quote & "]" & return & "end dragDrop"
+
+   -- a graphic whose mouseDown loops while the mouse is down, then waits
+   -- for a click (probeMouseLoop)
+   create graphic "Mouse Zone"
+   set the style of graphic "Mouse Zone" to "rectangle"
+   set the opaque of graphic "Mouse Zone" to true
+   set the rect of graphic "Mouse Zone" to 340,150,460,230
+   set the script of graphic "Mouse Zone" to "on mouseDown" & return & "   probeMouseLoop" & return & "end mouseDown"
 end makeProbeStack
 
 -- The test runner's stack (see the header)

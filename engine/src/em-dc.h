@@ -197,6 +197,8 @@ public:
 	bool update_mouse_position(const MCPoint &p_position, MCStack *p_stack);
 
 	virtual Boolean getmouse(uint2 button, Boolean& r_abort);
+    /* OXT-Beyond: the mouseClick, from the event queue */
+    virtual Boolean getmouseclick(uint2 button, Boolean& r_abort);
     virtual void platform_querymouse(int16_t& r_x, int16_t& r_y);
 
     /* OXT-Beyond: drag and drop between the stacks in the page. The drag
