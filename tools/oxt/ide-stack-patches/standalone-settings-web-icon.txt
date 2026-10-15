@@ -1,0 +1,11 @@
+# Standalone Settings, the Web (HTML5) card's button: its icon, image
+# "web.png", was OpenXTalk Lite's sign of Webtalk, an interpreter of its
+# own, which the card pointed to instead of the HTML5 settings. It becomes
+# a blue globe: the Start Center's ide/Resources/Start Center/samples/
+# sample_3/images/icons/globe.png, its alpha with the colour 43,124,211,
+# 25 pixels square in the middle of the image's 27 (made with Pillow,
+# resize LANCZOS).
+file: Toolset/palettes/standalone settings/revstandalonesettings.8.rev
+object: image id 40869 of card "General"
+image: tools/oxt/ide-stack-patches/images/standalone-settings-web.png
+from-sha1: 06a68f1b463c5e0b2b40035069a1cbf1b58c9831
