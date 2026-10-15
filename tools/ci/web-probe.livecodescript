@@ -38,7 +38,7 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- The checks run only in the web standalone: in the IDE, which opens the
 -- stack while it builds the standalone, openStack does nothing more.
 
-local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder
+local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder, sPlayStopped
 
 private command probeLine pText
    write "PROBE " & pText & return to stdout
@@ -75,7 +75,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeObjects"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probeObjects"
       try
          dispatch tCheck to me
       catch tError
@@ -298,6 +298,51 @@ command probeSystem
    set the lockCursor to false
    probeCheck "cursor", tCursor is "pointer", tCursor
 end probeSystem
+
+-- An audio clip, from a WAV file: the browser plays its samples (web_check.py
+-- checks what it was given), and when they have played, the sound is done
+-- and playStopped is sent, as on the desktop. A browser that waits for the
+-- user's first click before it makes a sound holds the clip back, and then
+-- it has played when it would have ended.
+command probeSound
+   local tFile, tData, tStart, tDeadline, tPlaying, tAfter, tElapsed
+   put specialFolderPath("temporary") & "/probe-sound.wav" into tFile
+   -- 0.3 s of a 400 Hz square wave: 8000 samples a second of 8 bits
+   repeat 120
+      put numToByte(192) & numToByte(192) & numToByte(192) & numToByte(192) & numToByte(192) \
+            & numToByte(192) & numToByte(192) & numToByte(192) & numToByte(192) & numToByte(192) \
+            & numToByte(64) & numToByte(64) & numToByte(64) & numToByte(64) & numToByte(64) \
+            & numToByte(64) & numToByte(64) & numToByte(64) & numToByte(64) & numToByte(64) after tData
+   end repeat
+   put "RIFF" & probeLittleEndian(36 + 2400, 4) & "WAVE" & "fmt " & probeLittleEndian(16, 4) \
+         & probeLittleEndian(1, 2) & probeLittleEndian(1, 2) & probeLittleEndian(8000, 4) \
+         & probeLittleEndian(8000, 4) & probeLittleEndian(1, 2) & probeLittleEndian(8, 2) \
+         & "data" & probeLittleEndian(2400, 4) & tData into url ("binfile:" & tFile)
+   put empty into sPlayStopped
+   put the milliseconds into tStart
+   play tFile
+   put the sound into tPlaying
+   put tStart + 5000 into tDeadline
+   wait until sPlayStopped is not empty or the milliseconds > tDeadline with messages
+   put the milliseconds - tStart into tElapsed
+   put the sound into tAfter
+   probeCheck "sound", tPlaying is "audioclip" && quote & "probe-sound.wav" & quote and tAfter is "done" \
+         and sPlayStopped is "probe-sound.wav" and tElapsed >= 250, \
+         "playing=" & tPlaying && "after=" & tAfter && "stopped=" & sPlayStopped && tElapsed & " ms"
+end probeSound
+
+private function probeLittleEndian pValue, pBytes
+   local tBytes
+   repeat pBytes
+      put numToByte(pValue mod 256) after tBytes
+      put pValue div 256 into pValue
+   end repeat
+   return tBytes
+end probeLittleEndian
+
+on playStopped pName
+   put pName into sPlayStopped
+end playStopped
 
 command probeObjects
    probeCheck "objects", there is a button "Probe Button" and there is a field "Probe Field" \

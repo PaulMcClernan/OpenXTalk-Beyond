@@ -78,14 +78,15 @@ Then:
    (answer, answer with two buttons, ask), whose default buttons this
    script clicks, typing "Ada" into the ask dialog's field, the standard
    folders, a file written to /downloads (which must reach the browser as
-   a download), the address, randomBytes, the modifier keys and the
-   cursor. When the probe writes "PROBE ready", this script clicks the
-   button, types "abc" into the field, and calls the stack's handlers
-   from the page (document.liveCode.findStackWithName): probeFromJS(21)
-   must return 42, probeReport() "abc|abc|1", and probeReport("keys"),
-   with Shift held down, "down|65505". Then it takes a screenshot of the
-   stack and checks the colours of the card, the graphic and the image in
-   it.
+   a download), the address, randomBytes, the modifier keys, the cursor
+   and an audio clip that it plays (the samples the browser was given
+   must be the clip's). When the probe writes "PROBE ready", this script
+   clicks the button, types "abc" into the field, and calls the stack's
+   handlers from the page (document.liveCode.findStackWithName):
+   probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
+   probeReport("keys"), with Shift held down, "down|65505". Then it takes
+   a screenshot of the stack and checks the colours of the card, the
+   graphic and the image in it.
 
 The URLs are loaded by the engine, or by the Internet library (libURL)
 when the standalone has it: the IDE's builder adds it, with its web
@@ -137,11 +138,42 @@ PROBE_CHECKS = (
     'platform', 'wait-openstack', 'wait-handler', 'wait-nested', 'wait-until', 'send-in-time',
     'javascript', 'file-roundtrip', 'standalone-folder', 'url-get', 'url-post', 'url-put',
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
-    'address', 'random-bytes', 'modifiers', 'cursor', 'objects',
+    'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'objects',
 )
 
 # The file the probe writes to /downloads, which the browser must download
 PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
+
+# The samples of the audio clip the probe plays, as the browser has them:
+# channels, rate, seconds and the tone's frequency (counted from where the
+# samples change sign, within 2%)
+PROBE_SOUND = {'channels': 1, 'rate': 8000, 'duration': 0.3, 'freq': 400}
+
+# Records the samples the page gives the browser to play, before the page's
+# own scripts run
+SOUND_HOOK = r'''
+window.__oxtSounds = [];
+(function() {
+  if (!window.AudioBufferSourceNode) {
+    return;
+  }
+  const start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function() {
+    const b = this.buffer;
+    const d = b.getChannelData(0);
+    let crossings = 0;
+    for (let i = 1; i < d.length; i++) {
+      if ((d[i - 1] < 0) != (d[i] < 0)) {
+        crossings++;
+      }
+    }
+    window.__oxtSounds.push({channels: b.numberOfChannels, rate: b.sampleRate,
+                             duration: Math.round(b.duration * 1000) / 1000,
+                             freq: Math.round(crossings / 2 / b.duration)});
+    return start.apply(this, arguments);
+  };
+})();
+'''
 
 # Colours in the screenshot, at points of the card (the probe's stack is
 # 480x360; see web-deploy.livecodescript)
@@ -548,6 +580,7 @@ def run_browser(url, version, work, timeout, url_path=None):
         page.on('dialog', on_dialog)
         page.on('download', on_download)
         page.on('pageerror', on_page_error)
+        page.add_init_script(SOUND_HOOK)
         started = time.time()
         page.goto(url)
         if not wait_for(lambda: 'version' in info, 'the engine starting (PROBE info version)', timeout):
@@ -604,6 +637,14 @@ def run_browser(url, version, work, timeout, url_path=None):
                         problems.append('the browser downloaded %r, expected %r' % (downloads, [PROBE_DOWNLOAD]))
                     else:
                         lines.append('the file written to /downloads reached the browser as a download')
+                # the samples of the audio clip that the probe played
+                sounds = page.evaluate('window.__oxtSounds')
+                if (len(sounds) != 1
+                        or any(sounds[0].get(k) != v for k, v in PROBE_SOUND.items() if k != 'freq')
+                        or abs(sounds[0].get('freq', 0) - PROBE_SOUND['freq']) > PROBE_SOUND['freq'] * 0.02):
+                    problems.append('the browser was given the sounds %r, expected %r' % (sounds, [PROBE_SOUND]))
+                else:
+                    lines.append('the audio clip\'s samples reached the browser')
                 # the colours drawn
                 shot = os.path.join(work, STACK_NAME + '.png')
                 page.screenshot(path=shot, clip=dict(x=canvas['x'], y=canvas['y'],

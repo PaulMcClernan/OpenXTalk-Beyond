@@ -50,6 +50,15 @@ WAVEHDR wh;         //wave header structure
 static SndChannelPtr soundChannel; //used for playing a sound on MAC
 static Handle sound;   //is the handle to the sound resource to be played
 static Boolean playing;  //flag inicates if a sound is playing
+#elif defined(__EMSCRIPTEN__)
+/* The browser plays the samples (em-sound.js): the sound playing, and the
+ * playLoudness, which the browser does not have */
+extern "C" uint32_t MCEmscriptenSoundPlay(const void *p_samples, uint32_t p_size, uint32_t p_format, uint32_t p_width, uint32_t p_channels, uint32_t p_rate, uint32_t p_loudness, bool p_looping);
+extern "C" bool MCEmscriptenSoundIsPlaying(uint32_t p_sound);
+extern "C" void MCEmscriptenSoundStop(uint32_t p_sound);
+extern "C" void MCEmscriptenSoundSetVolume(uint32_t p_loudness);
+static uint32_t s_web_sound = 0;
+static uint2 s_web_play_loudness = 100;
 #endif
 
 
@@ -234,6 +243,8 @@ void MCAudioClip::init()
 	supported = True;
 #elif defined(_LINUX)
 	supported = true ;
+#elif defined(__EMSCRIPTEN__)
+	supported = True;
 #endif
 	if (supported)
 	{
@@ -676,7 +687,19 @@ Boolean MCAudioClip::open_audio()
 		return x11audio -> init(NULL, nchannels, swidth);
 	return false ;
 }
-#elif defined _SERVER || defined(_MOBILE) || defined(__EMSCRIPTEN__)
+#elif defined(__EMSCRIPTEN__)
+/* Plays the samples, unless they are playing. Without the browser's
+ * Web Audio, play sends playStopped when they would have played. */
+Boolean MCAudioClip::open_audio()
+{
+	if (s_web_sound != 0)
+		return True;
+
+	s_web_sound = MCEmscriptenSoundPlay(samples, size, format, swidth, nchannels,
+	                                    rate, loudness, looping == True);
+	return s_web_sound != 0;
+}
+#elif defined _SERVER || defined(_MOBILE)
 Boolean MCAudioClip::open_audio()
 {
 	return False;
@@ -798,7 +821,15 @@ Boolean MCAudioClip::play()
 	}
 
 	return True;
-#elif defined(_SERVER) || defined(_MOBILE) || defined(__EMSCRIPTEN__)
+#elif defined(__EMSCRIPTEN__)
+	/* A looping sound plays until it is stopped */
+	if (!MCEmscriptenSoundIsPlaying(s_web_sound))
+	{
+		stop(False);
+		return False;
+	}
+	return True;
+#elif defined(_SERVER) || defined(_MOBILE)
 	return True;
 #else
 #error "MCAudioClip::play() not supported for this platform"
@@ -841,6 +872,12 @@ void MCAudioClip::stop(Boolean abort)
 		soundChannel = NULL;
 	}
 #elif defined(_LINUX)
+#elif defined(__EMSCRIPTEN__)
+	if (s_web_sound != 0)
+	{
+		MCEmscriptenSoundStop(s_web_sound);
+		s_web_sound = 0;
+	}
 #endif
 }
 
@@ -975,6 +1012,8 @@ uint2 MCS_getplayloudness()
         t_loudness = t_x11audio -> getloudness() ;
         delete t_x11audio;
     }
+#elif defined(__EMSCRIPTEN__)
+    t_loudness = s_web_play_loudness;
 #endif
     return t_loudness;
 }
@@ -1018,5 +1057,8 @@ void MCS_setplayloudness(uint2 p_loudness)
         t_x11audio -> setloudness(p_loudness);
         delete t_x11audio;
     }
+#elif defined(__EMSCRIPTEN__)
+    s_web_play_loudness = p_loudness;
+    MCEmscriptenSoundSetVolume(p_loudness);
 #endif
 }

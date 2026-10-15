@@ -314,46 +314,6 @@ mergeInto(LibraryManager.library, {
 			}
 		},
 
-		/*** Beep ***/
-
-		_audio: null,
-
-		// A tone of <pitch> Hz for <duration> ms, at <loudness> percent.
-		// Browsers let a page make a sound once the user has clicked or
-		// typed in it.
-		beep: function(pitch, duration, loudness) {
-			var AudioContext = window.AudioContext || window.webkitAudioContext;
-			if (!AudioContext || duration <= 0 || loudness <= 0 || pitch <= 0) {
-				return;
-			}
-			try {
-				if (!LiveCodeDC._audio) {
-					LiveCodeDC._audio = new AudioContext();
-				}
-				var audio = LiveCodeDC._audio;
-				if (audio.state == 'suspended') {
-					audio.resume();
-				}
-				var start = audio.currentTime;
-				var length = duration / 1000;
-				var fade = Math.min(0.005, length / 4);
-				var level = 0.25 * Math.min(loudness, 100) / 100;
-				var oscillator = audio.createOscillator();
-				var gain = audio.createGain();
-				oscillator.type = 'sine';
-				oscillator.frequency.value = Math.min(pitch, 20000);
-				gain.gain.setValueAtTime(0, start);
-				gain.gain.linearRampToValueAtTime(level, start + fade);
-				gain.gain.setValueAtTime(level, start + length - fade);
-				gain.gain.linearRampToValueAtTime(0, start + length);
-				oscillator.connect(gain);
-				gain.connect(audio.destination);
-				oscillator.start(start);
-				oscillator.stop(start + length);
-			} catch (e) {
-			}
-		},
-		
 		/*** Native Layer API ***/
 		nativeElementSetRect: function(pElementID, pLeft, pTop, pRight, pBottom) {
 			var tElement = LiveCodeUtil.fetchObject(pElementID);
@@ -572,8 +532,4 @@ mergeInto(LibraryManager.library, {
 		LiveCodeDC.setWindowCursor(p_window_id, p_cursor);
 	},
 
-	MCEmscriptenBeep__deps: ['$LiveCodeDC'],
-	MCEmscriptenBeep: function(p_pitch, p_duration, p_loudness) {
-		LiveCodeDC.beep(p_pitch, p_duration, p_loudness);
-	},
 });
