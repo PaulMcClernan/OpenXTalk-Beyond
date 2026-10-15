@@ -15,7 +15,13 @@ for more details.
 You should have received a copy of the GNU General Public License
 along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
-constant kLinuxBrowserList = "Firefox=firefox/firefox,Firefox Beta=firefox_beta/firefox,Firefox Aurora=firefox_aurora/firefox,Firefox Nightly=firefox_nightly/firefox,Chrome Stable=google-chrome-stable/google-chrome-stable,Chrome=google-chrome/google-chrome"
+-- OXT-Beyond: Chromium and Microsoft Edge too. Each entry is
+-- <name>=<programs>/<path>, and the browser is the first of the programs
+-- (names separated by spaces: Chromium is chromium on most systems and
+-- chromium-browser on Fedora) that is on the PATH, or else
+-- ~/<first program>/<path>, where a browser's download is unpacked
+-- (~/firefox/firefox), as it was when an entry named one program.
+constant kLinuxBrowserList = "Firefox=firefox/firefox,Firefox Beta=firefox_beta/firefox,Firefox Aurora=firefox_aurora/firefox,Firefox Nightly=firefox_nightly/firefox,Chrome Stable=google-chrome-stable/google-chrome-stable,Chrome=google-chrome/google-chrome,Chromium=chromium chromium-browser/chromium,Microsoft Edge=microsoft-edge microsoft-edge-stable/microsoft-edge"
 constant kPrivateModeSuffix = "[Private Mode]"
 
 local sBrowsers
@@ -170,14 +176,21 @@ private function __deployGetBrowserList
          put kLinuxBrowserList into tBrowserArray
          split tBrowserArray by comma and "="
          
+         -- OXT-Beyond: the programs are looked for in the folders of the
+         -- PATH (__deployFindProgram), not with shell("which" && ...),
+         -- whose output was taken as the browser's path whatever it was:
+         -- on systems whose which prints a message for a program it does
+         -- not find, every browser of the list was offered, missing or not
+         local tBrowserPath
          set the itemDel to slash
          repeat for each key tBrowser in tBrowserArray
-            get shell("which" && item 1 of tBrowserArray[tBrowser])
-            if it is not empty then
-               put it into tBrowserList[tBrowser]
+            put __deployFindProgram(item 1 of tBrowserArray[tBrowser]) into tBrowserPath
+            if tBrowserPath is not empty then
+               put tBrowserPath into tBrowserList[tBrowser]
             else
                local tUserBrowserPath
-               put $HOME & slash & tBrowserArray[tBrowser] into tUserBrowserPath
+               put $HOME & slash & word 1 of item 1 of tBrowserArray[tBrowser] & slash & \
+                     item 2 to -1 of tBrowserArray[tBrowser] into tUserBrowserPath
                if there is a file tUserBrowserPath then
                   put tUserBrowserPath into tBrowserList[tBrowser]
                end if
@@ -195,6 +208,22 @@ private function __deployGetBrowserList
    
    return tBrowserList
 end __deployGetBrowserList
+
+-- OXT-Beyond: the path of the first of pPrograms (names separated by
+-- spaces) that is in a folder of the PATH, or empty if none is
+private function __deployFindProgram pPrograms
+   local tFolders
+   put $PATH into tFolders
+   set the itemDel to ":"
+   repeat for each word tProgram in pPrograms
+      repeat for each item tFolder in tFolders
+         if tFolder begins with slash and there is a file (tFolder & slash & tProgram) then
+            return tFolder & slash & tProgram
+         end if
+      end repeat
+   end repeat
+   return empty
+end __deployFindProgram
 
 -- Add any exta command line args that we might want to pass to the browser.
 -- e.g. javascript consoles, debug modes etc
@@ -215,6 +244,8 @@ end __deployBrowserSupportsPrivateMode
 private function __deployGetBrowserPrivateModeArgs pBrowser
    switch
       case pBrowser contains "chrome"
+      -- OXT-Beyond: Chromium, whose name and program do not contain "chrome"
+      case pBrowser contains "chromium"
          return "--incognito"
       case pBrowser contains "iexplore"
          return "-private"
@@ -268,7 +299,14 @@ private command __deployLaunchURLInBrowser pURL, pBrowser, pPrivateMode
             return it
             
          case "Linux"
-            return shell(__wrapInQuotes(pBrowser) &&  tArgs && __wrapInQuotes(pURL))
+            -- OXT-Beyond: the browser starts in the background, with its
+            -- output thrown away. shell() returns only when the command has
+            -- ended and closed its output, so a browser that was not running
+            -- yet held the IDE until it quit, and with it the IDE's web
+            -- server, so the page never loaded; and what a browser prints
+            -- (GTK's warnings, for one) came back as an error,
+            -- "Could not open URL".
+            return shell(__wrapInQuotes(pBrowser) &&  tArgs && __wrapInQuotes(pURL) && "> /dev/null 2>&1 &")
             
          default
             launch URL pURL
