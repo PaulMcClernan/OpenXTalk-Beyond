@@ -35,6 +35,36 @@ extern "C" bool MCEmscriptenUrlLoad(const unichar_t *p_url,
                                     MCSystemUrlCallback p_callback,
                                     void *p_context);
 
+typedef bool (*MCEmscriptenUrlSendFunction)(const unichar_t *p_url,
+                                            uint32_t p_url_length,
+                                            const unichar_t *p_headers,
+                                            uint32_t p_headers_length,
+                                            const byte_t *p_data,
+                                            uint32_t p_data_length,
+                                            uint32_t p_timeout,
+                                            MCSystemUrlCallback p_callback,
+                                            void *p_context);
+
+extern "C" bool MCEmscriptenUrlPost(const unichar_t *p_url,
+                                    uint32_t p_url_length,
+                                    const unichar_t *p_headers,
+                                    uint32_t p_headers_length,
+                                    const byte_t *p_data,
+                                    uint32_t p_data_length,
+                                    uint32_t p_timeout,
+                                    MCSystemUrlCallback p_callback,
+                                    void *p_context);
+
+extern "C" bool MCEmscriptenUrlPut(const unichar_t *p_url,
+                                   uint32_t p_url_length,
+                                   const unichar_t *p_headers,
+                                   uint32_t p_headers_length,
+                                   const byte_t *p_data,
+                                   uint32_t p_data_length,
+                                   uint32_t p_timeout,
+                                   MCSystemUrlCallback p_callback,
+                                   void *p_context);
+
 /* ----------------------------------------------------------------
  * Wrappers (with C++ linkage)
  * ---------------------------------------------------------------- */
@@ -62,6 +92,55 @@ MCSystemLoadUrl(MCStringRef p_url,
 	                           p_callback, p_context);
 }
 
+static bool
+MCEmscriptenUrlSend(MCEmscriptenUrlSendFunction p_send,
+                    MCStringRef p_url,
+                    MCDataRef p_data,
+                    MCSystemUrlCallback p_callback,
+                    void *p_context)
+{
+	MCAutoStringRefAsUTF16String t_url_u16;
+	if (!t_url_u16.Lock(p_url))
+	{
+		return false;
+	}
+
+	MCAutoStringRefAsUTF16String t_headers_u16;
+	if (!t_headers_u16.Lock(MChttpheaders))
+	{
+		return false;
+	}
+
+	/* The data is copied before this returns */
+	return p_send(t_url_u16.Ptr(), t_url_u16.Size(),
+	              t_headers_u16.Ptr(), t_headers_u16.Size(),
+	              MCDataGetBytePtr(p_data), MCDataGetLength(p_data),
+	              MCsockettimeout,
+	              p_callback, p_context);
+}
+
+bool
+MCSystemPostUrl(MCStringRef p_url,
+                MCDataRef p_data,
+                uint32_t p_length,
+                MCSystemUrlCallback p_callback,
+                void *p_context)
+{
+	return MCEmscriptenUrlSend(MCEmscriptenUrlPost, p_url, p_data,
+	                           p_callback, p_context);
+}
+
+bool
+MCSystemPutUrl(MCStringRef p_url,
+               MCDataRef p_data,
+               uint32_t p_length,
+               MCSystemUrlCallback p_callback,
+               void *p_context)
+{
+	return MCEmscriptenUrlSend(MCEmscriptenUrlPut, p_url, p_data,
+	                           p_callback, p_context);
+}
+
 /* ---------------------------------------------------------------- */
 
 extern "C" MC_DLLEXPORT_DEF void
@@ -82,6 +161,22 @@ MCEmscriptenUrlCallbackProgress(uint32_t p_loaded_length,
 	 * the length transferred so far. */
 	p_callback(p_context, kMCSystemUrlStatusNegotiated, &p_total_length);
 	p_callback(p_context, kMCSystemUrlStatusLoadingProgress, &p_loaded_length);
+}
+
+extern "C" MC_DLLEXPORT_DEF void
+MCEmscriptenUrlCallbackUploading(uint32_t p_sent_length,
+                                 MCSystemUrlCallback p_callback,
+                                 void *p_context)
+{
+	p_callback(p_context, kMCSystemUrlStatusUploading, &p_sent_length);
+}
+
+extern "C" MC_DLLEXPORT_DEF void
+MCEmscriptenUrlCallbackUploaded(uint32_t p_sent_length,
+                                MCSystemUrlCallback p_callback,
+                                void *p_context)
+{
+	p_callback(p_context, kMCSystemUrlStatusUploaded, &p_sent_length);
 }
 
 extern "C" MC_DLLEXPORT_DEF void

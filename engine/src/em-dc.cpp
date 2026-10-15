@@ -36,6 +36,14 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include <emscripten.h>
 
 /* ================================================================
+ * Globals
+ * ================================================================ */
+
+/* Set by the event queue when it sees a third click (eventqueue.cpp),
+ * as on mobile. */
+Boolean tripleclick = False;
+
+/* ================================================================
  * Helper Functions
  * ================================================================ */
 
@@ -271,19 +279,19 @@ bool MCScreenDC::platform_getdisplays(bool p_effective, MCDisplay *&r_displays, 
  * Event loop
  * ================================================================ */
 
-// Important: This function is on the emterpreter whitelist. If its
-// signature function changes, the mangled name must be updated in
-// em-whitelist.json
-
-/* Returns true if quit is requested, or from any inner main loop. */
+/* Returns true if quit is requested, or if the engine cannot yield. */
 Boolean
 MCScreenDC::wait(real64_t p_duration,
                  Boolean p_allow_dispatch,
                  Boolean p_accept_any_event)
 {
-	/* Don't permit inner main loops.  They cause amusing "-12" assertion
-	 * failures from Emterpreter. */
-	if (0 < int(MCwaitdepth))
+	/* Waits nest as on the desktop: the engine yields to the browser
+	 * with Asyncify, which can save the stack from inside any handler.
+	 * It cannot while JavaScript has called into the engine (a handler
+	 * that the page calls, or a resume hook); a wait there returns at
+	 * once, as aborted, as every inner wait did in LiveCode's HTML5
+	 * engine (the Emterpreter could only yield from the main loop). */
+	if (!MCEmscriptenAsyncCanYield())
 	{
 		return true;
 	}

@@ -423,6 +423,13 @@ struct MCFontStruct
 #include <math.h>
 #include <signal.h>
 #include <assert.h>
+#if defined(__EMSCRIPTEN__) && defined(__cplusplus)
+// The web build's C++ library (libc++) includes <locale> from <vector>, <map>
+// and <functional>, and <locale> declares isspace() and the other character
+// classes as templates, which the macros below would break. Including it
+// first makes those later includes harmless.
+#include <locale>
+#endif
 #ifndef _CTYPE_H
 #define _CTYPE_H
 #endif

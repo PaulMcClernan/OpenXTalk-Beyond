@@ -22,11 +22,22 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "font.h"
 #include "platform.h"
 #include "mctheme.h"
+#include "context.h"
 
 MCTheme *
 MCThemeCreateNative()
 {
 	return nil;
+}
+
+/* There is no native theme, so the engine draws its controls itself;
+ * as on the server, drawing a native part fails. */
+bool
+MCThemeDraw(MCGContextRef p_context,
+            MCThemeDrawType p_type,
+            MCThemeDrawInfo *p_info)
+{
+	return false;
 }
 
 

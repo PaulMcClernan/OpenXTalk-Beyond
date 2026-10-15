@@ -1881,9 +1881,10 @@
                             'SK_FONT_FILE_PREFIX="/boot/standalone/"',
                         ],
 
+                        # SkDebug_stdio.cpp stays: it is the only SkDebugf()
+                        # for the web (Android has its own).
                         'sources!':
 						[
-                            'src/ports/SkDebug_stdio.cpp',
 							'src/ports/SkFontHost_none.cpp',
                             'src/ports/SkImageEncoder_none.cpp',
                             'src/ports/SkImageGenerator_none.cpp',

@@ -215,7 +215,7 @@ mergeInto(LibraryManager.library, {
 					(e.type == 'blur' || e.type == 'focusout') &&
 					LiveCodeEvents._getStackForCanvas(e.relatedTarget) == null)
 				{
-					_setInputFocus(null);
+					LiveCodeEvents._setInputFocus(null);
 					return;
 				}
 
@@ -615,6 +615,7 @@ mergeInto(LibraryManager.library, {
 				if (!stack)
 					return;
 
+				var char_code, key_code;
 				switch (e.type) {
 				case 'keyup':
 					char_code = LiveCodeEvents._encodeKeyboardCharCode(e);

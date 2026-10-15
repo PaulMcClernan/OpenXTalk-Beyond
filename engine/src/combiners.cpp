@@ -34,7 +34,12 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 static uint32_t g_current_background_colour = 0;
 
-enum BitwiseOperation
+// The operation enums have a fixed underlying type so that every int is one
+// of their values: the templates below cast each operation number to all four
+// of them, and current clang (the web build's) rejects a cast of an
+// out-of-range value in a template argument outright, whatever the pragma
+// above says. The values, and the code generated, are unchanged.
+enum BitwiseOperation : int
 {
 	// Bitwise
 	OPERATION_CLEAR,
@@ -57,7 +62,7 @@ enum BitwiseOperation
     LAST_BITWISE_OPERATION = OPERATION_SET,
 };
 
-enum ArithmeticOperation
+enum ArithmeticOperation : int
 {
 	// Arithmetic
 	OPERATION_BLEND = LAST_BITWISE_OPERATION + 1,
@@ -72,7 +77,7 @@ enum ArithmeticOperation
     LAST_ARITHMETIC_OPERATION = OPERATION_AD_MIN,
 };
 
-enum BasicImagingOperation
+enum BasicImagingOperation : int
 {
 	// Basic Imaging Blends
 	OPERATION_BLEND_CLEAR = LAST_ARITHMETIC_OPERATION + 1,
@@ -94,7 +99,7 @@ enum BasicImagingOperation
     LAST_BASIC_IMAGING_OPERATION = OPERATION_BLEND_SCREEN,
 };
 
-enum AdvancedImagingOperation
+enum AdvancedImagingOperation : int
 {
 	// Advanced Imaging Blends
 	OPERATION_BLEND_OVERLAY = LAST_BASIC_IMAGING_OPERATION + 1,

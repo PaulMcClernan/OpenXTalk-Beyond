@@ -1399,9 +1399,6 @@ void send_relaunch(void)
 #endif
 }
 
-// Important: This function is on the emterpreter whitelist. If its
-// signature function changes, the mangled name must be updated in
-// em-whitelist.json
 void send_startup_message(bool p_do_relaunch = true)
 {
 	if (p_do_relaunch)

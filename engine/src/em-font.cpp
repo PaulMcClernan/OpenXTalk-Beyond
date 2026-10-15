@@ -31,6 +31,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "skiatypeface.h"
 
 #include "em-font.h"
+#include "textlayout.h"
 
 #define MCEMSCRIPTEN_FONT_FOLDER "/boot/standalone"
 
@@ -237,4 +238,33 @@ float MCEmscriptenFontMeasureText(void *p_font, const char *p_text, uint32_t p_t
 	}
 	
 	return t_length;
+}
+
+/* ================================================================
+ * Text layout for printing
+ *
+ * Printing to PDF (customprinter.cpp) lays text out with these on the
+ * desktop; as on the server, the web engine has no text layout of its
+ * own for it.
+ * ================================================================ */
+
+bool
+MCTextLayoutInitialize()
+{
+	return false;
+}
+
+void
+MCTextLayoutFinalize()
+{
+}
+
+bool
+MCTextLayout(const unichar_t *p_chars,
+             uint32_t p_char_count,
+             MCFontStruct *p_font,
+             MCTextLayoutCallback p_callback,
+             void *p_context)
+{
+	return false;
 }

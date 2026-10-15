@@ -17,17 +17,13 @@
 		'__GNU__',
 	],
 
+	# The engine is compiled to WebAssembly with a current Emscripten (see
+	# docs/development/build-emscripten.md). The link settings (Asyncify,
+	# memory, exports) are not compiler flags: util/emscripten-javascriptify.py
+	# passes them when it links the engine's relocatable object into
+	# standalone-community-<version>.js and .wasm.
 	'cflags':
 	[
-		'-s ALLOW_MEMORY_GROWTH=1',
-		'-s ASSERTIONS=1',
-		'-s DEMANGLE_SUPPORT=1',
-		'-s EMTERPRETIFY=1',
-		'-s EMTERPRETIFY_ASYNC=1',
-		'-s LINKABLE=1',
-		'-s RESERVED_FUNCTION_POINTERS=1024',
-		'-s TOTAL_MEMORY=67108864',
-		'-s WARN_ON_UNDEFINED_SYMBOLS=1',
 	],
 
 	'cflags_c':

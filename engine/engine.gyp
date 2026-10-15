@@ -532,8 +532,8 @@
 									'rsrc/emscripten-standalone-template/',
 									'rsrc/emscripten-startup-template.livecodescript/',
 									'<(PRODUCT_DIR)/standalone-community-<(version_string).js',
+									'<(PRODUCT_DIR)/standalone-community-<(version_string).wasm',
 									'<(PRODUCT_DIR)/standalone-community-<(version_string).html',
-									'<(PRODUCT_DIR)/standalone-community-<(version_string).html.mem',
 								],
 							},
 						},
@@ -892,49 +892,19 @@
 						'actions':
 						[
 							{
-								'action_name': 'genwhitelist',
-								'message': 'Generating the Emterpreter whitelist',
-
-								'inputs':
-								[
-									'../util/emscripten-genwhitelist.py',
-									'<(PRODUCT_DIR)/standalone-community.bc',
-									'src/em-whitelist.json',
-									'src/em-blacklist.json',
-								],
-
-								'outputs':
-								[
-									'<(PRODUCT_DIR)/standalone-community-whitelist.json',
-									'<(PRODUCT_DIR)/standalone-community-blacklist.json',
-								],
-
-								'action':
-								[
-									'../util/emscripten-genwhitelist.py',
-									'--input',
-									'<(PRODUCT_DIR)/standalone-community.bc',
-									'--output',
-									'<(PRODUCT_DIR)/standalone-community-whitelist.json',
-									'<(PRODUCT_DIR)/standalone-community-blacklist.json',
-									'--include',
-									'src/em-whitelist.json',
-									'--exclude',
-									'src/em-blacklist.json',
-								],
-							},
-							{
+								# Links the engine (a relocatable WebAssembly
+								# object) with its JavaScript libraries into
+								# the .js and .wasm files, and writes the page
+								# that loads them from the HTML template.
 								'action_name': 'javascriptify',
-								'message': 'Javascript-ifying the Emscripten engine',
+								'message': 'Linking the web engine into JavaScript and WebAssembly',
 
 								'inputs':
 								[
 									'../util/emscripten-javascriptify.py',
-									'<(PRODUCT_DIR)/standalone-community.bc',
+									'<(PRODUCT_DIR)/standalone-community.o',
 									'rsrc/emscripten-html-template.html',
-									'<(PRODUCT_DIR)/standalone-community-whitelist.json',
 									'src/em-preamble.js',
-									'src/em-preamble-overlay.js',
 									'src/em-util.js',
 									'src/em-async.js',
 									'src/em-dialog.js',
@@ -950,24 +920,21 @@
 								'outputs':
 								[
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).js',
+									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).wasm',
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).html',
-									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).html.mem',
 								],
 
 								'action':
 								[
 									'../util/emscripten-javascriptify.py',
 									'--input',
-									'<(PRODUCT_DIR)/standalone-community.bc',
+									'<(PRODUCT_DIR)/standalone-community.o',
 									'--output',
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).html',
 									'--shell-file',
 									'rsrc/emscripten-html-template.html',
-									'--whitelist',
-									'<(PRODUCT_DIR)/standalone-community-whitelist.json',
 									'--pre-js',
 									'src/em-preamble.js',
-									'src/em-preamble-overlay.js',
 									'--js-library',
 									'src/em-util.js',
 									'src/em-async.js',

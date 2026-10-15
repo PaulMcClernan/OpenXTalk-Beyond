@@ -794,7 +794,6 @@
 			'src/em-native-layer.cpp',
 			'src/em-osspec-misc.cpp',
 			'src/em-osspec-network.cpp',
-			'src/em-preamble-overlay.js',
 			'src/em-preamble.js',
 			'src/em-resolution.cpp',
 			'src/em-stack.cpp',
