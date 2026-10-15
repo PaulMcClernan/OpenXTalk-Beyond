@@ -139,8 +139,9 @@ ffi_call(ffi_cif *p_cif,
 	              t_rvalue_type_ir, t_avalue_types_ir);
 }
 
-/* A C function pointer for a handler (a callback) needs code made at run
- * time, which WebAssembly cannot do; so on the web, making one fails. */
+/* A libffi closure needs code made at run time, which WebAssembly cannot
+ * do, so making one fails. A handler's function pointer (a callback) is a
+ * JavaScript function in the function table instead (foundation-handler.cpp). */
 extern "C" ffi_status
 ffi_prep_closure_loc(ffi_closure *p_closure,
                      ffi_cif *p_cif,

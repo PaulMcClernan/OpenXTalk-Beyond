@@ -35,6 +35,11 @@ settings = {
     'ALLOW_MEMORY_GROWTH': 1,
     'INITIAL_MEMORY': 64 * 1024 * 1024,
 
+    # The function pointers of LCB handlers (callbacks that extensions give
+    # C code) are JavaScript functions added to the function table
+    # (libfoundation/src/foundation-handler.cpp)
+    'ALLOW_TABLE_GROWTH': 1,
+
     # The engine only runs in web pages
     'ENVIRONMENT': 'web',
 
@@ -56,6 +61,9 @@ exported_functions = [
     '_main',
     '_malloc',
     '_free',
+    # runs an LCB handler for the function that stands for it
+    # (libfoundation/src/foundation-handler.cpp)
+    '_MCHandlerEmscriptenInvoke',
     ]
 
 # Get the build type and the compiler command
