@@ -110,7 +110,10 @@ Then:
    another with the mouse: the first's dragStart gives the drag a text,
    which the second, an unlocked field, must take, with dragEnter,
    dragDrop and the first's dragEnd (probeReport("dnd")), and the cursor
-   over it must say that a drop copies. Then it takes a screenshot of the
+   over it must say that a drop copies. It drops a file on the graphic
+   "Drop Zone" as if from another application (through Chromium's DevTools
+   protocol), which must get the path of its copy in /uploads, with the
+   file's text (probeReport("drop")). Then it takes a screenshot of the
    stack and checks the colours of the card, the graphic and the image in
    it.
 
@@ -184,6 +187,11 @@ PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
 # What the drag from the field "Drag Source" onto the field "Drag Target"
 # sends, and then the target's text (probeReport("dnd"))
 PROBE_DND = 'start|enter|drop:dropped text|end:copy|dropped text'
+
+# The file dropped on the graphic "Drop Zone" from outside the page, and
+# what the probe reports: its copy's path and text (probeReport("drop"))
+PROBE_DROP = ('probe-drop.txt', 'dropped file')
+PROBE_DROP_REPORT = '/uploads/probe-drop.txt:dropped file'
 
 # The samples of the audio clip the probe plays, as the browser has them:
 # channels, rate, seconds and the tone's frequency (counted from where the
@@ -780,6 +788,27 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                 else:
                     lines.append('a field dragged onto another sent the drag\'s messages and dropped its text, '
                                  'with the copy cursor over the target')
+                # a file dragged from outside the page (Chromium's DevTools protocol
+                # drives the browser's own drag and drop, as a drag from another
+                # application) and dropped on the graphic "Drop Zone", whose
+                # dragEnter takes files: the stack gets its copy in /uploads
+                drop_file = os.path.join(work, PROBE_DROP[0])
+                with open(drop_file, 'w') as f:
+                    f.write(PROBE_DROP[1])
+                zone = at(info['drop-zone-rect'])
+                drag_data = {'items': [], 'files': [drop_file], 'dragOperationsMask': 1}
+                cdp = page.context.new_cdp_session(page)
+                for kind in ('dragEnter', 'dragOver', 'drop'):
+                    cdp.send('Input.dispatchDragEvent', {'type': kind, 'x': zone[0], 'y': zone[1], 'data': drag_data})
+                    page.wait_for_timeout(50)
+                report_drop = "document.liveCode.findStackWithName('%s').probeReport('drop')" % STACK_NAME
+                if wait_for(lambda: page.evaluate(report_drop), 'the drop of %s' % PROBE_DROP[0], 10):
+                    dropped = page.evaluate(report_drop)
+                    if dropped != PROBE_DROP_REPORT:
+                        problems.append('a file dropped on the graphic "Drop Zone" from outside the page gave it %r, '
+                                        'expected %r' % (dropped, PROBE_DROP_REPORT))
+                    else:
+                        lines.append('a file dropped from outside the page reached the stack as its copy in /uploads')
                 # the file the probe wrote to /downloads
                 if wait_for(lambda: downloads, 'the download of %s' % PROBE_DOWNLOAD[0], 10):
                     if downloads != [PROBE_DOWNLOAD]:

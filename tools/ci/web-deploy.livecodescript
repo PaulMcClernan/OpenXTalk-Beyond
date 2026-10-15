@@ -155,6 +155,17 @@ private command makeProbeStack
          "on dragEnter" & return & "   probeDnd" && quote & "enter" & quote & return & "   pass dragEnter" & return & "end dragEnter" & return & \
          "on dragDrop" & return & "   probeDnd" && quote & "drop:" & quote && "& the dragData[" & quote & "text" & quote & "]" & return & \
          "   pass dragDrop" & return & "end dragDrop"
+
+   -- a graphic that takes files dropped on it from outside the page
+   -- (probeDrop)
+   create graphic "Drop Zone"
+   set the style of graphic "Drop Zone" to "rectangle"
+   set the opaque of graphic "Drop Zone" to true
+   set the rect of graphic "Drop Zone" to 20,300,160,340
+   set the script of graphic "Drop Zone" to \
+         "on dragEnter" & return & "   if the dragData[" & quote & "files" & quote & "] is not empty then" & return & \
+         "      set the dragAction to" && quote & "copy" & quote & return & "   end if" & return & "end dragEnter" & return & \
+         "on dragDrop" & return & "   probeDrop the dragData[" & quote & "files" & quote & "]" & return & "end dragDrop"
 end makeProbeStack
 
 -- The test runner's stack (see the header)

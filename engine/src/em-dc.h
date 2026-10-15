@@ -40,6 +40,8 @@ extern "C" MCStack *MCEmscriptenGetStackForWindow(Window p_window);
 extern "C" bool MCEmscriptenHandleMousePress(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, MCMousePressState p_state, int32_t p_button);
 extern "C" bool MCEmscriptenHandleMousePosition(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, int32_t p_x, int32_t p_y);
 extern "C" bool MCEmscriptenHandleMouseWheel(MCStack *p_stack, uint32_t p_time, uint32_t p_modifiers, int32_t p_dh, int32_t p_dv);
+/* OXT-Beyond: something dropped on a stack from outside the page */
+extern "C" bool MCEmscriptenHandleDrop(uint32_t p_window, uint32_t p_time, uint32_t p_modifiers, int32_t p_x, int32_t p_y, MCStringRef p_text, MCStringRef p_html, uint32_t p_drop);
 
 extern "C" uint32_t MCEmscriptenCreateWindow();
 extern "C" void MCEmscriptenDestroyWindow(uint32_t p_window_id);

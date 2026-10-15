@@ -532,7 +532,14 @@ on the desktop: `dragStart`, `the dragData`, `dragEnter`, `dragMove`,
 `dragLeave`, `dragDrop` and `dragEnd`, `the dragImage` and the engine's
 own dragging of text between fields. The cursor says what a drop would
 do, and Escape cancels a drag. A drag that a stack starts stays in the
-page.
+page. Files, folders, text and HTML dragged from another application or
+page can be dropped on a stack. The browser shows what such a drag
+carries only when it is dropped, so the stack under the pointer gets
+`dragEnter`, `dragMove` and `dragDrop` then (or `dragLeave`, if it does
+not take the drop), and until then the pointer says that a drop would
+copy. The files and folders are copied into `/uploads`, as those that
+`answer file` gives are, and `the dragData["files"]` has their copies'
+paths.
 * **The screen** is the browser's window: `the screenRect` is its size, a
 stack gets `desktopChanged` when it changes, and stacks draw at the
 screen's scale, so they stay sharp on high-resolution screens and when the

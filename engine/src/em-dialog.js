@@ -403,6 +403,24 @@ mergeInto(LibraryManager.library, {
             return LiveCodeDialog.kUploads + '/' + parts.join('/');
         },
 
+        // Copies a file that the user gave the page into /uploads, at
+        // its path <relative> to the folder that the user gave (or its
+        // name): returns a promise of the copy's path
+        _storeFile: function(file, relative) {
+            return file.arrayBuffer().then(function(buffer) {
+                var path = LiveCodeDialog._uploadPath(relative);
+                FS.mkdirTree(path.substring(0, path.lastIndexOf('/')));
+                FS.writeFile(path, new Uint8Array(buffer));
+                if (file.lastModified) {
+                    try {
+                        FS.utime(path, file.lastModified, file.lastModified);
+                    } catch (e) {
+                    }
+                }
+                return path;
+            });
+        },
+
         // Copies the files that the user picked into /uploads, then
         // closes the dialog <id> with the button 1 and their paths (one
         // per line), or, for a folder, the folder's path
@@ -410,19 +428,8 @@ mergeInto(LibraryManager.library, {
             var state = LiveCodeDialog._dialogs[id];
             var list = Array.prototype.slice.call(files);
             Promise.all(list.map(function(file) {
-                return file.arrayBuffer().then(function(buffer) {
-                    var relative = folder && file.webkitRelativePath ? file.webkitRelativePath : file.name;
-                    var path = LiveCodeDialog._uploadPath(relative);
-                    FS.mkdirTree(path.substring(0, path.lastIndexOf('/')));
-                    FS.writeFile(path, new Uint8Array(buffer));
-                    if (file.lastModified) {
-                        try {
-                            FS.utime(path, file.lastModified, file.lastModified);
-                        } catch (e) {
-                        }
-                    }
-                    return path;
-                });
+                var relative = folder && file.webkitRelativePath ? file.webkitRelativePath : file.name;
+                return LiveCodeDialog._storeFile(file, relative);
             })).then(function(paths) {
                 if (!state.open) {
                     return;
@@ -446,6 +453,62 @@ mergeInto(LibraryManager.library, {
                     LiveCodeDialog._close(id);
                     LiveCodeAsync.resume();
                 }
+            });
+        },
+
+        // OXT-Beyond: copies the files and folders that the user dropped
+        // on a stack into /uploads, as the files that the user picks are.
+        // <dropped> has a File for each file, or (where the browser has
+        // them) a FileSystemEntry for each file and folder. Returns a
+        // promise of the copies' paths, one per line: a folder's path for
+        // a folder, whose files are copied into it. What cannot be read is
+        // left out.
+        storeDropped: function(dropped) {
+            var store = function(item) {
+                if (!item.isFile && !item.isDirectory) {
+                    return LiveCodeDialog._storeFile(item, item.name);
+                }
+                if (item.isFile) {
+                    return new Promise(function(resolve, reject) {
+                        item.file(resolve, reject);
+                    }).then(function(file) {
+                        return LiveCodeDialog._storeFile(file, item.fullPath);
+                    });
+                }
+                // A folder's entries come a batch at a time, until one is
+                // empty; the folder is made even if it has none
+                var folder = LiveCodeDialog._uploadPath(item.fullPath);
+                FS.mkdirTree(folder);
+                var reader = item.createReader();
+                var stored = [];
+                var read = function() {
+                    return new Promise(function(resolve, reject) {
+                        reader.readEntries(resolve, reject);
+                    }).then(function(entries) {
+                        if (entries.length == 0) {
+                            return Promise.all(stored);
+                        }
+                        entries.forEach(function(entry) {
+                            stored.push(store(entry).catch(function(error) {
+                                console.error('could not read ' + entry.fullPath + ': ' + error);
+                            }));
+                        });
+                        return read();
+                    });
+                };
+                return read().then(function() {
+                    return folder;
+                });
+            };
+            return Promise.all(dropped.map(function(item) {
+                return store(item).catch(function(error) {
+                    console.error('could not read ' + (item.fullPath || item.name) + ': ' + error);
+                    return null;
+                });
+            })).then(function(paths) {
+                return paths.filter(function(path) {
+                    return !!path;
+                }).join('\n');
             });
         },
 

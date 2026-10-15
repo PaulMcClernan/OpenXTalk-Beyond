@@ -18,7 +18,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 mergeInto(LibraryManager.library, {
 
-	$LiveCodeEvents__deps: ['$LiveCodeAsync', '$LiveCodeDC', '$LiveCodeUtil', '$LiveCodeClipboard'],
+	$LiveCodeEvents__deps: ['$LiveCodeAsync', '$LiveCodeDC', '$LiveCodeUtil', '$LiveCodeClipboard', '$LiveCodeDialog'],
 	$LiveCodeEvents: {
 
 		// true if ensureInit() has ever been run
@@ -129,6 +129,12 @@ mergeInto(LibraryManager.library, {
 			document.addEventListener("mouseup", LiveCodeEvents._handleDocumentMouseEvent);
 			document.addEventListener("mousemove", LiveCodeEvents._handleDocumentMouseEvent);
 			window.addEventListener("blur", LiveCodeEvents._handleWindowBlur);
+
+			// OXT-Beyond: drops from outside the page on the stacks'
+			// windows (_handleDrop())
+			document.addEventListener('dragenter', LiveCodeEvents._handleDrop);
+			document.addEventListener('dragover', LiveCodeEvents._handleDrop);
+			document.addEventListener('drop', LiveCodeEvents._handleDrop);
 			
 			// Create the hidden input element
 			var tInput = document.createElement('input');
@@ -1291,16 +1297,21 @@ mergeInto(LibraryManager.library, {
 			}
 		},
 
-		// The stack window under the pointer: {'window', 'x', 'y'}, x, y
-		// being where the pointer is in its canvas (as for the mouse's
-		// events: _encodeMouseCoordinates()), or null if it is over none
+		// The stack window under the pointer, or null (_windowAt())
 		dragTarget: function() {
 			var pointer = LiveCodeEvents._pointer;
 			if (!pointer) {
 				return null;
 			}
-			// The canvas, or a native layer that is over it
-			var element = document.elementFromPoint(pointer[0], pointer[1]);
+			return LiveCodeEvents._windowAt(document.elementFromPoint(pointer[0], pointer[1]),
+											pointer[0], pointer[1]);
+		},
+
+		// The stack window that <element> is part of (its canvas, or a
+		// native layer over it): {'window', 'x', 'y'}, x, y being where
+		// <clientX>, <clientY> is in its canvas (as for the mouse's
+		// events: _encodeMouseCoordinates()), or null if it is in none
+		_windowAt: function(element, clientX, clientY) {
 			for (; element; element = element.parentElement) {
 				var dataset = element.dataset || {};
 				var id = Number(dataset.lcWindowId || dataset.lcLayerWindowId || 0);
@@ -1311,11 +1322,120 @@ mergeInto(LibraryManager.library, {
 					}
 					var rect = canvas.getBoundingClientRect();
 					return {'window': id,
-							'x': (pointer[0] - rect.left - canvas.clientLeft + canvas.scrollLeft) | 0,
-							'y': (pointer[1] - rect.top - canvas.clientTop + canvas.scrollTop) | 0};
+							'x': (clientX - rect.left - canvas.clientLeft + canvas.scrollLeft) | 0,
+							'y': (clientY - rect.top - canvas.clientTop + canvas.scrollTop) | 0};
 				}
 			}
 			return null;
+		},
+
+		// ----------------------------------------------------------------
+		// Drops from outside the page
+		// ----------------------------------------------------------------
+
+		// OXT-Beyond: files and folders, text and HTML can be dragged
+		// from outside the page and dropped on a stack. The browser shows
+		// what a drag carries only when it is dropped, so the stack hears
+		// of the drag then (MCEmscriptenHandleDrop(), em-dc.cpp), and
+		// meanwhile the page says that a drop would copy.
+
+		// The drops whose files and folders are being copied into
+		// /uploads (LiveCodeDialog.storeDropped()): id: the copies'
+		// paths, one per line, or null until they are copied
+		_drops: {},
+		_nextDrop: 1,
+
+		// Whether a drag carries what a stack takes
+		_dropCarries: function(data) {
+			var types = data && data.types ? Array.prototype.slice.call(data.types) : [];
+			return ['Files', 'text/plain', 'text/uri-list', 'text/html'].some(function(type) {
+				return types.indexOf(type) >= 0;
+			});
+		},
+
+		_handleDrop: function(e) {
+			var data = e.dataTransfer;
+			var target = LiveCodeEvents._windowAt(e.target, e.clientX, e.clientY);
+			if (!target || !LiveCodeEvents._dropCarries(data)) {
+				return;
+			}
+
+			// The stack takes the drag (the browser would open a file
+			// dropped on the page)
+			e.preventDefault();
+
+			if (e.type != 'drop') {
+				// A drop copies, if the drag lets it
+				var allowed = (data.effectAllowed || 'all').toLowerCase();
+				if (allowed == 'all' || allowed == 'uninitialized' || allowed.indexOf('copy') >= 0) {
+					data.dropEffect = 'copy';
+				} else if (allowed.indexOf('move') >= 0) {
+					data.dropEffect = 'move';
+				} else if (allowed.indexOf('link') >= 0) {
+					data.dropEffect = 'link';
+				}
+				return;
+			}
+
+			LiveCodeEvents._trackModifiers(e);
+			var mods = LiveCodeEvents._encodeModifiers(e.shiftKey, e.altKey, e.ctrlKey, e.metaKey);
+
+			// The text, or else the links (one a line: text/uri-list has
+			// comments too)
+			var text = data.getData('text/plain');
+			if (!text) {
+				text = data.getData('text/uri-list').split(/\r?\n/).filter(function(line) {
+					return line != '' && line.charAt(0) != '#';
+				}).join('\n');
+			}
+			var html = data.getData('text/html');
+
+			// The files and folders, which are copied into /uploads first
+			var dropped = [];
+			var items = data.items ? Array.prototype.slice.call(data.items) : [];
+			items.forEach(function(item) {
+				if (item.kind != 'file') {
+					return;
+				}
+				var entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+				var file = entry ? null : item.getAsFile();
+				if (entry || file) {
+					dropped.push(entry || file);
+				}
+			});
+			if (items.length == 0 && data.files) {
+				dropped = Array.prototype.slice.call(data.files);
+			}
+			var drop = 0;
+			if (dropped.length > 0) {
+				drop = LiveCodeEvents._nextDrop++;
+				LiveCodeEvents._drops[drop] = null;
+				LiveCodeDialog.storeDropped(dropped).then(function(paths) {
+					if (drop in LiveCodeEvents._drops) {
+						LiveCodeEvents._drops[drop] = paths;
+						LiveCodeAsync.resume();
+					}
+				});
+			}
+
+			if (!text && !html && !drop) {
+				return;
+			}
+
+			LiveCodeAsync.delay(function() {
+				Module.ccall('MCEmscriptenHandleDrop', 'number',
+							 ['number', /* Window window */
+							  'number', /* uint32_t time */
+							  'number', /* uint32_t modifiers */
+							  'number', 'number', /* int32_t x, y */
+							  'number', 'number', /* MCStringRef text, html */
+							  'number'], /* uint32_t drop */
+							 [target.window, e.timeStamp, mods, target.x, target.y,
+							  text ? LiveCodeUtil.stringToMCStringRef(text) : 0,
+							  html ? LiveCodeUtil.stringToMCStringRef(html) : 0,
+							  drop]);
+			});
+			LiveCodeAsync.resume();
 		},
 
 		// ----------------------------------------------------------------
@@ -1573,6 +1693,35 @@ mergeInto(LibraryManager.library, {
 	MCEmscriptenDragEnd__deps: ['$LiveCodeEvents'],
 	MCEmscriptenDragEnd: function() {
 		LiveCodeEvents.dragEnd();
+	},
+
+	// OXT-Beyond: whether the files and folders of the drop <drop> from
+	// outside the page (MCEmscriptenHandleDrop(), em-dc.cpp) are still
+	// being copied
+	MCEmscriptenDropIsPending__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDropIsPending: function(drop) {
+		return LiveCodeEvents._drops[drop] === null;
+	},
+
+	// The paths of their copies, one per line (UTF-16, which the engine
+	// frees); false if there are none. The drop is forgotten.
+	MCEmscriptenDropGetFiles__deps: ['$LiveCodeEvents', '$LiveCodeUtil'],
+	MCEmscriptenDropGetFiles: function(drop, r_paths, r_length) {
+		var paths = LiveCodeEvents._drops[drop];
+		delete LiveCodeEvents._drops[drop];
+		if (!paths) {
+			return false;
+		}
+		var buffer = LiveCodeUtil.stringToUTF16(paths);
+		{{{ makeSetValue('r_paths', '0', 'buffer', 'i32') }}};
+		{{{ makeSetValue('r_length', '0', 'paths.length', 'i32') }}};
+		return true;
+	},
+
+	// Forgets the drop <drop>, whose files are not wanted
+	MCEmscriptenDropRelease__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDropRelease: function(drop) {
+		delete LiveCodeEvents._drops[drop];
 	},
 
 });

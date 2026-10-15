@@ -34,6 +34,8 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "graphics_util.h"
 #include "image.h"
 #include "imagebitmap.h"
+#include "clipboard.h"
+#include "em-clipboard.h"
 
 #include <emscripten.h>
 
@@ -997,7 +999,8 @@ MCScreenDC::platform_querymouse(int16_t& r_x, int16_t& r_y)
  * dragDrop, then the source dragEnd. The page draws the drag's image
  * under the pointer, and a cursor that says what a drop there would do.
  * What the drag carries stays in the engine: the browser's own drag and
- * drop, to other pages and applications, is not the engine's. */
+ * drop, to other pages and applications, is not the engine's. What they
+ * drag can be dropped on a stack, though (below). */
 
 /* Why a drag was cancelled (LiveCodeEvents.kDragCancel*, em-event.js) */
 enum
@@ -1203,4 +1206,177 @@ MCScreenDC::drag_mouse_press(MCMousePressState p_state)
 	default:
 		return false;
 	}
+}
+
+/* ----------------------------------------------------------------
+ * Drops from outside the page
+ * ---------------------------------------------------------------- */
+
+/* OXT-Beyond: files and folders, text and HTML dragged from another page
+ * or application can be dropped on a stack (em-event.js). The browser
+ * shows what such a drag carries only when it is dropped, so the stack
+ * under the pointer hears of the drag then, as one that ends there would
+ * on the desktop (CDropTarget::Drop(), w32dnd.cpp): dragEnter and
+ * dragMove, then dragDrop if it takes the drop, dragLeave if it does not.
+ * The files and folders are copied into /uploads first, as the files that
+ * the user picks are, and the dragData["files"] has their copies' paths. */
+
+// Implemented in em-event.js
+extern "C" bool MCEmscriptenDropIsPending(uint32_t p_drop);
+extern "C" bool MCEmscriptenDropGetFiles(uint32_t p_drop, unichar_t **r_paths, size_t *r_length);
+extern "C" void MCEmscriptenDropRelease(uint32_t p_drop);
+
+/* Puts <p_string> (if any) on the dragboard, as the representation
+ * <p_type>: returns true if it did */
+static bool
+MCEmscriptenDropAdd(MCEmscriptenRawClipboard *p_board, MCRawClipboardKnownType p_type, MCStringRef p_string)
+{
+	MCAutoDataRef t_data;
+	return p_string != nil && !MCStringIsEmpty(p_string) &&
+		MCStringEncode(p_string, kMCStringEncodingUTF8, false, &t_data) &&
+		p_board->AddExternalData(p_type, *t_data);
+}
+
+class MCEmscriptenDropEvent: public MCCustomEvent
+{
+public:
+	/* Takes <p_text> and <p_html>, which may be nil. <p_drop> is the
+	 * page's drop whose files and folders are being copied, or 0. */
+	MCEmscriptenDropEvent(Window p_window, uint32_t p_time, uint32_t p_modifiers,
+	                      int32_t p_x, int32_t p_y,
+	                      MCStringRef p_text, MCStringRef p_html, uint32_t p_drop)
+		: m_window(p_window), m_time(p_time), m_modifiers(p_modifiers),
+		  m_x(p_x), m_y(p_y), m_text(p_text), m_html(p_html), m_drop(p_drop)
+	{
+	}
+
+	virtual void Destroy(void)
+	{
+		MCValueRelease(m_text);
+		MCValueRelease(m_html);
+		if (m_drop != 0)
+			MCEmscriptenDropRelease(m_drop);
+		delete this;
+	}
+
+	virtual void Dispatch(void)
+	{
+		/* The files are copied first. The stacks' other events wait
+		 * meanwhile, as they do in a drag. */
+		while (m_drop != 0 && !MCquit && MCEmscriptenDropIsPending(m_drop))
+		{
+			if (MCscreen->wait(60.0, False, True))
+				break;
+		}
+
+		MCAutoStringRef t_files;
+		if (m_drop != 0)
+		{
+			unichar_t *t_paths = nil;
+			size_t t_length = 0;
+			if (!MCEmscriptenDropIsPending(m_drop) &&
+			    MCEmscriptenDropGetFiles(m_drop, &t_paths, &t_length) &&
+			    !MCStringCreateWithCharsAndRelease(t_paths, t_length, &t_files))
+			{
+				free(t_paths);
+			}
+			MCEmscriptenDropRelease(m_drop);
+			m_drop = 0;
+		}
+
+		/* The drop is over a stack's window, and no drag is going on */
+		MCStack *t_stack = MCdispatcher->findstackd(m_window);
+		if (MCquit || t_stack == nil ||
+		    MCdispatcher->isdragsource() || MCdispatcher->isdragtarget())
+			return;
+
+		/* The dragboard has what was dropped, as a drag from another
+		 * application has */
+		MCdragboard->Clear();
+		MCEmscriptenRawClipboard *t_board =
+			static_cast<MCEmscriptenRawClipboard *>(MCdragboard->GetRawClipboard());
+		t_board->BeginExternalData();
+		bool t_carries = false;
+		if (MCEmscriptenDropAdd(t_board, kMCRawClipboardKnownTypeUTF8, m_text))
+			t_carries = true;
+		if (MCEmscriptenDropAdd(t_board, kMCRawClipboardKnownTypeHTML, m_html))
+			t_carries = true;
+		if (MCEmscriptenDropAdd(t_board, kMCRawClipboardKnownTypeFileURLList, *t_files))
+			t_carries = true;
+		if (!t_carries)
+		{
+			MCdragboard->Clear();
+			return;
+		}
+
+		uint16_t t_old_modifiers = MCmodifierstate;
+		MCmodifierstate = m_modifiers;
+
+		/* The pointer comes from outside the window, so the stack works
+		 * out what is under it afresh (wmdragmove() does only when the
+		 * mouse has moved) */
+		if (MCmousestackptr)
+			MCmousestackptr->munfocus();
+		MCmousex = MCmousey = -MAXINT2;
+
+		MCdispatcher->wmdragenter(m_window);
+		if (MCdispatcher->wmdragmove(m_window, m_x, m_y) != DRAG_ACTION_NONE)
+			MCdispatcher->wmdragdrop(m_window);
+		else
+			MCdispatcher->wmdragleave(m_window);
+
+		MCmodifierstate = t_old_modifiers;
+
+		/* The mouse's events are the stack's again, from where the drop
+		 * was, as when a drag is over (dodragdrop()) */
+		t_stack = MCdispatcher->findstackd(m_window);
+		if (t_stack != nil)
+		{
+			MCScreenDC *t_dc = static_cast<MCScreenDC *>(MCscreen);
+			t_dc->update_mouse_position(MCEmscriptenWindowToGlobalLoc(t_stack, MCPointMake(m_x, m_y)), t_stack);
+			MCEventQueuePostMouseFocus(t_stack, m_time, true);
+			MCEventQueuePostMousePosition(t_stack, m_time, m_modifiers, m_x, m_y);
+		}
+	}
+
+private:
+	Window m_window;
+	uint32_t m_time;
+	uint32_t m_modifiers;
+	int32_t m_x, m_y;
+	MCStringRef m_text;
+	MCStringRef m_html;
+	uint32_t m_drop;
+};
+
+/* Something was dropped from outside the page at <p_x>, <p_y> in the
+ * window <p_window> (em-event.js): text, HTML (UTF-8, as on the
+ * clipboard) and the drop <p_drop> whose files and folders are being
+ * copied into /uploads (0 if none). Takes <p_text> and <p_html>, which
+ * may be nil. */
+MC_DLLEXPORT_DEF bool
+MCEmscriptenHandleDrop(uint32_t p_window, uint32_t p_time, uint32_t p_modifiers,
+                       int32_t p_x, int32_t p_y,
+                       MCStringRef p_text, MCStringRef p_html, uint32_t p_drop)
+{
+	MCEmscriptenDropEvent *t_event = nil;
+	if (!MCnoui)
+		t_event = new (nothrow) MCEmscriptenDropEvent(reinterpret_cast<Window>(p_window),
+		                                              p_time, p_modifiers, p_x, p_y,
+		                                              p_text, p_html, p_drop);
+	if (t_event == nil)
+	{
+		MCValueRelease(p_text);
+		MCValueRelease(p_html);
+		if (p_drop != 0)
+			MCEmscriptenDropRelease(p_drop);
+		return false;
+	}
+
+	if (!MCEventQueuePostCustom(t_event))
+	{
+		t_event->Destroy();
+		return false;
+	}
+	return true;
 }

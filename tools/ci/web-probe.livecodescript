@@ -40,7 +40,7 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- stack while it builds the standalone, openStack does nothing more.
 
 local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder, sPlayStopped
-local sBrowserCalls, sBrowserEvents, sDrag, sDnd
+local sBrowserCalls, sBrowserEvents, sDrag, sDnd, sDrop
 
 private command probeLine pText
    write "PROBE " & pText & return to stdout
@@ -482,6 +482,7 @@ command probeObjects
    probeInfo "image-rect", the rect of image "Probe Image"
    probeInfo "drag-source-rect", the rect of field "Drag Source"
    probeInfo "drag-target-rect", the rect of field "Drag Target"
+   probeInfo "drop-zone-rect", the rect of graphic "Drop Zone"
 end probeObjects
 
 -- revXML, revZip and revDB with its SQLite driver, which the web engine
@@ -586,6 +587,13 @@ command probeDnd pWhat
    put pWhat after sDnd
 end probeDnd
 
+-- web_check.py drops a file from outside the page onto the graphic
+-- "Drop Zone", whose script calls this with the dragData["files"]: sDrop
+-- gets their paths and the first one's text
+command probeDrop pFiles
+   put pFiles & ":" & url ("file:" & line 1 of pFiles) into sDrop
+end probeDrop
+
 on keyDown pKey
    put pKey after sKeys
    pass keyDown
@@ -607,8 +615,9 @@ function probeFromJS pValue
 end probeFromJS
 
 -- Called from the page: what the user did, or with "keys", the keys that
--- are down, with "drag", the drag on the graphic, or with "dnd", the drag
--- and drop between the fields and the text of the field it dropped on
+-- are down, with "drag", the drag on the graphic, with "dnd", the drag
+-- and drop between the fields and the text of the field it dropped on, or
+-- with "drop", the file dropped from outside the page
 function probeReport pWhat
    if pWhat is "keys" then
       return the shiftKey & "|" & the keysDown
@@ -618,6 +627,9 @@ function probeReport pWhat
    end if
    if pWhat is "dnd" then
       return sDnd & "|" & the text of field "Drag Target"
+   end if
+   if pWhat is "drop" then
+      return sDrop
    end if
    return the text of field "Probe Field" & "|" & sKeys & "|" & sClicks
 end probeReport

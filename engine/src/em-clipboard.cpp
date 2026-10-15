@@ -58,7 +58,7 @@ static const char * const s_formats[kMCRawClipboardKnownTypeLast+1] =
     "text/x-revolution-styled",     // LiveCode styled text
 
     NULL,                           // File path
-    NULL,                           // File path list
+    "application/x-livecode-file-list", // File path list (OXT-Beyond)
     NULL,                           // URL
     NULL,                           // URL list
 };
@@ -226,15 +226,25 @@ MCStringRef MCEmscriptenRawClipboard::GetKnownTypeString(MCRawClipboardKnownType
     return MCSTR(s_formats[p_type]);
 }
 
-// No file lists: the engine's files are not the user's
+// OXT-Beyond: a list of files is their paths in the engine's file
+// system, one a line, as UTF-8. It stays in the page: the files that the
+// user drops on a stack are copied into the engine's file system first
+// (MCEmscriptenHandleDrop(), em-dc.cpp), and the browser's clipboard
+// only ever gets the paths as text.
 MCDataRef MCEmscriptenRawClipboard::EncodeFileListForTransfer(MCStringRef p_file_list) const
 {
-    return NULL;
+    MCDataRef t_data = nil;
+    if (!MCStringEncode(p_file_list, kMCStringEncodingUTF8, false, t_data))
+        return NULL;
+    return t_data;
 }
 
 MCStringRef MCEmscriptenRawClipboard::DecodeTransferredFileList(MCDataRef p_data) const
 {
-    return NULL;
+    MCStringRef t_list = nil;
+    if (!MCStringDecode(p_data, kMCStringEncodingUTF8, false, t_list))
+        return NULL;
+    return t_list;
 }
 
 // HTML is UTF-8 throughout
