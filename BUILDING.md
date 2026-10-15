@@ -532,6 +532,7 @@ through to the script.
 | `PREBUILT_WIN32_SUBPLATFORMS` | Which variants to fetch. Default: `v141_static_release`; a Debug build needs `v141_static_debug v141_static_release`. |
 | `PREBUILT_SKIP_VERIFY=1` | Do not check the SHA-256 sums. Only for testing new archives. |
 | `PREBUILT_STRICT=1` | Fail if a downloaded archive has no entry in `prebuilt/SHA256SUMS` (by default that is only a warning). CI sets it. |
+| `PREBUILT_SKIP_FETCH=1` | Fetch nothing, because the libraries are already in `prebuilt/` (built there without packaging them, as `tools/ci/build-web.sh` does). |
 
 ### Offline use
 

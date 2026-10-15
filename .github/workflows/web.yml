@@ -86,7 +86,7 @@ jobs:
       # The packages the first step installs (part of its cache key)
       BUILD_PKGS: >-
         build-essential gcc g++ make perl bison flex gawk pkg-config
-        python2 python-is-python2 python3 git curl ca-certificates
+        python2 python3 git curl ca-certificates
         bzip2 xz-utils zstd zip unzip file ccache
       EMSDK: /opt/emsdk
       # The commit of emsdk's tag for config/emscripten-version: a tag can
@@ -122,6 +122,9 @@ jobs:
           fi
           # shellcheck disable=SC2086 # BUILD_PKGS is a list
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends $BUILD_PKGS
+          # gyp and config.py run "python", which must be Python 2.7. Ubuntu
+          # 22.04 has no python-is-python2 (20.04 did), only python2.
+          ln -sf /usr/bin/python2 /usr/local/bin/python
           gcc --version | sed -n 1p
           python --version
           python3 --version

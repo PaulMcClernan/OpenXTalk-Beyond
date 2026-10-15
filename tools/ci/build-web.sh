@@ -52,11 +52,11 @@
 # publishes these, so this script builds the ones that are missing:
 # ICU and the Thirdparty libraries with prebuilt/build-libraries.sh (ICU's
 # source is the only download), libz and libffi in a Linux build folder,
-# build-linux-<arch>, which is configured for nothing else. Then it marks
-# prebuilt's library folders as fetched, so that the build does not run
+# build-linux-<arch>, which is configured for nothing else. The build runs
 # prebuilt/fetch-libraries.sh, which would look for tarballs that nobody
-# publishes. A second run, or a run with those folders restored from a
-# cache (web.yml), builds only the engine.
+# publishes, so this script sets PREBUILT_SKIP_FETCH=1. A second run, or a
+# run with prebuilt's library folders restored from a cache (web.yml),
+# builds only the engine.
 #
 # Environment:
 #   WEB_JOBS  how many jobs make runs at once (default: the number of
@@ -151,14 +151,11 @@ read -r -a THIRDPARTY_LIBS <<< "$(bash -c 'source prebuilt/scripts/lib_versions.
 ICU_LIBS=(libicudata libicui18n libicuio libicutu libicuuc)
 ICU_DATA=$(bash -c 'source prebuilt/scripts/lib_versions.inc && echo "icudt${ICU_VERSION%%.*}l.dat"')
 
-# prebuilt/fetch-libraries.sh runs, as a step of the build, whenever one of
-# the folders it fills (prebuilt/fetch.gyp: the outputs of fetch-linux and
-# fetch-emscripten) is missing or older than the script. They hold what this
-# script built (or a cache restored), so they are made newer.
-function markFetched {
-	mkdir -p "${PREBUILT}/bin/linux" "${PREBUILT}/lib/linux" "${LIB_WEB}"
-	touch "${PREBUILT}/bin/linux" "${PREBUILT}/lib/linux" "${LIB_WEB}"
-}
+# Every build of the engine runs prebuilt/fetch-libraries.sh (the actions of
+# prebuilt/fetch.gyp's fetch-linux and fetch-emscripten, whose outputs gyp
+# names relative to the build folder, where they never appear). The
+# libraries it would fetch are built here, or restored by a cache.
+export PREBUILT_SKIP_FETCH=1
 
 # 1. ICU, for the host (its tools build ICU's data, and the host tools link
 # it) and for the web (build-icu.sh builds both)
@@ -192,7 +189,6 @@ if hasLibraries "${LIB_WEB}" "${THIRDPARTY_LIBS[@]}" ; then
 	echo "Thirdparty libraries for the web: already built"
 else
 	echo "Thirdparty libraries: building them for the web"
-	markFetched
 	(cd prebuilt && PREBUILT_BUILD_LIBS=thirdparty ./build-libraries.sh emscripten js)
 fi
 
@@ -204,7 +200,6 @@ fi
 # 4. The engine: config-emscripten, then javascriptify, which links the
 # engine's object with its JavaScript libraries into the .js and .wasm and
 # writes the page (engine/engine.gyp)
-markFetched
 make config-emscripten
 BUILDTYPE=Release emmake make -C build-emscripten/livecode javascriptify -j"${JOBS}"
 
