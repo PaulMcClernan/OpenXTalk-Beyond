@@ -15,7 +15,7 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 | --- | --- |
 | [FIXME](#fixme) | 67 |
 | [HACK](#hack) | 33 |
-| [TODO](#todo) | 458 |
+| [TODO](#todo) | 457 |
 
 ## FIXME
 
@@ -30,8 +30,8 @@ Code its authors knew to be wrong or incomplete. 67 notes, by part of the reposi
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
 - [engine/src/dispatch.cpp:1574](engine/src/dispatch.cpp#L1574) FIXME This is horrible
 - [engine/src/em-dc-mainloop.cpp:46](engine/src/em-dc-mainloop.cpp#L46) FIXME these functions are pretty much the same for every X_init()
-- [engine/src/em-event.js:420](engine/src/em-event.js#L420) FIXME Maybe this should be done in the engine?
-- [engine/src/em-event.js:619](engine/src/em-event.js#L619) FIXME not supported
+- [engine/src/em-event.js:430](engine/src/em-event.js#L430) FIXME Maybe this should be done in the engine?
+- [engine/src/em-event.js:629](engine/src/em-event.js#L629) FIXME not supported
 - [engine/src/em-filehandle.cpp:126](engine/src/em-filehandle.cpp#L126) FIXME Figure out why this is needed
 - [engine/src/em-filehandle.cpp:151](engine/src/em-filehandle.cpp#L151) FIXME Figure out why this is a success
 - [engine/src/em-filehandle.cpp:210](engine/src/em-filehandle.cpp#L210) FIXME figure out why this is a success
@@ -67,7 +67,7 @@ Code its authors knew to be wrong or incomplete. 67 notes, by part of the reposi
 ### FIXME: libfoundation (10)
 
 - [libfoundation/include/system-commandline.h:81](libfoundation/include/system-commandline.h#L81) FIXME support for getting the command filename isn't implemented
-- [libfoundation/src/foundation-handler.cpp:503](libfoundation/src/foundation-handler.cpp#L503) FIXME Should include information about arguments and return
+- [libfoundation/src/foundation-handler.cpp:661](libfoundation/src/foundation-handler.cpp#L661) FIXME Should include information about arguments and return
 - [libfoundation/src/foundation-private.h:710](libfoundation/src/foundation-private.h#L710) define __MCAssertIsLocale(x)   MCAssert(nil != (x)) /* FIXME
 - [libfoundation/src/system-commandline.cpp:280](libfoundation/src/system-commandline.cpp#L280) return false; /* FIXME proper error
 - [libfoundation/src/system-file-w32.cpp:286](libfoundation/src/system-file-w32.cpp#L286) FIXME Remaining weaknesses:
@@ -221,13 +221,13 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 
 ## TODO
 
-Work left for later. 458 notes, by part of the repository:
+Work left for later. 457 notes, by part of the repository:
 
-[engine](#todo-engine) (268), [libfoundation](#todo-libfoundation) (47), [tests](#todo-tests) (20), [revbrowser](#todo-revbrowser) (19), [ide](#todo-ide) (18), [toolchain](#todo-toolchain) (14), [extensions](#todo-extensions) (12), [libgraphics](#todo-libgraphics) (12), [libscript](#todo-libscript) (12), [libbrowser](#todo-libbrowser) (10), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [ide-support](#todo-ide-support) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
+[engine](#todo-engine) (267), [libfoundation](#todo-libfoundation) (47), [tests](#todo-tests) (20), [revbrowser](#todo-revbrowser) (19), [ide](#todo-ide) (18), [toolchain](#todo-toolchain) (14), [extensions](#todo-extensions) (12), [libgraphics](#todo-libgraphics) (12), [libscript](#todo-libscript) (12), [libbrowser](#todo-libbrowser) (10), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [ide-support](#todo-ide-support) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
 
 <a id="todo-engine"></a>
 
-### TODO: engine (268)
+### TODO: engine (267)
 
 - [engine/exec-tests/filters/EvalUniDecode.test:35](engine/exec-tests/filters/EvalUniDecode.test#L35) TODO - add this platform :)
 - [engine/exec-tests/filters/EvalUniEncode.test:35](engine/exec-tests/filters/EvalUniEncode.test#L35) TODO - add this platform :)
@@ -271,9 +271,8 @@ Work left for later. 458 notes, by part of the repository:
 - [engine/src/dskw32.cpp:623](engine/src/dskw32.cpp#L623) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:633](engine/src/dskw32.cpp#L633) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:3031](engine/src/dskw32.cpp#L3031) TODO: set end of file...
-- [engine/src/em-dc.js:150](engine/src/em-dc.js#L150) TODO - handle cleanup of embedded canvas
-- [engine/src/em-dc.js:374](engine/src/em-dc.js#L374) TODO - implement
-- [engine/src/em-event.js:771](engine/src/em-event.js#L771) TODO - reenable alt key detection
+- [engine/src/em-dc.js:157](engine/src/em-dc.js#L157) TODO - handle cleanup of embedded canvas
+- [engine/src/em-event.js:781](engine/src/em-event.js#L781) TODO - reenable alt key detection
 - [engine/src/em-util.js:304](engine/src/em-util.js#L304) TODO - support more value types
 - [engine/src/em-util.js:332](engine/src/em-util.js#L332) TODO - for now, treat functions as objects but we may wish to differentiate them later
 - [engine/src/exec-engine.cpp:519](engine/src/exec-engine.cpp#L519) TODO - create as list?
