@@ -66,15 +66,17 @@ those changes can change what existing scripts see: regular expressions
 match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
 and revXML and revZip differ in the few ways
 [#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 to 0.2.6-rc.4 are test releases (pre-releases) of
+lists. 0.2.6-rc.1 to 0.2.6-rc.5 are test releases (pre-releases) of
 the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
 plan in the Claude desktop app or Claude Code, build stacks in the IDE
 (see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
 [0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
-[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), and of the
+[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), of the
 fixes and plugin packages in
-[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins);
-0.2.5 stays the main download until it has held up.
+[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins),
+and of web standalones in
+[0.2.6-rc.5](#026-rc5-web-standalones); 0.2.5 stays the main download
+until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1350,6 +1352,52 @@ difference from 0.2.5. It has been tested on Linux, the IDE's side
 against 0.2.5-rc.5's engine and the server against a stand-in; it has
 not yet been tried with the Claude desktop app, or on Windows or macOS.
 The engine and the standalone runtimes are those of 0.2.5-rc.2.
+
+#### 0.2.6-rc.5: web standalones
+
+OXT-Beyond 0.2.6-rc.5, a test release, makes HTML5 standalones work.
+The IDE builds a stack into a web page that runs in a current browser
+from any web server: tick **Build for HTML5** in the Standalone
+Settings, and **Test** serves it from your own computer and opens it in
+your browser. Its engine is the standalone engine built from this
+repository into WebAssembly with a current Emscripten, and every
+package carries it. LiveCode's last HTML5 engine could not `wait` in
+most handlers and had no dialogs, sound, player, browser widget,
+externals, `encrypt`, printing or drag and drop; this one has them all,
+each in the browser's own way:
+
+- `wait` works everywhere but in a handler that the page's JavaScript
+  calls. `answer`, `ask`, `ask password` and `answer color` show
+  dialogs in the page, `answer file` shows the browser's file picker,
+  and a file written to `/downloads` (where `ask file` puts it) reaches
+  you as a download.
+- URLs, the mouse, touch and a touch screen's keyboard, drag and drop,
+  sound, the player, the browser widget, printing (to the browser's
+  print dialog or to a PDF), snapshots of the screen, `encrypt`,
+  revXML, revZip, revDB with SQLite and revSpeech work.
+- Stacks other than the main stack open in windows with title bars,
+  which the user moves, resizes and closes; modal dialogs, palettes,
+  `blendLevel` and `ignoreMouseEvents` work as on the desktop.
+- Controls are drawn in the "Windows 95" look with Windows' light
+  colours, not LiveCode's old Motif look, and `start using font file`
+  loads fonts.
+
+What a browser does not let a page do (sockets, `shell()` and other
+programs, other externals, dragging out of the page) fails as it does
+on a desktop that cannot do it, and windows cannot be minimized or
+maximized. The guide *Deploying Your Application* says what works and
+how, and pull request
+[#108](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/108)
+lists what differs from LiveCode 9.6.3's HTML5 engine. Each package's
+automatic tests build an HTML5 standalone and check it in Chromium;
+it has not yet been tried in Firefox, Safari or a phone's browser.
+
+On the desktop, one change can be seen by a script, and it is a crash
+fix: `do ... in widget`, `go back in widget`, `go forward in widget`
+and `launch url ... in widget` crashed the engine for a widget whose
+extension is not loaded, and now do nothing, as the widget's other
+actions already did. Apart from HTML5 standalones and that fix,
+nothing differs from 0.2.6-rc.4.
 
 #### 0.2.6-rc.4: HyperCard import, a quick start on Windows and plugins
 
