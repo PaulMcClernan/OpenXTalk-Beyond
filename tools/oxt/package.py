@@ -22,8 +22,8 @@
       --out <stage-parent> [--build-number N] [--assets-cache DIR]
       [--no-external-assets] [--no-xtalk-extensions] [--xtalk-compiler-bin DIR]
       [--vc-redist DIR] [--allow-unpinned-vc-runtime] [--xtalk-cache DIR]
-      [--eol lf|crlf|keep] [--allow-single-arch] [--summary-json FILE]
-      [--compare <reference install or TSV> [--report FILE]]
+      [--eol lf|crlf|keep] [--allow-single-arch] [--web-runtime DIR]
+      [--summary-json FILE] [--compare <reference install or TSV> [--report FILE]]
 
 P chooses the layout (PLATFORMS below; default win-x86_64):
 
@@ -142,6 +142,18 @@ stage folder itself except on macOS):
                the MIME types, the icons and the library list the launcher
                checks, from Installer/linux and the branding PNGs
                (LINUX_DESKTOP).
+  web          the web runtime in Runtime/Emscripten/js (WEB_RUNTIME), from
+               --web-runtime, else the environment variable
+               OXT_WEB_RUNTIME: the folder that .github/workflows/web.yml
+               builds, which every platform's package gets, as the IDE's web
+               builder (ide-support/revsaveasemscriptenstandalone) takes
+               from it the web engine of the IDE's version,
+               standalone-community-<engine version>.js, .wasm and .html,
+               and the templates emscripten-standalone-template/ (without
+               names that start with ".") and
+               emscripten-startup-template.livecodescript. Without it the
+               package has no web runtime, and the IDE offers no HTML5
+               standalones.
 
 The build number is --build-number, else the environment variable
 OXT_BUILD_NUMBER, else the current UTC time as YYYYMMDDHHMM. ide/.buildnumber
@@ -224,6 +236,19 @@ DOCS_FILES = (
 
 # components Extensions and TimeZone: the same 42 ids layout.py knows
 PACKAGED_EXTENSIONS = layout.REPO_BUILT_EXTENSIONS
+
+# The web runtime (--web-runtime), under the tools folder: where the IDE's
+# web builder looks when the IDE is installed (getRuntimeFolder in
+# ide-support/revsaveasemscriptenstandalone.livecodescript, and
+# revEngineCheck("Emscripten"), which offers HTML5 standalones only when
+# the folder exists). The engine's files carry the engine's version
+# (WEB_ENGINE_FILES % version), which the builder asks for by the IDE's
+# version; the templates are the same for every version.
+WEB_RUNTIME_ENV = 'OXT_WEB_RUNTIME'
+WEB_RUNTIME = 'Runtime/Emscripten/js/'
+WEB_ENGINE_FILES = tuple('standalone-community-%%s.%s' % ext for ext in ('js', 'wasm', 'html'))
+WEB_TEMPLATE_FOLDER = 'emscripten-standalone-template'
+WEB_STARTUP_TEMPLATE = 'emscripten-startup-template.livecodescript'
 
 # ---------------------------------------------------------------------------
 # Platforms: build output -> installed path. The tables transcribe
@@ -851,7 +876,7 @@ class Item(object):
     def __init__(self, target, origin, source=None, data=None, member=None, asset=None, note='', link=None,
                  executable=False):
         self.target = target      # installed path, "/" separators
-        self.origin = origin      # ide, build, generated, licence, asset, xtalk, desktop
+        self.origin = origin      # ide, build, generated, licence, asset, xtalk, desktop, web
         self.source = source      # file on disk (ide, build, licence, xtalk)
         self.data = data          # bytes (generated, licence, desktop, the xtalk stamp)
         self.member = member      # zip member name (asset)
@@ -1123,6 +1148,49 @@ def plan_runtimes(pl, tools):
             externals_component(pl, folder, True)
 
 
+def plan_web(pl, web, version):
+    """Runtime/Emscripten/js (WEB_RUNTIME): the web engine of the given
+    version and the templates from the web runtime folder web."""
+    folder = pl.p.tools + WEB_RUNTIME
+    if not version:
+        pl.problems.append('web runtime: the engine version (BUILD_SHORT_VERSION in the file version) is unknown')
+        return
+    wanted = [name % version for name in WEB_ENGINE_FILES]
+    try:
+        names = os.listdir(web)
+    except OSError as e:
+        pl.problems.append('web runtime: cannot read %s: %s' % (web, e))
+        return
+    # An engine of another version would never be used: the builder asks
+    # for the IDE's
+    others = sorted(n for n in names if re.match(r'^standalone-.*\.(js|wasm|html)$', n) and n not in wanted)
+    if others:
+        pl.problems.append('web runtime: %s has web engines that are not version %s: %s'
+                           % (web, version, ', '.join(others)))
+    for name in wanted:
+        path = os.path.join(web, name)
+        if os.path.isfile(path):
+            pl.add(Item(folder + name, 'web', source=path, note='web engine %s' % version))
+        else:
+            pl.problems.append('web runtime: %s has no %s (the web engine of version %s)' % (web, name, version))
+    path = os.path.join(web, WEB_STARTUP_TEMPLATE)
+    if os.path.isfile(path):
+        pl.add(Item(folder + WEB_STARTUP_TEMPLATE, 'web', source=path, note='web standalones\' startup script'))
+    else:
+        pl.problems.append('web runtime: %s has no %s' % (web, WEB_STARTUP_TEMPLATE))
+    template = os.path.join(web, WEB_TEMPLATE_FOLDER)
+    files = walk_tree(template) if os.path.isdir(template) else []
+    if not files:
+        pl.problems.append('web runtime: %s has no %s/ with files' % (web, WEB_TEMPLATE_FOLDER))
+    for rel in files:
+        path = os.path.join(template, *rel.split('/'))
+        if os.path.islink(path):
+            pl.problems.append('web runtime: %s is a symbolic link' % path)
+            continue
+        pl.add(Item(folder + WEB_TEMPLATE_FOLDER + '/' + rel, 'web', source=path,
+                    note='file of every web standalone'))
+
+
 def plan_build(pl):
     p = pl.p
     tools = p.tools
@@ -1221,11 +1289,11 @@ def unused_build_outputs(p, bin_dir, used):
     return out
 
 
-def plan(repo, bin_dir, build_number, assets, xtalk=None, platform=None, notes=None):
+def plan(repo, bin_dir, build_number, assets, xtalk=None, platform=None, notes=None, web=None):
     """Return (items, folders, problems); folders are installed paths of
     folders to create even if empty. xtalk is what xtalk_extensions.build
-    returned, or None. notes (a list) gets messages worth showing that are
-    not problems."""
+    returned, or None; web is the web runtime folder, or None. notes (a
+    list) gets messages worth showing that are not problems."""
     p = platform or PLATFORMS[DEFAULT_PLATFORM]
     tools = p.tools
     pl = Planner(p, bin_dir)
@@ -1279,6 +1347,10 @@ def plan(repo, bin_dir, build_number, assets, xtalk=None, platform=None, notes=N
             pl.add(Item(tools + target, 'asset', source=archive, member=member, asset=asset,
                         note='asset %s: %s' % (asset['id'], member)))
         folders.extend(tools + d for d in dirs)
+
+    # The web runtime (plan_web)
+    if web:
+        plan_web(pl, web, engine_version(repo))
 
     # xTalk Suite extensions, as xtalk_extensions.build wrote them
     if xtalk:
@@ -1395,6 +1467,10 @@ def write_stage(stage, items, folders, eol, log, platform=None):
                     continue
                 shutil.copy2(it.source, dst)
                 executable = bool(os.stat(it.source).st_mode & 0o111)
+            elif it.origin == 'web':
+                # byte for byte: the page and the startup script are the
+                # engine's files, which every platform gets the same
+                shutil.copyfile(it.source, dst)
             elif it.origin == 'xtalk':
                 if it.data is not None:   # XTALK-EXTENSIONS.txt (see plan)
                     with open(dst, 'wb') as f:
@@ -1601,6 +1677,9 @@ def compare(stage, items, ref, no_assets, report=None, no_xtalk=False, platform=
 
     def replaced(path):
         return rebuilt and path.startswith(REBUILT_RUNTIMES)
+    # A web runtime staged from this repository's web build (--web-runtime)
+    # replaces the reference's, whose engine has another version
+    web = any(it.origin == 'web' for it in items)
     root, ref_paths, ref_empty, listed_classes = load_reference(ref)
     by_target = {it.target: it for it in items}
     by_lower = {it.target.lower(): it for it in items}
@@ -1637,6 +1716,9 @@ def compare(stage, items, ref, no_assets, report=None, no_xtalk=False, platform=
             elif cls == layout.EXTERNAL and replaced(p):
                 rows.append(('intended missing', p, '', cls, 'not in the runtimes built from this repository'))
                 counts[(cls, 'intended missing')] += 1
+            elif web and p.startswith(WEB_RUNTIME):
+                rows.append(('intended missing', p, '', cls, 'not in the web runtime built from this repository'))
+                counts[(cls, 'intended missing')] += 1
             elif cls == layout.IDE:
                 rows.append(('IDE change: removed', p, '', cls, 'not in the repository\'s IDE'))
                 counts[(cls, 'not in the IDE any more')] += 1
@@ -1657,6 +1739,8 @@ def compare(stage, items, ref, no_assets, report=None, no_xtalk=False, platform=
                 status = 'present (generated)'
                 if _same_bytes(ref_file, staged):
                     status = 'present (generated, identical)'
+            elif it.origin == 'web':
+                status = 'present (identical)' if _same_bytes(ref_file, staged) else 'present (rebuilt)'
             elif cls == layout.IDE:
                 if not layout.same_content(p, ref_file, staged):
                     status = 'IDE change: modified'
@@ -1692,6 +1776,8 @@ def compare(stage, items, ref, no_assets, report=None, no_xtalk=False, platform=
             status, why = 'IDE change: added', it.note
         elif it.origin == 'xtalk':
             status, why = 'intended addition', 'xTalk Suite extension (%s)' % it.note
+        elif it.origin == 'web':
+            status, why = 'intended addition', 'web runtime built from this repository (%s)' % it.note
         else:
             status, why = 'ERROR extra', '%s: %s' % (it.origin, it.note)
             problems += 1
@@ -1809,7 +1895,7 @@ def summarise(items, stage, bin_dir, used, log, platform=None):
         size_group[g] += size
     log('')
     log('Staged %d files, %s bytes, in %s' % (len(items), '{:,}'.format(sum(size_origin.values())), stage))
-    for o in ('ide', 'build', 'generated', 'licence', 'asset', 'xtalk', 'desktop'):
+    for o in ('ide', 'build', 'generated', 'licence', 'asset', 'xtalk', 'desktop', 'web'):
         if by_origin[o]:
             log('  %-10s %6d files %15s bytes' % (o, by_origin[o], '{:,}'.format(size_origin[o])))
     empty = layout.empty_dirs(stage)
@@ -1891,6 +1977,9 @@ def main(argv=None):
                    help='line endings of IDE text files (default: lf, as git stores them)')
     p.add_argument('--allow-single-arch', action='store_true',
                    help='mac-universal: stage a build that holds only one architecture (for testing)')
+    p.add_argument('--web-runtime', metavar='DIR',
+                   help='the web runtime to install in %s (default: $%s; none when it is not set)'
+                        % (WEB_RUNTIME.rstrip('/'), WEB_RUNTIME_ENV))
     p.add_argument('--summary-json', metavar='FILE', help='write a JSON summary here')
     p.add_argument('--compare', metavar='REF', help='installed folder or classify TSV to compare with')
     p.add_argument('--report', metavar='FILE', help='with --compare: write every path\'s status as TSV')
@@ -2017,8 +2106,16 @@ def main(argv=None):
                                            args.offline, log, args.allow_unpinned_vc_runtime)
             log('')
 
+        web = args.web_runtime or os.environ.get(WEB_RUNTIME_ENV) or None
+        if web:
+            web = os.path.abspath(web)
+            log('Web runtime  : %s' % web)
+        else:
+            log('Web runtime  : none (no --web-runtime or %s): the IDE offers no HTML5 standalones'
+                % WEB_RUNTIME_ENV)
+
         notes = []
-        items, folders, problems = plan(repo, bin_dir, build_number, assets, xtalk, plat, notes)
+        items, folders, problems = plan(repo, bin_dir, build_number, assets, xtalk, plat, notes, web)
         for n in notes:
             log(n)
         if problems:
@@ -2055,6 +2152,7 @@ def main(argv=None):
                 ('xtalk_extensions', [collections.OrderedDict(
                     (k, e[k]) for k in ('folder', 'kind', 'id', 'member', 'version', 'repository', 'commit'))
                     for e in (xtalk['extensions'] if xtalk else [])]),
+                ('web_runtime', web),
                 ('vc_redist', xtalk['vc_redist'] if xtalk else None),
                 ('vc_redist_version', xtalk['vc_redist_version'] if xtalk else None),
                 ('vc_runtime_pinned', xtalk['vc_runtime_pinned'] if xtalk else None),
