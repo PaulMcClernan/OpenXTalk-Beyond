@@ -1561,6 +1561,49 @@ The jobs that make the packages run it on them (`--install`), and the
 Linux build's job "Web runtime check" on the web runtime alone
 (`--runtime`).
 
+### Web engine tests
+
+[`tools/ci/web_tests.py`](tools/ci/web_tests.py) runs the LiveCode
+Script tests of `tests/lcs` in the web engine, as the
+[engine tests](#engine-tests) run them in the desktop's. It compiles
+the LiveCode Builder modules of `tests/` with the build's `lc-compile`,
+makes a web standalone of the tests with the build's development engine
+(as the [web standalone check](#web-standalone-check) does with
+`--runtime`), serves it on 127.0.0.1 and opens it in headless Chromium.
+The standalone's main stack,
+[`tools/ci/web-tests.livecodescript`](tools/ci/web-tests.livecodescript),
+runs the test commands one after the other, each with the test runner's
+set-up and clean-up, and writes their results to the browser's console.
+A test that quits is told it did (the quit is cancelled), and a test
+that never ends, or stops the engine, fails; the page is then opened
+again at the next test. Tests that need what a page cannot have skip
+there through the test library's requirements: sockets and other
+programs (`sockets` and `shell` in
+[`tests/_testlib.livecodescript`](tests/_testlib.livecodescript)), and
+the IDE and the LiveCode Builder compiler (the tests run in a
+standalone).
+
+```sh
+python3 tools/ci/web_tests.py --runtime <web runtime> --bin linux-x86_64-bin
+```
+
+`--runtime` is the [web runtime](#14-building-the-web-engine) and
+`--bin` a build output folder, with `lc-compile` and the development
+engine that writes the standalone's startup data (`--engine` names
+another). `--filter` takes a regular expression that the test's name must
+match, `--timeout` is the seconds a test may take (120). Failures are
+compared with
+[`tools/ci/web-tests-baseline.txt`](tools/ci/web-tests-baseline.txt) as
+the engine tests compare theirs: one not in it is run again on a page of
+its own, and only reported as flaky when it then passes; else it fails
+the check (exit code 1). `--update-baseline` rewrites the file. The log
+(`--log`, by default `web-tests.log` in the work folder, `--work`) has
+the output of every failed test and what the browser's console said
+while it ran.
+
+The Linux x86-64 package job runs it on its build and the web runtime
+it packages.
+
 ### IDE screenshots
 
 [`tools/ci/ui_tour.py`](tools/ci/ui_tour.py) looks at the IDE's own
@@ -2597,10 +2640,14 @@ Emscripten (3.10). These are its steps:
    | `emscripten-standalone-template/` | The files every standalone gets: the font it draws text with. |
    | `emscripten-startup-template.livecodescript` | The template of a standalone's startup script. |
 
-3. **Check** it with the [web standalone check](#web-standalone-check):
+3. **Check** it with the [web standalone check](#web-standalone-check),
+   and run the engine's own tests in it with the
+   [web engine tests](#web-engine-tests) (which need a desktop build
+   output for its development engine and `lc-compile`):
 
    ```sh
    python3 tools/ci/web_check.py --runtime web-runtime --engine-cache /tmp/oxt-engine
+   python3 tools/ci/web_tests.py --runtime web-runtime --bin linux-x86_64-bin
    ```
 
 4. **Package:** `tools/oxt/package.py` installs the runtime in

@@ -802,10 +802,8 @@ end TestMoveControl
 
 -- no key options working properly
 on TestUndo
-   if the platform is "HTML5" then
-      TestSkip "key options", "bug 16544"
-      exit TestUndo
-   end if
+   -- OXT-Beyond: runs on the web too, whose engine types keys with
+   -- their options (LiveCode's bug 16544)
 
    __createFieldWithText "bar"
    

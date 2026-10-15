@@ -304,6 +304,12 @@ mergeInto(LibraryManager.library, {
 			// handle continuation lines in the headers text.
 			var headerLines = headers.match(/[^\r\n]+/g);
 			var hasContentType = false;
+			// OXT-Beyond: the headers a page may not set (the Fetch
+			// standard's forbidden request-headers). The browser sets
+			// them itself, and refuses them with an error in the
+			// console, so they are left out quietly, as the browser
+			// would leave them out.
+			var forbidden = /^(accept-charset|accept-encoding|access-control-request-headers|access-control-request-method|connection|content-length|cookie2?|date|dnt|expect|host|keep-alive|origin|referer|set-cookie|te|trailer|transfer-encoding|upgrade|via|proxy-.*|sec-.*)$/i;
 			if (headerLines != null) {
 				var numHeaders = headerLines.length;
 				for (var i = 0; i < numHeaders; ++i) {
@@ -313,6 +319,9 @@ mergeInto(LibraryManager.library, {
 					var headerName = null;
 					if (headerFields != null) {
 						headerName = headerFields[1].trim();
+					}
+					if (headerName != null && forbidden.test(headerName)) {
+						continue;
 					}
 					try {
 						xhr.setRequestHeader(headerName,

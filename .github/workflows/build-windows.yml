@@ -123,6 +123,9 @@ on:
       - 'tools/ci/merge_universal.py'
       - 'tools/ci/sign_mac_app.py'
       - 'tools/ci/test_linux_package.py'
+      - 'tools/ci/web-tests-baseline.txt'
+      - 'tools/ci/web-tests.livecodescript'
+      - 'tools/ci/web_tests.py'
   pull_request:
     branches: [main]
     paths-ignore: *build-paths-ignore

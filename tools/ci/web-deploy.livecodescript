@@ -49,8 +49,17 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- 1 is given its module (and that of the library it uses), and 2 names it
 -- in the standalone settings.
 --
+-- 1 also makes the stack of tools/ci/web_tests.py, which runs the engine's
+-- tests (OXT_WEB_KIND "tests"): the test runner's script
+-- (tools/ci/web-tests.livecodescript) in a stack without controls, named
+-- StandaloneTestRunnerMainstack as LiveCode's standalone test runner
+-- names its own, which tells the test library that it runs in a
+-- standalone.
+--
 -- Environment:
---    OXT_WEB_PROBE     the probe's script (tools/ci/web-probe.livecodescript)
+--    OXT_WEB_KIND      1: "tests" for web_tests.py's stack, else the probe
+--    OXT_WEB_PROBE     the probe's script (tools/ci/web-probe.livecodescript),
+--                      or the test runner's
 --    OXT_WEB_STACK     where to save the stack file
 --    OXT_WEB_OUTPUT    1: the startup data to write; 2: the folder to build
 --                      the standalone in
@@ -128,6 +137,18 @@ private command makeProbeStack
    set the rect of image "Probe Image" to 300,200,324,224
 end makeProbeStack
 
+-- The test runner's stack (see the header)
+private command makeTestsStack
+   local tScript
+   put fileText($OXT_WEB_PROBE) into tScript
+   if line 1 of tScript begins with "script " then
+      delete line 1 of tScript
+   end if
+   create stack "StandaloneTestRunnerMainstack"
+   set the script of stack "StandaloneTestRunnerMainstack" to tScript
+   set the defaultStack to "StandaloneTestRunnerMainstack"
+end makeTestsStack
+
 ----------------------------------------------------------------
 -- 1. Without the IDE
 ----------------------------------------------------------------
@@ -150,8 +171,15 @@ on startup
       if $OXT_WEB_VERSION is empty then
          throw "OXT_WEB_VERSION is not set"
       end if
-      makeProbeStack
-      save stack "WebProbe" as $OXT_WEB_STACK
+      local tStack
+      if $OXT_WEB_KIND is "tests" then
+         makeTestsStack
+         put "StandaloneTestRunnerMainstack" into tStack
+      else
+         makeProbeStack
+         put "WebProbe" into tStack
+      end if
+      save stack tStack as $OXT_WEB_STACK
       if the result is not empty then
          throw "cannot save the stack as " & $OXT_WEB_STACK & ": " & the result
       end if

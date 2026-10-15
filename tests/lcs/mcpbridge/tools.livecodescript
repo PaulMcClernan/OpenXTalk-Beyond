@@ -18,6 +18,8 @@ local sInfoFile, sReply
 
 on TestSetup
    local tFolder, tStub, tName
+   -- Every test talks to the bridge's server
+   TestSkipIfNot "sockets"
    put TestGetIDERepositoryPath() & "/Extensions/org.openxtalk.plugin.mcpbridge" into tFolder
    start using stack (tFolder & "/mcpbridge-tools.livecodescript")
    -- The IDE's handlers the assistant's build library calls, and the

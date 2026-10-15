@@ -16,12 +16,18 @@ for more details.
 You should have received a copy of the GNU General Public License
 along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
+-- OXT-Beyond: in LiveCode's standalones the click functions were not sure
+-- to say what was clicked (TestAssertBroken below); in the web engine's
+-- they say it, as in the IDE
+private function __ClickUnsure
+   return TestIsInStandalone() and the platform is not "HTML5"
+end __ClickUnsure
+
 on TestSetup
    TestSkipIfNot "ui"
    TestSkipIf "environment", "server"
-   if the platform is "HTML5" then
-      return "SKIP bug 16544"
-   end if
+   -- OXT-Beyond: these run on the web too, whose engine types keys with
+   -- their options (LiveCode's bug 16544)
 end TestSetup
 
 on TestInterface2
@@ -37,14 +43,14 @@ local tPoint
 put (item 1 of it + item 3 of it) div 2 & "," & (item 2 of it + item 4 of it) div 2 into tPoint
 
 click button 3 at tPoint
-if TestIsInStandalone() then
+if __ClickUnsure() then
    TestAssertBroken "the clickChar is a", the clickChar is "a", "not sure"
 else
 TestAssert "the clickChar is a", the clickChar is "a"
 end if
 
 click at "0,0"
-if TestIsInStandalone() then
+if __ClickUnsure() then
    TestAssertBroken "the clickChar is empty", the clickChar is empty, "not sure"
 else
    TestAssert "the clickChar is empty", the clickChar is empty
@@ -61,14 +67,14 @@ set the text of the last field to "a"
 get the formattedRect of char 1 of field 1
 
 click button 3 at (item 1 of it + item 3 of it) div 2, (item 2 of it + item 4 of it) div 2
-if TestIsInStandalone() then
+if __ClickUnsure() then
    TestAssertBroken "the clickCharChunk is char 1 to 1 of field 1", the clickCharChunk is "char 1 to 1 of field 1", "not sure"
 else
    TestAssert "the clickCharChunk is char 1 to 1 of field 1", the clickCharChunk is "char 1 to 1 of field 1"
 end if
 
 click at 0,0
-if TestIsInStandalone() then
+if __ClickUnsure() then
    TestAssertBroken "the clickCharChunk is empty", the clickCharChunk is empty, "not sure"
 else
    TestAssert "the clickCharChunk is empty", the clickCharChunk is empty
@@ -86,14 +92,14 @@ set the text of field "tf" to "abcd"
 get the formattedRect of char 1 of field "tf"
 
 click button 3 at (item 1 of it + item 3 of it) div 2, (item 2 of it + item 4 of it) div 2
-if TestIsInStandalone() then
+if __ClickUnsure() then
    TestAssertBroken "the clickChunk is char 1 to 4 of field 1 or the clickChunk is char 1 to 4 of field 2", the clickChunk is "char 1 to 4 of field 1" or the clickChunk is "char 1 to 4 of field 2", "not sure"
 else
    TestAssert "the clickChunk is char 1 to 4 of field 1 or the clickChunk is char 1 to 4 of field 2", the clickChunk is "char 1 to 4 of field 1" or the clickChunk is "char 1 to 4 of field 2"
 end if
 
 click at 0,0
-if TestIsInStandalone() then
+if __ClickUnsure() then
    TestAssertBroken "the clickChunk is empty", the clickChunk is empty, "not sure"
 else
    TestAssert "the clickChunk is empty", the clickChunk is empty
@@ -175,7 +181,7 @@ set the text of field "tf" to "abcdef"
 get the formattedRect of word 1 of field "tf"
 
 click at (item 1 of it + item 3 of it) div 2, (item 2 of it + item 4 of it) div 2
-if TestIsInStandalone() then
+if __ClickUnsure() then
    TestAssertBroken "test", the clickText is "abcdef", "not sure"
 else
    TestAssert "test", the clickText is "abcdef"
@@ -199,7 +205,9 @@ TestAssert "test", the clickV is 0
 end TestInterface10
 
 on TestInterface44
-
+-- OXT-Beyond: a page has no display to name, and the web engine's
+-- screenName is empty, as LiveCode's was
+TestSkipIf "platform", "HTML5"
 
 TestAssert "test", the screenname is not empty
 

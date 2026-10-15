@@ -1620,6 +1620,7 @@ private function TestStartServer pStatus, pBody
    put 0 into sDelay
    put false into sPressEscape
    put 0 into sPicturesOffAt
+   TestSkipIfNot "sockets"
    accept connections on port 0 with message "xtaTestServerAccept"
    return it
 end TestStartServer

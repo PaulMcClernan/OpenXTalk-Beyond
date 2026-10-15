@@ -59,7 +59,8 @@
 # the IDE compile check run through the launcher, the IDE started through
 # the launcher on a screen (tools/ci/linux_ide_start.sh), an HTML5
 # standalone built by the IDE and opened in headless Chromium
-# (tools/ci/web_check.py), ldd and the launcher's
+# (tools/ci/web_check.py), the LiveCode Script tests run in the web engine
+# (tools/ci/web_tests.py, on x86_64), ldd and the launcher's
 # library list against every ELF file (tools/ci/check_linux_libraries.py),
 # desktop-file-validate, and the launcher, install.sh and uninstall.sh in
 # scratch home folders (tools/ci/test_linux_package.py). The runtime
@@ -1194,21 +1195,51 @@ jobs:
       # virtual environment of its own, with the system libraries its
       # Chromium needs. The probe's screenshot and the IDE's lines go with
       # the logs.
-      - name: Web standalone check
+      - name: Install Playwright and Chromium
         if: ${{ !cancelled() && env.OXT_ROOT != '' }}
-        timeout-minutes: 20
+        timeout-minutes: 10
         env:
           PLAYWRIGHT_VERSION: 1.56.0
         run: |
           python3 -m venv "$RUNNER_TEMP/playwright"
           "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
           "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps chromium
+
+      - name: Web standalone check
+        if: ${{ !cancelled() && env.OXT_ROOT != '' }}
+        timeout-minutes: 20
+        run: |
           status=0
           "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_check.py --install "$OXT_ROOT" --platform "linux-$ARCH" \
             --work "$RUNNER_TEMP/web-check" || status=$?
           mkdir -p "$RUNNER_TEMP/logs/web-check"
           cp "$RUNNER_TEMP"/web-check/*.png "$RUNNER_TEMP"/web-check/*.txt "$RUNNER_TEMP/logs/web-check/" 2> /dev/null || true
           exit "$status"
+
+      # The LiveCode Script tests of tests/lcs in the web engine
+      # (tools/ci/web_tests.py): their LiveCode Builder modules compiled by
+      # the build's lc-compile, a web standalone of the tests made by the
+      # build's development engine from the web runtime, and every test run
+      # in it in headless Chromium, one after the other, each with the test
+      # runner's set-up and clean-up as on the desktop. A failure that is
+      # not in tools/ci/web-tests-baseline.txt fails the step (a failed test
+      # is run once more on its own, and one that then passes is only
+      # reported as flaky); a baseline entry that passed is reported, to be
+      # removed. The job summary lists both, the log has every failed
+      # test's output with what the browser's console said. The web engine
+      # is the same on both architectures, so the x86_64 leg runs it.
+      - name: Web engine tests
+        if: ${{ !cancelled() && env.OXT_ROOT != '' && matrix.arch == 'x86_64' }}
+        timeout-minutes: 20
+        env:
+          BIN_TAR: ${{ runner.temp }}/ci-build/OXT-Beyond-linux-${{ matrix.arch }}-bin.tar.xz
+        run: |
+          bin_dir="$RUNNER_TEMP/web-tests-bin"
+          rm -rf "$bin_dir"
+          mkdir -p "$bin_dir"
+          tar -xJf "$BIN_TAR" -C "$bin_dir"
+          "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_tests.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --bin "$bin_dir/linux-$ARCH-bin" --work "$RUNNER_TEMP/web-tests" --log "$RUNNER_TEMP/logs/web-tests.log"
 
       # The IDE's own windows, as a user sees them under the Adwaita GTK
       # theme, light and dark: tools/ci/ui_tour.py starts the package's IDE

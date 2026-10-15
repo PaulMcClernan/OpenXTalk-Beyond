@@ -202,6 +202,15 @@ MCStack::view_platform_setgeom(const MCRectangle &p_rect)
 
 MCRectangle MCStack::view_platform_getwindowrect() const
 {
+	/* OXT-Beyond: while the screen is locked, a stack that is moved or
+	 * resized keeps its window where it was until the screen is unlocked,
+	 * so the window's rect is where it will be: the stack's (a window in
+	 * the page has no frame), as the Linux engine does (lnxstack.cpp).
+	 * Before, the effective rect of the stack was where its window had
+	 * been until the screen was unlocked. */
+	if (MClockscreen != 0)
+		return MCRectangleGetTransformedBounds(rect, view_getviewtransform());
+
 	uint32_t t_window = reinterpret_cast<uint32_t>(window);
 
 	return MCEmscriptenGetWindowRect(t_window);

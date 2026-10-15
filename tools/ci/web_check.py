@@ -298,16 +298,17 @@ def fetch_engine(cache):
 # ---------------------------------------------------------------------------
 # 1. The standalone
 
-def deploy(engine, runtime, version, work, timeout, modules=()):
+def deploy(engine, runtime, version, work, timeout, modules=(), kind='probe', script=PROBE_SCRIPT):
     """Write <work>/__startup.data with the development engine; modules are
     the module.lcm files of the extensions to include, each after those it
-    uses."""
+    uses. kind "tests" makes the stack of tools/ci/web_tests.py from script
+    (see web-deploy.livecodescript) instead of the probe stack."""
     stack = os.path.join(work, STACK_NAME + '.livecode')
     output = os.path.join(work, '__startup.data')
     env = dict(os.environ)
-    env.update(OXT_WEB_PROBE=PROBE_SCRIPT, OXT_WEB_STACK=stack, OXT_WEB_OUTPUT=output, OXT_WEB_VERSION=version,
+    env.update(OXT_WEB_PROBE=script, OXT_WEB_STACK=stack, OXT_WEB_OUTPUT=output, OXT_WEB_VERSION=version,
                OXT_WEB_TEMPLATE=os.path.join(runtime, 'emscripten-startup-template.livecodescript'),
-               OXT_WEB_MODULES='\n'.join(modules))
+               OXT_WEB_MODULES='\n'.join(modules), OXT_WEB_KIND=kind)
     try:
         r = subprocess.run([engine, '-ui', DEPLOY_SCRIPT], cwd=work, env=env, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE, timeout=timeout)
@@ -321,7 +322,7 @@ def deploy(engine, runtime, version, work, timeout, modules=()):
             log('  deploy: %s' % line)
     if r.returncode != 0 or not any(x.startswith('DEPLOY OK') for x in out):
         why = next((x for x in out if x.startswith('DEPLOY FAILED')), 'exit status %s, no DEPLOY line' % r.returncode)
-        raise CheckError('deploying the probe stack failed: %s' % why)
+        raise CheckError('deploying the %s stack failed: %s' % (kind, why))
     return output
 
 
@@ -337,26 +338,31 @@ def engine_modules(engine):
     return modules
 
 
-def make_standalone(runtime, js, wasm, html, startup_data, site):
-    """The standalone folder <site>, as the builder makes it."""
+def make_standalone(runtime, js, wasm, html, startup_data, site, files=(), title=STACK_TITLE):
+    """The standalone folder <site>, as the builder makes it; files are
+    (path in standalone.zip, file) pairs to add, as the builder adds the
+    files of the Copy Files pane under boot/standalone/, and title the
+    page's title."""
     os.makedirs(site, exist_ok=True)
     template = os.path.join(runtime, 'emscripten-standalone-template')
     with zipfile.ZipFile(os.path.join(site, 'standalone.zip'), 'w', zipfile.ZIP_STORED) as z:
         # the builder's scanFolder leaves out names that start with "."
-        for root, dirs, files in os.walk(template):
+        for root, dirs, names in os.walk(template):
             dirs[:] = sorted(d for d in dirs if not d.startswith('.'))
-            for name in sorted(files):
+            for name in sorted(names):
                 if not name.startswith('.'):
                     path = os.path.join(root, name)
                     z.write(path, os.path.relpath(path, template).replace(os.sep, '/'))
         z.write(startup_data, 'boot/__startup.data')
+        for name, path in files:
+            z.write(path, name)
     for path in (js, wasm):
         shutil.copyfile(path, os.path.join(site, os.path.basename(path)))
     with open(html, encoding='utf-8') as f:
         page = f.read()
     if '@STACK_TITLE@' not in page:
         raise CheckError('%s has no @STACK_TITLE@ for the builder to replace' % html)
-    page = page.replace('@STACK_TITLE@', STACK_TITLE)
+    page = page.replace('@STACK_TITLE@', title)
     with open(os.path.join(site, STACK_NAME + '.html'), 'w', encoding='utf-8') as f:
         f.write(page)
 
