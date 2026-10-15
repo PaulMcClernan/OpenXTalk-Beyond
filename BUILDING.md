@@ -2143,7 +2143,6 @@ it.
    | Windows x86-64 | `win-x86_64-setup.exe`, `win-x86_64-portable.zip`, `win-x86_64-binaries.zip`, `win-x86_64-symbols.zip` |
    | macOS universal | `mac-universal.dmg`, `mac-universal.zip`, `mac-universal-binaries.tar.xz`, `mac-universal-symbols.zip` |
    | Linux x86-64 | `linux-x86_64.tar.xz`, `linux-x86_64-binaries.tar.xz`, `linux-x86_64-symbols.tar.xz` |
-   | Other xTalks' IDEs | `xtalk-assistant-plugin.lce`, `mcp-bridge-plugin.lce` (built by the publish job, `tools/plugins`) |
    | All | `xtalk-sources.zip`, and `SHA256SUMS` |
 
    Edit the notes afterwards if needed: say what changed and repeat the

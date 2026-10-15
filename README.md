@@ -206,7 +206,6 @@ version, for example `0.1.0`:
 | 64-bit ARM Linux with glibc 2.31 or later (from 0.2.4-rc.2) | `OXT-Beyond-<version>-linux-arm64.tar.xz` | The same program folder for 64-bit ARM, such as a Raspberry Pi 3, 4 or 5 on a 64-bit system, without the browser widget (see [Linux (64-bit ARM)](#linux-64-bit-arm)). |
 | | `OXT-Beyond-<version>-linux-arm64-binaries.tar.xz` | Only the built engine, externals and tools (`linux-arm64-bin`), as for x86-64. |
 | | `OXT-Beyond-<version>-linux-arm64-symbols.tar.xz` | Debug symbols (`.dbg`), for developers. |
-| Other xTalks' IDEs (LiveCode Community 9, HyperXTalk, OpenXTalk) | `OXT-Beyond-<version>-xtalk-assistant-plugin.lce`, `OXT-Beyond-<version>-mcp-bridge-plugin.lce` | The xTalk Assistant and the xTalk MCP Bridge as extension packages, to install with that IDE's Extension Manager (see [tools/plugins](tools/plugins/README.md)). OXT-Beyond has both built in. Experimental. |
 | All | `OXT-Beyond-<version>-xtalk-sources.zip` | Every file of the bundled xTalk Suite extensions as the release took it from their repositories, so that it can be rebuilt without them. |
 | All | `SHA256SUMS` | SHA-256 checksums of all the files above. |
 

@@ -145,13 +145,6 @@ For 64-bit ARM Linux with glibc 2.31 or later: a Raspberry Pi 3, 4 or 5 running 
 - `{root}-linux-arm64-binaries.tar.xz`: the engine, externals and tools as built (`linux-arm64-bin`), without debug symbols and the build's own tools, plus the licence files.
 - `{root}-linux-arm64-symbols.tar.xz`: debug symbols (`.dbg` files) for the binaries.
 
-## Plugins for other xTalks
-
-The xTalk Assistant and the xTalk MCP Bridge, which are built into OXT-Beyond, as extension packages for the IDEs of LiveCode Community 9, HyperXTalk and OpenXTalk. Install one with Tools > Extension Manager and its install button; it is then in Development > Plugins. OXT-Beyond does not need them. Experimental: checked as the Extension Manager checks a package, and not yet tried in every one of those IDEs (see `tools/plugins/README.md`).
-
-- `{root}-xtalk-assistant-plugin.lce`: the xTalk Assistant.
-- `{root}-mcp-bridge-plugin.lce`: the xTalk MCP Bridge, which lets Claude work in the IDE.
-
 ## All platforms
 
 - `{root}-xtalk-sources.zip`: every file of the bundled xTalk Suite extensions as this release took it from their repositories, with the manifest that pins them, so that the release can be rebuilt without those repositories (see BUILDING.md, "xTalk Suite extensions").
