@@ -15,8 +15,9 @@ You should have received a copy of the GNU General Public License
 along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 
 /* The names of libexternal for an external that is linked into a program
- * with others: the web engine, which links revXML, revZip and revDB into
- * itself because a browser loads no libraries (engine/src/em-externals.cpp).
+ * with others: the web engine, which links revXML, revZip, revDB and
+ * revSpeech into itself because a browser loads no libraries
+ * (engine/src/em-externals.cpp).
  *
  * Every external has its own copy of libexternal: the copy keeps the
  * engine's callbacks and the external's handler table, and the engine looks

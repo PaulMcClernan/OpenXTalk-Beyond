@@ -97,8 +97,14 @@ Then:
    it builds without the IDE. Then encrypt and decrypt, with the OpenSSL
    that the web engine links: AES with a key and an IV, and Blowfish (of
    OpenSSL's legacy provider) with a password and a salt, which must give
-   the desktop engines' bytes, and the cipherNames. When the probe writes
-   "PROBE ready", this
+   the desktop engines' bytes, and the cipherNames. Last, revSpeech, which
+   speaks with the browser's speech synthesis: this script gives the page
+   three voices of its own (headless Chromium has none), one named in
+   Japanese, and the probe lists them (all, the female and the male), sets
+   the one named in Japanese with a speed, pitch and volume, and speaks a
+   text with an e acute and a euro sign, which the browser must be asked to
+   say with that voice at the Web Speech API's rate, pitch and volume for
+   those (3, 0.5 and 0.5). When the probe writes "PROBE ready", this
    script clicks the button, types "abc" into the field, and calls the
    stack's handlers from the page (document.liveCode.findStackWithName):
    probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
@@ -138,6 +144,7 @@ for the browser, the Python package playwright with its Chromium
 import argparse
 import hashlib
 import http.server
+import json
 import os
 import re
 import shutil
@@ -169,7 +176,7 @@ PROBE_CHECKS = (
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
     'xml', 'xslt', 'zip', 'database', 'database-error',
-    'encrypt', 'encrypt-legacy', 'cipher-names',
+    'encrypt', 'encrypt-legacy', 'cipher-names', 'speech',
 )
 
 # The page of the site that the probe's browser widget loads
@@ -223,6 +230,55 @@ window.__oxtSounds = [];
   };
 })();
 '''
+
+# The voices the page gets (headless Chromium has none), and what the
+# probe's revSpeech asks them to say: the text, the voice (by name) and the
+# Web Speech API's rate, pitch and volume (probeSpeech: a speed of 390, a
+# pitch of 120 and a volume of 50)
+PROBE_VOICES = ('Probe Female Voice', 'Probe Male Voice', 'Probe \u65e5\u672c\u8a9e')
+PROBE_SPEECH = {'text': 'Caf\u00e9 \u20ac1', 'voice': PROBE_VOICES[2], 'rate': 3.0, 'pitch': 0.5, 'volume': 0.5}
+
+# Gives the page the voices, and records what they are asked to say, before
+# the page's own scripts run. Each utterance speaks for 5 seconds, unless
+# speech is cancelled.
+SPEECH_HOOK = r'''
+window.__oxtSpeech = [];
+(function() {
+  const voices = %s.map(function(name, i) {
+    return {name: name, lang: 'en-US', voiceURI: 'probe-voice-' + i, localService: true, default: i == 0};
+  });
+  let speaking = false;
+  let timer = null;
+  function SpeechSynthesisUtterance(text) {
+    this.text = text === undefined ? '' : String(text);
+    this.voice = null;
+    this.lang = '';
+    this.rate = 1;
+    this.pitch = 1;
+    this.volume = 1;
+  }
+  const synthesis = {
+    get speaking() { return speaking; },
+    get pending() { return false; },
+    get paused() { return false; },
+    getVoices: function() { return voices.slice(); },
+    speak: function(u) {
+      window.__oxtSpeech.push({text: u.text, voice: u.voice ? u.voice.name : null,
+                               rate: u.rate, pitch: u.pitch, volume: u.volume});
+      speaking = true;
+      clearTimeout(timer);
+      timer = setTimeout(function() { speaking = false; }, 5000);
+    },
+    cancel: function() { speaking = false; clearTimeout(timer); },
+    pause: function() {},
+    resume: function() {},
+    addEventListener: function() {},
+    removeEventListener: function() {},
+  };
+  Object.defineProperty(window, 'speechSynthesis', {value: synthesis, configurable: true});
+  window.SpeechSynthesisUtterance = SpeechSynthesisUtterance;
+})();
+''' % json.dumps(PROBE_VOICES)
 
 # Colours in the screenshot, at points of the card (the probe's stack is
 # 480x360; see web-deploy.livecodescript)
@@ -687,6 +743,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
         page.on('download', on_download)
         page.on('pageerror', on_page_error)
         page.add_init_script(SOUND_HOOK)
+        page.add_init_script(SPEECH_HOOK)
         started = time.time()
         page.goto(url)
         if not wait_for(lambda: 'version' in info, 'the engine starting (PROBE info version)', timeout):
@@ -823,6 +880,15 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                     problems.append('the browser was given the sounds %r, expected %r' % (sounds, [PROBE_SOUND]))
                 else:
                     lines.append('the audio clip\'s samples reached the browser')
+                # what the probe's revSpeech asked the browser to say
+                spoken = page.evaluate('window.__oxtSpeech')
+                if (len(spoken) != 1
+                        or any(spoken[0].get(k) != v for k, v in PROBE_SPEECH.items() if not isinstance(v, float))
+                        or any(abs((spoken[0].get(k) or 0) - v) > 0.001
+                               for k, v in PROBE_SPEECH.items() if isinstance(v, float))):
+                    problems.append('the browser was asked to say %r, expected %r' % (spoken, [PROBE_SPEECH]))
+                else:
+                    lines.append('revSpeech spoke its text with the voice, rate, pitch and volume it set')
                 # the colours drawn
                 shot = os.path.join(work, STACK_NAME + '.png')
                 page.screenshot(path=shot, clip=dict(x=canvas['x'], y=canvas['y'],

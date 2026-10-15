@@ -199,6 +199,37 @@
 					],
 				},
 				{
+					'target_name': 'libExternal-static-revspeech',
+					'type': 'static_library',
+
+					'dependencies':
+					[
+						'../libcore/libcore.gyp:libCore',
+					],
+
+					'include_dirs':
+					[
+						'include',
+						'src',
+					],
+
+					'defines':
+					[
+						'EXTERNAL_STATIC_PREFIX=revspeech',
+					],
+
+					'cflags':
+					[
+						'-include', 'external-static.h',
+					],
+
+					'sources':
+					[
+						'src/external.c',
+						'src/unxsupport.cpp',
+					],
+				},
+				{
 					'target_name': 'libExternal-static-dbsqlite',
 					'type': 'static_library',
 

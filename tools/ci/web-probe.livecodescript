@@ -77,7 +77,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals,probeCiphers"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals,probeCiphers,probeSpeech"
       try
          dispatch tCheck to me
       catch tError
@@ -554,6 +554,41 @@ command probeCiphers
    probeCheck "cipher-names", "aes-256-cbc,256" is among the lines of tNames \
          and "bf-cbc,128" is among the lines of tNames, the number of lines of tNames && "ciphers"
 end probeCiphers
+
+-- revSpeech, which the web engine links into itself and which speaks with
+-- the browser's speech synthesis. web_check.py gives the page three voices
+-- of its own (headless Chromium has none), one of them named in Japanese,
+-- and records what they are asked to say, with the voice, rate, pitch and
+-- volume the browser is given: the text below (with an e acute and a euro
+-- sign), the voice named in Japanese, and the speed, pitch and volume set
+-- here (a rate of 3, a pitch of 0.5 and a volume of 0.5).
+command probeSpeech
+   local tResult, tVoices, tJapanese, tFemale, tMale, tText, tSpeaking, tVolume, tStopped
+   revLoadSpeech
+   put the result into tResult
+   put revSpeechVoices() into tVoices
+   put revSpeechVoices("female") into tFemale
+   put revSpeechVoices("male") into tMale
+   put "Probe " & numToCodepoint(26085) & numToCodepoint(26412) & numToCodepoint(35486) into tJapanese
+   revSetSpeechVoice line 3 of tVoices
+   revSetSpeechSpeed 390
+   revSetSpeechPitch 120
+   revSetSpeechVolume 50
+   put "Caf" & numToCodepoint(233) && numToCodepoint(8364) & "1" into tText
+   revSpeak tText
+   put revIsSpeaking() into tSpeaking
+   put revGetSpeechVolume() into tVolume
+   revStopSpeech
+   put revIsSpeaking() into tStopped
+   revUnloadSpeech
+   probeCheck "speech", tResult is empty and the number of lines of tVoices is 3 \
+         and line 1 of tVoices is "Probe Female Voice" and line 2 of tVoices is "Probe Male Voice" \
+         and line 3 of tVoices is tJapanese and tFemale is "Probe Female Voice" \
+         and tMale is "Probe Male Voice" and tSpeaking is true and tVolume is 50 and tStopped is false, \
+         "load=" & tResult && "voices=" & the number of lines of tVoices && "female=" & tFemale \
+         && "male=" & tMale && "japanese=" & (line 3 of tVoices is tJapanese) \
+         && "speaking=" & tSpeaking && "volume=" & tVolume && "stopped=" & tStopped
+end probeSpeech
 
 command probeClicked
    add 1 to sClicks

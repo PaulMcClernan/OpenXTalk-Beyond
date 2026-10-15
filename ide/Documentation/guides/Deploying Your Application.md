@@ -573,6 +573,16 @@ in it, so the **SSL & Encryption** inclusion is not needed. It has every
 cipher of the desktop engines but the four `aes-...-cbc-hmac-sha...`
 ones, which need an x86 processor's AES instructions. `md5Digest`,
 `sha1Digest`, `messageDigest` and `randomBytes` work too.
+* **Speech.** revSpeech speaks with the browser's speech synthesis, and
+the voices of the system the browser runs on: `revSpeak`,
+`revStopSpeech`, `revIsSpeaking()`, `revSpeechVoices()`,
+`revSetSpeechVoice`, `revSetSpeechSpeed`, `revSetSpeechPitch` and
+`revSetSpeechVolume`, on the scales they have on Windows, and `revSpeak`
+stops what is being said first, as on a Mac. Include it as on the
+desktop. A browser speaks only once the user has clicked or typed in the
+page, as it plays sound, and it does not tell a voice's gender:
+`revSpeechVoices("male")` and `revSpeechVoices("female")` list the
+voices whose names say so.
 * **JavaScript.** `do <script> as "JavaScript"` runs JavaScript in the
 page, and `the result` is its value. The page calls the handlers that a
 stack's `cJavascriptHandlers` property lists, one handler name a line:
@@ -593,7 +603,7 @@ cannot do them:
 `accept` does nothing. Use URLs to talk to servers.
 * Other programs: `shell()` throws an error, and `open process` does
 nothing.
-* Externals other than revXML, revZip and revDB, so neither revSpeech,
+* Externals other than revXML, revZip, revDB and revSpeech, so neither
 revBrowser (the browser widget works) nor the video grabber; and revDB's
 drivers other than SQLite, because MySQL, PostgreSQL and ODBC talk to
 their servers through sockets. The builder warns about each one that a

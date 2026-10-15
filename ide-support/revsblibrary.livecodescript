@@ -1348,7 +1348,7 @@ end revSBMobileExternalsList
 -- can load no others (engine/src/em-externals.cpp), and the database
 -- driver it links in for revDB
 private function revSBEmscriptenExternalsList
-   return "XML" & return & "Database" & return & "Revolution Zip"
+   return "XML" & return & "Database" & return & "Revolution Zip" & return & "Speech"
 end revSBEmscriptenExternalsList
 
 private function revSBEmscriptenDatabaseDriversList

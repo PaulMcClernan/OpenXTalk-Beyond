@@ -18,8 +18,9 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
  *
  * A desktop standalone loads an external from a library of its own. A
  * browser loads no libraries, so the web engine links into itself the
- * externals that can run in a browser: revXML, revZip and revDB with its
- * SQLite driver (no other driver: a browser has no sockets). Each is built
+ * externals that can run in a browser: revXML, revZip, revDB with its
+ * SQLite driver (no other driver: a browser has no sockets) and revSpeech,
+ * which speaks with the browser's speech synthesis. Each is built
  * for it with its names renamed (libexternal/src/external-static.h,
  * revdb/src/dbdriver-static.h), and registered here as a library with the
  * symbols that the engine and revDB look up in it. Loading an external by
@@ -51,6 +52,7 @@ extern "C"
 	EM_EXTERNAL_DECLARE(revxml)
 	EM_EXTERNAL_DECLARE(revzip)
 	EM_EXTERNAL_DECLARE(revdb)
+	EM_EXTERNAL_DECLARE(revspeech)
 
 	/* revdb/src/dbdriver.h */
 	void *dbsqlite_newdbconnectionref(void);
@@ -74,6 +76,8 @@ static const MCSLibraryStaticExport kMCEmscriptenRevZipExports[] =
 		EM_EXTERNAL_EXPORTS(revzip);
 static const MCSLibraryStaticExport kMCEmscriptenRevDBExports[] =
 		EM_EXTERNAL_EXPORTS(revdb);
+static const MCSLibraryStaticExport kMCEmscriptenRevSpeechExports[] =
+		EM_EXTERNAL_EXPORTS(revspeech);
 
 /* What revDB looks up in a driver (LoadDatabaseDriverFromName) */
 static const MCSLibraryStaticExport kMCEmscriptenDBSQLiteExports[] =
@@ -92,6 +96,7 @@ static MCSLibraryStaticInfo s_mc_emscripten_externals[] =
 	{ nullptr, "revzip", kMCEmscriptenRevZipExports },
 	{ nullptr, "revdb", kMCEmscriptenRevDBExports },
 	{ nullptr, "dbsqlite", kMCEmscriptenDBSQLiteExports },
+	{ nullptr, "revspeech", kMCEmscriptenRevSpeechExports },
 };
 
 void

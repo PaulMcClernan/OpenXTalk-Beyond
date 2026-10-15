@@ -17,8 +17,9 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 #ifndef __EM_EXTERNALS_H__
 #define __EM_EXTERNALS_H__
 
-/* Registers the externals linked into the web engine (revXML, revZip, revDB
- * and revDB's SQLite driver) as libraries that the engine can load by name.
+/* Registers the externals linked into the web engine (revXML, revZip, revDB,
+ * revDB's SQLite driver and revSpeech) as libraries that the engine can load
+ * by name.
  * Called once, after MCSInitialize() and before the standalone is read. */
 void MCEmscriptenRegisterExternals(void);
 

@@ -279,6 +279,7 @@
 							'../revzip/revzip.gyp:external-revzip-static',
 							'../revdb/revdb.gyp:external-revdb-static',
 							'../revdb/revdb.gyp:dbsqlite-static',
+							'../revspeech/revspeech.gyp:external-revspeech-static',
 						],
 					},
 				],

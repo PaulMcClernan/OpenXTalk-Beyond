@@ -490,6 +490,15 @@ EXTERNAL_BEGIN_DECLARATIONS("revSpeech")
 	EXTERNAL_DECLARE_COMMAND("revStopSpeech", revSpeechStop)
 	EXTERNAL_DECLARE_FUNCTION("revIsSpeaking", revSpeechBusy)
 	EXTERNAL_DECLARE_FUNCTION("revSpeechVoices", revSpeechVoices)
+#if defined(__EMSCRIPTEN__)
+	// OXT-Beyond: a browser's voices have names in any script (Chrome names
+	// its Japanese voice in Japanese), which the web engine's native
+	// encoding, ISO-8859-1, cannot hold: the names go to and from the script
+	// as UTF-8 (emscriptenspeech.cpp), so revSetSpeechVoice finds each voice
+	// that revSpeechVoices lists. The engine calls these, not the ones above.
+	EXTERNAL_DECLARE_FUNCTION_UTF8("revSpeechVoices", revSpeechVoices)
+	EXTERNAL_DECLARE_COMMAND_UTF8("revSetSpeechVoice", revSpeechVoice)
+#endif
 	EXTERNAL_DECLARE_COMMAND("revSetSpeechProvider", revSpeechProvider)
 #ifdef FEATURE_REVSPEAKTOFILE
 	EXTERNAL_DECLARE_COMMAND("revSpeakToFile", revSpeakToFile)

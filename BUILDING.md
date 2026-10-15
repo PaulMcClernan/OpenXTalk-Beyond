@@ -2586,8 +2586,10 @@ cannot do in a browser is in the guide
 [Deploying Your Application](ide/Documentation/guides/Deploying%20Your%20Application.md).
 
 A browser loads no libraries, so the externals that the web engine runs,
-revXML, revZip, revDB and revDB's SQLite driver, are linked into it, and
-registered by name before it starts
+revXML, revZip, revDB, revDB's SQLite driver and revSpeech (with the
+browser's speech synthesis,
+[`revspeech/src/emscriptenspeech.cpp`](revspeech/src/emscriptenspeech.cpp)),
+are linked into it, and registered by name before it starts
 ([`engine/src/em-externals.cpp`](engine/src/em-externals.cpp)): the
 engine and revDB find them by the names they load them by. Every external
 has its own copy of libexternal, so each one is compiled with

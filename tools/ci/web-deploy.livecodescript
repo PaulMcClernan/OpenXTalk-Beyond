@@ -221,11 +221,11 @@ on startup
       put empty into tParams["engine"]
       -- the externals the standalone loads, as the builder names those of
       -- the web engine's that a stack uses: the probe's use them all
-      -- (probeExternals), the tests none
+      -- (probeExternals and probeSpeech), the tests none
       if $OXT_WEB_KIND is "tests" then
          put empty into tParams["externals"]
       else
-         put "revxml" & return & "revzip" & return & "revdb" into tParams["externals"]
+         put "revxml" & return & "revzip" & return & "revdb" & return & "revspeech" into tParams["externals"]
       end if
       -- the extensions, which load before the stack (as the builder lists
       -- them: their module.lcm files, one a line, in the order they load)

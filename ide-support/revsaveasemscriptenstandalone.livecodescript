@@ -268,17 +268,17 @@ end getStartupScript
 
 -- OXT-Beyond: the externals of the web engine. A browser loads no
 -- libraries, so the web engine links into itself the externals that can
--- run in a browser (engine/src/em-externals.cpp): revXML, revZip, and revDB
--- with its SQLite driver. A standalone loads the ones its settings include
--- by name, as a desktop standalone loads its own; revDB finds its SQLite
--- driver in the engine.
-constant kWebExternals = "revxml,revzip,revdb"
+-- run in a browser (engine/src/em-externals.cpp): revXML, revZip, revDB
+-- with its SQLite driver, and revSpeech with the browser's speech. A
+-- standalone loads the ones its settings include by name, as a desktop
+-- standalone loads its own; revDB finds its SQLite driver in the engine.
+constant kWebExternals = "revxml,revzip,revdb,revspeech"
 constant kWebDatabaseDrivers = "SQLite"
 
 -- The names of the externals that the standalone loads at startup: those
--- of the web engine that the settings include (the XML, Revolution Zip and
--- Database inclusions). A warning names each other external or database
--- driver the settings include, which a browser cannot run.
+-- of the web engine that the settings include (the XML, Revolution Zip,
+-- Database and Speech inclusions). A warning names each other external or
+-- database driver the settings include, which a browser cannot run.
 private function getWebExternals pSettings
    local tMapping, tName, tExternals
    put revSBExternalsMapping() into tMapping
