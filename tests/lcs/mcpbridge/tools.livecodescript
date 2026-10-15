@@ -491,6 +491,15 @@ on TestDesktopConfig
    TestAssert "mcpServers added to a file without it", xtaJsonText(xtaJsonGet(xtaJsonParse(tNew["text"]), "mcpServers/oxt-beyond/command")) is "node"
    put mcbDesktopConfigText("{" & quote & "a" & quote & ": ", "oxt-beyond", "/opt/server.js") into tNew
    TestAssert "a broken file is left alone", tNew["problem"] is not empty and tNew["text"] is empty
+   -- A package of the bridge in another xTalk's IDE names its bridge file
+   put mcbDesktopConfigText(empty, "livecode", "/opt/server.js", "/home/me/.oxt-beyond/mcp-bridge-livecode.json") into tNew
+   TestDiagnostic tNew["text"]
+   put xtaJsonParse(tNew["text"]) into tParsed
+   TestAssert "the bridge file in the entry's env", tNew["problem"] is empty and \
+         xtaJsonText(xtaJsonGet(tParsed, "mcpServers/livecode/env/OXT_MCP_BRIDGE_FILE")) is "/home/me/.oxt-beyond/mcp-bridge-livecode.json" \
+         and xtaJsonText(xtaJsonGet(tParsed, "mcpServers/livecode/command")) is "node"
+   put mcbDesktopConfigText(empty, "oxt-beyond", "/opt/server.js") into tNew
+   TestAssert "no env without one", not (tNew["text"] contains "env")
 end TestDesktopConfig
 
 on TestSaveIsAskedAbout
