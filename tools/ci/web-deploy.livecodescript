@@ -135,6 +135,26 @@ private command makeProbeStack
    create image "Probe Image"
    set the text of image "Probe Image" to base64Decode(kGreenPNG)
    set the rect of image "Probe Image" to 300,200,324,224
+
+   -- drag and drop: a field whose dragStart gives the drag its text, and
+   -- an unlocked field that takes it (probeDnd)
+   create field "Drag Source"
+   set the rect of field "Drag Source" to 20,250,160,280
+   set the lockText of field "Drag Source" to true
+   set the text of field "Drag Source" to "Drag me"
+   set the script of field "Drag Source" to \
+         "on dragStart" & return & "   set the dragData[" & quote & "text" & quote & "] to" && quote & "dropped text" & quote & return & \
+         "   probeDnd" && quote & "start" & quote & return & "end dragStart" & return & \
+         "on dragEnd" & return & "   probeDnd" && quote & "end:" & quote && "& the dragAction" & return & "end dragEnd"
+
+   create field "Drag Target"
+   set the rect of field "Drag Target" to 200,250,440,280
+   set the backgroundColor of field "Drag Target" to "#FFFFFF"
+   set the lockText of field "Drag Target" to false
+   set the script of field "Drag Target" to \
+         "on dragEnter" & return & "   probeDnd" && quote & "enter" & quote & return & "   pass dragEnter" & return & "end dragEnter" & return & \
+         "on dragDrop" & return & "   probeDnd" && quote & "drop:" & quote && "& the dragData[" & quote & "text" & quote & "]" & return & \
+         "   pass dragDrop" & return & "end dragDrop"
 end makeProbeStack
 
 -- The test runner's stack (see the header)

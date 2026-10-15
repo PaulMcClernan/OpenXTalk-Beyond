@@ -106,9 +106,13 @@ Then:
    button with a finger, which must be one more click (the browser makes
    up no mouse events of its own after the touch's), and drags a finger
    across the graphic, which must send it mouseDown, mouseMove and mouseUp
-   at the finger's points (probeReport("drag")). Then it takes a
-   screenshot of the stack and checks the colours of the card, the
-   graphic and the image in it.
+   at the finger's points (probeReport("drag")). It drags one field onto
+   another with the mouse: the first's dragStart gives the drag a text,
+   which the second, an unlocked field, must take, with dragEnter,
+   dragDrop and the first's dragEnd (probeReport("dnd")), and the cursor
+   over it must say that a drop copies. Then it takes a screenshot of the
+   stack and checks the colours of the card, the graphic and the image in
+   it.
 
 The URLs are loaded by the engine, or by the Internet library (libURL)
 when the standalone has it: the IDE's builder adds it, with its web
@@ -176,6 +180,10 @@ PROBE_EXTENSIONS = ('com.livecode.library.widgetutils', 'com.livecode.widget.bro
 
 # The file the probe writes to /downloads, which the browser must download
 PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
+
+# What the drag from the field "Drag Source" onto the field "Drag Target"
+# sends, and then the target's text (probeReport("dnd"))
+PROBE_DND = 'start|enter|drop:dropped text|end:copy|dropped text'
 
 # The samples of the audio clip the probe plays, as the browser has them:
 # channels, rate, seconds and the tone's frequency (counted from where the
@@ -748,6 +756,30 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                                         points[-1][0] - canvas['x'], points[-1][1] - canvas['y'], drag))
                 elif taps == 1:
                     lines.append('a tap was one click, and a finger dragged across the graphic was the mouse')
+                # drag and drop: the mouse drags the field "Drag Source" onto the field
+                # "Drag Target" (the drag starts once it has moved dragDelta points with
+                # its button down), which takes the text that dragStart gave the drag;
+                # over it, the cursor says that a drop copies
+                source, target = at(info['drag-source-rect']), at(info['drag-target-rect'])
+                page.mouse.move(*source)
+                page.mouse.down()
+                steps = 10
+                for i in range(1, steps + 1):
+                    page.mouse.move(source[0] + (target[0] - source[0]) * i / steps,
+                                    source[1] + (target[1] - source[1]) * i / steps)
+                    page.wait_for_timeout(30)
+                page.wait_for_timeout(300)
+                cursor = page.evaluate("getComputedStyle(document.getElementById('canvas')).cursor")
+                page.mouse.up()
+                page.wait_for_timeout(300)
+                dnd = page.evaluate("document.liveCode.findStackWithName('%s').probeReport('dnd')" % STACK_NAME)
+                if dnd != PROBE_DND or cursor != 'copy':
+                    problems.append('the field "Drag Source" dragged onto the field "Drag Target" sent and dropped '
+                                    '%r with the cursor %r over the target, expected %r with the cursor \'copy\''
+                                    % (dnd, cursor, PROBE_DND))
+                else:
+                    lines.append('a field dragged onto another sent the drag\'s messages and dropped its text, '
+                                 'with the copy cursor over the target')
                 # the file the probe wrote to /downloads
                 if wait_for(lambda: downloads, 'the download of %s' % PROBE_DOWNLOAD[0], 10):
                     if downloads != [PROBE_DOWNLOAD]:

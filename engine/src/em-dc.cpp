@@ -127,9 +127,13 @@ bool MCEmscriptenHandleMousePress(MCStack *p_stack, uint32_t p_time, uint32_t p_
 	
 	MCScreenDC *t_dc = static_cast<MCScreenDC *>(MCscreen);
 	t_dc->update_mouse_press_state(p_state, p_button);
-	
+
+	/* OXT-Beyond: the button going up drops what a drag carries */
+	if (t_dc->drag_mouse_press(p_state))
+		return true;
+
 	MCEventQueuePostMousePress(p_stack, p_time, p_modifiers, p_state, p_button);
-	
+
 	return true;
 }
 
@@ -157,9 +161,9 @@ bool MCEmscriptenHandleMousePosition(MCStack *p_stack, uint32_t p_time, uint32_t
 	MCPoint t_position = MCPointMake(p_x, p_y);
 	if (p_stack)
 		t_position = MCEmscriptenWindowToGlobalLoc(p_stack, t_position);
-	if (t_dc->update_mouse_position(t_position))
+	if (t_dc->update_mouse_position(t_position, p_stack))
 		MCEventQueuePostMousePosition(p_stack, p_time, p_modifiers, p_x, p_y);
-	
+
 	return true;
 }
 
@@ -170,11 +174,13 @@ bool MCEmscriptenHandleMousePosition(MCStack *p_stack, uint32_t p_time, uint32_t
 
 MCScreenDC::MCScreenDC()
 	: m_main_window(nil), m_mouse_button_state(0),
+	  m_drag_state(kMCEmscriptenDragStateNone),
 	  m_beep_pitch(kMCEmscriptenBeepPitch),
 	  m_beep_duration(kMCEmscriptenBeepDuration),
 	  m_beep_loudness(kMCEmscriptenBeepLoudness)
 {
 	m_mouse_position = MCPointMake(-1,-1);
+	m_mouse_stack = nil;
 }
 
 MCScreenDC::~MCScreenDC()
@@ -935,14 +941,27 @@ MCScreenDC::update_mouse_press_state(MCMousePressState p_state, int32_t p_button
 }
 
 bool
-MCScreenDC::update_mouse_position(const MCPoint &p_position)
+MCScreenDC::update_mouse_position(const MCPoint &p_position, MCStack *p_stack)
 {
-	if (MCPointIsEqual(m_mouse_position, p_position))
-		return false;
+	/* OXT-Beyond: the same position in another stack is news to that
+	 * stack: the mouse went from one stack's window to another's, and the
+	 * events that say so are at one point (mouseleave, then mouseenter) */
+	bool t_changed = !MCPointIsEqual(m_mouse_position, p_position) ||
+		p_stack != m_mouse_stack;
 	
 	m_mouse_position = p_position;
+
+	/* OXT-Beyond: a drag follows the mouse itself (dodragdrop()), and the
+	 * stacks get the position after it, whatever it is */
+	if (drag_mouse_position())
+	{
+		m_mouse_stack = nil;
+		return false;
+	}
+
+	m_mouse_stack = p_stack;
 	
-	return true;
+	return t_changed;
 }
 
 Boolean
@@ -962,4 +981,226 @@ MCScreenDC::platform_querymouse(int16_t& r_x, int16_t& r_y)
     // browser has told us about.
     r_x = m_mouse_position.x;
     r_y = m_mouse_position.y;
+}
+
+/* ================================================================
+ * Drag and drop
+ * ================================================================ */
+
+/* OXT-Beyond: drag and drop between the stacks in the page, as the
+ * desktop engines have it between their windows. A drag starts when the
+ * mouse moves dragDelta points with a button down (eventqueue.cpp), and
+ * the dragStart handler puts what it carries on the dragboard; the drag
+ * then follows the mouse here, as a desktop's drag loop does
+ * (lnxdnd.cpp): the stack under the pointer gets dragEnter, dragMove
+ * and dragLeave, and the one under it when the button goes up gets
+ * dragDrop, then the source dragEnd. The page draws the drag's image
+ * under the pointer, and a cursor that says what a drop there would do.
+ * What the drag carries stays in the engine: the browser's own drag and
+ * drop, to other pages and applications, is not the engine's. */
+
+/* Why a drag was cancelled (LiveCodeEvents.kDragCancel*, em-event.js) */
+enum
+{
+	kMCEmscriptenDragCancelNone,
+	kMCEmscriptenDragCancelEscape,
+	kMCEmscriptenDragCancelLost,
+};
+
+// Implemented in em-event.js
+extern "C" void MCEmscriptenDragBegin(const void *p_pixels, uint32_t p_width, uint32_t p_height, uint32_t p_stride, int32_t p_xoffset, int32_t p_yoffset);
+extern "C" uint32_t MCEmscriptenDragGetTarget(int32_t *r_x, int32_t *r_y);
+extern "C" uint32_t MCEmscriptenDragGetCancel(void);
+extern "C" void MCEmscriptenDragSetAction(uint32_t p_action);
+extern "C" void MCEmscriptenDragEnd(void);
+
+/* The window that the pointer is over, if it is a stack's, and where in
+ * it the pointer is */
+static Window
+MCEmscriptenDragTarget(MCPoint &r_location)
+{
+	int32_t t_x = 0, t_y = 0;
+	Window t_window = reinterpret_cast<Window>(MCEmscriptenDragGetTarget(&t_x, &t_y));
+	if (t_window != nil && MCdispatcher->findstackd(t_window) == nil)
+		t_window = nil;
+
+	r_location = MCPointMake(t_x, t_y);
+	return t_window;
+}
+
+/* What a drop does: the stack's choice, made one that the source allows,
+ * as on Windows (CDropTarget::DragOver(), w32dnd.cpp): a move or a link
+ * that it does not allow is a copy */
+static MCDragAction
+MCEmscriptenDragAllowedAction(MCDragAction p_action, MCDragActionSet p_allowed_actions)
+{
+	if ((p_action == DRAG_ACTION_MOVE || p_action == DRAG_ACTION_LINK) &&
+	    (p_allowed_actions & p_action) == 0)
+		return DRAG_ACTION_COPY;
+	return p_action;
+}
+
+MCDragAction
+MCScreenDC::dodragdrop(Window w,
+                       MCDragActionSet p_allowed_actions,
+                       MCImage *p_image,
+                       const MCPoint *p_image_offset)
+{
+	/* The drag waits for the page's events, which the engine cannot do in
+	 * a handler that the page called (wait()). The button that started it
+	 * is still down, unless it went up while dragStart ran. */
+	if (!MCEmscriptenAsyncCanYield() ||
+	    m_drag_state != kMCEmscriptenDragStateNone ||
+	    m_mouse_button_state == 0)
+	{
+		return DRAG_ACTION_NONE;
+	}
+
+	/* The drag's image follows the pointer, which is dragImageOffset from
+	 * its top left */
+	MCImageBitmap *t_bitmap = nil;
+	if (p_image != nil && !p_image->lockbitmap(t_bitmap, true))
+		t_bitmap = nil;
+	MCEmscriptenDragBegin(t_bitmap != nil ? t_bitmap->data : nil,
+	                      t_bitmap != nil ? t_bitmap->width : 0,
+	                      t_bitmap != nil ? t_bitmap->height : 0,
+	                      t_bitmap != nil ? t_bitmap->stride : 0,
+	                      p_image_offset != nil ? p_image_offset->x : 0,
+	                      p_image_offset != nil ? p_image_offset->y : 0);
+	if (t_bitmap != nil)
+		p_image->unlockbitmap(t_bitmap);
+
+	/* The drag has the mouse now: the press that started it is over for
+	 * the stacks, as on a Mac (MCMacPlatformSyncMouseBeforeDragging(),
+	 * mac-core.mm), and its button going up drops what the drag carries */
+	MCbuttonstate = 0;
+	m_drag_state = kMCEmscriptenDragStateDragging;
+
+	uint16_t t_old_modifiers = MCmodifierstate;
+
+	Window t_over = nil;
+	MCDragAction t_action = DRAG_ACTION_NONE;
+	for (;;)
+	{
+		/* Escape cancels the drag, as on the desktop, and so does the page
+		 * losing the mouse (when it may not hear the button go up) */
+		uint32_t t_cancel = MCEmscriptenDragGetCancel();
+		if (t_cancel != kMCEmscriptenDragCancelNone)
+		{
+			if (m_drag_state == kMCEmscriptenDragStateDragging &&
+			    t_cancel == kMCEmscriptenDragCancelEscape)
+				m_drag_state = kMCEmscriptenDragStateCancelled;
+			else if (m_drag_state == kMCEmscriptenDragStateDragging ||
+			         m_drag_state == kMCEmscriptenDragStateDropped)
+				m_drag_state = kMCEmscriptenDragStateAborted;
+		}
+
+		if (MCquit ||
+		    m_drag_state == kMCEmscriptenDragStateCancelled ||
+		    m_drag_state == kMCEmscriptenDragStateAborted)
+		{
+			break;
+		}
+
+		/* The drag leaves the stack that it was over for the one under
+		 * the pointer now, which says what a drop there would do (as the
+		 * modifier keys can change it, they are the keys down now, as in
+		 * a desktop's drag loop) */
+		MCmodifierstate = querymods();
+
+		MCPoint t_location;
+		Window t_window = MCEmscriptenDragTarget(t_location);
+		if (t_window != t_over)
+		{
+			if (t_over != nil)
+				MCdispatcher->wmdragleave(t_over);
+			t_over = t_window;
+			if (t_over != nil)
+				MCdispatcher->wmdragenter(t_over);
+		}
+
+		t_action = DRAG_ACTION_NONE;
+		if (t_over != nil)
+			t_action = MCEmscriptenDragAllowedAction(MCdispatcher->wmdragmove(t_over, t_location.x, t_location.y),
+			                                         p_allowed_actions);
+		MCEmscriptenDragSetAction(t_action);
+
+		/* The button went up where the pointer is now */
+		if (m_drag_state != kMCEmscriptenDragStateDragging)
+			break;
+
+		/* Wait for the mouse to move or its button to go up. Only the
+		 * engine's own timers run meanwhile (a field scrolls as a drag
+		 * nears its edge), as in a desktop's drag loop. */
+		if (wait(60.0, False, True))
+			break;
+	}
+
+	/* The stack under the pointer takes the drop, if it takes one at all;
+	 * otherwise the drag leaves it */
+	MCDragAction t_result = DRAG_ACTION_NONE;
+	if (t_over != nil)
+	{
+		if (m_drag_state == kMCEmscriptenDragStateDropped &&
+		    t_action != DRAG_ACTION_NONE)
+			t_result = MCEmscriptenDragAllowedAction(MCdispatcher->wmdragdrop(t_over),
+			                                         p_allowed_actions);
+		else
+			MCdispatcher->wmdragleave(t_over);
+	}
+
+	MCEmscriptenDragEnd();
+	MCmodifierstate = t_old_modifiers;
+
+	/* After Escape, the drag has the mouse until its button goes up
+	 * (drag_mouse_press()) */
+	if (m_drag_state != kMCEmscriptenDragStateCancelled)
+		m_drag_state = kMCEmscriptenDragStateNone;
+
+	/* The mouse's events are the stacks' again, from the stack where the
+	 * drag ended, as on the desktop when a drag is over */
+	MCPoint t_location;
+	Window t_window = MCEmscriptenDragTarget(t_location);
+	if (t_window != nil)
+	{
+		MCStack *t_stack = MCdispatcher->findstackd(t_window);
+		MCEventQueuePostMouseFocus(t_stack, MCeventtime, true);
+		MCEventQueuePostMousePosition(t_stack, MCeventtime, MCmodifierstate,
+		                              t_location.x, t_location.y);
+	}
+
+	return t_result;
+}
+
+bool
+MCScreenDC::drag_mouse_position(void)
+{
+	return m_drag_state == kMCEmscriptenDragStateDragging ||
+		m_drag_state == kMCEmscriptenDragStateCancelled;
+}
+
+bool
+MCScreenDC::drag_mouse_press(MCMousePressState p_state)
+{
+	switch (m_drag_state)
+	{
+	case kMCEmscriptenDragStateDragging:
+		/* The button went up, or the browser cancelled the touch that was
+		 * the mouse */
+		if (p_state == kMCMousePressStateUp)
+			m_drag_state = kMCEmscriptenDragStateDropped;
+		else if (p_state == kMCMousePressStateRelease)
+			m_drag_state = kMCEmscriptenDragStateAborted;
+		return true;
+
+	case kMCEmscriptenDragStateCancelled:
+		/* The drag that Escape cancelled is over when the button goes up;
+		 * a press that comes first (the button went up away from the
+		 * page) is the stacks' */
+		m_drag_state = kMCEmscriptenDragStateNone;
+		return p_state != kMCMousePressStateDown;
+
+	default:
+		return false;
+	}
 }

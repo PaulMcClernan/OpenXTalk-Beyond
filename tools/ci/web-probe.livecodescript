@@ -40,7 +40,7 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- stack while it builds the standalone, openStack does nothing more.
 
 local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder, sPlayStopped
-local sBrowserCalls, sBrowserEvents, sDrag
+local sBrowserCalls, sBrowserEvents, sDrag, sDnd
 
 private command probeLine pText
    write "PROBE " & pText & return to stdout
@@ -480,6 +480,8 @@ command probeObjects
    probeInfo "field-rect", the rect of field "Probe Field"
    probeInfo "graphic-rect", the rect of graphic "Probe Graphic"
    probeInfo "image-rect", the rect of image "Probe Image"
+   probeInfo "drag-source-rect", the rect of field "Drag Source"
+   probeInfo "drag-target-rect", the rect of field "Drag Target"
 end probeObjects
 
 -- revXML, revZip and revDB with its SQLite driver, which the web engine
@@ -574,6 +576,16 @@ on mouseMove pX, pY
    pass mouseMove
 end mouseMove
 
+-- web_check.py drags the field "Drag Source" onto the field "Drag
+-- Target", whose scripts call this with dragStart, dragEnter, dragDrop
+-- and dragEnd: sDnd gets each
+command probeDnd pWhat
+   if sDnd is not empty then
+      put "|" after sDnd
+   end if
+   put pWhat after sDnd
+end probeDnd
+
 on keyDown pKey
    put pKey after sKeys
    pass keyDown
@@ -595,13 +607,17 @@ function probeFromJS pValue
 end probeFromJS
 
 -- Called from the page: what the user did, or with "keys", the keys that
--- are down, or with "drag", the drag on the graphic
+-- are down, with "drag", the drag on the graphic, or with "dnd", the drag
+-- and drop between the fields and the text of the field it dropped on
 function probeReport pWhat
    if pWhat is "keys" then
       return the shiftKey & "|" & the keysDown
    end if
    if pWhat is "drag" then
       return word 1 to -1 of sDrag
+   end if
+   if pWhat is "dnd" then
+      return sDnd & "|" & the text of field "Drag Target"
    end if
    return the text of field "Probe Field" & "|" & sKeys & "|" & sClicks
 end probeReport

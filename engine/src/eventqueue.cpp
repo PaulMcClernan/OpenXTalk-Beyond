@@ -218,6 +218,12 @@ static MCEvent *s_last_event = nil;
 static uint32_t s_click_time = 0;
 static uint32_t s_click_count = 0;
 
+#if defined(__EMSCRIPTEN__)
+// OXT-Beyond: true once the press that a button made has started a drag
+// in a web standalone (or would have), so that it starts one at most
+static bool s_drag_click = false;
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 
 bool MCEventQueueInitialize(void)
@@ -365,6 +371,10 @@ static void MCEventQueueDispatchEvent(MCEvent *p_event)
                 
                 MCclicklocx = MCmousex;
                 MCclicklocy = MCmousey;
+
+#if defined(__EMSCRIPTEN__)
+				s_drag_click = false;
+#endif
 			}
 			else
 				s_click_time = t_event -> mouse . time;
@@ -468,6 +478,23 @@ static void MCEventQueueDispatchEvent(MCEvent *p_event)
 			MCmousey = t_mouseloc.y;
 
 			t_target -> mfocus(t_mouseloc . x, t_mouseloc . y);
+
+#if defined(__EMSCRIPTEN__)
+			// OXT-Beyond: a web standalone starts a drag as the desktop
+			// engines do (w32dcw32.cpp, mac-core.mm): when the mouse has
+			// moved dragDelta points from where a button went down, while
+			// it is still down. The page then follows the drag
+			// (MCScreenDC::dodragdrop(), em-dc.cpp). Mobile engines have
+			// no drag and drop.
+			if (t_menu == nil && MCbuttonstate != 0 && !s_drag_click &&
+				MCmousestackptr && MCclickstackptr == MCmousestackptr &&
+				(MCU_abs(MCmousex - MCclicklocx) >= MCdragdelta ||
+				 MCU_abs(MCmousey - MCclicklocy) >= MCdragdelta))
+			{
+				s_drag_click = true;
+				MCdispatcher -> wmdrag(MCmousestackptr -> getwindow());
+			}
+#endif
 		}
 		break;
 

@@ -210,10 +210,16 @@ mergeInto(LibraryManager.library, {
 			LiveCodeEvents._modifierKeys = keys;
 		},
 
-		// The page lost the keyboard: the keys that are down go up for it
+		// The page lost the keyboard: the keys that are down go up for it.
+		// OXT-Beyond: a drag ends there too, as the page may not hear its
+		// button go up.
 		_handleWindowBlur: function() {
 			LiveCodeEvents._modifierKeys &= 16;
 			LiveCodeEvents._keysDown = {};
+			if (LiveCodeEvents._drag && !LiveCodeEvents._drag.cancel) {
+				LiveCodeEvents._drag.cancel = LiveCodeEvents.kDragCancelLost;
+				LiveCodeAsync.resume();
+			}
 		},
 
 		// The engine's modifiers that are down (MCScreenDC::querymods()):
@@ -725,6 +731,19 @@ mergeInto(LibraryManager.library, {
 				}
 			}
 
+			// OXT-Beyond: in a drag the keys are the drag's, as in a
+			// desktop's drag loop: Escape cancels it, and the modifier
+			// keys (tracked above) can change what a drop would do
+			if (LiveCodeEvents._drag) {
+				if (e.type == 'keydown' && e.key == 'Escape' &&
+					!LiveCodeEvents._drag.cancel) {
+					LiveCodeEvents._drag.cancel = LiveCodeEvents.kDragCancelEscape;
+				}
+				e.preventDefault();
+				LiveCodeAsync.resume();
+				return false;
+			}
+
 			if (e.type == 'keydown' && LiveCodeEvents._keepFromBrowser(e)) {
 				e.preventDefault();
 			}
@@ -1026,6 +1045,7 @@ mergeInto(LibraryManager.library, {
 		
 		_handleMouseEvent: function(e) {
 			LiveCodeEvents._trackModifiers(e);
+			LiveCodeEvents._trackPointer(e);
 			LiveCodeAsync.delay(function () {
 
 				var target = LiveCodeEvents._eventTarget(e);
@@ -1179,6 +1199,123 @@ mergeInto(LibraryManager.library, {
 			if (LiveCodeEvents._captureTarget) {
 				LiveCodeEvents._handleMouseEvent(e);
 			}
+		},
+
+		// ----------------------------------------------------------------
+		// Drag and drop
+		// ----------------------------------------------------------------
+
+		// OXT-Beyond: a drag that the engine started follows the mouse
+		// until its button goes up (MCScreenDC::dodragdrop(), em-dc.cpp).
+		// Meanwhile the keys are the drag's, the cursor says what a drop
+		// would do, and the drag's image follows the pointer.
+
+		// Where the pointer is in the page's viewport: [clientX, clientY]
+		_pointer: null,
+
+		// The drag, or null: {'cancel', 'image', 'xoffset', 'yoffset',
+		// 'style', 'cursor'}. Its image is a canvas, if it has one, whose
+		// top left is xoffset, yoffset from the pointer; its style makes
+		// the cursor over the whole page the drag's.
+		_drag: null,
+
+		// Why a drag was cancelled: Escape (its button is still down), or
+		// the page lost the mouse
+		kDragCancelEscape: 1,
+		kDragCancelLost: 2,
+
+		// The cursors that say what a drop would do: none, then the
+		// engine's drag actions (uidc.h): move, copy and link
+		_dragCursors: {0: 'no-drop', 1: 'grabbing', 2: 'copy', 4: 'alias'},
+
+		_trackPointer: function(e) {
+			if (typeof e.clientX != 'number') {
+				return;
+			}
+			LiveCodeEvents._pointer = [e.clientX, e.clientY];
+			var drag = LiveCodeEvents._drag;
+			if (drag && drag.image) {
+				drag.image.style.left = (e.clientX - drag.xoffset) + 'px';
+				drag.image.style.top = (e.clientY - drag.yoffset) + 'px';
+			}
+		},
+
+		dragBegin: function(pixels, width, height, stride, xoffset, yoffset) {
+			LiveCodeEvents.dragEnd();
+
+			var drag = {'cancel': 0, 'image': null, 'xoffset': xoffset, 'yoffset': yoffset,
+						'style': document.createElement('style'), 'cursor': null};
+			document.head.appendChild(drag.style);
+
+			if (pixels && width > 0 && height > 0) {
+				var image = LiveCodeDC.canvasFromPixels(pixels, width, height, stride);
+				if (image) {
+					image.style.position = 'fixed';
+					image.style.width = width + 'px';
+					image.style.height = height + 'px';
+					image.style.pointerEvents = 'none';
+					image.style.zIndex = 2147483647;
+					image.style.opacity = 0.75;
+					document.body.appendChild(image);
+					drag.image = image;
+				}
+			}
+
+			LiveCodeEvents._drag = drag;
+			if (LiveCodeEvents._pointer) {
+				LiveCodeEvents._trackPointer({'clientX': LiveCodeEvents._pointer[0],
+											  'clientY': LiveCodeEvents._pointer[1]});
+			}
+			LiveCodeEvents.dragSetCursor('grabbing');
+		},
+
+		dragSetCursor: function(cursor) {
+			var drag = LiveCodeEvents._drag;
+			if (drag && drag.cursor != cursor) {
+				drag.cursor = cursor;
+				drag.style.textContent = 'html, html * { cursor: ' + cursor + ' !important; }';
+			}
+		},
+
+		dragEnd: function() {
+			var drag = LiveCodeEvents._drag;
+			if (!drag) {
+				return;
+			}
+			LiveCodeEvents._drag = null;
+			if (drag.style.parentNode) {
+				drag.style.parentNode.removeChild(drag.style);
+			}
+			if (drag.image && drag.image.parentNode) {
+				drag.image.parentNode.removeChild(drag.image);
+			}
+		},
+
+		// The stack window under the pointer: {'window', 'x', 'y'}, x, y
+		// being where the pointer is in its canvas (as for the mouse's
+		// events: _encodeMouseCoordinates()), or null if it is over none
+		dragTarget: function() {
+			var pointer = LiveCodeEvents._pointer;
+			if (!pointer) {
+				return null;
+			}
+			// The canvas, or a native layer that is over it
+			var element = document.elementFromPoint(pointer[0], pointer[1]);
+			for (; element; element = element.parentElement) {
+				var dataset = element.dataset || {};
+				var id = Number(dataset.lcWindowId || dataset.lcLayerWindowId || 0);
+				if (id) {
+					var canvas = LiveCodeDC.getWindowCanvas(id);
+					if (!canvas) {
+						return null;
+					}
+					var rect = canvas.getBoundingClientRect();
+					return {'window': id,
+							'x': (pointer[0] - rect.left - canvas.clientLeft + canvas.scrollLeft) | 0,
+							'y': (pointer[1] - rect.top - canvas.clientTop + canvas.scrollTop) | 0};
+				}
+			}
+			return null;
 		},
 
 		// ----------------------------------------------------------------
@@ -1395,6 +1532,47 @@ mergeInto(LibraryManager.library, {
 			{{{ makeSetValue('codes', 'i * 4', 'Number(down[i])', 'i32') }}};
 		}
 		return down.length;
+	},
+
+	// OXT-Beyond: a drag that the engine started (MCScreenDC::dodragdrop(),
+	// em-dc.cpp). Its image, if it has one, is <pixels>: premultiplied
+	// RGBA, <stride> bytes a row; the pointer is <xoffset>, <yoffset> from
+	// its top left.
+	MCEmscriptenDragBegin__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragBegin: function(pixels, width, height, stride, xoffset, yoffset) {
+		LiveCodeEvents.dragBegin(pixels, width, height, stride, xoffset, yoffset);
+	},
+
+	// The window of the stack that the pointer is over (0 if none), and
+	// where in it the pointer is (<r_x>, <r_y>: int32_t)
+	MCEmscriptenDragGetTarget__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragGetTarget: function(r_x, r_y) {
+		var target = LiveCodeEvents.dragTarget();
+		if (!target) {
+			return 0;
+		}
+		{{{ makeSetValue('r_x', '0', 'target.x', 'i32') }}};
+		{{{ makeSetValue('r_y', '0', 'target.y', 'i32') }}};
+		return target.window;
+	},
+
+	// Why the drag was cancelled: 0 if it was not, 1 Escape (its button
+	// is still down), 2 the page lost the mouse
+	MCEmscriptenDragGetCancel__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragGetCancel: function() {
+		return LiveCodeEvents._drag ? LiveCodeEvents._drag.cancel : 0;
+	},
+
+	// What a drop would do (an engine drag action, or 0 for none): the
+	// cursor shows it
+	MCEmscriptenDragSetAction__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragSetAction: function(action) {
+		LiveCodeEvents.dragSetCursor(LiveCodeEvents._dragCursors[action] || 'no-drop');
+	},
+
+	MCEmscriptenDragEnd__deps: ['$LiveCodeEvents'],
+	MCEmscriptenDragEnd: function() {
+		LiveCodeEvents.dragEnd();
 	},
 
 });

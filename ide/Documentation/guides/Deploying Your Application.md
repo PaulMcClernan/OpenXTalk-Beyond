@@ -527,6 +527,12 @@ the desktop, and the copy, cut and paste keys use the system clipboard. On a
 touch screen, a finger on a stack is the mouse: touching presses the mouse
 button, moving moves the mouse, and lifting lets the button go, so taps
 click and fingers drag.
+* **Drag and drop** between the controls and stacks of the page works as
+on the desktop: `dragStart`, `the dragData`, `dragEnter`, `dragMove`,
+`dragLeave`, `dragDrop` and `dragEnd`, `the dragImage` and the engine's
+own dragging of text between fields. The cursor says what a drop would
+do, and Escape cancels a drag. A drag that a stack starts stays in the
+page.
 * **The screen** is the browser's window: `the screenRect` is its size, a
 stack gets `desktopChanged` when it changes, and stacks draw at the
 screen's scale, so they stay sharp on high-resolution screens and when the
@@ -586,7 +592,8 @@ drivers other than SQLite, because MySQL, PostgreSQL and ODBC talk to
 their servers through sockets. The builder warns about each one that a
 stack includes. Builder extensions work.
 * Printing: the print commands put "printing failed" into `the result`.
-* Drag and drop.
+* Dragging out of the page: a drag that a stack starts cannot be dropped
+on another application.
 * `the systemVersion` and `the machine` are empty, and `the processor` is
 `js`; `the platform` is `HTML5`. To know the browser, ask it:
 `do "navigator.userAgent" as "JavaScript"`.

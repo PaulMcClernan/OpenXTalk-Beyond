@@ -283,12 +283,27 @@ mergeInto(LibraryManager.library, {
 		// A cursor from an image: <pixels> is premultiplied RGBA, <stride>
 		// bytes a row
 		createCustomCursor: function(pixels, width, height, stride, xhot, yhot) {
+			var canvas = LiveCodeDC.canvasFromPixels(pixels, width, height, stride);
+			if (!canvas) {
+				return LiveCodeDC.createStandardCursor(1);
+			}
+			var id = LiveCodeDC._nextCursor++;
+			LiveCodeDC._cursors[id] = 'url("' + canvas.toDataURL('image/png') + '") ' +
+				Math.max(0, Math.min(xhot, width - 1)) + ' ' +
+				Math.max(0, Math.min(yhot, height - 1)) + ', auto';
+			return id;
+		},
+
+		// A canvas that shows an image (a cursor's, or a drag's): <pixels>
+		// is premultiplied RGBA, <stride> bytes a row. Null if there is no
+		// image.
+		canvasFromPixels: function(pixels, width, height, stride) {
 			var canvas = document.createElement('canvas');
 			canvas.width = width;
 			canvas.height = height;
 			var context = canvas.getContext('2d');
 			if (!context || width == 0 || height == 0) {
-				return LiveCodeDC.createStandardCursor(1);
+				return null;
 			}
 			var image = context.createImageData(width, height);
 			var data = image.data;
@@ -307,11 +322,7 @@ mergeInto(LibraryManager.library, {
 				}
 			}
 			context.putImageData(image, 0, 0);
-			var id = LiveCodeDC._nextCursor++;
-			LiveCodeDC._cursors[id] = 'url("' + canvas.toDataURL('image/png') + '") ' +
-				Math.max(0, Math.min(xhot, width - 1)) + ' ' +
-				Math.max(0, Math.min(yhot, height - 1)) + ', auto';
-			return id;
+			return canvas;
 		},
 
 		freeCursor: function(id) {
@@ -362,15 +373,19 @@ mergeInto(LibraryManager.library, {
 			if (tWindow && tElement)
 			{
 				this.containerAddElement(tWindow.container, tElement);
+				// OXT-Beyond: a drag over the element is over its window
+				// (LiveCodeEvents.dragTarget())
+				tElement.dataset.lcLayerWindowId = pWindowID;
 			}
 		},
-		
+
 		nativeElementRemoveFromWindow: function(pElementID, pWindowID) {
 			var tWindow = LiveCodeUtil.fetchObject(pWindowID);
 			var tElement = LiveCodeUtil.fetchObject(pElementID);
 			if (tWindow && tElement)
 			{
 				this.containerRemoveElement(tWindow.container, tElement);
+				delete tElement.dataset.lcLayerWindowId;
 			}
 		},
 		

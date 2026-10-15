@@ -183,11 +183,19 @@ public:
 
     /* Mouse management */
 	void update_mouse_press_state(MCMousePressState p_state, int32_t p_button);
-	bool update_mouse_position(const MCPoint &p_position); 
+	bool update_mouse_position(const MCPoint &p_position, MCStack *p_stack);
 
 	virtual Boolean getmouse(uint2 button, Boolean& r_abort);
     virtual void platform_querymouse(int16_t& r_x, int16_t& r_y);
-    
+
+    /* OXT-Beyond: drag and drop between the stacks in the page. The drag
+     * follows the mouse until its button goes up, and its events are the
+     * drag's meanwhile, not the stacks': drag_mouse_position() and
+     * drag_mouse_press() return true for those that the drag takes. */
+    virtual MCDragAction dodragdrop(Window w, MCDragActionSet p_allowed_actions, MCImage *p_image, const MCPoint *p_image_offset);
+    bool drag_mouse_position(void);
+    bool drag_mouse_press(MCMousePressState p_state);
+
 protected:
 	void FitWindow();
 
@@ -195,6 +203,25 @@ private:
 	Window m_main_window;
 	uint32_t m_mouse_button_state;
 	MCPoint m_mouse_position;
+	/* The stack of the last position that the stacks got (only compared) */
+	MCStack *m_mouse_stack;
+
+	/* Where a drag is (dodragdrop()) */
+	enum MCEmscriptenDragState
+	{
+		kMCEmscriptenDragStateNone,
+		/* Following the mouse */
+		kMCEmscriptenDragStateDragging,
+		/* Its button went up: the drag drops */
+		kMCEmscriptenDragStateDropped,
+		/* It ends with no drop: the browser cancelled the touch that was
+		 * the mouse, or the page lost the mouse */
+		kMCEmscriptenDragStateAborted,
+		/* Escape cancelled it: it ends with no drop, and has the mouse
+		 * until its button goes up */
+		kMCEmscriptenDragStateCancelled,
+	};
+	MCEmscriptenDragState m_drag_state;
 
 	int4 m_beep_pitch;
 	int4 m_beep_duration;
