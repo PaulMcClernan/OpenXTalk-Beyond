@@ -32,14 +32,15 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- which answers the page's dialogs as they come. Then the probe writes
 -- "PROBE ready", and web_check.py does what a user and a page do: it
 -- clicks the button (mouseUp writes "PROBE click PASS <count>"), types
--- into the field, holds Shift down, and calls the handlers that the
--- stack's cJavascriptHandlers name: probeFromJS and probeReport.
+-- into the field, holds Shift down, taps the button and drags a finger
+-- across the graphic, and calls the handlers that the stack's
+-- cJavascriptHandlers name: probeFromJS and probeReport.
 --
 -- The checks run only in the web standalone: in the IDE, which opens the
 -- stack while it builds the standalone, openStack does nothing more.
 
 local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder, sPlayStopped
-local sBrowserCalls, sBrowserEvents
+local sBrowserCalls, sBrowserEvents, sDrag
 
 private command probeLine pText
    write "PROBE " & pText & return to stdout
@@ -486,6 +487,23 @@ command probeClicked
    probeLine "click PASS" && sClicks
 end probeClicked
 
+-- web_check.py drags a finger across the graphic, whose script calls this
+-- with its mouseDown, mouseUp and mouseRelease: sDrag gets each, with the
+-- mouseLoc, and the first mouseMove between down and up (see mouseMove)
+command probeDrag pWhat
+   if pWhat is "down" then
+      put empty into sDrag
+   end if
+   put pWhat & "@" & the mouseLoc & space after sDrag
+end probeDrag
+
+on mouseMove pX, pY
+   if the last word of sDrag begins with "down@" then
+      put "move@" & pX & comma & pY & space after sDrag
+   end if
+   pass mouseMove
+end mouseMove
+
 on keyDown pKey
    put pKey after sKeys
    pass keyDown
@@ -507,10 +525,13 @@ function probeFromJS pValue
 end probeFromJS
 
 -- Called from the page: what the user did, or with "keys", the keys that
--- are down
+-- are down, or with "drag", the drag on the graphic
 function probeReport pWhat
    if pWhat is "keys" then
       return the shiftKey & "|" & the keysDown
+   end if
+   if pWhat is "drag" then
+      return word 1 to -1 of sDrag
    end if
    return the text of field "Probe Field" & "|" & sKeys & "|" & sClicks
 end probeReport

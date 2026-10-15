@@ -92,8 +92,12 @@ Then:
    button, types "abc" into the field, and calls the stack's handlers from
    the page (document.liveCode.findStackWithName):
    probeFromJS(21) must return 42, probeReport() "abc|abc|1", and
-   probeReport("keys"), with Shift held down, "down|65505". Then it takes
-   a screenshot of the stack and checks the colours of the card, the
+   probeReport("keys"), with Shift held down, "down|65505". It taps the
+   button with a finger, which must be one more click (the browser makes
+   up no mouse events of its own after the touch's), and drags a finger
+   across the graphic, which must send it mouseDown, mouseMove and mouseUp
+   at the finger's points (probeReport("drag")). Then it takes a
+   screenshot of the stack and checks the colours of the card, the
    graphic and the image in it.
 
 The URLs are loaded by the engine, or by the Internet library (libURL)
@@ -537,6 +541,30 @@ def parse_rect(text):
     return parts
 
 
+def touch_drag_ok(report, points):
+    """Whether the probe's report of a drag across its graphic
+    (probeReport("drag"): "down@x,y move@x,y up@x,y", each with the mouse's
+    place on the card) is what a finger at the points (on the card, the
+    first where it touched and the last where it lifted) does: mouseDown
+    where it touched, a mouseMove on its way, and mouseUp where it lifted
+    (the engine may join moves, so the mouseMove may be at any point after
+    the first)."""
+    try:
+        sent = [(word.split('@')[0], tuple(int(n) for n in word.split('@')[1].split(',')))
+                for word in (report or '').split()]
+    except (IndexError, ValueError):
+        return False
+    if [name for name, _ in sent] != ['down', 'move', 'up']:
+        return False
+
+    def near(at, point):
+        return abs(at[0] - point[0]) <= 1 and abs(at[1] - point[1]) <= 1
+
+    moved = sent[1][1]
+    return (near(sent[0][1], points[0]) and near(sent[2][1], points[-1])
+            and points[0][0] < moved[0] <= points[-1][0] + 1 and abs(moved[1] - points[0][1]) <= 1)
+
+
 def run_browser(url, version, work, timeout, url_path=None, browser_widget=None):
     """Open the page and check what the probe and the page do; url_path is
     what must load the probe's URLs, 'engine' or 'libURL' (None: either),
@@ -618,7 +646,8 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={'width': 800, 'height': 600}, accept_downloads=True)
+        page = browser.new_page(viewport={'width': 800, 'height': 600}, accept_downloads=True,
+                                has_touch=True)
         page.on('console', on_console)
         page.on('dialog', on_dialog)
         page.on('download', on_download)
@@ -674,6 +703,33 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                                     'and the keysDown: \'down|65505\'' % (keys,))
                 else:
                     lines.append('the shiftKey and the keysDown saw Shift held down')
+                # a touch: a tap on the button is one click (the browser makes up no mouse
+                # events of its own after the touch's), and a finger dragged across the
+                # graphic is the mouse with its button down
+                page.touchscreen.tap(*at(info['button-rect']))
+                wait_for(lambda: len(probes.get('click', [])) >= 2, 'the button\'s mouseUp for a tap', 10)
+                page.wait_for_timeout(300)
+                taps = len(probes.get('click', [])) - 1
+                if taps != 1:
+                    problems.append('a tap on the button sent its mouseUp %d times, expected once' % taps)
+                start = at(info['graphic-rect'])
+                points = [(start[0] + 8 * step, start[1]) for step in range(5)]
+                cdp = page.context.new_cdp_session(page)
+                for i, (x, y) in enumerate(points):
+                    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart' if i == 0 else 'touchMove',
+                                                          'touchPoints': [{'x': x, 'y': y}]})
+                    page.wait_for_timeout(50)
+                cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+                page.wait_for_timeout(300)
+                cdp.detach()
+                drag = page.evaluate("document.liveCode.findStackWithName('%s').probeReport('drag')" % STACK_NAME)
+                if not touch_drag_ok(drag, [(x - canvas['x'], y - canvas['y']) for x, y in points]):
+                    problems.append('a finger dragged across the graphic from %d,%d to %d,%d sent it %r, expected '
+                                    'mouseDown, mouseMove and mouseUp at the finger\'s points' % (
+                                        points[0][0] - canvas['x'], points[0][1] - canvas['y'],
+                                        points[-1][0] - canvas['x'], points[-1][1] - canvas['y'], drag))
+                elif taps == 1:
+                    lines.append('a tap was one click, and a finger dragged across the graphic was the mouse')
                 # the file the probe wrote to /downloads
                 if wait_for(lambda: downloads, 'the download of %s' % PROBE_DOWNLOAD[0], 10):
                     if downloads != [PROBE_DOWNLOAD]:

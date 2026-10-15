@@ -54,6 +54,11 @@ mergeInto(LibraryManager.library, {
 				['contextmenu', LiveCodeEvents._handleContextMenu],
 
 				['wheel', LiveCodeEvents._handleWheelEvent],
+
+				['touchstart', LiveCodeEvents._handleTouchEvent],
+				['touchmove', LiveCodeEvents._handleTouchEvent],
+				['touchend', LiveCodeEvents._handleTouchEvent],
+				['touchcancel', LiveCodeEvents._handleTouchEvent],
 			];
 
 			var mapLength = mapping.length;
@@ -87,8 +92,9 @@ mergeInto(LibraryManager.library, {
 
 		addEventListeners: function(pElement)
 		{
+			// (not passive: the handlers stop what the browser would do)
 			LiveCodeEvents._eventForEach(function(type, handler) {
-				pElement.addEventListener(type, handler, true);
+				pElement.addEventListener(type, handler, {capture: true, passive: false});
 			});
 
 			// Make sure the canvas is treated as focusable...
@@ -97,6 +103,10 @@ mergeInto(LibraryManager.library, {
 			// Force the canvas to use a normal mouse cursor by
 			// default
 			pElement.style.cursor = 'default';
+
+			// A touch on a stack is the stack's: the browser neither
+			// scrolls nor zooms the page for it
+			pElement.style.touchAction = 'none';
 		},
 		
 		removeEventListeners: function(pElement)
@@ -1169,6 +1179,108 @@ mergeInto(LibraryManager.library, {
 			if (LiveCodeEvents._captureTarget) {
 				LiveCodeEvents._handleMouseEvent(e);
 			}
+		},
+
+		// ----------------------------------------------------------------
+		// Touch events
+		// ----------------------------------------------------------------
+
+		// A touch screen drives the mouse, as a desktop's does: the first
+		// finger to touch a stack is the mouse with its button down
+		// (mouseDown, mouseMove as it moves, and mouseUp when it lifts, or
+		// mouseRelease when the browser cancels the touch), and the
+		// fingers that touch while it is down do nothing. The browser
+		// does nothing of its own with a touch on a stack: no scrolling or
+		// zooming, and none of the mouse events that it makes up for a
+		// tap, which would come after the touch's and repeat them. The
+		// mouse stays where the finger left it, until a finger touches
+		// another stack or the mouse moves.
+
+		// The touch that is the mouse while it is down (its identifier),
+		// and the canvas of the stack touched last
+		_touchId: null,
+		_touchCanvas: null,
+
+		_handleTouchEvent: function(e) {
+			e.preventDefault();
+
+			var touch = null;
+			for (var i = 0; i < e.changedTouches.length; i++) {
+				var t = e.changedTouches[i];
+				if (e.type == 'touchstart' ?
+					LiveCodeEvents._touchId == null :
+					t.identifier == LiveCodeEvents._touchId) {
+					touch = t;
+					break;
+				}
+			}
+			if (touch == null) {
+				return false;
+			}
+
+			// The mouse event that the touch is (a touch's events all go to
+			// the canvas that it started on)
+			var mouse = function(type, target) {
+				return {
+					type: type,
+					target: target || e.target,
+					clientX: touch.clientX,
+					clientY: touch.clientY,
+					timeStamp: e.timeStamp,
+					button: 0,
+					shiftKey: e.shiftKey,
+					altKey: e.altKey,
+					ctrlKey: e.ctrlKey,
+					metaKey: e.metaKey,
+					// a touch does not change the Caps Lock
+					getModifierState: function(key) {
+						return key == 'CapsLock' && (LiveCodeEvents._modifierKeys & 16) != 0;
+					},
+					preventDefault: function() {},
+				};
+			};
+
+			switch (e.type) {
+			case 'touchstart':
+				LiveCodeEvents._touchId = touch.identifier;
+				// The mouse leaves the stack touched last, and comes to
+				// this one
+				if (LiveCodeEvents._touchCanvas != null &&
+					LiveCodeEvents._touchCanvas != e.target) {
+					LiveCodeEvents._handleMouseEvent(mouse('mouseleave', LiveCodeEvents._touchCanvas));
+				}
+				LiveCodeEvents._touchCanvas = e.target;
+				LiveCodeEvents._handleMouseEvent(mouse('mouseenter'));
+				LiveCodeEvents._handleMouseEvent(mouse('mousedown'));
+				break;
+
+			case 'touchmove':
+				LiveCodeEvents._handleMouseEvent(mouse('mousemove'));
+				break;
+
+			case 'touchend':
+				LiveCodeEvents._touchId = null;
+				LiveCodeEvents._handleMouseEvent(mouse('mouseup'));
+				break;
+
+			case 'touchcancel':
+				// No click: the button is let go as when the mouse is
+				// released away from what it pressed
+				LiveCodeEvents._touchId = null;
+				LiveCodeAsync.delay(function() {
+					var target = LiveCodeEvents._eventTarget(mouse('mousemove'));
+					var stack = LiveCodeEvents._getStackForCanvas(target);
+					if (stack) {
+						var mods = LiveCodeEvents._encodeModifiers(e.shiftKey, e.altKey, e.ctrlKey, e.metaKey);
+						LiveCodeEvents._postMousePress(stack, e.timeStamp, mods,
+													   LiveCodeEvents._encodeMouseState('mouserelease'), 0);
+					}
+					LiveCodeEvents._releaseFocus();
+				});
+				LiveCodeAsync.resume();
+				break;
+			}
+			return false;
 		},
 
 		// ----------------------------------------------------------------

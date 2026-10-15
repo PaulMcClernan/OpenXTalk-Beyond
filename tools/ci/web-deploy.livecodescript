@@ -44,9 +44,10 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- tools/ci/web-probe.livecodescript (without its first line, the
 -- script-only stack's header), with the controls that the probe uses, so
 -- that the web engine reads them from a stack file: a button, a field, a
--- filled graphic and a PNG image. The standalone has the browser widget,
--- which the probe makes when it runs: 1 is given its module (and that of
--- the library it uses), and 2 names it in the standalone settings.
+-- filled graphic (which reports a drag across it) and a PNG image. The
+-- standalone has the browser widget, which the probe makes when it runs:
+-- 1 is given its module (and that of the library it uses), and 2 names it
+-- in the standalone settings.
 --
 -- Environment:
 --    OXT_WEB_PROBE     the probe's script (tools/ci/web-probe.livecodescript)
@@ -116,6 +117,11 @@ private command makeProbeStack
    set the opaque of graphic "Probe Graphic" to true
    set the lineSize of graphic "Probe Graphic" to 0
    set the backgroundColor of graphic "Probe Graphic" to "#CC3300"
+   -- what a drag across it sends (probeDrag)
+   set the script of graphic "Probe Graphic" to \
+         "on mouseDown" & return & "   probeDrag" && quote & "down" & quote & return & "end mouseDown" & return & \
+         "on mouseUp" & return & "   probeDrag" && quote & "up" & quote & return & "end mouseUp" & return & \
+         "on mouseRelease" & return & "   probeDrag" && quote & "release" & quote & return & "end mouseRelease"
 
    create image "Probe Image"
    set the text of image "Probe Image" to base64Decode(kGreenPNG)
