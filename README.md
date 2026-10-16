@@ -47,37 +47,26 @@ clone at the new one.
 
 ## Status
 
-OXT-Beyond 0.2.5 "Frankenstein" is an early release of a young project,
+OXT-Beyond 0.2.6 "Frankenstein" is an early release of a young project,
 for Windows, macOS and Linux (see what 0.2.1 adds, what 0.2.2 fixes,
-what 0.2.3 adds, what 0.2.4 changes and what 0.2.5 adds, under
-[The IDE](#the-ide)). Please read this before you download it. 0.2.5
-replaces the libraries under revXML and revZip with newer ones, makes
-regular expressions match case again (see
-[0.2.5-rc.1](#025-rc1-newer-xml-and-zip-libraries)), fixes two crashes
-in `export`, and adds the xTalk Assistant, an optional AI helper for
-writing scripts, which builds and runs them in your stack when you say
-yes and stays off until you turn it on (see
-[0.2.5-rc.2](#025-rc2-export-crashes-fixed-and-the-xtalk-assistant),
-[0.2.5-rc.3](#025-rc3-the-xtalk-assistants-window-opens) and
-[0.2.5-rc.4](#025-rc4-the-xtalk-assistant-builds-runs-and-debugs)),
-and entries for the xTalk Suite's extensions in both dictionaries (see
-[0.2.5-rc.5](#025-rc5-the-xtalk-suite-in-both-dictionaries)). Two of
-those changes can change what existing scripts see: regular expressions
-match case whatever the `caseSensitive`, as they did before 0.2.4-rc.4,
-and revXML and revZip differ in the few ways
-[#81](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/81)
-lists. 0.2.6-rc.1 to 0.2.6-rc.6 are test releases (pre-releases) of
-the xTalk MCP Bridge, which lets Claude, signed in with your own Claude
-plan in the Claude desktop app or Claude Code, build stacks in the IDE
-(see [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
+what 0.2.3 adds, what 0.2.4 changes, what 0.2.5 adds and what 0.2.6
+adds, under [The IDE](#the-ide)). Please read this before you download
+it. 0.2.6 adds the xTalk MCP Bridge, which lets Claude, signed in with
+your own Claude plan in the Claude desktop app or Claude Code, build
+stacks in the IDE and stays off until you turn it on (see
+[0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
 [0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
-[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), of the
-fixes and plugin packages in
-[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins),
-and of web standalones in
+[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), fixes
+HyperCard import and the installer's file dates on Windows, brings the
+xTalk Assistant and the bridge to other xTalks' IDEs (see
+[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins)),
+and makes HTML5 standalones work (see
 [0.2.6-rc.5](#026-rc5-web-standalones) and
-[0.2.6-rc.6](#026-rc6-the-web-panes-page-settings); 0.2.5 stays the
-main download until it has held up.
+[0.2.6-rc.6](#026-rc6-the-web-panes-page-settings)). Two of those
+changes can be seen by a script: on Linux a period typed while a
+handler runs no longer stops it (Control-period does, as on Windows),
+and `do ... in widget` and the other widget commands that crashed the
+engine for a widget whose extension is not loaded now do nothing.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -1324,6 +1313,10 @@ as a return value named "It", and in the other 49 a word runs into the
 next one after a colon (for example "automatic:creating"). The fix is
 in the xTalk Suite (its pull request 158) and comes with the next
 release.
+
+OXT-Beyond 0.2.6 is what its six release candidates, 0.2.6-rc.1 to
+0.2.6-rc.6, were; nothing in the program changed after 0.2.6-rc.6.
+What each of them changed follows.
 
 #### 0.2.6-rc.1: the xTalk MCP Bridge
 
