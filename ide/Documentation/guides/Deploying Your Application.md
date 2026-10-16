@@ -560,7 +560,10 @@ unlocked field has the focus, as on a phone: when the touch that put the
 focus there ends (a browser brings it up only for a touch), or the next
 touch after a script did, and it goes away when the field loses the
 focus. What it types reaches the field as keys, with their `keyDown`
-messages, and so does text from dictation or an emoji picker.
+messages, and so does text from dictation or an emoji picker. Text that
+a keyboard composes before it sends it (an input method for Chinese,
+Japanese or Korean, or a phone's keyboard that sends a word at a time)
+reaches the field with no `keyDown` messages.
 * **Drag and drop** between the controls and stacks of the page works as
 on the desktop: `dragStart`, `the dragData`, `dragEnter`, `dragMove`,
 `dragLeave`, `dragDrop` and `dragEnd`, `the dragImage` and the engine's
@@ -600,6 +603,9 @@ desktop. It shows a page of another web site only if that site lets other
 sites show its pages; the engine then knows only the address it gave the
 widget, `do ... in widget` does nothing, and the page calls a handler with
 `window.parent.postMessage({liveCode: "handlerName", parameters: [1, 2]}, "*")`.
+In Safari, a page of the stack's own site gets its `liveCode` object only
+once it has loaded, so a script that calls a handler as the page loads
+should wait until `window.liveCode` is there.
 * **Builder extensions and widgets** work, including foreign handlers with
 callbacks. A native library built for a desktop system cannot be loaded.
 * **XML, zip archives and databases.** revXML (with XSLT), revZip and
@@ -645,7 +651,9 @@ stack's `cJavascriptHandlers` property lists, one handler name a line:
 `document.liveCode.findStackWithName("My Stack").myHandler(1, 2)` returns
 what the handler returns. Builder extensions call JavaScript with the
 `com.livecode.emscripten` module.
-* **Fonts.** Text is drawn with Droid Sans, which every standalone has.
+* **Fonts.** Text is drawn with Droid Sans, plain or bold, which every
+standalone has, with the Chinese, Japanese and Korean characters of Droid
+Sans Fallback (bold text in those draws plain, as it has no bold).
 Font files listed one by one on the **Copy Files** pane (not in a folder)
 are loaded when the standalone starts, and their fonts are used by name.
 `start using font file` loads a font file of the engine's file system
@@ -685,8 +693,11 @@ When the engine starts, it unpacks `standalone.zip` into its file system,
 from its root:
 
 * `/boot/__startup.data`: the stacks, extensions and startup script.
-* `/boot/standalone/`: the files of the **Copy Files** pane, and the font
-(`DroidSansCombined.ttf`).
+* `/boot/standalone/`: the files of the **Copy Files** pane, and the fonts
+that text is drawn with (`DroidSansCombined.ttf`, and
+`DroidSansCombined-Bold.ttf` for bold text). Both are the font family
+"Droid Sans"; a font that the standalone has not got draws in it, plain or
+bold as asked.
 
 Files that you add to the archive yourself are unpacked too, at their paths
 in it; put them outside `boot/`.
@@ -783,10 +794,10 @@ Here's a complete page for an HTML5 standalone:
 
 ##### Advanced: Speeding up engine download
 
-The engine's `.wasm` file is about 23 MB, and the archive about 4 MB (the
-font is most of it). Web servers can send them compressed, which browsers
-unpack as they arrive: compressed with gzip, the engine is about 8.3 MB and
-the archive about 2 MB. Most hosting compresses by itself; on a server of
+The engine's `.wasm` file is about 23 MB, and the archive about 8 MB (the
+two fonts are most of it). Web servers can send them compressed, which
+browsers unpack as they arrive: compressed with gzip, the engine is about
+8.3 MB and the archive about 3.9 MB. Most hosting compresses by itself; on a server of
 your own, turn compression on for `.wasm`, `.js` and `.zip` files, or
 compress them once with `gzip` and have the server send those files:
 

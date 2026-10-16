@@ -67,6 +67,13 @@ changes can be seen by a script: on Linux a period typed while a
 handler runs no longer stops it (Control-period does, as on Windows),
 and `do ... in widget` and the other widget commands that crashed the
 engine for a widget whose extension is not loaded now do nothing.
+0.2.7-rc.1 is a test release (a pre-release) of a new font for HTML5
+standalones, with a bold face, of their tests in Firefox and WebKit as
+well as Chromium, of the Linux clipboard fix withdrawn with the first
+0.2.6-rc.4, and of xTalk Suite extensions that load on older Linux and
+macOS (see
+[0.2.7-rc.1](#027-rc1-a-new-web-font-and-firefox-and-safari)); 0.2.6
+stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -206,9 +213,11 @@ version, for example `0.1.0`:
 | All | `OXT-Beyond-<version>-xtalk-sources.zip` | Every file of the bundled xTalk Suite extensions as the release took it from their repositories, so that it can be rebuilt without them. |
 | All | `SHA256SUMS` | SHA-256 checksums of all the files above. |
 
-Some bundled xTalk Suite extensions need a newer system than the IDE:
-macOS 15 on a Mac, and on Linux glibc 2.33 (SodiumXT) or glibc 2.38 and
-OpenSSL 3 (DataChannelXT); see [macOS](#macos) and
+The bundled xTalk Suite extensions need macOS 10.15 Catalina on an
+Intel Mac, where the IDE runs from 10.13, and on 64-bit Linux and Apple
+Silicon nothing newer than the IDE (from 0.2.7-rc.1; up to 0.2.6 they
+needed macOS 15, and on Linux glibc 2.33 for SodiumXT or glibc 2.38 and
+OpenSSL 3 for DataChannelXT); see [macOS](#macos) and
 [Linux](#linux-x86-64). The release notes list each platform's
 requirements too.
 
@@ -308,9 +317,11 @@ for scripted installs). Releases carry them from 0.1.0 on (see
 **Requirements.** The IDE runs on macOS 10.13 High Sierra or later on an
 Intel Mac and macOS 11 Big Sur or later on Apple Silicon. The bundled
 xTalk Suite extensions (SodiumXT, TorrentXT, enetxt, DataChannelXT,
-Box2Dxt and CoinXT, whose native libraries are built for macOS 15) need
-macOS 15 Sequoia or later: on older macOS the IDE starts, but those
-extensions do not load.
+Box2Dxt and CoinXT) have native libraries built for macOS 10.15 Catalina
+on Intel and macOS 11 on Apple Silicon (from 0.2.7-rc.1; up to 0.2.6
+they needed macOS 15 Sequoia): on an Intel Mac with macOS 10.13 or
+10.14 the IDE starts, but those extensions do not load. No Mac older
+than macOS 15 has loaded them yet.
 
 **Install.**
 
@@ -369,7 +380,7 @@ To remove OXT-Beyond, move `OXT-Beyond.app` to the Trash.
   or later on the Mac that builds them. Universal standalones are
   planned. Standalones run on macOS 10.13 or later (Intel) and 11 or
   later (Apple Silicon); one that includes an xTalk Suite extension needs
-  macOS 15.
+  macOS 10.15 on Intel (macOS 15 up to 0.2.6).
 - The macOS package does not include the Visual C++ runtime DLLs that
   the Windows packages put next to enetxt and Box2Dxt: a Windows
   standalone built on a Mac with either of them needs the Visual C++
@@ -405,11 +416,12 @@ What it needs:
   (`LIVECODE_USE_CEF=0`), says which ones are missing, and the IDE shows
   the dictionary and other web pages in your web browser instead, and
   leaves the browser widget out of the Tools palette.
-- **Some bundled xTalk extensions need a newer system than the IDE.**
-  SodiumXT needs glibc 2.33 (Ubuntu 21.04, Debian 12, Fedora 34 or
-  later); DataChannelXT needs glibc 2.38 and OpenSSL 3 (Ubuntu 24.04,
-  Debian 13, Fedora 39 or later). On an older system these extensions do
-  not load; the IDE and the other extensions work.
+- **The bundled xTalk extensions need nothing newer than the IDE**
+  (from 0.2.7-rc.1): their 64-bit libraries need glibc 2.28 at most and
+  carry their own OpenSSL. Up to 0.2.6, SodiumXT needed glibc 2.33 and
+  DataChannelXT glibc 2.38 and OpenSSL 3. The 32-bit libraries that x86
+  standalones get still need glibc 2.33 (SodiumXT), 2.34 (Box2Dxt), or
+  2.38 and OpenSSL 3 (TorrentXT and DataChannelXT).
 - **The player** runs `/usr/bin/mplayer`: on Debian and Ubuntu
   `sudo apt install mplayer`. Without it, players open no file, and the
   Tools palette has no Player tool. mplayer draws only the video: the
@@ -1501,6 +1513,63 @@ them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
 
+#### 0.2.7-rc.1: a new web font, and Firefox and Safari
+
+OXT-Beyond 0.2.7-rc.1, a test release, has everything in 0.2.6, and:
+
+- **HTML5 standalones draw text in Droid Sans and Droid Sans Bold**,
+  under free licences: Google's Apache-licensed Droid fonts, with
+  symbols from DejaVu Sans and Noto Sans CJK, which make each file as
+  a whole SIL Open Font License 1.1 (see
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)). The font they
+  had, which came with LiveCode's HTML5 standalones, carried a
+  commercial licence and had no bold face, so bold text was drawn
+  plain. Plain text keeps its
+  widths and line height. Bold text is bold and wider,
+  `fontStyles("Droid Sans")` lists bold, and `the fontNames` lists
+  "Droid Sans Bold" too. About 300 symbols the old font also drew
+  (arrows, box drawing, circled numbers, mathematics) come from DejaVu
+  Sans and Noto Sans CJK now and have other widths. A standalone's
+  `standalone.zip` grows from about 4 MB to 8 MB (from 1.8 MB to
+  3.9 MB as a web server sends it compressed), since both faces carry
+  the Chinese, Japanese and Korean characters.
+- **HTML5 standalones are tested in Firefox and WebKit**, Safari's
+  engine, as well as in Chromium, by each package's automatic tests.
+  Firefox found that moving a window or choosing a snapshot's
+  rectangle never ended where a browser sends the mouse's events
+  without pointer events; both now take either. Two differences remain
+  between browsers, and the guide *Deploying Your Application* says
+  what they mean for a script: in Safari a page of the stack's own
+  site in a browser widget gets its `liveCode` object only once it has
+  loaded, and text that an input method composes reaches a field with
+  no `keyDown`. A browser widget's frame is given only the sandbox
+  settings the browser knows, which changes only what Safari writes to
+  its console. Touch dragging, dropping files from outside the page
+  and printing to paper are checked in Chromium only, and no phone has
+  run the tests.
+- **Linux: what you copy stays on the clipboard after OXT-Beyond or a
+  standalone quits**, when a clipboard manager that keeps it is
+  running. This came with the first 0.2.6-rc.4, which was withdrawn
+  while a Windows freeze was looked for; the freeze was the
+  installer's file dates, fixed in the second 0.2.6-rc.4. A test
+  checks it on every Linux build.
+- **The xTalk Suite extensions load on older systems.** Their native
+  libraries are built again from the same sources, for glibc 2.28 on
+  64-bit Linux (with OpenSSL inside DataChannelXT's) and for macOS
+  10.15 on an Intel Mac and 11 on Apple Silicon. Up to 0.2.6, SodiumXT
+  needed glibc 2.33, DataChannelXT glibc 2.38 and OpenSSL 3, and every
+  extension macOS 15, so on Ubuntu 22.04, Debian 12 or a Mac older than
+  macOS 15 they did not load. The Windows libraries are built again
+  too. Each package's automatic tests load every extension and call it
+  in OXT-Beyond's engine, and passed with the new libraries on Linux
+  (Ubuntu 24.04) and macOS 15; none has yet run on a Mac older than
+  macOS 15 or a Linux older than Ubuntu 24.04.
+
+On the desktop, a script sees one difference from 0.2.6: on those older
+systems the extensions now load where they failed to. Pull request
+[#111](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/111)
+lists every difference.
+
 ### xTalk Suite extensions
 
 OXT-Beyond ships the extensions of the
@@ -1746,11 +1815,17 @@ Known limitations, in rough order of importance:
    or use the portable zip, if you need them. Plan: keep that state in
    the user's own folders.
 12. HTML5 standalones are new. They are tested automatically in
-   Chromium only, not yet in Firefox, Safari or a phone's browser (the
-   touch screen's keyboard is checked with a stand-in for a phone's).
-   Their font, which came with LiveCode's HTML5 standalones, has a
-   licence that needs review (see
-   [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#still-to-review)).
+   Chromium, Firefox and WebKit (Safari's engine), but not yet on a
+   phone (the touch screen's keyboard is checked with a stand-in for a
+   phone's). A finger dragged across the stack, a file dropped from
+   outside the page and printing to paper are checked in Chromium only.
+   Two things differ between browsers. In Safari, a page of the stack's
+   own site that a browser widget shows gets its `liveCode` object only
+   once it has loaded, so a script that runs while the page loads cannot
+   call the stack's handlers yet. And text that a keyboard sends as an
+   input method's composition, as the tests' stand-in for a touch
+   screen's keyboard does in Firefox, reaches the field with no
+   `keyDown` messages.
 
 Done since 0.0.1: the extensions of the xTalk Suite are built in, taken
 from their own repositories at pinned commits (see

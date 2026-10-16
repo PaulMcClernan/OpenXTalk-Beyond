@@ -19,7 +19,7 @@
 browser.
 
   python3 tools/ci/web_check.py --runtime DIR (--engine FILE | --engine-cache DIR)
-      [--work DIR] [--timeout SECONDS] [--keep-serving]
+      [--browser B] [--work DIR] [--timeout SECONDS] [--keep-serving]
   python3 tools/ci/web_check.py (--install DIR | --package FILE | --bin DIR)
       [--platform P] [--ide-timeout SECONDS] [--work DIR] [--timeout SECONDS]
   python3 tools/ci/web_check.py --built DIR [--work DIR] [--timeout SECONDS]
@@ -35,7 +35,7 @@ installed OXT-Beyond, and the web build's output in CI), which holds
   standalone-community-<version>.js and .wasm   the engine
   standalone-community-<version>.html           the page template
   emscripten-standalone-template/               the files every standalone
-                                                gets (its font)
+                                                gets (its fonts)
   emscripten-startup-template.livecodescript    the startup script template
 
 A development engine (--engine; or --engine-cache, which downloads the
@@ -167,6 +167,14 @@ info url-path"), and each has results of its own for a missing page and a
 load (see web-probe.livecodescript). A standalone made without the IDE must
 use the engine, and one that the IDE made, libURL.
 
+--browser is the browser that opens the page: chromium (the default),
+firefox or webkit (Safari's engine), each Playwright's own build. Three
+steps drive the browser through Chromium's DevTools protocol, which the
+others have not got, and are left out in them, each with a line that says
+so: the finger dragged across the graphic, the file dropped from outside
+the page, and the paper that the frame which prints is printed on (a PDF
+that only Chromium makes). Everything else is checked in all three.
+
 Every check must pass, and nothing may reach the browser's error console
 or the page's error handler. The screenshot is written to
 <work>/WebProbe.png. --keep-serving keeps the server running after the
@@ -174,8 +182,8 @@ checks (Ctrl-C ends it), to open the page in a browser by hand.
 
 Exit status 0 when everything passes, 1 otherwise. Under GitHub Actions
 it writes annotations and a job summary. Needs Python 3.8 or later and,
-for the browser, the Python package playwright with its Chromium
-(python3 -m playwright install chromium).
+for the browser, the Python package playwright with its browser
+(python3 -m playwright install chromium, firefox or webkit).
 """
 
 import argparse
@@ -210,16 +218,35 @@ PROMPT_ANSWER = 'Ada'
 # The checks the probe makes before it is ready, in its order
 PROBE_CHECKS = (
     'platform', 'wait-openstack', 'wait-handler', 'wait-nested', 'wait-until', 'send-in-time',
-    'javascript', 'file-roundtrip', 'standalone-folder', 'font-file', 'url-get', 'url-post', 'url-put',
+    'javascript', 'file-roundtrip', 'standalone-folder', 'font-file', 'font-bold', 'url-get', 'url-post', 'url-put',
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
     'xml', 'xslt', 'zip', 'database', 'database-error',
     'encrypt', 'encrypt-legacy', 'cipher-names', 'speech', 'print',
 )
 
+# The formattedWidth of "Hello, World 123" in 14-point plain text, with no
+# font set, in "Droid Sans" and in "Arial" (probeFonts): what the font of
+# LiveCode's HTML5 standalones gave, which the standalone's font must keep
+# so that text wraps where it did
+PROBE_PLAIN_WIDTHS = ('105', '105', '105')
+
 # The page of the site that the probe's browser widget loads
 PROBE_PAGE = ('<!DOCTYPE html><html><head><title>Probe Page</title></head><body>'
               '<script>liveCode.probeBrowserCall("page", document.title)</script></body></html>')
+
+# ... and the same page in WebKit, which calls the handler once the page
+# has its liveCode object. WebKit reads and runs the whole of a small page,
+# its load event included, before the stack's page can do anything (seen
+# 2026-10-16 in WebKit 26.0 and WebKitGTK 2.48): the engine readies a page
+# of the site only after it has loaded, so a script that runs while the
+# page is being read finds no liveCode object there (README, "Known
+# limitations"). This one looks for it until it is there, for 5 seconds.
+PROBE_PAGE_DEFERRED = ('<!DOCTYPE html><html><head><title>Probe Page</title></head><body><script>'
+                       '(function call(n) {'
+                       'if (window.liveCode) { liveCode.probeBrowserCall("page", document.title); }'
+                       'else if (n < 500) { setTimeout(function() { call(n + 1); }, 10); }'
+                       '})(0)</script></body></html>')
 
 # The extensions that a standalone made without the IDE gets, from the
 # development engine's packaged_extensions, each after those it uses: the
@@ -727,7 +754,7 @@ def build_with_ide(args, work, timeout):
 # ---------------------------------------------------------------------------
 # 2. The web server
 
-def make_server(site):
+def make_server(site, probe_page=PROBE_PAGE):
     stored = {}
 
     class Handler(http.server.SimpleHTTPRequestHandler):
@@ -760,7 +787,7 @@ def make_server(site):
             if self.path == '/missing':
                 return self.reply(404, 'not found')
             if self.path == '/probe-page.html':
-                return self.reply(200, PROBE_PAGE, 'text/html; charset=utf-8')
+                return self.reply(200, probe_page, 'text/html; charset=utf-8')
             return super().do_GET()
 
         def do_POST(self):
@@ -978,8 +1005,8 @@ def snapshot_report_ok(report, wanted):
     return True
 
 
-def run_browser(url, version, work, timeout, url_path=None, browser_widget=None):
-    """Open the page and check what the probe and the page do; url_path is
+def run_browser(url, version, work, timeout, url_path=None, browser_widget=None, browser_name='chromium'):
+    """Open the page in browser_name and check what the probe and the page do; url_path is
     what must load the probe's URLs, 'engine' or 'libURL' (None: either),
     and browser_widget whether the standalone must have the browser widget
     (None: the probe's check of it may also be left out, when it has none).
@@ -1042,12 +1069,21 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
         page_errors.append(str(error))
         log('  page error: %s' % error)
 
+    # The browser's process for the page can die under it ("Target
+    # crashed"): WebKit's did twice in CI before the engine had started,
+    # on commits that passed before and after
+    crashed = []
+
+    def on_crash(crashed_page):
+        crashed.append(crashed_page)
+        log('  the page crashed')
+
     def wait_for(predicate, what, seconds):
         deadline = time.time() + seconds
         while time.time() < deadline:
             if predicate():
                 return True
-            if page_errors:
+            if page_errors or crashed:
                 return False
             try:
                 answer_page_dialog()
@@ -1058,20 +1094,47 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
         return False
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page(viewport={'width': 800, 'height': 600}, accept_downloads=True,
-                                has_touch=True)
-        page.on('console', on_console)
-        page.on('dialog', on_dialog)
-        page.on('download', on_download)
-        page.on('pageerror', on_page_error)
-        page.add_init_script(SOUND_HOOK)
-        page.add_init_script(SPEECH_HOOK)
-        page.add_init_script(PRINT_HOOK)
-        page.add_init_script(KEYBOARD_HOOK)
+        browser = getattr(p, browser_name).launch()
+        devtools = browser_name == 'chromium'
+        lines.append('browser: %s %s' % (browser_name, browser.version))
+
+        def open_page():
+            opened = browser.new_page(viewport={'width': 800, 'height': 600}, accept_downloads=True,
+                                      has_touch=True)
+            opened.on('console', on_console)
+            opened.on('dialog', on_dialog)
+            opened.on('download', on_download)
+            opened.on('pageerror', on_page_error)
+            opened.on('crash', on_crash)
+            opened.add_init_script(SOUND_HOOK)
+            opened.add_init_script(SPEECH_HOOK)
+            opened.add_init_script(PRINT_HOOK)
+            opened.add_init_script(KEYBOARD_HOOK)
+            return opened
+
+        page = open_page()
         started = time.time()
         page.goto(url)
-        if not wait_for(lambda: 'version' in info, 'the engine starting (PROBE info version)', timeout):
+        engine_started = wait_for(lambda: 'version' in info, 'the engine starting (PROBE info version)',
+                                  timeout)
+        if not engine_started and crashed and not info and not probes:
+            # A crash before the engine said anything is the browser's, not
+            # the standalone's: the page gets one more try, which the report
+            # names, and a second crash fails the check
+            lines.append('the page crashed before the engine started; it was opened again')
+            log('  the page crashed before the engine started; opening it again')
+            try:
+                page.close()
+            except PlaywrightError:
+                pass
+            del crashed[:]
+            del console[:]
+            page = open_page()
+            started = time.time()
+            page.goto(url)
+            engine_started = wait_for(lambda: 'version' in info,
+                                      'the engine starting (PROBE info version)', timeout)
+        if not engine_started:
             problems.append('the page did not start the engine')
         else:
             lines.append('the engine started in %.1f s' % (time.time() - started))
@@ -1130,16 +1193,21 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                     problems.append('a tap on the button sent its mouseUp %d times, expected once' % taps)
                 start = at(info['graphic-rect'])
                 points = [(start[0] + 8 * step, start[1]) for step in range(5)]
-                cdp = page.context.new_cdp_session(page)
-                for i, (x, y) in enumerate(points):
-                    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart' if i == 0 else 'touchMove',
-                                                          'touchPoints': [{'x': x, 'y': y}]})
-                    page.wait_for_timeout(50)
-                cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
-                page.wait_for_timeout(300)
-                cdp.detach()
-                drag = page.evaluate("document.liveCode.findStackWithName('%s').probeReport('drag')" % STACK_NAME)
-                if not touch_drag_ok(drag, [(x - canvas['x'], y - canvas['y']) for x, y in points]):
+                if devtools:
+                    cdp = page.context.new_cdp_session(page)
+                    for i, (x, y) in enumerate(points):
+                        cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart' if i == 0 else 'touchMove',
+                                                              'touchPoints': [{'x': x, 'y': y}]})
+                        page.wait_for_timeout(50)
+                    cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+                    page.wait_for_timeout(300)
+                    cdp.detach()
+                    drag = page.evaluate("document.liveCode.findStackWithName('%s').probeReport('drag')" % STACK_NAME)
+                if not devtools:
+                    if taps == 1:
+                        lines.append('a tap was one click (a finger dragged across the graphic is checked in '
+                                     'Chromium only)')
+                elif not touch_drag_ok(drag, [(x - canvas['x'], y - canvas['y']) for x, y in points]):
                     problems.append('a finger dragged across the graphic from %d,%d to %d,%d sent it %r, expected '
                                     'mouseDown, mouseMove and mouseUp at the finger\'s points' % (
                                         points[0][0] - canvas['x'], points[0][1] - canvas['y'],
@@ -1179,12 +1247,15 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                     f.write(PROBE_DROP[1])
                 zone = at(info['drop-zone-rect'])
                 drag_data = {'items': [], 'files': [drop_file], 'dragOperationsMask': 1}
-                cdp = page.context.new_cdp_session(page)
-                for kind in ('dragEnter', 'dragOver', 'drop'):
-                    cdp.send('Input.dispatchDragEvent', {'type': kind, 'x': zone[0], 'y': zone[1], 'data': drag_data})
-                    page.wait_for_timeout(50)
+                if devtools:
+                    cdp = page.context.new_cdp_session(page)
+                    for kind in ('dragEnter', 'dragOver', 'drop'):
+                        cdp.send('Input.dispatchDragEvent', {'type': kind, 'x': zone[0], 'y': zone[1], 'data': drag_data})
+                        page.wait_for_timeout(50)
+                else:
+                    lines.append('a file dropped from outside the page is checked in Chromium only')
                 report_drop = "document.liveCode.findStackWithName('%s').probeReport('drop')" % STACK_NAME
-                if wait_for(lambda: page.evaluate(report_drop), 'the drop of %s' % PROBE_DROP[0], 10):
+                if devtools and wait_for(lambda: page.evaluate(report_drop), 'the drop of %s' % PROBE_DROP[0], 10):
                     dropped = page.evaluate(report_drop)
                     if dropped != PROBE_DROP_REPORT:
                         problems.append('a file dropped on the graphic "Drop Zone" from outside the page gave it %r, '
@@ -1213,18 +1284,34 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                 typed = page.evaluate(stack_js + '.probeReport()')
                 page.evaluate(stack_js + '.probeUnfocus()')
                 put_away = page.evaluate('window.__oxtKeyboard.slice()')
-                if (unfocused_mode, tapped, tapped_mode, typed, put_away) != ('none', ['show'], 'text', PROBE_SOFT_REPORT,
-                                                                              ['show', 'hide']):
+                # Only Chromium has the VirtualKeyboard API: elsewhere the engine
+                # brings the keyboard up by focusing the input again, so the
+                # page's stand-in for the API hears nothing. And Playwright's
+                # insert_text is an input method's composition in Firefox
+                # (as an Android keyboard's text often is), which the engine
+                # puts into the field through its composition handling (from
+                # LiveCode's HTML5 engine), with no keyDown for it: the text
+                # must arrive either way
+                wanted_keyboard = (['show'], ['show', 'hide']) if devtools else ([], [])
+                composed = 'abc%s|abc|2' % PROBE_SOFT_TEXT
+                if ((unfocused_mode, tapped, tapped_mode, put_away) !=
+                        ('none', wanted_keyboard[0], 'text', wanted_keyboard[1])
+                        or typed not in ((PROBE_SOFT_REPORT,) if devtools else (PROBE_SOFT_REPORT, composed))):
                     problems.append('a touch screen\'s keyboard: with no field focused the input asked for the keyboard '
                                     '%r; a tap on the field asked the keyboard for %r and the input for %r; after the '
                                     'keyboard typed %r and a Backspace the probe reported %r; and when the field lost '
-                                    'the focus the keyboard had been asked for %r; expected \'none\', [\'show\'], '
-                                    '\'text\', %r and [\'show\', \'hide\']'
+                                    'the focus the keyboard had been asked for %r; expected \'none\', %r, '
+                                    '\'text\', %r and %r'
                                     % (unfocused_mode, tapped, tapped_mode, PROBE_SOFT_TEXT + 'x', typed, put_away,
-                                       PROBE_SOFT_REPORT))
-                else:
+                                       wanted_keyboard[0], PROBE_SOFT_REPORT, wanted_keyboard[1]))
+                elif devtools:
                     lines.append('a tap on the field brought up a touch screen\'s keyboard, which typed into it, and '
                                  'it went away when the field lost the focus')
+                else:
+                    lines.append('a tap on the field focused the input for a touch screen\'s keyboard, which typed '
+                                 'into it (%s)'
+                                 % ('as keys' if typed == PROBE_SOFT_REPORT
+                                    else 'as an input method\'s text, with no keyDown for it'))
                 # a loop in mouseDown that asks for the mouse until its button
                 # goes up, then a wait for a click (probeMouseLoop): the page's
                 # events must reach the engine while the loop runs, or it never
@@ -1279,6 +1366,14 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                 selector = '.oxt-snapshot-select'
                 graphic = parse_rect(info['graphic-rect'])
                 selected = []
+                # what the page saw of the drag, for the report if it fails
+                page.evaluate('''() => { window.__oxtPointer = [];
+                    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel',
+                                        'gotpointercapture', 'lostpointercapture', 'mousedown', 'mouseup']) {
+                      window.addEventListener(type, (e) => { if (window.__oxtPointer.length < 40)
+                        window.__oxtPointer.push(e.type + (e.pointerType ? ':' + e.pointerType : '') + '@' +
+                          ((e.target && e.target.className) || (e.target && e.target.tagName) || '?')); }, true);
+                    } }''')
                 for cancel in (False, True):
                     page.evaluate(stack_js + '.probeReport("snapshot-select")')
                     if not wait_for(lambda: page.locator(selector).count() > 0,
@@ -1298,8 +1393,10 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                 if (len(selected) != 2 or not snapshot_report_ok(selected[0], PROBE_SNAPSHOT_SELECT[0])
                         or selected[1] != PROBE_SNAPSHOT_SELECT[1] or left):
                     problems.append('import snapshot with a rectangle dragged out on the graphic, then with Escape, '
-                                    'reported %r, leaving %d of the page\'s selections, expected %r and none'
-                                    % (selected, left, list(PROBE_SNAPSHOT_SELECT)))
+                                    'reported %r, leaving %d of the page\'s selections, expected %r and none; the '
+                                    'page saw %s'
+                                    % (selected, left, list(PROBE_SNAPSHOT_SELECT),
+                                       ' '.join(page.evaluate('window.__oxtPointer || []')) or 'no pointer events'))
                 else:
                     lines.append('import snapshot took the rectangle dragged out on the page, and Escape cancelled it')
                 # a modal dialog (probeReport("modal")): the stack under it takes
@@ -1459,8 +1556,8 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
                              for number, (printed, points) in enumerate(zip(prints[0]['pages'], PROBE_PRINT_PAGES), 1)
                              for (name, point, want), got in zip(points, printed['colours'])
                              if any(abs(a - b) > 8 for a, b in zip(got, want))]
-                    paper = printed_paper(browser, prints[0]['html'])
-                    if paper != [list(size) for size in PROBE_BROWSER_SIZES]:
+                    paper = printed_paper(browser, prints[0]['html']) if devtools else None
+                    if devtools and paper != [list(size) for size in PROBE_BROWSER_SIZES]:
                         wrong.append('the browser printed the frame\'s document on paper of %s, expected %s'
                                      % (paper, [list(size) for size in PROBE_BROWSER_SIZES]))
                     if wrong:
@@ -1534,12 +1631,21 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None)
         problems.append('the probe\'s URLs were loaded by %s, expected %s' % (info['url-path'], url_path))
     else:
         lines.append('the URLs were loaded by %s' % info['url-path'])
+    plain = tuple(item.split('>')[0] for item in info.get('font-widths', '').split(','))
+    if plain != PROBE_PLAIN_WIDTHS:
+        problems.append('plain text is %r points wide (no font set, Droid Sans, Arial), expected %r, as the old '
+                        'font drew it' % (plain, PROBE_PLAIN_WIDTHS))
+    else:
+        lines.append('plain text kept its width, and bold text is bold (%s)' % info.get('font-widths'))
     if 'wait=refused' not in info.get('js-call', ''):
         problems.append('a wait in a handler called from the page did not fail as it must: %r'
                         % info.get('js-call'))
+    if crashed:
+        problems.append('the page crashed (the browser\'s "Target crashed")')
     for error in page_errors:
         problems.append('page error: %s' % error)
-    # The browser reports the probe's request for a missing page (url-missing)
+    # The browser may report the probe's request for a missing page
+    # (url-missing): Chromium and WebKit do, in these words; Firefox does not
     expected = ['Failed to load resource: the server responded with a status of 404 (Not Found)']
     for kind, text in console:
         if kind == 'error' and not text.startswith('PROBE '):
@@ -1561,6 +1667,8 @@ def main(argv=None):
                     help='the build output of a repository checkout: build with the checkout\'s IDE')
     ap.add_argument('--platform', help='with --install or --package: the layout (default: this machine\'s)')
     ap.add_argument('--built', metavar='DIR', help='a standalone of the probe stack that is already built')
+    ap.add_argument('--browser', choices=('chromium', 'firefox', 'webkit'), default='chromium',
+                    help='the browser that opens the page (default chromium)')
     ap.add_argument('--work', help='the work folder (default: a temporary folder)')
     ap.add_argument('--timeout', type=int, default=120, help='seconds for each step (default 120)')
     ap.add_argument('--ide-timeout', type=int, default=600,
@@ -1609,10 +1717,10 @@ def main(argv=None):
         lines.append('web engine %s: .wasm %.1f MB, .js %.0f kB' % (
             version, os.path.getsize(wasm) / 1e6, os.path.getsize(js) / 1e3))
         lines.append('standalone.zip %.1f kB' % (os.path.getsize(os.path.join(site, 'standalone.zip')) / 1e3))
-        server = make_server(site)
+        server = make_server(site, PROBE_PAGE_DEFERRED if args.browser == 'webkit' else PROBE_PAGE)
         url = 'http://127.0.0.1:%d/%s' % (server.server_address[1], os.path.basename(page))
         log('Opening %s' % url)
-        p, l = run_browser(url, version, work, args.timeout, url_path, browser_widget)
+        p, l = run_browser(url, version, work, args.timeout, url_path, browser_widget, args.browser)
         problems += p
         lines += l
         if args.keep_serving:
@@ -1639,7 +1747,7 @@ def main(argv=None):
     else:
         log('PASSED')
     title = {'runtime': 'without the IDE', 'ide': 'the IDE\'s builder', 'built': 'built before'}[mode]
-    summary('### Web standalone check (%s)\n\n' % title + ''.join('- %s\n' % x for x in lines)
+    summary('### Web standalone check (%s, %s)\n\n' % (title, args.browser) + ''.join('- %s\n' % x for x in lines)
             + ('\n**Failed:**\n\n' + ''.join('- %s\n' % x for x in problems) if problems else '\nAll checks passed.\n')
             + '\n')
     return 1 if problems else 0
