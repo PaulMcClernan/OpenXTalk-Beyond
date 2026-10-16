@@ -14,6 +14,10 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
+## 0.2.6 (2026-10-16)
+
+- Version 0.2.6, with its changelog (#110)
+
 ## 0.2.6-rc.6 (2026-10-15, pre-release)
 
 - Open the HTML5 Test target in Linux browsers without holding the IDE (#109)
