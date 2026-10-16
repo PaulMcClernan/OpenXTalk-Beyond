@@ -469,6 +469,10 @@ private command xtaOpenWindow
    if tBuilt is true then
       set the loc of stack kWindow to the screenLoc
    end if
+   -- Whole on the screen, title bar too: on a small screen (or one scaled
+   -- up) the window is made shorter, and one left where a screen no longer
+   -- is comes back
+   xtaKeepOnScreen the long id of stack kWindow, true
    palette stack kWindow
    set the visible of stack kWindow to true
    unlock screen
@@ -2149,6 +2153,9 @@ on xtaSettingsPrepare pFocus
    else
       set the loc of stack kSettingsWindow to the screenLoc
    end if
+   -- Over a window near the edge of the screen, or one taller than the
+   -- dialog, it would open partly off it
+   xtaKeepOnScreen the long id of stack kSettingsWindow, false
 end xtaSettingsPrepare
 
 function xtaSettingsDone
@@ -3027,6 +3034,7 @@ private function xtaMemoryDialog pWork, pYou, pStackNotes
    unlock messages
    set the defaultStack to tOldDefault
    set the loc of stack kMemoryWindow to the screenLoc
+   xtaKeepOnScreen the long id of stack kMemoryWindow, false
    -- Made invisible, so it is shown before it opens as a modal window (as
    -- the assistant's window must be)
    set the visible of stack kMemoryWindow to true
@@ -3692,6 +3700,12 @@ private function xtaToolMakeChanges pInput
       put xtaPlaceBeside(the long id of stack tPlan["name"]) into tWhat
       if tWhat is not empty then
          put return & "Its window was put beside the assistant's, at" && tWhat & ", so as not to be under it." after tResult["text"]
+      else
+         xtaKeepOnScreen the long id of stack tPlan["name"], false
+         put the result into tWhat
+         if tWhat is not empty then
+            put return & "Its window was moved to" && tWhat & ", so that all of it, its title bar too, is on the screen." after tResult["text"]
+         end if
       end if
    end if
    put false into tResult["error"]
@@ -3704,8 +3718,9 @@ end xtaToolMakeChanges
 
 -- Moves pStack (a long id), a stack the assistant has just made, beside
 -- the assistant's window when the two overlap: to its left, else to its
--- right, where the screen has room, its top level with the window's.
--- Returns its new rect, or empty when it was left where it was.
+-- right, where the screen has room, its top level with the window's, the
+-- whole of it on the screen (xtaKeepOnScreen). Returns its new rect, or
+-- empty when it was left where it was.
 private function xtaPlaceBeside pStack
    local tWindow, tRect, tScreen, tLine, tWidth, tHeight, tLeft, tTop
    if there is not a stack kWindow or there is not a pStack then
@@ -3717,9 +3732,10 @@ private function xtaPlaceBeside pStack
          or item 4 of tRect <= item 2 of tWindow or item 2 of tRect >= item 4 of tWindow then
       return empty
    end if
-   -- The screen the window is on
-   put the screenRect into tScreen
-   repeat for each line tLine in the screenRects
+   -- The screen the window is on, less the taskbar, the Dock and the menu
+   -- bar
+   put the working screenRect into tScreen
+   repeat for each line tLine in the working screenRects
       if the loc of stack kWindow is within tLine then
          put tLine into tScreen
          exit repeat
@@ -3737,6 +3753,8 @@ private function xtaPlaceBeside pStack
    end if
    put max(item 2 of tScreen, min(item 2 of tWindow, item 4 of tScreen - tHeight)) into tTop
    set the rect of pStack to tLeft, tTop, tLeft + tWidth, tTop + tHeight
+   -- Its title bar too
+   xtaKeepOnScreen pStack, false
    return the rect of pStack
 end xtaPlaceBeside
 

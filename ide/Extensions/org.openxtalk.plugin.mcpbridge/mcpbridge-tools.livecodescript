@@ -1993,7 +1993,7 @@ end mcbTrimEnd
 -- A batch of changes, checked (a mistake goes back with nothing changed),
 -- then made whole or not at all, and journaled for undo_changes
 private function mcbToolMakeChanges pArguments
-   local tPlan, tApplied, tText, tChange
+   local tPlan, tApplied, tText, tChange, tMoved
    -- A script copied from a cut read would put the cut one in place of the
    -- whole
    repeat for each element tChange in mcbChangesOf(pArguments)
@@ -2010,7 +2010,17 @@ private function mcbToolMakeChanges pArguments
    if tApplied["ok"] is not true then
       return mcbResult(tApplied["error"], true)
    end if
-   put tApplied["text"] & return & "This is change" && tApplied["entry"] & "; undo_changes takes it back." into tText
+   put tApplied["text"] into tText
+   -- A new stack whose rect put part of its window off the screen (0,0,...
+   -- hides its title bar above it) is moved whole onto the screen
+   if tPlan["newStack"] is true and there is a stack tPlan["name"] then
+      xtaKeepOnScreen the long id of stack tPlan["name"], false
+      put the result into tMoved
+      if tMoved is not empty then
+         put return & "Its window was moved to" && tMoved & ", so that all of it, its title bar too, is on the screen." after tText
+      end if
+   end if
+   put return & "This is change" && tApplied["entry"] & "; undo_changes takes it back." after tText
    return mcbResult(tText, false)
 end mcbToolMakeChanges
 
