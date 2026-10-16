@@ -128,8 +128,12 @@ on TestOpenWindow
    -- left it hidden, and turning the assistant on seemed to do nothing)
    TestAssert "the window is shown", the visible of stack kWindow
    TestAssert "the window is a palette", the mode of stack kWindow is 4
-   TestDiagnostic the rect of stack kWindow && "/" && the screenRect
-   TestAssert "the window is in the middle of the screen", the loc of stack kWindow is the screenLoc
+   TestDiagnostic the rect of stack kWindow && "/" && the screenRect && "/" && the working screenRect
+   -- In the middle of the screen, unless that would leave part of it (its
+   -- title bar too) off a small screen: then it is kept whole on the screen
+   TestAssert "the window is in the middle of the screen, or whole on it", \
+         the loc of stack kWindow is the screenLoc \
+         or TestWithin(the rect of stack kWindow, the working screenRect)
    TestAssert "the core is in use", kCore is among the lines of the stacksInUse
    TestAssert "the provider is shown", the label of button "Provider" of stack kWindow is "Anthropic"
    TestAssert "the model is shown", the label of button "Model" of stack kWindow is "test-model"
