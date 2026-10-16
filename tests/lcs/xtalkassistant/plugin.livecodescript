@@ -304,7 +304,8 @@ on TestTheWelcome
          and the linkText of line tLine + 4 of field "Conversation" of stack kWindow is "example,4"
    TestAssert "and how to send and stop", tText contains "Escape stops the assistant."
    TestAssert "the empty prompt says what to type", the visible of field "PromptHint" of stack kWindow \
-         and field "PromptHint" of stack kWindow is "Ask a question, or say what to build or fix"
+         and line 1 of field "PromptHint" of stack kWindow is "Ask a question, or say what to build or fix" \
+         and line 2 of field "PromptHint" of stack kWindow ends with "sends"
    dispatch "xtaConversationLink" to stack kMain with "example,2"
    TestAssert "a question clicked goes into the prompt", field "Prompt" of stack kWindow is line tLine + 2 of tText
    TestAssert "and the hint goes", not the visible of field "PromptHint" of stack kWindow
@@ -316,7 +317,7 @@ on TestTheWelcome
    TestDiagnostic tText
    TestAssert "without changing stacks, it does not offer to", not (tText contains "new stacks") \
          and "How do I count the words in a field?" is among the lines of tText
-   TestAssert "nor does the hint", field "PromptHint" of stack kWindow is "Ask a question about xTalk Script" \
+   TestAssert "nor does the hint", line 1 of field "PromptHint" of stack kWindow is "Ask a question about xTalk Script" \
          and the visible of field "PromptHint" of stack kWindow
    TestAssert "and neither names LiveCode", tText contains "xTalk Script" and not (tText contains "LiveCode")
 end TestTheWelcome

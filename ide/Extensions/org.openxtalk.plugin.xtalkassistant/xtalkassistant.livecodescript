@@ -475,6 +475,13 @@ private command xtaOpenWindow
    xtaKeepOnScreen the long id of stack kWindow, true
    palette stack kWindow
    set the visible of stack kWindow to true
+   -- Closed and opened again while a question is being answered: the new
+   -- window shows the activity row too, its spinner and its clock, as the
+   -- window showed Stop with nothing moving and seemed to have hung
+   if sBusy is true and sWork["start"] is not empty then
+      xtaShowActivity true
+      xtaStartTicking
+   end if
    unlock screen
    focus on field "Prompt" of stack kWindow
 end xtaOpenWindow
@@ -638,7 +645,7 @@ private command xtaBuildWindow
    set the dontWrap of field "Prompt" to false
    set the vScrollbar of field "Prompt" to false
    set the autoTab of field "Prompt" to false
-   set the tooltip of field "Prompt" to "Your question. Enter, or Command-Return (Control-Return), sends it; Escape stops the assistant."
+   set the tooltip of field "Prompt" to "Your question." && xtaSendKeysText() && "Escape stops the assistant."
 
    create button "Send"
    set the label of button "Send" to "Send"
@@ -661,12 +668,31 @@ private function xtaFooterText
    return "The model reads and answers: it cannot change your stacks."
 end xtaFooterText
 
+-- Which keys send the question, as this computer's keyboard names them.
+-- The window sends on Command-Return (Control-Return) and on Enter
+-- (enterInField), and Return starts a new line. A Mac's keyboard calls
+-- the key Return; the main key of a PC's is labelled Enter but sends
+-- Return, and only its keypad's sends Enter: the window used to say
+-- "Enter sends your question" there, and that key made a new line.
+private function xtaSendKeysText
+   if the platform is "MacOS" then
+      return "Command-Return sends your question (or Enter, on a keypad), and Return starts a new line."
+   end if
+   return "Ctrl+Enter sends your question (or the keypad's Enter), and Enter starts a new line."
+end xtaSendKeysText
+
 -- What the prompt says while it is empty
 private function xtaPromptHint
-   if xtaBuildOn() then
-      return "Ask a question, or say what to build or fix"
+   local tKeys
+   if the platform is "MacOS" then
+      put "Command-Return sends" into tKeys
+   else
+      put "Ctrl+Enter sends" into tKeys
    end if
-   return "Ask a question about xTalk Script"
+   if xtaBuildOn() then
+      return "Ask a question, or say what to build or fix" & return & tKeys
+   end if
+   return "Ask a question about xTalk Script" & return & tKeys
 end xtaPromptHint
 
 -- After the assistant put something into the prompt or emptied it: the
@@ -921,6 +947,9 @@ private command xtaUpdateButtons
       set the enabled of button "Send" of stack kWindow to true
    end if
    set the enabled of button "Models" of stack kWindow to (sBusy is not true)
+   -- The provider and model of a question stay its own until it is answered
+   set the enabled of button "Provider" of stack kWindow to (sBusy is not true)
+   set the enabled of button "Model" of stack kWindow to (sBusy is not true)
    set the enabled of button "Insert" of stack kWindow to (sBusy is not true and the number of elements of sLastCode > 0)
    -- Copy the Conversation, once there is one
    xtaRefreshMoreMenu
@@ -981,7 +1010,7 @@ end xtaSetPill
 -- (and with it no tools are sent, which small models mistake), and Undo
 -- All Changes is there while something the assistant did can be undone
 private function xtaMoreMenuText
-   local tShort, tUndo, tCopy
+   local tShort, tUndo, tCopy, tIdle
    if revIDEGetPreference(kPrefShortGuide) is true then
       put "!c" into tShort
    else
@@ -993,8 +1022,17 @@ private function xtaMoreMenuText
    if the number of elements of sTurns is 0 then
       put "(" into tCopy
    end if
-   return "Settings..." & return & "Set API Key..." & return & "Forget API Key" & return & "-" & return & \
-         "Explain the Last Error" & return & "Explain the Open Script" & return & tUndo & "Undo All Changes..." & return & \
+   -- While a question is being answered, what would change the provider,
+   -- its key, the guide or the stacks under it waits: each round reads the
+   -- settings again, and a conversation with one provider's tool calls sent
+   -- to another was refused (and its key forgotten)
+   if sBusy is true then
+      put "(" into tIdle
+      put "(" into tUndo
+      put "(" before tShort
+   end if
+   return tIdle & "Settings..." & return & tIdle & "Set API Key..." & return & tIdle & "Forget API Key" & return & "-" & return & \
+         tIdle & "Explain the Last Error" & return & tIdle & "Explain the Open Script" & return & tUndo & "Undo All Changes..." & return & \
          tCopy & "Copy the Conversation" & return & "Memory..." & return & \
          tShort & "Short Guide, No Tools (for small local models)" & return & "-" & return & \
          "Turn Off xTalk Assistant"
@@ -1623,7 +1661,7 @@ private command xtaDocWelcome @xDoc
    put empty into tPara
    put 14 into tPara["spaceAbove"]
    put 10 into tRun["textSize"]
-   xtaDocLine xDoc, "Enter sends your question, and Return starts a new line. Escape stops the assistant.", tRun, tPara
+   xtaDocLine xDoc, xtaSendKeysText() && "Escape stops the assistant.", tRun, tPara
 end xtaDocWelcome
 
 -- The questions the welcome offers: those that build only while the
@@ -4378,7 +4416,7 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
    local tWork, tSystem, tDeclared, tRound, tRounds, tBlocks, tCheck, tLastCode
    local tIn, tOut, tCached, tAnswered, tError, tTools, tCalls, tCall, tResults
    local tToolCalls, tRefusals, tRefusedNow, tSpent, tKind, tQuestion, tStats, tStopped
-   local tSettings, tRoom, tMore, tAgain, tCutNote, tCallName, tRefused
+   local tSettings, tRoom, tMore, tAgain, tCutNote, tCallName, tRefused, tCrash
    if sBusy is true or there is not a stack kWindow then
       exit xtaSendPrompt
    end if
@@ -4451,6 +4489,11 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
    put 0 into tCached
    put false into tAnswered
    put sShutDowns into tShutDowns
+   -- An error thrown on the way (by a tool, the conversation's display, a
+   -- check) ends the question as one the server refused would: before, it
+   -- left the window busy, Send showing Stop, until the assistant was
+   -- turned off. What was answered so far stays.
+   try
    repeat forever
       if tAgain is not empty then
          xtaPhase "wait", tAgain
@@ -4617,6 +4660,12 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
       put sTurns[tCount - 1]["stackName"] into sTurns[tCount]["stackName"]
       xtaShowConversation
    end repeat
+   catch tCrash
+      put xtaThrownText(tCrash) into tCrash
+      if word 1 to -1 of tCrash is empty then
+         put "an unknown error" into tCrash
+      end if
+   end try
 
    -- What the question took, for the conversation and the status line
    put (sStopAsked is true) into tStopped
@@ -4628,7 +4677,10 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
    put false into sBusy
    put false into sStopAsked
    xtaWorkEnd
-   if tReply["ok"] is not true then
+   if tCrash is not empty then
+      put "The question stopped on an error in the xTalk Assistant:" && tCrash & "." & return & return & \
+            "What was answered before it stays in the conversation; you can ask again." into tError
+   else if tReply["ok"] is not true then
       put tReply["error"] into tError
       -- The turn that was not answered is taken back: the question stays in
       -- the prompt, to send again; a compile check is dropped, and the
@@ -4665,7 +4717,10 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
          put xtaDot() & "the provider stopped the answer on safety grounds" after tStatus
          put "warn" into tKind
       end if
-      if tSpent then
+      if tCrash is not empty then
+         put xtaDot() & "stopped on an error" after tStatus
+         put "warn" into tKind
+      else if tSpent then
          put xtaDot() & "stopped: the model used up its tools for this question" after tStatus
          put "warn" into tKind
       else if tStopped then
@@ -4680,7 +4735,7 @@ on xtaSendPrompt pAttach, pAttachName, pWithScript
       xtaStatus xtaSettingsLine()
    end if
    if tError is not empty then
-      if line 1 of tError contains "API key" then
+      if line 1 of tError contains "API key" and tCrash is empty then
          put empty into sKeys[tProvider]
       end if
       answer warning tError titled kTitle

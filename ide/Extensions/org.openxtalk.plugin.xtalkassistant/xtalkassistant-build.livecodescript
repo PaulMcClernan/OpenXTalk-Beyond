@@ -67,6 +67,7 @@ script "org.openxtalk.plugin.xtalkassistant-build"
 --    xtaTargetStack(pName, pDefault)  the stack a tool names, checked
 --    xtaKeepOnScreen pStack, pShrink  a window moved whole onto the screen
 --    xtaOnScreenRect(pRect, pFrame, pArea, pMin)   where it goes
+--    xtaThrownText(pError)           an error thrown, in words
 --    xtaBuildCleanup                  forgets all of it (turning off)
 
 -- The hidden stacks made here; their names begin with "rev", so the IDE
@@ -991,6 +992,11 @@ private function xtbShort pValue
    end if
    return pValue
 end xtbShort
+
+-- xtbErrorMessage for the assistant's window
+function xtaThrownText pError
+   return xtbErrorMessage(pError)
+end xtaThrownText
 
 -- The message of the first line of an error the engine threw, or the
 -- error as it was thrown by a script
