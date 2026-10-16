@@ -77,6 +77,46 @@ on TestHyperCardImportCardsAndBackgrounds
    _Close tStack
 end TestHyperCardImportCardsAndBackgrounds
 
+on TestHyperCardImportNewStackCard
+   -- With messages unlocked, the import's new stack gets newStack, and a
+   -- handler that refers to one of its cards (the IDE's do) made a card on
+   -- the empty stack, which was kept as an extra, empty first card
+   local tFront, tStack, tError
+   put "HCNewStackFront" into tFront
+   lock messages
+   create stack tFront
+   unlock messages
+   set the script of stack tFront to "on newStack" & return & \
+      "get the id of card 1 of the target" & return & \
+      "pass newStack" & return & "end newStack"
+   insert the script of stack tFront into front
+   try
+      import stack from file TestGetInputFile("hypercard/TestCardsBackgrounds.stack")
+   catch tError
+   end try
+   remove the script of stack tFront from front
+   _Close tFront
+   put "TestCardsBackgrounds.stack" into tStack
+   TestAssert "imports with messages unlocked", tError is empty and there is a stack tStack
+   TestAssert "no card made by newStack", the number of cards of stack tStack is 6
+   TestAssert "HyperCard's first card is the first card", the id of card 1 of stack tStack is 2842
+   TestAssert "and the current card", the id of this card of stack tStack is 2842
+   _Close tStack
+end TestHyperCardImportNewStackCard
+
+on TestHyperCardImportMacRomanText
+   -- the text is MacRoman, and comes in as the same characters on every
+   -- platform (off the Mac it was converted the wrong way: a curly quote
+   -- came in as a letter with an accent)
+   local tStack
+   put _Import("TestStrangeFlags") into tStack
+   TestAssert "left double quote", \
+      codepointToNum(char 7 of field 12 of card 13 of stack tStack) is 8220
+   TestAssert "apostrophe", \
+      codepointToNum(char 105 of field 4 of card 16 of stack tStack) is 8217
+   _Close tStack
+end TestHyperCardImportMacRomanText
+
 on TestHyperCardImportCardOrder
    -- 200 cards over two PAGE blocks: the order is the LIST's
    local tStack
