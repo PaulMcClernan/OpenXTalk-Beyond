@@ -376,7 +376,13 @@ private command xtaShutDown
       delete stack kWindow
    end if
    -- The journal goes, with the hidden stacks and the checkpoints: what
-   -- was applied stays
+   -- was applied stays. While the xTalk MCP Bridge is on they stay too, as
+   -- the bridge works with the same libraries and journal (it unloads them
+   -- when it is turned off itself): turning the assistant off used to take
+   -- away what Claude could still undo.
+   if xtaBridgeOn() then
+      exit xtaShutDown
+   end if
    if there is a stack kBuild and the long id of stack kBuild is among the lines of xtaStacksInUse() then
       xtaBuildCleanup
       stop using stack kBuild
@@ -386,6 +392,20 @@ private command xtaShutDown
       stop using stack kCore
    end if
 end xtaShutDown
+
+-- True while the xTalk MCP Bridge is turned on
+private function xtaBridgeOn
+   local tOn, tError
+   put false into tOn
+   if there is a stack "org.openxtalk.plugin.mcpbridge" then
+      try
+         dispatch function "mcbIsEnabled" to stack "org.openxtalk.plugin.mcpbridge"
+         put (the result is true) into tOn
+      catch tError
+      end try
+   end if
+   return tOn
+end xtaBridgeOn
 
 private function xtaStacksInUse
    local tList, tName
