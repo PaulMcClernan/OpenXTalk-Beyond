@@ -629,3 +629,23 @@ on TestHyperCardImportIdClashes
    _Close tStack
    _DeleteFolder tFolder
 end TestHyperCardImportIdClashes
+
+on TestHyperCardImportSoundHeaders
+   -- extended headers (16-bit, stereo) and IMA 4:1 import; MACE is
+   -- named in the import log
+   local tFolder, tStack, tLog
+   put _NewFolder("sounds") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Sounds"
+   _CopyInput "forks/Sounds.rsrc", tFolder & "HC Sounds.rsrc"
+   put _ImportPath(tFolder & "HC Sounds") into tStack
+   put the hcImportStat into tLog
+   TestAssert "sound: 16-bit stereo", there is an audioClip "Stereo 16" of stack tStack
+   TestAssert "sound: 8-bit extended", there is an audioClip "Mono 8 Extended" of stack tStack
+   TestAssert "sound: IMA 4:1", there is an audioClip "IMA" of stack tStack
+   TestAssert "MACE is not imported", there is not an audioClip "MACE" of stack tStack
+   TestAssert "MACE is logged", "Not converting snd  id   203" && quote & "MACE" & quote & ": MACE 3:1 compression" is in tLog
+   TestAssert "sounds in resource order", the short name of audioClip 1 of stack tStack is "Stereo 16" \
+      and the short name of audioClip 3 of stack tStack is "IMA"
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportSoundHeaders

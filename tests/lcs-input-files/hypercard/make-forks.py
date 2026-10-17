@@ -19,6 +19,10 @@ forks/Empty.appledouble     an AppleDouble file whose fork holds nothing, as
 forks/Clash.rsrc            ids that collide: ICON 129 and CURS 129, ICON 2842
                             (card 1's id in TestCardsBackgrounds.stack), and
                             ICON 30000, above every object id of that stack
+forks/Sounds.rsrc           the sound headers beyond the standard one: snd 200
+                            "Stereo 16" (extended, 16-bit stereo), 201 "Mono 8
+                            Extended", 202 "IMA" (compressed, IMA 4:1 stereo),
+                            203 "MACE" (compressed, MACE 3:1: logged only)
 forks/TestCardsBackgrounds.applesingle
                             ../TestCardsBackgrounds.stack and the fork in one
                             AppleSingle file, named "Synthetic Stack"
@@ -60,6 +64,25 @@ def sound(samples):
     out += struct.pack(">IIIII", 0, len(samples), 0x56EE8BA3, 0, 0)
     out += bytes([0, 0x3C])
     return out + samples
+
+
+def extended_sound(channels, bits, frames, encode=0xFF, fmt=b"\0\0\0\0",
+                   compression=0, samples=b""):
+    # format 2, one bufferCmd, then a 64-byte extended (0xFF) or compressed
+    # (0xFE) sound header and the samples
+    header_at = 2 + 2 + 2 + 8
+    out = struct.pack(">HHH", 2, 0, 1)
+    out += struct.pack(">HHI", 0x8051, 0, header_at)
+    head = struct.pack(">IIIII", 0, channels, 0x56EE8BA3, 0, 0)
+    head += bytes([encode, 0x3C]) + struct.pack(">I", frames)
+    head += b"\0" * 10  # the AIFF sample rate, unused
+    if encode == 0xFF:
+        head += struct.pack(">IIIHHIII", 0, 0, 0, bits, 0, 0, 0, 0)
+    else:
+        head += struct.pack(">I", 0) + fmt + struct.pack(">IIIhHHH", 0, 0, 0,
+                                                          compression, 0, 0, bits)
+    assert len(head) == 64, len(head)
+    return out + head + samples
 
 
 def pict():
@@ -153,8 +176,24 @@ def main():
         ("ICON", 30000, "High Icon", icon()),
         ("CURS", 129, "Twin Cursor", cursor()),
     ])
+    stereo16 = b"".join(struct.pack(">hh", (i * 300) % 30000, -(i * 300) % 30000)
+                        for i in range(500))
+    mono8 = bytes(128 + (i % 64) for i in range(800))
+    # IMA 4:1: two packets per channel, each a predictor of 0 and step
+    # index 0 then alternating codes
+    ima_packet = b"\0\0" + bytes([0x17, 0x9F] * 16)
+    ima = ima_packet * 4
+    sounds = resource_fork([
+        ("snd ", 200, "Stereo 16", extended_sound(2, 16, 500, samples=stereo16)),
+        ("snd ", 201, "Mono 8 Extended", extended_sound(1, 8, 800, samples=mono8)),
+        ("snd ", 202, "IMA", extended_sound(2, 16, 2, encode=0xFE, fmt=b"ima4",
+                                           compression=-2, samples=ima)),
+        ("snd ", 203, "MACE", extended_sound(1, 8, 100, encode=0xFE, fmt=b"MAC3",
+                                            compression=3, samples=b"\0" * 200)),
+    ])
     files = {
         "Synthetic.rsrc": fork,
+        "Sounds.rsrc": sounds,
         "Clash.rsrc": clash,
         "Synthetic.appledouble": applefile(APPLEDOUBLE, [(9, FINDER_INFO), (2, fork)]),
         "Empty.appledouble": applefile(APPLEDOUBLE, [(9, FINDER_INFO), (2, empty)]),
