@@ -116,6 +116,7 @@ public:
 private:
     
 	friend class MCHcbutton;
+	friend class MCHcplte;
 	MCCdata *bdata;
 	iconlist *icons;
 	MCStringRef label;

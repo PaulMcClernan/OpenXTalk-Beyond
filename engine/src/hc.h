@@ -49,6 +49,7 @@ enum HC_File_type {
 #define HC_CURS 0x43555253
 #define HC_SND  0x736e6420
 #define HC_PICT 0x50494354
+#define HC_PLTE 0x504c5445
 
 #define HC_F_MULTIPLE       0x0010
 #define HC_F_MARGINS        0x0020
@@ -351,7 +352,7 @@ public:
 	uint32_t height;
 	MCHcpict();
 	~MCHcpict();
-	MCControl *build(uint4 p_id);
+	MCControl *build(uint4 p_id, bool p_keep = false);
 	MCHcpict *next()
 	{
 		return (MCHcpict *)MCDLlist::next();
@@ -364,6 +365,34 @@ public:
 	(MCHcpict *&list)
 	{
 		return (MCHcpict *)MCDLlist::remove
+			       ((MCDLlist *&)list);
+	}
+};
+
+// A PLTE resource: a HyperCard 2 palette, a PICT with buttons on it that
+// send messages, opened with "palette"
+class MCHcplte : public MCDLlist
+{
+public:
+	MCNameRef m_name;
+	uint4 id;
+	uint1 *data;
+	uint4 size;
+	MCHcplte();
+	~MCHcplte();
+	MCStack *build(MCHcstak *hcsptr, MCStack *p_main);
+	MCHcplte *next()
+	{
+		return (MCHcplte *)MCDLlist::next();
+	}
+	void appendto(MCHcplte *&list)
+	{
+		MCDLlist::appendto((MCDLlist *&)list);
+	}
+	MCHcplte *remove
+	(MCHcplte *&list)
+	{
+		return (MCHcplte *)MCDLlist::remove
 			       ((MCDLlist *&)list);
 	}
 };
@@ -440,6 +469,7 @@ public:
 	MCHcbmap *cursors;
 	MCHcsnd *snds;
 	MCHcpict *pictures;
+	MCHcplte *palettes;
 	// the path of the file being imported, or nil
 	MCStringRef path;
 	// the resource fork's inventory and where it came from, for the stack's

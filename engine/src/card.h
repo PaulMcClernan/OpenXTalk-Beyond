@@ -31,6 +31,7 @@ public:
 protected:
     
     friend class MCHccard;
+    friend class MCHcplte;
 	MCObjptr *objptrs;
 	MCObjptr *kfocused;
 	MCObjptr *oldkfocused;
