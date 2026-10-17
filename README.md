@@ -1532,6 +1532,19 @@ and:
   refused with a message saying so, and the imported stack has no file
   name, so Save asks where to save it. Other importers can join the
   submenu later.
+- **No extra empty first card.** A HyperCard stack opened with
+  messages unlocked (Open Stack, or `go` to its file) got an empty card
+  in front of HyperCard's first one: the IDE's newStack handler refers
+  to a card of the new stack, and the engine made one on the stack
+  before its cards were read. The stack now starts on HyperCard's first
+  card, with HyperCard's number of cards, as it did with messages
+  locked.
+- **HyperCard text comes in as the right characters on Windows and
+  Linux.** A HyperCard stack's text, names and scripts are MacRoman,
+  and off the Mac the importer converted them the wrong way round
+  (since LiveCode): a curly quote came in as "ñ" or "î", "™" as "»"
+  and "®" as "¬". They now come in as the characters HyperCard showed,
+  as they always did on the Mac.
 - **macOS: the app describes itself as OXT-Beyond.** Its AppleScript
   dictionary says "xTalk" where it said "LiveCode" (the commands and
   their codes are the same), its document types name OpenXTalk stacks,
@@ -1545,11 +1558,19 @@ and:
   keeps the IDE's normal quit, with its prompt to save changes, when
   you log out or restart.
 
-A script sees no difference from 0.2.7-rc.1. Pull requests
+A script sees two differences from 0.2.7-rc.1, both in a HyperCard
+stack as it is imported: opened with messages unlocked, it no longer
+has the extra empty first card, so its number of cards and its card
+numbers are HyperCard's; and on Windows and Linux its text, names and
+scripts have the characters HyperCard had where letters such as "ñ"
+stood before. A stack imported earlier and saved keeps its text. Pull
+requests
 [#112](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/112),
-[#113](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/113)
+[#113](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/113),
+[#114](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/114),
+[#116](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/116)
 and
-[#114](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/114)
+[#117](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/117)
 list every change.
 
 #### 0.2.7-rc.1: a new web font, and Firefox and Safari

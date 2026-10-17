@@ -36,6 +36,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "card.h"
 #include "stack.h"
 #include "hndlrlst.h"
+#include "cardlst.h"
 #include "hc.h"
 
 #include "exec-interface.h"
@@ -348,6 +349,66 @@ static uint2 convert_style(uint2 istyle)
 	return ostyle;
 }
 
+// HyperCard's text, names and scripts are MacRoman. convert_string and
+// convert_script keep them MacRoman (with line ends and HyperTalk's
+// operators changed), and hc_string and hc_name decode them, so each comes
+// in as the character HyperCard showed on every platform. (Off the Mac the
+// importer used to translate the bytes with MCisotranslations, which goes
+// from native to MacRoman, the wrong way, so a curly quote came in as "n"
+// with a tilde; Windows-1252 and ISO 8859-1, the native encodings there,
+// have no place for some MacRoman characters at all.) One MacRoman byte
+// is one character, so the offsets of style runs stay right.
+// (libfoundation decodes kMCStringEncodingMacRoman only on the Mac, so the
+// importer has its own table: the upper half of MacRoman, as Apple's
+// ROMAN.TXT maps it and libfoundation's MacRoman table does.)
+#ifndef _MACOSX
+static const unichar_t kHcMacRomanUpper[128] =
+{
+	0x00c4, 0x00c5, 0x00c7, 0x00c9, 0x00d1, 0x00d6, 0x00dc, 0x00e1, 0x00e0, 0x00e2, 0x00e4, 0x00e3,
+	0x00e5, 0x00e7, 0x00e9, 0x00e8, 0x00ea, 0x00eb, 0x00ed, 0x00ec, 0x00ee, 0x00ef, 0x00f1, 0x00f3,
+	0x00f2, 0x00f4, 0x00f6, 0x00f5, 0x00fa, 0x00f9, 0x00fb, 0x00fc, 0x2020, 0x00b0, 0x00a2, 0x00a3,
+	0x00a7, 0x2022, 0x00b6, 0x00df, 0x00ae, 0x00a9, 0x2122, 0x00b4, 0x00a8, 0x2260, 0x00c6, 0x00d8,
+	0x221e, 0x00b1, 0x2264, 0x2265, 0x00a5, 0x00b5, 0x2202, 0x2211, 0x220f, 0x03c0, 0x222b, 0x00aa,
+	0x00ba, 0x03a9, 0x00e6, 0x00f8, 0x00bf, 0x00a1, 0x00ac, 0x221a, 0x0192, 0x2248, 0x2206, 0x00ab,
+	0x00bb, 0x2026, 0x00a0, 0x00c0, 0x00c3, 0x00d5, 0x0152, 0x0153, 0x2013, 0x2014, 0x201c, 0x201d,
+	0x2018, 0x2019, 0x00f7, 0x25ca, 0x00ff, 0x0178, 0x2044, 0x20ac, 0x2039, 0x203a, 0xfb01, 0xfb02,
+	0x2021, 0x00b7, 0x201a, 0x201e, 0x2030, 0x00c2, 0x00ca, 0x00c1, 0x00cb, 0x00c8, 0x00cd, 0x00ce,
+	0x00cf, 0x00cc, 0x00d3, 0x00d4, 0xf8ff, 0x00d2, 0x00da, 0x00db, 0x00d9, 0x0131, 0x02c6, 0x02dc,
+	0x00af, 0x02d8, 0x02d9, 0x02da, 0x00b8, 0x02dd, 0x02db, 0x02c7
+};
+#endif
+
+static bool hc_string(const char *p_macroman, uindex_t p_length, MCStringRef &r_string)
+{
+#ifdef _MACOSX
+	// MacRoman is native: as before
+	return MCStringCreateWithNativeChars((const char_t *)p_macroman, p_length, r_string);
+#else
+	MCAutoArray<unichar_t> t_chars;
+	if (!t_chars.New(p_length))
+		return false;
+	for (uindex_t i = 0; i < p_length; i++)
+	{
+		uint1 t_byte = (uint1)p_macroman[i];
+		t_chars[i] = t_byte < 0x80 ? (unichar_t)t_byte : kHcMacRomanUpper[t_byte - 0x80];
+	}
+	return MCStringCreateWithChars(t_chars.Ptr(), p_length, r_string);
+#endif
+}
+
+static bool hc_string(const char *p_macroman, MCStringRef &r_string)
+{
+	return hc_string(p_macroman, strlen(p_macroman), r_string);
+}
+
+static void hc_setname(MCObject *p_object, const char *p_macroman)
+{
+	MCAutoStringRef t_string;
+	MCNewAutoNameRef t_name;
+	if (hc_string(p_macroman, &t_string) && MCNameCreate(*t_string, &t_name))
+		p_object->setname(*t_name);
+}
+
 static char *convert_string(const char *string)
 {
 	const uint1 *sptr = (const uint1 *)string;
@@ -358,11 +419,7 @@ static char *convert_string(const char *string)
 		if (*sptr == 0x0D)
 			*dptr = '\n';
 		else
-#ifdef _MACOSX
 			*dptr = *sptr;
-#else
-			*dptr = MCisotranslations[*sptr];
-#endif
 
 		dptr++;
 		sptr++;
@@ -421,11 +478,7 @@ static char *convert_script(const char *string)
 			*dptr = '>';
 			break;
 		default:
-#ifdef _MACOSX
 			*dptr = *sptr;
-#else
-			*dptr = MCisotranslations[*sptr];
-#endif
 
 			break;
 		}
@@ -695,7 +748,7 @@ MCCdata *MCHctext::buildf(MCHcstak *hcsptr, MCField *parent)
 		MCParagraph *pgptr = new (nothrow) MCParagraph;
 		pgptr->setparent(parent);
 		MCAutoStringRef t_string;
-		/* UNCHECKED */ MCStringCreateWithNativeChars((const char_t*)sptr, length, &t_string);
+		/* UNCHECKED */ hc_string(sptr, length, &t_string);
 		pgptr->settext(*t_string);
 		pgptr->appendto(paragraphs);
 		for (uint2 r = 0 ; r < nruns ; r++)
@@ -793,13 +846,15 @@ MCControl *MCHcfield::build(MCHcstak *hcsptr, MCStack *sptr)
 	MCField *fptr = (MCField *)MCtemplatefield->clone(False, OP_NONE, false);
 	fptr->parent = sptr;
 	if (name != NULL)
-		fptr -> setname_cstring(name);
+		hc_setname(fptr, name);
 	delete[] name;
 	fptr->altid = id;
 	fptr->obj_id = ++maxid;
 	if (script != NULL)
 	{
-		fptr -> setscript_cstring(script);
+		MCAutoStringRef t_script;
+		if (hc_string(script, &t_script))
+			fptr->setscript(*t_script);
 		delete[] script;
 	}
 	name = script = NULL;
@@ -965,14 +1020,16 @@ MCControl *MCHcbutton::build(MCHcstak *hcsptr, MCStack *sptr)
 	MCButton *bptr = (MCButton *)MCtemplatebutton->clone(False, OP_NONE, false);
 	bptr->parent = sptr;
 	if (name != NULL)
-		bptr->setname_cstring(name);
+		hc_setname(bptr, name);
 	delete[] name;
 	bptr->altid = id;
 	bptr->obj_id = ++maxid;
 	bptr->rect = rect;
 	if (script != NULL)
 	{
-		bptr -> setscript_cstring(script);
+		MCAutoStringRef t_script;
+		if (hc_string(script, &t_script))
+			bptr->setscript(*t_script);
 		delete[] script;
 	}
 	name = script = NULL;
@@ -1003,7 +1060,7 @@ MCControl *MCHcbutton::build(MCHcstak *hcsptr, MCStack *sptr)
 		{
 			MCStringRef t_menustring = nil;
 			char *t_menu = tptr->buildm();
-			/* UNCHECKED */ MCStringCreateWithCString(t_menu != NULL ? t_menu : "", t_menustring);
+			/* UNCHECKED */ hc_string(t_menu != NULL ? t_menu : "", t_menustring);
 			delete[] t_menu;
 			MCValueAssign(bptr->menustring, t_menustring);
 			MCValueRelease(t_menustring);
@@ -1513,11 +1570,13 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 	MCCard *cptr = MCtemplatecard->clone(False, False);
 	cptr->obj_id = id;
 	if (name != NULL)
-		cptr->setname_cstring(name);
+		hc_setname(cptr, name);
 	delete[] name;
 	if (script != NULL)
 	{
-		cptr -> setscript_cstring(script);
+		MCAutoStringRef t_script;
+		if (hc_string(script, &t_script))
+			cptr->setscript(*t_script);
 		delete[] script;
 	}
 	name = script = NULL;
@@ -1674,13 +1733,15 @@ MCGroup *MCHcbkgd::build(MCHcstak *hcsptr, MCStack *sptr)
 	gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
 	gptr->obj_id = id;
 	if (name != NULL)
-		gptr->setname_cstring(name);
+		hc_setname(gptr, name);
 	delete[] name;
 	gptr->rect = sptr->getrect();
 	gptr->rect.x = gptr->rect.y = 0;
 	if (script != NULL)
 	{
-		gptr -> setscript_cstring(script);
+		MCAutoStringRef t_script;
+		if (hc_string(script, &t_script))
+			gptr->setscript(*t_script);
 		delete[] script;
 	}
 	name = script = NULL;
@@ -2108,7 +2169,8 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
                 t_raw[t_length] = '\0';
                 char *t_converted = convert_string(t_raw);
                 delete[] t_raw;
-                if (!MCNameCreateWithNativeChars((const char_t *)t_converted, strlen(t_converted), &t_name))
+                MCAutoStringRef t_string;
+                if (!hc_string(t_converted, &t_string) || !MCNameCreate(*t_string, &t_name))
                     t_name = kMCEmptyName;
                 delete[] t_converted;
             }
@@ -2488,6 +2550,14 @@ IO_stat MCHcstak::readblocks(const uint1 *p_data, uint4 p_size)
 MCStack *MCHcstak::build()
 {
 	MCStack *sptr = MCtemplatestack->clone();
+	// clone() sends newStack, and a handler that refers to a card of the new
+	// stack (the IDE's do) makes the template card on a stack that has none
+	// (MCStack::getchildbyordinal and the others). Take any such card off
+	// now, so that HyperCard's first card is the stack's first card; it is
+	// deleted once the stack has its own cards.
+	MCCard *t_made_cards = sptr->cards;
+	sptr->cards = NULL;
+	sptr->curcard = NULL;
 	sptr->flags |= F_HC_STACK | F_HC_ADDRESSING | F_DYNAMIC_PATHS;
 	const char *tname = strrchr(name, PATH_SEPARATOR);
 	if (tname != NULL)
@@ -2498,7 +2568,9 @@ MCStack *MCHcstak::build()
 	delete[] name;
 	if (script != NULL)
 	{
-		sptr -> setscript_cstring(script);
+		MCAutoStringRef t_script;
+		if (hc_string(script, &t_script))
+			sptr->setscript(*t_script);
 		delete[] script;
 		if (sptr->hlist != NULL)
 		{
@@ -2612,6 +2684,44 @@ MCStack *MCHcstak::build()
 		if (hccards != NULL)
 			hcstat_append("Warning: cards that are in no page were left out");
 	}
+	// The cards newStack made: deleted when HyperCard's cards replace them,
+	// kept (as before) on a stack that brought none, and kept in front of
+	// HyperCard's (as before) when newStack put a control on one, since
+	// deleting the card would leave its controls behind in the stack
+	bool t_made_has_controls = false;
+	if (t_made_cards != NULL)
+	{
+		MCCard *t_card = t_made_cards;
+		do
+		{
+			if (t_card->getobjptrs() != NULL)
+				t_made_has_controls = true;
+			t_card = t_card->next();
+		}
+		while (t_card != t_made_cards);
+	}
+	if (sptr->cards == NULL)
+		sptr->cards = t_made_cards;
+	else if (t_made_has_controls)
+	{
+		while (sptr->cards != NULL)
+		{
+			MCCard *t_card = sptr->cards->remove(sptr->cards);
+			t_card->appendto(t_made_cards);
+		}
+		sptr->cards = t_made_cards;
+	}
+	else
+		while (t_made_cards != NULL)
+		{
+			MCCard *t_card = t_made_cards->remove(t_made_cards);
+			MCrecent->deletecard(t_card);
+			MCcstack->deletecard(t_card);
+			sptr->uncacheobjectbyid(t_card);
+			t_card->removereferences();
+			t_card->scheduledelete(false);
+		}
+	sptr->curcard = sptr->cards;
 	// The background order: HyperCard's own, the chain from the STAK
 	// block's first background through each one's next, so "bg 1" names the
 	// background it named in HyperCard. Backgrounds the chain misses (a
