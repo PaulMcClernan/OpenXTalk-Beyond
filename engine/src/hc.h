@@ -50,6 +50,8 @@ enum HC_File_type {
 #define HC_SND  0x736e6420
 #define HC_PICT 0x50494354
 #define HC_PLTE 0x504c5445
+#define HC_HCCD 0x48436364
+#define HC_HCBG 0x48436267
 
 #define HC_F_MULTIPLE       0x0010
 #define HC_F_MARGINS        0x0020
@@ -116,6 +118,10 @@ enum HC_File_type {
 
 class MCHcstak;
 class MCCdata;
+class MCCard;
+class MCGroup;
+class MCObjptr;
+class MCControl;
 
 struct Hcfont
 {
@@ -352,7 +358,8 @@ public:
 	uint32_t height;
 	MCHcpict();
 	~MCHcpict();
-	MCControl *build(uint4 p_id, bool p_keep = false);
+	// p_ink: the image's ink, when not the template image's
+	MCControl *build(uint4 p_id, bool p_keep = false, int p_ink = -1);
 	MCHcpict *next()
 	{
 		return (MCHcpict *)MCDLlist::next();
@@ -393,6 +400,40 @@ public:
 	(MCHcplte *&list)
 	{
 		return (MCHcplte *)MCDLlist::remove
+			       ((MCDLlist *&)list);
+	}
+};
+
+// An HCcd or HCbg resource: AddColor's colours for the card or background
+// with the resource's id, and, once drawn, the image that carries them and
+// where it goes
+class MCHcaddcolor : public MCDLlist
+{
+public:
+	uint4 id;
+	bool card;
+	uint1 *data;
+	uint4 size;
+	MCHcpict *layer;
+	MCCard *cptr;
+	MCObjptr *cafter;
+	MCGroup *gptr;
+	MCControl *gafter;
+	MCHcaddcolor();
+	~MCHcaddcolor();
+	bool draw(MCHcstak *hcsptr, MCHcbutton *p_buttons, MCHcfield *p_fields);
+	MCHcaddcolor *next()
+	{
+		return (MCHcaddcolor *)MCDLlist::next();
+	}
+	void appendto(MCHcaddcolor *&list)
+	{
+		MCDLlist::appendto((MCDLlist *&)list);
+	}
+	MCHcaddcolor *remove
+	(MCHcaddcolor *&list)
+	{
+		return (MCHcaddcolor *)MCDLlist::remove
 			       ((MCDLlist *&)list);
 	}
 };
@@ -470,6 +511,7 @@ public:
 	MCHcsnd *snds;
 	MCHcpict *pictures;
 	MCHcplte *palettes;
+	MCHcaddcolor *addcolors;
 	// the path of the file being imported, or nil
 	MCStringRef path;
 	// the resource fork's inventory and where it came from, for the stack's
@@ -483,6 +525,7 @@ public:
 	MCHcbmap *getbmap(uint4 bid);
 	MCHcbmap *removebmap(uint4 bid);
 	MCHcbkgd *getbkgd(uint4 bid);
+	MCHcaddcolor *getaddcolor(bool p_card, uint4 p_id);
 	const char *getfont(uint2 fid);
 	void getatts(uint2 aid, const char *&font, uint2 &size, uint2 &style);
 	IO_stat read(IO_handle stream);

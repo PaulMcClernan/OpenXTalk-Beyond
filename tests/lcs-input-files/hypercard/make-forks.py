@@ -29,6 +29,12 @@ forks/Pictures.rsrc         PICT 300 "Colour" (version 2: colour shapes, an
                             unnamed: an oval and a PackBitsRect), drawn as
                             the test expects pixel by pixel, and PLTE 300
                             "Test Palette" on PICT 300 with two buttons
+forks/AddColor.rsrc         AddColor's colours for TestButtonProperties.stack:
+                            HCbg 2670 (button 1 red with a bevel, button 2
+                            green but hidden, a blue rectangle) and HCcd 2883
+                            (a yellow rectangle, PICT 300 "Colour" drawn
+                            transparent, a picture file, which is not drawn),
+                            and HCcd 9999, for a card the stack does not have
 forks/TestCardsBackgrounds.applesingle
                             ../TestCardsBackgrounds.stack and the fork in one
                             AppleSingle file, named "Synthetic Stack"
@@ -192,6 +198,26 @@ def plte(pict_id, origin, buttons):
     return out
 
 
+def addcolor(entries):
+    """entries: AddColor's records, each (kind, hidden, ...): ("button" or
+    "field", hidden, id, bevel, (r, g, b)), ("rect", hidden, (top, left,
+    bottom, right), bevel, (r, g, b)), ("picture" or "file", hidden, (top,
+    left, bottom, right), transparent, name); colour components are 16-bit"""
+    out = b""
+    for entry in entries:
+        kind, hidden = entry[0], entry[1]
+        code = {"button": 1, "field": 2, "rect": 3, "picture": 4, "file": 5}[kind]
+        out += bytes([code | (0x80 if hidden else 0)])
+        if kind in ("button", "field"):
+            out += struct.pack(">hh3H", entry[2], entry[3], *entry[4])
+        elif kind == "rect":
+            out += rect(*entry[2]) + struct.pack(">h3H", entry[3], *entry[4])
+        else:
+            raw = entry[4].encode("mac_roman")
+            out += rect(*entry[2]) + bytes([1 if entry[3] else 0, len(raw)]) + raw
+    return out
+
+
 def resource_fork(resources):
     """resources: [(type, id, name or None, data)], grouped by type in order"""
     data = b""
@@ -301,7 +327,24 @@ def main():
             ((16, 0, 32, 16), '  set the uPaletteSet of this stack to 5'),
         ])),
     ])
+    colours = resource_fork([
+        ("PICT", 300, "Colour", pict_v2()),
+        ("HCbg", 2670, None, addcolor([
+            ("button", False, 1, 2, (65535, 0, 0)),
+            ("button", True, 2, 0, (0, 65535, 0)),
+            ("rect", False, (300, 400, 330, 500), 0, (0, 0, 65535)),
+        ])),
+        ("HCcd", 2883, None, addcolor([
+            ("rect", False, (10, 10, 40, 60), 3, (65535, 65535, 0)),
+            ("picture", False, (100, 400, 148, 464), True, "Colour"),
+            ("file", False, (0, 0, 10, 10), False, "Sky.pict"),
+        ])),
+        ("HCcd", 9999, None, addcolor([
+            ("rect", False, (0, 0, 10, 10), 0, (0, 65535, 0)),
+        ])),
+    ])
     files = {
+        "AddColor.rsrc": colours,
         "Synthetic.rsrc": fork,
         "Pictures.rsrc": pictures,
         "Sounds.rsrc": sounds,
