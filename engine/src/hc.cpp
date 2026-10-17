@@ -573,6 +573,11 @@ MCHcsnd::MCHcsnd()
 {
     m_name = MCValueRetain(kMCEmptyName);
 	data = NULL;
+	size = 0;
+	rate = 0;
+	channels = 1;
+	width = 1;
+	refusal = NULL;
 }
 
 MCHcsnd::~MCHcsnd()
@@ -582,10 +587,65 @@ MCHcsnd::~MCHcsnd()
 		delete[] data;
 }
 
+// IMA 4:1 ADPCM, as QuickTime and the Sound Manager store it ('ima4'): a
+// packet of 34 bytes per channel holds 64 samples, the first two bytes the
+// predictor (top 9 bits) and the step index (low 7 bits), then the
+// samples' 4-bit codes, low nibble first. The tables are the IMA's
+// (Recommended Practices for Enhancing Digital Audio Compatibility in
+// Multimedia Systems, 1992).
+static const int16_t kHcImaSteps[89] =
+{
+	7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45,
+	50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230,
+	253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963,
+	1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327,
+	3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442,
+	11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794,
+	32767
+};
+static const int8_t kHcImaIndexes[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
+
+// Decode p_packets packets per channel from p_src into big-endian 16-bit
+// samples, interleaved, at r_dst (64 * p_packets * p_channels samples).
+static void hc_decode_ima4(const uint1 *p_src, uint4 p_packets, uint2 p_channels, uint1 *r_dst)
+{
+	for (uint4 p = 0 ; p < p_packets ; p++)
+		for (uint2 c = 0 ; c < p_channels ; c++)
+		{
+			const uint1 *t_packet = p_src + (p * p_channels + c) * 34;
+			int32_t t_predictor = (int16_t)(((t_packet[0] << 8) | t_packet[1]) & 0xFF80);
+			int32_t t_index = t_packet[1] & 0x7F;
+			if (t_index > 88)
+				t_index = 88;
+			for (uint4 n = 0 ; n < 64 ; n++)
+			{
+				uint1 t_code = t_packet[2 + n / 2];
+				t_code = (n & 1) ? (t_code >> 4) : (t_code & 0x0F);
+				int32_t t_step = kHcImaSteps[t_index];
+				int32_t t_diff = t_step >> 3;
+				if (t_code & 4)
+					t_diff += t_step;
+				if (t_code & 2)
+					t_diff += t_step >> 1;
+				if (t_code & 1)
+					t_diff += t_step >> 2;
+				t_predictor += (t_code & 8) ? -t_diff : t_diff;
+				t_predictor = MCU_max((int32_t)-32768, MCU_min(t_predictor, (int32_t)32767));
+				t_index = MCU_max((int32_t)0, MCU_min(t_index + kHcImaIndexes[t_code & 7], (int32_t)88));
+				uint1 *t_out = r_dst + ((p * 64 + n) * p_channels + c) * 2;
+				t_out[0] = (uint1)((t_predictor >> 8) & 0xFF);
+				t_out[1] = (uint1)(t_predictor & 0xFF);
+			}
+		}
+}
+
 // A 'snd ' resource is format 1 (a list of synthesizers, then commands) or
 // format 2 (commands only). Its first command is a bufferCmd whose second
-// parameter is the offset of the sound header. Only uncompressed sampled
-// sound (a standard sound header, encode 0) is imported.
+// parameter is the offset of the sound header. Three headers (Inside
+// Macintosh: Sound, 2-104 to 2-111): the standard header (encode 0, 8-bit
+// mono, the only one imported before), the extended header (encode 0xFF:
+// 8 or 16 bits, one or two channels) and the compressed header (encode
+// 0xFE: IMA 4:1 is imported; MACE 3:1 and 6:1 are not yet, and are logged).
 Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length)
 {
 	id = inid;
@@ -607,8 +667,14 @@ Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length
 	uint4 hsize = hc_get_uint4(&sptr[t_commands + 6]);
 	if (hsize > p_length || p_length - hsize < 22)
 		return False;
-	if (sptr[hsize + 20]) // compressed or extended sound
+	uint1 t_encode = (uint1)sptr[hsize + 20];
+	if (t_encode == 0xFF || t_encode == 0xFE)
+		return importextended(sptr, p_length, hsize, t_encode);
+	if (t_encode != 0)
+	{
+		refusal = "an unknown sound header";
 		return False;
+	}
 	size = hc_get_uint4(&sptr[hsize + 4]);
 	rate = hc_get_uint2(&sptr[hsize + 8]);
 	uint1 t_base = (uint1)sptr[hsize + 21];
@@ -629,6 +695,82 @@ Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length
 	return True;
 }
 
+// The extended and compressed headers: 64 bytes, then the samples.
+Boolean MCHcsnd::importextended(const char *sptr, uint4 p_length, uint4 hsize, uint1 p_encode)
+{
+	if (p_length - hsize < 64)
+	{
+		refusal = "a short sound header";
+		return False;
+	}
+	uint4 t_channels = hc_get_uint4(&sptr[hsize + 4]);
+	uint4 t_frames = hc_get_uint4(&sptr[hsize + 22]);
+	rate = hc_get_uint2(&sptr[hsize + 8]);
+	uint1 t_base = (uint1)sptr[hsize + 21];
+	if (t_base == 0)
+		t_base = 0x3C;
+	rate = (uint2)((real8)rate / pow(1.05946309434, (real8)((int)t_base - 0x3C)));
+	if (t_channels != 1 && t_channels != 2)
+	{
+		refusal = "more than two channels";
+		return False;
+	}
+	channels = (uint2)t_channels;
+	const uint1 *t_samples = (const uint1 *)sptr + hsize + 64;
+	uint4 t_avail = p_length - hsize - 64;
+	if (p_encode == 0xFF)
+	{
+		uint2 t_bits = hc_get_uint2(&sptr[hsize + 48]);
+		if (t_bits != 8 && t_bits != 16)
+		{
+			refusal = "a sample size other than 8 or 16 bits";
+			return False;
+		}
+		width = t_bits / 8;
+		uint4 t_frame_size = width * channels;
+		if (t_frames > t_avail / t_frame_size)
+			t_frames = t_avail / t_frame_size;
+		size = t_frames * t_frame_size;
+		data = new (nothrow) int1[size];
+		if (data == NULL)
+			return False;
+		memcpy(data, t_samples, size);
+		// 8-bit samples are unsigned, as the standard header's
+		if (width == 1)
+			for (uint4 i = 0 ; i < size ; i++)
+				((uint1 *)data)[i] -= 128;
+		return True;
+	}
+	// compressed: the format, or the compression id of older resources
+	uint4 t_format = hc_get_uint4(&sptr[hsize + 40]);
+	int2 t_compression = hc_get_int2(&sptr[hsize + 56]);
+	if (t_format == 0x696D6134 /* ima4 */)
+	{
+		uint4 t_packets = t_avail / (34 * channels);
+		if (t_frames != 0 && t_frames < t_packets)
+			t_packets = t_frames;
+		if (t_packets == 0)
+		{
+			refusal = "no samples";
+			return False;
+		}
+		width = 2;
+		size = t_packets * 64 * channels * 2;
+		data = new (nothrow) int1[size];
+		if (data == NULL)
+			return False;
+		hc_decode_ima4(t_samples, t_packets, channels, (uint1 *)data);
+		return True;
+	}
+	if (t_format == 0x4D414333 /* MAC3 */ || t_compression == 3)
+		refusal = "MACE 3:1 compression";
+	else if (t_format == 0x4D414336 /* MAC6 */ || t_compression == 4)
+		refusal = "MACE 6:1 compression";
+	else
+		refusal = "an unknown compression";
+	return False;
+}
+
 MCAudioClip *MCHcsnd::build()
 {
 	MCAudioClip *aptr = new (nothrow) MCAudioClip;
@@ -636,10 +778,10 @@ MCAudioClip *MCHcsnd::build()
     aptr->setname(m_name);
 	aptr->samples = (int1 *)data;
 	data = NULL;
-	aptr->nchannels = 1;
+	aptr->nchannels = channels;
 	aptr->format = AF_SLINEAR;
 	aptr->rate = rate;
-	aptr->swidth = 1;
+	aptr->swidth = width;
 	return aptr;
 }
 
@@ -2245,7 +2387,18 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 					if (newsnd->import(id, *t_name, t_resource, t_length))
 						newsnd->appendto(snds);
 					else
+					{
+						// only the sounds this importer could not read
+						// before are named: a damaged one stays quiet
+						if (newsnd->refusal != NULL)
+						{
+							MCAutoStringRefAsCString t_name_str;
+							/* UNCHECKED */ t_name_str.Lock(MCNameGetString(*t_name));
+							hcstat_append("Not converting snd  id %5d \"%s\": %s",
+							              id, *t_name_str, newsnd->refusal);
+						}
 						delete newsnd;
+					}
 				}
 				break;
 			default:

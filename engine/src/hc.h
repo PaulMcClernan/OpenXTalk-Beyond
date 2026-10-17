@@ -137,9 +137,16 @@ public:
 	uint4 size;
 	uint2 rate;
 	uint2 id;
+	// 1 or 2 channels, interleaved; 1 byte a sample (signed), or 2 (signed,
+	// big-endian, as an AIFF file's)
+	uint2 channels;
+	uint2 width;
+	// why import() refused the sound, for the import log, or NULL
+	const char *refusal;
 	MCHcsnd();
 	~MCHcsnd();
 	Boolean import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length);
+	Boolean importextended(const char *sptr, uint4 p_length, uint4 hsize, uint1 p_encode);
 	MCAudioClip *build();
 	MCHcsnd *next()
 	{
