@@ -393,6 +393,92 @@ on TestHyperCardImportGame
    _Close tStack
 end TestHyperCardImportGame
 
+on TestHyperCardImportBuiltinSounds
+   -- HyperCard played boing, harpsichord and flute from its own resource
+   -- fork: a stack whose scripts name one (TestV1 says play "Boing") gets
+   -- a synthesised one, and a stack that names none gets none
+   local tStack
+   put _Import("TestV1") into tStack
+   TestAssert "built-in sounds: boing", there is an audioClip "boing" of stack tStack
+   TestAssert "built-in sounds: only the one named", the number of audioClips of stack tStack is 1
+   local tSet
+   put the customProperties["uHyperCard"] of audioClip "boing" of stack tStack into tSet
+   TestAssert "built-in sounds: marked as synthesised", tSet["source"] is "synthesised"
+   TestAssert "built-in sounds: logged", "Added HyperCard's" && quote & "boing" & quote is in the hcImportStat
+   _Close tStack
+
+   put _Import("TestCardsBackgrounds") into tStack
+   TestAssert "built-in sounds: none unnamed", the number of audioClips of stack tStack is 0
+   _Close tStack
+end TestHyperCardImportBuiltinSounds
+
+-- Play pSound (with pNotes, when given) and return how long after the
+-- play the playStopped message is due, when there is no audio device to
+-- play it on and the engine sends it when the sound would have ended;
+-- empty if the sound is playing. Pending playStopped messages from
+-- earlier plays are cancelled first.
+private function _PlayLength pSound, pNotes
+   local tLine, tStart
+   repeat for each line tLine in the pendingMessages
+      if item 3 of tLine is "playStopped" then cancel item 1 of tLine
+   end repeat
+   put the long seconds into tStart
+   if pNotes is empty then
+      play pSound
+   else
+      play pSound tempo 120 pNotes
+   end if
+   repeat for each line tLine in the pendingMessages
+      if item 3 of tLine is "playStopped" then return item 2 of tLine - tStart
+   end repeat
+   return empty
+end _PlayLength
+
+on TestHyperCardImportPlayNotes
+   -- `play "sound" tempo t "notes"` plays the notes with a sound from a
+   -- HyperCard import (here the synthesised boing of a stack with no fork)
+   local tStack, tError, tOther
+   put _Import("TestV1") into tStack
+   set the defaultStack to tStack
+   local tPlain, tMelody
+   put _PlayLength("boing") into tPlain
+   put _PlayLength("boing", "c4q d e r e.") into tMelody
+   if tMelody is not empty then
+      -- four quarters and a dotted quarter (the last "e" is the note E,
+      -- which keeps the quarter it carries) at 120 a minute: 2.75 seconds,
+      -- measured against the boing alone (0.8 seconds) so that the clock
+      -- the messages are timed by does not matter
+      TestAssert "notes: the melody's length (boing" && tPlain & ", melody" && tMelody & ")", \
+         abs((tMelody - tPlain) - (2.75 - 0.8)) < 0.1
+   else
+      -- (where it plays, its length is not measured here: an engine
+      -- without an audio device can report it playing for good)
+      TestAssert "notes: the melody plays", "boing" is in the sound
+   end if
+   play stop
+   try
+      play "boing" tempo "fast" "c"
+   catch tError
+   end try
+   TestAssert "notes: the tempo is evaluated", tError is not empty
+   _Close tStack
+
+   -- anywhere else they are not evaluated, as before
+   put "PlayNotesOther" & the milliseconds into tOther
+   create invisible stack tOther
+   set the defaultStack to tOther
+   put empty into tError
+   try
+      play "flute" tempo "fast" "c"
+   catch tError
+   end try
+   -- (only the error is asserted: what the play then reports differs, the
+   -- web engine looking for a file called "flute" where desktops answer
+   -- "no data in audioClip")
+   TestAssert "notes: not evaluated outside imports", tError is empty
+   delete stack tOther
+end TestHyperCardImportPlayNotes
+
 -- The resource fork. forks/ holds synthetic forks written by
 -- lcs-input-files/hypercard/make-forks.py (ICON 128 "Synth Icon", CURS 129
 -- "Synth Cursor", snd 130 "Synth Beep", and a PICT, an XCMD and an XFCN
