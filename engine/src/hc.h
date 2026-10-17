@@ -405,6 +405,11 @@ public:
 	MCHcsnd *snds;
 	// the path of the file being imported, or nil
 	MCStringRef path;
+	// the resource fork's inventory and where it came from, for the stack's
+	// custom property set "uHyperCard"
+	MCListRef resourcelist;
+	MCListRef externallist;
+	MCStringRef forksource;
 	MCHcstak(char *inname);
 	~MCHcstak();
 	uint4 geticon(uint2 iid);
@@ -417,6 +422,9 @@ public:
 	IO_stat readblocks(const uint1 *p_data, uint4 p_size);
 	void readresources(const uint1 *p_fork, uint4 p_size);
 	bool readresourcefile(MCStringRef p_path, bool p_log);
+	void noteresource(const char *p_type, uint2 p_id, MCNameRef p_name, uint4 p_size);
+	void setforksource(const char *p_source);
+	void storeinventory(MCStack *p_stack);
 	bool readsidecarresources();
 	MCStack *build();
 	

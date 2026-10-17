@@ -586,3 +586,46 @@ on TestHyperCardImportAppleSingle
    _AssertSyntheticFork "AppleSingle", tStack
    _Close tStack
 end TestHyperCardImportAppleSingle
+
+on TestHyperCardImportInventory
+   -- what the fork held, in the custom property set uHyperCard
+   local tFolder, tStack, tSet
+   put _NewFolder("inventory") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Inventory"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & "._HC Inventory"
+   put _ImportPath(tFolder & "HC Inventory") into tStack
+   put the customProperties["uHyperCard"] of stack tStack into tSet
+   TestAssert "inventory: every resource", the number of lines of tSet["resources"] is 6
+   TestAssert "inventory: type, id, size, name", line 1 of tSet["resources"] is "ICON" & tab & "128" & tab & "128" & tab & "Synth Icon"
+   TestAssert "inventory: the sound", line 3 of tSet["resources"] begins with "snd " & tab & "130" & tab
+   TestAssert "inventory: externals", tSet["externals"] is "XCMD" & tab & "PopUpMenu" & return & "XFCN" & tab & "FileName"
+   TestAssert "inventory: source", tSet["source"] is tFolder & "._HC Inventory (AppleDouble)"
+   _Close tStack
+   _DeleteFolder tFolder
+
+   -- a stack with no fork has no such set, as before
+   put _Import("TestCardsBackgrounds") into tStack
+   TestAssert "no fork: no uHyperCard", "uHyperCard" is not among the lines of the customPropertySets of stack tStack
+   _Close tStack
+end TestHyperCardImportInventory
+
+on TestHyperCardImportIdClashes
+   -- icon ids are kept, clashes are logged, and objects made later get
+   -- ids above every icon
+   local tFolder, tStack, tLog
+   put _NewFolder("clash") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Clash"
+   _CopyInput "forks/Clash.rsrc", tFolder & "HC Clash.rsrc"
+   put _ImportPath(tFolder & "HC Clash") into tStack
+   put the hcImportStat into tLog
+   TestAssert "clash: icon and cursor", "Warning: ICON" && quote & "Twin Icon" & quote && "and CURS" && quote & "Twin Cursor" & quote && "have the same id, 129" is in tLog
+   TestAssert "clash: icon and card", "Warning: ICON" && quote & "Card Twin" & quote && "and card" && quote is in tLog
+   TestAssert "clash: the card keeps its id", the id of card 1 of stack tStack is 2842
+   TestAssert "clash: the icon keeps its id", the short name of image id 30000 of stack tStack is "High Icon"
+   lock messages
+   create button "Made later" in card 1 of stack tStack
+   unlock messages
+   TestAssert "clash: a new object's id is above the icons", the id of button "Made later" of card 1 of stack tStack > 30000
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportIdClashes

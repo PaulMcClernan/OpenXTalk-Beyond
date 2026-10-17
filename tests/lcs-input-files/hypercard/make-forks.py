@@ -16,6 +16,9 @@ forks/Synthetic.appledouble the same fork in an AppleDouble file (RFC 1740),
                             as macOS writes "._Name"
 forks/Empty.appledouble     an AppleDouble file whose fork holds nothing, as
                             macOS writes for a file with Finder info only
+forks/Clash.rsrc            ids that collide: ICON 129 and CURS 129, ICON 2842
+                            (card 1's id in TestCardsBackgrounds.stack), and
+                            ICON 30000, above every object id of that stack
 forks/TestCardsBackgrounds.applesingle
                             ../TestCardsBackgrounds.stack and the fork in one
                             AppleSingle file, named "Synthetic Stack"
@@ -144,8 +147,15 @@ def main():
         struct.pack(">IHHHHH", 0, 0, 0, 28, 30, 0xFFFF)
     with open(os.path.join(HERE, "TestCardsBackgrounds.stack"), "rb") as f:
         stack = f.read()
+    clash = resource_fork([
+        ("ICON", 129, "Twin Icon", icon()),
+        ("ICON", 2842, "Card Twin", icon()),
+        ("ICON", 30000, "High Icon", icon()),
+        ("CURS", 129, "Twin Cursor", cursor()),
+    ])
     files = {
         "Synthetic.rsrc": fork,
+        "Clash.rsrc": clash,
         "Synthetic.appledouble": applefile(APPLEDOUBLE, [(9, FINDER_INFO), (2, fork)]),
         "Empty.appledouble": applefile(APPLEDOUBLE, [(9, FINDER_INFO), (2, empty)]),
         "TestCardsBackgrounds.applesingle": applefile(APPLESINGLE, [

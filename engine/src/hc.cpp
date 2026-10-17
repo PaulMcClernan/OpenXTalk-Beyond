@@ -1840,13 +1840,19 @@ MCHcstak::MCHcstak(char *inname)
 	  icons(nullptr),
 	  cursors(nullptr),
 	  snds(nullptr),
-	  path(nullptr)
+	  path(nullptr),
+	  resourcelist(nullptr),
+	  externallist(nullptr),
+	  forksource(nullptr)
 {
 }
 
 MCHcstak::~MCHcstak()
 {
 	MCValueRelease(path);
+	MCValueRelease(resourcelist);
+	MCValueRelease(externallist);
+	MCValueRelease(forksource);
 	delete[] name;
 	delete[] script;
 	delete[] fullbuffer;
@@ -2119,6 +2125,38 @@ static bool hc_decode_binhex(const uint1 *p_text, uint4 p_length, char *&r_name,
 
 // Read the resources HyperCard stacks keep in their resource fork: icons,
 // cursors and sounds. Every offset is checked against the fork.
+// The inventory of the resource fork, which build() stores in the stack's
+// custom property set "uHyperCard": one line per resource, "type<tab>id
+// <tab>size<tab>name", and the XCMDs and XFCNs alone, "type<tab>name", so
+// that a user can see what the stack expected that the import could not
+// bring in.
+void MCHcstak::noteresource(const char *p_type, uint2 p_id, MCNameRef p_name, uint4 p_size)
+{
+	MCAutoStringRef t_type;
+	if (!hc_string(p_type, 4, &t_type))
+		return;
+	if (resourcelist == nil && !MCListCreateMutable('\n', resourcelist))
+		return;
+	MCAutoStringRef t_line;
+	if (MCStringFormat(&t_line, "%@\t%d\t%u\t%@", *t_type, (int)(int2)p_id, p_size, MCNameGetString(p_name)))
+		/* UNCHECKED */ MCListAppend(resourcelist, *t_line);
+	if (memcmp(p_type, "XCMD", 4) == 0 || memcmp(p_type, "XFCN", 4) == 0)
+	{
+		if (externallist == nil && !MCListCreateMutable('\n', externallist))
+			return;
+		MCAutoStringRef t_external;
+		if (MCStringFormat(&t_external, "%@\t%@", *t_type, MCNameGetString(p_name)))
+			/* UNCHECKED */ MCListAppend(externallist, *t_external);
+	}
+}
+
+void MCHcstak::setforksource(const char *p_source)
+{
+	MCAutoStringRef t_source;
+	if (MCStringCreateWithCString(p_source, &t_source))
+		MCValueAssign(forksource, *t_source);
+}
+
 void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 {
 	const char *t_fork = (const char *)p_fork;
@@ -2184,6 +2222,7 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 			uint4 t_length = hc_get_uint4(&t_fork[t_data_offset + offset]);
 			if (t_length > p_size - t_data_offset - offset - 4)
 				t_length = p_size - t_data_offset - offset - 4;
+			noteresource(&t_map[t_entry], id, *t_name, t_length);
 			switch (t_type)
 			{
 			case HC_ICON:
@@ -2369,12 +2408,17 @@ bool MCHcstak::readresourcefile(MCStringRef p_path, bool p_log)
 	bool t_read = hc_count_resources(t_fork, t_fork_size) > 0;
 	if (t_read)
 	{
+		MCAutoStringRef t_source;
 		if (p_log)
 		{
 			MCAutoStringRefAsCString t_path_str;
 			/* UNCHECKED */ t_path_str.Lock(p_path);
 			hcstat_append("Reading the resource fork from %s (%s)", *t_path_str, t_kind);
+			if (MCStringFormat(&t_source, "%@ (%s)", p_path, t_kind))
+				MCValueAssign(forksource, *t_source);
 		}
+		else
+			setforksource("the file's resource fork");
 		readresources(t_fork, t_fork_size);
 	}
 	delete[] t_file;
@@ -2588,7 +2632,11 @@ IO_stat MCHcstak::read(IO_handle stream)
 	if (t_stat == IO_NORMAL)
 	{
 		if (t_rsrc != NULL && t_rsrc_size != 0)
+		{
+			setforksource(filetype == HC_MACBIN ? "MacBinary"
+			              : filetype == HC_BINHEX ? "BinHex" : "AppleSingle");
 			readresources(t_rsrc, t_rsrc_size);
+		}
 		else if (filetype == HC_RAW)
 		{
 			// A bare data fork: its own resource fork where the file system
@@ -2833,6 +2881,111 @@ IO_stat MCHcstak::readblocks(const uint1 *p_data, uint4 p_size)
 	return IO_NORMAL;
 }
 
+// Ids. Images take the ids of their ICON and CURS resources (scripts say
+// "set icon to 7001"), but those ids were never kept apart from each other
+// or from the stack's other objects: an ICON and a CURS with one id become
+// two images with that id, and an icon can have a card's id. Nothing is
+// renumbered (that would break the scripts); the import log says which.
+struct HCIdUse
+{
+	uint4 id;
+	MCObject *object;
+};
+
+static void hc_collect_ids(MCControl *p_controls, MCAutoArray<HCIdUse> &x_ids)
+{
+	MCControl *t_control = p_controls;
+	if (t_control == NULL)
+		return;
+	do
+	{
+		HCIdUse t_use = { t_control->getid(), t_control };
+		/* UNCHECKED */ x_ids.Push(t_use);
+		if (t_control->gettype() == CT_GROUP)
+			hc_collect_ids(((MCGroup *)t_control)->getcontrols(), x_ids);
+		t_control = t_control->next();
+	}
+	while (t_control != p_controls);
+}
+
+static void hc_describe(MCObject *p_object, MCGroup *p_icons, MCGroup *p_cursors, char *r_buffer, size_t p_size)
+{
+	MCAutoStringRefAsCString t_name;
+	/* UNCHECKED */ t_name.Lock(MCNameGetString(p_object->getname()));
+	const char *t_kind;
+	if (p_object->getparent() == p_icons && p_icons != NULL)
+		t_kind = "ICON";
+	else if (p_object->getparent() == p_cursors && p_cursors != NULL)
+		t_kind = "CURS";
+	else
+	{
+		switch (p_object->gettype())
+		{
+		case CT_CARD: t_kind = "card"; break;
+		case CT_GROUP: t_kind = "group"; break;
+		case CT_BUTTON: t_kind = "button"; break;
+		case CT_FIELD: t_kind = "field"; break;
+		case CT_IMAGE: t_kind = "image"; break;
+		default: t_kind = "object"; break;
+		}
+	}
+	snprintf(r_buffer, p_size, "%s \"%s\"", t_kind, *t_name);
+}
+
+static void hc_report_id_clashes(MCStack *p_stack, MCGroup *p_icons, MCGroup *p_cursors)
+{
+	MCAutoArray<HCIdUse> t_ids;
+	MCCard *t_card = p_stack->getcards();
+	if (t_card != NULL)
+	{
+		do
+		{
+			HCIdUse t_use = { t_card->getid(), t_card };
+			/* UNCHECKED */ t_ids.Push(t_use);
+			t_card = t_card->next();
+		}
+		while (t_card != p_stack->getcards());
+	}
+	hc_collect_ids(p_stack->getcontrols(), t_ids);
+	for (uindex_t i = 0 ; i < t_ids.Size() ; i++)
+	{
+		MCObject *t_parent = t_ids[i].object->getparent();
+		if (t_parent == NULL || (t_parent != p_icons && t_parent != p_cursors))
+			continue;
+		// each pair once: against everything before it that is not an
+		// icon or cursor reported already, and against every object
+		for (uindex_t j = 0 ; j < t_ids.Size() ; j++)
+		{
+			if (j == i || t_ids[j].id != t_ids[i].id)
+				continue;
+			MCObject *t_other_parent = t_ids[j].object->getparent();
+			bool t_other_is_bitmap = t_other_parent != NULL && (t_other_parent == p_icons || t_other_parent == p_cursors);
+			if (t_other_is_bitmap && j < i)
+				continue;
+			char t_this[300], t_that[300];
+			hc_describe(t_ids[i].object, p_icons, p_cursors, t_this, sizeof(t_this));
+			hc_describe(t_ids[j].object, p_icons, p_cursors, t_that, sizeof(t_that));
+			hcstat_append("Warning: %s and %s have the same id, %u", t_this, t_that, t_ids[i].id);
+		}
+	}
+}
+
+void MCHcstak::storeinventory(MCStack *p_stack)
+{
+	MCAutoArrayRef t_set;
+	if (!MCArrayCreateMutable(&t_set))
+		return;
+	MCAutoStringRef t_resources, t_externals;
+	if (MCListCopyAsString(resourcelist, &t_resources))
+		/* UNCHECKED */ MCArrayStoreValue(*t_set, false, MCNAME("resources"), *t_resources);
+	if (externallist != nil && MCListCopyAsString(externallist, &t_externals))
+		/* UNCHECKED */ MCArrayStoreValue(*t_set, false, MCNAME("externals"), *t_externals);
+	if (forksource != nil)
+		/* UNCHECKED */ MCArrayStoreValue(*t_set, false, MCNAME("source"), forksource);
+	MCExecContext ctxt(p_stack, nil, nil);
+	p_stack->SetCustomPropertiesElement(ctxt, MCNAME("uHyperCard"), *t_set);
+}
+
 MCStack *MCHcstak::build()
 {
 	MCStack *sptr = MCtemplatestack->clone();
@@ -3047,9 +3200,26 @@ MCStack *MCHcstak::build()
 		}
 		delete bmptr;
 	}
+	MCGroup *t_icon_group = NULL;
+	MCGroup *t_cursor_group = NULL;
+	// the highest icon or cursor id, which the stack's id must not be below
+	uint4 t_max_bitmap_id = 0;
+	MCHcbmap *t_lists[2] = { icons, cursors };
+	for (uint4 l = 0 ; l < 2 ; l++)
+	{
+		MCHcbmap *t_bitmap = t_lists[l];
+		if (t_bitmap != NULL)
+			do
+			{
+				t_max_bitmap_id = MCU_max(t_bitmap->id, t_max_bitmap_id);
+				t_bitmap = t_bitmap->next();
+			}
+			while (t_bitmap != t_lists[l]);
+	}
 	if (icons != NULL)
 	{
 		MCGroup *gptr = (MCGroup *)MCtemplategroup->clone(False, OP_NONE, false);
+		t_icon_group = gptr;
 		// MW-2011-08-09: [[ Groups ]] HC backgrounds are shared.
 		gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
 		gptr->obj_id = ++maxid;
@@ -3073,6 +3243,7 @@ MCStack *MCHcstak::build()
 	if (cursors != NULL)
 	{
 		MCGroup *gptr = (MCGroup *)MCtemplategroup->clone(False, OP_NONE, false);
+		t_cursor_group = gptr;
 		gptr->obj_id = ++maxid;
 		// MW-2011-08-09: [[ Groups ]] HC backgrounds are shared.
 		gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
@@ -3102,7 +3273,15 @@ MCStack *MCHcstak::build()
 		aptr->appendto(sptr->aclips);
 		delete sndptr;
 	}
-	sptr->obj_id = maxid;
+	if (t_icon_group != NULL || t_cursor_group != NULL)
+		hc_report_id_clashes(sptr, t_icon_group, t_cursor_group);
+	// Icon and cursor ids never raised maxid, so a stack whose icons have
+	// higher ids than its other objects (HyperBattleship!'s 5001-8012 over
+	// 3743) gave the next object made in it an icon's id. New imports start
+	// the stack's ids above them; the imported objects keep their ids.
+	sptr->obj_id = MCU_max(maxid, t_max_bitmap_id);
+	if (resourcelist != nil)
+		storeinventory(sptr);
 	return sptr;
 }
 
