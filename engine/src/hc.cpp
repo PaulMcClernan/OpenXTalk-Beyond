@@ -4095,36 +4095,36 @@ MCStack *MCHcstak::build()
 	// fork, so stacks name them without carrying them. A stack whose
 	// scripts name one, and that has no sound of that name, gets a
 	// synthesised one after its own sounds.
-	for (int i = 0; i < kHCInstrumentCount; i++)
+	for (int t_instrument = 0; t_instrument < kHCInstrumentCount; t_instrument++)
 	{
-		if ((s_hc_instruments & (1u << i)) == 0)
+		if ((s_hc_instruments & (1u << t_instrument)) == 0)
 			continue;
-		MCNewAutoNameRef t_name;
-		if (!MCNameCreateWithNativeChars((const char_t *)MCHcInstrumentName(i), strlen(MCHcInstrumentName(i)), &t_name) ||
-		    sptr->getobjname(CT_AUDIO_CLIP, *t_name) != NULL)
+		MCNewAutoNameRef t_clip_name;
+		if (!MCNameCreateWithNativeChars((const char_t *)MCHcInstrumentName(t_instrument), strlen(MCHcInstrumentName(t_instrument)), &t_clip_name) ||
+		    sptr->getobjname(CT_AUDIO_CLIP, *t_clip_name) != NULL)
 			continue;
-		int16_t *t_samples;
-		uint32_t t_count, t_rate;
-		if (!MCHcSynthInstrument(i, t_samples, t_count, t_rate))
+		int16_t *t_clip_samples;
+		uint32_t t_clip_count, t_clip_rate;
+		if (!MCHcSynthInstrument(t_instrument, t_clip_samples, t_clip_count, t_clip_rate))
 			continue;
-		MCAudioClip *aptr = new (nothrow) MCAudioClip;
-		if (aptr != NULL)
+		MCAudioClip *t_clip = new (nothrow) MCAudioClip;
+		if (t_clip != NULL)
 		{
-			aptr->setmono16(t_samples, t_count, t_rate);
-			aptr->setname(*t_name);
-			aptr->setparent(sptr);
-			aptr->appendto(sptr->aclips);
+			t_clip->setmono16(t_clip_samples, t_clip_count, t_clip_rate);
+			t_clip->setname(*t_clip_name);
+			t_clip->setparent(sptr);
+			t_clip->appendto(sptr->aclips);
 			// marked, so that `play` gives it HyperCard's notes
-			MCAutoArrayRef t_set;
-			if (MCArrayCreateMutable(&t_set) &&
-			    MCArrayStoreValue(*t_set, false, MCNAME("source"), MCSTR("synthesised")))
+			MCAutoArrayRef t_marker;
+			if (MCArrayCreateMutable(&t_marker) &&
+			    MCArrayStoreValue(*t_marker, false, MCNAME("source"), MCSTR("synthesised")))
 			{
-				MCExecContext ctxt(aptr, nil, nil);
-				aptr->SetCustomPropertiesElement(ctxt, MCNAME("uHyperCard"), *t_set);
+				MCExecContext t_ctxt(t_clip, nil, nil);
+				t_clip->SetCustomPropertiesElement(t_ctxt, MCNAME("uHyperCard"), *t_marker);
 			}
-			hcstat_append("Added HyperCard's \"%s\" sound (synthesised) for the scripts that play it", MCHcInstrumentName(i));
+			hcstat_append("Added HyperCard's \"%s\" sound (synthesised) for the scripts that play it", MCHcInstrumentName(t_instrument));
 		}
-		delete[] t_samples;
+		delete[] t_clip_samples;
 	}
 	if (t_icon_group != NULL || t_cursor_group != NULL)
 		hc_report_id_clashes(sptr, t_icon_group, t_cursor_group);
