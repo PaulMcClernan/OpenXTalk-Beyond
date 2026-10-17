@@ -412,28 +412,43 @@ on TestHyperCardImportBuiltinSounds
    _Close tStack
 end TestHyperCardImportBuiltinSounds
 
--- The playStopped message pending for the sound just played, when there
--- is no audio device to play it on, as the time it is due; empty if the
--- sound is playing
-private function _PlayStoppedDue
-   local tLine
+-- Play pSound (with pNotes, when given) and return how long after the
+-- play the playStopped message is due, when there is no audio device to
+-- play it on and the engine sends it when the sound would have ended;
+-- empty if the sound is playing. Pending playStopped messages from
+-- earlier plays are cancelled first.
+private function _PlayLength pSound, pNotes
+   local tLine, tStart
    repeat for each line tLine in the pendingMessages
-      if item 3 of tLine is "playStopped" then return item 2 of tLine
+      if item 3 of tLine is "playStopped" then cancel item 1 of tLine
+   end repeat
+   put the long seconds into tStart
+   if pNotes is empty then
+      play pSound
+   else
+      play pSound tempo 120 pNotes
+   end if
+   repeat for each line tLine in the pendingMessages
+      if item 3 of tLine is "playStopped" then return item 2 of tLine - tStart
    end repeat
    return empty
-end _PlayStoppedDue
+end _PlayLength
 
 on TestHyperCardImportPlayNotes
    -- `play "sound" tempo t "notes"` plays the notes with a sound from a
    -- HyperCard import (here the synthesised boing of a stack with no fork)
-   local tStack, tDue, tError, tOther
+   local tStack, tError, tOther
    put _Import("TestV1") into tStack
    set the defaultStack to tStack
-   play "boing" tempo 120 "c4q d e r e."
-   put _PlayStoppedDue() into tDue
-   if tDue is not empty then
-      -- four quarters and a dotted eighth at 120 a minute: 2.375 seconds
-      TestAssert "notes: the melody's length", abs(tDue - the long seconds - 2.375) < 0.25
+   local tPlain, tMelody
+   put _PlayLength("boing") into tPlain
+   put _PlayLength("boing", "c4q d e r e.") into tMelody
+   if tMelody is not empty then
+      -- four quarters and a dotted eighth at 120 a minute: 2.375 seconds,
+      -- measured against the boing alone (0.8 seconds) so that the clock
+      -- the messages are timed by does not matter
+      TestAssert "notes: the melody's length (boing" && tPlain & ", melody" && tMelody & ")", \
+         abs((tMelody - tPlain) - (2.375 - 0.8)) < 0.1
    else
       -- (where it plays, its length is not measured here: an engine
       -- without an audio device can report it playing for good)
