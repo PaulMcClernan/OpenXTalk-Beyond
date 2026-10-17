@@ -392,3 +392,197 @@ on TestHyperCardImportGame
    TestAssert "game: a picture on every card", tPictures is 67
    _Close tStack
 end TestHyperCardImportGame
+
+-- The resource fork. forks/ holds synthetic forks written by
+-- lcs-input-files/hypercard/make-forks.py (ICON 128 "Synth Icon", CURS 129
+-- "Synth Cursor", snd 130 "Synth Beep", and a PICT, an XCMD and an XFCN
+-- the importer only logs); the tests put them beside a copy of a stack the
+-- way each tool or file system leaves them.
+
+-- A new, empty folder for one test, with a slash at the end
+private function _NewFolder pName
+   local tFolder
+   put the temporary folder & "/hc-" & pName & "-" & the milliseconds & "/" into tFolder
+   create folder tFolder
+   return tFolder
+end _NewFolder
+
+private command _CopyInput pInput, pTo
+   put url ("binfile:" & TestGetInputFile("hypercard/" & pInput)) into url ("binfile:" & pTo)
+end _CopyInput
+
+-- Delete a folder made by _NewFolder, with everything in it
+private command _DeleteFolder pFolder
+   local tFile, tOldFolder
+   put the defaultFolder into tOldFolder
+   set the defaultFolder to pFolder
+   repeat for each line tFile in the files
+      delete file (pFolder & tFile)
+   end repeat
+   repeat for each line tFile in the folders
+      if tFile is not ".." and tFile is not "." then
+         _DeleteFolder pFolder & tFile & "/"
+      end if
+   end repeat
+   set the defaultFolder to tOldFolder
+   delete folder pFolder
+end _DeleteFolder
+
+-- Import pFile and return the stack, which is named after the file
+private function _ImportPath pFile
+   local tError, tStack
+   set the itemDelimiter to slash
+   put the last item of pFile into tStack
+   lock messages
+   try
+      import stack from file pFile
+   catch tError
+   end try
+   unlock messages
+   TestAssert tStack && "imports", tError is empty and there is a stack tStack
+   return tStack
+end _ImportPath
+
+-- What the synthetic fork becomes: an icon, a cursor and a sound
+private command _AssertSyntheticFork pWhat, pStack
+   -- (with HyperCard addressing, the groups the importer makes are
+   -- backgrounds, and their images background images)
+   TestAssert pWhat & ": icon group", there is a bkgnd "HC Icons" of stack pStack
+   TestAssert pWhat & ": icon", the short name of image id 128 of stack pStack is "Synth Icon"
+   TestAssert pWhat & ": icon in its group", the short name of the owner of image id 128 of stack pStack is "HC Icons"
+   TestAssert pWhat & ": cursor", there is an image "Synth Cursor" of bkgnd "HC cursors" of stack pStack
+   -- the hot spot as the importer has always read it: v, h
+   TestAssert pWhat & ": cursor hot spot", the hotSpot of image id 129 of stack pStack is "8,4"
+   TestAssert pWhat & ": sound", there is an audioClip "Synth Beep" of stack pStack
+   TestAssert pWhat & ": externals logged", "Not converting XCMD id   132 " & quote & "PopUpMenu" & quote is in the hcImportStat
+end _AssertSyntheticFork
+
+on TestHyperCardImportMacBinaryResourceFork
+   -- a MacBinary file carries its fork, as it always has
+   local tStack, tData, tFork, tHeader, tFile
+   put url ("binfile:" & TestGetInputFile("hypercard/TestCardsBackgrounds.stack")) into tData
+   put url ("binfile:" & TestGetInputFile("hypercard/forks/Synthetic.rsrc")) into tFork
+   put numToByte(0) & numToByte(19) & "HCMacBinaryForkTest" into tHeader
+   repeat 44 times
+      put numToByte(0) after tHeader
+   end repeat
+   put "STAKWILD" after tHeader
+   repeat 10 times
+      put numToByte(0) after tHeader
+   end repeat
+   put binaryEncode("NN", the number of bytes of tData, the number of bytes of tFork) after tHeader
+   repeat 128 - the number of bytes of tHeader times
+      put numToByte(0) after tHeader
+   end repeat
+   repeat (128 - the number of bytes of tData mod 128) mod 128 times
+      put numToByte(0) after tData
+   end repeat
+   put the temporary folder & "/hypercard-import-fork-test.bin" into tFile
+   put tHeader & tData & tFork into url ("binfile:" & tFile)
+   lock messages
+   import stack from file tFile
+   unlock messages
+   TestAssert "MacBinary with a fork imports", the result is empty
+   put "HCMacBinaryForkTest" into tStack
+   _AssertSyntheticFork "MacBinary", tStack
+   TestAssert "MacBinary: no sidecar named", "Reading the resource fork" is not in the hcImportStat
+   _Close tStack
+   delete file tFile
+end TestHyperCardImportMacBinaryResourceFork
+
+on TestHyperCardImportAppleDouble
+   -- macOS on a FAT, exFAT or SMB volume: "._Name" beside the stack
+   local tFolder, tStack
+   put _NewFolder("appledouble") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Sidecar"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & "._HC Sidecar"
+   put _ImportPath(tFolder & "HC Sidecar") into tStack
+   _AssertSyntheticFork "AppleDouble", tStack
+   TestAssert "AppleDouble: the log names it", \
+      "Reading the resource fork from" && tFolder & "._HC Sidecar (AppleDouble)" is in the hcImportStat
+   TestAssert "AppleDouble: the stack is as before", \
+      the number of cards of stack tStack is 6 and the id of card 1 of stack tStack is 2842
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportAppleDouble
+
+on TestHyperCardImportMacZip
+   -- a zip made on a Mac: __MACOSX/<the same folders>/._Name at its root
+   local tFolder, tStack
+   put _NewFolder("maczip") into tFolder
+   create folder tFolder & "Games"
+   create folder tFolder & "Games/Cards"
+   create folder tFolder & "__MACOSX"
+   create folder tFolder & "__MACOSX/Games"
+   create folder tFolder & "__MACOSX/Games/Cards"
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "Games/Cards/HC Zipped"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & "__MACOSX/Games/Cards/._HC Zipped"
+   put _ImportPath(tFolder & "Games/Cards/HC Zipped") into tStack
+   _AssertSyntheticFork "__MACOSX", tStack
+   TestAssert "__MACOSX: the log names it", \
+      "__MACOSX/Games/Cards/._HC Zipped (AppleDouble)" is in the hcImportStat
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportMacZip
+
+on TestHyperCardImportRawForks
+   -- a fork saved alone: "Name.rsrc", Basilisk II's ".rsrc/Name" and
+   -- netatalk's ".AppleDouble/Name"
+   local tFolder, tStack
+   put _NewFolder("rsrc") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Raw"
+   _CopyInput "forks/Synthetic.rsrc", tFolder & "HC Raw.rsrc"
+   put _ImportPath(tFolder & "HC Raw") into tStack
+   _AssertSyntheticFork "Name.rsrc", tStack
+   TestAssert "Name.rsrc: the log names it", "HC Raw.rsrc (resource fork)" is in the hcImportStat
+   _Close tStack
+   _DeleteFolder tFolder
+
+   put _NewFolder("basilisk") into tFolder
+   create folder tFolder & ".rsrc"
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Basilisk"
+   _CopyInput "forks/Synthetic.rsrc", tFolder & ".rsrc/HC Basilisk"
+   put _ImportPath(tFolder & "HC Basilisk") into tStack
+   _AssertSyntheticFork ".rsrc/Name", tStack
+   _Close tStack
+   _DeleteFolder tFolder
+
+   put _NewFolder("netatalk") into tFolder
+   create folder tFolder & ".AppleDouble"
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Netatalk"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & ".AppleDouble/HC Netatalk"
+   put _ImportPath(tFolder & "HC Netatalk") into tStack
+   _AssertSyntheticFork ".AppleDouble/Name", tStack
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportRawForks
+
+on TestHyperCardImportNoUsableSidecar
+   -- a "._Name" with an empty fork (macOS writes one for Finder info
+   -- alone), or one that is not a fork at all, is passed over without a
+   -- word, and the stack imports as it does with nothing beside it
+   local tFolder, tStack, tPlainLog
+   put _Import("TestCardsBackgrounds") into tStack
+   put the hcImportStat into tPlainLog
+   _Close tStack
+
+   put _NewFolder("emptyfork") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "TestCardsBackgrounds.stack"
+   _CopyInput "forks/Empty.appledouble", tFolder & "._TestCardsBackgrounds.stack"
+   put "not a resource fork" into url ("binfile:" & tFolder & "TestCardsBackgrounds.stack.rsrc")
+   put _ImportPath(tFolder & "TestCardsBackgrounds.stack") into tStack
+   TestAssert "unusable sidecars: no icons", there is not a bkgnd "HC Icons" of stack tStack
+   TestAssert "unusable sidecars: no sounds", the number of audioClips of stack tStack is 0
+   TestAssert "unusable sidecars: the same log", line 2 to -1 of the hcImportStat is line 2 to -1 of tPlainLog
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportNoUsableSidecar
+
+on TestHyperCardImportAppleSingle
+   -- both forks in one AppleSingle file, named after the Mac file in it
+   local tStack
+   put _ImportFile("forks/TestCardsBackgrounds.applesingle", "Synthetic Stack") into tStack
+   TestAssert "AppleSingle cards", the number of cards of stack tStack is 6
+   _AssertSyntheticFork "AppleSingle", tStack
+   _Close tStack
+end TestHyperCardImportAppleSingle

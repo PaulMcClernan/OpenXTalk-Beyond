@@ -7281,7 +7281,8 @@ on revIDEImportHyperCardStack pFilePath
 end revIDEImportHyperCardStack
 
 # The tests hc_import (engine/src/hc.cpp) makes of the first bytes of a
-# file: a HyperCard data fork (STAK at offset 4), a MacBinary file whose
+# file: a HyperCard data fork (STAK at offset 4), an AppleSingle file
+# (magic 00 05 16 00, both forks in one file), a MacBinary file whose
 # type is STAK, or a BinHex file.
 private function __revIDEIsHyperCardFile pFilePath
    local tHeader
@@ -7292,6 +7293,10 @@ private function __revIDEIsHyperCardFile pFilePath
    close file pFilePath
 
    if byte 5 to 8 of tHeader is "STAK" then return true
+   -- OXT-Beyond: AppleSingle; the engine checks that its data fork is a stack
+   if byte 1 to 4 of tHeader is (numToByte(0) & numToByte(5) & numToByte(22) & numToByte(0)) then
+      return true
+   end if
    if byteToNum(byte 1 of tHeader) is 0 and byteToNum(byte 75 of tHeader) is 0 \
          and byteToNum(byte 83 of tHeader) is 0 then
       return byte 66 to 69 of tHeader is "STAK"

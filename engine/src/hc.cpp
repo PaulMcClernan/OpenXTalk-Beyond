@@ -38,6 +38,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "hndlrlst.h"
 #include "cardlst.h"
 #include "hc.h"
+#include "osspec.h"
 
 #include "exec-interface.h"
 
@@ -1838,12 +1839,14 @@ MCHcstak::MCHcstak(char *inname)
 	  hcbmaps(nullptr),
 	  icons(nullptr),
 	  cursors(nullptr),
-	  snds(nullptr)
+	  snds(nullptr),
+	  path(nullptr)
 {
 }
 
 MCHcstak::~MCHcstak()
 {
+	MCValueRelease(path);
 	delete[] name;
 	delete[] script;
 	delete[] fullbuffer;
@@ -2219,6 +2222,246 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 	}
 }
 
+// The resources a resource fork holds, or -1 if p_fork is not one. Stricter
+// than readresources: a file found beside a stack (section "Sidecars" below)
+// is taken only if every offset in it is consistent, so a file that merely
+// has a fitting name is never read as a fork, and nothing is logged for it.
+static int32_t hc_count_resources(const uint1 *p_fork, uint4 p_size)
+{
+	const char *t_fork = (const char *)p_fork;
+	if (p_size < 16)
+		return -1;
+	uint4 t_data_offset = hc_get_uint4(&t_fork[0]);
+	uint4 t_map_offset = hc_get_uint4(&t_fork[4]);
+	uint4 t_data_size = hc_get_uint4(&t_fork[8]);
+	uint4 t_map_size = hc_get_uint4(&t_fork[12]);
+	if (t_data_offset < 16 || t_data_offset > p_size || t_data_size > p_size - t_data_offset
+	    || t_map_offset < 16 || t_map_offset > p_size || t_map_size > p_size - t_map_offset
+	    || t_map_size < 30)
+		return -1;
+	const char *t_map = &t_fork[t_map_offset];
+	uint4 t_types_offset = hc_get_uint2(&t_map[24]);
+	uint4 t_names_offset = hc_get_uint2(&t_map[26]);
+	if (t_types_offset < 28 || t_types_offset + 2 > t_map_size || t_names_offset > t_map_size)
+		return -1;
+	uint2 t_typecount = uint2(hc_get_uint2(&t_map[t_types_offset]) + 1);
+	int32_t t_count = 0;
+	for (uint2 i = 0 ; i < t_typecount ; i++)
+	{
+		uint4 t_entry = t_types_offset + 2 + i * 8;
+		if (t_entry + 8 > t_map_size)
+			return -1;
+		uint4 t_refs = t_types_offset + hc_get_uint2(&t_map[t_entry + 6]);
+		uint4 t_n = uint4(uint2(hc_get_uint2(&t_map[t_entry + 4]) + 1));
+		if (t_refs + t_n * 12 > t_map_size)
+			return -1;
+		for (uint4 j = 0 ; j < t_n ; j++)
+		{
+			uint4 t_offset = hc_get_uint4(&t_map[t_refs + j * 12 + 4]) & 0xFFFFFF;
+			if (t_offset > t_data_size || t_data_size - t_offset < 4)
+				return -1;
+		}
+		t_count += t_n;
+	}
+	return t_count;
+}
+
+// AppleSingle (magic 0x00051600) and AppleDouble (0x00051607), RFC 1740: a
+// 26-byte header (magic, version, 16 bytes of filler, the number of
+// entries), then 12 bytes per entry (id, offset, length). Entry 1 is the
+// data fork, 2 the resource fork and 3 the file's name.
+#define HC_APPLESINGLE 0x00051600
+#define HC_APPLEDOUBLE 0x00051607
+enum
+{
+	kHCAppleFileDataFork = 1,
+	kHCAppleFileResourceFork = 2,
+	kHCAppleFileRealName = 3,
+};
+
+static bool hc_applefile_entry(const uint1 *p_file, uint4 p_size, uint4 p_magic, uint4 p_id,
+                               const uint1 *&r_data, uint4 &r_length)
+{
+	const char *t_file = (const char *)p_file;
+	if (p_size < 26 || hc_get_uint4(&t_file[0]) != p_magic)
+		return false;
+	uint4 t_version = hc_get_uint4(&t_file[4]);
+	if (t_version != 0x00010000 && t_version != 0x00020000)
+		return false;
+	uint2 t_entries = hc_get_uint2(&t_file[24]);
+	for (uint2 i = 0 ; i < t_entries ; i++)
+	{
+		uint4 t_at = 26 + i * 12;
+		if (t_at + 12 > p_size)
+			return false;
+		if (hc_get_uint4(&t_file[t_at]) != p_id)
+			continue;
+		uint4 t_offset = hc_get_uint4(&t_file[t_at + 4]);
+		uint4 t_length = hc_get_uint4(&t_file[t_at + 8]);
+		if (t_offset > p_size || t_length > p_size - t_offset)
+			return false;
+		r_data = p_file + t_offset;
+		r_length = t_length;
+		return true;
+	}
+	return false;
+}
+
+// Read a whole file, if there is one at p_path and it is no larger than a
+// resource fork can be (its offsets are 32 bits, its data 16 MB).
+static bool hc_read_file(MCStringRef p_path, uint1 *&r_data, uint4 &r_size)
+{
+	// (A stream such as "Name:AFP_Resource" is not a file to MCS_exists.)
+	if (!MCStringEndsWithCString(p_path, (const char_t *)":AFP_Resource", kMCStringOptionCompareExact)
+	    && !MCS_exists(p_path, true))
+		return false;
+	IO_handle t_stream = MCS_open(p_path, kMCOpenFileModeRead, False, False, 0);
+	if (t_stream == NULL)
+		return false;
+	int64_t t_size = MCS_fsize(t_stream);
+	bool t_success = t_size > 0 && t_size <= 0x2000000;
+	uint1 *t_data = NULL;
+	if (t_success)
+	{
+		t_data = new (nothrow) uint1[(size_t)t_size];
+		t_success = t_data != NULL && IO_read(t_data, (size_t)t_size, t_stream) == IO_NORMAL;
+	}
+	MCS_close(t_stream);
+	if (!t_success)
+	{
+		delete[] t_data;
+		return false;
+	}
+	r_data = t_data;
+	r_size = (uint4)t_size;
+	return true;
+}
+
+// Sidecars. A bare data fork has lost its resource fork on the way to a
+// disk that has none, but the fork often travels beside it: macOS writes
+// it to "._Name" (AppleDouble) on FAT, exFAT and SMB volumes, and its zip
+// files keep it as "__MACOSX/<folder>/._Name" at the root of the archive;
+// netatalk keeps it in ".AppleDouble/Name"; tools that save a fork alone
+// name it "Name.rsrc"; Basilisk II and SheepShaver keep it in
+// ".rsrc/Name"; and on Windows, Services for Macintosh and macOS's SMB
+// client write it to the stream "Name:AFP_Resource". The first of these
+// that holds a resource fork with at least one resource is read, and the
+// import log says which. Each may be AppleDouble or a raw fork.
+bool MCHcstak::readresourcefile(MCStringRef p_path, bool p_log)
+{
+	uint1 *t_file = NULL;
+	uint4 t_size = 0;
+	if (!hc_read_file(p_path, t_file, t_size))
+		return false;
+	const uint1 *t_fork = NULL;
+	uint4 t_fork_size = 0;
+	const char *t_kind;
+	if (hc_applefile_entry(t_file, t_size, HC_APPLEDOUBLE, kHCAppleFileResourceFork, t_fork, t_fork_size))
+		t_kind = "AppleDouble";
+	else if (hc_applefile_entry(t_file, t_size, HC_APPLESINGLE, kHCAppleFileResourceFork, t_fork, t_fork_size))
+		t_kind = "AppleSingle";
+	else
+	{
+		t_fork = t_file;
+		t_fork_size = t_size;
+		t_kind = "resource fork";
+	}
+	bool t_read = hc_count_resources(t_fork, t_fork_size) > 0;
+	if (t_read)
+	{
+		if (p_log)
+		{
+			MCAutoStringRefAsCString t_path_str;
+			/* UNCHECKED */ t_path_str.Lock(p_path);
+			hcstat_append("Reading the resource fork from %s (%s)", *t_path_str, t_kind);
+		}
+		readresources(t_fork, t_fork_size);
+	}
+	delete[] t_file;
+	return t_read;
+}
+
+bool MCHcstak::readsidecarresources()
+{
+	if (path == nil)
+		return false;
+	MCAutoStringRef t_path;
+	if (!MCS_resolvepath(path, &t_path))
+		return false;
+	uindex_t t_slash;
+	MCAutoStringRef t_dir, t_leaf;
+	if (MCStringLastIndexOfChar(*t_path, '/', UINDEX_MAX, kMCStringOptionCompareExact, t_slash))
+	{
+		if (!MCStringCopySubstring(*t_path, MCRangeMake(0, t_slash + 1), &t_dir)
+		    || !MCStringCopySubstring(*t_path, MCRangeMakeMinMax(t_slash + 1, MCStringGetLength(*t_path)), &t_leaf))
+			return false;
+	}
+	else
+	{
+		t_dir = kMCEmptyString;
+		t_leaf = *t_path;
+	}
+	if (MCStringIsEmpty(*t_leaf))
+		return false;
+
+	MCAutoStringRef t_candidate;
+	if (MCStringFormat(&t_candidate, "%@._%@", *t_dir, *t_leaf) && readresourcefile(*t_candidate, true))
+		return true;
+
+	// __MACOSX/<the path from the archive's root>/._Name, in each folder
+	// above the stack (an unzipped archive may sit anywhere), at most 8 up
+	MCStringRef t_above = MCValueRetain(*t_dir);
+	MCStringRef t_below = MCValueRetain(kMCEmptyString);
+	bool t_found = false;
+	for (uint4 t_level = 0 ; !t_found && t_level < 8 ; t_level++)
+	{
+		MCAutoStringRef t_macosx;
+		if (MCStringFormat(&t_macosx, "%@__MACOSX/%@._%@", t_above, t_below, *t_leaf)
+		    && readresourcefile(*t_macosx, true))
+		{
+			t_found = true;
+			break;
+		}
+		// Move up one folder: t_above ("/a/b/") loses its last component
+		// ("b/"), which goes on the front of t_below.
+		uindex_t t_length = MCStringGetLength(t_above);
+		uindex_t t_up;
+		if (t_length < 2
+		    || !MCStringLastIndexOfChar(t_above, '/', t_length - 1, kMCStringOptionCompareExact, t_up))
+			break;
+		MCAutoStringRef t_component, t_new_above, t_new_below;
+		if (!MCStringCopySubstring(t_above, MCRangeMakeMinMax(t_up + 1, t_length), &t_component)
+		    || !MCStringCopySubstring(t_above, MCRangeMake(0, t_up + 1), &t_new_above)
+		    || !MCStringFormat(&t_new_below, "%@%@", *t_component, t_below))
+			break;
+		// a stack inside a __MACOSX folder is itself a sidecar's neighbour
+		if (MCStringIsEqualToCString(*t_component, "__MACOSX/", kMCStringOptionCompareExact))
+			break;
+		MCValueAssign(t_above, *t_new_above);
+		MCValueAssign(t_below, *t_new_below);
+	}
+	MCValueRelease(t_above);
+	MCValueRelease(t_below);
+	if (t_found)
+		return true;
+
+	MCAutoStringRef t_netatalk;
+	if (MCStringFormat(&t_netatalk, "%@.AppleDouble/%@", *t_dir, *t_leaf) && readresourcefile(*t_netatalk, true))
+		return true;
+	MCAutoStringRef t_rsrc;
+	if (MCStringFormat(&t_rsrc, "%@.rsrc", *t_path) && readresourcefile(*t_rsrc, true))
+		return true;
+	MCAutoStringRef t_basilisk;
+	if (MCStringFormat(&t_basilisk, "%@.rsrc/%@", *t_dir, *t_leaf) && readresourcefile(*t_basilisk, true))
+		return true;
+#ifdef _WIN32
+	MCAutoStringRef t_stream;
+	if (MCStringFormat(&t_stream, "%@:AFP_Resource", *t_path) && readresourcefile(*t_stream, true))
+		return true;
+#endif
+	return false;
+}
+
 // Read a HyperCard stack: a bare data fork, a MacBinary file or a BinHex
 // 4.0 file. The whole file is read, and every block is checked against
 // the data fork before it is parsed.
@@ -2231,6 +2474,8 @@ IO_stat MCHcstak::read(IO_handle stream)
 	HC_File_type filetype;
 	if (hc_get_uint4(&header[4]) == HC_STAK)
 		filetype = HC_RAW;
+	else if (hc_get_uint4(&header[0]) == HC_APPLESINGLE)
+		filetype = HC_APPLESINGLE_FILE;
 	else if (header[0] == '\0' && header[74] == '\0' && header[82] == '\0')
 	{
 		if (!strnequal(&header[65], "STAK", 4))
@@ -2289,6 +2534,33 @@ IO_stat MCHcstak::read(IO_handle stream)
 				t_rsrc = t_file + roffset;
 		}
 		break;
+	case HC_APPLESINGLE_FILE:
+		{
+			// both forks in one file, as HFSExplorer and some archivers
+			// write them; the data fork must be a stack
+			if (!hc_applefile_entry(t_file, t_file_size, HC_APPLESINGLE, kHCAppleFileDataFork, t_data, t_data_size)
+			    || t_data_size < 8 || hc_get_uint4((const char *)&t_data[4]) != HC_STAK)
+			{
+				delete[] t_file;
+				return IO_ERROR;
+			}
+			if (!hc_applefile_entry(t_file, t_file_size, HC_APPLESINGLE, kHCAppleFileResourceFork, t_rsrc, t_rsrc_size))
+				t_rsrc_size = 0;
+			const uint1 *t_real_name;
+			uint4 t_real_name_size;
+			if (hc_applefile_entry(t_file, t_file_size, HC_APPLESINGLE, kHCAppleFileRealName, t_real_name, t_real_name_size)
+			    && t_real_name_size != 0)
+			{
+				// named after the Mac file inside it, as a MacBinary file is
+				if (t_real_name_size > 63)
+					t_real_name_size = 63;
+				delete[] name;
+				name = new (nothrow) char[t_real_name_size + 1];
+				memcpy(name, t_real_name, t_real_name_size);
+				name[t_real_name_size] = '\0';
+			}
+		}
+		break;
 	case HC_BINHEX:
 		{
 			uint4 foffset;
@@ -2317,10 +2589,24 @@ IO_stat MCHcstak::read(IO_handle stream)
 	{
 		if (t_rsrc != NULL && t_rsrc_size != 0)
 			readresources(t_rsrc, t_rsrc_size);
-#ifdef _MAC_DESKTOP
 		else if (filetype == HC_RAW)
-			t_stat = macreadresources();
+		{
+			// A bare data fork: its own resource fork where the file system
+			// keeps one (macOS), else a sidecar beside it.
+			bool t_have_fork = false;
+#ifdef _MAC_DESKTOP
+			MCAutoStringRef t_native;
+			if (path != nil && MCStringFormat(&t_native, "%@/..namedfork/rsrc", path))
+				t_have_fork = readresourcefile(*t_native, false);
+			if (!t_have_fork)
+			{
+				t_stat = macreadresources();
+				t_have_fork = icons != NULL || cursors != NULL || snds != NULL;
+			}
 #endif
+			if (t_stat == IO_NORMAL && !t_have_fork)
+				readsidecarresources();
+		}
 	}
 
 	delete[] t_decoded_data;
@@ -2840,6 +3126,8 @@ IO_stat hc_import(MCStringRef name, IO_handle stream, MCStack *&sptr)
 	MCMemoryDeleteArray(t_cname);
 	
     MCHcstak *hcstak = new (nothrow) MCHcstak(t_name);
+	// the file's path as given, to look for its resource fork beside it
+	hcstak->path = MCValueRetain(name);
 	hcstat_append("Loading stack %s...", t_name);
 	uindex_t startlen = MCStringGetLength(MChcstat);
 	IO_stat stat;
