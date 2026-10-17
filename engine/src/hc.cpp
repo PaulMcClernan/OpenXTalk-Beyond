@@ -39,6 +39,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "cardlst.h"
 #include "hc.h"
 #include "osspec.h"
+#include "hcpict.h"
 
 #include "exec-interface.h"
 
@@ -1585,6 +1586,68 @@ MCControl *MCHcbmap::build()
 	return iptr;
 }
 
+MCHcpict::MCHcpict()
+{
+	m_name = MCValueRetain(kMCEmptyName);
+	id = 0;
+	pixels = NULL;
+	width = height = 0;
+}
+
+MCHcpict::~MCHcpict()
+{
+	MCValueRelease(m_name);
+	delete[] pixels;
+}
+
+// An image of the picture, named after the resource ("PICT <id>" if it has
+// no name), hidden like the icons: HyperCard showed a PICT only when a
+// script or an external asked for it.
+MCControl *MCHcpict::build(uint4 p_id)
+{
+	if (pixels == NULL)
+		return NULL;
+	MCImageBitmap *t_bitmap = nil;
+	if (!MCImageBitmapCreate(width, height, t_bitmap))
+		return NULL;
+	for (uint32_t y = 0 ; y < height ; y++)
+	{
+		uint32_t *t_row = (uint32_t *)((uint8_t *)t_bitmap->data + y * t_bitmap->stride);
+		for (uint32_t x = 0 ; x < width ; x++)
+		{
+			uint32_t v = pixels[y * width + x];
+			t_row[x] = MCGPixelPackNative((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF, 0xFF);
+		}
+	}
+	MCImageCompressedBitmap *t_compressed = nil;
+	bool t_compressed_ok = MCImageCompress(t_bitmap, false, t_compressed);
+	MCImageFreeBitmap(t_bitmap);
+	if (!t_compressed_ok)
+		return NULL;
+	MCImage *iptr = (MCImage *)MCtemplateimage->clone(False, OP_NONE, false);
+	iptr->obj_id = p_id;
+	MCRectangle t_rect;
+	t_rect.x = 0;
+	t_rect.y = 0;
+	t_rect.width = (uint2)width;
+	t_rect.height = (uint2)height;
+	iptr->rect = t_rect;
+	iptr->setcompressedbitmap(t_compressed);
+	MCImageFreeCompressedBitmap(t_compressed);
+	if (MCNameIsEmpty(m_name))
+	{
+		MCAutoStringRef t_name;
+		MCNewAutoNameRef t_named;
+		if (MCStringFormat(&t_name, "PICT %u", id) && MCNameCreate(*t_name, &t_named))
+			iptr->setname(*t_named);
+	}
+	else
+		iptr->setname(m_name);
+	delete[] pixels;
+	pixels = NULL;
+	return iptr;
+}
+
 MCHccard::MCHccard()
 {
 	name = NULL;
@@ -1982,6 +2045,7 @@ MCHcstak::MCHcstak(char *inname)
 	  icons(nullptr),
 	  cursors(nullptr),
 	  snds(nullptr),
+	  pictures(nullptr),
 	  path(nullptr),
 	  resourcelist(nullptr),
 	  externallist(nullptr),
@@ -2051,6 +2115,11 @@ MCHcstak::~MCHcstak()
 		MCHcsnd *sptr = snds->remove
 		                (snds);
 		delete sptr;
+	}
+	while (pictures != NULL)
+	{
+		MCHcpict *pptr = pictures->remove(pictures);
+		delete pptr;
 	}
 }
 
@@ -2401,6 +2470,32 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 					}
 				}
 				break;
+			case HC_PICT:
+				{
+					MCHcpict *t_pict = new (nothrow) MCHcpict;
+					uint32_t t_skipped = 0;
+					if (t_pict != NULL
+					    && MCHcPictDecode((const uint8_t *)t_resource, t_length, t_pict->pixels,
+					                      t_pict->width, t_pict->height, t_skipped))
+					{
+						t_pict->id = id;
+						MCValueAssign(t_pict->m_name, *t_name);
+						t_pict->appendto(pictures);
+						if (t_skipped != 0)
+						{
+							MCAutoStringRefAsCString t_name_str;
+							/* UNCHECKED */ t_name_str.Lock(MCNameGetString(*t_name));
+							hcstat_append("PICT id %5d \"%s\": not drawn:%s%s%s", id, *t_name_str,
+							              (t_skipped & kHCPictSkippedText) ? " text" : "",
+							              (t_skipped & kHCPictSkippedQuickTime) ? " QuickTime image" : "",
+							              (t_skipped & (kHCPictSkippedUnknown | kHCPictSkippedPattern)) ? " other operations" : "");
+						}
+						break;
+					}
+					delete t_pict;
+				}
+				// a picture this decoder cannot read is logged as before
+                // fall through
 			default:
                 {
                     MCAutoStringRefAsCString t_name_str;
@@ -3415,6 +3510,31 @@ MCStack *MCHcstak::build()
 				newobj->appendto(gptr->controls);
 			}
 			delete bmptr;
+		}
+	}
+	if (pictures != NULL)
+	{
+		// New: the stack's PICT resources. The group and its images take
+		// ids above every other object's and icon's, and come after the
+		// groups imports have always made, so nothing before them moves.
+		maxid = MCU_max(maxid, t_max_bitmap_id);
+		MCGroup *gptr = (MCGroup *)MCtemplategroup->clone(False, OP_NONE, false);
+		gptr->obj_id = ++maxid;
+		gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
+		gptr->setname_cstring("HC Pictures");
+		gptr->setparent(sptr);
+		MCControl *cptr = (MCControl *)gptr;
+		cptr->appendto(sptr->controls);
+		while (pictures != NULL)
+		{
+			MCHcpict *pptr = pictures->remove(pictures);
+			MCControl *newobj = pptr->build(++maxid);
+			if (newobj != NULL)
+			{
+				newobj->setparent(gptr);
+				newobj->appendto(gptr->controls);
+			}
+			delete pptr;
 		}
 	}
 	while (snds != NULL)

@@ -23,6 +23,11 @@ forks/Sounds.rsrc           the sound headers beyond the standard one: snd 200
                             "Stereo 16" (extended, 16-bit stereo), 201 "Mono 8
                             Extended", 202 "IMA" (compressed, IMA 4:1 stereo),
                             203 "MACE" (compressed, MACE 3:1: logged only)
+forks/Pictures.rsrc         PICT 300 "Colour" (version 2: colour shapes, an
+                            8-bit PackBitsRect, a 32-bit DirectBitsRect, a
+                            BitsRect and a line) and PICT 301 (version 1,
+                            unnamed: an oval and a PackBitsRect), drawn as
+                            the test expects pixel by pixel
 forks/TestCardsBackgrounds.applesingle
                             ../TestCardsBackgrounds.stack and the fork in one
                             AppleSingle file, named "Synthetic Stack"
@@ -88,6 +93,88 @@ def extended_sound(channels, bits, frames, encode=0xFF, fmt=b"\0\0\0\0",
 def pict():
     # a version 1 PICT that draws nothing: size, frame, version, end
     return struct.pack(">Hhhhh", 10, 0, 0, 32, 32) + b"\x11\x01\xff"
+
+
+def packbits_row(row):
+    # literal runs only: valid PackBits, if not the smallest
+    out = b""
+    for i in range(0, len(row), 128):
+        chunk = row[i:i + 128]
+        out += bytes([len(chunk) - 1]) + chunk
+    return out
+
+
+def packed_rows(rows, rowbytes):
+    out = b""
+    for row in rows:
+        packed = packbits_row(row)
+        out += (struct.pack(">H", len(packed)) if rowbytes > 250 else bytes([len(packed)])) + packed
+    return out
+
+
+def rect(top, left, bottom, right):
+    return struct.pack(">hhhh", top, left, bottom, right)
+
+
+def pict_v2():
+    # 64 x 48: red square, blue oval, black frame on the top row; an 8-bit
+    # indexed PackBitsRect (green | yellow), a 32-bit DirectBitsRect
+    # (#123456) and a 1-bit BitsRect (black top half) below; a line
+    w, h = 64, 48
+    ops = b""
+
+    def op(code, data=b""):
+        nonlocal ops
+        ops += struct.pack(">H", code) + data
+        if len(ops) % 2:
+            ops += b"\0"
+
+    op(0x0011, b"\x02\xff")
+    op(0x0C00, struct.pack(">hHII", -2, 0, 0x00480000, 0x00480000) + rect(0, 0, h, w) + b"\0" * 4)
+    op(0x001E)
+    op(0x0001, struct.pack(">H", 10) + rect(0, 0, h, w))
+    op(0x001A, struct.pack(">HHH", 0xFFFF, 0, 0))
+    op(0x0031, rect(0, 0, 16, 16))
+    op(0x001A, struct.pack(">HHH", 0, 0, 0xFFFF))
+    op(0x0051, rect(0, 16, 16, 32))
+    op(0x001A, struct.pack(">HHH", 0, 0, 0))
+    op(0x0030, rect(0, 32, 16, 48))
+    # 8-bit indexed, 16 x 16: index 0 green on the left, 1 yellow on the right
+    pixmap = struct.pack(">H", 0x8000 | 16) + rect(0, 0, 16, 16)
+    pixmap += struct.pack(">HHIIIHHHHIII", 0, 0, 0, 0x00480000, 0x00480000, 0, 8, 1, 8, 0, 0, 0)
+    ctab = struct.pack(">IHH", 0, 0x8000, 1)
+    ctab += struct.pack(">HHHH", 0, 0, 0xFFFF, 0) + struct.pack(">HHHH", 1, 0xFFFF, 0xFFFF, 0)
+    rows = [bytes([0] * 8 + [1] * 8) for _ in range(16)]
+    op(0x0098, pixmap + ctab + rect(0, 0, 16, 16) + rect(16, 0, 32, 16) + struct.pack(">H", 0)
+       + packed_rows(rows, 16))
+    # 32-bit, packType 4, 3 components, 16 x 16 of #123456
+    pixmap = struct.pack(">IH", 0xFF, 0x8000 | 64) + rect(0, 0, 16, 16)
+    pixmap += struct.pack(">HHIIIHHHHIII", 0, 4, 0, 0x00480000, 0x00480000, 16, 32, 3, 8, 0, 0, 0)
+    rows = [bytes([0x12] * 16 + [0x34] * 16 + [0x56] * 16) for _ in range(16)]
+    op(0x009A, pixmap + rect(0, 0, 16, 16) + rect(16, 16, 32, 32) + struct.pack(">H", 0)
+       + packed_rows(rows, 64))
+    # 1-bit bitmap, unpacked, 16 x 16: the top 8 rows black
+    bitmap = struct.pack(">H", 2) + rect(0, 0, 16, 16)
+    bits = b"\xff\xff" * 8 + b"\0\0" * 8
+    op(0x0090, bitmap + rect(0, 0, 16, 16) + rect(32, 0, 48, 16) + struct.pack(">H", 0) + bits)
+    op(0x0020, struct.pack(">hhhh", 40, 20, 40, 60))
+    op(0x00FF)
+    body = rect(0, 0, h, w) + ops
+    return struct.pack(">H", (2 + len(body)) & 0xFFFF) + body
+
+
+def pict_v1():
+    # 32 x 32, version 1: a painted oval in the top half, a PackBitsRect
+    # bitmap (black bottom-right quarter) below
+    ops = b"\x11\x01"
+    ops += b"\x51" + rect(0, 0, 16, 32)
+    bitmap = struct.pack(">H", 2) + rect(0, 0, 16, 16)
+    rows = [b"\x00\xff" if y >= 8 else b"\x00\x00" for y in range(16)]
+    # rowBytes 2 is under 8: rows are stored unpacked
+    ops += b"\x98" + bitmap + rect(0, 0, 16, 16) + rect(16, 16, 32, 32) + struct.pack(">H", 0) + b"".join(rows)
+    ops += b"\xff"
+    body = rect(0, 0, 32, 32) + ops
+    return struct.pack(">H", 2 + len(body)) + body
 
 
 def resource_fork(resources):
@@ -191,8 +278,13 @@ def main():
         ("snd ", 203, "MACE", extended_sound(1, 8, 100, encode=0xFE, fmt=b"MAC3",
                                             compression=3, samples=b"\0" * 200)),
     ])
+    pictures = resource_fork([
+        ("PICT", 300, "Colour", pict_v2()),
+        ("PICT", 301, None, pict_v1()),
+    ])
     files = {
         "Synthetic.rsrc": fork,
+        "Pictures.rsrc": pictures,
         "Sounds.rsrc": sounds,
         "Clash.rsrc": clash,
         "Synthetic.appledouble": applefile(APPLEDOUBLE, [(9, FINDER_INFO), (2, fork)]),

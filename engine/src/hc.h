@@ -48,6 +48,7 @@ enum HC_File_type {
 #define HC_ICON 0x49434f4e
 #define HC_CURS 0x43555253
 #define HC_SND  0x736e6420
+#define HC_PICT 0x50494354
 
 #define HC_F_MULTIPLE       0x0010
 #define HC_F_MARGINS        0x0020
@@ -339,6 +340,34 @@ public:
 	}
 };
 
+// A PICT resource, decoded (hcpict.cpp)
+class MCHcpict : public MCDLlist
+{
+public:
+	MCNameRef m_name;
+	uint4 id;
+	uint32_t *pixels;
+	uint32_t width;
+	uint32_t height;
+	MCHcpict();
+	~MCHcpict();
+	MCControl *build(uint4 p_id);
+	MCHcpict *next()
+	{
+		return (MCHcpict *)MCDLlist::next();
+	}
+	void appendto(MCHcpict *&list)
+	{
+		MCDLlist::appendto((MCDLlist *&)list);
+	}
+	MCHcpict *remove
+	(MCHcpict *&list)
+	{
+		return (MCHcpict *)MCDLlist::remove
+			       ((MCDLlist *&)list);
+	}
+};
+
 class MCHcbkgd : public MCDLlist
 {
 public:
@@ -410,6 +439,7 @@ public:
 	MCHcbmap *icons;
 	MCHcbmap *cursors;
 	MCHcsnd *snds;
+	MCHcpict *pictures;
 	// the path of the file being imported, or nil
 	MCStringRef path;
 	// the resource fork's inventory and where it came from, for the stack's

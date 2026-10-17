@@ -649,3 +649,40 @@ on TestHyperCardImportSoundHeaders
    _Close tStack
    _DeleteFolder tFolder
 end TestHyperCardImportSoundHeaders
+
+-- The red, green and blue of pixel (pX, pY) of an image, as "r,g,b"
+private function _Pixel pImage, pX, pY
+   local tData, tAt
+   put the imageData of pImage into tData
+   put (pY * the width of pImage + pX) * 4 + 2 into tAt
+   return byteToNum(byte tAt of tData) & comma & byteToNum(byte tAt + 1 of tData) & comma & byteToNum(byte tAt + 2 of tData)
+end _Pixel
+
+on TestHyperCardImportPictures
+   -- PICT resources become images in a new group, "HC Pictures"
+   local tFolder, tStack, tImage, tUnnamed
+   put _NewFolder("pictures") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Pictures"
+   _CopyInput "forks/Pictures.rsrc", tFolder & "HC Pictures.rsrc"
+   put _ImportPath(tFolder & "HC Pictures") into tStack
+   TestAssert "pictures: the group", there is a bkgnd "HC Pictures" of stack tStack
+   TestAssert "pictures: two images", the number of images of bkgnd "HC Pictures" of stack tStack is 2
+   put the long id of image "Colour" of bkgnd "HC Pictures" of stack tStack into tImage
+   TestAssert "version 2: size", the width of tImage & "x" & the height of tImage is "64x48"
+   TestAssert "version 2: painted rectangle", _Pixel(tImage, 8, 8) is "255,0,0"
+   TestAssert "version 2: painted oval", _Pixel(tImage, 24, 8) is "0,0,255"
+   TestAssert "version 2: oval's corner left alone", _Pixel(tImage, 17, 1) is "255,255,255"
+   TestAssert "version 2: framed rectangle", _Pixel(tImage, 32, 0) is "0,0,0" and _Pixel(tImage, 40, 8) is "255,255,255"
+   TestAssert "version 2: 8-bit pixel map", _Pixel(tImage, 4, 24) is "0,255,0" and _Pixel(tImage, 12, 24) is "255,255,0"
+   TestAssert "version 2: 32-bit pixel map", _Pixel(tImage, 24, 24) is "18,52,86"
+   TestAssert "version 2: bitmap", _Pixel(tImage, 8, 36) is "0,0,0" and _Pixel(tImage, 8, 44) is "255,255,255"
+   TestAssert "version 2: line", _Pixel(tImage, 30, 40) is "0,0,0" and _Pixel(tImage, 30, 41) is "255,255,255"
+   TestAssert "version 1: named after its id", there is an image "PICT 301" of bkgnd "HC Pictures" of stack tStack
+   put the long id of image "PICT 301" of bkgnd "HC Pictures" of stack tStack into tUnnamed
+   TestAssert "version 1: oval", _Pixel(tUnnamed, 16, 8) is "0,0,0" and _Pixel(tUnnamed, 0, 0) is "255,255,255"
+   TestAssert "version 1: bitmap", _Pixel(tUnnamed, 28, 28) is "0,0,0" and _Pixel(tUnnamed, 20, 28) is "255,255,255"
+   TestAssert "pictures: not logged as unconverted", "Not converting PICT" is not in the hcImportStat
+   TestAssert "pictures: ids above the stack's", the id of tImage > 5225
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportPictures
