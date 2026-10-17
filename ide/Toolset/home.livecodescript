@@ -1427,6 +1427,8 @@ command revInternal__InstallFileAssociations
       put return & "revhtml5urllibrary" after tLoadList
       -- OXT-Beyond: update checks against this project's GitHub Releases
       put return & "oxtBeyondUpdater" after tLoadList
+      -- OXT-Beyond: HyperCard stacks on Mac disk images (File > Import Stack)
+      put return & "revHyperCardDiskImageLibrary" after tLoadList
 
       if revEnvironmentEditionProperty("autocomplete_pro") then
          put return & "autocomplete-pro" after tLoadList

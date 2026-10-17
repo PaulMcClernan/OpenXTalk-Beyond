@@ -7204,8 +7204,11 @@ Description:
 HyperCard stacks have no file extension and, outside macOS, no file
 type, so the dialog lists all files; on macOS it lists the files of type
 STAK first. The stack is imported by <revIDEImportHyperCardStack>.
+A Mac disk image (a floppy or CD image with an HFS volume) can be chosen
+too: a second dialog lists the stacks on it, and the one chosen is
+imported with its resource fork by <revIDEImportHyperCardFromDiskImage>.
 
-References: revIDEImportHyperCardStack (command), revIDEActionOpenStack (command)
+References: revIDEImportHyperCardStack (command), revIDEImportHyperCardFromDiskImage (command), revIDEActionOpenStack (command)
 
 Tags: ide
 */
@@ -7217,13 +7220,81 @@ on revIDEActionImportHyperCardStack
    else
       put __answerGetTypeString("all") into tTypesA[1]
    end if
-   revIDEAnswerFile "", revIDELocalise("Please select a HyperCard stack"), "", tTypesA, true
+   revIDEAnswerFile "", revIDELocalise("Please select a HyperCard stack or a disk image"), "", tTypesA, true
 
    local tFilePath
    put line 1 of the result into tFilePath
    if tFilePath is empty or there is not a file tFilePath then exit revIDEActionImportHyperCardStack
+   -- OXT-Beyond: a disk image holding stacks
+   if revHyperCardIsDiskImage(tFilePath) then
+      revIDEImportHyperCardFromDiskImage tFilePath
+      exit revIDEActionImportHyperCardStack
+   end if
    revIDEImportHyperCardStack tFilePath
 end revIDEActionImportHyperCardStack
+
+/*
+Imports a HyperCard stack from a Mac disk image, with its resource fork.
+
+pImage (String): The path of the disk image: a raw HFS volume (a floppy
+image), a DiskCopy 4.2 image, or a disk or CD image with an Apple
+partition map (as Toast writes).
+
+pStackPath (String): The stack's HFS path on the volume, for example
+"HyperStacks:Games:Home", as revHyperCardImageStacks lists them. When
+empty, a dialog lists the stacks on the image to choose from.
+
+Example:
+revIDEImportHyperCardFromDiskImage "/Users/me/HyperCard-Stacks.img", "HyperStacks:Home"
+
+Returns: Empty, or an error when the image cannot be read or the import
+fails.
+
+Description:
+The stack's data fork and resource fork are copied out of the image to a
+temporary folder, imported from there by <revIDEImportHyperCardStack>
+(with messages locked, as it does), and deleted. The image is only read.
+HFS+ volumes are not read.
+
+References: revIDEImportHyperCardStack (command), revIDEActionImportHyperCardStack (command)
+
+Tags: ide
+*/
+on revIDEImportHyperCardFromDiskImage pImage, pStackPath
+   local tError, tFolder, tPath, tResult
+
+   if there is not a file pImage then return __revIDEError("Specified file does not exist")
+   if pStackPath is empty then
+      put revHyperCardImageChoose(pImage) into pStackPath
+      put the result into tError
+      if tError is empty and pStackPath is empty then return empty
+   end if
+   if tError is empty then
+      put the temporary folder & "/oxt-hypercard-" & the milliseconds into tFolder
+      create folder tFolder
+      put revHyperCardImageExtract(pImage, pStackPath, tFolder) into tPath
+      put the result into tError
+   end if
+   if tError is not empty then
+      answer error revIDELocalise("There was a problem reading the disk image:") && pImage & cr & tError
+      if tFolder is not empty then __revIDEDeleteHyperCardCopy tFolder
+      return __revIDEError(tError)
+   end if
+
+   revIDEImportHyperCardStack tPath
+   put the result into tResult
+   __revIDEDeleteHyperCardCopy tFolder
+   return tResult
+end revIDEImportHyperCardFromDiskImage
+
+-- Delete the folder revIDEImportHyperCardFromDiskImage copied a stack to
+private command __revIDEDeleteHyperCardCopy pFolder
+   local tFile
+   repeat for each line tFile in files(pFolder)
+      delete file (pFolder & slash & tFile)
+   end repeat
+   delete folder pFolder
+end __revIDEDeleteHyperCardCopy
 
 /*
 Imports a HyperCard stack without running its scripts.

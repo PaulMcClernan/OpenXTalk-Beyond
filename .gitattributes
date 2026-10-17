@@ -73,3 +73,6 @@ prebuilt/cef-sha1sums text eol=lf
 *.rsrc binary
 *.appledouble binary
 *.applesingle binary
+*.hfs binary
+*.dc42 binary
+*.apm binary
