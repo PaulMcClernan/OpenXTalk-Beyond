@@ -1604,7 +1604,7 @@ MCHcpict::~MCHcpict()
 // An image of the picture, named after the resource ("PICT <id>" if it has
 // no name), hidden like the icons: HyperCard showed a PICT only when a
 // script or an external asked for it.
-MCControl *MCHcpict::build(uint4 p_id, bool p_keep)
+MCControl *MCHcpict::build(uint4 p_id, bool p_keep, int p_ink)
 {
 	if (pixels == NULL)
 		return NULL;
@@ -1617,9 +1617,11 @@ MCControl *MCHcpict::build(uint4 p_id, bool p_keep)
 		for (uint32_t x = 0 ; x < width ; x++)
 		{
 			uint32_t v = pixels[y * width + x];
-			t_row[x] = MCGPixelPackNative((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF, 0xFF);
+			t_row[x] = MCGPixelPackNative((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF, (v >> 24) & 0xFF);
 		}
 	}
+	// (decoded pictures are opaque; AddColor's layers are not)
+	MCImageBitmapCheckTransparency(t_bitmap);
 	MCImageCompressedBitmap *t_compressed = nil;
 	bool t_compressed_ok = MCImageCompress(t_bitmap, false, t_compressed);
 	MCImageFreeBitmap(t_bitmap);
@@ -1635,6 +1637,8 @@ MCControl *MCHcpict::build(uint4 p_id, bool p_keep)
 	iptr->rect = t_rect;
 	iptr->setcompressedbitmap(t_compressed);
 	MCImageFreeCompressedBitmap(t_compressed);
+	if (p_ink >= 0)
+		iptr->ink = (uint1)p_ink;
 	if (MCNameIsEmpty(m_name))
 	{
 		MCAutoStringRef t_name;
@@ -1841,6 +1845,207 @@ MCStack *MCHcplte::build(MCHcstak *hcsptr, MCStack *p_main)
 	return t_pal;
 }
 
+MCHcaddcolor::MCHcaddcolor()
+{
+	id = 0;
+	card = false;
+	data = NULL;
+	size = 0;
+	layer = NULL;
+	cptr = NULL;
+	cafter = NULL;
+	gptr = NULL;
+	gafter = NULL;
+}
+
+MCHcaddcolor::~MCHcaddcolor()
+{
+	delete[] data;
+	delete layer;
+}
+
+// Fill p_rect of an AddColor layer with a colour, with AddColor's bevel: a
+// lighter top and left edge and a darker bottom and right one, p_bevel
+// pixels wide
+static void hc_addcolor_fill(uint32_t *p_pixels, uint32_t p_width, uint32_t p_height,
+                             int32_t p_top, int32_t p_left, int32_t p_bottom, int32_t p_right,
+                             int32_t p_bevel, const uint1 *p_rgb)
+{
+	uint32_t r = p_rgb[0], g = p_rgb[2], b = p_rgb[4];
+	uint32_t t_colour = 0xFF000000 | (r << 16) | (g << 8) | b;
+	uint32_t t_light = 0xFF000000 | ((r + (255 - r) / 2) << 16) | ((g + (255 - g) / 2) << 8) | (b + (255 - b) / 2);
+	uint32_t t_dark = 0xFF000000 | ((r / 2) << 16) | ((g / 2) << 8) | (b / 2);
+	if (p_bevel < 0 || p_bevel > 64)
+		p_bevel = 0;
+	for (int32_t y = MCU_max(p_top, 0) ; y < MCU_min(p_bottom, (int32_t)p_height) ; y++)
+		for (int32_t x = MCU_max(p_left, 0) ; x < MCU_min(p_right, (int32_t)p_width) ; x++)
+		{
+			uint32_t t_pixel = t_colour;
+			int32_t t_from_top = y - p_top, t_from_left = x - p_left;
+			int32_t t_from_bottom = p_bottom - 1 - y, t_from_right = p_right - 1 - x;
+			if (MCU_min(t_from_bottom, t_from_right) < p_bevel)
+				t_pixel = t_dark;
+			if (MCU_min(t_from_top, t_from_left) < p_bevel && MCU_min(t_from_top, t_from_left) <= MCU_min(t_from_bottom, t_from_right))
+				t_pixel = t_light;
+			p_pixels[y * p_width + x] = t_pixel;
+		}
+}
+
+// Draw an HCcd or HCbg resource into a layer the size of the card. Each
+// entry is a type byte (high bit set: hidden), then for a button (1) or a
+// field (2) its id, the bevel and the colour as three 16-bit components;
+// for a rectangle (3) the rectangle, the bevel and the colour; for a
+// picture from a PICT resource (4) or a file (5) the rectangle, a
+// transparent flag (white is not drawn) and the name as a Pascal string.
+bool MCHcaddcolor::draw(MCHcstak *hcsptr, MCHcbutton *p_buttons, MCHcfield *p_fields)
+{
+	uint32_t t_width = hcsptr->rect.width, t_height = hcsptr->rect.height;
+	if (data == NULL || t_width == 0 || t_height == 0 || layer != NULL)
+		return false;
+	uint32_t *t_pixels = new (nothrow) uint32_t[t_width * t_height];
+	if (t_pixels == NULL)
+		return false;
+	memset(t_pixels, 0, t_width * t_height * sizeof(uint32_t));
+	const char *t_where = card ? "card" : "bkgnd";
+	bool t_drawn = false;
+	uint4 t_pos = 0;
+	while (t_pos < size)
+	{
+		uint1 t_type = data[t_pos] & 0x7F;
+		bool t_hidden = (data[t_pos] & 0x80) != 0;
+		t_pos++;
+		if (t_type == 1 || t_type == 2)
+		{
+			if (t_pos + 10 > size)
+				break;
+			uint2 t_part = hc_get_uint2((const char *)&data[t_pos]);
+			int2 t_bevel = hc_get_int2((const char *)&data[t_pos + 2]);
+			const uint1 *t_rgb = &data[t_pos + 4];
+			t_pos += 10;
+			if (t_hidden)
+				continue;
+			MCRectangle t_rect;
+			bool t_found = false;
+			if (t_type == 1 && p_buttons != NULL)
+			{
+				MCHcbutton *t_each = p_buttons;
+				do
+				{
+					if (t_each->id == t_part)
+					{
+						t_rect = t_each->rect;
+						t_found = true;
+					}
+					t_each = t_each->next();
+				}
+				while (t_each != p_buttons && !t_found);
+			}
+			if (t_type == 2 && p_fields != NULL)
+			{
+				MCHcfield *t_each = p_fields;
+				do
+				{
+					if (t_each->id == t_part)
+					{
+						t_rect = t_each->rect;
+						t_found = true;
+					}
+					t_each = t_each->next();
+				}
+				while (t_each != p_fields && !t_found);
+			}
+			if (!t_found)
+				continue;
+			hc_addcolor_fill(t_pixels, t_width, t_height, t_rect.y, t_rect.x,
+			                 t_rect.y + t_rect.height, t_rect.x + t_rect.width, t_bevel, t_rgb);
+			t_drawn = true;
+		}
+		else if (t_type == 3)
+		{
+			if (t_pos + 16 > size)
+				break;
+			const char *t_entry = (const char *)&data[t_pos];
+			int2 t_bevel = hc_get_int2(&t_entry[8]);
+			t_pos += 16;
+			if (t_hidden)
+				continue;
+			hc_addcolor_fill(t_pixels, t_width, t_height, hc_get_int2(&t_entry[0]), hc_get_int2(&t_entry[2]),
+			                 hc_get_int2(&t_entry[4]), hc_get_int2(&t_entry[6]), t_bevel, &data[t_pos - 6]);
+			t_drawn = true;
+		}
+		else if (t_type == 4 || t_type == 5)
+		{
+			if (t_pos + 10 > size || t_pos + 10 + data[t_pos + 9] > size)
+				break;
+			const char *t_entry = (const char *)&data[t_pos];
+			int32_t t_top = hc_get_int2(&t_entry[0]), t_left = hc_get_int2(&t_entry[2]);
+			int32_t t_bottom = hc_get_int2(&t_entry[4]), t_right = hc_get_int2(&t_entry[6]);
+			bool t_transparent = t_entry[8] != 0;
+			uint1 t_name_length = data[t_pos + 9];
+			char t_name[256];
+			memcpy(t_name, &t_entry[10], t_name_length);
+			t_name[t_name_length] = '\0';
+			t_pos += 10 + t_name_length;
+			if (t_hidden)
+				continue;
+			MCHcpict *t_pict = NULL;
+			if (t_type == 4 && hcsptr->pictures != NULL)
+			{
+				MCAutoStringRef t_mac_name;
+				MCNewAutoNameRef t_wanted;
+				if (MCStringCreateWithNativeChars((const char_t *)t_name, t_name_length, &t_mac_name)
+				    && MCNameCreate(*t_mac_name, &t_wanted))
+				{
+					MCHcpict *t_each = hcsptr->pictures;
+					do
+					{
+						if (t_each->pixels != NULL && MCNameIsEqualToCaseless(t_each->m_name, *t_wanted))
+							t_pict = t_each;
+						t_each = t_each->next();
+					}
+					while (t_each != hcsptr->pictures && t_pict == NULL);
+				}
+			}
+			if (t_pict == NULL)
+			{
+				hcstat_append("AddColor picture %s \"%s\" on %s id %d not drawn: %s", t_type == 4 ? "resource" : "file",
+				              t_name, t_where, (int)id, t_type == 4 ? "no such PICT" : "a file outside the stack");
+				continue;
+			}
+			for (int32_t y = MCU_max(t_top, 0) ; y < MCU_min(MCU_min(t_bottom, t_top + (int32_t)t_pict->height), (int32_t)t_height) ; y++)
+				for (int32_t x = MCU_max(t_left, 0) ; x < MCU_min(MCU_min(t_right, t_left + (int32_t)t_pict->width), (int32_t)t_width) ; x++)
+				{
+					uint32_t t_pixel = t_pict->pixels[(y - t_top) * t_pict->width + (x - t_left)];
+					if (t_transparent && (t_pixel & 0xFFFFFF) == 0xFFFFFF)
+						continue;
+					t_pixels[y * t_width + x] = t_pixel | 0xFF000000;
+				}
+			t_drawn = true;
+		}
+		else
+		{
+			hcstat_append("AddColor data on %s id %d not read past an entry of type %d", t_where, (int)id, (int)t_type);
+			break;
+		}
+	}
+	if (!t_drawn)
+	{
+		delete[] t_pixels;
+		return false;
+	}
+	layer = new (nothrow) MCHcpict;
+	if (layer == NULL)
+	{
+		delete[] t_pixels;
+		return false;
+	}
+	layer->pixels = t_pixels;
+	layer->width = t_width;
+	layer->height = t_height;
+	MCValueAssign(layer->m_name, MCNAME("HC AddColor"));
+	return true;
+}
+
 MCHccard::MCHccard()
 {
 	name = NULL;
@@ -1997,6 +2202,12 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 		if (bmptr != NULL)
 			bmptr->setvisible((atts & HC_BC_HIDE_BMAP) == 0);
 	}
+	// AddColor's colours for the card, drawn while its buttons and fields
+	// are at hand (the image is made last, in MCHcstak::build, so that no
+	// imported object's id changes)
+	MCHcaddcolor *t_color = hcsptr->getaddcolor(true, id);
+	if (t_color != NULL && !t_color->draw(hcsptr, hcbuttons, hcfields))
+		t_color = NULL;
 	MCHcbkgd *bgptr = hcsptr->getbkgd(bkgdid);
 	if (bgptr == NULL)
 		hcstat_append("Error: card %d has no background %d", (int)id, (int)bkgdid);
@@ -2068,6 +2279,13 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 			}
 			break;
 		}
+	// the colours go on top of the card's objects, where they take nothing's
+	// place in the order of its parts
+	if (t_color != NULL)
+	{
+		t_color->cptr = cptr;
+		t_color->cafter = cptr->objptrs->prev();
+	}
 	return cptr;
 }
 
@@ -2164,6 +2382,11 @@ MCGroup *MCHcbkgd::build(MCHcstak *hcsptr, MCStack *sptr)
 			iptr->appendto(gptr->controls);
 		}
 	}
+	// AddColor's colours for the background, drawn while its buttons and
+	// fields are at hand
+	MCHcaddcolor *t_color = hcsptr->getaddcolor(false, id);
+	if (t_color != NULL && !t_color->draw(hcsptr, hcbuttons, hcfields))
+		t_color = NULL;
 	while (hctexts != NULL)
 	{
 		MCHctext *tptr = hctexts->remove
@@ -2205,6 +2428,12 @@ MCGroup *MCHcbkgd::build(MCHcstak *hcsptr, MCStack *sptr)
 			}
 			break;
 		}
+	// the colours go on top of the background's objects
+	if (t_color != NULL)
+	{
+		t_color->gptr = gptr;
+		t_color->gafter = gptr->controls != NULL ? gptr->controls->prev() : NULL;
+	}
 	return gptr;
 }
 
@@ -2240,6 +2469,7 @@ MCHcstak::MCHcstak(char *inname)
 	  snds(nullptr),
 	  pictures(nullptr),
 	  palettes(nullptr),
+	  addcolors(nullptr),
 	  path(nullptr),
 	  resourcelist(nullptr),
 	  externallist(nullptr),
@@ -2320,6 +2550,11 @@ MCHcstak::~MCHcstak()
 		MCHcplte *pptr = palettes->remove(palettes);
 		delete pptr;
 	}
+	while (addcolors != NULL)
+	{
+		MCHcaddcolor *aptr = addcolors->remove(addcolors);
+		delete aptr;
+	}
 }
 
 uint4 MCHcstak::geticon(uint2 iid)
@@ -2380,6 +2615,21 @@ MCHcbkgd *MCHcstak::getbkgd(uint4 bid)
 		bptr = bptr->next();
 	}
 	while (bptr != hcbkgds);
+	return NULL;
+}
+
+MCHcaddcolor *MCHcstak::getaddcolor(bool p_card, uint4 p_id)
+{
+	MCHcaddcolor *aptr = addcolors;
+	if (aptr == NULL)
+		return NULL;
+	do
+	{
+		if (aptr->card == p_card && aptr->id == p_id)
+			return aptr;
+		aptr = aptr->next();
+	}
+	while (aptr != addcolors);
 	return NULL;
 }
 
@@ -2712,6 +2962,27 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 							break;
 						}
 						delete t_plte;
+					}
+				}
+				goto not_converted;
+			case HC_HCCD:
+			case HC_HCBG:
+				if (t_length > 0)
+				{
+					MCHcaddcolor *t_color = new (nothrow) MCHcaddcolor;
+					if (t_color != NULL)
+					{
+						t_color->data = new (nothrow) uint1[t_length];
+						if (t_color->data != NULL)
+						{
+							memcpy(t_color->data, t_resource, t_length);
+							t_color->size = t_length;
+							t_color->id = id;
+							t_color->card = t_type == HC_HCCD;
+							t_color->appendto(addcolors);
+							break;
+						}
+						delete t_color;
 					}
 				}
 				goto not_converted;
@@ -3762,6 +4033,49 @@ MCStack *MCHcstak::build()
 			}
 			delete pptr;
 		}
+	}
+	// New: AddColor's colours (HCcd and HCbg resources), drawn when the
+	// cards and backgrounds were built. Each card or background with any
+	// gets one image, "HC AddColor", on top of its objects, with the
+	// blendMultiply ink: black stays black and white takes the colour, as
+	// in HyperCard 2.2's colour stacks. The images are disabled, so that
+	// clicks go through them to the objects below; they come last in the
+	// order of the card's or background's parts and take ids above every
+	// other object's, so that no number or id scripts know changes.
+	if (addcolors != NULL)
+	{
+		maxid = MCU_max(maxid, t_max_bitmap_id);
+		MCHcaddcolor *t_color = addcolors;
+		do
+		{
+			if (t_color->layer != NULL && (t_color->cptr != NULL || t_color->gptr != NULL))
+			{
+				MCControl *t_image = t_color->layer->build(++maxid, false, GXblendMultiply);
+				if (t_image != NULL)
+				{
+					t_image->setflag(True, F_DISABLED);
+					if (t_color->cptr != NULL)
+					{
+						t_image->setparent(sptr);
+						t_image->appendto(sptr->controls);
+						MCObjptr *t_optr = new (nothrow) MCObjptr;
+						t_optr->setparent(t_color->cptr);
+						t_optr->setid(t_image->getid());
+						t_color->cafter->append(t_optr);
+					}
+					else
+					{
+						t_image->setparent(t_color->gptr);
+						if (t_color->gafter != NULL)
+							t_color->gafter->append(t_image);
+						else
+							t_image->insertto(t_color->gptr->controls);
+					}
+				}
+			}
+			t_color = t_color->next();
+		}
+		while (t_color != addcolors);
 	}
 	while (snds != NULL)
 	{

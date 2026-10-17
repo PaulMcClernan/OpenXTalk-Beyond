@@ -721,3 +721,47 @@ on TestHyperCardImportPalettes
    _Close tStack
    _DeleteFolder tFolder
 end TestHyperCardImportPalettes
+
+private function _Alpha pImage, pX, pY
+   return byteToNum(byte (pY * the width of pImage + pX + 1) of the alphaData of pImage)
+end _Alpha
+
+on TestHyperCardImportAddColor
+   -- HCbg and HCcd resources (AddColor) become one image per background or
+   -- card, "HC AddColor", on top of its objects, with the blendMultiply ink,
+   -- disabled so that clicks reach the objects below
+   local tFolder, tStack, tBgImage, tCardImage, tLog
+   put _NewFolder("addcolor") into tFolder
+   _CopyInput "TestButtonProperties.stack", tFolder & "HC Colours"
+   _CopyInput "forks/AddColor.rsrc", tFolder & "HC Colours.rsrc"
+   put _ImportPath(tFolder & "HC Colours") into tStack
+   put the hcImportStat into tLog
+
+   TestAssert "addcolor: the background's colours", there is an image "HC AddColor" of bkgnd id 2670 of stack tStack
+   put the long id of image "HC AddColor" of bkgnd id 2670 of stack tStack into tBgImage
+   TestAssert "addcolor: the card's size", the width of tBgImage & "x" & the height of tBgImage is "512x342"
+   TestAssert "addcolor: blendMultiply", the ink of tBgImage is "blendMultiply"
+   TestAssert "addcolor: clicks go through", not the enabled of tBgImage
+   TestAssert "addcolor: on top of the buttons, numbered after them", the layer of tBgImage > the layer of button 13 of bkgnd id 2670 of stack tStack \
+         and the short name of button 13 of bkgnd id 2670 of stack tStack is "New Button"
+   TestAssert "addcolor: a button's colour", _Pixel(tBgImage, 88, 60) is "255,0,0"
+   TestAssert "addcolor: bevel, top left", _Pixel(tBgImage, 41, 49) is "255,127,127"
+   TestAssert "addcolor: bevel, bottom right", _Pixel(tBgImage, 135, 70) is "127,0,0"
+   TestAssert "addcolor: a hidden entry is not drawn", _Alpha(tBgImage, 91, 108) is 0
+   TestAssert "addcolor: a rectangle", _Pixel(tBgImage, 450, 315) is "0,0,255"
+   TestAssert "addcolor: transparent elsewhere", _Alpha(tBgImage, 250, 20) is 0
+
+   put the long id of image "HC AddColor" of card id 2883 of stack tStack into tCardImage
+   TestAssert "addcolor: the card's colours", there is tCardImage
+   TestAssert "addcolor: a bevelled rectangle", _Pixel(tCardImage, 30, 25) is "255,255,0" \
+         and _Pixel(tCardImage, 10, 10) is "255,255,127"
+   TestAssert "addcolor: a picture", _Pixel(tCardImage, 408, 108) is "255,0,0"
+   TestAssert "addcolor: a transparent picture's white", _Alpha(tCardImage, 408, 144) is 0
+   TestAssert "addcolor: a picture file is logged", "AddColor picture file" && quote & "Sky.pict" & quote && "on card id 2883 not drawn" is in tLog
+   TestAssert "addcolor: ids above the others", the id of tCardImage > the id of image "Colour" of bkgnd "HC Pictures" of stack tStack \
+         and the id of tBgImage > the id of image "Colour" of bkgnd "HC Pictures" of stack tStack
+   TestAssert "addcolor: other cards have none", there is not an image "HC AddColor" of card id 4067 of stack tStack
+   TestAssert "addcolor: not logged as unconverted", "Not converting HCcd" is not in tLog and "Not converting HCbg" is not in tLog
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportAddColor
