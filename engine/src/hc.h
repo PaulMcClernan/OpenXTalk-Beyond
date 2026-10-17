@@ -25,7 +25,8 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 enum HC_File_type {
     HC_RAW,
     HC_MACBIN,
-    HC_BINHEX
+    HC_BINHEX,
+    HC_APPLESINGLE_FILE
 };
 
 #define HC_STAK 0x5354414b
@@ -402,6 +403,8 @@ public:
 	MCHcbmap *icons;
 	MCHcbmap *cursors;
 	MCHcsnd *snds;
+	// the path of the file being imported, or nil
+	MCStringRef path;
 	MCHcstak(char *inname);
 	~MCHcstak();
 	uint4 geticon(uint2 iid);
@@ -413,6 +416,8 @@ public:
 	IO_stat read(IO_handle stream);
 	IO_stat readblocks(const uint1 *p_data, uint4 p_size);
 	void readresources(const uint1 *p_fork, uint4 p_size);
+	bool readresourcefile(MCStringRef p_path, bool p_log);
+	bool readsidecarresources();
 	MCStack *build();
 	
 #ifdef _MAC_DESKTOP
