@@ -35,6 +35,15 @@ forks/AddColor.rsrc         AddColor's colours for TestButtonProperties.stack:
                             (a yellow rectangle, PICT 300 "Colour" drawn
                             transparent, a picture file, which is not drawn),
                             and HCcd 9999, for a card the stack does not have
+forks/Stacks.hfs            a plain HFS volume (Inside Macintosh: Files, chapter
+                            2), "Old Disk": Stacks:Synthetic Stack (STAK,
+                            ../TestCardsBackgrounds.stack with Synthetic.rsrc
+                            as its fork, both fragmented, the fork's fourth
+                            extent in the extents tree), Stacks:More:Lost Type
+                            (a stack whose type is "????") and Read Me (TEXT),
+                            its catalog in two leaf nodes
+forks/Stacks.dc42           the volume as a DiskCopy 4.2 image
+forks/Stacks.apm            the volume behind an Apple partition map, as on CDs
 forks/TestCardsBackgrounds.applesingle
                             ../TestCardsBackgrounds.stack and the fork in one
                             AppleSingle file, named "Synthetic Stack"
@@ -280,6 +289,140 @@ APPLESINGLE = 0x00051600
 APPLEDOUBLE = 0x00051607
 
 
+# An HFS volume, written from nothing: 512-byte allocation blocks
+# starting at sector 4 (boot blocks 0-1, the master directory block 2, the
+# volume bitmap 3), B-tree nodes of 512 bytes
+HFS_BLOCK = 512
+
+
+def hfs_node(kind, height, records, flink=0):
+    """a B-tree node: its descriptor, its records, their offsets from the
+    end of the node backwards (with the free space's after them)"""
+    body = b""
+    offsets = []
+    for record in records:
+        offsets.append(14 + len(body))
+        body += record
+    offsets.append(14 + len(body))
+    node = struct.pack(">IIbBHH", flink, 0, kind, height, len(records), 0) + body
+    tail = b"".join(struct.pack(">H", o) for o in reversed(offsets))
+    assert len(node) + len(tail) <= HFS_BLOCK, "a node overflows"
+    return node + b"\0" * (HFS_BLOCK - len(node) - len(tail)) + tail
+
+
+def hfs_header_node(root, leaf_records, first_leaf, last_leaf, max_key, total, depth):
+    header = struct.pack(">HIIIIHHII", depth, root, leaf_records, first_leaf,
+                         last_leaf, HFS_BLOCK, max_key, total, 0) + b"\0" * 76
+    # the header record, the user record, the map record (all nodes used)
+    bitmap = bytes([0xFF] * (total // 8) + ([(0xFF << (8 - total % 8)) & 0xFF] if total % 8 else []))
+    room = HFS_BLOCK - 14 - len(header) - 128 - 8
+    return hfs_node(1, 0, [header, b"\0" * 128, bitmap.ljust(room, b"\0")])
+
+
+def hfs_key(parent, name):
+    raw = name.encode("mac_roman")
+    key = bytes([6 + len(raw), 0]) + struct.pack(">I", parent) + bytes([len(raw)]) + raw
+    return key + (b"\0" if len(key) % 2 else b"")
+
+
+def hfs_extents(extents):
+    extents = list(extents) + [(0, 0)] * (3 - len(extents))
+    return b"".join(struct.pack(">HH", start, count) for start, count in extents)
+
+
+def hfs_volume(name, folders, files):
+    """folders: [(id, parent, name)]; files: [(id, parent, name, type,
+    creator, data, rsrc, data_runs, rsrc_runs)], each *_runs a list of
+    block counts the fork is cut into, laid out with a free block between
+    them so that each run is its own extent"""
+    blocks = []                          # allocation block contents
+
+    def allocate(data, runs):
+        data += b"\0" * (-len(data) % HFS_BLOCK)
+        extents = []
+        at = 0
+        for count in runs:
+            blocks.append(b"\0" * HFS_BLOCK)        # the gap
+            extents.append((len(blocks), count))
+            for i in range(count):
+                blocks.append(data[at:at + HFS_BLOCK].ljust(HFS_BLOCK, b"\0"))
+                at += HFS_BLOCK
+        assert at >= len(data), "runs too short for the fork"
+        return extents
+
+    # the trees go first: blocks 0-1 the extents tree, 2-4 the catalog
+    blocks.extend([b""] * 5)
+    catalog = []
+    overflow = []
+    catalog.append(((1, name), struct.pack(">bbHHI", 1, 0, 0, len([f for f in folders if f[1] == 2]) +
+                                           len([f for f in files if f[1] == 2]), 2) + b"\0" * 60))
+    catalog.append(((2, ""), struct.pack(">bb8sI", 3, 0, b"", 1) + bytes([len(name)]) +
+                    name.encode("mac_roman").ljust(31, b"\0")))
+    for fid, parent, fname in folders:
+        catalog.append(((parent, fname), struct.pack(">bbHHI", 1, 0, 0, 0, fid) + b"\0" * 60))
+    for fid, parent, fname, ftype, creator, data, rsrc, data_runs, rsrc_runs in files:
+        dext = allocate(data, data_runs) if data else []
+        rext = allocate(rsrc, rsrc_runs) if rsrc else []
+        for fork, ext in ((0, dext), (255, rext)):
+            if len(ext) > 3:
+                overflow.append((fork, fid, sum(c for _, c in ext[:3]), ext[3:6]))
+        record = struct.pack(">bbBB", 2, 0, 0, 0) + ftype + creator + b"\0" * 8
+        record += struct.pack(">IHIIHIIIII", fid, 0, len(data), len(data) + (-len(data) % HFS_BLOCK),
+                              0, len(rsrc), len(rsrc) + (-len(rsrc) % HFS_BLOCK), 0, 0, 0)
+        record += b"\0" * 16 + struct.pack(">H", 0) + hfs_extents(dext[:3]) + hfs_extents(rext[:3])
+        record += b"\0" * 4
+        assert len(record) == 102
+        catalog.append(((parent, fname), record))
+    catalog.sort(key=lambda r: (r[0][0], r[0][1].lower()))
+    records = [hfs_key(*key) + data for key, data in catalog]
+    half = len(records) // 2
+    # the catalog: header (block 2), leaves 1 and 2 (blocks 3 and 4),
+    # linked forward; no index node, as the depth is 1 and the root a leaf
+    blocks[2] = hfs_header_node(1, len(records), 1, 2, 37, 3, 1)
+    blocks[3] = hfs_node(-1, 1, records[:half], flink=2)
+    blocks[4] = hfs_node(-1, 1, records[half:])
+    # the extents tree: header (block 0), one leaf (block 1)
+    xrecords = [bytes([7, fork]) + struct.pack(">IH", fid, start) + hfs_extents(ext)
+                for fork, fid, start, ext in overflow]
+    if xrecords:
+        blocks[0] = hfs_header_node(1, len(xrecords), 1, 1, 7, 2, 1)
+        blocks[1] = hfs_node(-1, 1, xrecords)
+    else:
+        blocks[0] = hfs_header_node(0, 0, 0, 0, 7, 2, 0)
+        blocks[1] = b"\0" * HFS_BLOCK
+    mdb = b"BD" + struct.pack(">IIHHHHHIIHIH", 0, 0, 0x0100, len([f for f in files if f[1] == 2]),
+                              3, 0, len(blocks), HFS_BLOCK, HFS_BLOCK * 4, 4, 100, 0)
+    mdb += bytes([len(name)]) + name.encode("mac_roman").ljust(27, b"\0")
+    mdb = mdb.ljust(130, b"\0")
+    mdb += struct.pack(">I", 2 * HFS_BLOCK) + hfs_extents([(0, 2)])
+    mdb += struct.pack(">I", 3 * HFS_BLOCK) + hfs_extents([(2, 3)])
+    assert len(mdb) == 162
+    bitmap = bytes([0xFF] * (len(blocks) // 8) + ([(0xFF << (8 - len(blocks) % 8)) & 0xFF] if len(blocks) % 8 else []))
+    return (b"\0" * 1024 + mdb.ljust(512, b"\0") + bitmap.ljust(512, b"\0") +
+            b"".join(blocks))
+
+
+def diskcopy42(name, volume):
+    # the name as a Pascal string in 64 bytes, the data and tag sizes, their
+    # checksums, the format (2: 1440K), the format byte, and 0x0100
+    raw = name.encode("mac_roman")
+    return (bytes([len(raw)]) + raw.ljust(63, b"\0") +
+            struct.pack(">IIIIBBH", len(volume), 0, 0, 0, 3, 0x22, 0x0100) + volume)
+
+
+def partition_map(volume):
+    # block 0 the driver descriptor, blocks 1-2 the map (its own entry and
+    # the volume's), the volume from block 64
+    def entry(start, count, name, ptype):
+        return (b"PM" + struct.pack(">HIII", 0, 2, start, count) +
+                name.ljust(32, b"\0") + ptype.ljust(32, b"\0")).ljust(512, b"\0")
+    blocks = len(volume) // 512
+    ddm = (b"ER" + struct.pack(">HI", 512, 64 + blocks)).ljust(512, b"\0")
+    out = ddm + entry(1, 63, b"Apple", b"Apple_partition_map") + \
+        entry(64, blocks, b"Old Disk", b"Apple_HFS")
+    return out.ljust(64 * 512, b"\0") + volume
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     samples = bytes(128 + (40 if (i // 25) % 2 else -40) for i in range(2000))
@@ -343,7 +486,15 @@ def main():
             ("rect", False, (0, 0, 10, 10), 0, (0, 65535, 0)),
         ])),
     ])
+    volume = hfs_volume("Old Disk", [(16, 2, "Stacks"), (17, 16, "More")], [
+        (20, 16, "Synthetic Stack", b"STAK", b"WILD", stack, fork, [10, 6], [2, 2, 1, 1]),
+        (21, 17, "Lost Type", b"????", b"????", stack, b"", [16], []),
+        (22, 2, "Read Me", b"TEXT", b"ttxt", b"An old disk.\r", b"", [1], []),
+    ])
     files = {
+        "Stacks.hfs": volume,
+        "Stacks.dc42": diskcopy42("Old Disk", volume),
+        "Stacks.apm": partition_map(volume),
         "AddColor.rsrc": colours,
         "Synthetic.rsrc": fork,
         "Pictures.rsrc": pictures,
