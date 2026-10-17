@@ -40,6 +40,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "hc.h"
 #include "osspec.h"
 #include "hcpict.h"
+#include "dispatch.h"
 
 #include "exec-interface.h"
 
@@ -1603,7 +1604,7 @@ MCHcpict::~MCHcpict()
 // An image of the picture, named after the resource ("PICT <id>" if it has
 // no name), hidden like the icons: HyperCard showed a PICT only when a
 // script or an external asked for it.
-MCControl *MCHcpict::build(uint4 p_id)
+MCControl *MCHcpict::build(uint4 p_id, bool p_keep)
 {
 	if (pixels == NULL)
 		return NULL;
@@ -1643,9 +1644,201 @@ MCControl *MCHcpict::build(uint4 p_id)
 	}
 	else
 		iptr->setname(m_name);
-	delete[] pixels;
-	pixels = NULL;
+	if (!p_keep)
+	{
+		delete[] pixels;
+		pixels = NULL;
+	}
 	return iptr;
+}
+
+MCHcplte::MCHcplte()
+{
+	m_name = MCValueRetain(kMCEmptyName);
+	id = 0;
+	data = NULL;
+	size = 0;
+}
+
+MCHcplte::~MCHcplte()
+{
+	MCValueRelease(m_name);
+	delete[] data;
+}
+
+// The script of a palette substack. A click on one of its buttons does what
+// HyperCard did: it records the button as the palette's hilited button
+// (HyperCard's "the hilitedButton of window", which is the custom property
+// uHCHilitedButton here: hilitedButton is a group property in this engine)
+// and sends the button's message to the current card of the stack the
+// palette belongs to. "the enabledButton_<n>" of the palette enables or
+// disables its nth button.
+static const char *kHcPaletteScript =
+	"-- HyperCard palette (PLTE resource), made by the HyperCard importer\n"
+	"on mouseUp\n"
+	"   if word 1 of the name of the target is not \"button\" then pass mouseUp\n"
+	"   local tMessage, tDefault\n"
+	"   set the uHCHilitedButton of me to the number of the target\n"
+	"   put the uHCMessage of the target into tMessage\n"
+	"   if tMessage is empty then exit mouseUp\n"
+	"   -- a command (put, go, set...) runs as if typed in the message box;\n"
+	"   -- anything else is a message to the card\n"
+	"   -- \"this card\" and \"this stack\" are the stack beneath the palette,\n"
+	"   -- as in HyperCard, not the palette itself\n"
+	"   if word 1 of tMessage is among the lines of the commandNames then\n"
+	"      put the defaultStack into tDefault\n"
+	"      set the defaultStack to the mainStack of me\n"
+	"      do tMessage\n"
+	"      -- (a one-line if here would take the else below as its own)\n"
+	"      if there is a stack tDefault then\n"
+	"         set the defaultStack to tDefault\n"
+	"      end if\n"
+	"   else\n"
+	"      send tMessage to this card of stack (the mainStack of me)\n"
+	"   end if\n"
+	"end mouseUp\n";
+
+// A PLTE resource: the PICT's id, the top left of its frame (the buttons'
+// rectangles are in the picture's coordinates), and its buttons, each a
+// rectangle, two bytes of flags and the message as a Pascal string padded
+// to an even length. (Read from HyperCard 2.x's palettes: there is no
+// published description of the resource.)
+MCStack *MCHcplte::build(MCHcstak *hcsptr, MCStack *p_main)
+{
+	const char *t_data = (const char *)data;
+	uint2 t_pict_id = hc_get_uint2(&t_data[8]);
+	int2 t_origin_v = hc_get_int2(&t_data[10]);
+	int2 t_origin_h = hc_get_int2(&t_data[12]);
+	uint2 t_count = hc_get_uint2(&t_data[22]);
+	MCHcpict *t_pict = NULL;
+	if (hcsptr->pictures != NULL)
+	{
+		MCHcpict *t_each = hcsptr->pictures;
+		do
+		{
+			if (t_each->id == t_pict_id)
+				t_pict = t_each;
+			t_each = t_each->next();
+		}
+		while (t_each != hcsptr->pictures && t_pict == NULL);
+	}
+	if (t_pict == NULL || t_pict->pixels == NULL)
+	{
+		MCAutoStringRefAsCString t_name_str;
+		/* UNCHECKED */ t_name_str.Lock(MCNameGetString(m_name));
+		hcstat_append("Not converting PLTE id %5d \"%s\": no PICT %d", id, *t_name_str, t_pict_id);
+		return NULL;
+	}
+
+	// a substack of the imported stack, as "set the mainStack" makes one
+	MCStack *t_pal = MCtemplatestack->clone();
+	MCdispatcher->removestack(t_pal);
+	if (p_main->substacks == NULL)
+		p_main->extraopen(true);
+	t_pal->appendto(p_main->substacks);
+	t_pal->setparent(p_main);
+	t_pal->setname(m_name);
+	MCCard *t_made_cards = t_pal->cards;
+	t_pal->cards = NULL;
+	t_pal->curcard = NULL;
+	// (a card a newStack handler made, as in MCHcstak::build)
+	while (t_made_cards != NULL)
+	{
+		MCCard *t_card = t_made_cards->remove(t_made_cards);
+		MCrecent->deletecard(t_card);
+		MCcstack->deletecard(t_card);
+		t_pal->uncacheobjectbyid(t_card);
+		t_card->removereferences();
+		t_card->scheduledelete(false);
+	}
+	t_pal->rect.width = (uint2)t_pict->width;
+	t_pal->rect.height = (uint2)t_pict->height;
+
+	uint4 t_next_id = 1000;
+	MCCard *t_card = MCtemplatecard->clone(False, False);
+	t_card->obj_id = t_next_id++;
+	t_card->setparent(t_pal);
+	t_card->appendto(t_pal->cards);
+	t_pal->curcard = t_card;
+
+	MCControl *t_image = t_pict->build(t_next_id++, true);
+	if (t_image != NULL)
+	{
+		t_image->setparent(t_pal);
+		t_image->appendto(t_pal->controls);
+		MCObjptr *t_optr = new (nothrow) MCObjptr;
+		t_optr->setparent(t_card);
+		t_optr->setid(t_image->getid());
+		t_optr->appendto(t_card->objptrs);
+	}
+
+	uint4 t_at = 24;
+	for (uint2 i = 0 ; i < t_count ; i++)
+	{
+		if (t_at + 11 > size)
+			break;
+		MCRectangle t_rect;
+		int2 t_top = hc_get_int2(&t_data[t_at]);
+		int2 t_left = hc_get_int2(&t_data[t_at + 2]);
+		int2 t_bottom = hc_get_int2(&t_data[t_at + 4]);
+		int2 t_right = hc_get_int2(&t_data[t_at + 6]);
+		uint1 t_length = (uint1)t_data[t_at + 10];
+		if (t_at + 11 + t_length > size)
+			break;
+		char *t_raw = new (nothrow) char[t_length + 1];
+		memcpy(t_raw, &t_data[t_at + 11], t_length);
+		t_raw[t_length] = '\0';
+		t_at += 11 + t_length;
+		if (t_at & 1)
+			t_at++;
+		t_rect.x = t_left - t_origin_h;
+		t_rect.y = t_top - t_origin_v;
+		t_rect.width = t_right > t_left ? (uint2)(t_right - t_left) : 0;
+		t_rect.height = t_bottom > t_top ? (uint2)(t_bottom - t_top) : 0;
+
+		MCButton *t_button = (MCButton *)MCtemplatebutton->clone(False, OP_NONE, false);
+		t_button->obj_id = t_next_id++;
+		t_button->rect = t_rect;
+		t_button->flags &= ~(F_STYLE | F_SHOW_NAME | F_SHOW_BORDER | F_OPAQUE | F_3D | F_AUTO_HILITE | F_SHOW_ICON);
+		t_button->flags |= F_RECTANGLE;
+		// the message, without the spaces HyperCard's palette editor put
+		// before it
+		char *t_start = t_raw;
+		while (*t_start == ' ' || *t_start == '\t')
+			t_start++;
+		char *t_end = t_start + strlen(t_start);
+		while (t_end > t_start && (t_end[-1] == ' ' || t_end[-1] == '\t' || t_end[-1] == '\r'))
+			*--t_end = '\0';
+		MCAutoStringRef t_message;
+		char *t_converted = convert_string(t_start);
+		delete[] t_raw;
+		MCAutoArrayRef t_props;
+		if (hc_string(t_converted, &t_message) && MCArrayCreateMutable(&t_props)
+		    && MCArrayStoreValue(*t_props, false, MCNAME("uHCMessage"), *t_message))
+		{
+			MCExecContext ctxt(t_button, nil, nil);
+			t_button->SetCustomProperties(ctxt, *t_props);
+		}
+		delete[] t_converted;
+		t_button->setparent(t_pal);
+		((MCControl *)t_button)->appendto(t_pal->controls);
+		MCObjptr *t_optr = new (nothrow) MCObjptr;
+		t_optr->setparent(t_card);
+		t_optr->setid(t_button->getid());
+		t_optr->appendto(t_card->objptrs);
+	}
+
+	// the script, with enabledButton_1 to _<n>
+	MCAutoStringRef t_script;
+	/* UNCHECKED */ MCStringMutableCopy(MCSTR(kHcPaletteScript), &t_script);
+	for (uint2 i = 1 ; i <= t_count ; i++)
+		/* UNCHECKED */ MCStringAppendFormat(*t_script,
+		    "getProp enabledButton_%d\n   return the enabled of button %d of me\nend enabledButton_%d\n"
+		    "setProp enabledButton_%d pValue\n   set the enabled of button %d of me to pValue\nend enabledButton_%d\n",
+		    i, i, i, i, i, i);
+	t_pal->setscript(*t_script);
+	t_pal->obj_id = t_next_id;
+	return t_pal;
 }
 
 MCHccard::MCHccard()
@@ -2046,6 +2239,7 @@ MCHcstak::MCHcstak(char *inname)
 	  cursors(nullptr),
 	  snds(nullptr),
 	  pictures(nullptr),
+	  palettes(nullptr),
 	  path(nullptr),
 	  resourcelist(nullptr),
 	  externallist(nullptr),
@@ -2119,6 +2313,11 @@ MCHcstak::~MCHcstak()
 	while (pictures != NULL)
 	{
 		MCHcpict *pptr = pictures->remove(pictures);
+		delete pptr;
+	}
+	while (palettes != NULL)
+	{
+		MCHcplte *pptr = palettes->remove(palettes);
 		delete pptr;
 	}
 }
@@ -2495,7 +2694,28 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 					delete t_pict;
 				}
 				// a picture this decoder cannot read is logged as before
-                // fall through
+				goto not_converted;
+			case HC_PLTE:
+				if (t_length >= 24)
+				{
+					MCHcplte *t_plte = new (nothrow) MCHcplte;
+					if (t_plte != NULL)
+					{
+						t_plte->data = new (nothrow) uint1[t_length];
+						if (t_plte->data != NULL)
+						{
+							memcpy(t_plte->data, t_resource, t_length);
+							t_plte->size = t_length;
+							t_plte->id = id;
+							MCValueAssign(t_plte->m_name, *t_name);
+							t_plte->appendto(palettes);
+							break;
+						}
+						delete t_plte;
+					}
+				}
+				goto not_converted;
+			not_converted:
 			default:
                 {
                     MCAutoStringRefAsCString t_name_str;
@@ -3511,6 +3731,12 @@ MCStack *MCHcstak::build()
 			}
 			delete bmptr;
 		}
+	}
+	while (palettes != NULL)
+	{
+		MCHcplte *pptr = palettes->remove(palettes);
+		pptr->build(this, sptr);
+		delete pptr;
 	}
 	if (pictures != NULL)
 	{

@@ -686,3 +686,38 @@ on TestHyperCardImportPictures
    _Close tStack
    _DeleteFolder tFolder
 end TestHyperCardImportPictures
+
+on TestHyperCardImportPalettes
+   -- a PLTE resource becomes a substack named after it: its PICT, with a
+   -- button on each of its rectangles that sends the PLTE's message
+   local tFolder, tStack, tPalette, tOldDefault
+   put _NewFolder("palettes") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Palettes"
+   _CopyInput "forks/Pictures.rsrc", tFolder & "HC Palettes.rsrc"
+   put _ImportPath(tFolder & "HC Palettes") into tStack
+   put "Test Palette" into tPalette
+   TestAssert "palette: a substack", tPalette is among the lines of the substacks of stack tStack
+   TestAssert "palette: the picture's size", the width of stack tPalette & "x" & the height of stack tPalette is "64x48"
+   TestAssert "palette: its picture", the number of images of card 1 of stack tPalette is 1
+   TestAssert "palette: two buttons", the number of buttons of card 1 of stack tPalette is 2
+   TestAssert "palette: button rectangle", the rect of button 2 of card 1 of stack tPalette is "0,16,16,32"
+   TestAssert "palette: message", the uHCMessage of button 1 of card 1 of stack tPalette is "hcPaletteTest 3," && quote & "a,b" & quote
+
+   set the script of stack tStack to "on hcPaletteTest p1, p2" & return & \
+      "set the uPaletteParams of me to p1 & slash & p2" & return & "end hcPaletteTest"
+   put the defaultStack into tOldDefault
+   set the defaultStack to tStack
+   send "mouseUp" to button 1 of card 1 of stack tPalette
+   TestAssert "palette: a message to the card", the uPaletteParams of stack tStack is "3/a,b"
+   TestAssert "palette: hilited button", the uHCHilitedButton of stack tPalette is 1
+   send "mouseUp" to button 2 of card 1 of stack tPalette
+   TestAssert "palette: a command", the uPaletteSet of stack tStack is 5
+   TestAssert "palette: hilited button follows", the uHCHilitedButton of stack tPalette is 2
+   set the defaultStack to tOldDefault
+
+   set the enabledButton_2 of stack tPalette to false
+   TestAssert "palette: enabledButton_n", not the enabled of button 2 of card 1 of stack tPalette
+   TestAssert "palette: enabledButton_n reads", the enabledButton_2 of stack tPalette is false
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportPalettes

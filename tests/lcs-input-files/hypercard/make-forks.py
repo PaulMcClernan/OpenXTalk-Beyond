@@ -27,7 +27,8 @@ forks/Pictures.rsrc         PICT 300 "Colour" (version 2: colour shapes, an
                             8-bit PackBitsRect, a 32-bit DirectBitsRect, a
                             BitsRect and a line) and PICT 301 (version 1,
                             unnamed: an oval and a PackBitsRect), drawn as
-                            the test expects pixel by pixel
+                            the test expects pixel by pixel, and PLTE 300
+                            "Test Palette" on PICT 300 with two buttons
 forks/TestCardsBackgrounds.applesingle
                             ../TestCardsBackgrounds.stack and the fork in one
                             AppleSingle file, named "Synthetic Stack"
@@ -177,6 +178,20 @@ def pict_v1():
     return struct.pack(">H", 2 + len(body)) + body
 
 
+def plte(pict_id, origin, buttons):
+    """buttons: [((top, left, bottom, right), message)]; the rectangles are
+    in the picture's coordinates, origin its frame's (v, h)"""
+    out = struct.pack(">HHIh", 0, 0x0806, 1, pict_id) + struct.pack(">hh", *origin)
+    out += b"\0" * 8 + struct.pack(">H", len(buttons))
+    for (top, left, bottom, right), message in buttons:
+        raw = message.encode("mac_roman")
+        entry = rect(top, left, bottom, right) + b"\0\0" + bytes([len(raw)]) + raw
+        if len(entry) % 2:
+            entry += b"\0"
+        out += entry
+    return out
+
+
 def resource_fork(resources):
     """resources: [(type, id, name or None, data)], grouped by type in order"""
     data = b""
@@ -281,6 +296,10 @@ def main():
     pictures = resource_fork([
         ("PICT", 300, "Colour", pict_v2()),
         ("PICT", 301, None, pict_v1()),
+        ("PLTE", 300, "Test Palette", plte(300, (0, 0), [
+            ((0, 0, 16, 16), '  hcPaletteTest 3, "a,b"'),
+            ((16, 0, 32, 16), '  set the uPaletteSet of this stack to 5'),
+        ])),
     ])
     files = {
         "Synthetic.rsrc": fork,

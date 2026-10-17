@@ -169,6 +169,7 @@ protected:
     
     friend class MCHcstak;
     friend class MCHccard;
+    friend class MCHcplte;
     
 	Window window;
 	MCCursorRef cursor;
