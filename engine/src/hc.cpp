@@ -40,6 +40,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "hc.h"
 #include "osspec.h"
 #include "hcpict.h"
+#include "hcnotes.h"
 #include "dispatch.h"
 
 #include "exec-interface.h"
@@ -47,6 +48,9 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "globals.h"
 
 static uint4 maxid;
+// The HyperCard instruments (hcnotes.h) the stack's scripts name, a bit
+// each, gathered by convert_script
+static uint32_t s_hc_instruments;
 static uint4 version;
 
 static uint2 iconx, icony;
@@ -435,6 +439,7 @@ static char *convert_script(const char *string)
 {
 	if (!*string)
 		return NULL;
+	s_hc_instruments |= MCHcInstrumentsNamedIn(string);
 
 	const uint1 *sptr = (const uint1 *)string;
 	uint2 conversions = 0;
@@ -4086,6 +4091,41 @@ MCStack *MCHcstak::build()
 		aptr->appendto(sptr->aclips);
 		delete sndptr;
 	}
+	// HyperCard played boing, harpsichord and flute from its own resource
+	// fork, so stacks name them without carrying them. A stack whose
+	// scripts name one, and that has no sound of that name, gets a
+	// synthesised one after its own sounds.
+	for (int i = 0; i < kHCInstrumentCount; i++)
+	{
+		if ((s_hc_instruments & (1u << i)) == 0)
+			continue;
+		MCNewAutoNameRef t_name;
+		if (!MCNameCreateWithNativeChars((const char_t *)MCHcInstrumentName(i), strlen(MCHcInstrumentName(i)), &t_name) ||
+		    sptr->getobjname(CT_AUDIO_CLIP, *t_name) != NULL)
+			continue;
+		int16_t *t_samples;
+		uint32_t t_count, t_rate;
+		if (!MCHcSynthInstrument(i, t_samples, t_count, t_rate))
+			continue;
+		MCAudioClip *aptr = new (nothrow) MCAudioClip;
+		if (aptr != NULL)
+		{
+			aptr->setmono16(t_samples, t_count, t_rate);
+			aptr->setname(*t_name);
+			aptr->setparent(sptr);
+			aptr->appendto(sptr->aclips);
+			// marked, so that `play` gives it HyperCard's notes
+			MCAutoArrayRef t_set;
+			if (MCArrayCreateMutable(&t_set) &&
+			    MCArrayStoreValue(*t_set, false, MCNAME("source"), MCSTR("synthesised")))
+			{
+				MCExecContext ctxt(aptr, nil, nil);
+				aptr->SetCustomPropertiesElement(ctxt, MCNAME("uHyperCard"), *t_set);
+			}
+			hcstat_append("Added HyperCard's \"%s\" sound (synthesised) for the scripts that play it", MCHcInstrumentName(i));
+		}
+		delete[] t_samples;
+	}
 	if (t_icon_group != NULL || t_cursor_group != NULL)
 		hc_report_id_clashes(sptr, t_icon_group, t_cursor_group);
 	// Icon and cursor ids never raised maxid, so a stack whose icons have
@@ -4102,6 +4142,7 @@ MCStack *MCHcstak::build()
 IO_stat hc_import(MCStringRef name, IO_handle stream, MCStack *&sptr)
 {
 	maxid = 0;
+	s_hc_instruments = 0;
 	MCValueAssign(MChcstat, kMCEmptyString);
 
     char* t_cname;

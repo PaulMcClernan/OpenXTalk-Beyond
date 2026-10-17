@@ -349,6 +349,60 @@ void MCAudioClip::convert_ulintoslin()
 	format = AF_SLINEAR;
 }
 
+bool MCAudioClip::getmono16(int16_t *&r_samples, uint32_t &r_count, uint32_t &r_rate)
+{
+	if (samples == NULL || nchannels == 0 || rate == 0)
+		return false;
+	// The engine keeps 16-bit samples signed big-endian when the format is
+	// AF_SLINEAR, little-endian (as a WAV file's) when AF_ULINEAR
+	uint32_t t_width = format == AF_MULAW ? 1 : swidth;
+	if (t_width != 1 && t_width != 2)
+		return false;
+	uint32_t t_frame = t_width * nchannels;
+	uint32_t t_count = size / t_frame;
+	int16_t *t_samples = new (nothrow) int16_t[t_count > 0 ? t_count : 1];
+	if (t_samples == NULL)
+		return false;
+	const uint1 *t_bytes = (const uint1 *)samples;
+	for (uint32_t i = 0; i < t_count; i++)
+	{
+		const uint1 *t_at = &t_bytes[i * t_frame];
+		int16_t t_value;
+		if (format == AF_MULAW)
+			t_value = ulaw_table[t_at[0]];
+		else if (t_width == 1)
+			t_value = (int16_t)((format == AF_ULINEAR ? (int)t_at[0] - 128 : (int)(int1)t_at[0]) << 8);
+		else if (format == AF_ULINEAR)
+			t_value = (int16_t)(t_at[0] | (t_at[1] << 8));
+		else
+			t_value = (int16_t)((t_at[0] << 8) | t_at[1]);
+		t_samples[i] = t_value;
+	}
+	r_samples = t_samples;
+	r_count = t_count;
+	r_rate = rate;
+	return true;
+}
+
+void MCAudioClip::setmono16(const int16_t *p_samples, uint32_t p_count, uint32_t p_rate)
+{
+	uint1 *t_bytes = new (nothrow) uint1[p_count * 2 > 0 ? p_count * 2 : 1];
+	if (t_bytes == NULL)
+		return;
+	for (uint32_t i = 0; i < p_count; i++)
+	{
+		t_bytes[i * 2] = (uint1)(((uint16_t)p_samples[i]) >> 8);
+		t_bytes[i * 2 + 1] = (uint1)(p_samples[i] & 0xFF);
+	}
+	delete[] samples;
+	samples = (int1 *)t_bytes;
+	size = p_count * 2;
+	format = AF_SLINEAR;
+	nchannels = 1;
+	swidth = 2;
+	rate = (uint2)p_rate;
+}
+
 Boolean MCAudioClip::isdisposable()
 {
 	return disposable;

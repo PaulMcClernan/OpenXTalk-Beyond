@@ -3303,7 +3303,9 @@ void MCMultimediaExecStopPlayingObject(MCExecContext& ctxt, MCObject *p_object);
 void MCMultimediaExecStopRecording(MCExecContext& ctxt);
 
 void MCMultimediaExecPrepareVideoClip(MCExecContext& ctxt, MCStack *p_target, int p_chunk_type, MCStringRef p_clip, bool p_looping, MCPoint *p_at, MCStringRef p_options);
-void MCMultimediaExecPlayAudioClip(MCExecContext& ctxt, MCStack *p_target, int p_chunk_type, MCStringRef p_clip, bool p_looping);
+// OXT-Beyond: p_notes (HyperCard's notes, hcnotes.h), when not nil or
+// empty, are played with the clip at p_tempo
+void MCMultimediaExecPlayAudioClip(MCExecContext& ctxt, MCStack *p_target, int p_chunk_type, MCStringRef p_clip, bool p_looping, MCStringRef p_notes = nil, double p_tempo = 0.0);
 void MCMultimediaExecPlayVideoClip(MCExecContext& ctxt, MCStack *p_target, int p_chunk_type, MCStringRef p_clip, bool p_looping, MCPoint *p_at, MCStringRef p_options);
 void MCMultimediaExecPlayStopAudio(MCExecContext& ctxt);
 void MCMultimediaExecPlayPlayerOperation(MCExecContext& ctxt, MCStack *p_target, int p_chunk_type, MCStringRef p_player, int p_player_chunk_type, int p_operation);

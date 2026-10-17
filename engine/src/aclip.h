@@ -110,6 +110,12 @@ public:
 	Boolean issupported();
 	void setdisposable();
 	void setlooping(Boolean loop);
+	// OXT-Beyond: the clip's first channel as 16-bit samples (r_samples
+	// freed with delete[]), and samples given back the same way, kept as
+	// 16-bit big-endian mono, as the HyperCard importer keeps its sounds
+	// (hcnotes.h's HyperCard instruments and notes)
+	bool getmono16(int16_t *&r_samples, uint32_t &r_count, uint32_t &r_rate);
+	void setmono16(const int16_t *p_samples, uint32_t p_count, uint32_t p_rate);
 	Boolean import(MCStringRef fname, IO_handle stream);
 	Boolean open_audio();
 	Boolean play();
