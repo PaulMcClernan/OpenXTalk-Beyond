@@ -444,11 +444,12 @@ on TestHyperCardImportPlayNotes
    put _PlayLength("boing") into tPlain
    put _PlayLength("boing", "c4q d e r e.") into tMelody
    if tMelody is not empty then
-      -- four quarters and a dotted eighth at 120 a minute: 2.375 seconds,
+      -- four quarters and a dotted quarter (the last "e" is the note E,
+      -- which keeps the quarter it carries) at 120 a minute: 2.75 seconds,
       -- measured against the boing alone (0.8 seconds) so that the clock
       -- the messages are timed by does not matter
       TestAssert "notes: the melody's length (boing" && tPlain & ", melody" && tMelody & ")", \
-         abs((tMelody - tPlain) - (2.375 - 0.8)) < 0.1
+         abs((tMelody - tPlain) - (2.75 - 0.8)) < 0.1
    else
       -- (where it plays, its length is not measured here: an engine
       -- without an audio device can report it playing for good)
