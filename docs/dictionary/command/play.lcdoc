@@ -106,7 +106,7 @@ C. Each note is a letter `a` to `g` (or `r` for a rest), an optional `#`
 or `b`, an optional octave (`c4` is middle C) and an optional duration
 (`w`, `h`, `q`, `e`, `s`, `t` or `x`, dotted with `.` or a triplet with
 `3`), or a MIDI note number; the tempo is in quarter notes a minute
-(120 when it is left out). With any other sound the tempo and the notes
+(100 when it is left out, as in HyperCard). With any other sound the tempo and the notes
 are ignored, as in LiveCode.
 
 > *Note:* The type of audio and video clip formats supported

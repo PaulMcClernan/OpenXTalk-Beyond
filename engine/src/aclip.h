@@ -98,6 +98,10 @@ public:
 	{
 		return loudness;
 	}
+	void setloudness(uint2 p_loudness)
+	{
+		loudness = p_loudness;
+	}
 	void init();
 	Exec_stat set(char *d);
 	void convert_mulawtolin16();

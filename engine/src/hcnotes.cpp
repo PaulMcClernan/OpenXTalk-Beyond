@@ -21,9 +21,10 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 // second, x sixty-fourth), dotted (.) or a triplet (3); or a MIDI note
 // number (60 is middle C) with an optional duration. A note without an
 // octave or a duration takes the last one given; the first defaults to
-// octave 4 and a quarter note. The tempo is in quarter notes a minute;
-// HyperCard's default, 120, is taken from the guide's description and has
-// not been checked against HyperCard itself.
+// octave 4 and a quarter note. The tempo is taken to be quarter notes a
+// minute, and it is 100 when left out ("If you don't specify a tempo,
+// tempo 100 is assumed", Apple's HyperTalk Beginner's Guide, 1989, p. 41);
+// neither has been checked against HyperCard itself.
 
 #include "hcnotes.h"
 
@@ -301,7 +302,7 @@ bool MCHcRenderNotes(const int16_t *p_source, uint32_t p_count, uint32_t p_rate,
 	if (p_notes == NULL || p_rate == 0)
 		return false;
 	if (!(p_tempo > 0.0))
-		p_tempo = 120.0;
+		p_tempo = 100.0;
 	if (p_tempo > 2000.0)
 		p_tempo = 2000.0;
 	double t_quarter = 60.0 / p_tempo * p_rate;

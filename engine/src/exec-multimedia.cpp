@@ -729,6 +729,7 @@ void MCMultimediaExecPlayAudioClip(MCExecContext& ctxt, MCStack *p_target, int p
 			{
 				t_clip -> setmono16(t_melody, t_length, t_rate);
 				t_clip -> setname(MCacptr -> getname());
+				t_clip -> setloudness(MCacptr -> getloudness());
 				t_clip -> setdisposable();
 				if (MCacptr -> isdisposable())
 					delete MCacptr;

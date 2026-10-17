@@ -52,7 +52,7 @@ bool MCHcSynthInstrument(int p_index, int16_t *&r_samples, uint32_t &r_count, ui
 // Play p_notes (HyperCard's notation: "c4q d e g#5h. r 60e", see
 // hcnotes.cpp) with the sound p_source (p_count mono samples at p_rate,
 // taken to sound middle C) at p_tempo quarter notes a minute (HyperCard's
-// 120 when p_tempo is not above 0). r_samples (freed with delete[]) holds
+// 100 when p_tempo is not above 0). r_samples (freed with delete[]) holds
 // r_count samples at p_rate. False if p_notes holds no note.
 bool MCHcRenderNotes(const int16_t *p_source, uint32_t p_count, uint32_t p_rate,
                      const char *p_notes, double p_tempo,
