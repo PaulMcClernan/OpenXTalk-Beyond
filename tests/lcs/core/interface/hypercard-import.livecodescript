@@ -472,7 +472,10 @@ on TestHyperCardImportPlayNotes
       play "flute" tempo "fast" "c"
    catch tError
    end try
-   TestAssert "notes: not evaluated outside imports", tError is empty and the result is "no data in audioClip"
+   -- (only the error is asserted: what the play then reports differs, the
+   -- web engine looking for a file called "flute" where desktops answer
+   -- "no data in audioClip")
+   TestAssert "notes: not evaluated outside imports", tError is empty
    delete stack tOther
 end TestHyperCardImportPlayNotes
 
