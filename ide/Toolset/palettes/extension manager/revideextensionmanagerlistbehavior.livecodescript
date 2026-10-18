@@ -193,8 +193,10 @@ on launchExtensionSampleStack pParam
    -- changed because pExtensionId was NOT an Extension Identifier,
    -- it was recieving a filePath instead
    if there is a file pParam then
-      go stack pParam
-      -- revIDEExtensionLaunchSampleStack pParam
+      -- OXT-Beyond: through the launcher, not "go stack": it empties the
+      -- opened sample's file name, so saving it asks for a new place
+      -- rather than overwriting the copy inside the installed extension
+      revIDEExtensionLaunchSampleStack pParam
    else
       local tSourceFolder, tSourceFile
       put revIDEExtensionProperty(pParam, "install_path") into tSourceFolder
