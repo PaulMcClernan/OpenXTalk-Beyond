@@ -38,6 +38,8 @@ on preOpenStack
          set the left of wd "revMenuBar" to the cTweakMenuBarL of stack "revPreferences"
       end if
    end if
+   -- OXT-Beyond: in the web IDE the menu bar spans the top of the page
+   if revEnvironmentIsWeb() then send "revWebIDEFitMenubar" to this stack in 2 ticks
    -----end palette positioning
    
    send "tApplyGridSetting" to this stack in 1 millisecond  --tp 23-12, set grid
@@ -669,6 +671,8 @@ on layoutMenu
    set the topleft of me to tTopLeft
    unlock messages
    updateButtonState
+   -- OXT-Beyond: in the web IDE the menu bar spans the top of the page
+   if revEnvironmentIsWeb() then revWebIDEFitMenubar
    unlock screen
 end layoutMenu
 
@@ -877,7 +881,13 @@ end revFullBar
 --pull in graphics for toolbar buttons
 function revMenubarButtonNameToIconPath pName, pStyle
    local tPath, tIcon
-   put revIDEPaletteResourcePath("images/") into tPath
+   -- OXT-Beyond: the web IDE's toolbar has its own flat icons, in every
+   -- state (images-web; its README says how they are made)
+   if revEnvironmentIsWeb() then
+      put revIDEPaletteResourcePath("images-web/") into tPath
+   else
+      put revIDEPaletteResourcePath("images/") into tPath
+   end if
    replace " " with "-" in pName
    put tPath & toLower(pName) into tIcon
    if pStyle is not empty then
@@ -2152,6 +2162,9 @@ end revMenubarPopupContextualMenu
 
 private function modifyMenu pMenuName, pMenu
    if the last char of pMenu is not return then put return after pMenu
+   -- OXT-Beyond: the web IDE leaves out what a browser cannot do
+   -- (revWebIDELibrary)
+   if revEnvironmentIsWeb() then return revWebIDEMenu(pMenuName, pMenu)
    return pMenu
 end modifyMenu
 
@@ -2463,6 +2476,10 @@ on revMenubarFileMenuPick pWhich
          break
       case "Save As..."
          revIDEActionSaveStackAs the long id of the topStack
+         break
+      -- OXT-Beyond: in the web IDE only (revWebIDEMenu)
+      case "Download Stack"
+         revWebIDEDownloadStack the long id of the topStack
          break
       case "Save As Standalone Application..."
          revIDESaveAsStandalone the long id of the topStack
@@ -2969,6 +2986,11 @@ on revMenubarHelpMenuPick pWhich
    local tPick
    put item 1 of pWhich into tPick
    switch tPick
+      -- OXT-Beyond: in the web IDE only (revWebIDEMenu): Home, its welcome
+      -- stack
+      case "Welcome to OXT-Beyond"
+         revWebIDEShowHome
+         break
       case "Dictionary"
          if the shiftkey is down then revIDEDocumentationLoad "API", "Script"
          else if the shiftkey is up then send tNewDictionaryDisplay to this stack 
@@ -3154,6 +3176,8 @@ on tMenuBar_AdjustWDSize
    local tRight  --tp 23-12, shorten size of revMenubar, make "Sample Stacks" last button
    put the right of cd btn "Sample Stacks" of cd 1 of wd "revMenuBar" +10 +(the left of wd "revMenuBar") into tRight 
    set the rect of wd "revMenuBar" to the left of wd "revMenubar",the top of wd "revMenuBar",tRight,the bottom of wd "revMenubar"
+   -- OXT-Beyond: in the web IDE the menu bar spans the top of the page
+   if revEnvironmentIsWeb() then revWebIDEFitMenubar
 end tMenuBar_AdjustWDSize
 
 on tApplyGridSetting  --tp 23-12, if grid true then set gridSize
@@ -3222,6 +3246,10 @@ end hConditionalDataGrid
 
 on tOpenNewGuides  --tp 24-12, open user submitted guides
    local tFilePath
+   -- OXT-Beyond: the lessons open in Learn (see revMenubarOpenLearn)
+   if revMenubarOpenLearn("lessons") then
+      exit tOpenNewGuides
+   end if
    set the itemdelimiter to slash
    put item 1 to -3 of the filename of stack "revMenubar" & "/userguides/userguides.oxtstack" into tFilePath
    open stack tFilePath
@@ -3229,6 +3257,10 @@ end tOpenNewGuides
 
 on tOpenAllGuides  --tp 24-12, open 'All Guides' stack
    local tFilePath
+   -- OXT-Beyond: the guides open in Learn (see revMenubarOpenLearn)
+   if revMenubarOpenLearn("guides") then
+      exit tOpenAllGuides
+   end if
    set the itemdelimiter to slash
    put item 1 to -3 of the filename of stack "revMenubar" & "/userguides/allguides.oxtstack" into tFilePath
    open stack tFilePath
@@ -3272,11 +3304,39 @@ on tOpenUnlock  --tp 07-06-2026, 'Unlock and Remove FX'
 end tOpenUnlock
 
 on tOpenDemos  --tp 26-1, open 'Demos' stack
+   -- OXT-Beyond: the examples open in Learn (see revMenubarOpenLearn)
+   if revMenubarOpenLearn("examples") then
+      exit tOpenDemos
+   end if
    set the itemdelimiter to slash
    put item 1 to -5 of the filename of stack "revMenubar" & slash & "Resources" & slash & "Examples" & slash & "demos.oxtstack" into tFilePath
    set the itemdelimiter to ","
    open stack tFilePath
 end tOpenDemos
+
+-- OXT-Beyond: Learn (palettes/learn) shows the lessons, the guides and the
+-- examples in one window, in the look of the web tour, and reads the
+-- classic stacks without changing them. It opens at pSection ("lessons",
+-- "guides" or "examples") and returns true; with the Option (Alt) key
+-- down, or when Learn is missing or fails, it returns false and the
+-- classic stack opens as it always did.
+private function revMenubarOpenLearn pSection
+   local tPath, tError
+   if the optionKey is down then
+      return false
+   end if
+   set the itemDelimiter to slash
+   put item 1 to -3 of the filename of stack "revMenubar" & "/learn/revlearn.livecodescript" into tPath
+   if there is no file tPath then
+      return false
+   end if
+   try
+      dispatch "revLearnShow" to stack tPath with pSection
+   catch tError
+      return false
+   end try
+   return it is "handled"
+end revMenubarOpenLearn
 
 on tMenuBar_WDdecorations  --tp 24-1, show revmenubar as standard window
    local tOldTop, tOldLeft, tCorrectMacOS

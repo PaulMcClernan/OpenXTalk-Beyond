@@ -321,6 +321,7 @@ public:
 private:
     
 	friend class MCHcbmap;
+	friend class MCHcpict;
 	
 	MCImageRep *m_rep;
 	// IM-2013-11-05: [[ RefactorGraphics ]] Resampled image rep used to store cached

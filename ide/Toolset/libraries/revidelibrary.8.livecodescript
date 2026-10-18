@@ -2505,6 +2505,9 @@ function revIDEPlatform
    else if the platform begins with "linux" then return "linux"
    else if the platform begins with "iphone" then return "ios"
    else if the platform begins with "android" then return "android"
+   -- OXT-Beyond: the web IDE (whose platform is HTML5) wears the Linux
+   -- theme, as revEnvironmentPlatform calls its platform Linux
+   else if revEnvironmentIsWeb() then return "linux"
    return __revIDEError("Unknown Platform")
 end revIDEPlatform
 
@@ -4566,6 +4569,15 @@ on revIDEEnsureOnscreen pStackName
    # Ensure the stack exists
    if there is not a stack pStackName then return __revIDEError("No such stack:" && pStackName)
    
+   -- OXT-Beyond: in the web IDE the page is the screen, and no window
+   -- manager keeps a window on it: a palette wider or taller than the page
+   -- is made to fit, below the menu bar (revWebIDELibrary)
+   if revEnvironmentIsWeb() then
+      revWebIDEKeepOnPage pStackName
+      revIDESetPaletteRectPreference pStackName
+      exit revIDEEnsureOnscreen
+   end if
+
    local tScreenRect
    put line (the screen of stack pStackName) of the working screenrects into tScreenRect
    
@@ -6936,6 +6948,49 @@ function revIDEStackScreenLoc pStackName, pWorking
 end revIDEStackScreenLoc
 
 /*
+Summary: Move an IDE stack's window whole onto the screen it is on
+
+Parameters:
+pStackName (string): The name of a stack
+
+Description:
+Moves the window, its title bar included, into the working area of its
+screen (the screen less the taskbar, the Dock and the menu bar) when part of
+it is outside: a palette left where a screen no longer is, or a dialog that
+opened above the top of the screen. A window larger than the area goes to
+its top left. A window that fits is not moved, and its size never changes.
+
+The back script calls it as each IDE stack opens (preOpenStack), and the
+palettes and the error display when the screens change (ideDesktopChanged).
+OXT-Beyond: the handler had gone from this library while those calls stayed,
+so each of them stopped on "can't find handler" and nothing was kept on the
+screen.
+*/
+on revIDEEnsureOnScreen pStackName
+   local tArea, tRect, tFrame, tTitle, tEdge, tLeft, tTop
+   -- A hidden stack is left where it is: some are opened off the screen on
+   -- purpose, to draw in
+   if pStackName is empty or there is not a stack pStackName or not the visible of stack pStackName then
+      exit revIDEEnsureOnScreen
+   end if
+   put revIDEStackScreenRect(pStackName, true) into tArea
+   if item 3 of tArea <= item 1 of tArea or item 4 of tArea <= item 2 of tArea then
+      exit revIDEEnsureOnScreen
+   end if
+   put the rect of stack pStackName into tRect
+   -- The window's frame: its title bar above the card and a border round
+   -- it, at least what the platforms draw while it has no window yet
+   put the effective rect of stack pStackName into tFrame
+   put max(32, item 2 of tRect - item 2 of tFrame) into tTitle
+   put max(8, item 1 of tRect - item 1 of tFrame) into tEdge
+   put max(item 1 of tArea + tEdge, min(item 1 of tRect, item 3 of tArea - tEdge - (item 3 of tRect - item 1 of tRect))) into tLeft
+   put max(item 2 of tArea + tTitle, min(item 2 of tRect, item 4 of tArea - tEdge - (item 4 of tRect - item 2 of tRect))) into tTop
+   if tLeft is not item 1 of tRect or tTop is not item 2 of tRect then
+      set the topLeft of stack pStackName to tLeft, tTop
+   end if
+end revIDEEnsureOnScreen
+
+/*
 Summary: Get the screenRect for a stack based on the screen the stack is on
 
 Parameters:
@@ -7125,6 +7180,10 @@ on revIDEActionOpenStack
       # Check the stack exists
       if there is not a file tStackFilePath then exit revIDEActionOpenStack
       
+      -- OXT-Beyond: the web IDE keeps the stack in the browser's storage,
+      -- where saving it keeps it (revWebIDELibrary)
+      if revEnvironmentIsWeb() then put revWebIDEKeepFile(tStackFilePath) into tStackFilePath
+      
       # Open the stack
       -- tperry 21-1-25 -- caution prompt when opening stacks
       if the cDontUseCaution of stack "revPreferences" is true then
@@ -7161,8 +7220,11 @@ Description:
 HyperCard stacks have no file extension and, outside macOS, no file
 type, so the dialog lists all files; on macOS it lists the files of type
 STAK first. The stack is imported by <revIDEImportHyperCardStack>.
+A Mac disk image (a floppy or CD image with an HFS volume) can be chosen
+too: a second dialog lists the stacks on it, and the one chosen is
+imported with its resource fork by <revIDEImportHyperCardFromDiskImage>.
 
-References: revIDEImportHyperCardStack (command), revIDEActionOpenStack (command)
+References: revIDEImportHyperCardStack (command), revIDEImportHyperCardFromDiskImage (command), revIDEActionOpenStack (command)
 
 Tags: ide
 */
@@ -7174,13 +7236,81 @@ on revIDEActionImportHyperCardStack
    else
       put __answerGetTypeString("all") into tTypesA[1]
    end if
-   revIDEAnswerFile "", revIDELocalise("Please select a HyperCard stack"), "", tTypesA, true
+   revIDEAnswerFile "", revIDELocalise("Please select a HyperCard stack or a disk image"), "", tTypesA, true
 
    local tFilePath
    put line 1 of the result into tFilePath
    if tFilePath is empty or there is not a file tFilePath then exit revIDEActionImportHyperCardStack
+   -- OXT-Beyond: a disk image holding stacks
+   if revHyperCardIsDiskImage(tFilePath) then
+      revIDEImportHyperCardFromDiskImage tFilePath
+      exit revIDEActionImportHyperCardStack
+   end if
    revIDEImportHyperCardStack tFilePath
 end revIDEActionImportHyperCardStack
+
+/*
+Imports a HyperCard stack from a Mac disk image, with its resource fork.
+
+pImage (String): The path of the disk image: a raw HFS volume (a floppy
+image), a DiskCopy 4.2 image, or a disk or CD image with an Apple
+partition map (as Toast writes).
+
+pStackPath (String): The stack's HFS path on the volume, for example
+"HyperStacks:Games:Home", as revHyperCardImageStacks lists them. When
+empty, a dialog lists the stacks on the image to choose from.
+
+Example:
+revIDEImportHyperCardFromDiskImage "/Users/me/HyperCard-Stacks.img", "HyperStacks:Home"
+
+Returns: Empty, or an error when the image cannot be read or the import
+fails.
+
+Description:
+The stack's data fork and resource fork are copied out of the image to a
+temporary folder, imported from there by <revIDEImportHyperCardStack>
+(with messages locked, as it does), and deleted. The image is only read.
+HFS+ volumes are not read.
+
+References: revIDEImportHyperCardStack (command), revIDEActionImportHyperCardStack (command)
+
+Tags: ide
+*/
+on revIDEImportHyperCardFromDiskImage pImage, pStackPath
+   local tError, tFolder, tPath, tResult
+
+   if there is not a file pImage then return __revIDEError("Specified file does not exist")
+   if pStackPath is empty then
+      put revHyperCardImageChoose(pImage) into pStackPath
+      put the result into tError
+      if tError is empty and pStackPath is empty then return empty
+   end if
+   if tError is empty then
+      put the temporary folder & "/oxt-hypercard-" & the milliseconds into tFolder
+      create folder tFolder
+      put revHyperCardImageExtract(pImage, pStackPath, tFolder) into tPath
+      put the result into tError
+   end if
+   if tError is not empty then
+      answer error revIDELocalise("There was a problem reading the disk image:") && pImage & cr & tError
+      if tFolder is not empty then __revIDEDeleteHyperCardCopy tFolder
+      return __revIDEError(tError)
+   end if
+
+   revIDEImportHyperCardStack tPath
+   put the result into tResult
+   __revIDEDeleteHyperCardCopy tFolder
+   return tResult
+end revIDEImportHyperCardFromDiskImage
+
+-- Delete the folder revIDEImportHyperCardFromDiskImage copied a stack to
+private command __revIDEDeleteHyperCardCopy pFolder
+   local tFile
+   repeat for each line tFile in files(pFolder)
+      delete file (pFolder & slash & tFile)
+   end repeat
+   delete folder pFolder
+end __revIDEDeleteHyperCardCopy
 
 /*
 Imports a HyperCard stack without running its scripts.
@@ -7238,7 +7368,8 @@ on revIDEImportHyperCardStack pFilePath
 end revIDEImportHyperCardStack
 
 # The tests hc_import (engine/src/hc.cpp) makes of the first bytes of a
-# file: a HyperCard data fork (STAK at offset 4), a MacBinary file whose
+# file: a HyperCard data fork (STAK at offset 4), an AppleSingle file
+# (magic 00 05 16 00, both forks in one file), a MacBinary file whose
 # type is STAK, or a BinHex file.
 private function __revIDEIsHyperCardFile pFilePath
    local tHeader
@@ -7249,6 +7380,10 @@ private function __revIDEIsHyperCardFile pFilePath
    close file pFilePath
 
    if byte 5 to 8 of tHeader is "STAK" then return true
+   -- OXT-Beyond: AppleSingle; the engine checks that its data fork is a stack
+   if byte 1 to 4 of tHeader is (numToByte(0) & numToByte(5) & numToByte(22) & numToByte(0)) then
+      return true
+   end if
    if byteToNum(byte 1 of tHeader) is 0 and byteToNum(byte 75 of tHeader) is 0 \
          and byteToNum(byte 83 of tHeader) is 0 then
       return byte 66 to 69 of tHeader is "STAK"
@@ -8285,6 +8420,10 @@ on revIDEActionSaveStackAs pStackID, pSubstackOnly
       revIDESetEdited tShortName
       return "Cancelled"
    end if
+   
+   -- OXT-Beyond: the web IDE keeps the stack in the browser's storage, not
+   -- in the downloads folder that ask file answers (revWebIDELibrary)
+   if revEnvironmentIsWeb() then get revWebIDESavePath(it)
    
    # MacOS Auotmatically appends the filetype to the filename
    local tFilePath

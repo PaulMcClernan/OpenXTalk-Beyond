@@ -392,3 +392,462 @@ on TestHyperCardImportGame
    TestAssert "game: a picture on every card", tPictures is 67
    _Close tStack
 end TestHyperCardImportGame
+
+on TestHyperCardImportBuiltinSounds
+   -- HyperCard played boing, harpsichord and flute from its own resource
+   -- fork: a stack whose scripts name one (TestV1 says play "Boing") gets
+   -- a synthesised one, and a stack that names none gets none
+   local tStack
+   put _Import("TestV1") into tStack
+   TestAssert "built-in sounds: boing", there is an audioClip "boing" of stack tStack
+   TestAssert "built-in sounds: only the one named", the number of audioClips of stack tStack is 1
+   local tSet
+   put the customProperties["uHyperCard"] of audioClip "boing" of stack tStack into tSet
+   TestAssert "built-in sounds: marked as synthesised", tSet["source"] is "synthesised"
+   TestAssert "built-in sounds: logged", "Added HyperCard's" && quote & "boing" & quote is in the hcImportStat
+   _Close tStack
+
+   put _Import("TestCardsBackgrounds") into tStack
+   TestAssert "built-in sounds: none unnamed", the number of audioClips of stack tStack is 0
+   _Close tStack
+end TestHyperCardImportBuiltinSounds
+
+-- Play pSound (with pNotes, when given) and return how long after the
+-- play the playStopped message is due, when there is no audio device to
+-- play it on and the engine sends it when the sound would have ended;
+-- empty if the sound is playing. Pending playStopped messages from
+-- earlier plays are cancelled first.
+private function _PlayLength pSound, pNotes
+   local tLine, tStart
+   repeat for each line tLine in the pendingMessages
+      if item 3 of tLine is "playStopped" then cancel item 1 of tLine
+   end repeat
+   put the long seconds into tStart
+   if pNotes is empty then
+      play pSound
+   else
+      play pSound tempo 120 pNotes
+   end if
+   repeat for each line tLine in the pendingMessages
+      if item 3 of tLine is "playStopped" then return item 2 of tLine - tStart
+   end repeat
+   return empty
+end _PlayLength
+
+on TestHyperCardImportPlayNotes
+   -- `play "sound" tempo t "notes"` plays the notes with a sound from a
+   -- HyperCard import (here the synthesised boing of a stack with no fork)
+   local tStack, tError, tOther
+   put _Import("TestV1") into tStack
+   set the defaultStack to tStack
+   local tPlain, tMelody
+   put _PlayLength("boing") into tPlain
+   put _PlayLength("boing", "c4q d e r e.") into tMelody
+   if tMelody is not empty then
+      -- four quarters and a dotted quarter (the last "e" is the note E,
+      -- which keeps the quarter it carries) at 120 a minute: 2.75 seconds,
+      -- measured against the boing alone (0.8 seconds) so that the clock
+      -- the messages are timed by does not matter
+      TestAssert "notes: the melody's length (boing" && tPlain & ", melody" && tMelody & ")", \
+         abs((tMelody - tPlain) - (2.75 - 0.8)) < 0.1
+   else
+      -- (where it plays, its length is not measured here: an engine
+      -- without an audio device can report it playing for good)
+      TestAssert "notes: the melody plays", "boing" is in the sound
+   end if
+   play stop
+   try
+      play "boing" tempo "fast" "c"
+   catch tError
+   end try
+   TestAssert "notes: the tempo is evaluated", tError is not empty
+   _Close tStack
+
+   -- anywhere else they are not evaluated, as before
+   put "PlayNotesOther" & the milliseconds into tOther
+   create invisible stack tOther
+   set the defaultStack to tOther
+   put empty into tError
+   try
+      play "flute" tempo "fast" "c"
+   catch tError
+   end try
+   -- (only the error is asserted: what the play then reports differs, the
+   -- web engine looking for a file called "flute" where desktops answer
+   -- "no data in audioClip")
+   TestAssert "notes: not evaluated outside imports", tError is empty
+   delete stack tOther
+end TestHyperCardImportPlayNotes
+
+-- The resource fork. forks/ holds synthetic forks written by
+-- lcs-input-files/hypercard/make-forks.py (ICON 128 "Synth Icon", CURS 129
+-- "Synth Cursor", snd 130 "Synth Beep", and a PICT, an XCMD and an XFCN
+-- the importer only logs); the tests put them beside a copy of a stack the
+-- way each tool or file system leaves them.
+
+-- A new, empty folder for one test, with a slash at the end
+private function _NewFolder pName
+   local tFolder
+   put the temporary folder & "/hc-" & pName & "-" & the milliseconds & "/" into tFolder
+   create folder tFolder
+   return tFolder
+end _NewFolder
+
+private command _CopyInput pInput, pTo
+   put url ("binfile:" & TestGetInputFile("hypercard/" & pInput)) into url ("binfile:" & pTo)
+end _CopyInput
+
+-- Delete a folder made by _NewFolder, with everything in it
+private command _DeleteFolder pFolder
+   local tFile, tOldFolder
+   put the defaultFolder into tOldFolder
+   set the defaultFolder to pFolder
+   repeat for each line tFile in the files
+      delete file (pFolder & tFile)
+   end repeat
+   repeat for each line tFile in the folders
+      if tFile is not ".." and tFile is not "." then
+         _DeleteFolder pFolder & tFile & "/"
+      end if
+   end repeat
+   set the defaultFolder to tOldFolder
+   delete folder pFolder
+end _DeleteFolder
+
+-- Import pFile and return the stack, which is named after the file
+private function _ImportPath pFile
+   local tError, tStack
+   set the itemDelimiter to slash
+   put the last item of pFile into tStack
+   lock messages
+   try
+      import stack from file pFile
+   catch tError
+   end try
+   unlock messages
+   TestAssert tStack && "imports", tError is empty and there is a stack tStack
+   return tStack
+end _ImportPath
+
+-- What the synthetic fork becomes: an icon, a cursor and a sound
+private command _AssertSyntheticFork pWhat, pStack
+   -- (with HyperCard addressing, the groups the importer makes are
+   -- backgrounds, and their images background images)
+   TestAssert pWhat & ": icon group", there is a bkgnd "HC Icons" of stack pStack
+   TestAssert pWhat & ": icon", the short name of image id 128 of stack pStack is "Synth Icon"
+   TestAssert pWhat & ": icon in its group", the short name of the owner of image id 128 of stack pStack is "HC Icons"
+   TestAssert pWhat & ": cursor", there is an image "Synth Cursor" of bkgnd "HC cursors" of stack pStack
+   -- the hot spot as the importer has always read it: v, h
+   TestAssert pWhat & ": cursor hot spot", the hotSpot of image id 129 of stack pStack is "8,4"
+   TestAssert pWhat & ": sound", there is an audioClip "Synth Beep" of stack pStack
+   TestAssert pWhat & ": externals logged", "Not converting XCMD id   132 " & quote & "PopUpMenu" & quote is in the hcImportStat
+end _AssertSyntheticFork
+
+on TestHyperCardImportMacBinaryResourceFork
+   -- a MacBinary file carries its fork, as it always has
+   local tStack, tData, tFork, tHeader, tFile
+   put url ("binfile:" & TestGetInputFile("hypercard/TestCardsBackgrounds.stack")) into tData
+   put url ("binfile:" & TestGetInputFile("hypercard/forks/Synthetic.rsrc")) into tFork
+   put numToByte(0) & numToByte(19) & "HCMacBinaryForkTest" into tHeader
+   repeat 44 times
+      put numToByte(0) after tHeader
+   end repeat
+   put "STAKWILD" after tHeader
+   repeat 10 times
+      put numToByte(0) after tHeader
+   end repeat
+   put binaryEncode("NN", the number of bytes of tData, the number of bytes of tFork) after tHeader
+   repeat 128 - the number of bytes of tHeader times
+      put numToByte(0) after tHeader
+   end repeat
+   repeat (128 - the number of bytes of tData mod 128) mod 128 times
+      put numToByte(0) after tData
+   end repeat
+   put the temporary folder & "/hypercard-import-fork-test.bin" into tFile
+   put tHeader & tData & tFork into url ("binfile:" & tFile)
+   lock messages
+   import stack from file tFile
+   unlock messages
+   TestAssert "MacBinary with a fork imports", the result is empty
+   put "HCMacBinaryForkTest" into tStack
+   _AssertSyntheticFork "MacBinary", tStack
+   TestAssert "MacBinary: no sidecar named", "Reading the resource fork" is not in the hcImportStat
+   _Close tStack
+   delete file tFile
+end TestHyperCardImportMacBinaryResourceFork
+
+on TestHyperCardImportAppleDouble
+   -- macOS on a FAT, exFAT or SMB volume: "._Name" beside the stack
+   local tFolder, tStack
+   put _NewFolder("appledouble") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Sidecar"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & "._HC Sidecar"
+   put _ImportPath(tFolder & "HC Sidecar") into tStack
+   _AssertSyntheticFork "AppleDouble", tStack
+   TestAssert "AppleDouble: the log names it", \
+      "Reading the resource fork from" && tFolder & "._HC Sidecar (AppleDouble)" is in the hcImportStat
+   TestAssert "AppleDouble: the stack is as before", \
+      the number of cards of stack tStack is 6 and the id of card 1 of stack tStack is 2842
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportAppleDouble
+
+on TestHyperCardImportMacZip
+   -- a zip made on a Mac: __MACOSX/<the same folders>/._Name at its root
+   local tFolder, tStack
+   put _NewFolder("maczip") into tFolder
+   create folder tFolder & "Games"
+   create folder tFolder & "Games/Cards"
+   create folder tFolder & "__MACOSX"
+   create folder tFolder & "__MACOSX/Games"
+   create folder tFolder & "__MACOSX/Games/Cards"
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "Games/Cards/HC Zipped"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & "__MACOSX/Games/Cards/._HC Zipped"
+   put _ImportPath(tFolder & "Games/Cards/HC Zipped") into tStack
+   _AssertSyntheticFork "__MACOSX", tStack
+   TestAssert "__MACOSX: the log names it", \
+      "__MACOSX/Games/Cards/._HC Zipped (AppleDouble)" is in the hcImportStat
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportMacZip
+
+on TestHyperCardImportRawForks
+   -- a fork saved alone: "Name.rsrc", Basilisk II's ".rsrc/Name" and
+   -- netatalk's ".AppleDouble/Name"
+   local tFolder, tStack
+   put _NewFolder("rsrc") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Raw"
+   _CopyInput "forks/Synthetic.rsrc", tFolder & "HC Raw.rsrc"
+   put _ImportPath(tFolder & "HC Raw") into tStack
+   _AssertSyntheticFork "Name.rsrc", tStack
+   TestAssert "Name.rsrc: the log names it", "HC Raw.rsrc (resource fork)" is in the hcImportStat
+   _Close tStack
+   _DeleteFolder tFolder
+
+   put _NewFolder("basilisk") into tFolder
+   create folder tFolder & ".rsrc"
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Basilisk"
+   _CopyInput "forks/Synthetic.rsrc", tFolder & ".rsrc/HC Basilisk"
+   put _ImportPath(tFolder & "HC Basilisk") into tStack
+   _AssertSyntheticFork ".rsrc/Name", tStack
+   _Close tStack
+   _DeleteFolder tFolder
+
+   put _NewFolder("netatalk") into tFolder
+   create folder tFolder & ".AppleDouble"
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Netatalk"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & ".AppleDouble/HC Netatalk"
+   put _ImportPath(tFolder & "HC Netatalk") into tStack
+   _AssertSyntheticFork ".AppleDouble/Name", tStack
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportRawForks
+
+on TestHyperCardImportNoUsableSidecar
+   -- a "._Name" with an empty fork (macOS writes one for Finder info
+   -- alone), or one that is not a fork at all, is passed over without a
+   -- word, and the stack imports as it does with nothing beside it
+   local tFolder, tStack, tPlainLog
+   put _Import("TestCardsBackgrounds") into tStack
+   put the hcImportStat into tPlainLog
+   _Close tStack
+
+   put _NewFolder("emptyfork") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "TestCardsBackgrounds.stack"
+   _CopyInput "forks/Empty.appledouble", tFolder & "._TestCardsBackgrounds.stack"
+   put "not a resource fork" into url ("binfile:" & tFolder & "TestCardsBackgrounds.stack.rsrc")
+   put _ImportPath(tFolder & "TestCardsBackgrounds.stack") into tStack
+   TestAssert "unusable sidecars: no icons", there is not a bkgnd "HC Icons" of stack tStack
+   TestAssert "unusable sidecars: no sounds", the number of audioClips of stack tStack is 0
+   TestAssert "unusable sidecars: the same log", line 2 to -1 of the hcImportStat is line 2 to -1 of tPlainLog
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportNoUsableSidecar
+
+on TestHyperCardImportAppleSingle
+   -- both forks in one AppleSingle file, named after the Mac file in it
+   local tStack
+   put _ImportFile("forks/TestCardsBackgrounds.applesingle", "Synthetic Stack") into tStack
+   TestAssert "AppleSingle cards", the number of cards of stack tStack is 6
+   _AssertSyntheticFork "AppleSingle", tStack
+   _Close tStack
+end TestHyperCardImportAppleSingle
+
+on TestHyperCardImportInventory
+   -- what the fork held, in the custom property set uHyperCard
+   local tFolder, tStack, tSet
+   put _NewFolder("inventory") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Inventory"
+   _CopyInput "forks/Synthetic.appledouble", tFolder & "._HC Inventory"
+   put _ImportPath(tFolder & "HC Inventory") into tStack
+   put the customProperties["uHyperCard"] of stack tStack into tSet
+   TestAssert "inventory: every resource", the number of lines of tSet["resources"] is 6
+   TestAssert "inventory: type, id, size, name", line 1 of tSet["resources"] is "ICON" & tab & "128" & tab & "128" & tab & "Synth Icon"
+   TestAssert "inventory: the sound", line 3 of tSet["resources"] begins with "snd " & tab & "130" & tab
+   TestAssert "inventory: externals", tSet["externals"] is "XCMD" & tab & "PopUpMenu" & return & "XFCN" & tab & "FileName"
+   TestAssert "inventory: source", tSet["source"] is tFolder & "._HC Inventory (AppleDouble)"
+   _Close tStack
+   _DeleteFolder tFolder
+
+   -- a stack with no fork has no such set, as before
+   put _Import("TestCardsBackgrounds") into tStack
+   TestAssert "no fork: no uHyperCard", "uHyperCard" is not among the lines of the customPropertySets of stack tStack
+   _Close tStack
+end TestHyperCardImportInventory
+
+on TestHyperCardImportIdClashes
+   -- icon ids are kept, clashes are logged, and objects made later get
+   -- ids above every icon
+   local tFolder, tStack, tLog
+   put _NewFolder("clash") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Clash"
+   _CopyInput "forks/Clash.rsrc", tFolder & "HC Clash.rsrc"
+   put _ImportPath(tFolder & "HC Clash") into tStack
+   put the hcImportStat into tLog
+   TestAssert "clash: icon and cursor", "Warning: ICON" && quote & "Twin Icon" & quote && "and CURS" && quote & "Twin Cursor" & quote && "have the same id, 129" is in tLog
+   TestAssert "clash: icon and card", "Warning: ICON" && quote & "Card Twin" & quote && "and card" && quote is in tLog
+   TestAssert "clash: the card keeps its id", the id of card 1 of stack tStack is 2842
+   TestAssert "clash: the icon keeps its id", the short name of image id 30000 of stack tStack is "High Icon"
+   lock messages
+   create button "Made later" in card 1 of stack tStack
+   unlock messages
+   TestAssert "clash: a new object's id is above the icons", the id of button "Made later" of card 1 of stack tStack > 30000
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportIdClashes
+
+on TestHyperCardImportSoundHeaders
+   -- extended headers (16-bit, stereo) and IMA 4:1 import; MACE is
+   -- named in the import log
+   local tFolder, tStack, tLog
+   put _NewFolder("sounds") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Sounds"
+   _CopyInput "forks/Sounds.rsrc", tFolder & "HC Sounds.rsrc"
+   put _ImportPath(tFolder & "HC Sounds") into tStack
+   put the hcImportStat into tLog
+   TestAssert "sound: 16-bit stereo", there is an audioClip "Stereo 16" of stack tStack
+   TestAssert "sound: 8-bit extended", there is an audioClip "Mono 8 Extended" of stack tStack
+   TestAssert "sound: IMA 4:1", there is an audioClip "IMA" of stack tStack
+   TestAssert "MACE is not imported", there is not an audioClip "MACE" of stack tStack
+   TestAssert "MACE is logged", "Not converting snd  id   203" && quote & "MACE" & quote & ": MACE 3:1 compression" is in tLog
+   TestAssert "sounds in resource order", the short name of audioClip 1 of stack tStack is "Stereo 16" \
+      and the short name of audioClip 3 of stack tStack is "IMA"
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportSoundHeaders
+
+-- The red, green and blue of pixel (pX, pY) of an image, as "r,g,b"
+private function _Pixel pImage, pX, pY
+   local tData, tAt
+   put the imageData of pImage into tData
+   put (pY * the width of pImage + pX) * 4 + 2 into tAt
+   return byteToNum(byte tAt of tData) & comma & byteToNum(byte tAt + 1 of tData) & comma & byteToNum(byte tAt + 2 of tData)
+end _Pixel
+
+on TestHyperCardImportPictures
+   -- PICT resources become images in a new group, "HC Pictures"
+   local tFolder, tStack, tImage, tUnnamed
+   put _NewFolder("pictures") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Pictures"
+   _CopyInput "forks/Pictures.rsrc", tFolder & "HC Pictures.rsrc"
+   put _ImportPath(tFolder & "HC Pictures") into tStack
+   TestAssert "pictures: the group", there is a bkgnd "HC Pictures" of stack tStack
+   TestAssert "pictures: two images", the number of images of bkgnd "HC Pictures" of stack tStack is 2
+   put the long id of image "Colour" of bkgnd "HC Pictures" of stack tStack into tImage
+   TestAssert "version 2: size", the width of tImage & "x" & the height of tImage is "64x48"
+   TestAssert "version 2: painted rectangle", _Pixel(tImage, 8, 8) is "255,0,0"
+   TestAssert "version 2: painted oval", _Pixel(tImage, 24, 8) is "0,0,255"
+   TestAssert "version 2: oval's corner left alone", _Pixel(tImage, 17, 1) is "255,255,255"
+   TestAssert "version 2: framed rectangle", _Pixel(tImage, 32, 0) is "0,0,0" and _Pixel(tImage, 40, 8) is "255,255,255"
+   TestAssert "version 2: 8-bit pixel map", _Pixel(tImage, 4, 24) is "0,255,0" and _Pixel(tImage, 12, 24) is "255,255,0"
+   TestAssert "version 2: 32-bit pixel map", _Pixel(tImage, 24, 24) is "18,52,86"
+   TestAssert "version 2: bitmap", _Pixel(tImage, 8, 36) is "0,0,0" and _Pixel(tImage, 8, 44) is "255,255,255"
+   TestAssert "version 2: line", _Pixel(tImage, 30, 40) is "0,0,0" and _Pixel(tImage, 30, 41) is "255,255,255"
+   TestAssert "version 1: named after its id", there is an image "PICT 301" of bkgnd "HC Pictures" of stack tStack
+   put the long id of image "PICT 301" of bkgnd "HC Pictures" of stack tStack into tUnnamed
+   TestAssert "version 1: oval", _Pixel(tUnnamed, 16, 8) is "0,0,0" and _Pixel(tUnnamed, 0, 0) is "255,255,255"
+   TestAssert "version 1: bitmap", _Pixel(tUnnamed, 28, 28) is "0,0,0" and _Pixel(tUnnamed, 20, 28) is "255,255,255"
+   TestAssert "pictures: not logged as unconverted", "Not converting PICT" is not in the hcImportStat
+   TestAssert "pictures: ids above the stack's", the id of tImage > 5225
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportPictures
+
+on TestHyperCardImportPalettes
+   -- a PLTE resource becomes a substack named after it: its PICT, with a
+   -- button on each of its rectangles that sends the PLTE's message
+   local tFolder, tStack, tPalette, tOldDefault
+   put _NewFolder("palettes") into tFolder
+   _CopyInput "TestCardsBackgrounds.stack", tFolder & "HC Palettes"
+   _CopyInput "forks/Pictures.rsrc", tFolder & "HC Palettes.rsrc"
+   put _ImportPath(tFolder & "HC Palettes") into tStack
+   put "Test Palette" into tPalette
+   TestAssert "palette: a substack", tPalette is among the lines of the substacks of stack tStack
+   TestAssert "palette: the picture's size", the width of stack tPalette & "x" & the height of stack tPalette is "64x48"
+   TestAssert "palette: its picture", the number of images of card 1 of stack tPalette is 1
+   TestAssert "palette: two buttons", the number of buttons of card 1 of stack tPalette is 2
+   TestAssert "palette: button rectangle", the rect of button 2 of card 1 of stack tPalette is "0,16,16,32"
+   TestAssert "palette: message", the uHCMessage of button 1 of card 1 of stack tPalette is "hcPaletteTest 3," && quote & "a,b" & quote
+
+   set the script of stack tStack to "on hcPaletteTest p1, p2" & return & \
+      "set the uPaletteParams of me to p1 & slash & p2" & return & "end hcPaletteTest"
+   put the defaultStack into tOldDefault
+   set the defaultStack to tStack
+   send "mouseUp" to button 1 of card 1 of stack tPalette
+   TestAssert "palette: a message to the card", the uPaletteParams of stack tStack is "3/a,b"
+   TestAssert "palette: hilited button", the uHCHilitedButton of stack tPalette is 1
+   send "mouseUp" to button 2 of card 1 of stack tPalette
+   TestAssert "palette: a command", the uPaletteSet of stack tStack is 5
+   TestAssert "palette: hilited button follows", the uHCHilitedButton of stack tPalette is 2
+   set the defaultStack to tOldDefault
+
+   set the enabledButton_2 of stack tPalette to false
+   TestAssert "palette: enabledButton_n", not the enabled of button 2 of card 1 of stack tPalette
+   TestAssert "palette: enabledButton_n reads", the enabledButton_2 of stack tPalette is false
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportPalettes
+
+private function _Alpha pImage, pX, pY
+   return byteToNum(byte (pY * the width of pImage + pX + 1) of the alphaData of pImage)
+end _Alpha
+
+on TestHyperCardImportAddColor
+   -- HCbg and HCcd resources (AddColor) become one image per background or
+   -- card, "HC AddColor", on top of its objects, with the blendMultiply ink,
+   -- disabled so that clicks reach the objects below
+   local tFolder, tStack, tBgImage, tCardImage, tLog
+   put _NewFolder("addcolor") into tFolder
+   _CopyInput "TestButtonProperties.stack", tFolder & "HC Colours"
+   _CopyInput "forks/AddColor.rsrc", tFolder & "HC Colours.rsrc"
+   put _ImportPath(tFolder & "HC Colours") into tStack
+   put the hcImportStat into tLog
+
+   TestAssert "addcolor: the background's colours", there is an image "HC AddColor" of bkgnd id 2670 of stack tStack
+   put the long id of image "HC AddColor" of bkgnd id 2670 of stack tStack into tBgImage
+   TestAssert "addcolor: the card's size", the width of tBgImage & "x" & the height of tBgImage is "512x342"
+   TestAssert "addcolor: blendMultiply", the ink of tBgImage is "blendMultiply"
+   TestAssert "addcolor: clicks go through", not the enabled of tBgImage
+   TestAssert "addcolor: on top of the buttons, numbered after them", the layer of tBgImage > the layer of button 13 of bkgnd id 2670 of stack tStack \
+         and the short name of button 13 of bkgnd id 2670 of stack tStack is "New Button"
+   TestAssert "addcolor: a button's colour", _Pixel(tBgImage, 88, 60) is "255,0,0"
+   TestAssert "addcolor: bevel, top left", _Pixel(tBgImage, 41, 49) is "255,127,127"
+   TestAssert "addcolor: bevel, bottom right", _Pixel(tBgImage, 135, 70) is "127,0,0"
+   TestAssert "addcolor: a hidden entry is not drawn", _Alpha(tBgImage, 91, 108) is 0
+   TestAssert "addcolor: a rectangle", _Pixel(tBgImage, 450, 315) is "0,0,255"
+   TestAssert "addcolor: transparent elsewhere", _Alpha(tBgImage, 250, 20) is 0
+
+   put the long id of image "HC AddColor" of card id 2883 of stack tStack into tCardImage
+   TestAssert "addcolor: the card's colours", there is tCardImage
+   TestAssert "addcolor: a bevelled rectangle", _Pixel(tCardImage, 30, 25) is "255,255,0" \
+         and _Pixel(tCardImage, 10, 10) is "255,255,127"
+   TestAssert "addcolor: a picture", _Pixel(tCardImage, 408, 108) is "255,0,0"
+   TestAssert "addcolor: a transparent picture's white", _Alpha(tCardImage, 408, 144) is 0
+   TestAssert "addcolor: a picture file is logged", "AddColor picture file" && quote & "Sky.pict" & quote && "on card id 2883 not drawn" is in tLog
+   TestAssert "addcolor: ids above the others", the id of tCardImage > the id of image "Colour" of bkgnd "HC Pictures" of stack tStack \
+         and the id of tBgImage > the id of image "Colour" of bkgnd "HC Pictures" of stack tStack
+   TestAssert "addcolor: other cards have none", there is not an image "HC AddColor" of card id 4067 of stack tStack
+   TestAssert "addcolor: not logged as unconverted", "Not converting HCcd" is not in tLog and "Not converting HCbg" is not in tLog
+   _Close tStack
+   _DeleteFolder tFolder
+end TestHyperCardImportAddColor

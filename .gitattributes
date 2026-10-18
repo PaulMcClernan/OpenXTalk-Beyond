@@ -69,3 +69,10 @@ prebuilt/cef-sha1sums text eol=lf
 # files too: their Mac line endings must not change).
 *.stack binary
 *.hqx binary
+# and so are the synthetic resource forks beside them (make-forks.py)
+*.rsrc binary
+*.appledouble binary
+*.applesingle binary
+*.hfs binary
+*.dc42 binary
+*.apm binary

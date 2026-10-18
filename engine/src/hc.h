@@ -25,7 +25,8 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 enum HC_File_type {
     HC_RAW,
     HC_MACBIN,
-    HC_BINHEX
+    HC_BINHEX,
+    HC_APPLESINGLE_FILE
 };
 
 #define HC_STAK 0x5354414b
@@ -47,6 +48,10 @@ enum HC_File_type {
 #define HC_ICON 0x49434f4e
 #define HC_CURS 0x43555253
 #define HC_SND  0x736e6420
+#define HC_PICT 0x50494354
+#define HC_PLTE 0x504c5445
+#define HC_HCCD 0x48436364
+#define HC_HCBG 0x48436267
 
 #define HC_F_MULTIPLE       0x0010
 #define HC_F_MARGINS        0x0020
@@ -113,6 +118,10 @@ enum HC_File_type {
 
 class MCHcstak;
 class MCCdata;
+class MCCard;
+class MCGroup;
+class MCObjptr;
+class MCControl;
 
 struct Hcfont
 {
@@ -136,9 +145,16 @@ public:
 	uint4 size;
 	uint2 rate;
 	uint2 id;
+	// 1 or 2 channels, interleaved; 1 byte a sample (signed), or 2 (signed,
+	// big-endian, as an AIFF file's)
+	uint2 channels;
+	uint2 width;
+	// why import() refused the sound, for the import log, or NULL
+	const char *refusal;
 	MCHcsnd();
 	~MCHcsnd();
 	Boolean import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length);
+	Boolean importextended(const char *sptr, uint4 p_length, uint4 hsize, uint1 p_encode);
 	MCAudioClip *build();
 	MCHcsnd *next()
 	{
@@ -331,6 +347,97 @@ public:
 	}
 };
 
+// A PICT resource, decoded (hcpict.cpp)
+class MCHcpict : public MCDLlist
+{
+public:
+	MCNameRef m_name;
+	uint4 id;
+	uint32_t *pixels;
+	uint32_t width;
+	uint32_t height;
+	MCHcpict();
+	~MCHcpict();
+	// p_ink: the image's ink, when not the template image's
+	MCControl *build(uint4 p_id, bool p_keep = false, int p_ink = -1);
+	MCHcpict *next()
+	{
+		return (MCHcpict *)MCDLlist::next();
+	}
+	void appendto(MCHcpict *&list)
+	{
+		MCDLlist::appendto((MCDLlist *&)list);
+	}
+	MCHcpict *remove
+	(MCHcpict *&list)
+	{
+		return (MCHcpict *)MCDLlist::remove
+			       ((MCDLlist *&)list);
+	}
+};
+
+// A PLTE resource: a HyperCard 2 palette, a PICT with buttons on it that
+// send messages, opened with "palette"
+class MCHcplte : public MCDLlist
+{
+public:
+	MCNameRef m_name;
+	uint4 id;
+	uint1 *data;
+	uint4 size;
+	MCHcplte();
+	~MCHcplte();
+	MCStack *build(MCHcstak *hcsptr, MCStack *p_main);
+	MCHcplte *next()
+	{
+		return (MCHcplte *)MCDLlist::next();
+	}
+	void appendto(MCHcplte *&list)
+	{
+		MCDLlist::appendto((MCDLlist *&)list);
+	}
+	MCHcplte *remove
+	(MCHcplte *&list)
+	{
+		return (MCHcplte *)MCDLlist::remove
+			       ((MCDLlist *&)list);
+	}
+};
+
+// An HCcd or HCbg resource: AddColor's colours for the card or background
+// with the resource's id, and, once drawn, the image that carries them and
+// where it goes
+class MCHcaddcolor : public MCDLlist
+{
+public:
+	uint4 id;
+	bool card;
+	uint1 *data;
+	uint4 size;
+	MCHcpict *layer;
+	MCCard *cptr;
+	MCObjptr *cafter;
+	MCGroup *gptr;
+	MCControl *gafter;
+	MCHcaddcolor();
+	~MCHcaddcolor();
+	bool draw(MCHcstak *hcsptr, MCHcbutton *p_buttons, MCHcfield *p_fields);
+	MCHcaddcolor *next()
+	{
+		return (MCHcaddcolor *)MCDLlist::next();
+	}
+	void appendto(MCHcaddcolor *&list)
+	{
+		MCDLlist::appendto((MCDLlist *&)list);
+	}
+	MCHcaddcolor *remove
+	(MCHcaddcolor *&list)
+	{
+		return (MCHcaddcolor *)MCDLlist::remove
+			       ((MCDLlist *&)list);
+	}
+};
+
 class MCHcbkgd : public MCDLlist
 {
 public:
@@ -402,17 +509,33 @@ public:
 	MCHcbmap *icons;
 	MCHcbmap *cursors;
 	MCHcsnd *snds;
+	MCHcpict *pictures;
+	MCHcplte *palettes;
+	MCHcaddcolor *addcolors;
+	// the path of the file being imported, or nil
+	MCStringRef path;
+	// the resource fork's inventory and where it came from, for the stack's
+	// custom property set "uHyperCard"
+	MCListRef resourcelist;
+	MCListRef externallist;
+	MCStringRef forksource;
 	MCHcstak(char *inname);
 	~MCHcstak();
 	uint4 geticon(uint2 iid);
 	MCHcbmap *getbmap(uint4 bid);
 	MCHcbmap *removebmap(uint4 bid);
 	MCHcbkgd *getbkgd(uint4 bid);
+	MCHcaddcolor *getaddcolor(bool p_card, uint4 p_id);
 	const char *getfont(uint2 fid);
 	void getatts(uint2 aid, const char *&font, uint2 &size, uint2 &style);
 	IO_stat read(IO_handle stream);
 	IO_stat readblocks(const uint1 *p_data, uint4 p_size);
 	void readresources(const uint1 *p_fork, uint4 p_size);
+	bool readresourcefile(MCStringRef p_path, bool p_log);
+	void noteresource(const char *p_type, uint2 p_id, MCNameRef p_name, uint4 p_size);
+	void setforksource(const char *p_source);
+	void storeinventory(MCStack *p_stack);
+	bool readsidecarresources();
 	MCStack *build();
 	
 #ifdef _MAC_DESKTOP

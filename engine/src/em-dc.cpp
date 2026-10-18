@@ -97,6 +97,38 @@ MCEmscriptenHandleScreenChanged()
 	return true;
 }
 
+/* OXT-Beyond: the window of <p_stack> moved on the screen while it was
+ * on it (em-dc.js): the page moved its canvas, as a centred page does
+ * when the browser's window is resized, or the user dragged it. A menu
+ * that is open is a window of its own, fixed where it opened, so it
+ * would be left behind: it closes, as the desktop engines close it when
+ * the system cancels it (MCPlatformHandleWindowCancel()), and as a
+ * browser closes a <select>'s list. A menu's own window moving (a
+ * cascade opening beside it) or a tooltip's leaves it open. */
+extern "C" MC_DLLEXPORT_DEF bool
+MCEmscriptenHandleWindowMoved(MCStack *p_stack)
+{
+	if (MCnoui || p_stack == nil || MCdispatcher->getmenu() == nil)
+		return false;
+
+	switch (p_stack->getmode())
+	{
+		case WM_TOP_LEVEL:
+		case WM_TOP_LEVEL_LOCKED:
+		case WM_MODELESS:
+		case WM_PALETTE:
+		case WM_MODAL:
+		case WM_SHEET:
+		case WM_DRAWER:
+			break;
+		default:
+			return false;
+	}
+
+	MCdispatcher->closemenus();
+	return true;
+}
+
 /* ================================================================
  * Initialization / Finalization
  * ================================================================ */
@@ -296,6 +328,9 @@ MCScreenDC::openwindow(Window p_window,
                        Boolean override)
 {
 	uint32_t t_window = reinterpret_cast<uint32_t>(p_window);
+	/* OXT-Beyond: the engine opens a window that is already on the screen
+	 * too (setting a shown stack's visible, its decorations, ...) */
+	bool t_was_visible = MCEmscriptenGetWindowVisible(t_window);
 	MCLog("set window visible");
 	MCEmscriptenSetWindowVisible(t_window, true);
 
@@ -318,9 +353,13 @@ MCScreenDC::openwindow(Window p_window,
 
 	/* OXT-Beyond: a modal dialog disables the stacks under it, as on the
 	 * desktop (lnxdcs.cpp), and the window that the system would make the
-	 * active one takes the keyboard when the stacks have it */
+	 * active one takes the keyboard when the stacks have it. Only when it
+	 * comes onto the screen: showing a window that is there already does
+	 * not activate it on the desktop, so the palette or window the user
+	 * clicked keeps the keyboard (the IDE's Script Editor reopens its
+	 * window while the user types in the Message Box). */
 	MCstacks->enableformodal(p_window, False);
-	if (MCEmscriptenStackTakesKeyboard(t_stack))
+	if (!t_was_visible && MCEmscriptenStackTakesKeyboard(t_stack))
 		MCEmscriptenPassKeyboard(0, t_window);
 }
 

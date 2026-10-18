@@ -1003,6 +1003,46 @@ Parse_stat MCMM::parse(MCScriptPoint &sp)
 	return PS_NORMAL;
 }
 
+// Whether p_object has the custom property set "uHyperCard", which the
+// HyperCard importer gives a stack built with a resource fork
+// (MCHcstak::storeinventory) and the instruments it synthesises
+static bool MCMMHasHyperCardSet(MCObject *p_object)
+{
+	if (p_object == nil)
+		return false;
+	MCExecContext ctxt(p_object, nil, nil);
+	uindex_t t_count = 0;
+	MCStringRef *t_sets = nil;
+	p_object -> GetCustomPropertySets(ctxt, t_count, t_sets);
+	bool t_found = false;
+	for (uindex_t i = 0; i < t_count; i++)
+	{
+		if (MCStringIsEqualToCString(t_sets[i], "uHyperCard", kMCCompareCaseless))
+			t_found = true;
+		MCValueRelease(t_sets[i]);
+	}
+	MCMemoryDeleteArray(t_sets);
+	return t_found;
+}
+
+// A sound HyperCard's notes are played with: one in a stack imported
+// with its resource fork, or an instrument the importer synthesised
+static bool MCMMIsHyperCardSound(MCStack *p_stack, Chunk_term p_chunk_type, MCStringRef p_clip)
+{
+	if (p_stack == nil)
+		return false;
+	if (MCMMHasHyperCardSet(p_stack))
+		return true;
+	MCObject *t_clip = p_stack -> getAV(p_chunk_type, p_clip, CT_AUDIO_CLIP);
+	if (t_clip == nil)
+	{
+		MCNewAutoNameRef t_name;
+		if (MCNameCreate(p_clip, &t_name))
+			t_clip = p_stack -> getobjname(CT_AUDIO_CLIP, *t_name);
+	}
+	return t_clip != nil && MCMMHasHyperCardSet(t_clip);
+}
+
 void MCMM::exec_ctxt(MCExecContext &ctxt)
 {
 	ctxt . SetTheResultToEmpty();
@@ -1122,7 +1162,21 @@ void MCMM::exec_ctxt(MCExecContext &ctxt)
 			}
 		}
 		else
-			MCMultimediaExecPlayAudioClip(ctxt, (MCStack *)optr, etype, *t_clip_name, looping == True);
+		{
+			// OXT-Beyond: HyperCard's `play "sound" tempo t "notes"` plays
+			// the notes with a sound from a HyperCard import. Elsewhere the
+			// tempo and the notes are not evaluated, as before.
+			MCAutoStringRef t_notes;
+			double t_tempo = 0.0;
+			if (loc != NULL && MCMMIsHyperCardSound(optr != nil ? (MCStack *)optr : MCdefaultstackptr, etype, *t_clip_name))
+			{
+				if (!ctxt . EvalExprAsStringRef(loc, EE_PLAY_BADLOC, &t_notes))
+					return;
+				if (!ctxt . EvalOptionalExprAsDouble(tempo, 0.0, EE_PLAY_BADLOC, t_tempo))
+					return;
+			}
+			MCMultimediaExecPlayAudioClip(ctxt, (MCStack *)optr, etype, *t_clip_name, looping == True, *t_notes, t_tempo);
+		}
     }
 }
 

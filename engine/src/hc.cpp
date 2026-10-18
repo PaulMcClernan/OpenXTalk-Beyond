@@ -38,12 +38,19 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "hndlrlst.h"
 #include "cardlst.h"
 #include "hc.h"
+#include "osspec.h"
+#include "hcpict.h"
+#include "hcnotes.h"
+#include "dispatch.h"
 
 #include "exec-interface.h"
 
 #include "globals.h"
 
 static uint4 maxid;
+// The HyperCard instruments (hcnotes.h) the stack's scripts name, a bit
+// each, gathered by convert_script
+static uint32_t s_hc_instruments;
 static uint4 version;
 
 static uint2 iconx, icony;
@@ -432,6 +439,7 @@ static char *convert_script(const char *string)
 {
 	if (!*string)
 		return NULL;
+	s_hc_instruments |= MCHcInstrumentsNamedIn(string);
 
 	const uint1 *sptr = (const uint1 *)string;
 	uint2 conversions = 0;
@@ -572,6 +580,11 @@ MCHcsnd::MCHcsnd()
 {
     m_name = MCValueRetain(kMCEmptyName);
 	data = NULL;
+	size = 0;
+	rate = 0;
+	channels = 1;
+	width = 1;
+	refusal = NULL;
 }
 
 MCHcsnd::~MCHcsnd()
@@ -581,10 +594,65 @@ MCHcsnd::~MCHcsnd()
 		delete[] data;
 }
 
+// IMA 4:1 ADPCM, as QuickTime and the Sound Manager store it ('ima4'): a
+// packet of 34 bytes per channel holds 64 samples, the first two bytes the
+// predictor (top 9 bits) and the step index (low 7 bits), then the
+// samples' 4-bit codes, low nibble first. The tables are the IMA's
+// (Recommended Practices for Enhancing Digital Audio Compatibility in
+// Multimedia Systems, 1992).
+static const int16_t kHcImaSteps[89] =
+{
+	7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45,
+	50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230,
+	253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963,
+	1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327,
+	3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442,
+	11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794,
+	32767
+};
+static const int8_t kHcImaIndexes[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
+
+// Decode p_packets packets per channel from p_src into big-endian 16-bit
+// samples, interleaved, at r_dst (64 * p_packets * p_channels samples).
+static void hc_decode_ima4(const uint1 *p_src, uint4 p_packets, uint2 p_channels, uint1 *r_dst)
+{
+	for (uint4 p = 0 ; p < p_packets ; p++)
+		for (uint2 c = 0 ; c < p_channels ; c++)
+		{
+			const uint1 *t_packet = p_src + (p * p_channels + c) * 34;
+			int32_t t_predictor = (int16_t)(((t_packet[0] << 8) | t_packet[1]) & 0xFF80);
+			int32_t t_index = t_packet[1] & 0x7F;
+			if (t_index > 88)
+				t_index = 88;
+			for (uint4 n = 0 ; n < 64 ; n++)
+			{
+				uint1 t_code = t_packet[2 + n / 2];
+				t_code = (n & 1) ? (t_code >> 4) : (t_code & 0x0F);
+				int32_t t_step = kHcImaSteps[t_index];
+				int32_t t_diff = t_step >> 3;
+				if (t_code & 4)
+					t_diff += t_step;
+				if (t_code & 2)
+					t_diff += t_step >> 1;
+				if (t_code & 1)
+					t_diff += t_step >> 2;
+				t_predictor += (t_code & 8) ? -t_diff : t_diff;
+				t_predictor = MCU_max((int32_t)-32768, MCU_min(t_predictor, (int32_t)32767));
+				t_index = MCU_max((int32_t)0, MCU_min(t_index + kHcImaIndexes[t_code & 7], (int32_t)88));
+				uint1 *t_out = r_dst + ((p * 64 + n) * p_channels + c) * 2;
+				t_out[0] = (uint1)((t_predictor >> 8) & 0xFF);
+				t_out[1] = (uint1)(t_predictor & 0xFF);
+			}
+		}
+}
+
 // A 'snd ' resource is format 1 (a list of synthesizers, then commands) or
 // format 2 (commands only). Its first command is a bufferCmd whose second
-// parameter is the offset of the sound header. Only uncompressed sampled
-// sound (a standard sound header, encode 0) is imported.
+// parameter is the offset of the sound header. Three headers (Inside
+// Macintosh: Sound, 2-104 to 2-111): the standard header (encode 0, 8-bit
+// mono, the only one imported before), the extended header (encode 0xFF:
+// 8 or 16 bits, one or two channels) and the compressed header (encode
+// 0xFE: IMA 4:1 is imported; MACE 3:1 and 6:1 are not yet, and are logged).
 Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length)
 {
 	id = inid;
@@ -606,8 +674,14 @@ Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length
 	uint4 hsize = hc_get_uint4(&sptr[t_commands + 6]);
 	if (hsize > p_length || p_length - hsize < 22)
 		return False;
-	if (sptr[hsize + 20]) // compressed or extended sound
+	uint1 t_encode = (uint1)sptr[hsize + 20];
+	if (t_encode == 0xFF || t_encode == 0xFE)
+		return importextended(sptr, p_length, hsize, t_encode);
+	if (t_encode != 0)
+	{
+		refusal = "an unknown sound header";
 		return False;
+	}
 	size = hc_get_uint4(&sptr[hsize + 4]);
 	rate = hc_get_uint2(&sptr[hsize + 8]);
 	uint1 t_base = (uint1)sptr[hsize + 21];
@@ -628,6 +702,82 @@ Boolean MCHcsnd::import(uint4 inid, MCNameRef inname, char *sptr, uint4 p_length
 	return True;
 }
 
+// The extended and compressed headers: 64 bytes, then the samples.
+Boolean MCHcsnd::importextended(const char *sptr, uint4 p_length, uint4 hsize, uint1 p_encode)
+{
+	if (p_length - hsize < 64)
+	{
+		refusal = "a short sound header";
+		return False;
+	}
+	uint4 t_channels = hc_get_uint4(&sptr[hsize + 4]);
+	uint4 t_frames = hc_get_uint4(&sptr[hsize + 22]);
+	rate = hc_get_uint2(&sptr[hsize + 8]);
+	uint1 t_base = (uint1)sptr[hsize + 21];
+	if (t_base == 0)
+		t_base = 0x3C;
+	rate = (uint2)((real8)rate / pow(1.05946309434, (real8)((int)t_base - 0x3C)));
+	if (t_channels != 1 && t_channels != 2)
+	{
+		refusal = "more than two channels";
+		return False;
+	}
+	channels = (uint2)t_channels;
+	const uint1 *t_samples = (const uint1 *)sptr + hsize + 64;
+	uint4 t_avail = p_length - hsize - 64;
+	if (p_encode == 0xFF)
+	{
+		uint2 t_bits = hc_get_uint2(&sptr[hsize + 48]);
+		if (t_bits != 8 && t_bits != 16)
+		{
+			refusal = "a sample size other than 8 or 16 bits";
+			return False;
+		}
+		width = t_bits / 8;
+		uint4 t_frame_size = width * channels;
+		if (t_frames > t_avail / t_frame_size)
+			t_frames = t_avail / t_frame_size;
+		size = t_frames * t_frame_size;
+		data = new (nothrow) int1[size];
+		if (data == NULL)
+			return False;
+		memcpy(data, t_samples, size);
+		// 8-bit samples are unsigned, as the standard header's
+		if (width == 1)
+			for (uint4 i = 0 ; i < size ; i++)
+				((uint1 *)data)[i] -= 128;
+		return True;
+	}
+	// compressed: the format, or the compression id of older resources
+	uint4 t_format = hc_get_uint4(&sptr[hsize + 40]);
+	int2 t_compression = hc_get_int2(&sptr[hsize + 56]);
+	if (t_format == 0x696D6134 /* ima4 */)
+	{
+		uint4 t_packets = t_avail / (34 * channels);
+		if (t_frames != 0 && t_frames < t_packets)
+			t_packets = t_frames;
+		if (t_packets == 0)
+		{
+			refusal = "no samples";
+			return False;
+		}
+		width = 2;
+		size = t_packets * 64 * channels * 2;
+		data = new (nothrow) int1[size];
+		if (data == NULL)
+			return False;
+		hc_decode_ima4(t_samples, t_packets, channels, (uint1 *)data);
+		return True;
+	}
+	if (t_format == 0x4D414333 /* MAC3 */ || t_compression == 3)
+		refusal = "MACE 3:1 compression";
+	else if (t_format == 0x4D414336 /* MAC6 */ || t_compression == 4)
+		refusal = "MACE 6:1 compression";
+	else
+		refusal = "an unknown compression";
+	return False;
+}
+
 MCAudioClip *MCHcsnd::build()
 {
 	MCAudioClip *aptr = new (nothrow) MCAudioClip;
@@ -635,10 +785,10 @@ MCAudioClip *MCHcsnd::build()
     aptr->setname(m_name);
 	aptr->samples = (int1 *)data;
 	data = NULL;
-	aptr->nchannels = 1;
+	aptr->nchannels = channels;
 	aptr->format = AF_SLINEAR;
 	aptr->rate = rate;
-	aptr->swidth = 1;
+	aptr->swidth = width;
 	return aptr;
 }
 
@@ -1442,6 +1592,465 @@ MCControl *MCHcbmap::build()
 	return iptr;
 }
 
+MCHcpict::MCHcpict()
+{
+	m_name = MCValueRetain(kMCEmptyName);
+	id = 0;
+	pixels = NULL;
+	width = height = 0;
+}
+
+MCHcpict::~MCHcpict()
+{
+	MCValueRelease(m_name);
+	delete[] pixels;
+}
+
+// An image of the picture, named after the resource ("PICT <id>" if it has
+// no name), hidden like the icons: HyperCard showed a PICT only when a
+// script or an external asked for it.
+MCControl *MCHcpict::build(uint4 p_id, bool p_keep, int p_ink)
+{
+	if (pixels == NULL)
+		return NULL;
+	MCImageBitmap *t_bitmap = nil;
+	if (!MCImageBitmapCreate(width, height, t_bitmap))
+		return NULL;
+	for (uint32_t y = 0 ; y < height ; y++)
+	{
+		uint32_t *t_row = (uint32_t *)((uint8_t *)t_bitmap->data + y * t_bitmap->stride);
+		for (uint32_t x = 0 ; x < width ; x++)
+		{
+			uint32_t v = pixels[y * width + x];
+			t_row[x] = MCGPixelPackNative((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF, (v >> 24) & 0xFF);
+		}
+	}
+	// (decoded pictures are opaque; AddColor's layers are not)
+	MCImageBitmapCheckTransparency(t_bitmap);
+	MCImageCompressedBitmap *t_compressed = nil;
+	bool t_compressed_ok = MCImageCompress(t_bitmap, false, t_compressed);
+	MCImageFreeBitmap(t_bitmap);
+	if (!t_compressed_ok)
+		return NULL;
+	MCImage *iptr = (MCImage *)MCtemplateimage->clone(False, OP_NONE, false);
+	iptr->obj_id = p_id;
+	MCRectangle t_rect;
+	t_rect.x = 0;
+	t_rect.y = 0;
+	t_rect.width = (uint2)width;
+	t_rect.height = (uint2)height;
+	iptr->rect = t_rect;
+	iptr->setcompressedbitmap(t_compressed);
+	MCImageFreeCompressedBitmap(t_compressed);
+	if (p_ink >= 0)
+		iptr->ink = (uint1)p_ink;
+	if (MCNameIsEmpty(m_name))
+	{
+		MCAutoStringRef t_name;
+		MCNewAutoNameRef t_named;
+		if (MCStringFormat(&t_name, "PICT %u", id) && MCNameCreate(*t_name, &t_named))
+			iptr->setname(*t_named);
+	}
+	else
+		iptr->setname(m_name);
+	if (!p_keep)
+	{
+		delete[] pixels;
+		pixels = NULL;
+	}
+	return iptr;
+}
+
+MCHcplte::MCHcplte()
+{
+	m_name = MCValueRetain(kMCEmptyName);
+	id = 0;
+	data = NULL;
+	size = 0;
+}
+
+MCHcplte::~MCHcplte()
+{
+	MCValueRelease(m_name);
+	delete[] data;
+}
+
+// The script of a palette substack. A click on one of its buttons does what
+// HyperCard did: it records the button as the palette's hilited button
+// (HyperCard's "the hilitedButton of window", which is the custom property
+// uHCHilitedButton here: hilitedButton is a group property in this engine)
+// and sends the button's message to the current card of the stack the
+// palette belongs to. "the enabledButton_<n>" of the palette enables or
+// disables its nth button.
+static const char *kHcPaletteScript =
+	"-- HyperCard palette (PLTE resource), made by the HyperCard importer\n"
+	"on mouseUp\n"
+	"   if word 1 of the name of the target is not \"button\" then pass mouseUp\n"
+	"   local tMessage, tDefault\n"
+	"   set the uHCHilitedButton of me to the number of the target\n"
+	"   put the uHCMessage of the target into tMessage\n"
+	"   if tMessage is empty then exit mouseUp\n"
+	"   -- a command (put, go, set...) runs as if typed in the message box;\n"
+	"   -- anything else is a message to the card\n"
+	"   -- \"this card\" and \"this stack\" are the stack beneath the palette,\n"
+	"   -- as in HyperCard, not the palette itself\n"
+	"   if word 1 of tMessage is among the lines of the commandNames then\n"
+	"      put the defaultStack into tDefault\n"
+	"      set the defaultStack to the mainStack of me\n"
+	"      do tMessage\n"
+	"      -- (a one-line if here would take the else below as its own)\n"
+	"      if there is a stack tDefault then\n"
+	"         set the defaultStack to tDefault\n"
+	"      end if\n"
+	"   else\n"
+	"      send tMessage to this card of stack (the mainStack of me)\n"
+	"   end if\n"
+	"end mouseUp\n";
+
+// A PLTE resource: the PICT's id, the top left of its frame (the buttons'
+// rectangles are in the picture's coordinates), and its buttons, each a
+// rectangle, two bytes of flags and the message as a Pascal string padded
+// to an even length. (Read from HyperCard 2.x's palettes: there is no
+// published description of the resource.)
+MCStack *MCHcplte::build(MCHcstak *hcsptr, MCStack *p_main)
+{
+	const char *t_data = (const char *)data;
+	uint2 t_pict_id = hc_get_uint2(&t_data[8]);
+	int2 t_origin_v = hc_get_int2(&t_data[10]);
+	int2 t_origin_h = hc_get_int2(&t_data[12]);
+	uint2 t_count = hc_get_uint2(&t_data[22]);
+	MCHcpict *t_pict = NULL;
+	if (hcsptr->pictures != NULL)
+	{
+		MCHcpict *t_each = hcsptr->pictures;
+		do
+		{
+			if (t_each->id == t_pict_id)
+				t_pict = t_each;
+			t_each = t_each->next();
+		}
+		while (t_each != hcsptr->pictures && t_pict == NULL);
+	}
+	if (t_pict == NULL || t_pict->pixels == NULL)
+	{
+		MCAutoStringRefAsCString t_name_str;
+		/* UNCHECKED */ t_name_str.Lock(MCNameGetString(m_name));
+		hcstat_append("Not converting PLTE id %5d \"%s\": no PICT %d", id, *t_name_str, t_pict_id);
+		return NULL;
+	}
+
+	// a substack of the imported stack, as "set the mainStack" makes one
+	MCStack *t_pal = MCtemplatestack->clone();
+	MCdispatcher->removestack(t_pal);
+	if (p_main->substacks == NULL)
+		p_main->extraopen(true);
+	t_pal->appendto(p_main->substacks);
+	t_pal->setparent(p_main);
+	t_pal->setname(m_name);
+	MCCard *t_made_cards = t_pal->cards;
+	t_pal->cards = NULL;
+	t_pal->curcard = NULL;
+	// (a card a newStack handler made, as in MCHcstak::build)
+	while (t_made_cards != NULL)
+	{
+		MCCard *t_card = t_made_cards->remove(t_made_cards);
+		MCrecent->deletecard(t_card);
+		MCcstack->deletecard(t_card);
+		t_pal->uncacheobjectbyid(t_card);
+		t_card->removereferences();
+		t_card->scheduledelete(false);
+	}
+	t_pal->rect.width = (uint2)t_pict->width;
+	t_pal->rect.height = (uint2)t_pict->height;
+
+	uint4 t_next_id = 1000;
+	MCCard *t_card = MCtemplatecard->clone(False, False);
+	t_card->obj_id = t_next_id++;
+	t_card->setparent(t_pal);
+	t_card->appendto(t_pal->cards);
+	t_pal->curcard = t_card;
+
+	MCControl *t_image = t_pict->build(t_next_id++, true);
+	if (t_image != NULL)
+	{
+		t_image->setparent(t_pal);
+		t_image->appendto(t_pal->controls);
+		MCObjptr *t_optr = new (nothrow) MCObjptr;
+		t_optr->setparent(t_card);
+		t_optr->setid(t_image->getid());
+		t_optr->appendto(t_card->objptrs);
+	}
+
+	uint4 t_at = 24;
+	for (uint2 i = 0 ; i < t_count ; i++)
+	{
+		if (t_at + 11 > size)
+			break;
+		MCRectangle t_rect;
+		int2 t_top = hc_get_int2(&t_data[t_at]);
+		int2 t_left = hc_get_int2(&t_data[t_at + 2]);
+		int2 t_bottom = hc_get_int2(&t_data[t_at + 4]);
+		int2 t_right = hc_get_int2(&t_data[t_at + 6]);
+		uint1 t_length = (uint1)t_data[t_at + 10];
+		if (t_at + 11 + t_length > size)
+			break;
+		char *t_raw = new (nothrow) char[t_length + 1];
+		memcpy(t_raw, &t_data[t_at + 11], t_length);
+		t_raw[t_length] = '\0';
+		t_at += 11 + t_length;
+		if (t_at & 1)
+			t_at++;
+		t_rect.x = t_left - t_origin_h;
+		t_rect.y = t_top - t_origin_v;
+		t_rect.width = t_right > t_left ? (uint2)(t_right - t_left) : 0;
+		t_rect.height = t_bottom > t_top ? (uint2)(t_bottom - t_top) : 0;
+
+		MCButton *t_button = (MCButton *)MCtemplatebutton->clone(False, OP_NONE, false);
+		t_button->obj_id = t_next_id++;
+		t_button->rect = t_rect;
+		t_button->flags &= ~(F_STYLE | F_SHOW_NAME | F_SHOW_BORDER | F_OPAQUE | F_3D | F_AUTO_HILITE | F_SHOW_ICON);
+		t_button->flags |= F_RECTANGLE;
+		// the message, without the spaces HyperCard's palette editor put
+		// before it
+		char *t_start = t_raw;
+		while (*t_start == ' ' || *t_start == '\t')
+			t_start++;
+		char *t_end = t_start + strlen(t_start);
+		while (t_end > t_start && (t_end[-1] == ' ' || t_end[-1] == '\t' || t_end[-1] == '\r'))
+			*--t_end = '\0';
+		MCAutoStringRef t_message;
+		char *t_converted = convert_string(t_start);
+		delete[] t_raw;
+		MCAutoArrayRef t_props;
+		if (hc_string(t_converted, &t_message) && MCArrayCreateMutable(&t_props)
+		    && MCArrayStoreValue(*t_props, false, MCNAME("uHCMessage"), *t_message))
+		{
+			MCExecContext ctxt(t_button, nil, nil);
+			t_button->SetCustomProperties(ctxt, *t_props);
+		}
+		delete[] t_converted;
+		t_button->setparent(t_pal);
+		((MCControl *)t_button)->appendto(t_pal->controls);
+		MCObjptr *t_optr = new (nothrow) MCObjptr;
+		t_optr->setparent(t_card);
+		t_optr->setid(t_button->getid());
+		t_optr->appendto(t_card->objptrs);
+	}
+
+	// the script, with enabledButton_1 to _<n>
+	MCAutoStringRef t_script;
+	/* UNCHECKED */ MCStringMutableCopy(MCSTR(kHcPaletteScript), &t_script);
+	for (uint2 i = 1 ; i <= t_count ; i++)
+		/* UNCHECKED */ MCStringAppendFormat(*t_script,
+		    "getProp enabledButton_%d\n   return the enabled of button %d of me\nend enabledButton_%d\n"
+		    "setProp enabledButton_%d pValue\n   set the enabled of button %d of me to pValue\nend enabledButton_%d\n",
+		    i, i, i, i, i, i);
+	t_pal->setscript(*t_script);
+	t_pal->obj_id = t_next_id;
+	return t_pal;
+}
+
+MCHcaddcolor::MCHcaddcolor()
+{
+	id = 0;
+	card = false;
+	data = NULL;
+	size = 0;
+	layer = NULL;
+	cptr = NULL;
+	cafter = NULL;
+	gptr = NULL;
+	gafter = NULL;
+}
+
+MCHcaddcolor::~MCHcaddcolor()
+{
+	delete[] data;
+	delete layer;
+}
+
+// Fill p_rect of an AddColor layer with a colour, with AddColor's bevel: a
+// lighter top and left edge and a darker bottom and right one, p_bevel
+// pixels wide
+static void hc_addcolor_fill(uint32_t *p_pixels, uint32_t p_width, uint32_t p_height,
+                             int32_t p_top, int32_t p_left, int32_t p_bottom, int32_t p_right,
+                             int32_t p_bevel, const uint1 *p_rgb)
+{
+	uint32_t r = p_rgb[0], g = p_rgb[2], b = p_rgb[4];
+	uint32_t t_colour = 0xFF000000 | (r << 16) | (g << 8) | b;
+	uint32_t t_light = 0xFF000000 | ((r + (255 - r) / 2) << 16) | ((g + (255 - g) / 2) << 8) | (b + (255 - b) / 2);
+	uint32_t t_dark = 0xFF000000 | ((r / 2) << 16) | ((g / 2) << 8) | (b / 2);
+	if (p_bevel < 0 || p_bevel > 64)
+		p_bevel = 0;
+	for (int32_t y = MCU_max(p_top, 0) ; y < MCU_min(p_bottom, (int32_t)p_height) ; y++)
+		for (int32_t x = MCU_max(p_left, 0) ; x < MCU_min(p_right, (int32_t)p_width) ; x++)
+		{
+			uint32_t t_pixel = t_colour;
+			int32_t t_from_top = y - p_top, t_from_left = x - p_left;
+			int32_t t_from_bottom = p_bottom - 1 - y, t_from_right = p_right - 1 - x;
+			if (MCU_min(t_from_bottom, t_from_right) < p_bevel)
+				t_pixel = t_dark;
+			if (MCU_min(t_from_top, t_from_left) < p_bevel && MCU_min(t_from_top, t_from_left) <= MCU_min(t_from_bottom, t_from_right))
+				t_pixel = t_light;
+			p_pixels[y * p_width + x] = t_pixel;
+		}
+}
+
+// Draw an HCcd or HCbg resource into a layer the size of the card. Each
+// entry is a type byte (high bit set: hidden), then for a button (1) or a
+// field (2) its id, the bevel and the colour as three 16-bit components;
+// for a rectangle (3) the rectangle, the bevel and the colour; for a
+// picture from a PICT resource (4) or a file (5) the rectangle, a
+// transparent flag (white is not drawn) and the name as a Pascal string.
+bool MCHcaddcolor::draw(MCHcstak *hcsptr, MCHcbutton *p_buttons, MCHcfield *p_fields)
+{
+	uint32_t t_width = hcsptr->rect.width, t_height = hcsptr->rect.height;
+	if (data == NULL || t_width == 0 || t_height == 0 || layer != NULL)
+		return false;
+	uint32_t *t_pixels = new (nothrow) uint32_t[t_width * t_height];
+	if (t_pixels == NULL)
+		return false;
+	memset(t_pixels, 0, t_width * t_height * sizeof(uint32_t));
+	const char *t_where = card ? "card" : "bkgnd";
+	bool t_drawn = false;
+	uint4 t_pos = 0;
+	while (t_pos < size)
+	{
+		uint1 t_type = data[t_pos] & 0x7F;
+		bool t_hidden = (data[t_pos] & 0x80) != 0;
+		t_pos++;
+		if (t_type == 1 || t_type == 2)
+		{
+			if (t_pos + 10 > size)
+				break;
+			uint2 t_part = hc_get_uint2((const char *)&data[t_pos]);
+			int2 t_bevel = hc_get_int2((const char *)&data[t_pos + 2]);
+			const uint1 *t_rgb = &data[t_pos + 4];
+			t_pos += 10;
+			if (t_hidden)
+				continue;
+			MCRectangle t_rect;
+			bool t_found = false;
+			if (t_type == 1 && p_buttons != NULL)
+			{
+				MCHcbutton *t_each = p_buttons;
+				do
+				{
+					if (t_each->id == t_part)
+					{
+						t_rect = t_each->rect;
+						t_found = true;
+					}
+					t_each = t_each->next();
+				}
+				while (t_each != p_buttons && !t_found);
+			}
+			if (t_type == 2 && p_fields != NULL)
+			{
+				MCHcfield *t_each = p_fields;
+				do
+				{
+					if (t_each->id == t_part)
+					{
+						t_rect = t_each->rect;
+						t_found = true;
+					}
+					t_each = t_each->next();
+				}
+				while (t_each != p_fields && !t_found);
+			}
+			if (!t_found)
+				continue;
+			hc_addcolor_fill(t_pixels, t_width, t_height, t_rect.y, t_rect.x,
+			                 t_rect.y + t_rect.height, t_rect.x + t_rect.width, t_bevel, t_rgb);
+			t_drawn = true;
+		}
+		else if (t_type == 3)
+		{
+			if (t_pos + 16 > size)
+				break;
+			const char *t_entry = (const char *)&data[t_pos];
+			int2 t_bevel = hc_get_int2(&t_entry[8]);
+			t_pos += 16;
+			if (t_hidden)
+				continue;
+			hc_addcolor_fill(t_pixels, t_width, t_height, hc_get_int2(&t_entry[0]), hc_get_int2(&t_entry[2]),
+			                 hc_get_int2(&t_entry[4]), hc_get_int2(&t_entry[6]), t_bevel, &data[t_pos - 6]);
+			t_drawn = true;
+		}
+		else if (t_type == 4 || t_type == 5)
+		{
+			if (t_pos + 10 > size || t_pos + 10 + data[t_pos + 9] > size)
+				break;
+			const char *t_entry = (const char *)&data[t_pos];
+			int32_t t_top = hc_get_int2(&t_entry[0]), t_left = hc_get_int2(&t_entry[2]);
+			int32_t t_bottom = hc_get_int2(&t_entry[4]), t_right = hc_get_int2(&t_entry[6]);
+			bool t_transparent = t_entry[8] != 0;
+			uint1 t_name_length = data[t_pos + 9];
+			char t_name[256];
+			memcpy(t_name, &t_entry[10], t_name_length);
+			t_name[t_name_length] = '\0';
+			t_pos += 10 + t_name_length;
+			if (t_hidden)
+				continue;
+			MCHcpict *t_pict = NULL;
+			if (t_type == 4 && hcsptr->pictures != NULL)
+			{
+				MCAutoStringRef t_mac_name;
+				MCNewAutoNameRef t_wanted;
+				if (MCStringCreateWithNativeChars((const char_t *)t_name, t_name_length, &t_mac_name)
+				    && MCNameCreate(*t_mac_name, &t_wanted))
+				{
+					MCHcpict *t_each = hcsptr->pictures;
+					do
+					{
+						if (t_each->pixels != NULL && MCNameIsEqualToCaseless(t_each->m_name, *t_wanted))
+							t_pict = t_each;
+						t_each = t_each->next();
+					}
+					while (t_each != hcsptr->pictures && t_pict == NULL);
+				}
+			}
+			if (t_pict == NULL)
+			{
+				hcstat_append("AddColor picture %s \"%s\" on %s id %d not drawn: %s", t_type == 4 ? "resource" : "file",
+				              t_name, t_where, (int)id, t_type == 4 ? "no such PICT" : "a file outside the stack");
+				continue;
+			}
+			for (int32_t y = MCU_max(t_top, 0) ; y < MCU_min(MCU_min(t_bottom, t_top + (int32_t)t_pict->height), (int32_t)t_height) ; y++)
+				for (int32_t x = MCU_max(t_left, 0) ; x < MCU_min(MCU_min(t_right, t_left + (int32_t)t_pict->width), (int32_t)t_width) ; x++)
+				{
+					uint32_t t_pixel = t_pict->pixels[(y - t_top) * t_pict->width + (x - t_left)];
+					if (t_transparent && (t_pixel & 0xFFFFFF) == 0xFFFFFF)
+						continue;
+					t_pixels[y * t_width + x] = t_pixel | 0xFF000000;
+				}
+			t_drawn = true;
+		}
+		else
+		{
+			hcstat_append("AddColor data on %s id %d not read past an entry of type %d", t_where, (int)id, (int)t_type);
+			break;
+		}
+	}
+	if (!t_drawn)
+	{
+		delete[] t_pixels;
+		return false;
+	}
+	layer = new (nothrow) MCHcpict;
+	if (layer == NULL)
+	{
+		delete[] t_pixels;
+		return false;
+	}
+	layer->pixels = t_pixels;
+	layer->width = t_width;
+	layer->height = t_height;
+	MCValueAssign(layer->m_name, MCNAME("HC AddColor"));
+	return true;
+}
+
 MCHccard::MCHccard()
 {
 	name = NULL;
@@ -1598,6 +2207,12 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 		if (bmptr != NULL)
 			bmptr->setvisible((atts & HC_BC_HIDE_BMAP) == 0);
 	}
+	// AddColor's colours for the card, drawn while its buttons and fields
+	// are at hand (the image is made last, in MCHcstak::build, so that no
+	// imported object's id changes)
+	MCHcaddcolor *t_color = hcsptr->getaddcolor(true, id);
+	if (t_color != NULL && !t_color->draw(hcsptr, hcbuttons, hcfields))
+		t_color = NULL;
 	MCHcbkgd *bgptr = hcsptr->getbkgd(bkgdid);
 	if (bgptr == NULL)
 		hcstat_append("Error: card %d has no background %d", (int)id, (int)bkgdid);
@@ -1669,6 +2284,13 @@ MCCard *MCHccard::build(MCHcstak *hcsptr, MCStack *sptr)
 			}
 			break;
 		}
+	// the colours go on top of the card's objects, where they take nothing's
+	// place in the order of its parts
+	if (t_color != NULL)
+	{
+		t_color->cptr = cptr;
+		t_color->cafter = cptr->objptrs->prev();
+	}
 	return cptr;
 }
 
@@ -1765,6 +2387,11 @@ MCGroup *MCHcbkgd::build(MCHcstak *hcsptr, MCStack *sptr)
 			iptr->appendto(gptr->controls);
 		}
 	}
+	// AddColor's colours for the background, drawn while its buttons and
+	// fields are at hand
+	MCHcaddcolor *t_color = hcsptr->getaddcolor(false, id);
+	if (t_color != NULL && !t_color->draw(hcsptr, hcbuttons, hcfields))
+		t_color = NULL;
 	while (hctexts != NULL)
 	{
 		MCHctext *tptr = hctexts->remove
@@ -1806,6 +2433,12 @@ MCGroup *MCHcbkgd::build(MCHcstak *hcsptr, MCStack *sptr)
 			}
 			break;
 		}
+	// the colours go on top of the background's objects
+	if (t_color != NULL)
+	{
+		t_color->gptr = gptr;
+		t_color->gafter = gptr->controls != NULL ? gptr->controls->prev() : NULL;
+	}
 	return gptr;
 }
 
@@ -1838,12 +2471,23 @@ MCHcstak::MCHcstak(char *inname)
 	  hcbmaps(nullptr),
 	  icons(nullptr),
 	  cursors(nullptr),
-	  snds(nullptr)
+	  snds(nullptr),
+	  pictures(nullptr),
+	  palettes(nullptr),
+	  addcolors(nullptr),
+	  path(nullptr),
+	  resourcelist(nullptr),
+	  externallist(nullptr),
+	  forksource(nullptr)
 {
 }
 
 MCHcstak::~MCHcstak()
 {
+	MCValueRelease(path);
+	MCValueRelease(resourcelist);
+	MCValueRelease(externallist);
+	MCValueRelease(forksource);
 	delete[] name;
 	delete[] script;
 	delete[] fullbuffer;
@@ -1900,6 +2544,21 @@ MCHcstak::~MCHcstak()
 		MCHcsnd *sptr = snds->remove
 		                (snds);
 		delete sptr;
+	}
+	while (pictures != NULL)
+	{
+		MCHcpict *pptr = pictures->remove(pictures);
+		delete pptr;
+	}
+	while (palettes != NULL)
+	{
+		MCHcplte *pptr = palettes->remove(palettes);
+		delete pptr;
+	}
+	while (addcolors != NULL)
+	{
+		MCHcaddcolor *aptr = addcolors->remove(addcolors);
+		delete aptr;
 	}
 }
 
@@ -1961,6 +2620,21 @@ MCHcbkgd *MCHcstak::getbkgd(uint4 bid)
 		bptr = bptr->next();
 	}
 	while (bptr != hcbkgds);
+	return NULL;
+}
+
+MCHcaddcolor *MCHcstak::getaddcolor(bool p_card, uint4 p_id)
+{
+	MCHcaddcolor *aptr = addcolors;
+	if (aptr == NULL)
+		return NULL;
+	do
+	{
+		if (aptr->card == p_card && aptr->id == p_id)
+			return aptr;
+		aptr = aptr->next();
+	}
+	while (aptr != addcolors);
 	return NULL;
 }
 
@@ -2116,6 +2790,38 @@ static bool hc_decode_binhex(const uint1 *p_text, uint4 p_length, char *&r_name,
 
 // Read the resources HyperCard stacks keep in their resource fork: icons,
 // cursors and sounds. Every offset is checked against the fork.
+// The inventory of the resource fork, which build() stores in the stack's
+// custom property set "uHyperCard": one line per resource, "type<tab>id
+// <tab>size<tab>name", and the XCMDs and XFCNs alone, "type<tab>name", so
+// that a user can see what the stack expected that the import could not
+// bring in.
+void MCHcstak::noteresource(const char *p_type, uint2 p_id, MCNameRef p_name, uint4 p_size)
+{
+	MCAutoStringRef t_type;
+	if (!hc_string(p_type, 4, &t_type))
+		return;
+	if (resourcelist == nil && !MCListCreateMutable('\n', resourcelist))
+		return;
+	MCAutoStringRef t_line;
+	if (MCStringFormat(&t_line, "%@\t%d\t%u\t%@", *t_type, (int)(int2)p_id, p_size, MCNameGetString(p_name)))
+		/* UNCHECKED */ MCListAppend(resourcelist, *t_line);
+	if (memcmp(p_type, "XCMD", 4) == 0 || memcmp(p_type, "XFCN", 4) == 0)
+	{
+		if (externallist == nil && !MCListCreateMutable('\n', externallist))
+			return;
+		MCAutoStringRef t_external;
+		if (MCStringFormat(&t_external, "%@\t%@", *t_type, MCNameGetString(p_name)))
+			/* UNCHECKED */ MCListAppend(externallist, *t_external);
+	}
+}
+
+void MCHcstak::setforksource(const char *p_source)
+{
+	MCAutoStringRef t_source;
+	if (MCStringCreateWithCString(p_source, &t_source))
+		MCValueAssign(forksource, *t_source);
+}
+
 void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 {
 	const char *t_fork = (const char *)p_fork;
@@ -2181,6 +2887,7 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 			uint4 t_length = hc_get_uint4(&t_fork[t_data_offset + offset]);
 			if (t_length > p_size - t_data_offset - offset - 4)
 				t_length = p_size - t_data_offset - offset - 4;
+			noteresource(&t_map[t_entry], id, *t_name, t_length);
 			switch (t_type)
 			{
 			case HC_ICON:
@@ -2203,9 +2910,88 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 					if (newsnd->import(id, *t_name, t_resource, t_length))
 						newsnd->appendto(snds);
 					else
+					{
+						// only the sounds this importer could not read
+						// before are named: a damaged one stays quiet
+						if (newsnd->refusal != NULL)
+						{
+							MCAutoStringRefAsCString t_name_str;
+							/* UNCHECKED */ t_name_str.Lock(MCNameGetString(*t_name));
+							hcstat_append("Not converting snd  id %5d \"%s\": %s",
+							              id, *t_name_str, newsnd->refusal);
+						}
 						delete newsnd;
+					}
 				}
 				break;
+			case HC_PICT:
+				{
+					MCHcpict *t_pict = new (nothrow) MCHcpict;
+					uint32_t t_skipped = 0;
+					if (t_pict != NULL
+					    && MCHcPictDecode((const uint8_t *)t_resource, t_length, t_pict->pixels,
+					                      t_pict->width, t_pict->height, t_skipped))
+					{
+						t_pict->id = id;
+						MCValueAssign(t_pict->m_name, *t_name);
+						t_pict->appendto(pictures);
+						if (t_skipped != 0)
+						{
+							MCAutoStringRefAsCString t_name_str;
+							/* UNCHECKED */ t_name_str.Lock(MCNameGetString(*t_name));
+							hcstat_append("PICT id %5d \"%s\": not drawn:%s%s%s", id, *t_name_str,
+							              (t_skipped & kHCPictSkippedText) ? " text" : "",
+							              (t_skipped & kHCPictSkippedQuickTime) ? " QuickTime image" : "",
+							              (t_skipped & (kHCPictSkippedUnknown | kHCPictSkippedPattern)) ? " other operations" : "");
+						}
+						break;
+					}
+					delete t_pict;
+				}
+				// a picture this decoder cannot read is logged as before
+				goto not_converted;
+			case HC_PLTE:
+				if (t_length >= 24)
+				{
+					MCHcplte *t_plte = new (nothrow) MCHcplte;
+					if (t_plte != NULL)
+					{
+						t_plte->data = new (nothrow) uint1[t_length];
+						if (t_plte->data != NULL)
+						{
+							memcpy(t_plte->data, t_resource, t_length);
+							t_plte->size = t_length;
+							t_plte->id = id;
+							MCValueAssign(t_plte->m_name, *t_name);
+							t_plte->appendto(palettes);
+							break;
+						}
+						delete t_plte;
+					}
+				}
+				goto not_converted;
+			case HC_HCCD:
+			case HC_HCBG:
+				if (t_length > 0)
+				{
+					MCHcaddcolor *t_color = new (nothrow) MCHcaddcolor;
+					if (t_color != NULL)
+					{
+						t_color->data = new (nothrow) uint1[t_length];
+						if (t_color->data != NULL)
+						{
+							memcpy(t_color->data, t_resource, t_length);
+							t_color->size = t_length;
+							t_color->id = id;
+							t_color->card = t_type == HC_HCCD;
+							t_color->appendto(addcolors);
+							break;
+						}
+						delete t_color;
+					}
+				}
+				goto not_converted;
+			not_converted:
 			default:
                 {
                     MCAutoStringRefAsCString t_name_str;
@@ -2217,6 +3003,251 @@ void MCHcstak::readresources(const uint1 *p_fork, uint4 p_size)
 			}
 		}
 	}
+}
+
+// The resources a resource fork holds, or -1 if p_fork is not one. Stricter
+// than readresources: a file found beside a stack (section "Sidecars" below)
+// is taken only if every offset in it is consistent, so a file that merely
+// has a fitting name is never read as a fork, and nothing is logged for it.
+static int32_t hc_count_resources(const uint1 *p_fork, uint4 p_size)
+{
+	const char *t_fork = (const char *)p_fork;
+	if (p_size < 16)
+		return -1;
+	uint4 t_data_offset = hc_get_uint4(&t_fork[0]);
+	uint4 t_map_offset = hc_get_uint4(&t_fork[4]);
+	uint4 t_data_size = hc_get_uint4(&t_fork[8]);
+	uint4 t_map_size = hc_get_uint4(&t_fork[12]);
+	if (t_data_offset < 16 || t_data_offset > p_size || t_data_size > p_size - t_data_offset
+	    || t_map_offset < 16 || t_map_offset > p_size || t_map_size > p_size - t_map_offset
+	    || t_map_size < 30)
+		return -1;
+	const char *t_map = &t_fork[t_map_offset];
+	uint4 t_types_offset = hc_get_uint2(&t_map[24]);
+	uint4 t_names_offset = hc_get_uint2(&t_map[26]);
+	if (t_types_offset < 28 || t_types_offset + 2 > t_map_size || t_names_offset > t_map_size)
+		return -1;
+	uint2 t_typecount = uint2(hc_get_uint2(&t_map[t_types_offset]) + 1);
+	int32_t t_count = 0;
+	for (uint2 i = 0 ; i < t_typecount ; i++)
+	{
+		uint4 t_entry = t_types_offset + 2 + i * 8;
+		if (t_entry + 8 > t_map_size)
+			return -1;
+		uint4 t_refs = t_types_offset + hc_get_uint2(&t_map[t_entry + 6]);
+		uint4 t_n = uint4(uint2(hc_get_uint2(&t_map[t_entry + 4]) + 1));
+		if (t_refs + t_n * 12 > t_map_size)
+			return -1;
+		for (uint4 j = 0 ; j < t_n ; j++)
+		{
+			uint4 t_offset = hc_get_uint4(&t_map[t_refs + j * 12 + 4]) & 0xFFFFFF;
+			if (t_offset > t_data_size || t_data_size - t_offset < 4)
+				return -1;
+		}
+		t_count += t_n;
+	}
+	return t_count;
+}
+
+// AppleSingle (magic 0x00051600) and AppleDouble (0x00051607), RFC 1740: a
+// 26-byte header (magic, version, 16 bytes of filler, the number of
+// entries), then 12 bytes per entry (id, offset, length). Entry 1 is the
+// data fork, 2 the resource fork and 3 the file's name.
+#define HC_APPLESINGLE 0x00051600
+#define HC_APPLEDOUBLE 0x00051607
+enum
+{
+	kHCAppleFileDataFork = 1,
+	kHCAppleFileResourceFork = 2,
+	kHCAppleFileRealName = 3,
+};
+
+static bool hc_applefile_entry(const uint1 *p_file, uint4 p_size, uint4 p_magic, uint4 p_id,
+                               const uint1 *&r_data, uint4 &r_length)
+{
+	const char *t_file = (const char *)p_file;
+	if (p_size < 26 || hc_get_uint4(&t_file[0]) != p_magic)
+		return false;
+	uint4 t_version = hc_get_uint4(&t_file[4]);
+	if (t_version != 0x00010000 && t_version != 0x00020000)
+		return false;
+	uint2 t_entries = hc_get_uint2(&t_file[24]);
+	for (uint2 i = 0 ; i < t_entries ; i++)
+	{
+		uint4 t_at = 26 + i * 12;
+		if (t_at + 12 > p_size)
+			return false;
+		if (hc_get_uint4(&t_file[t_at]) != p_id)
+			continue;
+		uint4 t_offset = hc_get_uint4(&t_file[t_at + 4]);
+		uint4 t_length = hc_get_uint4(&t_file[t_at + 8]);
+		if (t_offset > p_size || t_length > p_size - t_offset)
+			return false;
+		r_data = p_file + t_offset;
+		r_length = t_length;
+		return true;
+	}
+	return false;
+}
+
+// Read a whole file, if there is one at p_path and it is no larger than a
+// resource fork can be (its offsets are 32 bits, its data 16 MB).
+static bool hc_read_file(MCStringRef p_path, uint1 *&r_data, uint4 &r_size)
+{
+	// (A stream such as "Name:AFP_Resource" is not a file to MCS_exists.)
+	if (!MCStringEndsWithCString(p_path, (const char_t *)":AFP_Resource", kMCStringOptionCompareExact)
+	    && !MCS_exists(p_path, true))
+		return false;
+	IO_handle t_stream = MCS_open(p_path, kMCOpenFileModeRead, False, False, 0);
+	if (t_stream == NULL)
+		return false;
+	int64_t t_size = MCS_fsize(t_stream);
+	bool t_success = t_size > 0 && t_size <= 0x2000000;
+	uint1 *t_data = NULL;
+	if (t_success)
+	{
+		t_data = new (nothrow) uint1[(size_t)t_size];
+		t_success = t_data != NULL && IO_read(t_data, (size_t)t_size, t_stream) == IO_NORMAL;
+	}
+	MCS_close(t_stream);
+	if (!t_success)
+	{
+		delete[] t_data;
+		return false;
+	}
+	r_data = t_data;
+	r_size = (uint4)t_size;
+	return true;
+}
+
+// Sidecars. A bare data fork has lost its resource fork on the way to a
+// disk that has none, but the fork often travels beside it: macOS writes
+// it to "._Name" (AppleDouble) on FAT, exFAT and SMB volumes, and its zip
+// files keep it as "__MACOSX/<folder>/._Name" at the root of the archive;
+// netatalk keeps it in ".AppleDouble/Name"; tools that save a fork alone
+// name it "Name.rsrc"; Basilisk II and SheepShaver keep it in
+// ".rsrc/Name"; and on Windows, Services for Macintosh and macOS's SMB
+// client write it to the stream "Name:AFP_Resource". The first of these
+// that holds a resource fork with at least one resource is read, and the
+// import log says which. Each may be AppleDouble or a raw fork.
+bool MCHcstak::readresourcefile(MCStringRef p_path, bool p_log)
+{
+	uint1 *t_file = NULL;
+	uint4 t_size = 0;
+	if (!hc_read_file(p_path, t_file, t_size))
+		return false;
+	const uint1 *t_fork = NULL;
+	uint4 t_fork_size = 0;
+	const char *t_kind;
+	if (hc_applefile_entry(t_file, t_size, HC_APPLEDOUBLE, kHCAppleFileResourceFork, t_fork, t_fork_size))
+		t_kind = "AppleDouble";
+	else if (hc_applefile_entry(t_file, t_size, HC_APPLESINGLE, kHCAppleFileResourceFork, t_fork, t_fork_size))
+		t_kind = "AppleSingle";
+	else
+	{
+		t_fork = t_file;
+		t_fork_size = t_size;
+		t_kind = "resource fork";
+	}
+	bool t_read = hc_count_resources(t_fork, t_fork_size) > 0;
+	if (t_read)
+	{
+		MCAutoStringRef t_source;
+		if (p_log)
+		{
+			MCAutoStringRefAsCString t_path_str;
+			/* UNCHECKED */ t_path_str.Lock(p_path);
+			hcstat_append("Reading the resource fork from %s (%s)", *t_path_str, t_kind);
+			if (MCStringFormat(&t_source, "%@ (%s)", p_path, t_kind))
+				MCValueAssign(forksource, *t_source);
+		}
+		else
+			setforksource("the file's resource fork");
+		readresources(t_fork, t_fork_size);
+	}
+	delete[] t_file;
+	return t_read;
+}
+
+bool MCHcstak::readsidecarresources()
+{
+	if (path == nil)
+		return false;
+	MCAutoStringRef t_path;
+	if (!MCS_resolvepath(path, &t_path))
+		return false;
+	uindex_t t_slash;
+	MCAutoStringRef t_dir, t_leaf;
+	if (MCStringLastIndexOfChar(*t_path, '/', UINDEX_MAX, kMCStringOptionCompareExact, t_slash))
+	{
+		if (!MCStringCopySubstring(*t_path, MCRangeMake(0, t_slash + 1), &t_dir)
+		    || !MCStringCopySubstring(*t_path, MCRangeMakeMinMax(t_slash + 1, MCStringGetLength(*t_path)), &t_leaf))
+			return false;
+	}
+	else
+	{
+		t_dir = kMCEmptyString;
+		t_leaf = *t_path;
+	}
+	if (MCStringIsEmpty(*t_leaf))
+		return false;
+
+	MCAutoStringRef t_candidate;
+	if (MCStringFormat(&t_candidate, "%@._%@", *t_dir, *t_leaf) && readresourcefile(*t_candidate, true))
+		return true;
+
+	// __MACOSX/<the path from the archive's root>/._Name, in each folder
+	// above the stack (an unzipped archive may sit anywhere), at most 8 up
+	MCStringRef t_above = MCValueRetain(*t_dir);
+	MCStringRef t_below = MCValueRetain(kMCEmptyString);
+	bool t_found = false;
+	for (uint4 t_level = 0 ; !t_found && t_level < 8 ; t_level++)
+	{
+		MCAutoStringRef t_macosx;
+		if (MCStringFormat(&t_macosx, "%@__MACOSX/%@._%@", t_above, t_below, *t_leaf)
+		    && readresourcefile(*t_macosx, true))
+		{
+			t_found = true;
+			break;
+		}
+		// Move up one folder: t_above ("/a/b/") loses its last component
+		// ("b/"), which goes on the front of t_below.
+		uindex_t t_length = MCStringGetLength(t_above);
+		uindex_t t_up;
+		if (t_length < 2
+		    || !MCStringLastIndexOfChar(t_above, '/', t_length - 1, kMCStringOptionCompareExact, t_up))
+			break;
+		MCAutoStringRef t_component, t_new_above, t_new_below;
+		if (!MCStringCopySubstring(t_above, MCRangeMakeMinMax(t_up + 1, t_length), &t_component)
+		    || !MCStringCopySubstring(t_above, MCRangeMake(0, t_up + 1), &t_new_above)
+		    || !MCStringFormat(&t_new_below, "%@%@", *t_component, t_below))
+			break;
+		// a stack inside a __MACOSX folder is itself a sidecar's neighbour
+		if (MCStringIsEqualToCString(*t_component, "__MACOSX/", kMCStringOptionCompareExact))
+			break;
+		MCValueAssign(t_above, *t_new_above);
+		MCValueAssign(t_below, *t_new_below);
+	}
+	MCValueRelease(t_above);
+	MCValueRelease(t_below);
+	if (t_found)
+		return true;
+
+	MCAutoStringRef t_netatalk;
+	if (MCStringFormat(&t_netatalk, "%@.AppleDouble/%@", *t_dir, *t_leaf) && readresourcefile(*t_netatalk, true))
+		return true;
+	MCAutoStringRef t_rsrc;
+	if (MCStringFormat(&t_rsrc, "%@.rsrc", *t_path) && readresourcefile(*t_rsrc, true))
+		return true;
+	MCAutoStringRef t_basilisk;
+	if (MCStringFormat(&t_basilisk, "%@.rsrc/%@", *t_dir, *t_leaf) && readresourcefile(*t_basilisk, true))
+		return true;
+#ifdef _WIN32
+	MCAutoStringRef t_stream;
+	if (MCStringFormat(&t_stream, "%@:AFP_Resource", *t_path) && readresourcefile(*t_stream, true))
+		return true;
+#endif
+	return false;
 }
 
 // Read a HyperCard stack: a bare data fork, a MacBinary file or a BinHex
@@ -2231,6 +3262,8 @@ IO_stat MCHcstak::read(IO_handle stream)
 	HC_File_type filetype;
 	if (hc_get_uint4(&header[4]) == HC_STAK)
 		filetype = HC_RAW;
+	else if (hc_get_uint4(&header[0]) == HC_APPLESINGLE)
+		filetype = HC_APPLESINGLE_FILE;
 	else if (header[0] == '\0' && header[74] == '\0' && header[82] == '\0')
 	{
 		if (!strnequal(&header[65], "STAK", 4))
@@ -2289,6 +3322,33 @@ IO_stat MCHcstak::read(IO_handle stream)
 				t_rsrc = t_file + roffset;
 		}
 		break;
+	case HC_APPLESINGLE_FILE:
+		{
+			// both forks in one file, as HFSExplorer and some archivers
+			// write them; the data fork must be a stack
+			if (!hc_applefile_entry(t_file, t_file_size, HC_APPLESINGLE, kHCAppleFileDataFork, t_data, t_data_size)
+			    || t_data_size < 8 || hc_get_uint4((const char *)&t_data[4]) != HC_STAK)
+			{
+				delete[] t_file;
+				return IO_ERROR;
+			}
+			if (!hc_applefile_entry(t_file, t_file_size, HC_APPLESINGLE, kHCAppleFileResourceFork, t_rsrc, t_rsrc_size))
+				t_rsrc_size = 0;
+			const uint1 *t_real_name;
+			uint4 t_real_name_size;
+			if (hc_applefile_entry(t_file, t_file_size, HC_APPLESINGLE, kHCAppleFileRealName, t_real_name, t_real_name_size)
+			    && t_real_name_size != 0)
+			{
+				// named after the Mac file inside it, as a MacBinary file is
+				if (t_real_name_size > 63)
+					t_real_name_size = 63;
+				delete[] name;
+				name = new (nothrow) char[t_real_name_size + 1];
+				memcpy(name, t_real_name, t_real_name_size);
+				name[t_real_name_size] = '\0';
+			}
+		}
+		break;
 	case HC_BINHEX:
 		{
 			uint4 foffset;
@@ -2316,11 +3376,29 @@ IO_stat MCHcstak::read(IO_handle stream)
 	if (t_stat == IO_NORMAL)
 	{
 		if (t_rsrc != NULL && t_rsrc_size != 0)
+		{
+			setforksource(filetype == HC_MACBIN ? "MacBinary"
+			              : filetype == HC_BINHEX ? "BinHex" : "AppleSingle");
 			readresources(t_rsrc, t_rsrc_size);
-#ifdef _MAC_DESKTOP
+		}
 		else if (filetype == HC_RAW)
-			t_stat = macreadresources();
+		{
+			// A bare data fork: its own resource fork where the file system
+			// keeps one (macOS), else a sidecar beside it.
+			bool t_have_fork = false;
+#ifdef _MAC_DESKTOP
+			MCAutoStringRef t_native;
+			if (path != nil && MCStringFormat(&t_native, "%@/..namedfork/rsrc", path))
+				t_have_fork = readresourcefile(*t_native, false);
+			if (!t_have_fork)
+			{
+				t_stat = macreadresources();
+				t_have_fork = icons != NULL || cursors != NULL || snds != NULL;
+			}
 #endif
+			if (t_stat == IO_NORMAL && !t_have_fork)
+				readsidecarresources();
+		}
 	}
 
 	delete[] t_decoded_data;
@@ -2547,6 +3625,111 @@ IO_stat MCHcstak::readblocks(const uint1 *p_data, uint4 p_size)
 	return IO_NORMAL;
 }
 
+// Ids. Images take the ids of their ICON and CURS resources (scripts say
+// "set icon to 7001"), but those ids were never kept apart from each other
+// or from the stack's other objects: an ICON and a CURS with one id become
+// two images with that id, and an icon can have a card's id. Nothing is
+// renumbered (that would break the scripts); the import log says which.
+struct HCIdUse
+{
+	uint4 id;
+	MCObject *object;
+};
+
+static void hc_collect_ids(MCControl *p_controls, MCAutoArray<HCIdUse> &x_ids)
+{
+	MCControl *t_control = p_controls;
+	if (t_control == NULL)
+		return;
+	do
+	{
+		HCIdUse t_use = { t_control->getid(), t_control };
+		/* UNCHECKED */ x_ids.Push(t_use);
+		if (t_control->gettype() == CT_GROUP)
+			hc_collect_ids(((MCGroup *)t_control)->getcontrols(), x_ids);
+		t_control = t_control->next();
+	}
+	while (t_control != p_controls);
+}
+
+static void hc_describe(MCObject *p_object, MCGroup *p_icons, MCGroup *p_cursors, char *r_buffer, size_t p_size)
+{
+	MCAutoStringRefAsCString t_name;
+	/* UNCHECKED */ t_name.Lock(MCNameGetString(p_object->getname()));
+	const char *t_kind;
+	if (p_object->getparent() == p_icons && p_icons != NULL)
+		t_kind = "ICON";
+	else if (p_object->getparent() == p_cursors && p_cursors != NULL)
+		t_kind = "CURS";
+	else
+	{
+		switch (p_object->gettype())
+		{
+		case CT_CARD: t_kind = "card"; break;
+		case CT_GROUP: t_kind = "group"; break;
+		case CT_BUTTON: t_kind = "button"; break;
+		case CT_FIELD: t_kind = "field"; break;
+		case CT_IMAGE: t_kind = "image"; break;
+		default: t_kind = "object"; break;
+		}
+	}
+	snprintf(r_buffer, p_size, "%s \"%s\"", t_kind, *t_name);
+}
+
+static void hc_report_id_clashes(MCStack *p_stack, MCGroup *p_icons, MCGroup *p_cursors)
+{
+	MCAutoArray<HCIdUse> t_ids;
+	MCCard *t_card = p_stack->getcards();
+	if (t_card != NULL)
+	{
+		do
+		{
+			HCIdUse t_use = { t_card->getid(), t_card };
+			/* UNCHECKED */ t_ids.Push(t_use);
+			t_card = t_card->next();
+		}
+		while (t_card != p_stack->getcards());
+	}
+	hc_collect_ids(p_stack->getcontrols(), t_ids);
+	for (uindex_t i = 0 ; i < t_ids.Size() ; i++)
+	{
+		MCObject *t_parent = t_ids[i].object->getparent();
+		if (t_parent == NULL || (t_parent != p_icons && t_parent != p_cursors))
+			continue;
+		// each pair once: against everything before it that is not an
+		// icon or cursor reported already, and against every object
+		for (uindex_t j = 0 ; j < t_ids.Size() ; j++)
+		{
+			if (j == i || t_ids[j].id != t_ids[i].id)
+				continue;
+			MCObject *t_other_parent = t_ids[j].object->getparent();
+			bool t_other_is_bitmap = t_other_parent != NULL && (t_other_parent == p_icons || t_other_parent == p_cursors);
+			if (t_other_is_bitmap && j < i)
+				continue;
+			char t_this[300], t_that[300];
+			hc_describe(t_ids[i].object, p_icons, p_cursors, t_this, sizeof(t_this));
+			hc_describe(t_ids[j].object, p_icons, p_cursors, t_that, sizeof(t_that));
+			hcstat_append("Warning: %s and %s have the same id, %u", t_this, t_that, t_ids[i].id);
+		}
+	}
+}
+
+void MCHcstak::storeinventory(MCStack *p_stack)
+{
+	MCAutoArrayRef t_set;
+	if (!MCArrayCreateMutable(&t_set))
+		return;
+	MCAutoStringRef t_resources, t_externals;
+	if (MCListCopyAsString(resourcelist, &t_resources))
+		/* UNCHECKED */ MCArrayStoreValue(*t_set, false, MCNAME("resources"), *t_resources);
+	if (externallist != nil && MCListCopyAsString(externallist, &t_externals))
+		/* UNCHECKED */ MCArrayStoreValue(*t_set, false, MCNAME("externals"), *t_externals);
+	if (forksource != nil)
+		/* UNCHECKED */ MCArrayStoreValue(*t_set, false, MCNAME("source"), forksource);
+	MCExecContext ctxt(p_stack, nil, nil);
+	p_stack->SetCustomPropertiesElement(ctxt, MCNAME("uHyperCard"), *t_set);
+}
+
 MCStack *MCHcstak::build()
 {
 	MCStack *sptr = MCtemplatestack->clone();
@@ -2761,9 +3944,26 @@ MCStack *MCHcstak::build()
 		}
 		delete bmptr;
 	}
+	MCGroup *t_icon_group = NULL;
+	MCGroup *t_cursor_group = NULL;
+	// the highest icon or cursor id, which the stack's id must not be below
+	uint4 t_max_bitmap_id = 0;
+	MCHcbmap *t_lists[2] = { icons, cursors };
+	for (uint4 l = 0 ; l < 2 ; l++)
+	{
+		MCHcbmap *t_bitmap = t_lists[l];
+		if (t_bitmap != NULL)
+			do
+			{
+				t_max_bitmap_id = MCU_max(t_bitmap->id, t_max_bitmap_id);
+				t_bitmap = t_bitmap->next();
+			}
+			while (t_bitmap != t_lists[l]);
+	}
 	if (icons != NULL)
 	{
 		MCGroup *gptr = (MCGroup *)MCtemplategroup->clone(False, OP_NONE, false);
+		t_icon_group = gptr;
 		// MW-2011-08-09: [[ Groups ]] HC backgrounds are shared.
 		gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
 		gptr->obj_id = ++maxid;
@@ -2787,6 +3987,7 @@ MCStack *MCHcstak::build()
 	if (cursors != NULL)
 	{
 		MCGroup *gptr = (MCGroup *)MCtemplategroup->clone(False, OP_NONE, false);
+		t_cursor_group = gptr;
 		gptr->obj_id = ++maxid;
 		// MW-2011-08-09: [[ Groups ]] HC backgrounds are shared.
 		gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
@@ -2807,6 +4008,80 @@ MCStack *MCHcstak::build()
 			delete bmptr;
 		}
 	}
+	while (palettes != NULL)
+	{
+		MCHcplte *pptr = palettes->remove(palettes);
+		pptr->build(this, sptr);
+		delete pptr;
+	}
+	if (pictures != NULL)
+	{
+		// New: the stack's PICT resources. The group and its images take
+		// ids above every other object's and icon's, and come after the
+		// groups imports have always made, so nothing before them moves.
+		maxid = MCU_max(maxid, t_max_bitmap_id);
+		MCGroup *gptr = (MCGroup *)MCtemplategroup->clone(False, OP_NONE, false);
+		gptr->obj_id = ++maxid;
+		gptr->flags = (gptr -> flags & ~F_GROUP_ONLY) | F_GROUP_SHARED;
+		gptr->setname_cstring("HC Pictures");
+		gptr->setparent(sptr);
+		MCControl *cptr = (MCControl *)gptr;
+		cptr->appendto(sptr->controls);
+		while (pictures != NULL)
+		{
+			MCHcpict *pptr = pictures->remove(pictures);
+			MCControl *newobj = pptr->build(++maxid);
+			if (newobj != NULL)
+			{
+				newobj->setparent(gptr);
+				newobj->appendto(gptr->controls);
+			}
+			delete pptr;
+		}
+	}
+	// New: AddColor's colours (HCcd and HCbg resources), drawn when the
+	// cards and backgrounds were built. Each card or background with any
+	// gets one image, "HC AddColor", on top of its objects, with the
+	// blendMultiply ink: black stays black and white takes the colour, as
+	// in HyperCard 2.2's colour stacks. The images are disabled, so that
+	// clicks go through them to the objects below; they come last in the
+	// order of the card's or background's parts and take ids above every
+	// other object's, so that no number or id scripts know changes.
+	if (addcolors != NULL)
+	{
+		maxid = MCU_max(maxid, t_max_bitmap_id);
+		MCHcaddcolor *t_color = addcolors;
+		do
+		{
+			if (t_color->layer != NULL && (t_color->cptr != NULL || t_color->gptr != NULL))
+			{
+				MCControl *t_image = t_color->layer->build(++maxid, false, GXblendMultiply);
+				if (t_image != NULL)
+				{
+					t_image->setflag(True, F_DISABLED);
+					if (t_color->cptr != NULL)
+					{
+						t_image->setparent(sptr);
+						t_image->appendto(sptr->controls);
+						MCObjptr *t_optr = new (nothrow) MCObjptr;
+						t_optr->setparent(t_color->cptr);
+						t_optr->setid(t_image->getid());
+						t_color->cafter->append(t_optr);
+					}
+					else
+					{
+						t_image->setparent(t_color->gptr);
+						if (t_color->gafter != NULL)
+							t_color->gafter->append(t_image);
+						else
+							t_image->insertto(t_color->gptr->controls);
+					}
+				}
+			}
+			t_color = t_color->next();
+		}
+		while (t_color != addcolors);
+	}
 	while (snds != NULL)
 	{
 		MCHcsnd *sndptr = snds->remove
@@ -2816,7 +4091,50 @@ MCStack *MCHcstak::build()
 		aptr->appendto(sptr->aclips);
 		delete sndptr;
 	}
-	sptr->obj_id = maxid;
+	// HyperCard played boing, harpsichord and flute from its own resource
+	// fork, so stacks name them without carrying them. A stack whose
+	// scripts name one, and that has no sound of that name, gets a
+	// synthesised one after its own sounds.
+	for (int t_instrument = 0; t_instrument < kHCInstrumentCount; t_instrument++)
+	{
+		if ((s_hc_instruments & (1u << t_instrument)) == 0)
+			continue;
+		MCNewAutoNameRef t_clip_name;
+		if (!MCNameCreateWithNativeChars((const char_t *)MCHcInstrumentName(t_instrument), strlen(MCHcInstrumentName(t_instrument)), &t_clip_name) ||
+		    sptr->getobjname(CT_AUDIO_CLIP, *t_clip_name) != NULL)
+			continue;
+		int16_t *t_clip_samples;
+		uint32_t t_clip_count, t_clip_rate;
+		if (!MCHcSynthInstrument(t_instrument, t_clip_samples, t_clip_count, t_clip_rate))
+			continue;
+		MCAudioClip *t_clip = new (nothrow) MCAudioClip;
+		if (t_clip != NULL)
+		{
+			t_clip->setmono16(t_clip_samples, t_clip_count, t_clip_rate);
+			t_clip->setname(*t_clip_name);
+			t_clip->setparent(sptr);
+			t_clip->appendto(sptr->aclips);
+			// marked, so that `play` gives it HyperCard's notes
+			MCAutoArrayRef t_marker;
+			if (MCArrayCreateMutable(&t_marker) &&
+			    MCArrayStoreValue(*t_marker, false, MCNAME("source"), MCSTR("synthesised")))
+			{
+				MCExecContext t_ctxt(t_clip, nil, nil);
+				t_clip->SetCustomPropertiesElement(t_ctxt, MCNAME("uHyperCard"), *t_marker);
+			}
+			hcstat_append("Added HyperCard's \"%s\" sound (synthesised) for the scripts that play it", MCHcInstrumentName(t_instrument));
+		}
+		delete[] t_clip_samples;
+	}
+	if (t_icon_group != NULL || t_cursor_group != NULL)
+		hc_report_id_clashes(sptr, t_icon_group, t_cursor_group);
+	// Icon and cursor ids never raised maxid, so a stack whose icons have
+	// higher ids than its other objects (HyperBattleship!'s 5001-8012 over
+	// 3743) gave the next object made in it an icon's id. New imports start
+	// the stack's ids above them; the imported objects keep their ids.
+	sptr->obj_id = MCU_max(maxid, t_max_bitmap_id);
+	if (resourcelist != nil)
+		storeinventory(sptr);
 	return sptr;
 }
 
@@ -2824,6 +4142,7 @@ MCStack *MCHcstak::build()
 IO_stat hc_import(MCStringRef name, IO_handle stream, MCStack *&sptr)
 {
 	maxid = 0;
+	s_hc_instruments = 0;
 	MCValueAssign(MChcstat, kMCEmptyString);
 
     char* t_cname;
@@ -2840,6 +4159,8 @@ IO_stat hc_import(MCStringRef name, IO_handle stream, MCStack *&sptr)
 	MCMemoryDeleteArray(t_cname);
 	
     MCHcstak *hcstak = new (nothrow) MCHcstak(t_name);
+	// the file's path as given, to look for its resource fork beside it
+	hcstak->path = MCValueRetain(name);
 	hcstat_append("Loading stack %s...", t_name);
 	uindex_t startlen = MCStringGetLength(MChcstat);
 	IO_stat stat;

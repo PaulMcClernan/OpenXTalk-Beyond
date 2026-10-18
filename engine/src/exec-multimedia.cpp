@@ -37,6 +37,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "vclip.h"
 
 #include "platform.h"
+#include "hcnotes.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -660,7 +661,7 @@ void MCMultimediaExecPrepareVideoClip(MCExecContext& ctxt, MCStack *p_target, in
 	MCMultimediaExecLoadVideoClip(ctxt, p_target, p_chunk_type, p_clip, p_looping, p_at, p_options, true);
 }
 
-void MCMultimediaExecPlayAudioClip(MCExecContext& ctxt, MCStack *p_target, int p_chunk_type, MCStringRef p_clip, bool p_looping)
+void MCMultimediaExecPlayAudioClip(MCExecContext& ctxt, MCStack *p_target, int p_chunk_type, MCStringRef p_clip, bool p_looping, MCStringRef p_notes, double p_tempo)
 {
     // AL-2014-09-12: [[ Bug 13428 ]] Missed an MCU_play_stop() in the refactoring
     MCU_play_stop();
@@ -711,6 +712,32 @@ void MCMultimediaExecPlayAudioClip(MCExecContext& ctxt, MCStack *p_target, int p
 			return;
 		}
 		MCS_close(stream);
+	}
+	// HyperCard's notes: the clip, taken to sound middle C, pitched for each
+	// note, as a clip of its own that goes when it has played
+	if (p_notes != nil && !MCStringIsEmpty(p_notes))
+	{
+		MCAutoStringRefAsCString t_notes;
+		int16_t *t_source = nil, *t_melody = nil;
+		uint32_t t_count, t_rate, t_length;
+		if (t_notes . Lock(p_notes) &&
+		    MCacptr -> getmono16(t_source, t_count, t_rate) &&
+		    MCHcRenderNotes(t_source, t_count, t_rate, *t_notes, p_tempo, t_melody, t_length))
+		{
+			MCAudioClip *t_clip = new (nothrow) MCAudioClip;
+			if (t_clip != nil)
+			{
+				t_clip -> setmono16(t_melody, t_length, t_rate);
+				t_clip -> setname(MCacptr -> getname());
+				t_clip -> setloudness(MCacptr -> getloudness());
+				t_clip -> setdisposable();
+				if (MCacptr -> isdisposable())
+					delete MCacptr;
+				MCacptr = t_clip;
+			}
+		}
+		delete[] t_source;
+		delete[] t_melody;
 	}
 	MCacptr->setlooping(p_looping);
 	MCU_play();
