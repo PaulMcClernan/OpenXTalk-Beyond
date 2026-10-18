@@ -2,20 +2,20 @@
 on FillInData pDataA, pRow
    # Map pDataA values to physical controls...
    local tVersion
-   
+
    set the cTypeID of me to pDataA["name"]
-   
+
    local tLabel, tAuthor
    if pDataA["title"] is not empty then put pDataA["title"] into tLabel
    else if pDataA["label"] is not empty then put pDataA["label"] into tLabel
    else if pDataA["display name"] is not empty then put pDataA["display name"] into tLabel
    else put pDataA["name"] into tLabel
-   
+
    if pDataA["author"] is not empty then put pDataA["author"] into tAuthor
    if tAuthor is empty then put "Unknown Author" into tAuthor
-   
+
    put tLabel & return & tAuthor  into field "description" of me
-   
+
    local tShowSVGIcon, tSVGIcon, tDefaultName
    put true into tShowSVGIcon
    revIDEExtensionIconFromType pDataA["type"], pDataA["name"], tDefaultName, tSVGIcon
@@ -23,11 +23,11 @@ on FillInData pDataA, pRow
       set the iconPath of widget "svgicon" of me to pDataA["svgicon"]
    else if pDataA["icon"] is not empty then
       put false into tShowSVGIcon
-      set the filename of image "icon" of me to pDataA["icon"] 
+      set the filename of image "icon" of me to pDataA["icon"]
    else
       set the iconPresetName of widget "svgicon" of me to tDefaultName
    end if
-   
+
    if tShowSVGIcon then
       show widget "svgicon" of me
       hide image "icon" of me
@@ -35,20 +35,20 @@ on FillInData pDataA, pRow
       hide widget "svgicon" of me
       show image "icon" of me
    end if
-   
+
    ## Is an update available
    hide button "uninstall" of me
    hide button "update" of me
-   
+
    put char -5 to -1 of pDataA["identifier"] into tVersion
    if pDataA["status"] is not "uninstalled" then
       if pDataA["latest"] is not tVersion then
          set the cLatestVersion of me to pDataA["latest"]
       end if
    end if
-   
+
    set the cIDE of me to (pDataA["ide"] is true)
-   
+
    switch pDataA["status"]
       case "installed"
          hide button "cancel" of me
@@ -61,17 +61,17 @@ on FillInData pDataA, pRow
          hide group "installProgress" of me
          show image "Error" of me
          put pDataA["name"] && "error" into field "Error Message" of me
-         set the tooltip of field "Error Message" of me to pDataA["error"]         
+         set the tooltip of field "Error Message" of me to pDataA["error"]
          set the tooltip of image "Error" of me to pDataA["error"]
          show field "Error Message" of me
          break
-      case "unloaded"         
+      case "unloaded"
          hide button "cancel" of me
          hide group "installProgress" of me
          hide image "Error" of me
          hide field "Error Message" of me
          break
-      case "uninstalled"         
+      case "uninstalled"
          hide button "cancel" of me
          hide group "installProgress" of me
          hide image "Error" of me
@@ -84,19 +84,19 @@ on FillInData pDataA, pRow
          set the thumbposition of scrollbar "installProgressBar" of me to  pDataA["progress"]
          hide image "Error" of me
          hide field "Error Message" of me
-         break         
-   end switch   
-   
+         break
+   end switch
+
    local tActions
    put __MenuActionsForRow(pDataA) into tActions
-   
+
    set the text of button "extensionActions" of me to tActions
    enable widget "actionIcon" of me
 end FillInData
 
 private function __MenuActionsForRow pDataA
    local tActions
-   
+
    if pDataA["status"] is "unloaded" then
       put "Load" & return after tActions
       if not pDataA["ide"] then
@@ -114,7 +114,7 @@ private function __MenuActionsForRow pDataA
          put "Remove" & return after tActions
       end if
    end if
-   
+
    if pDataA["type"] is "widget" then
       local tShow
       put "Show in tools palette/|Toggle Visible" & return into tShow
@@ -127,7 +127,7 @@ private function __MenuActionsForRow pDataA
    else if pDataA["type"] is "snippet" then
       put "Show snippet" & return after tActions
    end if
-   
+
    if _canLoad(pDataA) then
       local tLoadOnStartup
       put "Load on startup/|Toggle Load" & return into tLoadOnStartup
@@ -136,9 +136,9 @@ private function __MenuActionsForRow pDataA
       end if
       put tLoadOnStartup after tActions
    end if
-   
+
    put "Show documentation" & return after tActions
-   
+
    local tSampleList
    if pDataA["samples"] is not empty then
       put "Sample stacks" & return after tActions
@@ -161,19 +161,20 @@ private function _canLoad pDataA
    switch pDataA["type"]
       case "snippet"
       case "sample"
-         return false
+         -- return true
+      return false
    end switch
    return true
 end _canLoad
 
 on LayoutControl pControlRect
-   
+
    local tMargin, tPadding, tIconLoc
-   
+
    # Resize controls/row
    put the paletteMargin of me into tMargin
    put the palettePadding of me into tPadding
-   
+
    set the rect of graphic "background" of me to pControlRect
    set the width of graphic "border" of me to (item 3 of pControlRect - item 1 of pControlRect)
    set the bottomLeft of graphic "border" of me to item 1 of pControlRect, item 4 of pControlRect
@@ -181,43 +182,43 @@ on LayoutControl pControlRect
 
    set the loc of widget "svgicon" of me to tIconLoc
    set the left of widget "svgicon" of me to item 1 of pControlRect + tMargin
-   set the loc of image "icon" of me to the loc of widget "svgicon" of me  
+   set the loc of image "icon" of me to the loc of widget "svgicon" of me
 
    set the width of field "description" of me to the formattedWidth of field "description" of me
    set the height of field "description" of me to the formattedHeight of field "description" of me
    set the loc of field "description" of me to the loc of me
    set the left of field "description" of me to the right of widget "svgicon" of me + tPadding
-   
-   set the textColor of line 1 of field "description" of me to revIDEColor("text_1")
-   set the textColor of line 2 of field "description" of me to revIDEColor("text_2")
-   
+
+   -- set the textColor of line 1 of field "description" of me to revIDEColor("text_1")
+   -- set the textColor of line 2 of field "description" of me to revIDEColor("text_2")
+
    ## Action Icon
    set the loc of widget "ActionIcon" of me to the loc of me
    set the right of widget "ActionIcon" of me to item 3 of pControlRect - tMargin
-   
+
    ## Cancel button
    set the loc of button "cancel" of me to the loc of me
    set the right of button "cancel" of me to the left of widget "actionIcon" of me - tMargin
-   
+
    ## Progress Bar
    set the width of group "installProgress" of me to (item 3 of pControlRect - the right of field "description" of me - the width of widget "actionIcon" of me - the width of button "cancel" of me - tMargin)
    set the loc of group "installProgress" of me to the loc of me
    set the right of group "installProgress" of me to the left of widget "ActionIcon" of me - tPadding
-   
+
    hide button "cancel" of me
-   
+
    ## Error data
    set the loc of image "Error" of me to the loc of me
    set the right of image "Error" of me to the left of widget "actionIcon" of me - tPadding
    set the width of field "Error Message" of me to (item 3 of pControlRect - the width of widget "ActionIcon" of me)
    set the loc of field "Error Message" of me to the loc of me
-   
+
    if the visible of image "Error" of me then
       set the right of field "Error Message" of me to the left of image "Error" of me
    else
       set the right of field "Error Message" of me to item 3 of pControlRect - tMargin
    end if
-   
+
    -- Don't allow the error field to overspill the description
    -- or go past a third of the width
    local tLeft
@@ -233,7 +234,7 @@ on LayoutControl pControlRect
       set the loc of field "Error Message" of me to the loc of me
       set the left of field "Error Message" of me to tLeft
    end if
-   
+
 end LayoutControl
 
 on mouseUp pMouseButton
@@ -256,13 +257,13 @@ end mouseUp
 
 on menuPick pAction
    local tSample, tSampleStacks
-   
+
    set the itemDel to "|"
    if item 1 of pAction is "Sample Stacks" then
       put item 2 of pAction into tSample
       delete item 2 of pAction
    end if
-   
+
    local tKind
    put the cTypeID of me into tKind
    switch pAction
@@ -297,6 +298,7 @@ on menuPick pAction
          break
       case "Sample Stacks"
          put the cSampleStacks of me into tSampleStacks
+         -- open stack tSampleStacks
          launchExtensionSampleStack tSampleStacks[tSample]
          break
       case "Show Documentation"
@@ -313,7 +315,7 @@ end menuPick
 
 on mouseDoubleUp
    if not the cIDE of me then
-      dispatch "browserGoToExtensionPage" to card 2 of this stack with the cTypeID of me
+      dispatch "browserGoToExtensionPage" to card "web" of this stack with the cTypeID of me
    end if
 end mouseDoubleUp
 
@@ -321,6 +323,6 @@ getProp dvRowControl
    return the long id of me
 end dvRowControl
 
-setProp dvHilite[pHiliteColor] pBoolean
+-- setProp dvHilite[pHiliteColor] pBoolean
    # Override basic hilite feature...
-end dvHilite
+-- end dvHilite
