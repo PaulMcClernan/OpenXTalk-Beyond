@@ -115,6 +115,10 @@ on TestHyperCardScriptsRules
    TestAssert "T11: of cd", line 6 of tScript is "  set the hilite of btn 1 of this cd to true"
    TestAssert "T11: exit to HyperCard", line 7 of tScript is "  exit to top"
 
+   put _Rewrite("on mouseUp", "  put the version of scriptingLanguage " & quote & "AppleScript" & quote & " into x", "  get version of scriptingLanguage " & quote & "AppleScript" & quote, "end mouseUp") into tScript
+   TestAssert "T10: the version of a scripting language", line 2 of tScript is "  put hcVersion() into x"
+   TestAssert "T10: version of a scripting language, without the", line 3 of tScript is "  get hcVersion()"
+
    put _Rewrite("junk before", "on mouseUp", "  put 1 into x", "end mouseUp", "junk after") into tScript
    TestAssert "T0: text outside handlers", tScript is _Lines("-- junk before", "on mouseUp", "  put 1 into x", "end mouseUp", "-- junk after")
 
@@ -143,10 +147,12 @@ on TestHyperCardScriptsFix
    put the script of stack tStack into tOriginal
    create button "Mixed"
    set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown", "function f", "  put ( into z", "end f")
+   create button "Named"
+   set the script of button "Named" to _Lines("on mouseUp", "  put 3 into w", "end mouseUp", "on " & quote & "v" & quote, "  beep", "end " & quote & "v" & quote)
    unlock messages
 
    put revHyperCardFixScripts(tStack) into tReport
-   TestAssert "a report", "HyperCard scripts: 2 rewritten, 1 salvaged" is in tReport
+   TestAssert "a report", "HyperCard scripts: 3 rewritten, 2 salvaged" is in tReport
    TestAssert "the stack script compiles", _Compiles(the script of stack tStack)
    TestAssert "the stack script rewritten", "global hc_group" is in the script of stack tStack
    TestAssert "its HyperTalk kept", _Kept(the long id of stack tStack) is tOriginal
@@ -157,7 +163,8 @@ on TestHyperCardScriptsFix
    TestAssert "salvaged: the bad handler passes its message", "   pass mouseDown" is among the lines of the script of button "Mixed" of stack tStack
    TestAssert "salvaged: its HyperTalk inside, commented out", "   --   put 1 +* into" is among the lines of the script of button "Mixed" of stack tStack
    TestAssert "salvaged: a bad function returns empty", "   return empty" is among the lines of the script of button "Mixed" of stack tStack
-   TestAssert "logged in the hcImportStat", "HyperCard scripts: 2 rewritten" is in the hcImportStat
+   TestAssert "salvaged: a handler no name can call, commented out whole", _Compiles(the script of button "Named" of stack tStack) and "-- on " & quote & "v" & quote is among the lines of the script of button "Named" of stack tStack
+   TestAssert "logged in the hcImportStat", "HyperCard scripts: 3 rewritten" is in the hcImportStat
    put the customProperties["uHyperCard"] of stack tStack into tSet
    TestAssert "the report kept on the stack", tSet["scripts"] is tReport
 

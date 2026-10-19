@@ -879,7 +879,11 @@ private function _PhraseRules pLine
          next repeat
       end if
       if tWord is "version" and tNext is "of" and tNext2 is "scriptinglanguage" then
-         _Replace tTokens, tIdx, (i - (tPrev is "the")), i + 3, "hcVersion()"
+         if tPrev is "the" then
+            _Replace tTokens, tIdx, i - 1, i + 3, "hcVersion()"
+         else
+            _Replace tTokens, tIdx, i, i + 3, "hcVersion()"
+         end if
          _Fire "T10 HyperCard's version"
          next repeat
       end if
@@ -1126,7 +1130,7 @@ end _Visual
 -- ran the first). Returns the script; sLeftOut is the number of handlers
 -- left out.
 private function _Salvage pScript, pOriginal
-   local tPieces, tCount, i, tOut, tName, tKind, tSeen, tLeftOut, tOriginalHandlers
+   local tPieces, tCount, i, tOut, tName, tKind, tSeen, tLeftOut, tOriginalHandlers, tStub
    put _Handlers(pScript) into tPieces
    put _Handlers(pOriginal) into tOriginalHandlers
    put 0 into tLeftOut
@@ -1149,7 +1153,13 @@ private function _Salvage pScript, pOriginal
          next repeat
       end if
       add 1 to tLeftOut
-      put _Stub(tKind, tName, _OriginalHandler(tOriginalHandlers, tName, tPieces[i]["text"])) & return after tOut
+      put _Stub(tKind, tName, _OriginalHandler(tOriginalHandlers, tName, tPieces[i]["text"])) into tStub
+      if not _Compiles(tStub) then
+         -- a name no handler can have here ("v" in quotes, time&Date):
+         -- nothing can call it, so it is commented out whole
+         put _Commented(_OriginalHandler(tOriginalHandlers, tName, tPieces[i]["text"]), "a handler whose name cannot be a handler's here") into tStub
+      end if
+      put tStub & return after tOut
    end repeat
    delete the last char of tOut
    put tLeftOut into sLeftOut
