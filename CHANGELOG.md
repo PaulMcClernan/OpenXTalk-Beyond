@@ -17,7 +17,8 @@ words, is in the [README](README.md#the-ide) and on the
 ## Unreleased
 
 - Learn: the xTalk Suite demos open built, in the middle of the screen (#157)
-- xTalk Academy: an interactive course in programming for beginners and schools
+- Branding: 0.2.7 "Bug Hunt" splash screens, installer art, banner and release name (#161)
+- xTalk Academy: an interactive course in programming for beginners and schools (#163)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 
