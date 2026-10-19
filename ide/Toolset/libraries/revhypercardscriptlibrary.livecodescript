@@ -84,6 +84,9 @@ local sFiredTotal
 -- How many handlers the last _Salvage left out
 local sLeftOut
 
+-- The pieces of the last _Match
+local sMatch
+
 /*
 Rewrites the HyperTalk scripts of a stack the engine has just imported
 so that they compile here.
@@ -293,18 +296,28 @@ end _Externals
 -- Add the library as a substack of the stack and make it the stack's
 -- behavior. Returns a line for the report, or empty if it was there.
 private function _AddLibrary pStack
-   local tMain
-   put the long id of stack (the short name of pStack) into tMain
+   local tName, tCount
    if the behavior of pStack is not empty then
       return "Not added: the HyperCard library (the stack already has a behavior)"
    end if
-   if kLibraryName is not among the lines of the substacks of pStack then
-      create invisible stack kLibraryName
-      set the mainStack of stack kLibraryName to the short name of pStack
-      set the script of stack kLibraryName of pStack to revHyperCardLibraryScript()
+   -- A substack of the import may have the name already (a PLTE palette
+   -- is one): this library is the one marked as it, under the first free
+   -- name
+   put kLibraryName into tName
+   put 1 into tCount
+   repeat while tName is among the lines of the substacks of pStack \
+         and the uHyperCard["library"] of stack tName of pStack is not true
+      add 1 to tCount
+      put kLibraryName && tCount into tName
+   end repeat
+   if tName is not among the lines of the substacks of pStack then
+      create invisible stack tName
+      set the mainStack of it to the short name of pStack
+      set the script of stack tName of pStack to revHyperCardLibraryScript()
+      set the uHyperCard["library"] of stack tName of pStack to true
    end if
-   set the behavior of pStack to the long id of stack kLibraryName of pStack
-   return "Added: the substack" && quote & kLibraryName & quote && "as the stack's behavior"
+   set the behavior of pStack to the long id of stack tName of pStack
+   return "Added: the substack" && quote & tName & quote && "as the stack's behavior"
 end _AddLibrary
 
 ----------------------------------------------------------------------
@@ -1029,44 +1042,117 @@ end _PlayNotes
 -- library's handlers; and "group" in a text style, which is not a style
 -- here
 private function _LineCommands pLine
-   local tCode, tIndent, tRest, a, b, c, d, e
-   put _CodeText(pLine) into tCode
-   if quote is in pLine then
-      -- (a quoted string in these commands is passed through as it is)
-   end if
-   if matchText(pLine, "(?i)^(\s*)reset\s+menubar\s*(--.*)?$", tIndent, tRest) then
+   local tIndent, tRest, a, b, c, d
+   -- Each pattern is matched with the inside of strings and comments
+   -- blanked, so that only the code outside them can match; the pieces
+   -- are then cut from the line itself (_Match)
+   if _Match(pLine, "(?i)^(\s*)reset\s+menubar\s*(--.*)?$") then
+      put sMatch[1] into tIndent
+      put sMatch[2] into tRest
       _Fire "T8 reset menubar"
       return tIndent & "hcResetMenubar" & _Spaced(tRest)
    end if
-   if matchText(pLine, "(?i)^(\s*)(create|delete)\s+menu\s+(.+)$", tIndent, a, tRest) then
+   if _Match(pLine, "(?i)^(\s*)(create|delete)\s+menu\s+(.+)$") then
+      put sMatch[1] into tIndent
+      put sMatch[2] into a
+      put sMatch[3] into tRest
       if _Lower(word 1 of tRest) is not among the words of "item items" then
          _Fire "T12 HyperCard command to the library"
          if _Lower(a) is "create" then return tIndent & "hcCreateMenu" && tRest
          return tIndent & "hcDeleteMenu" && tRest
       end if
    end if
-   if matchText(pLine, "(?i)^(\s*)open\s+report\s+printing\b(.*)$", tIndent, tRest) then
+   if _Match(pLine, "(?i)^(\s*)open\s+report\s+printing\b(.*)$") then
+      put sMatch[1] into tIndent
+      put sMatch[2] into tRest
       _Fire "T12 HyperCard command to the library"
       return tIndent & "hcOpenReportPrinting" && _Quoted(tRest)
    end if
-   if matchText(pLine, "(?i)^(\s*)dial\s+(.*?)\s+with\s+modem\b(.*)$", tIndent, a, tRest) then
+   if _Match(pLine, "(?i)^(\s*)dial\s+(.*?)\s+with\s+modem\b(.*)$") then
+      put sMatch[1] into tIndent
+      put sMatch[2] into a
+      put sMatch[3] into tRest
       _Fire "T12 HyperCard command to the library"
       return tIndent & "hcDial" && a & comma && _Quoted(tRest)
    end if
-   if matchText(pLine, "(?i)^(\s*)put\s+(.+?)\s+(into|after|before)\s+menu\s+(.+?)\s+with\s+menu(?:msgs?|messages?)\s+(.+)$", tIndent, a, b, c, d) then
+   if _Match(pLine, "(?i)^(\s*)put\s+(.+?)\s+(into|after|before)\s+menu\s+(.+?)\s+with\s+menu(?:msgs?|messages?)\s+(.+)$") then
+      put sMatch[1] into tIndent
+      put sMatch[2] into a
+      put sMatch[3] into b
+      put sMatch[4] into c
+      put sMatch[5] into d
       _Fire "T12 HyperCard command to the library"
       return tIndent & "hcPutIntoMenu" && a & comma && quote & b & quote & comma && c & comma && d
    end if
-   if matchText(pLine, "(?i)^(\s*(?:(?:then|else)\s+)?)palette\s+(.+?,.+)$", tIndent, a) then
+   if _Match(pLine, "(?i)^(\s*(?:(?:then|else)\s+)?)palette\s+(.+?,.+)$") then
+      put sMatch[1] into tIndent
+      put sMatch[2] into a
       _Fire "T12 HyperCard command to the library"
       return tIndent & "hcPalette" && a
    end if
-   if matchText(pLine, "(?i)^(\s*set\s+(?:the\s+)?textstyle\b.*\bto\b.*?),\s*group\b(.*)$", a, b) then
+   if _Match(pLine, "(?i)^(\s*set\s+(?:the\s+)?textstyle\b.*\bto\b.*?),\s*group\b(.*)$") then
+      put sMatch[1] into a
+      put sMatch[2] into b
       _Fire "T12 HyperCard command to the library"
       return a & b
    end if
    return pLine
 end _LineCommands
+
+-- matchText on pLine, with the inside of its strings and comments blanked
+-- for the match (the same length, so the pieces line up); the pieces are
+-- cut from pLine into sMatch[1] to sMatch[5]
+private function _Match pLine, pPattern
+   local tMasked, s1, e1, s2, e2, s3, e3, s4, e4, s5, e5
+   put empty into sMatch
+   put _Masked(pLine) into tMasked
+   if not matchChunk(tMasked, pPattern, s1, e1, s2, e2, s3, e3, s4, e4, s5, e5) then
+      return false
+   end if
+   put _Piece(pLine, s1, e1) into sMatch[1]
+   put _Piece(pLine, s2, e2) into sMatch[2]
+   put _Piece(pLine, s3, e3) into sMatch[3]
+   put _Piece(pLine, s4, e4) into sMatch[4]
+   put _Piece(pLine, s5, e5) into sMatch[5]
+   return true
+end _Match
+
+private function _Piece pLine, pStart, pEnd
+   if pStart is not an integer or pEnd is not an integer or pEnd < pStart then return empty
+   return char pStart to pEnd of pLine
+end _Piece
+
+-- pLine with every char inside a string, and every char of a comment after
+-- its "--", made an x
+private function _Masked pLine
+   local tOut, tChar, tInString, i
+   put false into tInString
+   repeat with i = 1 to the number of chars of pLine
+      put char i of pLine into tChar
+      if tInString then
+         if tChar is quote then
+            put false into tInString
+         else
+            put "x" into tChar
+         end if
+      else if tChar is quote then
+         put true into tInString
+      else if tChar is "-" and char i + 1 of pLine is "-" then
+         put "--" & _Xs(the number of chars of pLine - i - 1) after tOut
+         return tOut
+      end if
+      put tChar after tOut
+   end repeat
+   return tOut
+end _Masked
+
+private function _Xs pCount
+   local tOut
+   repeat pCount times
+      put "x" after tOut
+   end repeat
+   return tOut
+end _Xs
 
 private function _Spaced pText
    if pText is empty then return empty

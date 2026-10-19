@@ -126,6 +126,10 @@ on TestHyperCardScriptsRules
    TestAssert "T12: palette with a location", line 2 of tScript is "  hcPalette " & quote & "Navigator" & quote & ", " & quote & "100,100" & quote
    TestAssert "T12: a continued command on one line, the line count kept", line 3 of tScript is "  hcPutIntoMenu x, " & quote & "into" & quote & ", " & quote & "Go" & quote & ", " & quote & "m" & quote and line 4 of tScript is empty and line 5 of tScript is "  beep"
 
+   put _Rewrite("on mouseUp", "  put " & quote & "x into menu Go with menuMsg y" & quote & " into tMenu", "  reset menubar -- palette a, b", "end mouseUp") into tScript
+   TestAssert "T12: a command's words inside a string are not the command", line 2 of tScript is "  put " & quote & "x into menu Go with menuMsg y" & quote & " into tMenu"
+   TestAssert "T8: a comment kept, and not read as a command", line 3 of tScript is "  hcResetMenubar -- palette a, b"
+
    put revHyperCardRewriteScript(_Lines("on mouseUp", "  popUp the short name of me, true", "end mouseUp"), "PopUp") into tScript
    TestAssert "T13: an external named like a command", line 2 of tScript is "  hcX_popUp the short name of me, true"
 end TestHyperCardScriptsRules
@@ -172,6 +176,21 @@ on TestHyperCardScriptsFix
    TestAssert "library added", "HyperCard Library" is among the lines of the substacks of stack tStack
    TestAssert "library is the behavior", the short name of the behavior of stack tStack is "HyperCard Library"
    TestAssert "library compiles", _Compiles(the script of stack "HyperCard Library" of stack tStack)
+   _Close tStack
+
+   -- a substack the import made with the library's name (a palette, say)
+   -- is left alone
+   put "HCClash" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   create invisible stack "HyperCard Library"
+   set the mainStack of it to tStack
+   set the script of stack "HyperCard Library" of stack tStack to _Lines("on palette", "end palette")
+   set the script of stack tStack to _Lines("on openStack", "  put the message box into x", "end openStack")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "a clash: the library under a free name", the short name of the behavior of stack tStack is "HyperCard Library 2"
+   TestAssert "a clash: the other substack untouched", the script of stack "HyperCard Library" of stack tStack is _Lines("on palette", "end palette") & return or the script of stack "HyperCard Library" of stack tStack is _Lines("on palette", "end palette")
    _Close tStack
 end TestHyperCardScriptsFix
 
