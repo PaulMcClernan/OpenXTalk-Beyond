@@ -1562,9 +1562,12 @@ OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
 - **The web IDE's MCP Bridge under Claude Desktop.** The desktop
   extension that Claude Setup downloads now serves when Claude Desktop
   starts it with its own built-in Node.js, where before it never
-  started ("Request timed out"). Claude Desktop can still fail to reach
-  it ("Unable to connect to extension server"); that is being looked
-  into.
+  started ("Request timed out"). With Claude Desktop's built-in
+  Node.js, Desktop can still fail to reach it ("Unable to connect to
+  extension server"): turn off *Use Built-in Node.js for MCP* (Settings
+  > Extensions > Advanced settings) and it connects. Desktop starts two
+  copies of the server and only the first holds the web IDE's port, so
+  use the bridge from a regular Claude Desktop chat.
 
 A script sees these differences from 0.2.7-rc.4. On a Mac,
 revcommonlibrary's private `_revEnvironmentPlatform` always says "MacOS
