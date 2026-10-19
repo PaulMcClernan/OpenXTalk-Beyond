@@ -17,6 +17,7 @@ words, is in the [README](README.md#the-ide) and on the
 ## Unreleased
 
 - Learn: the xTalk Suite demos open built, in the middle of the screen (#157)
+- Branding: 0.2.7 "Bug Hunt" splash screens, installer art, banner and release name (#161)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 
