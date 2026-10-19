@@ -1592,8 +1592,6 @@ function lkIconPaths pName
          return "<line x1='19' x2='10' y1='4' y2='4'/><line x1='14' x2='5' y1='20' y2='20'/><line x1='15' x2='9' y1='4' y2='20'/>"
       case "strikethrough"
          return "<path d='M16 4H9a3 3 0 0 0-2.83 4'/><path d='M14 12a4 4 0 0 1 0 8H6'/><line x1='4' x2='20' y1='12' y2='12'/>"
-      case "code"
-         return "<polyline points='16 18 22 12 16 6'/><polyline points='8 6 2 12 8 18'/>"
       case "square-code"
          return "<path d='M10 9.5 8 12l2 2.5'/><path d='m14 9.5 2 2.5-2 2.5'/><rect width='18' height='18' x='3' y='3' rx='2'/>"
       case "list"
