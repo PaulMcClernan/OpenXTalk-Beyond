@@ -29,6 +29,7 @@ words, is in the [README](README.md#the-ide) and on the
 - IDE dialogs: the window can be made bigger, and its text and code take the room (#165)
 - Changelog: #159's lines under Unreleased, where they were merged (#165)
 - xTalk Assistant: its windows in the look of Learn, with xTalk in Learn's colours (#167)
+- Tools palette: a modern look, sizeable, with names, a filter and sections that fold (Tools > Modern Tools Palette; the classic look stays the default) (#166)
 - IDE: the About, Release Notes and xTalk Assistant Memory windows can be made larger (#164)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
