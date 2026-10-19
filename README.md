@@ -86,7 +86,12 @@ Bridge, closes a web menu when the page around it is clicked, brings
 over OXT DPE's Extension Manager, lets a stack in the Stack Player find
 its files through `specialFolderPath("resources")` and polishes the
 stacks new in 0.2.7 (see
-[0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish));
+[0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish)),
+and 0.2.7-rc.5, the last candidate before 0.2.7, adds xTalk Chat, three
+xTalk Suite apps in Learn and a new About window, and fixes the
+Standalone Settings' Web card on macOS 26 and the web IDE's bridge under
+Claude Desktop (see
+[0.2.7-rc.5](#027-rc5-xtalk-chat-the-xtalk-suites-apps-and-a-new-about-window));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1526,6 +1531,55 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.5: xTalk Chat, the xTalk Suite's apps, and a new About window
+
+OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
+0.2.7, has everything in 0.2.7-rc.4, and:
+
+- **xTalk Chat** (*Development > Plugins > xTalk Chat*): a chat in the
+  IDE for the people using xTalk who choose to go online, with public
+  rooms, who is online now and private messages, over Nostr through the
+  xTalk Suite extensions OXT-Beyond ships built in, so there is no
+  server of ours. It connects to nothing until you press **Go online**
+  in its window, which first says what goes to the relays and who can
+  read it; the environment variable `OXTBEYOND_XTALK_CHAT=off` keeps it
+  off for good. Its key and name are kept in `.oxt-beyond/xtalk-chat`
+  in your home folder (see [Where OXT-Beyond keeps your
+  files](#where-oxt-beyond-keeps-your-files)).
+- **Three xTalk Suite apps in Learn**, under "xTalk Suite demos": No
+  Cloud Quick Share (send a file of any size with a short code, straight
+  from one computer to another), Torrent Client and Box2D Platformer,
+  each a stack whose script is the suite's own, on the extensions
+  OXT-Beyond ships built in (see
+  [tools/examples](tools/examples/README.md#xtalk-suite-demos)).
+- **A new About window**, in the look of Home and Learn: the version,
+  the release's name, the build and the engine with a Copy version
+  button, the about text, and the licences. With the Option (Alt) key
+  down, Help > About opens the classic window as before.
+- **The Standalone Settings' Web card on macOS 26** is whole again: it
+  showed its heading and nothing else, so a stack could not be built for
+  the web there.
+- **The web IDE's MCP Bridge under Claude Desktop.** The desktop
+  extension that Claude Setup downloads now answers when Claude Desktop
+  starts it with its own built-in Node.js; before, Desktop gave up on it
+  ("Request timed out").
+
+A script sees these differences from 0.2.7-rc.4. On a Mac,
+revcommonlibrary's private `_revEnvironmentPlatform` always says "MacOS
+X", so on macOS 26 the IDE's font helpers return Lucida Grande at 11
+where they threw; on macOS 10 to 15, Windows and Linux nothing changes.
+`tOpenAbout` of the menu bar opens the stack "revAbout" (with the
+Option key down, "aboutstack" as before); Learn's examples table has a
+group "suite" and three rows; and the menu bar's Development > Plugins
+has an "xTalk Chat" line when its extension is installed. The MCP
+Bridge's server serves however Node.js loads it, unless
+`OXT_MCP_LIBRARY=1`. Desktop engines and stacks are otherwise unchanged.
+Pull requests
+[#146](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/146)
+to
+[#149](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/149)
+list every change.
 
 #### 0.2.7-rc.4: Claude in the web IDE, the Extension Manager, and polish
 
