@@ -329,8 +329,10 @@ private on  __setPropertyDataOfObjectFromFile pObjectType, pFile, pPropInfoA
 
       -- OXT-Beyond: the Linux player (player-legacy) has no mirrored
       -- property, so setting it to its default made every new player fail
-      -- to be created, and the inspector could not show or set it
-      if tPropertyName is "mirrored" and pObjectType is "com.livecode.interface.classic.Player" and the platform is "Linux" then
+      -- to be created, and the inspector could not show or set it. The web
+      -- engine's player (em-player.cpp) is player-legacy too
+      if tPropertyName is "mirrored" and pObjectType is "com.livecode.interface.classic.Player" and \
+            (the platform is "Linux" or the platform is "HTML5") then
          next repeat
       end if
 
