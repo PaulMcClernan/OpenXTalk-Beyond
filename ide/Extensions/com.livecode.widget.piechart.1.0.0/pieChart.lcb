@@ -22,10 +22,10 @@ use com.livecode.engine
 use com.livecode.library.widgetutils
 
 metadata title is "Pie Chart"
-metadata author is "LiveCode"
-metadata version is "1.0.0"
+metadata author is "LiveCode, OpenXTalk.org"
+metadata version is "1.0.1"
 metadata preferredSize is "200,150"
-metadata svgicon is "M115 386 c-44 -19 -103 -89 -111 -131 -31 -164 87 -282 251 -251 43 8 113 68 132 113 26 62 24 63 -97 63 l-110 0 0 110 c0 122 -2 124 -65 96z M200 301 l0 -101 101 0 102 0 -6 41 c-10 77 -79 146 -156 156 l-41 6 0 -102z" 
+metadata svgicon is "M115 386 c-44 -19 -103 -89 -111 -131 -31 -164 87 -282 251 -251 43 8 113 68 132 113 26 62 24 63 -97 63 l-110 0 0 110 c0 122 -2 124 -65 96z M200 301 l0 -101 101 0 102 0 -6 41 c-10 77 -79 146 -156 156 l-41 6 0 -102z"
 
 private variable mValues as List
 private variable mLabels as List
@@ -64,7 +64,7 @@ Description:
 Use the <sectorLabels> property to set the labels to be displayed in the pie chart.
 **/
 property "sectorLabels" get getLabels set setLabels
-metadata sectorLabels.default is "Jan,Feb,Mar,Apr,May,Jun"
+metadata sectorLabels.default is "Jan,Feb,Mar,Apr,May,June,July,Aug,Sept,Oct,Nov,Dec"
 metadata sectorLabels.label is "Labels"
 
 /**
@@ -85,8 +85,8 @@ constant kPadding is 10
 public handler OnCreate()
    variable tSectors
 
-   setValues("1,2,3,5,8,13")
-   setLabels("Jan,Feb,Mar,Apr,May,Jun")
+   setValues("1,2,3,4,5,6,7,8,9,10,11,12")
+   setLabels("Jan,Feb,Mar,Apr,May,June,July,Aug,Sept,Oct,Nov,Dec")
    put true into mShowLabels
 
    put the number of elements in mValues into tSectors
@@ -114,6 +114,7 @@ public handler OnPaint()
       variable tLabelBounds as Rectangle
       variable tLabelWidth as Number
       variable tLabelHeight as Number
+      set the font of this canvas to my font
 
       repeat for each element tLabelText in mLabels
          measure tLabelText on this canvas
@@ -192,16 +193,19 @@ public handler OnPaint()
       repeat for each element tElement in mLabels
          add 1 to tSectorNumber
 
-         put rectangle path of rectangle [the left of tLabelRect + tColorIndicatorPadding,tLineTop + tColorIndicatorPadding,the left of tLabelRect + tColorIndicatorDimension + tColorIndicatorPadding,tLineTop + tColorIndicatorDimension + tColorIndicatorPadding] into tColorIndicatorPath
+         put rectangle path of rectangle [the left of tLabelRect, tLineTop, the left of tLabelRect + tColorIndicatorDimension , tLineTop + tColorIndicatorDimension] into tColorIndicatorPath
 
          set the paint of this canvas to solid paint with element tSectorNumber of mColors
          fill tColorIndicatorPath on this canvas
 
          put rectangle [the left of tLabelRect + tLabelLineHeight,tLineTop,tWidth,tLineTop + tLabelLineHeight] into tLineRect
 
-         set the paint of this canvas to solid paint with color [0,0,0,1]
-         fill text tElement at top left of tLineRect on this canvas
-         add tLabelLineHeight to tLineTop
+	   -- This change is to use the Engine's inherited fore color info from the OS as the default text color -- Paul
+   		 set the paint of this canvas to my foreground paint  ---- OLD: set the paint of this canvas to solid paint with color [0,0,0,1]
+         fill text tElement at bottom left of tLineRect on this canvas
+         add the size of my font + 2 to tLineTop
+
+        -- add tLabelLineHeight to tLineTop
       end repeat
    end if
 end handler
@@ -318,6 +322,68 @@ public handler setLabels(in pLabels as String) returns nothing
 	redraw all
 end handler
 
+
+/**
+
+Syntax: set the sectorColors of <widget> to <pLabelList>
+Syntax: get the sectorColors of <widget>
+
+Parameters:
+pColorlist (String): A line delimited list of colors to use for each slice corresponding to sectorLabels.
+
+Summary: The list of colors associated with the pie chart sectors.
+
+Description:
+Use the <sectorLabels> property to set the labels to be displayed in the pie chart.
+**/
+private variable mColorList as List
+property "sectorColors" get getColorList set setColorList
+metadata sectorColors.default is "255,0,0\n0,255,0\n0,0,255\n255,255,0\n255,0,255\n0,255,255\n128,0,0\n0,128,0\n0,0,128\n128,128,0\n128,0,128\n0,128,128"
+metadata sectorColors.label is "Colors"
+
+public handler setColorList(in pColors as String) returns nothing
+   variable tColorLine as String
+    variable tColor as Color
+    variable tNewColorList as List
+
+  	 if pColors is not the empty string then
+	   split pColors by "\n" into mColorList
+	    repeat for each element tColorLine in mColorList
+	      if tColorLine is not the empty string then
+  	       	put StringToColor( tColorLine ) into tColor
+         	 -- log tColor
+         		 push tColor onto tNewColorList
+      	   end if
+  	     end repeat
+     else
+         -- log "Reset colors list to the default colors, there's always at least 12 colors in the list"
+   		 put "255,0,0\n0,255,0\n0,0,255\n255,255,0\n255,0,255\n0,255,255\n128,0,0\n0,128,0\n0,0,128\n128,128,0\n128,0,128\n0,128,128" into pColors
+    	 split pColors by "\n" into mColorList
+   		 repeat for each element tColorLine in mColorList
+        	 if tColorLine is not the empty string then
+   		      	put StringToColor( tColorLine ) into tColor
+          		-- log tColor
+         		push tColor onto tNewColorList
+      		end if
+    	end repeat
+     end if
+    -- log tNewColorList
+    put tNewColorList into mColors
+	redraw all
+end handler
+
+private handler getColorList() returns optional any
+   variable tColor
+   variable tColorListStr as String
+   repeat for each element tColor in mColors
+     --colorToString(pColor,pIncludeAlpha)
+      put colorToString( tColor, false) & "\n" after tColorListStr
+     -- log tColor
+   end repeat
+   delete the last char of tColorListStr -- remove trailing cr
+   return tColorListStr
+end handler
+
 private handler getLabels() returns String
    variable tLabels
    combine mLabels with "," into tLabels
@@ -329,5 +395,20 @@ public handler setShowLabels(in pShow as Boolean) returns nothing
    redraw all
 end handler
 
+private variable mTextSize as Integer
+property "textSize" get mTextSize set setTextSize
+-- metadata textSize.default is "12" -- ?
+private handler setTextSize(in pTextSize as Real)
+	put pTextSize into mTextSize -- use for storing property
+	redraw all
+end handler
+
+private variable mTextFont as optional any
+property "textFont" get mTextFont set setTextFont
+-- metadata textSize.default is "Helvetica" -- ?
+private handler setTextFont(in pTextFont as String)
+	put pTextFont into mTextFont -- use for storing property
+	redraw all
+end handler
 
 end widget
