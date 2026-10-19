@@ -108,14 +108,23 @@ function playerParam pQuery, pName
    return empty
 end playerParam
 
+-- The handlers below that playerOpenFile calls once the stack is open are
+-- private, which a call reaches straight, not through the message path.
+-- A stack imported from HyperCard has dynamicPaths true, and until the
+-- engine's turn ends the message path of a handler in another stack (the
+-- player's) runs through that stack's current card instead of its own
+-- stack, so a public handler of the player's is not found there ("can't
+-- find handler playerLog"). Nothing else calls them: the player is not in
+-- the message path of the stacks it opens.
+
 -- A line for the browser's console (and the checks of player_check.py)
-command playerLog pText
+private command playerLog pText
    replace return with " | " in pText
    write "PLAYER" && pText & return to stdout
 end playerLog
 
 -- pKind "error" for what went wrong, which the page shows as such
-command playerStatus pText, pKind
+private command playerStatus pText, pKind
    if there is a field "Status" of card 1 of me then
       put pText into field "Status" of card 1 of me
    end if
@@ -128,7 +137,7 @@ end playerStatus
 -- Tells the page's script (index.html) what happened: pEvent "ready",
 -- "opened" with the stack's name, "home", "library" and "choices" with
 -- their lists (playerShowLibrary, playerShowChoices), or "status"
-command playerTellPage pEvent, pDetail
+private command playerTellPage pEvent, pDetail
    local tError
    try
       do "if (window.oxtPlayer) window.oxtPlayer.event('" & pEvent & "'," & playerJSString(pDetail) & ");" as "JavaScript"
@@ -529,7 +538,7 @@ end playerForgetFolder
 ----------------------------------------------------------------
 
 command playerOpenFile pPath
-   local tRect, tName, tError, tResult, tFolder
+   local tRect, tName, tError, tResult, tFolder, tOpenError
    if sCurrent is not empty then
       playerGoHome
    end if
@@ -567,6 +576,16 @@ command playerOpenFile pPath
       put the result into tResult
    catch tError
       put playerErrorText(tError) into tResult
+      -- a script error in the stack's own openStack or openCard (a
+      -- HyperCard stack calling an XCMD it no longer has): the stack is
+      -- open, as it is on the desktop, and the error is reported once it
+      -- shows
+      if there is a stack pPath then
+         if the mode of stack pPath > 0 then
+            put tError into tOpenError
+            put empty into tResult
+         end if
+      end if
    end try
    if tResult is not empty then
       put empty into sCurrent
@@ -590,6 +609,9 @@ command playerOpenFile pPath
    playerLog "opened" && tName && "cards=" & the number of cards of stack tName && \
          "rect=" & the rect of stack tName
    playerTellPage "opened", tName & return & the number of cards of stack tName & return & the width of stack tName & "x" & the height of stack tName
+   if tOpenError is not empty then
+      playerShowError tOpenError, the long name of stack tName
+   end if
 end playerOpenFile
 
 -- Back to the player: the stack's windows close, and it and the stacks it
@@ -752,7 +774,7 @@ private command playerInstallErrorHandler
 end playerInstallErrorHandler
 
 -- The engine's error lines ("code,line,char,hint") as text
-function playerErrorText pError
+private function playerErrorText pError
    local tLine, tText, tMessage, tMessages
    -- a standalone has no error texts of its own: the build keeps the
    -- IDE's in the player's cScriptErrors
@@ -785,7 +807,7 @@ end playerErrorText
 -- coinxt...) has no build for the web: its first call fails with "unable to
 -- load foreign library". That is said in plain words, with the library's
 -- name, rather than as the extension's error trace.
-function playerNativeLibrary pError
+private function playerNativeLibrary pError
    local tOffset, tName
    put offset("unable to load foreign library '", pError) into tOffset
    if tOffset is 0 then
@@ -796,12 +818,17 @@ function playerNativeLibrary pError
    return tName
 end playerNativeLibrary
 
-function playerNativeText pLibrary
+private function playerNativeText pLibrary
    return "it uses" && pLibrary & ", an extension built from native code for" && \
          "desktop computers. Native extensions do not run on the web yet."
 end playerNativeText
 
 command playerReportError pError, pObject
+   playerShowError pError, pObject
+end playerReportError
+
+-- (private, for playerOpenFile: see playerLog)
+private command playerShowError pError, pObject
    local tText, tLibrary
    put playerErrorText(pError) into tText
    put playerNativeLibrary(pError) into tLibrary
@@ -819,7 +846,7 @@ command playerReportError pError, pObject
    else
       answer error "A script error in" && pObject & ":" & return & return & tText
    end if
-end playerReportError
+end playerShowError
 
 ----------------------------------------------------------------
 -- Files
