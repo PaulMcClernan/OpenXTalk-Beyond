@@ -7336,7 +7336,16 @@ while it is imported. They run as usual once you use the stack.
 An imported stack has no file name, as with Open Stack, so File > Save
 asks where to save it and the HyperCard file is not overwritten.
 
-References: revIDEActionImportHyperCardStack (command), revIDEOpenStack (command)
+Unless File > Import Stack > Make HyperTalk Scripts Compile is turned off
+(the preference cHyperCardFixScripts set to false), the stack's scripts
+that do not compile here are then rewritten by
+<revHyperCardFixScripts>: HyperTalk let a variable be called "group" or a
+handler "doMenu", and took forms this engine's parser refuses. The
+HyperTalk of each script that changes is kept in the custom property
+uHyperCard["script"] of its object, and the import log (the
+hcImportStat) says how many changed. Open Stack does not do this.
+
+References: revIDEActionImportHyperCardStack (command), revIDEOpenStack (command), revHyperCardFixScripts (function)
 
 Tags: ide
 */
@@ -7356,6 +7365,10 @@ on revIDEImportHyperCardStack pFilePath
    go stack pFilePath
    put the result into tError
    if tError is empty then put the long id of the defaultStack into tStack
+   -- OXT-Beyond: HyperTalk that compiles here, unless turned off
+   if tError is empty and revIDEGetPreference("cHyperCardFixScripts") is not false then
+      get revHyperCardFixScripts(tStack)
+   end if
    set the lockMessages to tWasLocked
 
    if tError is not empty then
