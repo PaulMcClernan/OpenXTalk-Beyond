@@ -39,6 +39,10 @@ constant kFootHeight = 66
 constant kPad = 32
 constant kIndexLine = 28
 constant kTextInset = 4
+-- The widest the page's lines are, however wide the window
+constant kMeasure = 860
+-- Room at the page's right for its scroll thumb
+constant kThumbRoom = 14
 constant kRepoUrl = "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond"
 
 -- The releases of CHANGELOG.md, newest first, by number: each one's
@@ -195,6 +199,7 @@ private command rnPlace
       catch tError
       end try
    end if
+   rnLayout
 end rnPlace
 
 ################################################################################
@@ -442,6 +447,7 @@ private command rnLayout
    lkRestAt "github"
    rnStretch the long id of graphic "pageBg", tW - kPad + 8, tH - kFootHeight
    rnStretch the long id of field "page", tW - kPad - 18, tH - kFootHeight - 12
+   rnMeasure the long id of field "page"
    set the top of group "classic" to tH - kFootHeight + 16
    lkRestAt "classic"
    set the topLeft of group "close" to tW - kPad + 8 - 110, tH - kFootHeight + 16
@@ -453,6 +459,13 @@ private command rnLayout
       set the defaultStack to tSaved
    end if
 end rnLayout
+
+-- Keeps field pObj's lines no wider than kMeasure, from its left (under
+-- the header's text), and clear of its scroll thumb
+private command rnMeasure pObj
+   set the leftMargin of pObj to 0
+   set the rightMargin of pObj to max(kThumbRoom, the width of pObj - kMeasure)
+end rnMeasure
 
 -- Moves pObj's right and bottom edges (empty keeps one), not its top left
 private command rnStretch pObj, pRight, pBottom

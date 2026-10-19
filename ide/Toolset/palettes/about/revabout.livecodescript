@@ -28,6 +28,10 @@ constant kHeroHeight = 156
 constant kFootHeight = 68
 constant kPad = 28
 constant kClassicStack = "aboutstack"
+-- The widest the panel's lines are, however wide the window
+constant kMeasure = 760
+-- Room at the panel's right for its scroll thumb
+constant kThumbRoom = 14
 
 -- What the panel shows: "about", "licences" or "licence"
 local sView
@@ -131,6 +135,7 @@ private command abPlace
       catch tError
       end try
    end if
+   abLayout
 end abPlace
 
 ################################################################################
@@ -367,6 +372,7 @@ private command abLayout
    end repeat
    abStretch the long id of graphic "panelBg", tW - kPad + 8, tH - kFootHeight
    abStretch the long id of field "panel", tW - kPad - 24, tH - kFootHeight - 14
+   abMeasure the long id of field "panel"
    repeat for each item tObj in "notes,licences"
       set the top of group tObj to tH - kFootHeight + 18
       lkRestAt tObj
@@ -379,6 +385,13 @@ private command abLayout
       set the defaultStack to tSaved
    end if
 end abLayout
+
+-- Keeps field pObj's lines no wider than kMeasure, from its left (under
+-- the header's text), and clear of its scroll thumb
+private command abMeasure pObj
+   set the leftMargin of pObj to 0
+   set the rightMargin of pObj to max(kThumbRoom, the width of pObj - kMeasure)
+end abMeasure
 
 -- Moves pObj's right and bottom edges (empty keeps one), not its top left
 private command abStretch pObj, pRight, pBottom
