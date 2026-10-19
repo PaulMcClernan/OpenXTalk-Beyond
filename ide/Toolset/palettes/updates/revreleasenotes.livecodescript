@@ -22,6 +22,10 @@ script "revReleaseNotes"
 -- Release Notes with the Option (Alt) key down or when this window cannot
 -- open. This window changes no file.
 --
+-- It opens at 920 by 640, as it always has, and can be made larger, never
+-- smaller: rnLayout stretches the page and the index to the window and
+-- keeps the buttons at its edges.
+--
 -- It is a script-only stack, so it keeps no controls: this script builds
 -- them when it opens, and draws each page anew. It is drawn by
 -- revLearnKit, which is its behavior. Its name begins with "rev", so the
@@ -116,6 +120,11 @@ end openStack
 on closeStack
    lkStopTicking
 end closeStack
+
+on resizeStack
+   rnLayout
+   pass resizeStack
+end resizeStack
 
 -- Escape closes it
 on rawKeyDown pKey
@@ -373,7 +382,10 @@ private command rnBuild
    lock screen
    lock messages
    set the label of me to "Release Notes"
-   set the resizable of me to false
+   -- (no smaller than it opens: what it shows is laid out for that)
+   set the resizable of me to true
+   set the minWidth of me to kWidth
+   set the minHeight of me to kHeight
    set the destroyStack of me to true
    set the rect of me to 0, 0, kWidth, kHeight
    set the backgroundColor of me to lkColor("bg")
@@ -406,6 +418,54 @@ private command rnBuild
       set the defaultStack to tSaved
    end if
 end rnBuild
+
+-- Puts what rnBuild made where the window's size wants it: the sidebar
+-- and the page as tall as the window, the page as wide, and the buttons
+-- at its edges (each where rnBuild puts it at 920 by 640)
+private command rnLayout
+   local tW, tH, tSaved
+   if there is no field "page" of me then
+      exit rnLayout
+   end if
+   put the width of me into tW
+   put the height of me into tH
+   put the defaultStack into tSaved
+   set the defaultStack to the short name of me
+   lock screen
+   set the rect of graphic "sideBg" to 0, 0, kSide, tH
+   lkGradientPoints the long id of graphic "sideBg", "0,0", "0," & tH
+   rnStretch the long id of field "idx", kSide - 8, tH - 54
+   set the top of field "navCount" to tH - 42 - kTextInset
+   rnStretch the long id of field "hdrTitle", tW - 200, empty
+   rnStretch the long id of field "hdrTag", tW - 200, empty
+   set the left of group "github" to tW - kPad - 134
+   lkRestAt "github"
+   rnStretch the long id of graphic "pageBg", tW - kPad + 8, tH - kFootHeight
+   rnStretch the long id of field "page", tW - kPad - 18, tH - kFootHeight - 12
+   set the top of group "classic" to tH - kFootHeight + 16
+   lkRestAt "classic"
+   set the topLeft of group "close" to tW - kPad + 8 - 110, tH - kFootHeight + 16
+   lkRestAt "close"
+   lkScrollSync "pageThumb"
+   lkScrollSync "idxThumb"
+   unlock screen
+   if tSaved is not empty and there is a stack tSaved then
+      set the defaultStack to tSaved
+   end if
+end rnLayout
+
+-- Moves pObj's right and bottom edges (empty keeps one), not its top left
+private command rnStretch pObj, pRight, pBottom
+   local tRect
+   put the rect of pObj into tRect
+   if pRight is not empty then
+      put pRight into item 3 of tRect
+   end if
+   if pBottom is not empty then
+      put pBottom into item 4 of tRect
+   end if
+   set the rect of pObj to tRect
+end rnStretch
 
 private command rnBuildSide
    local tObj
@@ -691,7 +751,7 @@ private command rnGo pPage
    put pPage into sPage
    put the defaultStack into tSaved
    set the defaultStack to the short name of me
-   lock screen for visual effect in rect lkR(kSide, 0, kWidth, kHeight)
+   lock screen for visual effect in rect lkR(kSide, 0, the width of me, the height of me)
    rnRender
    rnSyncIndex
    unlock screen with visual effect "dissolve" very fast

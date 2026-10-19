@@ -3088,6 +3088,7 @@ private function xtaMemoryDialog pWork, pYou, pStackNotes
    set the cXtaChoice of stack kMemoryWindow to "cancel"
    xtaUiFooter "Kept in" && quote & kMemoryFile & quote & ", in the preferences folder.", "16," & (tTop + 32) & comma & tRight & comma & (tTop + 50)
    set the height of stack kMemoryWindow to tTop + 58
+   xtaMemoryResizable
 
    unlock messages
    set the defaultStack to tOldDefault
@@ -3111,6 +3112,62 @@ private function xtaMemoryDialog pWork, pYou, pStackNotes
    unlock messages
    return tResult
 end xtaMemoryDialog
+
+-- The memory window opens at the size it is built at and can be made
+-- larger, never smaller: the notes fields share the height it gains and
+-- take the width, and the buttons and the footer keep to its foot. Its
+-- stack script does it, from a line per control: its name, how it takes
+-- the width ("s" stretches, "m" moves, "f" stays), how it takes the height
+-- ("g1" grows by half, "m1" moves by half, "g2" moves by half and grows by
+-- the other half, "m" moves, "f" stays), and its rect as built.
+private command xtaMemoryResizable
+   local tRules, tRule, tLayout, tScript
+   put "uiBand,s,f|uiTitle,s,f|Status,s,f|Section1,s,f|Section1Line,s,f|YouLabel,s,f|You,s,g1|" & \
+         "Section2,s,m1|Section2Line,s,m1|StackLabel,s,m1|Stack,s,g2|Forget,f,m|Cancel,m,m|Save,m,m|uiFooter,s,m" into tRules
+   replace "|" with return in tRules
+   repeat for each line tRule in tRules
+      put tRule & comma & the rect of control (item 1 of tRule) of this card of stack kMemoryWindow & return after tLayout
+   end repeat
+   delete the last char of tLayout
+   set the cXtaLayout of stack kMemoryWindow to tLayout
+   set the cXtaBaseWidth of stack kMemoryWindow to the width of stack kMemoryWindow
+   set the cXtaBaseHeight of stack kMemoryWindow to the height of stack kMemoryWindow
+   put "on resizeStack pWidth, pHeight" & return & \
+         "   local tDX, tDY, tHalf, tRule, tRect" & return & \
+         "   put pWidth - the cXtaBaseWidth of me into tDX" & return & \
+         "   put pHeight - the cXtaBaseHeight of me into tDY" & return & \
+         "   put tDY div 2 into tHalf" & return & \
+         "   lock screen" & return & \
+         "   repeat for each line tRule in the cXtaLayout of me" & return & \
+         "      put item 4 to 7 of tRule into tRect" & return & \
+         "      if item 2 of tRule is " & quote & "s" & quote & " then" & return & \
+         "         add tDX to item 3 of tRect" & return & \
+         "      else if item 2 of tRule is " & quote & "m" & quote & " then" & return & \
+         "         add tDX to item 1 of tRect" & return & \
+         "         add tDX to item 3 of tRect" & return & \
+         "      end if" & return & \
+         "      if item 3 of tRule is " & quote & "g1" & quote & " then" & return & \
+         "         add tHalf to item 4 of tRect" & return & \
+         "      else if item 3 of tRule is " & quote & "m1" & quote & " then" & return & \
+         "         add tHalf to item 2 of tRect" & return & \
+         "         add tHalf to item 4 of tRect" & return & \
+         "      else if item 3 of tRule is " & quote & "g2" & quote & " then" & return & \
+         "         add tHalf to item 2 of tRect" & return & \
+         "         add tDY to item 4 of tRect" & return & \
+         "      else if item 3 of tRule is " & quote & "m" & quote & " then" & return & \
+         "         add tDY to item 2 of tRect" & return & \
+         "         add tDY to item 4 of tRect" & return & \
+         "      end if" & return & \
+         "      set the rect of control (item 1 of tRule) of this card of me to tRect" & return & \
+         "   end repeat" & return & \
+         "   unlock screen" & return & \
+         "   pass resizeStack" & return & \
+         "end resizeStack" into tScript
+   set the script of stack kMemoryWindow to tScript
+   set the minWidth of stack kMemoryWindow to the width of stack kMemoryWindow
+   set the minHeight of stack kMemoryWindow to the height of stack kMemoryWindow
+   set the resizable of stack kMemoryWindow to true
+end xtaMemoryResizable
 
 -- A numbered section's header at xTop in a window pWidth wide, which then
 -- is where what follows it goes
