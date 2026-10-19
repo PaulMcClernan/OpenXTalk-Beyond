@@ -451,6 +451,22 @@ Notes:
   folder and require the Microsoft Visual C++ Redistributable on the
   PCs that run it.
 
+### xTalk Suite demos
+
+Three apps of the xTalk Suite are in
+[`ide/Resources/Examples/xTalk Suite/`](ide/Resources/Examples/xTalk%20Suite/),
+as stacks whose script is the suite's own file (see
+[`tools/examples/README.md`](tools/examples/README.md#xtalk-suite-demos)):
+No Cloud Quick Share (the suite's `nocloud`), Torrent Client
+(`torrentxt/examples`) and Box2D Platformer (`box2dxt/examples`). They
+are MIT, © 2026 Seth Morrow, under the suite's `LICENSE`, like the
+extensions above. No Cloud Quick Share carries OnionXT's script inside
+its own, and Box2D Platformer the Box2Dxt Kit's, both of them MIT, ©
+2026 Seth Morrow. Box2D Platformer's pictures are Kenney's game assets
+(kenney.nl), CC0 1.0 (public domain dedication), from the suite's
+`box2dxt/Spritesheets`, imported into the stack; its sounds are made by
+its script.
+
 ## Standalone runtimes for other platforms
 
 Every package carries standalone runtimes for the other platforms that
