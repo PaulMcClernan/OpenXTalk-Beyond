@@ -1,6 +1,6 @@
 # OXT-Beyond
 
-![OXT-Beyond 0.2.1 "Frankenstein"](Installer/oxt-beyond/branding/art/oxt-beyond-banner.png)
+![OXT-Beyond 0.2.7 "Bug Hunt"](Installer/oxt-beyond/branding/art/oxt-beyond-banner.png)
 
 [![Build (Windows)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml/badge.svg)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml)
 [![Build (macOS)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml/badge.svg)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml)

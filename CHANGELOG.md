@@ -17,6 +17,7 @@ words, is in the [README](README.md#the-ide) and on the
 ## Unreleased
 
 - Learn: the xTalk Suite demos open built, in the middle of the screen (#157)
+- Branding: 0.2.7 "Bug Hunt" splash screens, installer art, banner and release name (#161)
 - Web IDE: a new Player is made again, and the tour makes every control (#162)
 - Web IDE: Help > Release Notes, now that its window works on the web (#162)
 - Changelog: #162's commits (#162)
