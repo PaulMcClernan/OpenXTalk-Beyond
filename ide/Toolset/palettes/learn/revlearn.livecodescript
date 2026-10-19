@@ -362,7 +362,12 @@ end leRead
 -- A page's title: its card's name, without the spaces that indent it in
 -- the guides' index
 private function leTitle pSection, pPage
-   return word 1 to -1 of line pPage of sTitles[pSection]
+   local tTitle
+   put word 1 to -1 of line pPage of sTitles[pSection] into tTitle
+   -- (the guides were debranded from "LiveCode Script" to "XTalk Script")
+   set the caseSensitive to true
+   replace "XTalk" with "xTalk" in tTitle
+   return tTitle
 end leTitle
 
 -- How deep a guides page is: its card's name is indented three spaces a
@@ -539,10 +544,10 @@ private command leLayout
    -- the column, in the middle of the page when the window is wide
    leColumn false
    set the rect of group "hdr" to kSide, 0, tW, kHeaderHeight
-   set the left of field "hdrTitle" to sX
-   set the width of field "hdrTitle" to tW - sX - 210
-   set the left of field "hdrTag" to sX
-   set the width of field "hdrTag" to tW - sX - 210
+   -- (by rect: setting a width keeps the centre, which moved the left
+   -- off the column whenever the window was narrower than kWidth)
+   set the rect of field "hdrTitle" to sX, the top of field "hdrTitle", tW - 210, the bottom of field "hdrTitle"
+   set the rect of field "hdrTag" to sX, the top of field "hdrTag", tW - 210, the bottom of field "hdrTag"
    set the left of graphic "hdrLine" to sX
    set the right of group "classic" to tW - kPad
    lkRestAt "classic"
@@ -668,6 +673,7 @@ private command leFillIndex
          end if
       end repeat
    end if
+   leFitIndex
    unlock screen
    leSyncIndex
    if tTerm is not empty then
@@ -679,6 +685,29 @@ private command leFillIndex
       put tMatched into field "navCount"
    end if
 end leFillIndex
+
+-- A line of the index too long for the sidebar ends in an ellipsis, not
+-- at the sidebar's edge (the page itself shows the whole title)
+private command leFitIndex
+   local tRoom, tLine, tMax
+   -- the field's margins, and the scroller's thumb at its right
+   put the width of field "idx" - 8 - 2 - 12 into tRoom
+   repeat with tLine = 1 to the number of lines of field "idx"
+      put tRoom - the leftIndent of line tLine of field "idx" into tMax
+      if the formattedWidth of line tLine of field "idx" <= tMax then
+         next repeat
+      end if
+      repeat while the formattedWidth of line tLine of field "idx" > tMax \
+            and the number of chars of line tLine of field "idx" > 6
+         delete the last char of line tLine of field "idx"
+      end repeat
+      delete the last char of line tLine of field "idx"
+      repeat while the last char of line tLine of field "idx" is space
+         delete the last char of line tLine of field "idx"
+      end repeat
+      put numToCodepoint(8230) after line tLine of field "idx"
+   end repeat
+end leFitIndex
 
 -- The index marks the page in front, and scrolls to it
 private command leSyncIndex
@@ -1154,10 +1183,16 @@ private command leRenderMissing
    get lkIcon("p_missIcon", leSectionInfo(sSection, "icon"), tAccent, lkR(sX + 40, tTop + 40, sX + 64, tTop + 64), "page")
    put lkLabel("p_missTitle", lkR(sX + 96, tTop + 30, sX + sColW - 28, tTop + 56), "The" && tLabel && "are not here", 20, lkColor("ink"), "page") into tObj
    set the textStyle of tObj to "bold"
-   put "They are kept in" && leSectionInfo(sSection, "stack") & ".oxtstack, in the Toolset's palettes/userguides " & \
-         "folder, and this copy of the IDE does not have it." into tText
-   if sSection is "guides" then
-      put " The web IDE leaves it out, as it is large; the same guide is in the User Guide PDF." after tText
+   -- (in plain words on the web, where leaving it out is the design and
+   -- the file's name means nothing to the reader)
+   if sSection is "guides" and the platform is "HTML5" then
+      put "The web IDE leaves them out to keep its download small. The same guide is in the User Guide PDF." into tText
+   else
+      put "This copy of the IDE does not have the stack they are kept in:" && leSectionInfo(sSection, "stack") & \
+            ".oxtstack, in the Toolset's palettes/userguides folder." into tText
+      if sSection is "guides" then
+         put " The same guide is in the User Guide PDF." after tText
+      end if
    end if
    put tTop + 62 into sY
    put leHtmlField("p_missText", sX + 96, sColW - 124, "<p>" & lkEscape(tText) & "</p>", 14, lkColor("soft")) into tObj
@@ -2088,6 +2123,20 @@ private function leExampleTable
          "native scroller.|LiveCode Ltd, from LiveCode Community|mobile|monitor-play|teal|mobile scroller phone" & return after tTable
    put "Resources/Mobile Examples/Sound Example.livecode|Mobile Sound|Plays sounds in a phone app.|" & \
          "LiveCode Ltd, from LiveCode Community|mobile|volume-2|pink|mobile sound audio phone" & return after tTable
+   -- OXT-Beyond: whole apps on the xTalk Suite extensions the IDE ships
+   -- built in (tools/examples/README.md, "xTalk Suite demos"). The web IDE
+   -- has no such extensions and leaves the files out, so it lists none
+   put "Resources/Examples/xTalk Suite/No Cloud Quick Share.oxtstack|No Cloud Quick Share|Share a file of any size " & \
+         "with a short code and no server: it goes straight from your computer to your friend's, over BitTorrent, " & \
+         "or Tor when you choose.|Seth Morrow, 2026, from the xTalk Suite|suite|zap|sky|" & \
+         "torrent share files peer-to-peer tor torrentxt sodiumxt onionxt" & return after tTable
+   put "Resources/Examples/xTalk Suite/Torrent Client.oxtstack|Torrent Client|A whole BitTorrent client: add magnets " & \
+         "and .torrent files, make and seed your own, and watch files, peers and trackers.|" & \
+         "Seth Morrow, 2026, from the xTalk Suite|suite|package|indigo|torrent download magnet seed torrentxt" & return after tTable
+   put "Resources/Examples/xTalk Suite/Box2D Platformer.oxtstack|Box2D Platformer|Seven levels of running, " & \
+         "jumping and coin collecting, with real physics: rope bridges, boulders, crushers and a bestiary of " & \
+         "enemies.|Seth Morrow, 2026, from the xTalk Suite; art by Kenney (CC0)|suite|gamepad-2|emerald|" & \
+         "game physics platformer box2d box2dxt" & return after tTable
    -- The Stack Player's stacks, when this copy of the IDE has them
    put leShowcaseTable() after tTable
    return tTable
@@ -2210,6 +2259,8 @@ private function leExampleGroups
          "controls, each small enough to read in one sitting." & return & \
          "tours|Tours|Guided tours of the Data Grid and of SQLite, a card at a time." & return & \
          "apps|Small apps to take apart|Each does one thing, in a few short scripts: open one, then read its scripts." & return & \
+         "suite|xTalk Suite demos|Whole apps on the xTalk Suite extensions built into OXT-Beyond: share files " & \
+         "with no server, download torrents, and play a physics platformer." & return & \
          "samples|Start Center samples|LiveCode Community's samples: a game, a database and a template." & return & \
          "mobile|For phones and tablets|These use the mobile engine's commands: they open here, but do their work on a phone."
 end leExampleGroups
@@ -2330,6 +2381,7 @@ private command leFillExamplesIndex pTerm
          set the leftIndent of line tCount of field "idx" to 14
       end if
    end repeat
+   leFitIndex
    unlock screen
    leSyncIndex
    if pTerm is not empty then

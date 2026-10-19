@@ -79,6 +79,13 @@ on setUpExtensionList
    -- set the viewProp["row color"] of group "extensionList" of card "list" of this stack to revIDEColor("dataView_rowColor")
    -- set the viewProp["alternate row color"] of group "extensionList" of card "list" of this stack to "Gray70"
    -- set the viewProp["alternate row color"] of group "extensionList" of card "list" of this stack to revIDEColor("dataView_rowAlternateColor")
+   -- OXT-Beyond: the rows light, as before 0.2.7-rc.4, in the light and
+   -- the dark appearance alike (the rows' own grey backgrounds read as
+   -- dark, and white text on them in the dark appearance)
+   set the viewProp["hilite color"] of group "extensionList" of card "list" of this stack to ideColorGet("pb_line_selected")
+   set the viewProp["background color"] of group "extensionList" of card "list" of this stack to empty
+   set the viewProp["row color"] of group "extensionList" of card "list" of this stack to revIDEColor("dataView_rowColor")
+   set the viewProp["alternate row color"] of group "extensionList" of card "list" of this stack to revIDEColor("dataView_rowAlternateColor")
 
    set the viewProp["fixed row height"] of group "extensionList" of card "list" of this stack to "true"
    set the viewProp["row height"] of group "extensionList" of card "list" of this stack to 41
@@ -193,8 +200,10 @@ on launchExtensionSampleStack pParam
    -- changed because pExtensionId was NOT an Extension Identifier,
    -- it was recieving a filePath instead
    if there is a file pParam then
-      go stack pParam
-      -- revIDEExtensionLaunchSampleStack pParam
+      -- OXT-Beyond: through the launcher, not "go stack": it empties the
+      -- opened sample's file name, so saving it asks for a new place
+      -- rather than overwriting the copy inside the installed extension
+      revIDEExtensionLaunchSampleStack pParam
    else
       local tSourceFolder, tSourceFile
       put revIDEExtensionProperty(pParam, "install_path") into tSourceFolder

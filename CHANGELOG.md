@@ -14,9 +14,62 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
-## Unreleased
+## 0.2.7-rc.5 (2026-10-19, pre-release)
 
+- Standalone Settings: the Web card is whole again on macOS 26 (#147)
+- MCP Bridge: serve when Claude Desktop's own Node.js starts the server (#148)
+- xTalk Chat: a chat in the IDE for xTalk developers who go online (#146)
+- File > Import Stack: HyperTalk that compiles here (#150)
+- HyperCard scripts: two faults the whole corpus found (#150)
+- HyperCard scripts: line commands outside strings; the library's own name (#150)
+- Learn: No Cloud Quick Share, Torrent Client and Box2D Platformer, the xTalk Suite's demos (#149)
+- IDE: the About window in the look of Home and Learn (#149)
+- Version 0.2.7-rc.5, with its changelog and notes (#149)
+- Learn kit: drop the second "code" icon case xTalk Chat added (#149)
+- Extension Manager: light rows again, and no Repo or Playground tab (#149)
+- Dictionary: not blank when Preferences chooses the text dictionary (#149)
+
+## 0.2.7-rc.4 (2026-10-18, pre-release)
+
+- Web Stack Player: specialFolderPath("resources") finds a stack's files, and a polish pass over the new stacks (#140)
+- Version 0.2.7-rc.4, with its changelog (#141)
+- Web IDE: connect Claude through the xTalk MCP Bridge, and let the xTalk Assistant reach Anthropic (#142)
+- Web: close an open menu when the page outside every window is clicked (#144)
+- Rename LiveCode terminology to xTalk terminology (#143)
+- Extension Manager stack Fixups (#143)
+- Extension Manager: fix the install paths of the new Repo tab (#143)
+- Extension Manager: open a sample stack through the sample launcher (#143)
+- 0.2.7-rc.4's notes: the web IDE's MCP Bridge, web menus and the Extension Manager (#145)
+
+## 0.2.7-rc.3 (2026-10-18, pre-release)
+
+- HyperCard import: find the resource fork beside a bare stack, read AppleSingle (#121)
+- HyperCard import: record the resources a stack had, warn about id clashes (#122)
+- HyperCard import: import extended and compressed sound headers (#123)
+- HyperCard import: PICT resources become images (#124)
+- engine: define M_PI for MSVC in the PICT decoder (#124)
+- HyperCard import: PLTE palettes become substacks (#125)
+- HyperCard import: AddColor colours (HCcd, HCbg) become a colour layer (#126)
+- IDE: import HyperCard stacks straight from Mac disk images (#127)
 - Web: close an open menu when its stack's window moves (#118)
+- HyperCard import: HyperCard's built-in sounds and play's notes (#128)
+- docs: play's HyperCard notes (#128)
+- HyperCard import: no shadowed locals in the instrument block (#128)
+- tests: time the melody against the boing alone (#128)
+- tests: the melody ends on a dotted quarter, not a dotted eighth (#128)
+- tests: outside imports, assert only that the notes go unevaluated (#128)
+- HyperCard notes: tempo 100 when left out, and the clip's loudness kept (#128)
+- Rename LiveCode terminology to xTalk terminology (#119)
+- Remove engine/rsrc/terminology.r, which no build uses (#129)
+- Web IDE: the IDE in a web page (#131)
+- Web IDE: a modern header, and windows kept on the page (#132)
+- CI: screenshots of the web IDE (#133)
+- Web: the Stack Player, a web page that opens any stack (#130)
+- Web IDE: Home, a welcome stack in the spirit of HyperCard's (#134)
+- Web Stack Player: four more samples, and a Script Viewer of each stack's own (#135)
+- IDE: Learn, one window for the lessons, the guides and the examples (#136)
+- IDE: Learn's examples, remastered in its look beside the originals (#137)
+- Version 0.2.7-rc.3, with its changelog (#138)
 
 ## 0.2.7-rc.2 (2026-10-16, pre-release)
 

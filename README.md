@@ -75,8 +75,24 @@ macOS (see
 [0.2.7-rc.1](#027-rc1-a-new-web-font-and-firefox-and-safari)), and
 0.2.7-rc.2 adds a File menu item for importing HyperCard stacks and
 de-branded macOS app settings (see
-[0.2.7-rc.2](#027-rc2-importing-hypercard-stacks)); 0.2.6 stays the
-main download until it has held up.
+[0.2.7-rc.2](#027-rc2-importing-hypercard-stacks)), and 0.2.7-rc.3
+adds the Stack Player, a web page that opens any stack, the IDE itself
+in a web page, Learn, one window for the lessons, guides and examples,
+and a HyperCard import that brings in pictures, palettes, colour and
+sound and reads Mac disk images (see
+[0.2.7-rc.3](#027-rc3-stacks-and-the-ide-on-the-web-learn-and-more-of-hypercard)),
+and 0.2.7-rc.4 connects the web IDE to Claude through the xTalk MCP
+Bridge, closes a web menu when the page around it is clicked, brings
+over OXT DPE's Extension Manager, lets a stack in the Stack Player find
+its files through `specialFolderPath("resources")` and polishes the
+stacks new in 0.2.7 (see
+[0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish)),
+and 0.2.7-rc.5, the last candidate before 0.2.7, makes the scripts of
+imported HyperCard stacks compile, and adds xTalk Chat, three xTalk
+Suite apps in Learn and a new About window, and fixes the
+Standalone Settings' Web card on macOS 26 (see
+[0.2.7-rc.5](#027-rc5-hypercard-scripts-that-compile-xtalk-chat-and-the-xtalk-suites-apps));
+0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -539,6 +555,12 @@ On Linux:
 
 The xTalk Assistant keeps the notes you ask it to remember in
 `xTalk Assistant Memory.txt`, in the preferences folder.
+
+xTalk Chat (*Development > Plugins > xTalk Chat*) keeps your chat key
+and the name you chose in `identity.txt`, in `.oxt-beyond/xtalk-chat`
+in your home folder (on Windows your user folder), readable only by
+you. The key is who you are in the chat: keep a copy (the chat's
+settings can copy it) to be the same person on another computer.
 
 Installed and portable copies of OXT-Beyond on the same computer share
 these folders. LiveCode and OpenXTalk Lite keep their preferences
@@ -1515,6 +1537,261 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.5: HyperCard scripts that compile, xTalk Chat, and the xTalk Suite's apps
+
+OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
+0.2.7, has everything in 0.2.7-rc.4, and:
+
+- **HyperCard scripts that compile.** About one HyperCard script in ten
+  did not compile here (a variable called `group` or `name`, a handler
+  called `doMenu`, `the message box`, `of cd`, notes after `play`), and
+  one bad line lost every handler of its script. File > Import Stack now
+  rewrites each script that does not compile, leaving strings and
+  comments alone, and keeps the HyperTalk of every object it changes. A
+  handler that still does not compile passes its message, with its
+  HyperTalk commented out inside it to fix by hand. Over 2,186 HyperCard
+  stacks, the handlers lost went from 21.8% to 3.3%, and no script that
+  compiled stopped compiling. The rewritten scripts call a small
+  library, added to the stack as the substack "HyperCard Library" and
+  made its behavior, where HyperCard's Home stack was. File > Import
+  Stack > Make HyperTalk Scripts Compile turns it off.
+
+- **xTalk Chat** (*Development > Plugins > xTalk Chat*): a chat in the
+  IDE for the people using xTalk who choose to go online, with public
+  rooms, who is online now and private messages, over Nostr through the
+  xTalk Suite extensions OXT-Beyond ships built in, so there is no
+  server of ours. It connects to nothing until you press **Go online**
+  in its window, which first says what goes to the relays and who can
+  read it; the environment variable `OXTBEYOND_XTALK_CHAT=off` keeps it
+  off for good. Its key and name are kept in `.oxt-beyond/xtalk-chat`
+  in your home folder (see [Where OXT-Beyond keeps your
+  files](#where-oxt-beyond-keeps-your-files)).
+- **Three xTalk Suite apps in Learn**, under "xTalk Suite demos": No
+  Cloud Quick Share (send a file of any size with a short code, straight
+  from one computer to another), Torrent Client and Box2D Platformer,
+  each a stack whose script is the suite's own, on the extensions
+  OXT-Beyond ships built in (see
+  [tools/examples](tools/examples/README.md#xtalk-suite-demos)).
+- **A new About window**, in the look of Home and Learn: the version,
+  the release's name, the build and the engine with a Copy version
+  button, the about text, and the licences. With the Option (Alt) key
+  down, Help > About opens the classic window as before.
+- **The Dictionary is no longer blank** when Preferences > Dictionary
+  chooses the text dictionary. LiveCode's Dictionary still opens then
+  (Help > Dictionary with Shift, an entry's link in the Script Editor or
+  the inspector), but its page and data were never made, so the
+  Documentation Cache folder stayed empty. It makes them the first time
+  it opens.
+- **The Extension Manager is light again**: its rows are white and
+  light grey with dark text, as before 0.2.7-rc.4, in the light and the
+  dark appearance. The Repo and Playground tabs, web pages that were
+  slow to load, are gone; Install extension installs a package from a
+  file.
+- **The Standalone Settings' Web card on macOS 26** is whole again: it
+  showed its heading and nothing else, so a stack could not be built for
+  the web there.
+- **The web IDE's MCP Bridge under Claude Desktop.** The desktop
+  extension that Claude Setup downloads now serves when Claude Desktop
+  starts it with its own built-in Node.js, where before it never
+  started ("Request timed out"). With Claude Desktop's built-in
+  Node.js, Desktop can still fail to reach it ("Unable to connect to
+  extension server"): turn off *Use Built-in Node.js for MCP* (Settings
+  > Extensions > Advanced settings) and it connects. Desktop starts two
+  copies of the server and only the first holds the web IDE's port, so
+  use the bridge from a regular Claude Desktop chat.
+
+A script sees these differences from 0.2.7-rc.4. A HyperCard stack
+imported with File > Import Stack (or from a disk image) has rewritten
+scripts, the "HyperCard Library" substack as its behavior, its original
+HyperTalk in `uHyperCard["script"]` of each changed object and a list
+of the changes in the stack's `uHyperCard["scripts"]`, and one more line
+in its hcImportStat; with the menu item off it comes in as before. In
+such a stack, scripts that compiled already change in two ways only: a
+`doMenu` command goes to the stack's own `doMenu` handler (now
+`hcDoMenu`, which never compiled before, so never ran), and
+`the version` reads `2.4.1`, HyperCard's, where it read the engine's.
+Open Stack, `go stack` and `import stack` on a HyperCard file, and stacks
+imported earlier, are unchanged; the IDE loads one more library,
+`revHyperCardScriptLibrary`, whose handlers start with `revHyperCard`.
+On a Mac,
+revcommonlibrary's private `_revEnvironmentPlatform` always says "MacOS
+X", so on macOS 26 the IDE's font helpers return Lucida Grande at 11
+where they threw; on macOS 10 to 15, Windows and Linux nothing changes.
+`tOpenAbout` of the menu bar opens the stack "revAbout" (with the
+Option key down, "aboutstack" as before); Learn's examples table has a
+group "suite" and three rows; with the text dictionary chosen, the IDE
+library's dictionary handlers work once LiveCode's Dictionary has
+opened (its new `revIDEEnsureBrowserDictionary` makes the page and its
+data); the Extension Manager has no "repo" or
+"playground" frame item, its `showExtensionStore` (which the Tools
+palette's more-widgets button sends) shows the Widgets list, and a
+double-click on a row does nothing; and the menu bar's Development > Plugins
+has an "xTalk Chat" line when its extension is installed. The MCP
+Bridge's server serves however Node.js loads it, unless
+`OXT_MCP_LIBRARY=1`. Desktop engines and stacks are otherwise unchanged.
+Pull requests
+[#146](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/146)
+to
+[#150](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/150)
+list every change.
+
+#### 0.2.7-rc.4: Claude in the web IDE, the Extension Manager, and polish
+
+OXT-Beyond 0.2.7-rc.4, a test release, has everything in 0.2.7-rc.3,
+and:
+
+- **Claude in the web IDE.** Development > Plugins > xTalk MCP Bridge
+  has a **Connect** choice on the web: Claude's app runs the bridge's
+  MCP server in a web mode on the same computer, the page connects out
+  to it, and every tool the desktop bridge has works, with running code
+  and saving a stack still asked in the page first. **Claude Setup...**
+  downloads a ready Claude Desktop extension or gives the command for
+  Claude Code; the page and the server prove a shared key to each other
+  before either takes a request. The xTalk Assistant can use Anthropic
+  from the browser (see the bridge's
+  [README](ide/Extensions/org.openxtalk.plugin.mcpbridge/mcp/README.md)).
+- **Web menus close when the page is clicked.** In the web IDE and
+  web standalones, a menu from the menu bar, or an option or popup
+  menu, closes when the page around the windows, a window's title bar or
+  a browser widget's page is clicked, or the page loses the focus, as a
+  click outside a menu does on the desktop. Before, it stayed open until
+  its own button was clicked again.
+- **The Extension Manager from OXT DPE** (from Paul McClernan,
+  [#139](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/139)):
+  a **Repo** tab on the OpenXTalk Resource Depot in place of LiveCode
+  Ltd's old store page, a **Playground** tab, colours that follow the
+  light or dark appearance, sample stacks opened from a row's menu, and
+  installs of base64-encoded `.lce.b64` packages. The Sample Stacks and
+  Snippets tabs show when an extension of that kind is installed.
+- **The Stack Player finds a stack's own files through
+  `specialFolderPath("resources")`.** A stack opened with its folder
+  (or its `.zip`) already found the files beside it by relative paths;
+  now a path built from `specialFolderPath("resources")`, as a stack
+  builds one in the IDE and in its own standalone, finds them too. A
+  field of links to pictures in a `resources` folder, which a user
+  reported showing nothing, shows them.
+- **Polish.** Home and Learn in the web IDE, the remastered examples
+  and the Stack Player's sample stacks had a look-and-wording pass:
+  words centred in their pills, chips, badges and circles, greys dark
+  enough to read, a note in each empty grid, table and box until it
+  fills, Learn's page titles on the body's column and its long index
+  lines ending in an ellipsis, and small text fixes. xTalk Primer's
+  checkbox and radio buttons draw their own marks, as a browser drew
+  the engine's as broken arcs.
+
+A script sees these differences from 0.2.7-rc.3. In the web IDE and
+web standalones, a click on the page outside every window, or the page
+losing the focus, closes an open menu with no `menuPick`, as a click
+outside it on a stack already did. On the web, the xTalk Assistant's
+requests leave out `Connection: close`, which browsers refuse, and its
+requests to Anthropic carry `anthropic-dangerous-direct-browser-access`;
+the MCP Bridge's library has four more handlers, `mcbLinkStart`,
+`mcbLinkStop`, `mcbLinkHandle` and `mcbLinkLost`, and hides the IDE's
+own stacks from Claude. The Extension Manager's stack is OXT DPE's
+(its card "search" is now "web"). In the Stack Player,
+`specialFolderPath("resources")` still returns `/boot/standalone`, but
+while a stack is open `files()` and `folders()` of that folder also
+list the entries beside the stack (except names the player's own files
+have there), and writing through one of them writes into the stack's
+own folder, which the browser keeps, where before the write went to the
+player's folder, which a reload loses. In the remastered Animate a
+Letter the graphic "Boundry" is named "Boundary"; Quick Start Guide's
+lists of commands and functions leave out the engine's names that start
+with `_`; and the xTalk Primer sample has a label. Desktop engines, the
+desktop MCP Bridge and the desktop assistant are unchanged. Pull
+requests
+[#140](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/140)
+to
+[#144](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/144)
+list every change.
+
+#### 0.2.7-rc.3: stacks and the IDE on the web, Learn, and more of HyperCard
+
+OXT-Beyond 0.2.7-rc.3, a test release, has everything in 0.2.7-rc.2,
+and:
+
+- **The Stack Player**, a new file of the release
+  (`OXT-Beyond-<version>-web-player.zip`): a web page that opens any
+  stack. Put its folder on a web server, open its `index.html`, then
+  open or drop a stack file, a folder or a `.zip` with a stack and its
+  files, and the stack takes the page. It carries every script library
+  (the Data Grid among them), the web externals (revXML, revZip, revDB
+  with SQLite, revSpeech) and the widgets and library extensions that
+  run in a browser, keeps the stacks it opened in the browser for the
+  next visit, and shows a script error with its object and line. Its
+  home page has three whole stacks (a tour of what a stack can do in a
+  page, Learn xTalk, a first course in ten lessons, and the xTalk
+  Primer) and thirteen small ones, from Fireworks and Live Weather to
+  Kanban Board, Markdown Notes, UI Gallery and Photo Lab, each with a
+  button that shows its scripts in colour. Experimental: HyperCard
+  stacks do not open in it yet (see
+  [tools/web-player](tools/web-player/README.md)).
+- **The IDE in a web page.** The real IDE, its scripts and stacks run
+  by its own engine built for the web, with nothing to install: the
+  Tools palette, the Property Inspector, the Message Box, the Script
+  Editor, browse mode and the Dictionary, with stacks kept in the
+  browser and downloaded or opened from your computer. It opens with
+  Home, a welcome stack of live demos. It is not a file of the release
+  yet: [tools/web-ide](tools/web-ide/README.md) says how to build one
+  from a package and serve it.
+- **Learn.** Help > Lessons, Help > Guides, Help > Demos and the
+  toolbar's Sample Stacks open one window for the lessons, the guides
+  and the examples, with real headings, code blocks with a Copy button,
+  a search box and an index. Its gallery has a card for each example,
+  saying what it shows and who made it, the Stack Player's stacks among
+  them. Fourteen of the IDE's examples have a remaster in Learn's look
+  (Zip Build and Zip Extract share one), each program on a stage with
+  its scripts beside it; the originals
+  are under Classic and open as before. Hold Option (Alt on Windows
+  and Linux) to open the classic Lessons, Guides and Demos stacks,
+  which have not changed.
+- **More of a HyperCard stack comes in.** PICT pictures become images
+  (in a hidden background group "HC Pictures"), HyperCard 2 palettes
+  become substacks whose buttons send their messages, AddColor colours
+  become a colour layer on each coloured card and background, and
+  sounds with extended or IMA-compressed headers become audio clips.
+  A stack copied off a Mac without its resource fork finds the fork
+  beside it (`._Name`, `__MACOSX`, `Name.rsrc` and the other usual
+  places), AppleSingle files import, and a stack whose scripts play
+  HyperCard's own boing, harpsichord or flute gets a synthesised
+  sound of that name, with `play`'s notes and tempo. File > Import
+  Stack > HyperCard Stack... also takes a Mac disk image (a floppy or
+  CD image with an HFS volume) and lists the stacks on it. The import
+  log names what it still cannot convert, and warns when an icon and
+  an object have the same id.
+- **Web standalones.** An open menu closes when its stack's window
+  moves, as a browser closes a list when the page moves under it. A
+  standalone's zip unpacks deflated files over 64 KB correctly, a
+  browser widget showing a local page finds the fonts and pictures its
+  style sheets name, and drawing an empty region or asking for the
+  rect of a closed window no longer stops the engine.
+- **macOS.** The AppleScript dictionary's remaining "LiveCode" names
+  say "xTalk" (from Paul McClernan,
+  [#119](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/119)).
+
+A script sees these differences from 0.2.7-rc.2. In a HyperCard stack
+as it is imported (a stack imported earlier and saved is unchanged):
+it can have the images, background group, substacks and audio clips
+above, so `the number of bgs`, `the substacks` and `the number of
+audioClips` can be higher, the new objects come after every other
+object and take ids above theirs, and its next id can be higher; it has
+a custom property set `uHyperCard` (its resources, its XCMDs and XFCNs,
+and where the fork came from) when it had a resource fork; and `play`
+with notes and one of its HyperCard sounds plays the melody, so a tempo
+that is not a number throws "play: bad movie location" there. With any
+other sound `play` is unchanged. The IDE loads one more library,
+`revHyperCardDiskImageLibrary`, whose handlers start with
+`revHyperCard`. In a web standalone, a menu closed because its window
+moved sends no `menuPick`, as a click outside it does not; an `answer`
+or `ask` opened by a Return (a `returnInField` handler) waits for the
+user where it closed at once with its default button; and showing a
+window that is already on the screen no longer takes the keyboard from
+the window the user clicked. Pull requests
+[#118](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/118)
+to
+[#137](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/137)
+list every change.
 
 #### 0.2.7-rc.2: importing HyperCard stacks
 

@@ -56,7 +56,7 @@ end browserShow
 
 on browserSetURL pURL
    lock screen
-   set the url of widget "browser" of card "web" of me to pURL
+   set the url of widget "browser" of me to pURL
    nudgeBrowser
    unlock screen
 end browserSetURL
@@ -107,8 +107,11 @@ on browserGoToExtensionStore
 end browserGoToExtensionStore
 
 on browserDocumentLoadBegin pUrl,pError
-   setStatus ("Load Begin Failure" & cr &"URL:"& pUrl &cr& "Error: " & pError)
-   broswerHide
+   -- OXT-Beyond: this is the start of every load, not a failure, and the
+   -- handler is browserHide (a misspelt name raised an error dialog on
+   -- every page load)
+   setStatus "Loading..."
+   browserHide
    --   if pURL ends with ".b64" then 
    --      put "Base64 Data"
    --      --   else
@@ -119,7 +122,7 @@ end browserDocumentLoadBegin
 on browserDocumentLoadComplete pURL
    -- put "browserDocumentLoadComplete "& pURL & cr after msg
    -- put "browserNavigateComplete "& pURL & cr after msg
-   set the javaScriptHandlers of widget "browser" of me to "installExtension" & cr & "installExtensionB64Decode" &cr& "doXTscript"
+   setPageHandlers
    
    --   get the goSection of this stack
    --   if it is not empty then
@@ -138,11 +141,20 @@ end browserDocumentLoadComplete
 
 on browserDocumentLoadFailed pURL,pError
    if pURL ends with ".lce.b64" then
-      -- TO DO: FINISH EXTENSION INSTALL PROCESS -------------------------- <-----  NOTE!
-      put base64Decode(URL pURL) into pFileData
-      open file "~/test.zip" for binary write
-      write pFileData to file "~/test.zip"
-      close file  "~/test.zip"
+      -- OXT-Beyond: a link to a base64-encoded package (GitHub Pages serves
+      -- an .lce as a download the browser widget cannot take): fetch it
+      -- and install it under the identifier its file name carries
+      local tData, tResID
+      put URL pURL into tData
+      if the result is not empty or tData is empty then
+         setStatus ("Download Failed" & cr & "URL:" & pURL & cr & "Error: " & the result)
+         exit browserDocumentLoadFailed
+      end if
+      set the itemDelimiter to slash
+      put the last item of pURL into tResID
+      delete char -8 to -1 of tResID
+      browserShow
+      installExtensionB64Decode tData, tResID, ""
    else
       setStatus ("Document Load Failed" & cr &"URL:"& pUrl &cr& "Error: " & pError)
       -- put "browserDocumentLoadFailed " & pUrl, pError & cr after msg
@@ -151,33 +163,44 @@ on browserDocumentLoadFailed pURL,pError
 end browserDocumentLoadFailed
 
 on browserNavigateBegin pURL
-   browserHide
+   -- OXT-Beyond: a package handed over as a data URI is installed (it
+   -- was written to ~/test.zip while this was being worked on); the
+   -- browser is hidden by browserDocumentLoadBegin when a page loads, not
+   -- here, since a navigation that loads nothing would leave it hidden
    if pURL begins with "data:application/octet-stream;base64," then
       delete char 1 to 37 of pURL
-      put base64Decode(pURL) into pFileData
-      open file "~/test.zip" for binary write
-      write pFileData to file "~/test.zip"
-      close file  "~/test.zip"
-      exit to top
-   -- else
-      -- put "browserNavigateBegin "& pURL & cr after msg
+      installExtensionB64Decode pURL, "", ""
    end if
 end browserNavigateBegin
 
 on browserNavigateComplete pUrl
-   -- put "browserNavigateComplete "& pURL & cr after msg
-   set the javaScriptHandlers of widget "browser" of me to "installExtension" & cr & "installExtensionB64Decode" &cr& "doXTscript"
-   get the goSection of this stack
-   if it is not empty then
-      put the goSection of this stack into tGoSection
-      -- put tGoSection
-      if tGoSection is "Repo" then
-         send "showExtensionStore" to this stack -- in 50 millisecs
-      else if tGoSection is "Playground" then
-         send "showWebPlaygound" to this stack -- in 50 millisecs
-      end if
+   -- OXT-Beyond: nudgeBrowser also sends this, on a timer, so it only
+   -- restores what a load resets (the page's handlers, the browser, the
+   -- tab's hilite); it does not go to a section or set a URL, which
+   -- pulled the palette back to this card from whichever tab was chosen
+   -- meanwhile, and back to the section's first page from any link
+   setPageHandlers
+   if the short name of this card of this stack is not the short name of me then
+      exit browserNavigateComplete
    end if
+   switch the goSection of this stack
+      case "Repo"
+         hiliteFrameItem "repo"
+         break
+      case "Playground"
+         hiliteFrameItem "playground"
+         break
+   end switch
+   browserShow
 end browserNavigateComplete
+
+-- The handlers the page in the browser may call. OXT-Beyond: the two
+-- install handlers only. The first version also offered doXTscript,
+-- which ran whatever script the page sent, and would have done so for
+-- any page reached from it.
+private command setPageHandlers
+   set the javaScriptHandlers of widget "browser" of me to "installExtension" & cr & "installExtensionB64Decode"
+end setPageHandlers
 
 on browserNavigateFailed pUrl, pError
    setStatus ("Navigate Failure" & cr &"URL:"& pUrl &cr& "Error: " & pError)
