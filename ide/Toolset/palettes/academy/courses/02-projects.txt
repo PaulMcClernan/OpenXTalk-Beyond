@@ -1,0 +1,666 @@
+course: Projects
+id: projects
+icon: rocket
+accent: amber
+eyebrow: Course 2 · Build things
+credit: Classic first programs, as generations of programmers met them in books, clubs and classrooms. Each project builds on Coding with xTalk.
+
+Put what you learned together in small, complete programs: games, puzzles, codes and tools. Each project starts with the plan, shows the pieces, and then hands the keyboard to you.
+
+unit: Games
+icon: gamepad-2
+
+Programs that play: guessing, dice, and the oldest game of all.
+
+lesson: Guess the number
+id: guess
+minutes: 10
+
+The computer thinks of a number from 1 to 100, and you guess. After each guess it tells you "Too low", "Too high" or "Correct!". It is one of the oldest computer games: versions of it ran on the first home computers in the 1970s.
+
+## The plan
+
+Programmers break a problem into pieces before writing code. This game has three:
+
+1. Choose a secret number: `random(100)`.
+2. Compare a guess with the secret, and say how it went.
+3. Keep asking until the guess is right.
+
+Piece 2 is the heart of the game, so it gets a function of its own. A function that only compares two numbers is easy to test: you can try it with any secret, not just a random one.
+
+<code>
+function checkGuess pGuess, pSecret
+   if pGuess < pSecret then return "Too low"
+   if pGuess > pSecret then return "Too high"
+   return "Correct!"
+end checkGuess
+
+put checkGuess(30, 64)
+put checkGuess(80, 64)
+put checkGuess(64, 64)
+</code>
+
+## Playing it
+
+With `ask`, the game can talk to a player. This version opens dialogs, so run it in the playground and play:
+
+<code dialog>
+function checkGuess pGuess, pSecret
+   if pGuess < pSecret then return "Too low"
+   if pGuess > pSecret then return "Too high"
+   return "Correct!"
+end checkGuess
+
+put random(100) into tSecret
+put 0 into tTries
+repeat
+   ask "Guess my number (1 to 100):"
+   if it is empty then exit repeat
+   add 1 to tTries
+   put checkGuess(it, tSecret) into tReply
+   if tReply is "Correct!" then
+      answer "Correct! You took" && tTries && "guesses."
+      exit repeat
+   end if
+   answer tReply
+end repeat
+</code>
+
+<tip>
+The best strategy is to guess the middle every time: 50, then 25 or 75, and so on. That is a binary search, and it never needs more than seven guesses for 1 to 100.
+</tip>
+
+<challenge>
+Improve `checkGuess`: when the guess is wrong but within 5 of the secret, it should say `Close, but too low` or `Close, but too high`. Far guesses still get `Too low` and `Too high`.
+<starter>
+function checkGuess pGuess, pSecret
+   if pGuess < pSecret then return "Too low"
+   if pGuess > pSecret then return "Too high"
+   return "Correct!"
+end checkGuess
+
+put checkGuess(60, 64)
+</starter>
+<solution>
+function checkGuess pGuess, pSecret
+   if pGuess is pSecret then return "Correct!"
+   if abs(pGuess - pSecret) <= 5 then
+      if pGuess < pSecret then return "Close, but too low"
+      return "Close, but too high"
+   end if
+   if pGuess < pSecret then return "Too low"
+   return "Too high"
+end checkGuess
+
+put checkGuess(60, 64)
+</solution>
+<check>
+checkGuess(64, 64) is "Correct!" | a right guess is Correct!
+checkGuess(60, 64) is "Close, but too low" | 60 for 64 is close, but too low
+checkGuess(69, 64) is "Close, but too high" | 69 for 64 is close, but too high
+checkGuess(10, 64) is "Too low" | 10 for 64 is too low
+checkGuess(99, 64) is "Too high" | 99 for 64 is too high
+</check>
+<hint>
+`abs(pGuess - pSecret)` is how far the guess is from the secret, whichever side it is on.
+</hint>
+</challenge>
+
+lesson: Rock, paper, scissors
+id: rps
+minutes: 8
+
+Rock blunts scissors, scissors cut paper, paper wraps rock. The program needs one function: who wins?
+
+## The plan
+
+There are nine pairs of moves, but only three outcomes. Instead of nine `if`s, notice that each move beats exactly one other. Keep that in an array, and the rules are one line each:
+
+<code>
+put "scissors" into tBeats["rock"]
+put "paper" into tBeats["scissors"]
+put "rock" into tBeats["paper"]
+put "Rock beats" && tBeats["rock"]
+</code>
+
+## The computer's move
+
+`any item of` picks an item at random. It is a little easier to read than `item random(3) of`.
+
+<code>
+put "You play rock, the computer plays" && any item of "rock,paper,scissors"
+</code>
+
+<note>
+Keeping rules in data (the array) instead of in code (a pile of ifs) is a powerful idea. To add a move (lizard, Spock...) you change the data, not the logic.
+</note>
+
+<challenge>
+Write a function `winner(pMove1, pMove2)` that returns `player 1`, `player 2` or `draw`.
+<starter>
+function winner pMove1, pMove2
+   return "draw"
+end winner
+
+put winner("rock", "scissors")
+</starter>
+<solution>
+function winner pMove1, pMove2
+   local tBeats
+   put "scissors" into tBeats["rock"]
+   put "paper" into tBeats["scissors"]
+   put "rock" into tBeats["paper"]
+   if pMove1 is pMove2 then return "draw"
+   if tBeats[pMove1] is pMove2 then return "player 1"
+   return "player 2"
+end winner
+
+put winner("rock", "scissors")
+</solution>
+<check>
+winner("rock", "scissors") is "player 1" | rock beats scissors
+winner("rock", "paper") is "player 2" | paper beats rock
+winner("scissors", "paper") is "player 1" | scissors beat paper
+winner("paper", "paper") is "draw" | the same move is a draw
+</check>
+</challenge>
+
+lesson: Dice statistics
+id: dice
+minutes: 9
+
+Roll two dice and add them. Which total comes up most? Mathematicians can work it out; programmers can **simulate** it: roll thousands of times and count.
+
+<code>
+repeat 6000 times
+   add 1 to tCount[random(6) + random(6)]
+end repeat
+repeat with tTotal = 2 to 12
+   put tTotal & ":" && tCount[tTotal]
+end repeat
+</code>
+
+## Drawing a chart
+
+Numbers are hard to compare at a glance. A bar of characters, one for every 50 rolls, makes a chart in the Output:
+
+<code>
+repeat 6000 times
+   add 1 to tCount[random(6) + random(6)]
+end repeat
+repeat with tTotal = 2 to 12
+   put empty into tBar
+   repeat round(tCount[tTotal] / 50) times
+      put "#" after tBar
+   end repeat
+   put format("%2d", tTotal) && tBar
+end repeat
+</code>
+
+Seven comes up most, because more pairs make seven (1+6, 2+5, 3+4, 4+3, 5+2, 6+1) than any other total.
+
+<tip>
+Run it again: the bars change a little each time, but the shape stays. That is what statistics is about.
+</tip>
+
+<challenge>
+Write a function `rollDice(pCount)` that rolls pCount six-sided dice and returns their total.
+<starter>
+function rollDice pCount
+   return random(6)
+end rollDice
+
+put rollDice(3)
+</starter>
+<solution>
+function rollDice pCount
+   local tTotal
+   put 0 into tTotal
+   repeat pCount times
+      add random(6) to tTotal
+   end repeat
+   return tTotal
+end rollDice
+
+put rollDice(3)
+</solution>
+<check>
+rollDice(1) >= 1 and rollDice(1) <= 6 | one die gives 1 to 6
+rollDice(10) >= 10 and rollDice(10) <= 60 | ten dice give 10 to 60
+rollDice(100) > 100 | a hundred dice give more than 100
+</check>
+<hint>
+Start a total at 0, and add `random(6)` to it pCount times.
+</hint>
+</challenge>
+
+unit: Words and codes
+icon: type
+
+Programs that read and change text.
+
+lesson: FizzBuzz
+id: fizzbuzz
+minutes: 8
+
+FizzBuzz is a counting game from the playground, and the most famous small test in programming. Count from 1, but say **Fizz** for multiples of 3, **Buzz** for multiples of 5, and **FizzBuzz** for multiples of both.
+
+1, 2, Fizz, 4, Buzz, Fizz, 7, 8, Fizz, Buzz, 11, Fizz, 13, 14, FizzBuzz ...
+
+## The trap
+
+The obvious version checks 3, then 5, then both, and never says FizzBuzz, because a multiple of 15 is a multiple of 3 and stops at the first test. The order of the tests matters:
+
+<code>
+repeat with tNumber = 1 to 15
+   if tNumber mod 15 is 0 then
+      put "FizzBuzz"
+   else if tNumber mod 3 is 0 then
+      put "Fizz"
+   else if tNumber mod 5 is 0 then
+      put "Buzz"
+   else
+      put tNumber
+   end if
+end repeat
+</code>
+
+<challenge>
+Write a function `fizzBuzz(pNumber)` that returns what to say for one number: `Fizz`, `Buzz`, `FizzBuzz`, or the number itself.
+<starter>
+function fizzBuzz pNumber
+   if pNumber mod 3 is 0 then return "Fizz"
+   if pNumber mod 5 is 0 then return "Buzz"
+   return pNumber
+end fizzBuzz
+
+repeat with tNumber = 1 to 15
+   put fizzBuzz(tNumber)
+end repeat
+</starter>
+<solution>
+function fizzBuzz pNumber
+   if pNumber mod 15 is 0 then return "FizzBuzz"
+   if pNumber mod 3 is 0 then return "Fizz"
+   if pNumber mod 5 is 0 then return "Buzz"
+   return pNumber
+end fizzBuzz
+
+repeat with tNumber = 1 to 15
+   put fizzBuzz(tNumber)
+end repeat
+</solution>
+<check>
+fizzBuzz(9) is "Fizz" | 9 is Fizz
+fizzBuzz(10) is "Buzz" | 10 is Buzz
+fizzBuzz(30) is "FizzBuzz" | 30 is FizzBuzz
+fizzBuzz(7) is 7 | 7 is 7
+</check>
+<hint>
+Which test must come first, so that 15 is not caught by the test for 3?
+</hint>
+</challenge>
+
+lesson: Secret codes
+id: caesar
+minutes: 10
+
+Julius Caesar sent secret messages by shifting every letter three places along the alphabet: A became D, B became E, and so on, with X, Y and Z going round to A, B and C. It is the most famous cipher of all, and a lovely little program.
+
+## Letters as numbers
+
+Every character has a number, its **code point**. `codepointToNum` gives the number, and `numToCodepoint` turns a number back into a character. The capital letters are 65 to 90.
+
+<code>
+put codepointToNum("A")
+put numToCodepoint(72) & numToCodepoint(105)
+</code>
+
+## Going round
+
+To shift a letter, turn it into its place in the alphabet (0 to 25), add the shift, and use `mod 26` so that 26 goes round to 0:
+
+<code>
+put "XYZ" into tText
+repeat for each char tChar in tText
+   put codepointToNum(tChar) - 65 into tPlace
+   put (tPlace + 3) mod 26 into tPlace
+   put numToCodepoint(tPlace + 65) after tSecret
+end repeat
+put tSecret
+</code>
+
+<note>
+To decode, shift by 26 minus the shift: a shift of 3 is undone by a shift of 23. Encoding and decoding are the same program.
+</note>
+
+<challenge>
+Write a function `caesar(pText, pShift)` that shifts every capital letter of pText by pShift places, and leaves everything else (spaces, digits) as it is.
+<starter>
+function caesar pText, pShift
+   return pText
+end caesar
+
+put caesar("HELLO WORLD", 3)
+</starter>
+<solution>
+function caesar pText, pShift
+   local tResult, tPlace
+   repeat for each char tChar in pText
+      put codepointToNum(tChar) into tPlace
+      if tPlace >= 65 and tPlace <= 90 then
+         put numToCodepoint((tPlace - 65 + pShift) mod 26 + 65) after tResult
+      else
+         put tChar after tResult
+      end if
+   end repeat
+   return tResult
+end caesar
+
+put caesar("HELLO WORLD", 3)
+</solution>
+<check>
+caesar("HELLO WORLD", 3) is "KHOOR ZRUOG" | HELLO WORLD becomes KHOOR ZRUOG
+caesar("XYZ", 3) is "ABC" | XYZ goes round to ABC
+caesar(caesar("SECRET 42", 5), 21) is "SECRET 42" | a shift of 21 undoes a shift of 5
+</check>
+<hint>
+Only change a character whose code point is from 65 to 90. Take 65 away, add the shift, use `mod 26`, then add 65 back.
+</hint>
+</challenge>
+
+lesson: Palindromes
+id: palindromes
+minutes: 8
+
+A palindrome reads the same backwards: "level", "racecar", or "A man, a plan, a canal: Panama!" when you ignore the spaces, the punctuation and the capitals.
+
+## Reversing text
+
+Build the reversed text by putting each character **before** what you have so far:
+
+<code>
+repeat for each char tChar in "stressed"
+   put tChar before tReversed
+end repeat
+put tReversed
+</code>
+
+## Cleaning up first
+
+To ignore everything but letters, keep only the characters that are letters:
+
+<code>
+repeat for each char tChar in "A man, a plan!"
+   if tChar is in "abcdefghijklmnopqrstuvwxyz" then put tChar after tLetters
+end repeat
+put tLetters
+</code>
+
+<note>
+xTalk compares letters without minding their case, so "A" is in "abcdefghijklmnopqrstuvwxyz". When case matters, set the caseSensitive to true.
+</note>
+
+<challenge>
+Write a function `isPalindrome(pText)` that returns true when pText reads the same backwards, ignoring everything that is not a letter.
+<starter>
+function isPalindrome pText
+   return false
+end isPalindrome
+
+put isPalindrome("Racecar")
+</starter>
+<solution>
+function isPalindrome pText
+   local tLetters, tReversed
+   repeat for each char tChar in pText
+      if tChar is in "abcdefghijklmnopqrstuvwxyz" then
+         put tChar after tLetters
+         put tChar before tReversed
+      end if
+   end repeat
+   return tLetters is tReversed
+end isPalindrome
+
+put isPalindrome("Racecar")
+</solution>
+<check>
+isPalindrome("Racecar") | Racecar is a palindrome
+isPalindrome("A man, a plan, a canal: Panama!") | so is A man, a plan, a canal: Panama!
+not isPalindrome("xTalk") | xTalk is not
+</check>
+</challenge>
+
+lesson: Word counter
+id: wordcount
+minutes: 8
+
+Writers want to know how long their text is, and which words they use too often. A word counter is a few lines of xTalk, because xTalk already knows what a word is.
+
+<code>
+put "The cat sat. The cat ran! The dog sat." into tText
+put the number of words of tText && "words"
+put the number of chars of tText && "characters"
+</code>
+
+## Words, not punctuation
+
+xTalk's words are separated by spaces, so "sat." with its full stop is a word. To count words properly, take the punctuation out first:
+
+<code>
+put "The cat sat. The cat ran!" into tText
+repeat for each char tChar in ".,!?;:"
+   replace tChar with empty in tText
+end repeat
+put tText
+</code>
+
+<challenge>
+Write a function `wordReport(pText)` that returns one line per different word, in alphabetical order, each as the word, a space and how many times it appears. Ignore full stops, commas, exclamation and question marks, and capitals: "The cat. the cat!" gives `cat 2` and `the 2`.
+<starter>
+function wordReport pText
+   return the number of words of pText
+end wordReport
+
+put wordReport("The cat. the cat!")
+</starter>
+<solution>
+function wordReport pText
+   local tCounts, tWords, tReport
+   repeat for each char tChar in ".,!?"
+      replace tChar with empty in pText
+   end repeat
+   repeat for each word tWord in toLower(pText)
+      add 1 to tCounts[tWord]
+   end repeat
+   put the keys of tCounts into tWords
+   sort lines of tWords
+   repeat for each line tWord in tWords
+      put tWord && tCounts[tWord] & return after tReport
+   end repeat
+   delete the last char of tReport
+   return tReport
+end wordReport
+
+put wordReport("The cat. the cat!")
+</solution>
+<check>
+wordReport("The cat. the cat!") is "cat 2" & return & "the 2" | The cat. the cat! gives cat 2 and the 2
+line 1 of wordReport("b a b c b") is "a 1" | the words are in alphabetical order
+line 2 of wordReport("b a b c b") is "b 3" | b is counted 3 times
+</check>
+<hint>
+Take out the punctuation with `replace`, count with an array and `toLower`, then sort `the keys` of the array.
+</hint>
+</challenge>
+
+unit: Apps
+icon: layout-grid
+
+Small apps with buttons and fields, on the stage.
+
+lesson: Grade book
+id: gradebook
+minutes: 10
+
+A teacher's grade book: names and scores, the class average, the top student. It is the kind of program that spreadsheets were invented for, and it shows how arrays and lists work together.
+
+## The data
+
+Data often arrives as text, one record per line, with the parts separated by commas. That is a CSV file, and xTalk reads it with chunks:
+
+<code>
+put "Ada,92" & return & "Alan,78" & return & "Grace,95" into tClass
+repeat for each line tRecord in tClass
+   put item 1 of tRecord && "scored" && item 2 of tRecord
+end repeat
+</code>
+
+## Sorting by score
+
+`sort` can sort by any chunk of each line. `sort lines of tClass numeric descending by item 2 of each` puts the best first:
+
+<code>
+put "Ada,92" & return & "Alan,78" & return & "Grace,95" into tClass
+sort lines of tClass numeric descending by item 2 of each
+put tClass
+</code>
+
+<challenge>
+Write two functions for a class list like the one above: `classAverage(pClass)` returns the average score, rounded to one decimal place, and `topStudent(pClass)` returns the name with the highest score.
+<starter>
+function classAverage pClass
+   return 0
+end classAverage
+
+function topStudent pClass
+   return item 1 of line 1 of pClass
+end topStudent
+
+put "Ada,92" & return & "Alan,78" & return & "Grace,95" into tClass
+put classAverage(tClass)
+put topStudent(tClass)
+</starter>
+<solution>
+function classAverage pClass
+   local tTotal
+   put 0 into tTotal
+   repeat for each line tRecord in pClass
+      add item 2 of tRecord to tTotal
+   end repeat
+   return round(tTotal / the number of lines of pClass, 1)
+end classAverage
+
+function topStudent pClass
+   sort lines of pClass numeric descending by item 2 of each
+   return item 1 of line 1 of pClass
+end topStudent
+
+put "Ada,92" & return & "Alan,78" & return & "Grace,95" into tClass
+put classAverage(tClass)
+put topStudent(tClass)
+</solution>
+<check>
+classAverage("Ada,92" & return & "Alan,78" & return & "Grace,95") is 88.3 | the average of 92, 78 and 95 is 88.3
+topStudent("Ada,92" & return & "Alan,78" & return & "Grace,95") is "Grace" | Grace has the top score
+topStudent("Kim,40" & return & "Lee,70") is "Lee" | it works for any class
+</check>
+</challenge>
+
+lesson: Clicker game
+id: clicker
+minutes: 10
+stage: yes
+
+A clicker game: click the button, score points, and level up every ten clicks. It is a tiny game, but it has what every game has: **state** (the score and level), **events** (the clicks) and **feedback** (the display).
+
+## State in script locals
+
+The score must survive between clicks, so it lives in script local variables, declared at the top. A handler that updates the display is called after every change, so the screen always shows the state.
+
+<code>
+local sScore, sLevel
+
+on mouseUp
+   if the short name of the target is not "Click me" then exit mouseUp
+   add 1 to sScore
+   if sScore mod 10 is 0 then
+      add 1 to sLevel
+      put "Level up! Now on level" && sLevel
+   end if
+   showScore
+end mouseUp
+
+command showScore
+   put "Score:" && sScore && " Level:" && sLevel into field "Display"
+end showScore
+
+put 0 into sScore
+put 1 into sLevel
+create button "Click me"
+set the rect of button "Click me" to 20, 20, 200, 80
+create field "Display"
+set the rect of field "Display" to 20, 100, 300, 130
+showScore
+</code>
+
+Run it and click away. Watch the Output when you reach ten.
+
+<tip>
+Ideas to extend it: make the button jump to a random place after each click (`set the loc of button "Click me" to random(300), random(200)`), or make each level need more clicks.
+</tip>
+
+<challenge>
+Make the game: a button `Click me` and a field `Display`. Each click adds 1 to the score, and the field shows `Score: ` and the score, like `Score: 3`.
+<starter>
+local sScore
+
+on mouseUp
+   add 1 to sScore
+end mouseUp
+
+create button "Click me"
+</starter>
+<solution>
+local sScore
+
+on mouseUp
+   if the short name of the target is "Click me" then
+      add 1 to sScore
+      put "Score:" && sScore into field "Display"
+   end if
+end mouseUp
+
+create button "Click me"
+set the rect of button "Click me" to 20, 20, 200, 80
+create field "Display"
+set the rect of field "Display" to 20, 100, 300, 130
+</solution>
+<check>
+there is a button "Click me" and there is a field "Display" | the button and the field
+academyClick("Click me") and academyClick("Click me") and academyClick("Click me") | three clicks
+field "Display" is "Score: 3" | the field shows Score: 3
+</check>
+</challenge>
+
+lesson: What will you build?
+id: build
+minutes: 3
+
+Every program in this course started as a small idea, broken into pieces, built and tested one piece at a time. That is how all software is made, from games to spacecraft.
+
+## Ideas to try
+
+- **Hangman**: a secret word, a field showing `_ _ _`, and a button per guess. Chunks do the hard part.
+- **Quiz maker**: questions and answers in a list, asked in a random order, with a score at the end.
+- **Times-table tester**: random questions, with a timer (`the seconds`) to see how fast you are.
+- **Morse code**: an array from each letter to its dots and dashes.
+- **Drawing app**: on `mouseMove`, put a small graphic where the mouse is.
+
+## Taking it further
+
+When a program gets bigger than the playground, make it a stack of its own: File > New Stack in the IDE, draw the buttons and fields with the Tools palette, and write the handlers in the Script Editor. Everything you learned here works there.
+
+<tip>
+Give your project to someone else to try, and watch them use it without helping. You will learn more from that than from anything else.
+</tip>

@@ -1,0 +1,247 @@
+course: For teachers
+id: teachers
+icon: users
+accent: teal
+eyebrow: Course 3 · For teachers and parents
+teachers: yes
+credit: Change any lesson, or write your own course: the Academy's courses are plain text files.
+
+How to teach with the Academy, how its courses are written, and how to write your own: a lesson for tomorrow's class, a unit for your scheme of work, or a whole course in another language.
+
+unit: Teaching with the Academy
+icon: graduation-cap
+
+What the Academy is for, and ideas for the classroom.
+
+lesson: Using the Academy
+id: using
+minutes: 5
+
+The xTalk Academy teaches programming to complete beginners, from about eleven years old to adults. Its first course, **Coding with xTalk**, covers what an introductory computing course covers: sequence, variables, selection, iteration, strings, lists, subroutines and scope, arrays, events, debugging, searching, sorting and recursion. **Projects** puts those ideas to work in small programs.
+
+## A lesson
+
+Each lesson is short: a few minutes of reading, with examples the learner runs with **Try it**, quick checks (multiple choice, with a sentence on why the answer is right) and, in most lessons, a **challenge**. A challenge is checked by running the learner's code against tests, as you would mark it: it looks at what the code does, not at how it is spelled. After two tries, the solution can be seen.
+
+A lesson is done when its quick checks are answered and its challenge passed. The sidebar shows progress through the course.
+
+## Where things are kept
+
+Progress and each challenge's code are kept on the computer, in the IDE's preferences, for whoever uses it. **Start this course again**, on a course's first page, clears one course. The Academy writes no other files.
+
+## The playground
+
+The editor on the right runs xTalk as the IDE does, with two differences that suit learners: every `put` gets its own line in the Output, and a loop that runs for more than ten seconds is stopped with an explanation. Code that makes buttons and fields shows them on a **Stage** window, where they can be clicked.
+
+<tip>
+Errors are explained in plain words, with the line marked in the editor. Encourage learners to read them before asking for help: it is the most useful habit in programming.
+</tip>
+
+lesson: Ideas for the classroom
+id: classroom
+minutes: 6
+
+These approaches work well with the Academy. None of them needs anything beyond the IDE and the lessons.
+
+## Predict, run, investigate
+
+Before pressing **Try it**, ask learners to write down what they think the code will put. Then run it. Where they were wrong is where the learning is. Then ask them to change one thing and predict again. (This is the PRIMM approach: Predict, Run, Investigate, Modify, Make.)
+
+## Pairs
+
+Two learners, one keyboard. The **driver** types; the **navigator** reads the lesson, spots mistakes and thinks ahead. Swap every challenge. Pairs get stuck less, and explain more.
+
+## Away from the computer
+
+- **Human robot**: one learner writes instructions for making a sandwich, another follows them exactly as written. Bugs appear at once.
+- **Sorting people**: line up by height using only "compare two neighbours and swap". That is bubble sort, before the Sorting lesson.
+- **Guess my number**: play it in pairs before the project, and ask what the best strategy is.
+
+## After each unit
+
+- **Comments lesson**: give learners a working program from an earlier lesson and ask them to add a comment to every line.
+- **Bug hunt**: change one character in a working example and ask learners to find it from the error alone.
+- **Make your own challenge**: learners write a small function, and a check for it, for a partner to solve.
+
+<note>
+The Projects course works well as an end-of-term assignment: each project names its pieces before building them, which is the habit to assess.
+</note>
+
+unit: Writing courses
+icon: pen-line
+
+The course file format, and how to check what you write.
+
+lesson: The course file
+id: format
+minutes: 8
+
+Each course is a text file in the Academy's **courses** folder (in the IDE: `Toolset/palettes/academy/courses`), read in the order of the file names. Copy a file, change it, and the IDE shows it the next time the Academy opens. **Open a course file**, on this course's first page, opens a file from anywhere for this session, to try it out.
+
+## The parts
+
+A line `course:`, `unit:` or `lesson:` at the very start of a line begins a part. The lines straight after it, up to the first blank line, are its settings, as `name: value`. A course's or unit's other lines are its description; a lesson's other lines are the lesson.
+
+<code text>
+course: Coding with xTalk
+id: basics
+icon: graduation-cap
+accent: violet
+eyebrow: Course 1 · For beginners
+credit: Who wrote it, in a line.
+
+What the course is about, in a sentence or two.
+
+unit: First steps
+icon: footprints
+
+What the unit covers.
+
+lesson: Hello, xTalk
+id: hello
+minutes: 5
+
+The lesson's text starts here.
+</code>
+
+## Settings
+
+- A course: `id` (kept with the learner's progress, so do not change it once it is in use), `icon`, `accent` (violet, indigo, sky, teal, emerald, amber, orange, rose or pink), `eyebrow` (the small words over the title), `credit`, and `teachers: yes` for a course like this one.
+- A unit: `icon`.
+- A lesson: `id` (as for a course), `minutes` (otherwise worked out from its length), and `stage: yes` to show the Stage on every run, for lessons about objects.
+
+The icons are those of Learn (and [Lucide](https://lucide.dev)): graduation-cap, footprints, variable, git-branch, repeat, type, blocks, braces, mouse-pointer-click, brain, rocket, gamepad-2, layout-grid, users, pen-line and many more.
+
+## Text
+
+A blank line starts a new paragraph. A line starting `## ` is a heading, `- ` a bullet and `1. ` a numbered step. In a line, `**bold**` is bold, backticks mark code, and `[words](https://...)` is a link.
+
+<caution>
+Save course files as UTF-8. Keep straight double quotes in code: a "smart" quote from a word processor is not xTalk.
+</caution>
+
+lesson: Blocks
+id: blocks
+minutes: 8
+
+Everything that is not text is a **block**: a line with its tag, the block's lines, and a line with the closing tag.
+
+## Code
+
+A `<code>` block shows code with **Try it** and **Copy**, and is closed by a `</code>` line. Words after `code` in its tag change it: `<code error>` is code that stops with an error on purpose, `<code dialog>` opens a dialog (so the course check does not run it), and `<code text>` is text that is not to be run, as in these lessons.
+
+## Callouts
+
+`<tip>`, `<note>`, `<important>` and `<caution>` make a coloured panel. Their lines are text, with the usual markup.
+
+## Quick checks
+
+<code text>
+<quiz>
+What does put 20 mod 6 show?
+- 3
+* 2
+- 3.33
+= 6 goes into 20 three times, and 2 is left over.
+</quiz>
+</code>
+
+The other lines are the question. `- ` is a wrong answer, `* ` the right one (exactly one), and `= ` the explanation shown when it is answered right.
+
+## Challenges
+
+<code text>
+<challenge>
+Write a function double(pNumber) that returns pNumber times 2.
+<starter>
+function double pNumber
+   return pNumber
+end double
+</starter>
+<solution>
+function double pNumber
+   return pNumber * 2
+end double
+</solution>
+<check>
+double(4) is 8 | 4 doubled is 8
+double(0) is 0 | 0 doubled is 0
+</check>
+<hint>
+Multiply by 2.
+</hint>
+</challenge>
+</code>
+
+The lines outside the parts say what to do. `<starter>` is the code the playground starts with, `<solution>` the answer (shown after two tries), `<hint>` an optional hint, and `<check>` the tests: one per line, written as an xTalk expression, a `|`, and what it looks for in words.
+
+lesson: Writing checks
+id: checks
+minutes: 9
+
+A check is an xTalk expression that is true when the learner's code is right. It is worked out after the learner's code has run, on the stage's card, so it can call the learner's functions and look at what their code made.
+
+## What a check can use
+
+- The learner's own functions: `double(4) is 8`.
+- `output`: everything the code put, a line each. `line 1 of output is "Hello"`, `the number of lines of output is 10`.
+- `code`: the learner's code itself. `code contains "repeat"` checks that a loop was used.
+- The stage: `there is a button "Start"`, `field "Score" is 0`.
+- `academyClick("Name")` clicks a button of the stage, and `academyType("Field", "text")` puts text into a field. Each returns true, so a check line can do it: put the click on a line of its own, and look at the result on the next.
+
+The checks of a challenge run in order on the same stage, so a click in one check is seen by the next:
+
+<code text>
+academyClick("Count") | a click on Count
+the last line of output is "Clicks: 1" | shows Clicks: 1
+</code>
+
+## Good checks
+
+- Test what the code does, not how it is written. `double(3) is 6` accepts every right answer; `code contains "* 2"` turns away `pNumber + pNumber`.
+- Test the edges: zero, one item, an empty list, a negative number.
+- Make the starter code fail at least one check, so that the learner has something to do.
+- Say what each check looks for in plain words after the `|`: the learner sees that list before they start.
+
+## Names the Academy keeps
+
+The learner's code runs in a stack called revAcademyStage, whose script the Academy writes. A learner's handlers cannot be called `msgChanged`, `errorDialog` or anything starting with `academy`, and the Academy says so.
+
+## Checking a course
+
+`tools/ci/academy-check.livecodescript`, in the OXT-Beyond source, runs every example of every course, checks that each quiz has one right answer, and that each challenge's solution passes its checks while its starter does not. Run it after changing a course:
+
+<code text>
+python3 tools/ci/academy_check.py --engine path/to/the/engine
+</code>
+
+<tip>
+Write the solution first, then the checks, then break the solution in small ways and make sure a check catches each one.
+</tip>
+
+unit: Background
+icon: book-open
+
+Where xTalk and the Academy's ideas come from.
+
+lesson: Where the ideas come from
+id: history
+minutes: 5
+
+xTalk began in 1987 with **HyperCard**, Bill Atkinson's program for the Macintosh, and its language **HyperTalk**, designed by Dan Winkler. HyperCard's idea was that anybody could make software: you drew buttons and fields on cards, and wrote what they did in a language that reads like English. A great many people who never thought of themselves as programmers did just that, and many of today's programmers started there.
+
+The family grew: SuperCard, MetaCard, then Revolution and **LiveCode**, whose open-source Community edition kept the language alive and moved it to Windows, Linux, phones and the web. OpenXTalk carries it on as a community project, and OXT-Beyond is one of its IDEs.
+
+## Teaching with xTalk
+
+xTalk has been used to teach programming in schools and universities for most of its life, because beginners can read it. The Academy follows that tradition: the HyperCard handbooks that taught by example, the step-by-step lessons of Revolution and LiveCode, and LiveCode's courses for schools, which taught computing through apps the learners designed.
+
+The way the Academy teaches draws on current computing education: short worked examples before practice, predicting before running, immediate feedback on every attempt, and challenges marked by running tests, as professional programmers check their own code.
+
+## Thanks
+
+To everyone who wrote a HyperCard stack, a Revolution tutorial or a LiveCode lesson and shared it: this course stands on your work.
+
+<note>
+The Academy is part of OXT-Beyond and shares its licence. Its courses are yours to copy, change and share for teaching.
+</note>
