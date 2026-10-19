@@ -1327,6 +1327,9 @@ private function revMenubarFileMenu pContext, tFile
    end if
    put "Import Stack" & return after tFile
    put tab & "HyperCard Stack.../|hypercard" & return after tFile
+   -- OXT-Beyond: whether the import rewrites HyperTalk that does not compile
+   -- here (revHyperCardScriptLibrary); on unless turned off
+   put tab & toggleMenuItem("Make HyperTalk Scripts Compile/|hypercardscripts", revIDEGetPreference("cHyperCardFixScripts") is not false) & return after tFile
    put enableMenuItem("&Close/W", the mode of the topStack <= 3 and the short name of the topstack is not "revMenubar") & return after tFile
    put enableMenuItem("Close and Remove From Memor&y", tCanSaveStack) & return after tFile
    put "-" & return after tFile
@@ -2528,6 +2531,9 @@ on revMenubarFileMenuPick pWhich
                break
             case "Import Stack"
                if item 2 of pWhich is "hypercard" then revIDEActionImportHyperCardStack
+               if item 2 of pWhich is "hypercardscripts" then
+                  revIDESetPreference "cHyperCardFixScripts", (revIDEGetPreference("cHyperCardFixScripts") is false)
+               end if
                break
             case "Browse Recent Files..."
                choose browse tool
