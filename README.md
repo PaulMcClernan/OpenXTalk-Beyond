@@ -89,8 +89,7 @@ stacks new in 0.2.7 (see
 [0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish)),
 and 0.2.7-rc.5, the last candidate before 0.2.7, adds xTalk Chat, three
 xTalk Suite apps in Learn and a new About window, and fixes the
-Standalone Settings' Web card on macOS 26 and the web IDE's bridge under
-Claude Desktop (see
+Standalone Settings' Web card on macOS 26 (see
 [0.2.7-rc.5](#027-rc5-xtalk-chat-the-xtalk-suites-apps-and-a-new-about-window));
 0.2.6 stays the main download until it has held up.
 
@@ -1561,9 +1560,11 @@ OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
   showed its heading and nothing else, so a stack could not be built for
   the web there.
 - **The web IDE's MCP Bridge under Claude Desktop.** The desktop
-  extension that Claude Setup downloads now answers when Claude Desktop
-  starts it with its own built-in Node.js; before, Desktop gave up on it
-  ("Request timed out").
+  extension that Claude Setup downloads now serves when Claude Desktop
+  starts it with its own built-in Node.js, where before it never
+  started ("Request timed out"). Claude Desktop can still fail to reach
+  it ("Unable to connect to extension server"); that is being looked
+  into.
 
 A script sees these differences from 0.2.7-rc.4. On a Mac,
 revcommonlibrary's private `_revEnvironmentPlatform` always says "MacOS
