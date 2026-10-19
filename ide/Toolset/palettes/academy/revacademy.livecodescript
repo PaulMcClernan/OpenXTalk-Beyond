@@ -129,7 +129,7 @@ command revAcademyShow pCourse, pLesson
 end revAcademyShow
 
 on preOpenStack
-   local tSaved, tError, tWant
+   local tSaved, tError, tWant, tLesson
    if not acForMe() then
       pass preOpenStack
    end if
@@ -147,7 +147,11 @@ on preOpenStack
       end if
       acBuild
       acPlace
-      acGoTo item 1 of tWant, item 2 of tWant, true
+      set the itemDelimiter to "|"
+      put item 2 of tWant into tLesson
+      put item 1 of tWant into tWant
+      set the itemDelimiter to comma
+      acGoTo tWant, tLesson, true
       -- (a script-only stack is made invisible when it is loaded)
       show me
    catch tError
@@ -1271,12 +1275,12 @@ private command acShow pCourse, pLesson, pEffect, pFirst
    if not pFirst then
       unlock screen with visual effect pEffect very fast
    end if
-   acRestore tSaved
    -- (a lesson with nothing to do is done once it is read)
    if pLesson > 0 and not acHasWork(pCourse, pLesson) then
       acMarkDone pCourse, pLesson
    end if
    acSaveProgress
+   acRestore tSaved
 end acShow
 
 -- Whether a lesson has something to do: a challenge or a quick check
@@ -2853,6 +2857,9 @@ end tabKey
 -- Runs the editor's code
 private command acRunEditor
    local tCode, tRun
+   if acBusy() then
+      exit acRunEditor
+   end if
    put the text of field "ed" into tCode
    if word 1 to -1 of tCode is empty then
       acShowOutput "Nothing to run yet: type some xTalk first.", "warn", empty
@@ -2863,6 +2870,16 @@ private command acRunEditor
    put acRunCode(tCode, acStageLesson()) into tRun
    acShowRun tRun, empty
 end acRunEditor
+
+-- Whether code is running still (it waits, with messages, say): a second
+-- run would delete the stage under it, so it says so and waits its turn
+private function acBusy
+   if sRunning is not true then
+      return false
+   end if
+   acToast "Your code is still running: wait for it to finish, then run it again.", "warn"
+   return true
+end acBusy
 
 -- Whether the lesson in front is about objects: its stage shows each run
 private function acStageLesson
@@ -2875,7 +2892,7 @@ end acStageLesson
 -- Checks the editor's code against the challenge's tests
 private command acCheckEditor
    local tChallenge, tCode, tCheck, tKey, tHtml, tIndex, tColor, tMark
-   if sMode is not "challenge" then
+   if sMode is not "challenge" or acBusy() then
       exit acCheckEditor
    end if
    put sModeKey into tKey
@@ -2956,7 +2973,7 @@ end acResetEditor
 -- An example of the lesson, in the playground, run
 private command acTryExample pIndex
    local tRun
-   if sCode[pIndex] is empty then
+   if sCode[pIndex] is empty or acBusy() then
       exit acTryExample
    end if
    acKeepDraft
@@ -3199,14 +3216,23 @@ end acStageMade
 -- academy* ones) come between the two.
 private function acSandboxScript pCode, @rScript
    local tLines, tCount, tIndex, tLine, tHandler, tWord, tName, tTop, tRun, tRunCount, tGoOn, tHead
+   local tPlace, tGuard
+   put false into tGuard
+   put false into tGoOn
    put empty into sLineMap
    split pCode by return
    put the number of elements of pCode into tCount
    repeat with tIndex = 1 to tCount
       put pCode[tIndex] into tLine
       put word 1 of tLine into tWord
-      if word 1 of tLine is "repeat" and not tGoOn then
+      -- (a repeat's guard goes after its header, on the header's last
+      -- line when it goes on with "\")
+      if tWord is "repeat" and not tGoOn then
+         put true into tGuard
+      end if
+      if tGuard and not acGoesOn(tLine) then
          put acGuardLine(tLine) into tLine
+         put false into tGuard
       end if
       if tHandler is not empty then
          -- in a handler, until its end
@@ -3214,6 +3240,9 @@ private function acSandboxScript pCode, @rScript
          if tWord is "end" and word 2 of tLine is tHandler then
             put empty into tHandler
          end if
+      else if tGoOn and tPlace is "keep" then
+         -- the rest of a declaration that went on with "\"
+         put tLine into tLines[tIndex]
       else if tGoOn then
          -- the rest of a statement that went on with "\"
          add 1 to tRunCount
@@ -3230,13 +3259,15 @@ private function acSandboxScript pCode, @rScript
             end if
          else if tWord is among the items of "local,global,constant" or acIsQuiet(tLine) then
             put tLine into tLines[tIndex]
+            put "keep" into tPlace
          else
             add 1 to tRunCount
             put tLine into tRun[tRunCount]
             put tIndex into sLineMap[tRunCount]
+            put "run" into tPlace
          end if
       end if
-      put acGoesOn(tLine) into tGoOn
+      put acGoesOn(pCode[tIndex]) into tGoOn
    end repeat
    -- the editor's lines, in place
    repeat with tIndex = 1 to tCount
@@ -3612,14 +3643,21 @@ end acExplain
 -- An error in a handler of the stage after its run (a click on a button
 -- the code made, say), sent by the stage's errorDialog
 command revAcademyError pError
-   local tRun
+   local tRun, tSaved
    put acRunError(pError) into tRun
    if the mode of me is 0 then
       exit revAcademyError
    end if
+   -- (a click on the stage made the stage the defaultStack)
+   put the defaultStack into tSaved
+   if acIsStage(tSaved) then
+      put the short name of me into tSaved
+   end if
+   set the defaultStack to the short name of me
    lock screen
    acShowRun tRun, empty
    unlock screen
+   acRestore tSaved
 end revAcademyError
 
 ################################################################################
