@@ -1,5 +1,6 @@
 import module com.livecode.widget.piechart
   use com.livecode.canvas
+  use com.livecode.library.widgetutils
   use com.livecode.array
   use com.livecode.list
   use com.livecode.widget
@@ -12,6 +13,7 @@ import module com.livecode.widget.piechart
   use com.livecode.mathfoundation
   use com.livecode.engine
   use com.livecode.typeconvert
+  use com.livecode.char
   handler OnCreate() returns optional any
   handler OnPaint() returns optional any
   handler OnMouseUp() returns optional any
@@ -20,5 +22,6 @@ import module com.livecode.widget.piechart
   handler colorList(in pNumber as optional any) returns List
   handler setValues(in pValues as String) returns nothing
   handler setLabels(in pValues as String) returns nothing
+  handler setColorList(in pValues as String) returns nothing
   handler setShowLabels(in pShow as Boolean) returns nothing
 end module
