@@ -69,9 +69,27 @@ command revReleaseNotesShow
 end revReleaseNotesShow
 
 on preOpenStack
-   local tSaved
+   local tSaved, tError
    put the defaultStack into tSaved
    set the defaultStack to the short name of me
+   try
+      rnOpen
+   catch tError
+      -- (the IDE's defaultStack is put back on the way out, whatever
+      -- happens: tOpenReleaseNotes then opens the classic window)
+      rnRestore tSaved
+      throw tError
+   end try
+   rnRestore tSaved
+end preOpenStack
+
+private command rnRestore pSaved
+   if pSaved is not empty and there is a stack pSaved then
+      set the defaultStack to pSaved
+   end if
+end rnRestore
+
+private command rnOpen
    rnUseKit
    rnLoad
    rnBuild
@@ -88,10 +106,7 @@ on preOpenStack
    rnRender
    -- (a script-only stack is made invisible when it is loaded)
    show me
-   if tSaved is not empty and there is a stack tSaved then
-      set the defaultStack to tSaved
-   end if
-end preOpenStack
+end rnOpen
 
 on openStack
    lkStartTicking
