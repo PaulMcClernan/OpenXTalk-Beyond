@@ -1577,6 +1577,11 @@ OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
   the release's name, the build and the engine with a Copy version
   button, the about text, and the licences. With the Option (Alt) key
   down, Help > About opens the classic window as before.
+- **The Extension Manager is light again**: its rows are white and
+  light grey with dark text, as before 0.2.7-rc.4, in the light and the
+  dark appearance. The Repo and Playground tabs, web pages that were
+  slow to load, are gone; Install extension installs a package from a
+  file.
 - **The Standalone Settings' Web card on macOS 26** is whole again: it
   showed its heading and nothing else, so a stack could not be built for
   the web there.
@@ -1609,7 +1614,10 @@ X", so on macOS 26 the IDE's font helpers return Lucida Grande at 11
 where they threw; on macOS 10 to 15, Windows and Linux nothing changes.
 `tOpenAbout` of the menu bar opens the stack "revAbout" (with the
 Option key down, "aboutstack" as before); Learn's examples table has a
-group "suite" and three rows; and the menu bar's Development > Plugins
+group "suite" and three rows; the Extension Manager has no "repo" or
+"playground" frame item, its `showExtensionStore` (which the Tools
+palette's more-widgets button sends) shows the Widgets list, and a
+double-click on a row does nothing; and the menu bar's Development > Plugins
 has an "xTalk Chat" line when its extension is installed. The MCP
 Bridge's server serves however Node.js loads it, unless
 `OXT_MCP_LIBRARY=1`. Desktop engines and stacks are otherwise unchanged.
