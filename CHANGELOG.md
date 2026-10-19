@@ -17,6 +17,7 @@ words, is in the [README](README.md#the-ide) and on the
 ## Unreleased
 
 - Learn: the xTalk Suite demos open built, in the middle of the screen (#157)
+- xTalk Academy: an interactive course in programming for beginners and schools
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 

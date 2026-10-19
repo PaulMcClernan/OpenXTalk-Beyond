@@ -51,7 +51,8 @@ folders), the user guides except the dictionary and the PDF guides, the
 Resource Center, the tutorials and the 23 MB "All Guides" stack.
 
 --repo DIR copies a source checkout's script-only IDE stacks
-(ide/**/*.livecodescript, and ide-support's into Toolset/libraries) over
+(ide/**/*.livecodescript, the xTalk Academy's course files, and
+ide-support's scripts into Toolset/libraries) over
 the installed ones, to try IDE script changes without packaging them, and
 puts the examples of Learn's gallery that are not in the install yet
 where packaging does: the remastered examples (ide/Resources/Examples/
@@ -179,6 +180,9 @@ def repo_scripts(repo, install):
         rel = 'Extensions/com.livecode.library.%s/%s' % (name, os.path.basename(path))
         if os.path.isfile(os.path.join(install, *rel.split('/'))):
             scripts[rel] = path
+    # The xTalk Academy's courses, text files beside its stack
+    for path in glob.glob(os.path.join(ide, 'Toolset', 'palettes', 'academy', 'courses', '*.txt')):
+        scripts['Toolset/palettes/academy/courses/' + os.path.basename(path)] = path
     log('  %d script-only stacks from %s' % (len(scripts), repo))
     # The remastered examples, for Learn's examples gallery
     remastered = os.path.join(ide, 'Resources', 'Examples', 'Remastered')

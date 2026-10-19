@@ -1373,6 +1373,20 @@ end linkClicked
 #
 
 on lkAction pAction
+   local tSaved, tError
+   -- (an action can come from another stack, as Learn's does)
+   put the defaultStack into tSaved
+   set the defaultStack to the short name of me
+   try
+      acAction pAction
+   catch tError
+      acRestore tSaved
+      throw tError
+   end try
+   acRestore tSaved
+end lkAction
+
+private command acAction pAction
    local tArg
    put word 2 to -1 of pAction into tArg
    switch word 1 of pAction
@@ -1430,7 +1444,7 @@ on lkAction pAction
          acShowStage
          break
    end switch
-end lkAction
+end acAction
 
 private command acCopy pIndex
    if sCode[pIndex] is empty then
@@ -2988,7 +3002,11 @@ end acUseSolution
 private command acShowRun pRun, pExtra
    local tHtml, tStatus, tKind
    if pRun["ok"] then
-      put "Ran in" && pRun["ms"] && "ms" into tStatus
+      if pRun["ms"] < 1 then
+         put "Ran in under 1 ms" into tStatus
+      else
+         put "Ran in" && pRun["ms"] && "ms" into tStatus
+      end if
       put "ok" into tKind
       if pRun["output"] is empty and pExtra is empty then
          put "<p><font color=" & quote & "#64748b" & quote & ">It ran, and put nothing. Use put to see a value here.</font></p>" into tHtml
@@ -3388,6 +3406,9 @@ private function acCompileError pResult
    put acEditorLine(item 2 of line 1 of pResult) into tRun["line"]
    if tCode is an integer then
       put line tCode of the scriptParsingErrors into tText
+      if tText is empty then
+         put acEngineWords(tCode, "parse") into tText
+      end if
    end if
    if tRun["line"] is an integer then
       put "Line" && tRun["line"] & ": xTalk could not read this" into tRun["title"]
@@ -3424,6 +3445,9 @@ private function acRunError pError
       end if
       if tText is empty then
          put line tCode of the scriptExecutionErrors into tText
+         if tText is empty then
+            put acEngineWords(tCode, "run") into tText
+         end if
          put item 4 to -1 of tLine into tHint
       end if
       if tAt is empty and item 2 of tLine is an integer and item 2 of tLine > 0 then
@@ -3439,6 +3463,63 @@ private function acRunError pError
    put acExplain(tText, tHint, "run") into tRun["error"]
    return tRun
 end acRunError
+
+-- The engine's words for the errors a learner meets most, by their
+-- number, for an engine that has no table of them (the scriptParsingErrors
+-- and the scriptExecutionErrors are empty in a standalone engine, as the
+-- web IDE's may be); only the words acExplain looks for
+private function acEngineWords pCode, pKind
+   if pKind is "parse" then
+      switch pCode
+         case 114
+            return "Expression: missing factor"
+         case 118
+            return "Expression: unquoted literal"
+         case 167
+            return "Handler: end doesn't match handler name"
+         case 169
+            return "Handler: bad handler name (may be reserved word)"
+         case 189
+            return "if: missing 'then'"
+         case 190
+            return "if: missing 'end if'"
+         case 219
+            return "local: not a valid variable or constant name"
+         case 339
+            return "repeat: missing 'end repeat'"
+      end switch
+      return empty
+   end if
+   switch pCode
+      case 573
+         return "Handler: can't find handler"
+      case 153
+         return "numeric: divide by zero"
+      case 77
+      case 89
+      case 95
+         return "Chunk: no such object"
+      case 9
+      case 148
+      case 333
+      case 578
+         return "destination has a bad format (numeric?)"
+      case 155
+      case 156
+      case 198
+      case 199
+      case 312
+      case 313
+      case 318
+      case 319
+      case 375
+      case 376
+      case 394
+      case 395
+         return "Operators: error in operand"
+   end switch
+   return empty
+end acEngineWords
 
 -- The editor's line for the stage's script line pLine (empty when the
 -- line is the Academy's own)
@@ -3683,7 +3764,7 @@ private command acDropStage
    if there is no stack kStage then
       exit acDropStage
    end if
-   if the mode of stack kStage is not 0 then
+   if the visible of stack kStage then
       put the rect of stack kStage into sStageRect
    end if
    if acIsStage(the defaultStack) then
@@ -3705,16 +3786,18 @@ private command acShowStage
       acToast "There is no stage yet: run some code that makes a button or a field.", "warn"
       exit acShowStage
    end if
-   if the mode of stack kStage is 0 then
+   -- (a stack made with create is open, but invisible, until it is shown)
+   if not the visible of stack kStage then
       if sStageRect is not empty then
          set the rect of stack kStage to sStageRect
       else
          set the topLeft of stack kStage to the left of me + kSide + 40, the top of me + kHeaderHeight + 40
       end if
-      modeless stack kStage
-   else
-      go stack kStage
    end if
+   modeless stack kStage
+   show stack kStage
+   -- (the stage comes to the front, and the Academy's handlers go on)
+   set the defaultStack to the short name of me
 end acShowStage
 
 -- The stage, closed (pGone: and forgotten, as the Academy closes)
@@ -3722,7 +3805,7 @@ private command acCloseStage pGone
    if there is no stack kStage then
       exit acCloseStage
    end if
-   if the mode of stack kStage is not 0 then
+   if the visible of stack kStage then
       put the rect of stack kStage into sStageRect
    end if
    if pGone then

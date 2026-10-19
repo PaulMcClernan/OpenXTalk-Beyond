@@ -895,6 +895,9 @@ on lkAction pAction
       case "pdf"
          leOpenGuidePdf
          break
+      case "academy"
+         leOpenAcademy
+         break
       case "clear"
          put empty into field "search"
          put empty into sSearch[sSection]
@@ -907,6 +910,17 @@ on lkAction pAction
          break
    end switch
 end lkAction
+
+-- The xTalk Academy (palettes/academy), the course in coding for
+-- beginners that the lessons' first page points to
+private command leOpenAcademy
+   local tPath
+   put leToolset() & "/palettes/academy/revacademy.livecodescript" into tPath
+   if there is no file tPath then
+      exit leOpenAcademy
+   end if
+   dispatch "revAcademyShow" to stack tPath
+end leOpenAcademy
 
 -- Goes to a page: next pushes left, back pushes right, a jump dissolves
 command leGo pWhere
@@ -1748,7 +1762,8 @@ private command leRenderLanding
       leHero "LESSONS", "Learn xTalk, one idea at a time", \
             the number of lines of sTitles[sSection] - 2 && "short lessons, each with code you can copy: from your first button to arrays, SQLite, sockets and widgets.", \
             leSectionInfo(sSection, "credit"), "124,58,237|219,39,119|249,115,22", \
-            "Start with lesson 1|go 3|play", "Read the foreword|go 2|book-open"
+            "Start with lesson 1|go 3|play", "Read the foreword|go 2|book-open", \
+            "New to coding? Try the Academy|academy|graduation-cap"
       leLessonTiles
    else
       leHero "GUIDES", "The xTalk guide", \
@@ -1764,7 +1779,7 @@ end leRenderLanding
 -- The big banner at the top of a first page: a gradient, lights that
 -- float over it, and its words laid out from the top down (it is as tall
 -- as they need)
-private command leHero pEyebrow, pTitle, pText, pCredit, pColors, pButton1, pButton2
+private command leHero pEyebrow, pTitle, pText, pCredit, pColors, pButton1, pButton2, pButton3
    local tTop, tBottom, tObj, tBg, tIndex, tLeft, tRight, tX, tSize, tY
    put sY - 6 into tTop
    put sX + 40 into tLeft
@@ -1805,6 +1820,10 @@ private command leHero pEyebrow, pTitle, pText, pCredit, pColors, pButton1, pBut
    if pButton2 is not empty then
       add 12 + lkButton("p_heroB2", tX, tY, 38, item 1 of pButton2, item 3 of pButton2, "light", \
             leSectionInfo(sSection, "accent"), "p_hero", item 2 of pButton2, 0, "page") to tX
+   end if
+   if pButton3 is not empty then
+      add 12 + lkButton("p_heroB3", tX, tY, 38, item 1 of pButton3, item 3 of pButton3, "light", \
+            leSectionInfo(sSection, "accent"), "p_hero", item 2 of pButton3, 0, "page") to tX
    end if
    set the itemDelimiter to comma
    if tX > tLeft then

@@ -1905,6 +1905,7 @@ private function revMenubarHelpMenu pContext
    put "-" & return after tHelp
    put "Guides" & return after tHelp  --tp's 'allguides.oxtstack' version
    put "Lessons" & return after tHelp  --tl's 'lessons.txt'
+   put "xTalk Academy" & return after tHelp  -- OXT-Beyond: learn to code (palettes/academy)
    put "Demos" & return after tHelp
    put "Forums" & return after tHelp
    put "-" & return after tHelp
@@ -3043,6 +3044,9 @@ on revMenubarHelpMenuPick pWhich
       case "Lessons"
          send "tOpenNewGuides" to this stack  --tp 23-1, changed to open lessons
          break
+      case "xTalk Academy"
+         send "tOpenAcademy" to this stack
+         break
       case "Release Notes"
          send "tOpenReleaseNotes" to card "Automatic Updates" of stack "revPreferencesGUI"
          break
@@ -3356,6 +3360,20 @@ on tOpenDemos  --tp 26-1, open 'Demos' stack
    set the itemdelimiter to ","
    open stack tFilePath
 end tOpenDemos
+
+-- OXT-Beyond: the xTalk Academy (palettes/academy), a course in coding for
+-- beginners, taught in xTalk, with a playground that runs each example and
+-- checks each challenge
+on tOpenAcademy
+   local tPath
+   set the itemDelimiter to slash
+   put item 1 to -3 of the filename of stack "revMenubar" & "/academy/revacademy.livecodescript" into tPath
+   set the itemDelimiter to comma
+   if there is no file tPath then
+      exit tOpenAcademy
+   end if
+   dispatch "revAcademyShow" to stack tPath
+end tOpenAcademy
 
 -- OXT-Beyond: Learn (palettes/learn) shows the lessons, the guides and the
 -- examples in one window, in the look of the web tour, and reads the

@@ -918,6 +918,10 @@ private command hmIde pWhat
          case "dictionary"
             send "tNewDictionaryDisplay" to stack "revMenubar"
             break
+         case "academy"
+            -- (the xTalk Academy: palettes/academy)
+            send "tOpenAcademy" to stack "revMenubar"
+            break
       end switch
    catch tError
       hmStatus "That could not open:" && hmErrorText(tError), "bad"
@@ -1616,10 +1620,11 @@ private command hmBuildHome
    add 10 + hmButton("pill_open", tX, 532, 38, "Open a stack", "folder-open", "ghost", hmColor("indigo"), "pg_home", "ide open", 0, "home") to tX
    add 10 + hmButton("pill_examples", tX, 532, 38, "Examples", "layers", "ghost", hmColor("indigo"), "pg_home", "ide examples", 0, "home") to tX
    add 10 + hmButton("pill_dictionary", tX, 532, 38, "Dictionary", "book-open-text", "ghost", hmColor("indigo"), "pg_home", "ide dictionary", 0, "home") to tX
+   add 10 + hmButton("pill_academy", tX, 532, 38, "Learn to code", "graduation-cap", "ghost", hmColor("indigo"), "pg_home", "ide academy", 0, "home") to tX
    hmGlow the long id of graphic "pill_new_bg", hmColor("indigo"), 12, 90
    hmRoom "pill_new", 14
    put 7 into tIndex
-   repeat for each item tPage in "pill_new,pill_open,pill_examples,pill_dictionary"
+   repeat for each item tPage in "pill_new,pill_open,pill_examples,pill_dictionary,pill_academy"
       put tIndex into sCfg[tPage]["enter"]
       add 1 to tIndex
    end repeat
