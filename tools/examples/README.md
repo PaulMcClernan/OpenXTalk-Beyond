@@ -43,6 +43,35 @@ The builders also use the drawing handlers of Learn's kit
 saved in the stack as graphics, fields and images, so a remaster does not
 need the kit to open.
 
+## xTalk Suite demos
+
+Learn also lists three whole apps of the
+[xTalk Suite](https://github.com/SethMorrowSoftware/xtalk-suite), under
+"xTalk Suite demos", which run on the suite's extensions that OXT-Beyond
+ships built in. They are not remasters and have no builder here: each is
+a binary stack in `ide/Resources/Examples/xTalk Suite/` whose stack
+script is the suite's file, unchanged, and that builds its window
+itself when it opens.
+
+| Stack | The suite's file (stack script) | Needs |
+| --- | --- | --- |
+| No Cloud Quick Share | `nocloud/src/nocloudquickshare.livecodescript` | TorrentXT; SodiumXT for passphrases and the Tor path, and a Tor daemon for that path |
+| Torrent Client | `torrentxt/examples/torrent-client.livecodescript` | TorrentXT |
+| Box2D Platformer | `box2dxt/examples/box2dxt-platformer.livecodescript` | Box2Dxt |
+
+No Cloud Quick Share and Torrent Client were made from the suite's
+commit `34221ae` (the extensions' pins in
+[`tools/oxt/xtalk-extensions.json`](../oxt/xtalk-extensions.json) are the
+same files) with an OXT-Beyond engine: a new stack named after the app,
+its script set to the file, saved in the 7.0 stack format. Box2D
+Platformer is the stack Seth Morrow saved on 2026-10-14 after its first
+run had imported the suite's `box2dxt/Spritesheets` and its sounds into
+it, so that it opens without that folder, renamed from "Untitled 1";
+every line of its script but the Box2Dxt Kit's doc comments is the
+suite's file at `34221ae`. To take a newer version, make the first two
+the same way, and for the platformer run the new file once with the
+`Spritesheets` folder, let it import, and save it.
+
 ## Building
 
 ```sh

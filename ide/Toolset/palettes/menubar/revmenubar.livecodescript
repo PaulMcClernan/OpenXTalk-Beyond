@@ -3305,11 +3305,36 @@ end tNavigatorPick
 
 on tOpenAbout  --tp 24-1, open 'About' stack
    local tFilePath
+   -- OXT-Beyond: the About window in the look of Home and Learn
+   -- (palettes/about); with the Option (Alt) key down, or when it is
+   -- missing or fails, the classic window opens as it always did
+   if revMenubarOpenAbout() then
+      exit tOpenAbout
+   end if
    set the itemdelimiter to slash
    put item 1 to -3 of the filename of stack "revMenubar" & slash & "about.oxtstack" into tFilePath
    set the itemdelimiter to ","
    open stack tFilePath
 end tOpenAbout
+
+private function revMenubarOpenAbout
+   local tPath, tError
+   if the optionKey is down then
+      return false
+   end if
+   set the itemDelimiter to slash
+   put item 1 to -3 of the filename of stack "revMenubar" & "/about/revabout.livecodescript" into tPath
+   set the itemDelimiter to comma
+   if there is no file tPath then
+      return false
+   end if
+   try
+      dispatch "revAboutShow" to stack tPath
+   catch tError
+      return false
+   end try
+   return it is "handled"
+end revMenubarOpenAbout
 
 on tOpenOnlineDict  --tp 24-1, open online dictionary in default browser
    -- revGoURL "https://openxtalk-org.github.io/OpenXTalk_Syntax_Dictionary/" -- relocated to not use github.io
