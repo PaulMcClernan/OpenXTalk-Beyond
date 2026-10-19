@@ -1556,6 +1556,17 @@ OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
   library, added to the stack as the substack "HyperCard Library" and
   made its behavior, where HyperCard's Home stack was. File > Import
   Stack > Make HyperTalk Scripts Compile turns it off.
+- **Stand-ins for the HyperCard externals stacks call most.** An XCMD
+  or XFCN is 68k code this engine cannot run, so a call to one failed
+  with "can't find handler". The HyperCard Library now answers 22 of
+  them, which 503 of the 2,186 stacks call: the file dialogs FileName,
+  NewFileName and PutFile; PopUpMenu and HPopUpMenu; the list dialogs
+  XScrollBox, ShowList and DoList; PrintField; Speak and Talk, where
+  there is speech; HCBalloon as the target's tooltip; MaxDepth; and
+  Promptoid. NewMenu, DeleteMenu, ShowMenu, Dialoger, ShowDialog,
+  ResCopy, Search, ColorizeHC and popUp give the error an XCMD would.
+  The dialogs and popups are verified statically and need a pass in the
+  IDE.
 
 - **xTalk Chat** (*Development > Plugins > xTalk Chat*): a chat in the
   IDE for the people using xTalk who choose to go online, with public
@@ -1611,6 +1622,9 @@ such a stack, scripts that compiled already change in two ways only: a
 `doMenu` command goes to the stack's own `doMenu` handler (now
 `hcDoMenu`, which never compiled before, so never ran), and
 `the version` reads `2.4.1`, HyperCard's, where it read the engine's.
+A call in such a stack to one of the 22 externals above that the stack
+does not define itself reaches the library's stand-in, at the end of its
+message path, where it threw "can't find handler".
 Open Stack, `go stack` and `import stack` on a HyperCard file, and stacks
 imported earlier, are unchanged; the IDE loads one more library,
 `revHyperCardScriptLibrary`, whose handlers start with `revHyperCard`.
@@ -1633,7 +1647,10 @@ Bridge's server serves however Node.js loads it, unless
 Pull requests
 [#146](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/146)
 to
-[#150](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/150)
+[#150](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/150),
+[#152](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/152)
+and
+[#153](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/153)
 list every change.
 
 #### 0.2.7-rc.4: Claude in the web IDE, the Extension Manager, and polish

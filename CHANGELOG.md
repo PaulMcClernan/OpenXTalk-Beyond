@@ -28,6 +28,9 @@ words, is in the [README](README.md#the-ide) and on the
 - Learn kit: drop the second "code" icon case xTalk Chat added (#149)
 - Extension Manager: light rows again, and no Repo or Playground tab (#149)
 - Dictionary: not blank when Preferences chooses the text dictionary (#149)
+- HyperCard Library: stand-ins for the externals stacks call most (#152)
+- HyperCard Library: review findings on the list dialog and popups (#152)
+- Notes: the HyperCard externals' stand-ins in 0.2.7-rc.5 (#153)
 
 ## 0.2.7-rc.4 (2026-10-18, pre-release)
 
