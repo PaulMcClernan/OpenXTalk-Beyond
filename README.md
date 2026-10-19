@@ -1648,9 +1648,10 @@ Pull requests
 [#146](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/146)
 to
 [#150](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/150),
-[#152](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/152)
-and
+[#152](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/152),
 [#153](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/153)
+and
+[#155](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/155)
 list every change.
 
 #### 0.2.7-rc.4: Claude in the web IDE, the Extension Manager, and polish

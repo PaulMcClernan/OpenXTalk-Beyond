@@ -31,6 +31,7 @@ words, is in the [README](README.md#the-ide) and on the
 - HyperCard Library: stand-ins for the externals stacks call most (#152)
 - HyperCard Library: review findings on the list dialog and popups (#152)
 - Notes: the HyperCard externals' stand-ins in 0.2.7-rc.5 (#153)
+- Engine tests: read until EOF from a process that outlives open process (#155)
 
 ## 0.2.7-rc.4 (2026-10-18, pre-release)
 
