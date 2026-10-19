@@ -1577,6 +1577,12 @@ OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
   the release's name, the build and the engine with a Copy version
   button, the about text, and the licences. With the Option (Alt) key
   down, Help > About opens the classic window as before.
+- **The Dictionary is no longer blank** when Preferences > Dictionary
+  chooses the text dictionary. LiveCode's Dictionary still opens then
+  (Help > Dictionary with Shift, an entry's link in the Script Editor or
+  the inspector), but its page and data were never made, so the
+  Documentation Cache folder stayed empty. It makes them the first time
+  it opens.
 - **The Extension Manager is light again**: its rows are white and
   light grey with dark text, as before 0.2.7-rc.4, in the light and the
   dark appearance. The Repo and Playground tabs, web pages that were
@@ -1614,7 +1620,10 @@ X", so on macOS 26 the IDE's font helpers return Lucida Grande at 11
 where they threw; on macOS 10 to 15, Windows and Linux nothing changes.
 `tOpenAbout` of the menu bar opens the stack "revAbout" (with the
 Option key down, "aboutstack" as before); Learn's examples table has a
-group "suite" and three rows; the Extension Manager has no "repo" or
+group "suite" and three rows; with the text dictionary chosen, the IDE
+library's dictionary handlers work once LiveCode's Dictionary has
+opened (its new `revIDEEnsureBrowserDictionary` makes the page and its
+data); the Extension Manager has no "repo" or
 "playground" frame item, its `showExtensionStore` (which the Tools
 palette's more-widgets button sends) shows the Widgets list, and a
 double-click on a row does nothing; and the menu bar's Development > Plugins
