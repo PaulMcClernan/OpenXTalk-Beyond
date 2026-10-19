@@ -214,6 +214,49 @@ on TestHyperCardScriptsLibrary
    _Close tStack
 end TestHyperCardScriptsLibrary
 
+on TestHyperCardScriptsStandIns
+   -- calls to the externals stacks call most reach the library's
+   -- stand-ins (those that need no dialog)
+   local tStack
+   global gHCScriptsTest
+   put "HCStandIns" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put (MaxDepth() is the screenDepth) & comma & NewMenu(" & quote & "Tools" & quote & ", " & quote & "One" & quote & ") & comma & NewMenu(" & quote & "More" & quote & ") into gHCScriptsTest", \
+         "  put comma & DeleteMenu(1) after gHCScriptsTest", \
+         "  ShowMenu 2", \
+         "  put comma & the result after gHCScriptsTest", \
+         "  HCBalloon " & quote & "off" & quote, \
+         "  HCBalloon " & quote & "query" & quote, \
+         "  put comma & the result after gHCScriptsTest", \
+         "  Dialoger " & quote & "Ask" & quote, \
+         "  put comma & the result after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Balloon"
+   set the script of button "Balloon" to _Lines("on mouseEnter", "  HCBalloon " & quote & "Click me" & quote, "end mouseEnter")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "MaxDepth, NewMenu, DeleteMenu, ShowMenu, HCBalloon query, Dialoger", gHCScriptsTest is "true,1,2,,HyperCard menus are not supported yet,false,The Dialoger external is not supported"
+   send "mouseEnter" to button "Balloon" of stack tStack
+   TestAssert "HCBalloon: balloons off, no tooltip", the toolTip of button "Balloon" of stack tStack is empty
+   send "HCBalloon" && quote & "on" & quote to button "B" of stack tStack
+   send "mouseEnter" to button "Balloon" of stack tStack
+   TestAssert "HCBalloon: the target's tooltip", the toolTip of button "Balloon" of stack tStack is "Click me"
+   TestAssert "PopUpMenu items: semicolons, else returns, else commas", \
+         value("hcPopUpItems(" & quote & "a;b,c" & quote & ")", button "B" of stack tStack) is _Lines("a", "b,c") \
+         and value("hcPopUpItems(" & quote & "a,b" & quote & ")", button "B" of stack tStack) is _Lines("a", "b")
+   TestAssert "HPopUpMenu: a submenu choice is line,item", \
+         value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "File|Save" & quote & ")", button "B" of stack tStack) is "2,2"
+   TestAssert "HPopUpMenu: an entry with no submenu is line,0", \
+         value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "Edit" & quote & ")", button "B" of stack tStack) is "1,0"
+   _Close tStack
+end TestHyperCardScriptsStandIns
+
 on TestHyperCardScriptsImported
    -- a stack the engine imports: every script compiles afterwards, and
    -- one that compiled is unchanged
