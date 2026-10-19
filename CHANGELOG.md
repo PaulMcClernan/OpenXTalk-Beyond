@@ -20,11 +20,14 @@ words, is in the [README](README.md#the-ide) and on the
 - MCP Bridge: serve when Claude Desktop's own Node.js starts the server (#148)
 - xTalk Chat: a chat in the IDE for xTalk developers who go online (#146)
 - File > Import Stack: HyperTalk that compiles here (#150)
+- HyperCard scripts: two faults the whole corpus found (#150)
+- HyperCard scripts: line commands outside strings; the library's own name (#150)
 - Learn: No Cloud Quick Share, Torrent Client and Box2D Platformer, the xTalk Suite's demos (#149)
 - IDE: the About window in the look of Home and Learn (#149)
+- Version 0.2.7-rc.5, with its changelog and notes (#149)
+- Learn kit: drop the second "code" icon case xTalk Chat added (#149)
 - Extension Manager: light rows again, and no Repo or Playground tab (#149)
 - Dictionary: not blank when Preferences chooses the text dictionary (#149)
-- Version 0.2.7-rc.5, with its changelog (#149)
 
 ## 0.2.7-rc.4 (2026-10-18, pre-release)
 
