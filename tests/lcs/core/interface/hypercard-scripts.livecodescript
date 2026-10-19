@@ -250,6 +250,10 @@ on TestHyperCardScriptsStandIns
    TestAssert "PopUpMenu items: semicolons, else returns, else commas", \
          value("hcPopUpItems(" & quote & "a;b,c" & quote & ")", button "B" of stack tStack) is _Lines("a", "b,c") \
          and value("hcPopUpItems(" & quote & "a,b" & quote & ")", button "B" of stack tStack) is _Lines("a", "b")
+   TestAssert "HPopUpMenu: a submenu choice is line,item", \
+         value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "File|Save" & quote & ")", button "B" of stack tStack) is "2,2"
+   TestAssert "HPopUpMenu: an entry with no submenu is line,0", \
+         value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "Edit" & quote & ")", button "B" of stack tStack) is "1,0"
    _Close tStack
 end TestHyperCardScriptsStandIns
 

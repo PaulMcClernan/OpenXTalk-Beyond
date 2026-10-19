@@ -98,6 +98,7 @@ end hcDeleteMenu
 
 local sHCMenuCount
 local sHCBalloons
+local sHCPopUp
 
 -- FileName([type, ...] [, prompt]): the path of a file the user picks
 -- (Standard File's open dialog), or empty if they cancel. File types
@@ -143,7 +144,7 @@ end PopUpMenu
 -- the rest its submenu; "line,item" of the choice (item 0 for an entry
 -- with no submenu), 0 if none
 function HPopUpMenu pMenus, pChecked, pTop, pLeft
-   local tText, tLine, tItem, tChosen, tLineNumber, tItemNumber, i
+   local tText, tLine, tChosen, i
    repeat for each line tLine in pMenus
       put item 1 of tLine & return after tText
       repeat with i = 2 to the number of items of tLine
@@ -153,27 +154,35 @@ function HPopUpMenu pMenus, pChecked, pTop, pLeft
    delete the last char of tText
    put _HCPopUp(tText, pTop, pLeft) into tChosen
    if tChosen is empty then return 0
+   return hcHPopUpChoice(pMenus, tChosen)
+end HPopUpMenu
+
+-- "line,item" of an HPopUpMenu choice, as the popup gives it ("entry" or
+-- "entry|subitem"), 0 if it is not one of pMenus
+function hcHPopUpChoice pMenus, pChosen
+   local tItem, tLineNumber, tItemNumber, i
    set the itemDelimiter to "|"
-   put item 1 of tChosen into tItem
+   put item 1 of pChosen into tItem
+   put item 2 of pChosen into pChosen
+   set the itemDelimiter to comma
    repeat with i = 1 to the number of lines of pMenus
       if item 1 of line i of pMenus is tItem then
          put i into tLineNumber
          exit repeat
       end if
    end repeat
+   if tLineNumber is empty then return 0
    put 0 into tItemNumber
-   if the number of items of tChosen > 1 then
-      put item 2 of tChosen into tItem
-      set the itemDelimiter to comma
+   if pChosen is not empty then
       repeat with i = 2 to the number of items of line tLineNumber of pMenus
-         if item i of line tLineNumber of pMenus is tItem then
+         if item i of line tLineNumber of pMenus is pChosen then
             put i - 1 into tItemNumber
             exit repeat
          end if
       end repeat
    end if
    return tLineNumber & comma & tItemNumber
-end HPopUpMenu
+end hcHPopUpChoice
 
 -- The items of a PopUpMenu list, one per line
 function hcPopUpItems pItems
@@ -284,8 +293,13 @@ end MaxDepth
 on Promptoid pMessage
    local tDefault
    put the defaultStack into tDefault
+   if there is a stack "Promptoid" and the uHyperCard["promptoid"] of stack "Promptoid" is not true then
+      -- the stack's own window of that name: left alone
+      return "There is already a window called Promptoid"
+   end if
    if there is not a stack "Promptoid" then
       create invisible stack "Promptoid"
+      set the uHyperCard["promptoid"] of it to true
       set the destroyStack of it to true
       set the width of it to 320
       set the height of it to 60
@@ -355,39 +369,41 @@ end hcX_popUp
 -- The line of pList the user picks in a list dialog, or empty if they
 -- cancel
 function hcChooseLine pPrompt, pList
-   local tDefault, tLine
+   local tDefault, tLine, tName, tStack
    if pList is empty then return empty
    put the defaultStack into tDefault
-   if there is a stack "HyperCard List" then delete stack "HyperCard List"
-   create invisible stack "HyperCard List"
-   set the destroyStack of it to true
-   set the title of it to "Choose"
-   set the width of it to 360
-   set the height of it to 300
-   set the defaultStack to "HyperCard List"
+   -- (a name of its own, so that no stack of the user's is touched; kept
+   -- until its choice is read)
+   put "HyperCard List " & the milliseconds into tName
+   create invisible stack tName
+   put the long id of it into tStack
+   set the title of tStack to "Choose"
+   set the width of tStack to 360
+   set the height of tStack to 300
+   set the defaultStack to tName
    create field "Prompt"
    set the rect of it to 10,10,350,34
    set the lockText of it to true
-   put pPrompt into it
+   put pPrompt into field "Prompt"
    create field "List"
    set the rect of it to 10,40,350,250
    set the listBehavior of it to true
    set the lockText of it to true
    set the vScrollbar of it to true
-   put pList into it
-   set the hilitedLine of it to 1
+   put pList into field "List"
+   set the hilitedLine of field "List" to 1
    create button "OK"
    set the rect of it to 270,262,350,288
-   set the script of it to "on mouseUp" & return & "set the uChosen of this stack to the hilitedLine of field " & quote & "List" & quote & return & "close this stack" & return & "end mouseUp"
+   set the default of it to true
+   set the script of it to "on mouseUp" & return & "set the uChosen of the owner of the owner of me to the hilitedLine of field " & quote & "List" & quote & " of the owner of me" & return & "close stack (the short name of the owner of the owner of me)" & return & "end mouseUp"
    create button "Cancel"
    set the rect of it to 180,262,260,288
-   set the script of it to "on mouseUp" & return & "close this stack" & return & "end mouseUp"
-   set the defaultButton of button "OK" to true
+   set the script of it to "on mouseUp" & return & "close stack (the short name of the owner of the owner of me)" & return & "end mouseUp"
    set the defaultStack to tDefault
-   modal stack "HyperCard List"
-   if there is a stack "HyperCard List" then
-      put the uChosen of stack "HyperCard List" into tLine
-      delete stack "HyperCard List"
+   modal stack tName
+   if exists(tStack) then
+      put the uChosen of tStack into tLine
+      delete stack tName
    end if
    return tLine
 end hcChooseLine
@@ -414,24 +430,26 @@ end _HCLineOf
 private function _HCPopUp pText, pTop, pLeft
    local tDefault, tChosen
    put the defaultStack into tDefault
-   if there is not a stack "HyperCard Popup" then
-      create invisible stack "HyperCard Popup"
-      set the destroyStack of it to true
-      create button "Menu" in it
-      set the style of button "Menu" of stack "HyperCard Popup" to "menu"
-      set the menuMode of button "Menu" of stack "HyperCard Popup" to "popup"
-      set the menuMouseButton of button "Menu" of stack "HyperCard Popup" to 0
-      set the script of button "Menu" of stack "HyperCard Popup" to "on menuPick pItem" & return & "set the uChosen of me to pItem" & return & "end menuPick"
+   if sHCPopUp is empty or not exists(sHCPopUp) then
+      -- (a name of its own, so that no stack of the user's is touched)
+      create invisible stack ("HyperCard Popup " & the milliseconds)
+      put the long id of it into sHCPopUp
+      set the defaultStack to the short name of sHCPopUp
+      create button "Menu"
+      set the style of it to "menu"
+      set the menuMode of it to "popup"
+      set the menuMouseButton of it to 0
+      set the script of it to "on menuPick pItem" & return & "set the uChosen of me to pItem" & return & "end menuPick"
+      set the defaultStack to tDefault
    end if
-   set the defaultStack to tDefault
-   set the text of button "Menu" of stack "HyperCard Popup" to pText
-   set the uChosen of button "Menu" of stack "HyperCard Popup" to empty
+   set the text of button "Menu" of sHCPopUp to pText
+   set the uChosen of button "Menu" of sHCPopUp to empty
    if pTop is an integer and pLeft is an integer then
-      popup button "Menu" of stack "HyperCard Popup" at pLeft, pTop
+      popup button "Menu" of sHCPopUp at pLeft, pTop
    else
-      popup button "Menu" of stack "HyperCard Popup"
+      popup button "Menu" of sHCPopUp
    end if
-   put the uChosen of button "Menu" of stack "HyperCard Popup" into tChosen
+   put the uChosen of button "Menu" of sHCPopUp into tChosen
    return tChosen
 end _HCPopUp
 
