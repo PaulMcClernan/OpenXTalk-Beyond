@@ -14,24 +14,33 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
-## Unreleased
+## 0.2.7-rc.6 (2026-10-19, pre-release)
 
 - Learn: the xTalk Suite demos open built, in the middle of the screen (#157)
+- Calendar and Pie Chart: the widgets load in the IDE, with Paul's Pie Chart changes (#156)
+- Pie Chart: old charts keep their look, custom colours are saved, recompiled (#156)
+- IDE: a Release Notes window with the changelog, in the look of Home and Learn (#158)
+- Release Notes: put the defaultStack back when opening fails (#158)
 - Branding: 0.2.7 "Bug Hunt" splash screens, installer art, banner and release name (#161)
 - Web IDE: a new Player is made again, and the tour makes every control (#162)
 - Web IDE: Help > Release Notes, now that its window works on the web (#162)
 - Changelog: #162's commits (#162)
+- File > Import Stack: put the HyperCard libraries in the message path (#160)
 - IDE: a dialog in the look of Learn, and the warning before a stack opens (#159)
 - Check for Updates: its messages in the look of Learn (#159)
 - MCP Bridge: its windows in the look of Learn (#159)
 - IDE dialogs: code in Learn's colours on its code panels, with Copy, and Learn's callouts (#159)
+- MCP Bridge: a second web server passes its calls to the one on the port (#151)
 - Home on the desktop: Help > Welcome to OXT-Beyond, a window that can be resized, and opening at startup as a choice (#165)
 - IDE dialogs: the window can be made bigger, and its text and code take the room (#165)
 - Changelog: #159's lines under Unreleased, where they were merged (#165)
 - xTalk Assistant: its windows in the look of Learn, with xTalk in Learn's colours (#167)
 - Tools palette: a modern look, sizeable, with names, a filter and sections that fold (Tools > Modern Tools Palette; the classic look stays the default) (#166)
 - IDE: the About, Release Notes and xTalk Assistant Memory windows can be made larger (#164)
+- Tools palette: long names shrink or wrap instead of being cut off (#168)
 - xTalk Academy: an interactive course in programming for beginners and schools (#163)
+- Stack Player: HyperCard stacks imported and saved on the desktop now open on the web (they stopped with "can't find handler playerLog"); a stack whose openStack or openCard fails now opens and shows the script error, as on the desktop (#169)
+- Version 0.2.7-rc.6, with its changelog and notes (#170)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 
