@@ -14,6 +14,10 @@ script "revAbout"
 -- buttons each time, so the two never disagree, and the stack is taken
 -- out of memory again unless it is open. This window changes no file.
 --
+-- It opens at 640 by 500, as it always has, and can be made larger, never
+-- smaller: abLayout stretches the header and the panel to the window and
+-- keeps the buttons at its foot.
+--
 -- It is a script-only stack, so it keeps no controls: this script builds
 -- them when it opens. Its name begins with "rev", so the IDE treats it as
 -- one of its own windows.
@@ -24,6 +28,10 @@ constant kHeroHeight = 156
 constant kFootHeight = 68
 constant kPad = 28
 constant kClassicStack = "aboutstack"
+-- The widest the panel's lines are, however wide the window
+constant kMeasure = 760
+-- Room at the panel's right for its scroll thumb
+constant kThumbRoom = 14
 
 -- What the panel shows: "about", "licences" or "licence"
 local sView
@@ -64,6 +72,11 @@ end openStack
 on closeStack
    lkStopTicking
 end closeStack
+
+on resizeStack
+   abLayout
+   pass resizeStack
+end resizeStack
 
 on returnKey
    close me
@@ -122,6 +135,7 @@ private command abPlace
       catch tError
       end try
    end if
+   abLayout
 end abPlace
 
 ################################################################################
@@ -261,7 +275,10 @@ private command abBuild
    lock screen
    lock messages
    set the label of me to "About" && abName()
-   set the resizable of me to false
+   -- (no smaller than it opens: what it shows is laid out for that)
+   set the resizable of me to true
+   set the minWidth of me to kWidth
+   set the minHeight of me to kHeight
    set the destroyStack of me to true
    set the rect of me to 0, 0, kWidth, kHeight
    set the backgroundColor of me to lkColor("bg")
@@ -333,6 +350,61 @@ private command abBuild
       set the defaultStack to tSaved
    end if
 end abBuild
+
+-- Puts what abBuild made where the window's size wants it: the header as
+-- wide as the window, the panel as wide and as tall, and the buttons at
+-- its foot (each where abBuild puts it at 640 by 500)
+private command abLayout
+   local tW, tH, tSaved, tObj
+   if there is no field "panel" of me then
+      exit abLayout
+   end if
+   put the width of me into tW
+   put the height of me into tH
+   put the defaultStack into tSaved
+   set the defaultStack to the short name of me
+   lock screen
+   put the long id of graphic "heroBg" into tObj
+   set the rect of tObj to 0, 0, tW, kHeroHeight
+   lkGradientPoints tObj, "0,0", tW & "," & kHeroHeight
+   repeat for each item tObj in "heroTitle,heroVersion,heroBuild,copied"
+      abStretch the long id of field tObj, tW - kPad, empty
+   end repeat
+   abStretch the long id of graphic "panelBg", tW - kPad + 8, tH - kFootHeight
+   abStretch the long id of field "panel", tW - kPad - 24, tH - kFootHeight - 14
+   abMeasure the long id of field "panel"
+   repeat for each item tObj in "notes,licences"
+      set the top of group tObj to tH - kFootHeight + 18
+      lkRestAt tObj
+   end repeat
+   set the topLeft of group "close" to tW - kPad + 8 - 110, tH - kFootHeight + 18
+   lkRestAt "close"
+   lkScrollSync "panelThumb"
+   unlock screen
+   if tSaved is not empty and there is a stack tSaved then
+      set the defaultStack to tSaved
+   end if
+end abLayout
+
+-- Keeps field pObj's lines no wider than kMeasure, from its left (under
+-- the header's text), and clear of its scroll thumb
+private command abMeasure pObj
+   set the leftMargin of pObj to 0
+   set the rightMargin of pObj to max(kThumbRoom, the width of pObj - kMeasure)
+end abMeasure
+
+-- Moves pObj's right and bottom edges (empty keeps one), not its top left
+private command abStretch pObj, pRight, pBottom
+   local tRect
+   put the rect of pObj into tRect
+   if pRight is not empty then
+      put pRight into item 3 of tRect
+   end if
+   if pBottom is not empty then
+      put pBottom into item 4 of tRect
+   end if
+   set the rect of pObj to tRect
+end abStretch
 
 private function abPlatform
    switch the platform
