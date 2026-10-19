@@ -1,0 +1,1982 @@
+course: Coding with xTalk
+id: basics
+icon: graduation-cap
+accent: violet
+eyebrow: Course 1 · For beginners
+credit: Written for OXT-Beyond, in the spirit of HyperCard's and LiveCode's own lessons. Every example runs: press **Try it**.
+
+Learn to program from the very first line. xTalk reads almost like English, so you spend your time on the ideas every programmer uses (values, decisions, loops, functions, lists and events) instead of on punctuation. No experience needed.
+
+unit: First steps
+icon: footprints
+
+Say hello, do sums, join words, and learn to read code.
+
+lesson: Hello, xTalk
+id: hello
+minutes: 5
+
+A program is a list of instructions that a computer follows, one after another, from the top. In xTalk each instruction is called a **statement**, and each statement goes on a line of its own.
+
+The first word you will learn is `put`. On its own, `put` shows a value: in the Academy it appears in the **Output** below the playground.
+
+<code>
+put "Hello, world!"
+</code>
+
+Press **Try it** above. The code goes into the playground on the right, runs, and its output appears below it. You can change it there and press **Run** (or Ctrl+Enter) as often as you like: nothing you type can break anything.
+
+## Text and numbers
+
+Text goes inside double quotes, so xTalk knows where it starts and ends. Programmers call a piece of text a **string**. Numbers need no quotes.
+
+<code>
+put "I am learning xTalk"
+put 42
+put 3.5
+</code>
+
+<tip>
+Every `put` in the Academy gets a line of its own in the Output, so you can see each step of your program. In the IDE's Message Box, each `put` replaces the last one instead.
+</tip>
+
+<quiz>
+Which line shows the words Good morning?
+- put Good morning
+* put "Good morning"
+- "Good morning" put
+= Text needs double quotes around it, and the command comes first: put, then what to put.
+</quiz>
+
+<challenge>
+Make the Output say exactly `Hello, Academy!` on its first line, and then the number `2026` on the next line.
+<starter>
+-- Write two put statements below
+</starter>
+<solution>
+put "Hello, Academy!"
+put 2026
+</solution>
+<check>
+line 1 of output is "Hello, Academy!" | the first line is Hello, Academy!
+line 2 of output is "2026" | the second line is 2026
+</check>
+<hint>
+You need two lines: one `put` with text in quotes, and one `put` with a number (no quotes).
+</hint>
+</challenge>
+
+lesson: Doing sums
+id: sums
+minutes: 6
+
+Computers are very good at arithmetic. xTalk uses the symbols you know from maths, with `*` for times and `/` for divide:
+
+<code>
+put 7 + 5
+put 7 - 5
+put 7 * 5
+put 7 / 5
+</code>
+
+## More operators
+
+`^` raises to a power. `div` divides and drops what is left over; `mod` gives only what is left over. These two are more useful than they look: `mod` tells you whether a number is even, and turns seconds into minutes and seconds.
+
+<code>
+put 2 ^ 10
+put 17 div 5
+put 17 mod 5
+</code>
+
+## Which goes first
+
+Just as in maths, `*` and `/` happen before `+` and `-`. Brackets change the order.
+
+<code>
+put 2 + 3 * 4
+put (2 + 3) * 4
+</code>
+
+<quiz>
+What does `put 20 mod 6` show?
+- 3
+* 2
+- 3.33
+= 6 goes into 20 three times (18), and 2 is left over. mod gives what is left over.
+</quiz>
+
+<challenge>
+How many seconds are there in one day? Write one `put` that works it out from 24 hours, 60 minutes and 60 seconds, so the Output shows the answer.
+<starter>
+put 24
+</starter>
+<solution>
+put 24 * 60 * 60
+</solution>
+<check>
+line 1 of output is 86400 | the Output shows the seconds in a day
+code contains "*" | it multiplies, and does not just type the answer
+</check>
+<hint>
+Multiply the hours in a day by the minutes in an hour, and by the seconds in a minute.
+</hint>
+</challenge>
+
+lesson: Joining words
+id: joining
+minutes: 6
+
+Joining strings together is called **concatenation**. xTalk has two operators for it: `&` joins two values exactly, and `&&` joins them with a space between.
+
+<code>
+put "sun" & "flower"
+put "sun" && "flower"
+put "The answer is" && 6 * 7
+</code>
+
+## Special characters
+
+Some characters are hard to type inside a string. xTalk gives them names: `quote` is a double quote, `return` starts a new line, `tab` and `space` are what they say.
+
+<code>
+put "She said" && quote & "hello" & quote
+put "Line one" & return & "Line two"
+</code>
+
+## How long is it?
+
+`the number of chars of` counts the characters in a string, spaces included. `length()` does the same.
+
+<code>
+put the number of chars of "xTalk"
+put length("Hello world")
+</code>
+
+<quiz>
+What does `put "Hot" & "dog"` show?
+- Hot dog
+* Hotdog
+- "Hot" & "dog"
+= & joins two strings exactly, with nothing between them. && would add a space.
+</quiz>
+
+<challenge>
+Use `&&` to make the Output say `xTalk is fun` from the three separate strings "xTalk", "is" and "fun".
+<starter>
+put "xTalk" & "is" & "fun"
+</starter>
+<solution>
+put "xTalk" && "is" && "fun"
+</solution>
+<check>
+line 1 of output is "xTalk is fun" | the Output says xTalk is fun
+code contains "&&" | it joins with &&
+</check>
+<hint>
+`&` sticks words together with no space. Which operator adds a space?
+</hint>
+</challenge>
+
+lesson: Reading code
+id: comments
+minutes: 4
+
+Programs are read by people far more often than they are written. Good programmers leave notes for the next reader, who is often themselves a month later.
+
+A **comment** is a note that xTalk ignores. It starts with `--` (or `#`) and runs to the end of the line. A longer note can go between `/*` and `*/`.
+
+<code>
+-- Work out the area of a rectangle
+put 8 * 5 -- width times height
+/* Comments can also
+   cover several lines */
+</code>
+
+## Read it like a sentence
+
+xTalk was designed in 1987 for HyperCard, so that people who were not programmers could read a script aloud and understand it. Try it with this line:
+
+<code>
+put the number of words of "the quick brown fox" into tCount
+put tCount
+</code>
+
+"Put the number of words of the quick brown fox into tCount" is nearly English. When you are stuck, reading your code aloud is a real debugging trick.
+
+<note>
+xTalk does not care about capital letters in its own words: `PUT`, `Put` and `put` are the same. Most people write them in lower case.
+</note>
+
+<quiz>
+What does xTalk do with the line `-- add the bonus`?
+- It adds the bonus
+* It ignores it: it is a comment
+- It stops with an error
+= A line starting with -- is a comment: a note for people, which xTalk skips.
+</quiz>
+
+unit: Variables and values
+icon: variable
+
+Give values names, change them, and use xTalk's built-in functions.
+
+lesson: Variables
+id: variables
+minutes: 7
+
+A **variable** is a named box that holds a value. You put a value into it, and then use its name wherever you want the value.
+
+<code>
+put "Ada" into tName
+put 36 into tAge
+put tName && "is" && tAge
+</code>
+
+`put ... into` stores the value instead of showing it. From then on, `tName` stands for "Ada".
+
+## Choosing names
+
+A name starts with a letter and has no spaces. Many xTalk programmers start variable names with a small `t` (for "temporary"), which makes them easy to spot and avoids clashing with words xTalk already uses. That is a convention, not a rule.
+
+<caution>
+Do not name a variable after one of xTalk's own words, like `sum`, `length` or `the`. Use names like `tSum` and `tLength` instead.
+</caution>
+
+## A variable can change
+
+Putting a new value into a variable replaces the old one. The right-hand side is worked out first, so a variable can even be used to change itself.
+
+<code>
+put 10 into tScore
+put tScore + 5 into tScore
+put tScore
+</code>
+
+<quiz>
+After these lines, what is in `tColour`? `put "red" into tColour` then `put "blue" into tColour`
+- red
+* blue
+- redblue
+= put into replaces whatever was in the variable before.
+</quiz>
+
+<challenge>
+Store your favourite number in a variable called `tNumber`, then put a sentence that uses it, like `My number is 7`. The sentence must come from the variable, so changing the number in one place changes the sentence.
+<starter>
+put 7
+</starter>
+<solution>
+put 7 into tNumber
+put "My number is" && tNumber
+</solution>
+<check>
+code contains "into tNumber" | it puts a value into tNumber
+line 1 of output begins with "My number is " | the Output says My number is ...
+the last word of line 1 of output is a number | the sentence ends with the number
+</check>
+<hint>
+First `put 7 into tNumber`. Then join "My number is" and tNumber with `&&`.
+</hint>
+</challenge>
+
+lesson: Changing values
+id: changing
+minutes: 6
+
+xTalk has commands that change a number in a variable directly: `add`, `subtract`, `multiply` and `divide`.
+
+<code>
+put 100 into tMoney
+add 20 to tMoney
+subtract 5 from tMoney
+multiply tMoney by 2
+put tMoney
+</code>
+
+## Before and after
+
+`put ... after` adds to the end of what a variable holds, and `put ... before` adds to the front. This is how you build up a string a bit at a time.
+
+<code>
+put "middle" into tWord
+put "start-" before tWord
+put "-end" after tWord
+put tWord
+</code>
+
+<tip>
+`add 1 to tCount` is the xTalk way of counting. You will see it in nearly every program that loops.
+</tip>
+
+<quiz>
+What is in `tTotal` after `put 3 into tTotal`, `add 4 to tTotal`, `multiply tTotal by 10`?
+- 43
+* 70
+- 34
+= 3 plus 4 is 7, and 7 times 10 is 70.
+</quiz>
+
+<challenge>
+A shop sells pencils at 3 each. Start `tTotal` at 0, use `add` three times (one pencil each time), then `put` the total.
+<starter>
+put 0 into tTotal
+put tTotal
+</starter>
+<solution>
+put 0 into tTotal
+add 3 to tTotal
+add 3 to tTotal
+add 3 to tTotal
+put tTotal
+</solution>
+<check>
+the last line of output is 9 | the total is 9
+the number of lines of code >= 4 | it adds one pencil at a time
+code contains "add" | it uses add
+</check>
+<hint>
+Write `add 3 to tTotal` three times, before the last line.
+</hint>
+</challenge>
+
+lesson: Functions that help
+id: builtins
+minutes: 7
+
+A **function** takes some values, does something with them and gives back an answer. xTalk has hundreds built in. You call one by writing its name with the values in brackets:
+
+<code>
+put round(3.7)
+put max(4, 19, 7)
+put min(4, 19, 7)
+put sqrt(81)
+put abs(-12)
+</code>
+
+## Random numbers
+
+`random(n)` gives a whole number from 1 to n, different each time. Games are made of it. Run this a few times:
+
+<code>
+put "You rolled a" && random(6)
+</code>
+
+## Using an answer
+
+A function's answer can go anywhere a value can: into a variable, into a sum, or into another function.
+
+<code>
+put round(22 / 7, 2) into tPi
+put "Pi is about" && tPi
+</code>
+
+<note>
+`round(22 / 7, 2)` rounds to two decimal places. Many functions take extra values like this: the Dictionary (Help menu) lists each one.
+</note>
+
+<quiz>
+What does `put max(3, round(8.6), 5)` show?
+- 8.6
+* 9
+- 5
+= round(8.6) is 9, and the biggest of 3, 9 and 5 is 9.
+</quiz>
+
+<challenge>
+A square room has an area of 144. Use the function `sqrt` to put the length of one side.
+<starter>
+put 144
+</starter>
+<solution>
+put sqrt(144)
+</solution>
+<check>
+line 1 of output is 12 | the Output shows 12
+code contains "sqrt" | it uses sqrt
+</check>
+</challenge>
+
+lesson: Everything is text
+id: types
+minutes: 6
+
+In many languages you must say whether a variable holds a number or a string. In xTalk, every value is text, and xTalk treats it as a number when you do arithmetic with it. That is why `"12" + 1` works.
+
+<code>
+put "12" + 1
+put 5 & 5
+</code>
+
+## Asking what a value is
+
+Because anything can be in a variable, you sometimes need to check. `is a number` and `is an integer` answer `true` or `false`.
+
+<code>
+put "42" is a number
+put "forty-two" is a number
+put 3.5 is an integer
+</code>
+
+## True and false
+
+`true` and `false` are **booleans**: the answers to yes-or-no questions. You will use them with `if` in the next unit.
+
+<code>
+put 10 > 3
+put "cat" is "dog"
+put not (2 + 2 is 5)
+</code>
+
+<caution>
+Doing arithmetic with text that is not a number stops your program with an error. Try it: the Academy explains what went wrong.
+</caution>
+
+<code error>
+put "ten" + 1
+</code>
+
+<quiz>
+What does `put 2 & 3 + 1` show?
+- 6
+* 24
+- 33
+= + happens before &, so 3 + 1 is 4, and & joins 2 and 4 into 24.
+</quiz>
+
+unit: Making decisions
+icon: git-branch
+
+Teach your programs to choose with if, else and switch.
+
+lesson: If and else
+id: if
+minutes: 7
+
+Programs become interesting when they make choices. `if` runs a statement only when a condition is true:
+
+<code>
+put 15 into tTemperature
+if tTemperature > 25 then
+   put "Wear a T-shirt"
+else
+   put "Bring a jumper"
+end if
+</code>
+
+Change 15 to 30 in the playground and run it again. The structure is always the same: `if`, a condition, `then`, the lines to run, an optional `else` with the lines for "otherwise", and `end if`.
+
+## On one line
+
+A short `if` can go on one line, with no `end if`:
+
+<code>
+put 7 into tAge
+if tAge < 13 then put "Child ticket"
+</code>
+
+## Comparing
+
+`=` and `is` both mean "equal to". `<>` and `is not` mean "not equal". Then there are `<`, `>`, `<=` and `>=`.
+
+<tip>
+The lines inside an `if` are indented by three spaces. xTalk does not need it, but it makes the shape of the program easy to see. The playground indents for you after `then`.
+</tip>
+
+<quiz>
+What does this show? `put 5 into x` then `if x >= 5 then put "yes" else put "no"`
+* yes
+- no
+- nothing
+= 5 is greater than or equal to 5, so the condition is true.
+</quiz>
+
+<challenge>
+A test has a pass mark of 50. Put a score into `tScore`, then put `Pass` if it is 50 or more, and `Try again` if it is less. Try it with a few different scores.
+<starter>
+put 64 into tScore
+</starter>
+<solution>
+put 64 into tScore
+if tScore >= 50 then
+   put "Pass"
+else
+   put "Try again"
+end if
+</solution>
+<check>
+code contains "if" and code contains "else" | it uses if and else
+output is "Pass" or output is "Try again" | it puts Pass or Try again
+(output is "Pass") is (word 2 of line 1 of code >= 50) | the answer is right for the score
+</check>
+<hint>
+Use `>=` to test for "50 or more". Keep your first line as it is: the checks read the score from it.
+</hint>
+</challenge>
+
+lesson: And, or, not
+id: logic
+minutes: 7
+
+Real decisions often depend on more than one thing. `and` is true only when both sides are true; `or` is true when at least one is; `not` flips true and false.
+
+<code>
+put 14 into tAge
+put true into tWithAdult
+if tAge >= 12 and tAge <= 17 then put "Teenager"
+if tAge >= 18 or tWithAdult then put "Can see the film"
+if not tWithAdult then put "On your own"
+</code>
+
+## Questions about text
+
+xTalk has operators that read naturally: `contains` looks inside a string, `begins with` and `ends with` check its edges, and `is among the items of` checks a list.
+
+<code>
+put "banana bread" into tFood
+put tFood contains "nan"
+put tFood begins with "ban"
+put "pear" is among the items of "apple,pear,plum"
+</code>
+
+<quiz>
+When is `tA or tB` false?
+- When either one is false
+* Only when both are false
+- Never
+= or needs just one true side, so it is only false when both sides are false.
+</quiz>
+
+<challenge>
+A year is a **leap year** if it divides by 4, except years that divide by 100, which are only leap years if they also divide by 400. Write a function `isLeap(pYear)` that returns true or false. (You will learn about functions properly soon: fill in the condition.)
+<starter>
+function isLeap pYear
+   return pYear mod 4 is 0
+end isLeap
+
+put isLeap(2024)
+put isLeap(1900)
+</starter>
+<solution>
+function isLeap pYear
+   return (pYear mod 4 is 0 and pYear mod 100 is not 0) or pYear mod 400 is 0
+end isLeap
+
+put isLeap(2024)
+put isLeap(1900)
+</solution>
+<check>
+isLeap(2024) | 2024 is a leap year
+not isLeap(2023) | 2023 is not
+not isLeap(1900) | 1900 is not (it divides by 100)
+isLeap(2000) | 2000 is (it divides by 400)
+</check>
+<hint>
+`pYear mod 4 is 0` means "divides by 4". Combine three such tests with `and`, `or` and brackets.
+</hint>
+</challenge>
+
+lesson: Many choices
+id: switch
+minutes: 7
+
+When there are more than two choices, `else if` lets you test one condition after another. The first one that is true wins.
+
+<code>
+put 72 into tScore
+if tScore >= 90 then
+   put "A"
+else if tScore >= 70 then
+   put "B"
+else if tScore >= 50 then
+   put "C"
+else
+   put "D"
+end if
+</code>
+
+## switch
+
+When you compare one value with a list of possibilities, `switch` is tidier. Each `case` is a possible value; `break` ends that case, and `default` catches everything else.
+
+<code>
+put "Tuesday" into tDay
+switch tDay
+   case "Saturday"
+   case "Sunday"
+      put "Weekend!"
+      break
+   case "Friday"
+      put "Nearly there"
+      break
+   default
+      put "A school day"
+end switch
+</code>
+
+<caution>
+Forget a `break` and xTalk carries on into the next case. That is how "Saturday" and "Sunday" share their lines above, but it is also a classic bug.
+</caution>
+
+<quiz>
+In the grade example, which grade does a score of 90 get?
+* A
+- B
+- Both A and B
+= The conditions are tested in order and the first true one wins: 90 >= 90, so A.
+</quiz>
+
+<challenge>
+Write a function `sizeOf(pNumber)` that returns `small` for numbers under 10, `medium` for 10 to 99, and `large` for 100 or more.
+<starter>
+function sizeOf pNumber
+   return "small"
+end sizeOf
+
+put sizeOf(5)
+put sizeOf(50)
+put sizeOf(500)
+</starter>
+<solution>
+function sizeOf pNumber
+   if pNumber < 10 then
+      return "small"
+   else if pNumber < 100 then
+      return "medium"
+   else
+      return "large"
+   end if
+end sizeOf
+
+put sizeOf(5)
+put sizeOf(50)
+put sizeOf(500)
+</solution>
+<check>
+sizeOf(3) is "small" | 3 is small
+sizeOf(10) is "medium" | 10 is medium
+sizeOf(99) is "medium" | 99 is medium
+sizeOf(100) is "large" | 100 is large
+</check>
+</challenge>
+
+unit: Repeating
+icon: repeat
+
+Make the computer do the boring part, over and over.
+
+lesson: Counting loops
+id: loops
+minutes: 8
+
+A **loop** runs the same lines again and again. The simplest says how many times:
+
+<code>
+repeat 3 times
+   put "Hip hip hooray!"
+end repeat
+</code>
+
+## Counting with a variable
+
+`repeat with` counts for you, putting each number into a variable in turn. This is the loop you will use most.
+
+<code>
+repeat with tNumber = 1 to 5
+   put tNumber && "squared is" && tNumber * tNumber
+end repeat
+</code>
+
+It can count backwards with `down to`, and in bigger steps with `step`:
+
+<code>
+repeat with tCount = 10 down to 0 step 2
+   put tCount
+end repeat
+put "Lift off!"
+</code>
+
+<tip>
+Loops and `add` together are a pattern every programmer knows: start a total at 0, and add to it each time round.
+</tip>
+
+<code>
+put 0 into tTotal
+repeat with tNumber = 1 to 100
+   add tNumber to tTotal
+end repeat
+put "1 + 2 + ... + 100 =" && tTotal
+</code>
+
+<quiz>
+How many lines does `repeat with i = 2 to 6` followed by `put i` and `end repeat` show?
+- 4
+* 5
+- 6
+= It puts 2, 3, 4, 5 and 6: five numbers.
+</quiz>
+
+<challenge>
+Put the 7 times table, from `1 x 7 = 7` to `10 x 7 = 70`, one line each.
+<starter>
+repeat with tNumber = 1 to 3
+   put tNumber
+end repeat
+</starter>
+<solution>
+repeat with tNumber = 1 to 10
+   put tNumber && "x 7 =" && tNumber * 7
+end repeat
+</solution>
+<check>
+the number of lines of output is 10 | ten lines
+line 1 of output is "1 x 7 = 7" | the first line is 1 x 7 = 7
+line 10 of output is "10 x 7 = 70" | the last line is 10 x 7 = 70
+code contains "repeat" | it uses a loop
+</check>
+<hint>
+Count from 1 to 10, and join the parts with `&&`: the number, "x 7 =", and the number times 7.
+</hint>
+</challenge>
+
+lesson: Loops that decide
+id: while
+minutes: 7
+
+Sometimes you do not know how many times to repeat: you want to keep going **while** something is true, or **until** it becomes true.
+
+<code>
+put 1 into tPaper
+put 0 into tFolds
+repeat while tPaper < 1000
+   multiply tPaper by 2
+   add 1 to tFolds
+end repeat
+put "Folded" && tFolds && "times, the paper is" && tPaper && "layers thick"
+</code>
+
+`repeat until` is the same idea the other way round:
+
+<code>
+put 0 into tRolls
+repeat until random(6) is 6
+   add 1 to tRolls
+end repeat
+put "It took" && tRolls && "rolls before a six"
+</code>
+
+## Loops that never stop
+
+If the condition never changes, the loop runs for ever. This is called an **infinite loop**, and every programmer writes one sooner or later. The Academy stops any loop that is still going after ten seconds, and says so.
+
+<caution>
+In a loop that waits for a condition, make sure something inside the loop changes it. A `repeat while tCount < 10` with no `add 1 to tCount` never ends.
+</caution>
+
+<quiz>
+How many times does this loop run? `put 1 into x`, `repeat while x < 20`, `multiply x by 3`, `end repeat`
+- 2
+* 3
+- 20
+= x goes 1, 3, 9, 27: the test fails once x is 27, after three times round.
+</quiz>
+
+<challenge>
+Starting from 1, keep doubling a number until it is bigger than 500, then put the number.
+<starter>
+put 1 into tNumber
+put tNumber
+</starter>
+<solution>
+put 1 into tNumber
+repeat until tNumber > 500
+   multiply tNumber by 2
+end repeat
+put tNumber
+</solution>
+<check>
+line 1 of output is 512 | the Output shows 512
+code contains "repeat" | it uses a loop
+</check>
+</challenge>
+
+lesson: For each
+id: foreach
+minutes: 7
+
+Most loops go through a collection: every character of a word, every word of a sentence, every line of a list. `repeat for each` does exactly that, and it is fast.
+
+<code>
+repeat for each word tWord in "the cat sat on the mat"
+   put toUpper(tWord)
+end repeat
+</code>
+
+It works with `char`, `word`, `item` and `line`:
+
+<code>
+put 0 into tCount
+repeat for each char tChar in "mississippi"
+   if tChar is "s" then add 1 to tCount
+end repeat
+put "There are" && tCount && "s's in mississippi"
+</code>
+
+## Stopping early and skipping
+
+`exit repeat` leaves a loop straight away; `next repeat` skips to the next time round.
+
+<code>
+repeat for each item tFruit in "apple,banana,stop,cherry"
+   if tFruit is "stop" then exit repeat
+   if tFruit is "banana" then next repeat
+   put tFruit
+end repeat
+</code>
+
+<quiz>
+What does the last example put?
+* only apple
+- apple and cherry
+- apple, banana and cherry
+= banana is skipped by next repeat, and the loop ends at stop, before cherry.
+</quiz>
+
+<challenge>
+Write a function `vowels(pText)` that returns how many vowels (a, e, i, o, u) are in pText.
+<starter>
+function vowels pText
+   return 0
+end vowels
+
+put vowels("programming")
+</starter>
+<solution>
+function vowels pText
+   local tCount
+   put 0 into tCount
+   repeat for each char tChar in pText
+      if tChar is among the chars of "aeiou" then add 1 to tCount
+   end repeat
+   return tCount
+end vowels
+
+put vowels("programming")
+</solution>
+<check>
+vowels("programming") is 3 | programming has 3 vowels
+vowels("xyz") is 0 | xyz has none
+vowels("AUDIO") is 4 | AUDIO has 4 (xTalk compares letters without minding case)
+</check>
+<hint>
+Loop with `repeat for each char`, and test each one with `is among the chars of "aeiou"`.
+</hint>
+</challenge>
+
+unit: Text and lists
+icon: type
+
+Chunk expressions: xTalk's superpower for words, lines and lists.
+
+lesson: Chunks
+id: chunks
+minutes: 8
+
+Most languages make you count positions to get at part of a string. xTalk lets you ask for it by name: a **chunk**.
+
+<code>
+put "The quick brown fox" into tText
+put word 2 of tText
+put char 1 to 3 of tText
+put the last word of tText
+put the number of words of tText
+</code>
+
+The chunks are `char`, `word`, `item` (separated by commas) and `line`. You can ask for one, a range (`word 2 to 3`), or count from the end with negatives (`word -1`).
+
+<code>
+put "red,green,blue" into tColours
+put item 2 of tColours
+put "first line" & return & "second line" into tLines
+put line 2 of tLines
+put char 1 of word 2 of "hello world"
+</code>
+
+<tip>
+Chunks work inside chunks, and the smaller one comes first: `char 1 of word 2`, never `word 2 of char 1`.
+</tip>
+
+<quiz>
+What does `put item -1 of "cats,dogs,mice"` show?
+- cats
+* mice
+- 3
+= -1 counts from the end: the last item.
+</quiz>
+
+<challenge>
+Write a function `initials(pName)` that returns the first letter of each word, in capitals. `initials("ada lovelace")` should give `AL`.
+<starter>
+function initials pName
+   return char 1 of pName
+end initials
+
+put initials("ada lovelace")
+</starter>
+<solution>
+function initials pName
+   local tResult
+   repeat for each word tWord in pName
+      put toUpper(char 1 of tWord) after tResult
+   end repeat
+   return tResult
+end initials
+
+put initials("ada lovelace")
+</solution>
+<check>
+initials("ada lovelace") is "AL" | ada lovelace gives AL
+initials("grace brewster murray hopper") is "GBMH" | it works for four words
+initials("Alan") is "A" | and for one
+</check>
+<hint>
+Loop over each word, take `char 1 of` it, make it upper case with `toUpper()`, and `put` it `after` a result variable.
+</hint>
+</challenge>
+
+lesson: Changing text
+id: editing
+minutes: 7
+
+Chunks are not only for reading. You can put a value into a chunk, delete one, or put something before or after it.
+
+<code>
+put "I like cats" into tText
+put "dogs" into word 3 of tText
+put tText
+delete word 2 of tText
+put tText
+put "really " before word 2 of tText
+put tText
+</code>
+
+## Find and replace
+
+`replace` changes every copy of one string into another. `offset` tells you where one string first appears (0 if it does not).
+
+<code>
+put "the cat sat on the cat mat" into tText
+replace "cat" with "dog" in tText
+put tText
+put offset("sat", tText)
+</code>
+
+## Case
+
+`toUpper` and `toLower` change letters to capitals or small letters.
+
+<code>
+put toUpper("shout")
+put toLower("WHISPER")
+</code>
+
+<quiz>
+After `put "one two three" into t` and `delete word 1 of t`, what is t?
+* two three
+- one three
+- one two
+= Deleting word 1 removes "one" (and the space after it).
+</quiz>
+
+<challenge>
+Write a function `censor(pText)` that replaces every "bad" in pText with "***".
+<starter>
+function censor pText
+   return pText
+end censor
+
+put censor("a bad, bad day")
+</starter>
+<solution>
+function censor pText
+   replace "bad" with "***" in pText
+   return pText
+end censor
+
+put censor("a bad, bad day")
+</solution>
+<check>
+censor("a bad, bad day") is "a ***, *** day" | both bads are hidden
+censor("good") is "good" | other text is left alone
+</check>
+</challenge>
+
+lesson: Lists
+id: lists
+minutes: 8
+
+In xTalk, a list is usually just text: one thing per line, or items separated by commas. Everything you know about chunks works on it, and there are commands made for lists.
+
+<code>
+put "pear" & return & "apple" & return & "cherry" into tFruit
+sort lines of tFruit
+put tFruit
+put "There are" && the number of lines of tFruit && "fruits"
+</code>
+
+`sort` can sort numbers too, and backwards:
+
+<code>
+put "10,2,33,4" into tNumbers
+sort items of tNumbers numeric descending
+put tNumbers
+</code>
+
+## Keeping only some
+
+`filter` keeps the lines that match a pattern, where `*` stands for "anything":
+
+<code>
+put "cat" & return & "cow" & return & "dog" & return & "cod" into tAnimals
+filter lines of tAnimals with "c*"
+put tAnimals
+</code>
+
+<note>
+Without `numeric`, numbers sort like words: "10" comes before "2", because "1" comes before "2". That surprises everyone once.
+</note>
+
+<quiz>
+What does `sort items of t` do to "10,9,100" when t is that list?
+- 9,10,100
+* 10,100,9
+- 100,10,9
+= Without numeric, items sort as text, character by character: 10, 100, then 9.
+</quiz>
+
+<challenge>
+Write a function `longest(pList)` that returns the longest line of pList.
+<starter>
+function longest pList
+   return line 1 of pList
+end longest
+
+put longest("ox" & return & "zebra" & return & "cat")
+</starter>
+<solution>
+function longest pList
+   local tBest
+   repeat for each line tLine in pList
+      if the number of chars of tLine > the number of chars of tBest then
+         put tLine into tBest
+      end if
+   end repeat
+   return tBest
+end longest
+
+put longest("ox" & return & "zebra" & return & "cat")
+</solution>
+<check>
+longest("ox" & return & "zebra" & return & "cat") is "zebra" | zebra is the longest
+longest("elephant" & return & "ant") is "elephant" | it works when the longest is first
+</check>
+<hint>
+Keep the best so far in a variable. Go through each line, and when one is longer than the best, it becomes the best.
+</hint>
+</challenge>
+
+unit: Handlers
+icon: blocks
+
+Name your own commands and functions, and learn where values live.
+
+lesson: Your own commands
+id: commands
+minutes: 8
+
+So far your code ran from top to bottom. A **handler** is a named piece of code you can run whenever you like, by using its name. A **command** handler starts with `command` (or `on`) and its name, and finishes with `end` and the name:
+
+<code>
+command sayHello
+   put "Hello!"
+   put "Nice to meet you."
+end sayHello
+
+sayHello
+sayHello
+</code>
+
+The handler does nothing until it is called. The last two lines call it twice.
+
+## Parameters
+
+A handler can take values, called **parameters**. Their names go after the handler's name, separated by commas.
+
+<code>
+command greet pName, pTimes
+   repeat pTimes times
+      put "Hello," && pName
+   end repeat
+end greet
+
+greet "Sam", 2
+greet "Alex", 1
+</code>
+
+<tip>
+Many xTalk programmers start parameter names with `p`, as variables start with `t`. Then you can tell where a value came from at a glance.
+</tip>
+
+<quiz>
+How many lines does `greet "Kim", 3` put?
+- 1
+* 3
+- 4
+= pTimes is 3, so the loop puts the greeting three times.
+</quiz>
+
+<challenge>
+Write a command `countdown pFrom` that puts the numbers from pFrom down to 1, and then `Go!`. Call it with 3.
+<starter>
+command countdown pFrom
+   put "Go!"
+end countdown
+
+countdown 3
+</starter>
+<solution>
+command countdown pFrom
+   repeat with tNumber = pFrom down to 1
+      put tNumber
+   end repeat
+   put "Go!"
+end countdown
+
+countdown 3
+</solution>
+<check>
+line 1 of output is 3 and line 3 of output is 1 | it counts 3, 2, 1
+the last line of output is "Go!" | then it says Go!
+the number of lines of output is 4 | four lines in all
+</check>
+</challenge>
+
+lesson: Functions
+id: functions
+minutes: 8
+
+A **function** handler works out a value and gives it back with `return`. You have already used xTalk's functions, like `round()` and `max()`: now you can write your own.
+
+<code>
+function double pNumber
+   return pNumber * 2
+end double
+
+put double(21)
+put double(double(5))
+</code>
+
+Commands **do** things; functions **answer** things. A good function does not put anything itself: it returns its answer, and whoever called it decides what to do with it.
+
+<code>
+function areaOfCircle pRadius
+   return round(pi * pRadius ^ 2, 1)
+end areaOfCircle
+
+put "A circle of radius 3 has an area of" && areaOfCircle(3)
+</code>
+
+<note>
+`return` ends the handler at once. Any lines after it in the handler do not run.
+</note>
+
+<quiz>
+What does `put double(3) + double(4)` show, with the double function above?
+- 7
+* 14
+- 34
+= double(3) is 6, double(4) is 8, and 6 + 8 is 14.
+</quiz>
+
+<challenge>
+Write a function `averageOf(pList)` that returns the average of a list of numbers separated by commas. `averageOf("2,4,9")` is 5.
+<starter>
+function averageOf pList
+   return 0
+end averageOf
+
+put averageOf("2,4,9")
+</starter>
+<solution>
+function averageOf pList
+   local tTotal
+   put 0 into tTotal
+   repeat for each item tNumber in pList
+      add tNumber to tTotal
+   end repeat
+   return tTotal / the number of items of pList
+end averageOf
+
+put averageOf("2,4,9")
+</solution>
+<check>
+averageOf("2,4,9") is 5 | the average of 2, 4 and 9 is 5
+averageOf("10") is 10 | the average of one number is the number
+averageOf("1,2") is 1.5 | the average of 1 and 2 is 1.5
+</check>
+<hint>
+Add up the items with a loop, then divide by `the number of items of pList`. (xTalk has this built in as `average()`. That is why this function is called `averageOf`: a handler cannot have the name of one of xTalk's own functions.)
+</hint>
+</challenge>
+
+lesson: Where values live
+id: scope
+minutes: 7
+
+A variable used inside a handler belongs to that handler alone: it is **local**. It is made fresh each time the handler runs and is gone when it ends. That is a good thing: handlers cannot trip over each other's variables.
+
+<code>
+command setIt
+   put "inside" into tPlace
+end setIt
+
+put "outside" into tPlace
+setIt
+put tPlace
+</code>
+
+The `tPlace` in `setIt` is a different variable from the one outside, so the last line still puts "outside".
+
+## Sharing a value
+
+When handlers do need to share, a **script local** variable is declared at the top, outside any handler, with `local`. Every handler in the script can use it, and it keeps its value between calls.
+
+<code>
+local sCount
+
+command tally
+   add 1 to sCount
+end tally
+
+tally
+tally
+tally
+put "Called" && sCount && "times"
+</code>
+
+<note>
+The `s` at the start of `sCount` is another convention: `s` for script local. A `global` variable is shared by every script in the whole program, and its name usually starts with `g`. Use them sparingly.
+</note>
+
+<quiz>
+Why did the first example put "outside"?
+- setIt never ran
+* The tPlace in setIt is local to setIt
+- put cannot change a variable twice
+= Each handler has its own local variables, so setIt changed only its own tPlace.
+</quiz>
+
+lesson: Messages
+id: messages
+minutes: 6
+
+xTalk is an **event-driven** language. When something happens (a click, a key press, a card opening) xTalk sends a **message** with a name like `mouseUp` or `openCard`. If a handler with that name is in the right script, it runs.
+
+That is all a command handler is: a handler for a message. When you write `sayHello` in your code, xTalk sends the message "sayHello", finds your handler, and runs it.
+
+## The message path
+
+A message starts at the object it is about (a button that was clicked, say) and travels upwards: from the button to its card, to the stack, and on to xTalk itself. The first handler with the right name on the way handles it. This journey is called the **message path**.
+
+<code>
+command whereAmI
+   put "This handler is in" && the name of me
+end whereAmI
+
+whereAmI
+</code>
+
+In the Academy, your handlers live in the script of the stage: a stack made for your code. That is why `me` is a stack here.
+
+<tip>
+A handler can let the message carry on along the path with `pass`. That is how one script can react to a message and still let the next one have it.
+</tip>
+
+<quiz>
+A button with no script is clicked. Where can a mouseUp handler for it be?
+- Nowhere: it needs its own script
+* In its card's or its stack's script
+- Only in the Message Box
+= The message travels up the message path, so a handler in the card or stack catches it.
+</quiz>
+
+unit: Arrays
+icon: braces
+
+Store values by name in one variable, and count things with them.
+
+lesson: Arrays
+id: arrays
+minutes: 8
+
+An **array** is a variable that holds many values, each under a **key**. You write the key in square brackets:
+
+<code>
+put 12 into tAges["Sam"]
+put 9 into tAges["Kim"]
+put 15 into tAges["Lee"]
+put "Kim is" && tAges["Kim"]
+</code>
+
+`the keys of` an array lists its keys, one per line, and you can loop over them:
+
+<code>
+put "woof" into tSounds["dog"]
+put "moo" into tSounds["cow"]
+put "meow" into tSounds["cat"]
+put the keys of tSounds into tAnimals
+sort lines of tAnimals
+repeat for each line tAnimal in tAnimals
+   put "The" && tAnimal && "says" && tSounds[tAnimal]
+end repeat
+</code>
+
+## Numbered arrays
+
+Keys can be numbers too, which makes an array a numbered list:
+
+<code>
+put "Mercury" into tPlanets[1]
+put "Venus" into tPlanets[2]
+put "Earth" into tPlanets[3]
+put "Planet 3 is" && tPlanets[3]
+put "There are" && the number of elements of tPlanets && "here"
+</code>
+
+<tip>
+Arrays are perfect for counting: use the thing you are counting as the key, and `add 1 to` its value.
+</tip>
+
+<quiz>
+What does `put tScores["Zoe"]` show when there is no key "Zoe"?
+- An error
+* Nothing: the value is empty
+- Zoe
+= An element that was never set is empty, so you can add 1 to a count that has not started yet.
+</quiz>
+
+<challenge>
+Write a function `mostCommon(pText)` that returns the word that appears most often in pText. Use an array to count the words.
+<starter>
+function mostCommon pText
+   return word 1 of pText
+end mostCommon
+
+put mostCommon("the cat and the dog and the bird")
+</starter>
+<solution>
+function mostCommon pText
+   local tCounts, tBest
+   repeat for each word tWord in pText
+      add 1 to tCounts[tWord]
+   end repeat
+   repeat for each key tWord in tCounts
+      if tBest is empty or tCounts[tWord] > tCounts[tBest] then
+         put tWord into tBest
+      end if
+   end repeat
+   return tBest
+end mostCommon
+
+put mostCommon("the cat and the dog and the bird")
+</solution>
+<check>
+mostCommon("the cat and the dog and the bird") is "the" | the commonest word is the
+mostCommon("go stop stop stop go") is "stop" | it is not always the first word
+code contains "[" | it uses an array
+</check>
+<hint>
+Loop over the words and `add 1 to tCounts[tWord]`. Then loop over the keys with `repeat for each key`, keeping the key with the biggest count.
+</hint>
+</challenge>
+
+lesson: Splitting and combining
+id: split
+minutes: 6
+
+`split` turns a list into a numbered array, and `combine` turns an array back into a list. Together they let you switch between the two whenever one is easier.
+
+<code>
+put "red,green,blue" into tList
+split tList by comma
+put tList[2]
+put "yellow" into tList[4]
+combine tList using comma
+put tList
+</code>
+
+A list of pairs can become an array with names as keys, by splitting with two delimiters:
+
+<code>
+put "Sam=12,Kim=9" into tText
+split tText by comma and "="
+put tText["Kim"]
+</code>
+
+<quiz>
+After `put "a b c" into t` and `split t by space`, what is `t[3]`?
+- a b c
+- 3
+* c
+= split by space makes one element per word, numbered from 1, so element 3 is c.
+</quiz>
+
+unit: Objects and events
+icon: mouse-pointer-click
+
+Make buttons and fields with code, and make them respond to clicks.
+
+lesson: Making objects
+id: objects
+minutes: 8
+stage: yes
+
+xTalk programs live in **stacks** of **cards**, and on cards are **objects**: buttons, fields, graphics and images. You usually draw them with the IDE's tools, but code can make them too. In the Academy, what your code makes appears on the **Stage**, a window of its own.
+
+<code>
+create button "Hello"
+set the rect of button "Hello" to 20, 20, 160, 60
+create field "Note"
+set the rect of field "Note" to 20, 80, 300, 140
+put "Made by code!" into field "Note"
+</code>
+
+## Properties
+
+Everything about an object is a **property**: its name, its size and place (`rect`, `loc`, `width`), its colours, its text. `set` changes a property and `the` reads one.
+
+<code>
+create button "Big"
+set the width of button "Big" to 200
+set the loc of button "Big" to 240, 180
+set the label of button "Big" to "A big button"
+put "Its width is" && the width of button "Big"
+</code>
+
+<note>
+Each run starts with an empty stage, so you can try things freely. The stage stays open until your next run, and you can click what you made.
+</note>
+
+<quiz>
+Which line makes a button 300 pixels wide?
+- put 300 into button "Go"
+* set the width of button "Go" to 300
+- width button "Go" 300
+= Properties are changed with set: set the width of the object to a value.
+</quiz>
+
+<challenge>
+Make a button called `Start` and a field called `Score` that shows `0`.
+<starter>
+create button "Start"
+</starter>
+<solution>
+create button "Start"
+set the rect of button "Start" to 20, 20, 140, 60
+create field "Score"
+set the rect of field "Score" to 160, 20, 260, 60
+put 0 into field "Score"
+</solution>
+<check>
+there is a button "Start" | there is a button called Start
+there is a field "Score" | there is a field called Score
+field "Score" is "0" | the Score field shows 0
+</check>
+</challenge>
+
+lesson: Events
+id: events
+minutes: 9
+stage: yes
+
+A button does something when it is clicked because its script has a `mouseUp` handler: when you let go of the mouse over it, xTalk sends it the message `mouseUp`.
+
+In the Academy, the handlers you write go into the stage's script. The message path takes a button's `mouseUp` up to the stage, so a `mouseUp` handler in your code hears every click on the stage. `the short name of the target` tells it which object was clicked.
+
+<code>
+local sClicks
+
+on mouseUp
+   add 1 to sClicks
+   put "You clicked" && the short name of the target && "(click" && sClicks & ")"
+end mouseUp
+
+create button "Red"
+set the rect of button "Red" to 20, 20, 120, 60
+create button "Blue"
+set the rect of button "Blue" to 140, 20, 240, 60
+</code>
+
+Run it, then click the buttons on the Stage and watch the Output.
+
+## A script of its own
+
+An object can have its own script. Code can set it, as a string:
+
+<code>
+create button "Beep"
+set the script of button "Beep" to "on mouseUp" & return & "put 1 + 1" & return & "end mouseUp"
+</code>
+
+<tip>
+In a real stack you would open the button's script in the Script Editor and type the handler there. Setting a script from code is useful when one program builds another.
+</tip>
+
+<quiz>
+Which message does a button get when it is clicked and the mouse is let go?
+- click
+* mouseUp
+- buttonPressed
+= mouseUp is sent when the mouse button goes up over the object.
+</quiz>
+
+<challenge>
+Make a button called `Count`. Each time it is clicked, the Output should show how many times it has been clicked so far, as `Clicks: 1`, `Clicks: 2` and so on.
+<starter>
+on mouseUp
+   put "Clicked"
+end mouseUp
+
+create button "Count"
+</starter>
+<solution>
+local sClicks
+
+on mouseUp
+   add 1 to sClicks
+   put "Clicks:" && sClicks
+end mouseUp
+
+create button "Count"
+</solution>
+<check>
+there is a button "Count" | there is a button called Count
+academyClick("Count") | a click on Count
+the last line of output is "Clicks: 1" | shows Clicks: 1
+academyClick("Count") and academyClick("Count") | two more clicks
+the last line of output is "Clicks: 3" | show Clicks: 3
+</check>
+<hint>
+Keep the count in a script local variable (declared with `local` at the top), so it keeps its value between clicks.
+</hint>
+</challenge>
+
+lesson: Fields and input
+id: fields
+minutes: 8
+stage: yes
+
+A field is where a user types, and where a program shows text. Its text is read and changed like a variable: `field "Name"` is the field's text.
+
+<code>
+create field "Name"
+set the rect of field "Name" to 20, 20, 220, 50
+put "Ada" into field "Name"
+put "The field says" && field "Name"
+</code>
+
+## A tiny app
+
+Together, a field, a button and a handler make an app. Run this, type your name in the field, and click the button.
+
+<code>
+on mouseUp
+   if the short name of the target is "Greet" then
+      put "Hello," && field "Name" & "!" into field "Answer"
+   end if
+end mouseUp
+
+create field "Name"
+set the rect of field "Name" to 20, 20, 220, 50
+create button "Greet"
+set the rect of button "Greet" to 240, 20, 340, 50
+create field "Answer"
+set the rect of field "Answer" to 20, 70, 340, 100
+</code>
+
+## Asking
+
+`ask` shows a dialog with a question and puts the answer into `it`. `answer` shows a message with buttons. (They open dialogs, so the checks of the Academy do not run them for you.)
+
+<code dialog>
+ask "What is your name?"
+answer "Hello," && it
+</code>
+
+<quiz>
+After `put "42" into field "Age"`, what does `put field "Age" + 1` show?
+* 43
+- 421
+- An error
+= A field's text is a value like any other, and "42" is a number.
+</quiz>
+
+<challenge>
+Make a temperature converter: a field called `Celsius`, a button called `Convert`, and a field called `Fahrenheit`. Clicking Convert puts the Celsius value times 9/5 plus 32 into Fahrenheit.
+<starter>
+on mouseUp
+end mouseUp
+
+create field "Celsius"
+create button "Convert"
+create field "Fahrenheit"
+</starter>
+<solution>
+on mouseUp
+   if the short name of the target is "Convert" then
+      put field "Celsius" * 9 / 5 + 32 into field "Fahrenheit"
+   end if
+end mouseUp
+
+create field "Celsius"
+set the rect of field "Celsius" to 20, 20, 120, 50
+create button "Convert"
+set the rect of button "Convert" to 140, 20, 240, 50
+create field "Fahrenheit"
+set the rect of field "Fahrenheit" to 260, 20, 360, 50
+</solution>
+<check>
+there is a field "Celsius" and there is a field "Fahrenheit" | the two fields
+academyType("Celsius", 100) and academyClick("Convert") | 100 typed in Celsius, then Convert
+field "Fahrenheit" is 212 | 100 Celsius is 212 Fahrenheit
+academyType("Celsius", -40) and academyClick("Convert") | -40 typed, then Convert
+field "Fahrenheit" is -40 | -40 is the same in both
+</check>
+<hint>
+In `mouseUp`, check that the target is Convert, then put `field "Celsius" * 9 / 5 + 32` into field "Fahrenheit".
+</hint>
+</challenge>
+
+unit: Thinking like a programmer
+icon: brain
+
+Find bugs, then learn the classic algorithms that programmers everywhere share.
+
+lesson: Finding bugs
+id: debugging
+minutes: 8
+
+A **bug** is a mistake in a program. Everybody writes them; good programmers find them quickly. (The word is older than computers, but in 1947 Grace Hopper's team found a real moth in the Harvard Mark II, and taped it into the log book.)
+
+## Read the error
+
+When xTalk stops, the Academy shows the line and says what went wrong. Read it: it is usually right. Run this:
+
+<code error>
+put "5" into tApples
+put "five" into tPears
+put tApples + tPears
+</code>
+
+## Look inside
+
+When a program runs but gives the wrong answer, put the values in the middle to see where it goes wrong. Programmers call these **probes** or print statements.
+
+<code>
+put 0 into tTotal
+repeat with tNumber = 1 to 4
+   add tNumber to tTotal
+   put "after" && tNumber & ", the total is" && tTotal
+end repeat
+</code>
+
+## Catching errors
+
+`try` runs some lines, and if one of them stops with an error, `catch` runs instead of the program stopping.
+
+<code>
+try
+   put 10 / 0 into tAnswer
+catch tError
+   put "That went wrong, but we carried on"
+end try
+</code>
+
+<tip>
+Change one thing at a time, and run after each change. If something breaks, you know what broke it.
+</tip>
+
+<challenge>
+This function should return the total of the numbers from 1 to pN, but it is wrong. Find the bug and fix it. (Put some values to look inside.)
+<starter>
+function total pN
+   put 0 into tTotal
+   repeat with tNumber = 1 to pN
+      put tNumber into tTotal
+   end repeat
+   return tTotal
+end total
+
+put total(4)
+</starter>
+<solution>
+function total pN
+   put 0 into tTotal
+   repeat with tNumber = 1 to pN
+      add tNumber to tTotal
+   end repeat
+   return tTotal
+end total
+
+put total(4)
+</solution>
+<check>
+total(4) is 10 | the total from 1 to 4 is 10
+total(10) is 55 | the total from 1 to 10 is 55
+total(1) is 1 | the total from 1 to 1 is 1
+</check>
+<hint>
+Look at the line inside the loop. Does it add to the total, or replace it?
+</hint>
+</challenge>
+
+lesson: Searching
+id: searching
+minutes: 8
+
+An **algorithm** is a recipe for solving a problem, step by step. Some recipes are so useful that every programmer learns them. The first two: find the biggest thing in a list, and find where something is.
+
+## The biggest
+
+Keep the best so far. Look at each item; if it beats the best, it becomes the best.
+
+<code>
+put "7,3,19,4,11" into tList
+put item 1 of tList into tBiggest
+repeat for each item tNumber in tList
+   if tNumber > tBiggest then put tNumber into tBiggest
+end repeat
+put "The biggest is" && tBiggest
+</code>
+
+## Linear search
+
+To find where something is, look at each item in turn until you find it. If you get to the end, it is not there.
+
+<code>
+function positionOf pWanted, pList
+   local tIndex
+   put 0 into tIndex
+   repeat for each item tItem in pList
+      add 1 to tIndex
+      if tItem is pWanted then return tIndex
+   end repeat
+   return 0
+end positionOf
+
+put positionOf("cherry", "apple,banana,cherry,date")
+put positionOf("kiwi", "apple,banana,cherry,date")
+</code>
+
+<note>
+In a list of a million items, a linear search may look at a million items. If the list is sorted, a **binary search** looks at the middle, throws away the half that cannot hold the answer, and repeats: about twenty looks for a million items.
+</note>
+
+<quiz>
+A linear search looks for something that is not in a list of 50 items. How many items does it look at?
+- 1
+- 25
+* 50
+= It has to check every item before it can be sure the thing is not there.
+</quiz>
+
+<challenge>
+Write a function `smallest(pList)` that returns the smallest number in a list of numbers separated by commas, without using xTalk's `min()`.
+<starter>
+function smallest pList
+   return item 1 of pList
+end smallest
+
+put smallest("8,3,12,5")
+</starter>
+<solution>
+function smallest pList
+   local tSmallest
+   put item 1 of pList into tSmallest
+   repeat for each item tNumber in pList
+      if tNumber < tSmallest then put tNumber into tSmallest
+   end repeat
+   return tSmallest
+end smallest
+
+put smallest("8,3,12,5")
+</solution>
+<check>
+smallest("8,3,12,5") is 3 | the smallest of 8, 3, 12 and 5 is 3
+smallest("4,9,-2") is -2 | it works with negative numbers
+smallest("6") is 6 | and with one number
+not (code contains "min(") | it does not use min()
+</check>
+</challenge>
+
+lesson: Sorting
+id: sorting
+minutes: 9
+
+xTalk's `sort` command sorts for you, but sorting by hand is how programmers learn to think about algorithms. The simplest method is **bubble sort**: go through the list comparing each pair of neighbours, and swap them if they are the wrong way round. Repeat until a whole pass makes no swaps.
+
+<code>
+put "5,1,4,2,8" into tList
+put true into tSwapped
+repeat while tSwapped
+   put false into tSwapped
+   repeat with tIndex = 1 to the number of items of tList - 1
+      if item tIndex of tList > item tIndex + 1 of tList then
+         -- swap the two neighbours
+         put item tIndex of tList into tTemp
+         put item tIndex + 1 of tList into item tIndex of tList
+         put tTemp into item tIndex + 1 of tList
+         put true into tSwapped
+      end if
+   end repeat
+   put tList
+end repeat
+</code>
+
+Each line of the Output is one pass: watch the big numbers "bubble" to the end.
+
+## Swapping
+
+Swapping two values needs a third variable to hold one of them for a moment, just as swapping the drinks in two glasses needs a third glass.
+
+<important>
+Bubble sort is easy to understand but slow on big lists: sorting a thousand items can take nearly a million comparisons. Faster methods (merge sort, quicksort) split the list in halves. xTalk's own `sort` uses a fast one.
+</important>
+
+<quiz>
+Why does the swap need `tTemp`?
+- xTalk cannot put a value into an item
+* Without it, the first value would be overwritten before it was copied
+- It makes the sort faster
+= The first put replaces item tIndex, so its old value must be saved somewhere first.
+</quiz>
+
+<challenge>
+Write a function `sortNumbers(pList)` that sorts a comma-separated list of numbers from smallest to largest, without using xTalk's `sort` command.
+<starter>
+function sortNumbers pList
+   return pList
+end sortNumbers
+
+put sortNumbers("3,1,2")
+</starter>
+<solution>
+function sortNumbers pList
+   local tSwapped, tTemp
+   put true into tSwapped
+   repeat while tSwapped
+      put false into tSwapped
+      repeat with tIndex = 1 to the number of items of pList - 1
+         if item tIndex of pList > item tIndex + 1 of pList then
+            put item tIndex of pList into tTemp
+            put item tIndex + 1 of pList into item tIndex of pList
+            put tTemp into item tIndex + 1 of pList
+            put true into tSwapped
+         end if
+      end repeat
+   end repeat
+   return pList
+end sortNumbers
+
+put sortNumbers("3,1,2")
+</solution>
+<check>
+sortNumbers("3,1,2") is "1,2,3" | 3,1,2 becomes 1,2,3
+sortNumbers("10,9,100,1") is "1,9,10,100" | numbers sort as numbers
+sortNumbers("4") is "4" | one number stays as it is
+not (code contains "sort items") and not (code contains "sort lines") | it does not use the sort command
+</check>
+<hint>
+Start from the bubble sort above. Put it in the function, sort pList, and return it.
+</hint>
+</challenge>
+
+lesson: Recursion
+id: recursion
+minutes: 8
+
+A function can call itself. This is called **recursion**, and it suits problems that contain smaller copies of themselves.
+
+The factorial of a number (written 5! in maths) is it times every whole number below it: 5! = 5 x 4 x 3 x 2 x 1. But notice that 5! is just 5 x 4!, and 4! is 4 x 3!, and so on, down to 1! which is 1.
+
+<code>
+function factorial pNumber
+   if pNumber <= 1 then return 1
+   return pNumber * factorial(pNumber - 1)
+end factorial
+
+put factorial(5)
+put factorial(10)
+</code>
+
+Every recursive function needs a **base case**: a simple case it answers without calling itself (here, 1). Without one, it would call itself for ever.
+
+<caution>
+If the base case is never reached, xTalk stops with an error once the calls are thousands deep. That is the recursive version of an infinite loop.
+</caution>
+
+<quiz>
+What is `factorial(4)`?
+- 10
+* 24
+- 16
+= 4 x 3 x 2 x 1 is 24.
+</quiz>
+
+<challenge>
+The Fibonacci numbers start 1, 1, and each one after is the sum of the two before: 1, 1, 2, 3, 5, 8, 13 ... Write a recursive function `fib(pN)` that returns the pN-th one, so fib(1) and fib(2) are 1, and fib(7) is 13.
+<starter>
+function fib pN
+   return 1
+end fib
+
+put fib(7)
+</starter>
+<solution>
+function fib pN
+   if pN <= 2 then return 1
+   return fib(pN - 1) + fib(pN - 2)
+end fib
+
+put fib(7)
+</solution>
+<check>
+fib(1) is 1 and fib(2) is 1 | the first two are 1
+fib(7) is 13 | the seventh is 13
+fib(12) is 144 | the twelfth is 144
+</check>
+<hint>
+The base case is pN of 1 or 2. Otherwise, return fib(pN - 1) + fib(pN - 2).
+</hint>
+</challenge>
+
+lesson: What next?
+id: next
+minutes: 4
+
+You have learned the ideas that every programming language is built on: values and variables, decisions, loops, functions, lists, arrays, events, debugging and algorithms. In another language the punctuation changes, but these ideas do not.
+
+## Keep going
+
+- **Projects**, the next course here, puts it all together in small programs: games, puzzles and tools.
+- **Learn** (Help menu) teaches the IDE: making stacks with the tools, the Property Inspector and the Script Editor.
+- **Lessons** (Help menu) has step-by-step guides to building real apps.
+- **The Dictionary** (Help menu) explains every word of xTalk, with examples.
+
+## Make something
+
+The best way to learn is to build something you want. Ideas: a quiz about your favourite subject, a times-table tester, a diary, a dice game, a drawing program. Choose File > New Stack in the IDE, draw some buttons and fields, and start writing handlers.
+
+<tip>
+Stuck? Read the error, put some values, change one thing at a time, and read your code aloud. And remember that every programmer was a beginner once.
+</tip>

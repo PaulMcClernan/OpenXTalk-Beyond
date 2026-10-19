@@ -1598,6 +1598,81 @@ function lkIconPaths pName
          return "<path d='M3 12h.01'/><path d='M3 18h.01'/><path d='M3 6h.01'/><path d='M8 12h13'/><path d='M8 18h13'/><path d='M8 6h13'/>"
       case "text-quote"
          return "<path d='M17 6H3'/><path d='M21 12H8'/><path d='M21 18H8'/><path d='M3 12v6'/>"
+      case "key-round"
+         return "<path d='M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 " & \
+               "0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z'/><circle cx='16.5' " & \
+               "cy='7.5' r='.5' fill='currentColor'/>"
+      case "circle-help"
+         return "<circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><path d='M12 17h.01'" & \
+               "/>"
+      case "repeat"
+         return "<path d='m17 2 4 4-4 4'/><path d='M3 11v-1a4 4 0 0 1 4-4h14'/><path d='m7 22-4-4 4-4'/><path d='M21 " & \
+               "13v1a4 4 0 0 1-4 4H3'/>"
+      case "git-branch"
+         return "<line x1='6' x2='6' y1='3' y2='15'/><circle cx='18' cy='6' r='3'/><circle cx='6' cy='18' r='3'/><pat" & \
+               "h d='M18 9a9 9 0 0 1-9 9'/>"
+      case "variable"
+         return "<path d='M8 21s-4-3-4-9 4-9 4-9'/><path d='M16 3s4 3 4 9-4 9-4 9'/><line x1='15' x2='9' y1='9' y2='1" & \
+               "5'/><line x1='9' x2='15' y1='9' y2='15'/>"
+      case "list-ordered"
+         return "<path d='M10 12h11'/><path d='M10 18h11'/><path d='M10 6h11'/><path d='M4 10h2'/><path d='M4 6h1v4'/" & \
+               "><path d='M6 18H4c0-1 2-2 2-3s-1-1.5-2-1'/>"
+      case "calculator"
+         return "<rect width='16' height='20' x='4' y='2' rx='2'/><line x1='8' x2='16' y1='6' y2='6'/><line x1='16' x" & \
+               "2='16' y1='14' y2='18'/><path d='M16 10h.01'/><path d='M12 10h.01'/><path d='M8 10h.01'/><path d='M1" & \
+               "2 14h.01'/><path d='M8 14h.01'/><path d='M12 18h.01'/><path d='M8 18h.01'/>"
+      case "shuffle"
+         return "<path d='m18 14 4 4-4 4'/><path d='m18 2 4 4-4 4'/><path d='M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a" & \
+               "4 4 0 0 1 3.3-1.7H22'/><path d='M2 6h1.972a4 4 0 0 1 3.6 2.2'/><path d='M22 18h-6.041a4 4 0 0 1-3.3-" & \
+               "1.8l-.359-.45'/>"
+      case "dices"
+         return "<rect width='12' height='12' x='2' y='10' rx='2' ry='2'/><path d='m17.92 14 3.5-3.5a2.24 2.24 0 0 0 " & \
+               "0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6'/><path d='M6 18h.01'/><path d='M10 14h.01'/><path d='M15 6h.01" & \
+               "'/><path d='M18 9h.01'/>"
+      case "target"
+         return "<circle cx='12' cy='12' r='10'/><circle cx='12' cy='12' r='6'/><circle cx='12' cy='12' r='2'/>"
+      case "brain"
+         return "<path d='M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z'/><pat" & \
+               "h d='M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z'/><path d=" & \
+               "'M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4'/><path d='M17.599 6.5a3 3 0 0 0 .399-1.375'/><path d='M" & \
+               "6.003 5.125A3 3 0 0 0 6.401 6.5'/><path d='M3.477 10.896a4 4 0 0 1 .585-.396'/><path d='M19.938 10.5" & \
+               "a4 4 0 0 1 .585.396'/><path d='M6 18a4 4 0 0 1-1.967-.516'/><path d='M19.967 17.484A4 4 0 0 1 18 18'" & \
+               "/>"
+      case "split"
+         return "<path d='M16 3h5v5'/><path d='M8 3H3v5'/><path d='M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3'/><path d='m" & \
+               "15 9 6-6'/>"
+      case "mouse-pointer-2"
+         return "<path d='M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.43" & \
+               "8 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z'/>"
+      case "timer"
+         return "<line x1='10' x2='14' y1='2' y2='2'/><line x1='12' x2='15' y1='14' y2='11'/><circle cx='12' cy='14' " & \
+               "r='8'/>"
+      case "flag"
+         return "<path d='M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z'/><line x1='4' x2='4' y1='22' y2=" & \
+               "'15'/>"
+      case "pen-line"
+         return "<path d='M12 20h9'/><path d='M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2." & \
+               "872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z'/>"
+      case "search-code"
+         return "<path d='m13 13.5 2-2.5-2-2.5'/><path d='m21 21-4.3-4.3'/><path d='M9 8.5 7 11l2 2.5'/><circle cx='1" & \
+               "1' cy='11' r='8'/>"
+      case "eye"
+         return "<path d='M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 " & \
+               "1-19.876 0'/><circle cx='12' cy='12' r='3'/>"
+      case "undo-2"
+         return "<path d='M9 14 4 9l5-5'/><path d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'/>"
+      case "footprints"
+         return "<path d='M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2" & \
+               " 8.68V16a2 2 0 1 1-4 0Z'/><path d='M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 " & \
+               "6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z'/><path d='M16 17h4'/><path d='M4 13h4'/>"
+      case "chart-column"
+         return "<path d='M3 3v16a2 2 0 0 0 2 2h16'/><path d='M18 17V9'/><path d='M13 17V5'/><path d='M8 17v-3'/>"
+      case "sigma"
+         return "<path d='M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1" & \
+               " 1 0 0 0 1-1v-2'/>"
+      case "box"
+         return "<path d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0" & \
+               " 0 2 0l7-4A2 2 0 0 0 21 16Z'/><path d='m3.3 7 8.7 5 8.7-5'/><path d='M12 22V12'/>"
    end switch
    return empty
 end lkIconPaths

@@ -1142,6 +1142,18 @@ jobs:
           python3 tools/ci/run_livecode_check.py compile --install "$OXT_ROOT" --engine "$OXT_ROOT/oxt-beyond" \
             --platform "linux-$ARCH" --log "$RUNNER_TEMP/logs/ide-compile-check.log"
 
+      # Every lesson of the xTalk Academy's courses, as the package ships
+      # them, run by the package's engine with the Academy's own runner:
+      # each example runs, each quick check has one right answer, and each
+      # challenge's solution passes its checks while its starter does not
+      # (tools/ci/academy_check.py)
+      - name: Academy check (package)
+        if: ${{ !cancelled() && env.OXT_ROOT != '' }}
+        timeout-minutes: 10
+        run: |
+          python3 tools/ci/academy_check.py --engine "$OXT_ROOT/oxt-beyond" --toolset "$OXT_ROOT/Toolset" \
+            --log "$RUNNER_TEMP/logs/academy-check.log"
+
       # A standalone built from each runtime of the package (Linux x86-64
       # and x86, Windows x86-64 and x86) by its engine, as the IDE's builder
       # does at its core ("_internal deploy"); the Linux x86-64 one is run,

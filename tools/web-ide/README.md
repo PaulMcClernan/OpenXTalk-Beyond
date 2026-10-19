@@ -20,6 +20,10 @@ What works in it:
   and with the Option (Alt) key down they open the classic stacks. The
   page does not carry the guides' stack, so its Guides tab offers the
   User Guide PDF;
+- the xTalk Academy, a course in programming for beginners and schools
+  ([palettes/academy](../../ide/Toolset/palettes/academy/revacademy.livecodescript)):
+  Help > xTalk Academy, Learn's lessons page and Home's "Learn to code"
+  open it, and its playground runs each lesson's code in the page;
 - making stacks, with the Tools palette, the Property Inspector and the
   Message Box;
 - the Script Editor, with colouring, compile errors and the handler list;

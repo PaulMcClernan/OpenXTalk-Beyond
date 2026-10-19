@@ -31,6 +31,7 @@ words, is in the [README](README.md#the-ide) and on the
 - xTalk Assistant: its windows in the look of Learn, with xTalk in Learn's colours (#167)
 - Tools palette: a modern look, sizeable, with names, a filter and sections that fold (Tools > Modern Tools Palette; the classic look stays the default) (#166)
 - IDE: the About, Release Notes and xTalk Assistant Memory windows can be made larger (#164)
+- xTalk Academy: an interactive course in programming for beginners and schools (#163)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 

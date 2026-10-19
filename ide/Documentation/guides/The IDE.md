@@ -227,6 +227,7 @@ using the IDE and XTalk.
 | **Sample Scripts**      | Opens the Resource Center, which contains many sample scripts, including tutorials on text processing and using databases.                                                      																			   |
 | **Beginner's Guide**    | Opens the beginner's guide in an external browser                                                                    	                                                      	    																		   |
 | **All Guides**          | Opens the main documentation window, which contains all of the user guides	                                                         																												   |
+| **xTalk Academy**      | Opens the xTalk Academy: courses that teach programming in xTalk, with a playground that runs and checks your code |
 | **Tutorials**           | Launches the online lessons portal in an external browser                                                      																																	   |
 | **User Guide**          | Opens the old user guide in an external PDF viewer                                                   																			                                                         					   |
 | **Forums**              | Navigates to the discussion forums in an external browser                                                  																			                                                         	   |
