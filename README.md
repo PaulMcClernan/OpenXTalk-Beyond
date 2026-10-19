@@ -87,10 +87,11 @@ over OXT DPE's Extension Manager, lets a stack in the Stack Player find
 its files through `specialFolderPath("resources")` and polishes the
 stacks new in 0.2.7 (see
 [0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish)),
-and 0.2.7-rc.5, the last candidate before 0.2.7, adds xTalk Chat, three
-xTalk Suite apps in Learn and a new About window, and fixes the
+and 0.2.7-rc.5, the last candidate before 0.2.7, makes the scripts of
+imported HyperCard stacks compile, and adds xTalk Chat, three xTalk
+Suite apps in Learn and a new About window, and fixes the
 Standalone Settings' Web card on macOS 26 (see
-[0.2.7-rc.5](#027-rc5-xtalk-chat-the-xtalk-suites-apps-and-a-new-about-window));
+[0.2.7-rc.5](#027-rc5-hypercard-scripts-that-compile-xtalk-chat-and-the-xtalk-suites-apps));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1537,10 +1538,24 @@ them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
 
-#### 0.2.7-rc.5: xTalk Chat, the xTalk Suite's apps, and a new About window
+#### 0.2.7-rc.5: HyperCard scripts that compile, xTalk Chat, and the xTalk Suite's apps
 
 OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
 0.2.7, has everything in 0.2.7-rc.4, and:
+
+- **HyperCard scripts that compile.** About one HyperCard script in ten
+  did not compile here (a variable called `group` or `name`, a handler
+  called `doMenu`, `the message box`, `of cd`, notes after `play`), and
+  one bad line lost every handler of its script. File > Import Stack now
+  rewrites each script that does not compile, leaving strings and
+  comments alone, and keeps the HyperTalk of every object it changes. A
+  handler that still does not compile passes its message, with its
+  HyperTalk commented out inside it to fix by hand. Over 2,186 HyperCard
+  stacks, the handlers lost went from 21.8% to 3.3%, and no script that
+  compiled stopped compiling. The rewritten scripts call a small
+  library, added to the stack as the substack "HyperCard Library" and
+  made its behavior, where HyperCard's Home stack was. File > Import
+  Stack > Make HyperTalk Scripts Compile turns it off.
 
 - **xTalk Chat** (*Development > Plugins > xTalk Chat*): a chat in the
   IDE for the people using xTalk who choose to go online, with public
@@ -1575,7 +1590,20 @@ OXT-Beyond 0.2.7-rc.5, a test release and the last candidate before
   copies of the server and only the first holds the web IDE's port, so
   use the bridge from a regular Claude Desktop chat.
 
-A script sees these differences from 0.2.7-rc.4. On a Mac,
+A script sees these differences from 0.2.7-rc.4. A HyperCard stack
+imported with File > Import Stack (or from a disk image) has rewritten
+scripts, the "HyperCard Library" substack as its behavior, its original
+HyperTalk in `uHyperCard["script"]` of each changed object and a list
+of the changes in the stack's `uHyperCard["scripts"]`, and one more line
+in its hcImportStat; with the menu item off it comes in as before. In
+such a stack, scripts that compiled already change in two ways only: a
+`doMenu` command goes to the stack's own `doMenu` handler (now
+`hcDoMenu`, which never compiled before, so never ran), and
+`the version` reads `2.4.1`, HyperCard's, where it read the engine's.
+Open Stack, `go stack` and `import stack` on a HyperCard file, and stacks
+imported earlier, are unchanged; the IDE loads one more library,
+`revHyperCardScriptLibrary`, whose handlers start with `revHyperCard`.
+On a Mac,
 revcommonlibrary's private `_revEnvironmentPlatform` always says "MacOS
 X", so on macOS 26 the IDE's font helpers return Lucida Grande at 11
 where they threw; on macOS 10 to 15, Windows and Linux nothing changes.
@@ -1588,7 +1616,7 @@ Bridge's server serves however Node.js loads it, unless
 Pull requests
 [#146](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/146)
 to
-[#149](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/149)
+[#150](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/150)
 list every change.
 
 #### 0.2.7-rc.4: Claude in the web IDE, the Extension Manager, and polish

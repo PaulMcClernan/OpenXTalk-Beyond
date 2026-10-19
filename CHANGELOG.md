@@ -19,6 +19,7 @@ words, is in the [README](README.md#the-ide) and on the
 - Standalone Settings: the Web card is whole again on macOS 26 (#147)
 - MCP Bridge: serve when Claude Desktop's own Node.js starts the server (#148)
 - xTalk Chat: a chat in the IDE for xTalk developers who go online (#146)
+- File > Import Stack: HyperTalk that compiles here (#150)
 - Learn: No Cloud Quick Share, Torrent Client and Box2D Platformer, the xTalk Suite's demos (#149)
 - IDE: the About window in the look of Home and Learn (#149)
 - Version 0.2.7-rc.5, with its changelog (#149)
