@@ -83,3 +83,363 @@ end hcCreateMenu
 on hcDeleteMenu pMenu
    return "HyperCard menus are not supported yet"
 end hcDeleteMenu
+
+----------------------------------------------------------------------
+-- Stand-ins for the externals stacks call most
+--
+-- An XCMD or XFCN is 68k code, which this engine cannot run; a call to
+-- one that the stack carried comes here instead. These are the externals
+-- the most stacks of a 2,186-stack corpus call from script, each written
+-- from the way those stacks call it and from the externals' own
+-- documentation, so the less common forms of a call may differ. The
+-- dialogs and menus are this engine's; an external with no counterpart
+-- here (a dialog builder, a resource copier) does nothing and says so in
+-- the result, which is where an XCMD put its error.
+
+local sHCMenuCount
+local sHCBalloons
+
+-- FileName([type, ...] [, prompt]): the path of a file the user picks
+-- (Standard File's open dialog), or empty if they cancel. File types
+-- are four characters; anything longer is taken as the prompt
+function FileName
+   local tPrompt, i
+   put "Choose a file:" into tPrompt
+   repeat with i = 1 to paramCount()
+      if (the number of chars of param(i)) > 4 then put param(i) into tPrompt
+   end repeat
+   answer file tPrompt
+   if the result is "Cancel" then return empty
+   return it
+end FileName
+
+-- NewFileName(prompt, default name): the path the user gives a new file
+-- (Standard File's save dialog), or empty if they cancel
+function NewFileName pPrompt, pDefault
+   if pPrompt is empty then put "Save as:" into pPrompt
+   ask file pPrompt with pDefault
+   if the result is "Cancel" then return empty
+   return it
+end NewFileName
+
+-- PutFile(prompt, default name): the same save dialog
+function PutFile pPrompt, pDefault
+   return NewFileName(pPrompt, pDefault)
+end PutFile
+
+-- PopUpMenu(items, checked item, top, left): a popup menu of the items
+-- (separated by semicolons, else by returns, else by commas) with its top
+-- left at left,top; the number of the item chosen, 0 if none
+function PopUpMenu pItems, pChecked, pTop, pLeft
+   local tItems, tChosen
+   put hcPopUpItems(pItems) into tItems
+   put _HCPopUp(_HCMenuText(tItems, pChecked), pTop, pLeft) into tChosen
+   if tChosen is empty then return 0
+   return _HCLineOf(tChosen, tItems)
+end PopUpMenu
+
+-- HPopUpMenu(menus, checked item, top, left): a popup menu with one
+-- line per entry, and on a line with commas the first item the entry and
+-- the rest its submenu; "line,item" of the choice (item 0 for an entry
+-- with no submenu), 0 if none
+function HPopUpMenu pMenus, pChecked, pTop, pLeft
+   local tText, tLine, tItem, tChosen, tLineNumber, tItemNumber, i
+   repeat for each line tLine in pMenus
+      put item 1 of tLine & return after tText
+      repeat with i = 2 to the number of items of tLine
+         put tab & item i of tLine & return after tText
+      end repeat
+   end repeat
+   delete the last char of tText
+   put _HCPopUp(tText, pTop, pLeft) into tChosen
+   if tChosen is empty then return 0
+   set the itemDelimiter to "|"
+   put item 1 of tChosen into tItem
+   repeat with i = 1 to the number of lines of pMenus
+      if item 1 of line i of pMenus is tItem then
+         put i into tLineNumber
+         exit repeat
+      end if
+   end repeat
+   put 0 into tItemNumber
+   if the number of items of tChosen > 1 then
+      put item 2 of tChosen into tItem
+      set the itemDelimiter to comma
+      repeat with i = 2 to the number of items of line tLineNumber of pMenus
+         if item i of line tLineNumber of pMenus is tItem then
+            put i - 1 into tItemNumber
+            exit repeat
+         end if
+      end repeat
+   end if
+   return tLineNumber & comma & tItemNumber
+end HPopUpMenu
+
+-- The items of a PopUpMenu list, one per line
+function hcPopUpItems pItems
+   if ";" is in pItems then
+      replace ";" with return in pItems
+   else if return is not in pItems then
+      replace comma with return in pItems
+   end if
+   return pItems
+end hcPopUpItems
+
+-- XScrollBox(mode, prompt, list): the user picks a line of the list;
+-- "line number,line" of it, empty if they cancel
+function XScrollBox pMode, pPrompt, pList
+   local tLine
+   put hcChooseLine(pPrompt, pList) into tLine
+   if tLine is empty then return empty
+   return tLine & comma & line tLine of pList
+end XScrollBox
+
+-- ShowList(list, prompt, ...): the user picks a line of the list; the
+-- button ("OK" or "Cancel") on line 1 and the line picked on line 2.
+-- When the second argument is a delimiter, the prompt is the third
+function ShowList pList, pPrompt
+   local tLine
+   if pPrompt is among the items of (return & comma & ";,") or pPrompt is tab then put param(3) into pPrompt
+   put hcChooseLine(pPrompt, pList) into tLine
+   if tLine is empty then return "Cancel"
+   return "OK" & return & line tLine of pList
+end ShowList
+
+-- DoList button, button, list, one: the user picks a line of the list;
+-- the result is "button,line" ("Cancel," if they cancel). DoList 999,
+-- list, ... takes the list second
+on DoList pButton, pCancel, pList
+   local tLine
+   if pButton is a number then
+      put pCancel into pList
+      put "OK" into pButton
+      put "Cancel" into pCancel
+   end if
+   put hcChooseLine(empty, pList) into tLine
+   if tLine is empty then return pCancel & comma
+   return pButton & comma & line tLine of pList
+end DoList
+
+-- PrintField "field description": prints the field's text
+on PrintField pField
+   local tField
+   try
+      put the long id of pField into tField
+   catch tError
+      try
+         put value("the long id of" && pField) into tField
+      catch tError
+         return "Can't find" && pField
+      end try
+   end try
+   try
+      revPrintField tField
+   catch tError
+      return "Printing is not available"
+   end try
+   return empty
+end PrintField
+
+-- Speak text / Talk text, rate, pitch: speech, where this engine has it
+on Speak pText
+   return _HCSpeak(pText)
+end Speak
+
+on Talk pText
+   return _HCSpeak(pText)
+end Talk
+
+-- HCBalloon text: a balloon for the object the message came to, here its
+-- tooltip. HCBalloon "on", "off" and "query" turn balloons on and off and
+-- give back whether they are on
+on HCBalloon pText
+   if sHCBalloons is empty then put true into sHCBalloons
+   switch pText
+      case "on"
+         put true into sHCBalloons
+         return empty
+      case "off"
+         put false into sHCBalloons
+         return empty
+      case "query"
+         return sHCBalloons
+   end switch
+   if sHCBalloons then set the toolTip of the target to pText
+   return empty
+end HCBalloon
+
+-- ColorizeHC: colour drawn over the card, which this engine does with
+-- its own colours (the importer keeps AddColor's as a colour layer)
+on ColorizeHC
+   return empty
+end ColorizeHC
+
+-- MaxDepth(): the deepest colour of the screens
+function MaxDepth
+   return the screenDepth
+end MaxDepth
+
+-- Promptoid message: a small window with the message, which scripts
+-- close as the window "Promptoid"
+on Promptoid pMessage
+   local tDefault
+   put the defaultStack into tDefault
+   if there is not a stack "Promptoid" then
+      create invisible stack "Promptoid"
+      set the destroyStack of it to true
+      set the width of it to 320
+      set the height of it to 60
+      set the defaultStack to "Promptoid"
+      create field "Message"
+      set the rect of it to 10,10,310,50
+      set the lockText of it to true
+      set the defaultStack to tDefault
+   end if
+   put pMessage into field "Message" of stack "Promptoid"
+   palette stack "Promptoid"
+   set the defaultStack to tDefault
+   return empty
+end Promptoid
+
+-- NewMenu(title, items...), DeleteMenu(menu), ShowMenu menu: menus added
+-- to HyperCard's menu bar, which this engine's menus do not take yet.
+-- NewMenu gives back a number for DeleteMenu, as the external did
+function NewMenu
+   add 1 to sHCMenuCount
+   return sHCMenuCount
+end NewMenu
+
+function DeleteMenu pMenu
+   return empty
+end DeleteMenu
+
+on DeleteMenu pMenu
+   return "HyperCard menus are not supported yet"
+end DeleteMenu
+
+on ShowMenu pMenu
+   return "HyperCard menus are not supported yet"
+end ShowMenu
+
+function ShowMenu pMenu
+   return empty
+end ShowMenu
+
+-- Externals with nothing like them here: they do nothing, and say so
+on Dialoger
+   return "The Dialoger external is not supported"
+end Dialoger
+
+function Dialoger
+   return empty
+end Dialoger
+
+on ShowDialog
+   return "The ShowDialog external is not supported"
+end ShowDialog
+
+on ResCopy
+   return "ResCopy is not supported: resources are not copied"
+end ResCopy
+
+function Search
+   return empty
+end Search
+
+-- popUp (called hcX_popUp after the import, since popup is a command
+-- here): the Home stack's popup cards, which are not imported
+on hcX_popUp
+   return "popUp is not supported"
+end hcX_popUp
+
+-- The line of pList the user picks in a list dialog, or empty if they
+-- cancel
+function hcChooseLine pPrompt, pList
+   local tDefault, tLine
+   if pList is empty then return empty
+   put the defaultStack into tDefault
+   if there is a stack "HyperCard List" then delete stack "HyperCard List"
+   create invisible stack "HyperCard List"
+   set the destroyStack of it to true
+   set the title of it to "Choose"
+   set the width of it to 360
+   set the height of it to 300
+   set the defaultStack to "HyperCard List"
+   create field "Prompt"
+   set the rect of it to 10,10,350,34
+   set the lockText of it to true
+   put pPrompt into it
+   create field "List"
+   set the rect of it to 10,40,350,250
+   set the listBehavior of it to true
+   set the lockText of it to true
+   set the vScrollbar of it to true
+   put pList into it
+   set the hilitedLine of it to 1
+   create button "OK"
+   set the rect of it to 270,262,350,288
+   set the script of it to "on mouseUp" & return & "set the uChosen of this stack to the hilitedLine of field " & quote & "List" & quote & return & "close this stack" & return & "end mouseUp"
+   create button "Cancel"
+   set the rect of it to 180,262,260,288
+   set the script of it to "on mouseUp" & return & "close this stack" & return & "end mouseUp"
+   set the defaultButton of button "OK" to true
+   set the defaultStack to tDefault
+   modal stack "HyperCard List"
+   if there is a stack "HyperCard List" then
+      put the uChosen of stack "HyperCard List" into tLine
+      delete stack "HyperCard List"
+   end if
+   return tLine
+end hcChooseLine
+
+private function _HCMenuText pItems, pChecked
+   if pChecked is an integer and abs(pChecked) > 0 and abs(pChecked) <= the number of lines of pItems then
+      put "!c" before line abs(pChecked) of pItems
+   end if
+   return pItems
+end _HCMenuText
+
+private function _HCLineOf pChosen, pItems
+   local tLine, i
+   put 0 into i
+   repeat for each line tLine in pItems
+      add 1 to i
+      if tLine is pChosen or (char 1 to 2 of tLine is "!c" and char 3 to -1 of tLine is pChosen) then return i
+   end repeat
+   return 0
+end _HCLineOf
+
+-- Shows pText as a popup menu with its top left at pLeft,pTop (the mouse
+-- if they are left out); the item chosen, or empty
+private function _HCPopUp pText, pTop, pLeft
+   local tDefault, tChosen
+   put the defaultStack into tDefault
+   if there is not a stack "HyperCard Popup" then
+      create invisible stack "HyperCard Popup"
+      set the destroyStack of it to true
+      create button "Menu" in it
+      set the style of button "Menu" of stack "HyperCard Popup" to "menu"
+      set the menuMode of button "Menu" of stack "HyperCard Popup" to "popup"
+      set the menuMouseButton of button "Menu" of stack "HyperCard Popup" to 0
+      set the script of button "Menu" of stack "HyperCard Popup" to "on menuPick pItem" & return & "set the uChosen of me to pItem" & return & "end menuPick"
+   end if
+   set the defaultStack to tDefault
+   set the text of button "Menu" of stack "HyperCard Popup" to pText
+   set the uChosen of button "Menu" of stack "HyperCard Popup" to empty
+   if pTop is an integer and pLeft is an integer then
+      popup button "Menu" of stack "HyperCard Popup" at pLeft, pTop
+   else
+      popup button "Menu" of stack "HyperCard Popup"
+   end if
+   put the uChosen of button "Menu" of stack "HyperCard Popup" into tChosen
+   return tChosen
+end _HCPopUp
+
+private function _HCSpeak pText
+   try
+      revSpeak pText
+   catch tError
+      return "Speech is not available"
+   end try
+   return the result
+end _HCSpeak
