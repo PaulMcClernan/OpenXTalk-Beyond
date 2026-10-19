@@ -147,10 +147,10 @@ on preOpenStack
       end if
       acBuild
       acPlace
-      set the itemDelimiter to "|"
+      -- (revAcademyShow's course|lesson, or the place, course,lesson)
+      replace "|" with comma in tWant
       put item 2 of tWant into tLesson
       put item 1 of tWant into tWant
-      set the itemDelimiter to comma
       acGoTo tWant, tLesson, true
       -- (a script-only stack is made invisible when it is loaded)
       show me
@@ -3174,6 +3174,9 @@ private function acRunCode pCode, pStage
    end if
    set the defaultStack to kStage
    put true into sRunning
+   -- (while the run lasts, a wait in a loop does not restart its clock;
+   -- after it, a pause between clicks on the stage does)
+   set the cAcademyRunning of stack kStage to true
    put the milliseconds into tStart
    try
       send kRunHandler to stack kStage
@@ -3181,6 +3184,9 @@ private function acRunCode pCode, pStage
    catch tError
       put acRunError(tError) into tRun
    end try
+   if there is a stack kStage then
+      set the cAcademyRunning of stack kStage to false
+   end if
    put the milliseconds - tStart into tRun["ms"]
    put false into sRunning
    acRestore tSaved
@@ -3311,13 +3317,16 @@ private function acHandlerName pLine
    return empty
 end acHandlerName
 
--- A handler's name without the "(" a function's name may have stuck to it
+-- A handler's name without the "(" a function's name may have stuck to
+-- it, or the "[" of a custom property's key (getProp score[pPlayer])
 private function acBareName pWord
-   local tParen
-   put offset("(", pWord) into tParen
-   if tParen > 0 then
-      delete char tParen to -1 of pWord
-   end if
+   local tCut, tChar
+   repeat for each item tChar in "(,["
+      put offset(tChar, pWord) into tCut
+      if tCut > 0 then
+         delete char tCut to -1 of pWord
+      end if
+   end repeat
    return pWord
 end acBareName
 
@@ -3394,7 +3403,7 @@ private function acHelperScript
          "command academyGuard" & return & \
          "   local tNow" & return & \
          "   put the milliseconds into tNow" & return & \
-         "   if tNow - sAcademyLast > 1000 then put tNow into sAcademyStart" & return & \
+         "   if tNow - sAcademyLast > 1000 and the cAcademyRunning of me is not true then put tNow into sAcademyStart" & return & \
          "   put tNow into sAcademyLast" & return & \
          "   if tNow - sAcademyStart > " & kLoopSeconds * 1000 & " then throw " & quote & "academy-loop" & quote & return & \
          "end academyGuard" & return & \
