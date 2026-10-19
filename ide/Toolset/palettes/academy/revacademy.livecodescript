@@ -51,8 +51,10 @@ constant kSide = 248
 constant kPlay = 452
 constant kWidth = 1280
 constant kHeight = 800
-constant kMinWidth = 1100
-constant kMinHeight = 660
+constant kMinWidth = 1000
+constant kMinHeight = 620
+constant kMinPlay = 380
+constant kMaxPlay = 680
 constant kHeaderHeight = 92
 constant kPad = 36
 constant kColumn = 640
@@ -1010,7 +1012,7 @@ private command acLayout
    set the top of field "navCount" to tH - 60 - kTextInset
    set the top of field "navKeys" to tH - 43 - kTextInset
    -- the playground, at the right
-   put tW - kPlay into tX
+   put tW - acPlay() into tX
    set the rect of group "play" to tX, 0, tW, tH
    set the rect of graphic "playBg" to tX, 0, tW, tH
    lkGradientPoints the long id of graphic "playBg", tX & ",0", tX & "," & tH
@@ -1037,6 +1039,8 @@ private command acLayout
       put the right of group "run" + 14 into tMid
    end if
    set the rect of field "runKeys" to tMid, tY + 9 - kTextInset, the left of group "reset" - 8, tY + 26
+   -- (in a narrow window, the hint goes rather than show half of itself)
+   set the visible of field "runKeys" to the formattedWidth of field "runKeys" <= the width of field "runKeys"
    put tY + 48 into tY
    set the rect of graphic "outBg" to tX + 18, tY, tW - 18, tH - 18
    set the topLeft of field "outWord" to tX + 34, tY + 12 - kTextInset
@@ -1061,10 +1065,16 @@ private command acLayout
    acRestore tSaved
 end acLayout
 
+-- The playground's width: kPlay at the window's first size, and a share
+-- of what the window gains or loses from there, within bounds
+private function acPlay
+   return max(kMinPlay, min(kMaxPlay, kPlay + round((sWidth - kWidth) * 0.44)))
+end acPlay
+
 -- The page's column: its left (sX) and width (sColW)
 private command acColumn
    local tRoom
-   put sWidth - kPlay - kSide - 2 * kPad into tRoom
+   put sWidth - acPlay() - kSide - 2 * kPad into tRoom
    put min(kColumn, tRoom) into sColW
    put kSide + kPad + (tRoom - sColW) div 2 into sX
 end acColumn
@@ -1261,13 +1271,23 @@ private command acShow pCourse, pLesson, pEffect, pFirst
       exit acShow
    end if
    acKeepDraft
+   -- (a course not visited yet opens at its first page)
+   if pLesson is not an integer or pLesson < 0 then
+      put 0 into pLesson
+   end if
+   -- (what the last lesson's code made does not stay over the next one)
+   if pCourse is not sCourse or pLesson is not sLesson[sCourse] then
+      if sRunning is not true then
+         acCloseStage
+      end if
+   end if
    put pCourse into sCourse
    put pLesson into sLesson[pCourse]
    put empty into sChallenge
    put the defaultStack into tSaved
    set the defaultStack to the short name of me
    if not pFirst then
-      lock screen for visual effect in rect lkR(kSide, 0, sWidth - kPlay, sHeight)
+      lock screen for visual effect in rect lkR(kSide, 0, sWidth - acPlay(), sHeight)
    end if
    acSyncSide
    acRender
@@ -1486,8 +1506,8 @@ private command acToast pText, pKind
    lock screen
    put pText into field "toast_label"
    lkIconInk the long id of image "toast_icon", tIcon, tColor
-   put min(sWidth - kPlay - kSide - 40, the formattedWidth of field "toast_label" + 62) into tWidth
-   put kSide + (sWidth - kPlay - kSide - tWidth) div 2 into tLeft
+   put min(sWidth - acPlay() - kSide - 40, the formattedWidth of field "toast_label" + 62) into tWidth
+   put kSide + (sWidth - acPlay() - kSide - tWidth) div 2 into tLeft
    put sHeight - 64 into tTop
    set the rect of group "toast" to tLeft, tTop, tLeft + tWidth, tTop + 40
    set the rect of graphic "toast_bg" to tLeft, tTop, tLeft + tWidth, tTop + 40
@@ -1683,11 +1703,11 @@ private command acHeader pTitle, pTag
    local tSize
    if pTitle is empty then
       hide group "hdr"
-      set the rect of group "body" to kSide, 0, sWidth - kPlay, sHeight
+      set the rect of group "body" to kSide, 0, sWidth - acPlay(), sHeight
       exit acHeader
    end if
    show group "hdr"
-   set the rect of group "body" to kSide, kHeaderHeight, sWidth - kPlay, sHeight
+   set the rect of group "body" to kSide, kHeaderHeight, sWidth - acPlay(), sHeight
    put pTitle into field "hdrTitle"
    -- (a long title is set smaller, to stay on one line)
    put 26 into tSize
