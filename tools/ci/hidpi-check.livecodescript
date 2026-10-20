@@ -25,7 +25,11 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- with those places. Then it turns usePixelScaling off, logs the screen
 -- again and quits.
 
-constant kText = "The quick brown fox jumps over the lazy dog WM"
+-- No spaces: a field draws a line in pieces between its spaces, each where
+-- measuring puts it, so a line with spaces ends where it was measured even
+-- when each piece is drawn wider (its spaces shrink instead). Without them
+-- the line is one piece, and its glyphs end where the drawing font puts them.
+constant kText = "Thequickbrownfoxjumpsoverthelazydog0123456789WM"
 
 command logLine pText
    put pText & return after URL ("binfile:" & $OXT_HIDPI_LOG)
@@ -82,7 +86,7 @@ command runCheck
          set the textSize of tField to tSize
          set the textColor of tField to "black"
          set the rect of tField to 48, tTop, 636, tTop + 26
-         put kText into tField
+         put kText into field ("F" & tCount)
          add 30 to tTop
       end repeat
    end repeat
