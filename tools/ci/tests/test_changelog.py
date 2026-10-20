@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
 
-"""tools/ci/changelog.py, the changelog fragments of changelog.d/: the
+"""tools/ci/changelog.py, the changelog fragments of changelog/: the
 check CI makes on them, and folding them into CHANGELOG.md, on made-up
 repositories (and the check on this one).
 

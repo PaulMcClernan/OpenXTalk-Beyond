@@ -65,7 +65,7 @@ def ignored(patterns, path):
 
 def repo_files():
     out = []
-    for top in ('.github', 'tools', 'changelog.d'):
+    for top in ('.github', 'tools', 'changelog'):
         for root, dirs, files in os.walk(os.path.join(REPO, top)):
             dirs[:] = [d for d in dirs if d != '__pycache__']
             for f in files:

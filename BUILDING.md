@@ -2224,7 +2224,7 @@ it.
    Fold the pull requests' changelog fragments into the "Unreleased"
    section of [CHANGELOG.md](CHANGELOG.md) with
    `python3 tools/ci/changelog.py fold`, which deletes them
-   ([changelog.d/README.md](changelog.d/README.md)), then make that
+   ([changelog/README.md](changelog/README.md)), then make that
    section the version's, at the top of CHANGELOG.md, with one line per
    commit since the previous release and the number of the pull request
    that brought it in:

@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
 
-"""The changelog fragments of changelog.d/, and folding them into
+"""The changelog fragments of changelog/, and folding them into
 CHANGELOG.md.
 
   python3 tools/ci/changelog.py check
@@ -25,7 +25,7 @@ Every pull request used to add its lines to the end of the "Unreleased"
 section of CHANGELOG.md, so each merge left every other open pull request
 in conflict on that one file, and the merge of main that settled it built
 all three platforms again. Now a pull request writes its lines to a file
-of its own, changelog.d/<name>.md (any name no other pull request uses:
+of its own, changelog/<name>.md (any name no other pull request uses:
 its branch's, or its number once it has one), in CHANGELOG.md's own form,
 one "- " line per change ending with the pull request's number:
 
@@ -42,7 +42,7 @@ release's section when there is none), in the order the fragments came
 into the repository (the commit that added each, from git; by name when
 git cannot tell, as in a shallow clone), and deletes the fragments. So
 CHANGELOG.md reads exactly as it did when the lines were added to it by
-hand. changelog.d/README.md is not a fragment. Only the Python 3 standard
+hand. changelog/README.md is not a fragment. Only the Python 3 standard
 library is used.
 """
 
@@ -53,7 +53,7 @@ import sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 CHANGELOG = 'CHANGELOG.md'
-FRAGMENTS = 'changelog.d'
+FRAGMENTS = 'changelog'
 README = 'README.md'
 UNRELEASED = '## Unreleased'
 
