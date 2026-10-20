@@ -98,13 +98,15 @@ on:
     branches: [ main ]
     paths-ignore: &build-paths-ignore
       # Nothing that goes into this platform's build, packages or checks:
-      # the Markdown files at the top of the repository, GitHub's issue
-      # and pull request forms, the workflows and scripts that build
-      # nothing (screenshots branch, release, runtimes, tagging, checks by
-      # hand, the CI checks), and what only the other platforms' builds
-      # use. A file that is not listed builds; tools/ci/tests checks that
-      # no file a build workflow names is listed in its own list.
+      # the Markdown files at the top of the repository, the changelog
+      # fragments (changelog.d), GitHub's issue and pull request forms,
+      # the workflows and scripts that build nothing (screenshots branch,
+      # release, runtimes, tagging, checks by hand, the CI checks), and
+      # what only the other platforms' builds use. A file that is not
+      # listed builds; tools/ci/tests checks that no file a build workflow
+      # names is listed in its own list.
       - '*.md'
+      - 'changelog.d/**'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/pull_request_template.md'
       - '.github/workflows/ci-checks.yml'
@@ -116,6 +118,7 @@ on:
       - '.github/workflows/runtimes.yml'
       - '.github/workflows/tag-release.yml'
       - '.github/workflows/ui-tour.yml'
+      - 'tools/ci/changelog.py'
       - 'tools/ci/ide_screenshots_branch.py'
       - 'tools/ci/release_assets.py'
       - 'tools/ci/release_notes.py'
