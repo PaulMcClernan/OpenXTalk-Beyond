@@ -74,6 +74,34 @@ static void lnx_pango_reset_matrix(void)
 	pango_context_set_matrix(s_pango, &t_identity);
 }
 
+// OXT-Beyond: [[ HiDPI ]] For a transform that scales uniformly, without
+// rotation or skew, and not by 1: a copy of the font at the scaled size (the
+// caller frees it) and the scale. Else nil, and the text takes the old path.
+// Drawing and measuring both use it, so text is measured at the size it is
+// drawn: Pango rounds each glyph's advance to a whole pixel, so the font at
+// twice the size is not twice as wide, and a width measured at the unscaled
+// size put the caret and the next run of text up to a point per character
+// away from the glyphs drawn at the scaled size.
+static PangoFontDescription *lnx_pango_copy_scaled_font(const MCGFont &p_font, const MCGAffineTransform &p_transform, MCGFloat &r_scale)
+{
+	if (p_transform . b != 0 || p_transform . c != 0 ||
+		p_transform . a != p_transform . d || p_transform . a <= 0 || p_transform . a == 1)
+		return nil;
+
+	PangoFontDescription *t_scaled_font;
+	t_scaled_font = pango_font_description_copy((PangoFontDescription *) p_font . fid);
+	if (t_scaled_font == nil)
+		return nil;
+
+	r_scale = p_transform . a;
+	if (pango_font_description_get_size_is_absolute(t_scaled_font))
+		pango_font_description_set_absolute_size(t_scaled_font, pango_font_description_get_size(t_scaled_font) * r_scale);
+	else
+		pango_font_description_set_size(t_scaled_font, gint(pango_font_description_get_size(t_scaled_font) * r_scale + 0.5));
+
+	return t_scaled_font;
+}
+
 static bool lnx_pango_objects_initialize()
 {
     bool t_success;
@@ -178,23 +206,14 @@ void MCGContextDrawPlatformText(MCGContextRef self, const unichar_t *p_text, uin
 	t_location = p_location;
 	PangoFontDescription *t_scaled_font;
 	t_scaled_font = nil;
-	if (t_success && t_transform . b == 0 && t_transform . c == 0 &&
-		t_transform . a == t_transform . d && t_transform . a > 0 && t_transform . a != 1)
+	MCGFloat t_scale;
+	t_scale = 1;
+	if (t_success)
+		t_scaled_font = lnx_pango_copy_scaled_font(p_font, t_transform, t_scale);
+	if (t_scaled_font != nil)
 	{
-		MCGFloat t_scale;
-		t_scale = t_transform . a;
-
-		t_scaled_font = pango_font_description_copy((PangoFontDescription *) p_font . fid);
-		if (t_scaled_font != nil)
-		{
-			if (pango_font_description_get_size_is_absolute(t_scaled_font))
-				pango_font_description_set_absolute_size(t_scaled_font, pango_font_description_get_size(t_scaled_font) * t_scale);
-			else
-				pango_font_description_set_size(t_scaled_font, gint(pango_font_description_get_size(t_scaled_font) * t_scale + 0.5));
-
-			t_transform = MCGAffineTransformMakeTranslation(t_transform . tx, t_transform . ty);
-			t_location = MCGPointMake(p_location . x * t_scale, p_location . y * t_scale);
-		}
+		t_transform = MCGAffineTransformMakeTranslation(t_transform . tx, t_transform . ty);
+		t_location = MCGPointMake(p_location . x * t_scale, p_location . y * t_scale);
 	}
 
 	PangoLayoutLine *t_line;
@@ -326,12 +345,31 @@ MCGFloat __MCGContextMeasurePlatformText(MCGContextRef self, const unichar_t *p_
 		// OXT-Beyond: from Tom Perry's OpenXTalk Lite 7 engine.
 		lnx_pango_reset_matrix();
 
+		// OXT-Beyond: [[ HiDPI ]] Text that is drawn scaled (a HiDPI
+		// window's backing scale, or a stack's scaleFactor) is measured at
+		// the size it is drawn, and the width given back in logical units,
+		// as the transform's contract asks (MM-2014-04-16: [[ Bug 11964 ]]).
+		// At a scale of 1 it is measured as it always was.
+		PangoFontDescription *t_scaled_font;
+		MCGFloat t_scale;
+		t_scale = 1;
+		t_scaled_font = lnx_pango_copy_scaled_font(p_font, p_transform, t_scale);
+
 		pango_layout_set_text(s_layout, t_text, -1);
-		pango_layout_set_font_description(s_layout, (PangoFontDescription *) p_font . fid);
+		pango_layout_set_font_description(s_layout, t_scaled_font != nil ? t_scaled_font : (PangoFontDescription *) p_font . fid);
 		
 		PangoRectangle t_bounds;
-		pango_layout_get_pixel_extents(s_layout, NULL, &t_bounds);
-		t_width = t_bounds . width;
+		if (t_scaled_font != nil)
+		{
+			pango_layout_get_extents(s_layout, NULL, &t_bounds);
+			t_width = t_bounds . width / (MCGFloat(PANGO_SCALE) * t_scale);
+			pango_font_description_free(t_scaled_font);
+		}
+		else
+		{
+			pango_layout_get_pixel_extents(s_layout, NULL, &t_bounds);
+			t_width = t_bounds . width;
+		}
 	}
 	
 	MCCStringFree(t_text);
