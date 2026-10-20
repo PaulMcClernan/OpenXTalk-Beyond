@@ -612,7 +612,12 @@ callbacks. A native library built for a desktop system cannot be loaded.
 revDB with its SQLite driver work as on the desktop, on the files of the
 engine's file system. Include them as on the desktop, on the
 **Inclusions** pane or by letting the builder search for them. A database
-in the home folder is kept between visits, as any file there is.
+in the home folder is kept between visits, as any file there is: it is
+written to the browser's storage moments after it changes, and when the
+page is hidden or closed, so a change committed just before the browser
+ends the page can be lost; SQLite's journal keeps the database whole.
+(Until 0.2.7-rc.6, each commit waited for the browser's storage, which
+made Safari reload a page that used SQLite.)
 * **Encryption.** `encrypt` and `decrypt`, with a cipher or with RSA
 keys, and `the cipherNames` work as on the desktop: the engine has OpenSSL
 in it, so the **SSL & Encryption** inclusion is not needed. It has every
