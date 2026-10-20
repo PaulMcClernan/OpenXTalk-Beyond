@@ -100,7 +100,7 @@
 									# for it (engine/src/em-system.js), so that
 									# the engine never suspends inside SQLite
 									# and SQLite is left out of Asyncify
-									# (util/emscripten-asyncify-remove.json)
+									# (util/emscripten-javascriptify.py)
 									'defines':
 									[
 										'fdatasync=MCEmscriptenStorageSync',
