@@ -34,6 +34,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "lnxdc.h"
 #include "lnxmplayer.h"
+#include "graphics_util.h"
 
 #include <sys/stat.h>
 #include <poll.h>
@@ -212,6 +213,17 @@ bool MPlayer::launch_player(void)
 
 
 
+// OXT-Beyond: [[ HiDPI ]] A rect in the stack's coords in its window's pixels:
+// scaled by the window's backing scale, which is 1 unless the desktop scales.
+static MCRectangle MCPlayerRectInWindow(MCStack *p_stack, const MCRectangle &p_rect)
+{
+	MCGFloat t_scale;
+	t_scale = p_stack != nil ? p_stack->view_getbackingscale() : 1.0;
+	if (t_scale == 1.0)
+		return p_rect;
+	return MCRectangleGetScaledFloorRect(p_rect, t_scale);
+}
+
 bool MPlayer::init(const char * p_filename, MCStack *p_stack, MCRectangle p_rect )
 {
 	
@@ -228,12 +240,16 @@ bool MPlayer::init(const char * p_filename, MCStack *p_stack, MCRectangle p_rect
 	if ( stack_window == DNULL)
 		return false ;
 	
+    // OXT-Beyond: [[ HiDPI ]] The player's rect in its window's pixels
+    MCRectangle t_rect;
+    t_rect = MCPlayerRectInWindow(p_stack, p_rect);
+    
     GdkWindowAttr t_wa;
     t_wa.colormap = ((MCScreenDC*)MCscreen)->getcmapnative();
-    t_wa.x = p_rect.x;
-    t_wa.y = p_rect.y;
-    t_wa.width = p_rect.width;
-    t_wa.height = p_rect.height;
+    t_wa.x = t_rect.x;
+    t_wa.y = t_rect.y;
+    t_wa.width = t_rect.width;
+    t_wa.height = t_rect.height;
     t_wa.event_mask = 0;
     t_wa.wclass = GDK_INPUT_OUTPUT;
     t_wa.visual = ((MCScreenDC*)MCscreen)->getvisual();
@@ -299,7 +315,9 @@ void MPlayer::resize( MCRectangle p_rect)
 	if ( m_window == DNULL)
 		return ;
 	
-    gdk_window_move_resize(m_window, p_rect.x, p_rect.y, p_rect.width, p_rect.height);
+    MCRectangle t_rect;
+    t_rect = MCPlayerRectInWindow(m_stack, p_rect);
+    gdk_window_move_resize(m_window, t_rect.x, t_rect.y, t_rect.width, t_rect.height);
 	m_player_rect = p_rect ;
 }
 

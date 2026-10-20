@@ -40,6 +40,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "lnxdc.h"
 #include "lnximagecache.h"
+#include "graphics_util.h"
 
 #include "license.h"
 #include "revbuild.h"
@@ -252,6 +253,10 @@ Boolean MCScreenDC::open()
     
     GdkScreen *t_screen;
     t_screen = gdk_display_get_default_screen(dpy);
+    
+    // OXT-Beyond: [[ HiDPI ]] Read the desktop's scale before any window is
+    // made (MCResInitPixelScaling, which runs after this, depends on it).
+    MCLinuxReadDesktopScale(dpy);
     
     {
         MCAutoStringRef t_displayname;
@@ -627,10 +632,14 @@ void MCScreenDC::ungrabpointer()
 	gdk_display_pointer_ungrab(dpy, MCeventtime);
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] The screen's width in logical coords (as on Windows)
 uint16_t MCScreenDC::platform_getwidth(void)
 {
-	return device_getwidth();
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == 1.0)
+		return device_getwidth();
+	return (uint16_t)(device_getwidth() / t_scale);
 }
 
 uint16_t MCScreenDC::device_getwidth(void)
@@ -638,10 +647,14 @@ uint16_t MCScreenDC::device_getwidth(void)
 	return gdk_screen_get_width(getscreen());
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] The screen's height in logical coords (as on Windows)
 uint16_t MCScreenDC::platform_getheight(void)
 {
-	return device_getheight();
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == 1.0)
+		return device_getheight();
+	return (uint16_t)(device_getheight() / t_scale);
 }
 
 uint16_t MCScreenDC::device_getheight(void)
@@ -788,10 +801,13 @@ Pixmap MCScreenDC::createpixmap(uint2 width, uint2 height,
 	return pm;
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] The window's geometry in logical coords
 bool MCScreenDC::platform_getwindowgeometry(Window w, MCRectangle &r_rect)
 {
-	return device_getwindowgeometry(w, r_rect);
+	if (!device_getwindowgeometry(w, r_rect))
+		return false;
+	r_rect = screentologicalrect(r_rect);
+	return true;
 }
 
 bool MCScreenDC::device_getwindowgeometry(Window w, MCRectangle &drect)
@@ -1066,6 +1082,22 @@ MCImageBitmap *MCScreenDC::snapshot(MCRectangle &r, uint4 window, MCStringRef di
     
     // Ensure that we are up-to-date with the window server
     gdk_display_sync(t_display);
+    
+    // OXT-Beyond: [[ HiDPI ]] A rectangle (of the screen or of the window) or
+    // a point is given in logical coords: take that area at the screen's
+    // pixels.
+    if (r.x != -32768)
+    {
+        if (r.width != 0 && r.height != 0)
+            r = logicaltoscreenrect(r);
+        else
+        {
+            MCPoint t_point;
+            t_point = logicaltoscreenpoint(MCPointMake(r.x, r.y));
+            r.x = t_point.x;
+            r.y = t_point.y;
+        }
+    }
     
     // Are we going to display a selection rectangle?
     if (window == 0 && r.x == -32768)

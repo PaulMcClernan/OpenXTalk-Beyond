@@ -48,8 +48,13 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 //#include <X11/extensions/Xinerama.h>
 
 #include "graphics_util.h"
+#include "resolution.h"
+#include "stacklst.h"
 #include <fontconfig/fontconfig.h>
 #include "font.h"
+
+#include <math.h>
+#include <stdlib.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -307,9 +312,26 @@ bool MCScreenDC::apply_partial_struts(MCDisplay *p_displays, uint32_t p_display_
 }
 
 // IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] The displays in logical coords, each with the
+// desktop's scale, on a desktop that scales; unchanged where it does not.
 bool MCScreenDC::platform_getdisplays(bool p_effective, MCDisplay *&r_displays, uint32_t &r_display_count)
 {
-	return device_getdisplays(p_effective, r_displays, r_display_count);
+	if (!device_getdisplays(p_effective, r_displays, r_display_count))
+		return false;
+
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale != 1.0)
+	{
+		for (uint32_t i = 0; i < r_display_count; i++)
+		{
+			r_displays[i].pixel_scale = t_scale;
+			r_displays[i].viewport = screentologicalrect(r_displays[i].viewport);
+			r_displays[i].workarea = screentologicalrect(r_displays[i].workarea);
+		}
+	}
+
+	return true;
 }
 
 // IM-2014-01-29: [[ HiDPI ]] Refactored to handle display info caching in MCUIDC superclass
@@ -387,28 +409,45 @@ MCPrinter *MCScreenDC::createprinter(void)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] The conversions as on Windows (w32dc.cpp), at the
+// desktop's scale. At a scale of 1 each returns its input untouched, so a
+// desktop that does not scale sees exactly the coordinates it saw before.
 MCPoint MCScreenDC::logicaltoscreenpoint(const MCPoint &p_point)
 {
-	return p_point;
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == 1.0)
+		return p_point;
+	return MCPointTransform(p_point, MCGAffineTransformMakeScale(t_scale, t_scale));
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
 MCPoint MCScreenDC::screentologicalpoint(const MCPoint &p_point)
 {
-	return p_point;
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == 1.0)
+		return p_point;
+	return MCPointTransform(p_point, MCGAffineTransformMakeScale(1 / t_scale, 1 / t_scale));
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
 MCRectangle MCScreenDC::logicaltoscreenrect(const MCRectangle &p_rect)
 {
-	return p_rect;
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == 1.0)
+		return p_rect;
+	// The scaled floor and ceiling functions, as on Windows (IM-2014-04-21:
+	// [[ Bug 12236 ]]), give the same width and height wherever the rect is.
+	return MCRectangleGetScaledFloorRect(p_rect, t_scale);
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
 MCRectangle MCScreenDC::screentologicalrect(const MCRectangle &p_rect)
 {
-	return p_rect;
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == 1.0)
+		return p_rect;
+	return MCRectangleGetScaledCeilingRect(p_rect, 1 / t_scale);
 }
 
 bool MCScreenDC::platform_get_display_handle(void *&r_display)
@@ -430,19 +469,330 @@ void MCResPlatformInitPixelScaling(void)
 {
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Pixel scaling not supported on Linux
+////////////////////////////////////////////////////////////////////////////////
+
+// OXT-Beyond: [[ HiDPI ]] Linux had no pixel scaling (IM-2014-01-29), so on a
+// HiDPI screen every stack, the IDE included, came out at half the size of the
+// rest of the desktop: a GTK 2 program is not scaled by GTK, and a compositor
+// that leaves X11 programs to scale themselves (GNOME on Wayland with the
+// xwayland-native-scaling feature, KDE, a plain X11 HiDPI desktop) leaves the
+// window's pixels as they are. Now the engine scales its windows itself, the
+// way it does on Windows: the pixelScale stays 1, the stacks keep their
+// logical coordinates, and each window is drawn into a backing buffer at the
+// desktop's scale.
+//
+// The scale is the one a GTK 3 program (HyperXTalk, say) uses: GDK_SCALE when
+// it is set, else the desktop's Gdk/WindowScalingFactor XSETTING. With no
+// XSETTINGS manager (a bare X11 window manager), an Xft.dpi resource of 168
+// or more (twice 96, less a margin) gives its whole multiple of 96. Only whole
+// scales are used, as GTK 3 does; a desktop at 1 (and every desktop with
+// GDK_SCALE=1) keeps the old behaviour exactly, usePixelScaling false and not
+// settable included, as before.
+
+static int s_linux_desktop_scale = 1;
+
+// The logical-to-screen scale the open windows and MCwbr were last set up at
+static MCGFloat s_linux_applied_scale = 1.0;
+
+// The desktop scales above this are not believed (GTK 3 has no limit; a scale
+// of 9 on a real screen would leave a window a handful of controls across).
+#define MAX_DESKTOP_SCALE 8
+
+static bool MCLinuxScaleFromString(const char *p_string, int &r_scale)
+{
+	if (p_string == nil || *p_string == '\0')
+		return false;
+
+	char *t_end;
+	long t_value;
+	t_value = strtol(p_string, &t_end, 10);
+	if (*t_end != '\0' || t_value < 1 || t_value > MAX_DESKTOP_SCALE)
+		return false;
+
+	r_scale = (int)t_value;
+	return true;
+}
+
+static uint32_t MCLinuxXSettingsCard32(const uint8_t *p_data, bool p_msb_first)
+{
+	if (p_msb_first)
+		return (uint32_t(p_data[0]) << 24) | (uint32_t(p_data[1]) << 16) | (uint32_t(p_data[2]) << 8) | uint32_t(p_data[3]);
+	return (uint32_t(p_data[3]) << 24) | (uint32_t(p_data[2]) << 16) | (uint32_t(p_data[1]) << 8) | uint32_t(p_data[0]);
+}
+
+static uint16_t MCLinuxXSettingsCard16(const uint8_t *p_data, bool p_msb_first)
+{
+	if (p_msb_first)
+		return uint16_t((p_data[0] << 8) | p_data[1]);
+	return uint16_t((p_data[1] << 8) | p_data[0]);
+}
+
+static inline size_t MCLinuxXSettingsPad(size_t p_length)
+{
+	return (p_length + 3) & ~size_t(3);
+}
+
+// Find the integer setting p_name in an _XSETTINGS_SETTINGS property (the
+// XSETTINGS specification, version 0.5). Returns false when it is not there or
+// the property is malformed.
+static bool MCLinuxXSettingsFindInteger(const uint8_t *p_data, size_t p_length, const char *p_name, int32_t &r_value)
+{
+	if (p_length < 12)
+		return false;
+
+	bool t_msb_first;
+	t_msb_first = p_data[0] != 0;
+
+	uint32_t t_count;
+	t_count = MCLinuxXSettingsCard32(p_data + 8, t_msb_first);
+
+	size_t t_name_length;
+	t_name_length = strlen(p_name);
+
+	size_t t_offset = 12;
+	for (uint32_t i = 0; i < t_count; i++)
+	{
+		if (p_length - t_offset < 4)
+			return false;
+
+		uint8_t t_type;
+		t_type = p_data[t_offset];
+
+		size_t t_length;
+		t_length = MCLinuxXSettingsCard16(p_data + t_offset + 2, t_msb_first);
+		t_offset += 4;
+		if (p_length - t_offset < MCLinuxXSettingsPad(t_length) + 4)
+			return false;
+
+		bool t_match;
+		t_match = t_length == t_name_length && memcmp(p_data + t_offset, p_name, t_length) == 0;
+		t_offset += MCLinuxXSettingsPad(t_length) + 4; // the name, then its last-change serial
+
+		switch (t_type)
+		{
+			case 0: // XSettingsTypeInteger
+				if (p_length - t_offset < 4)
+					return false;
+				if (t_match)
+				{
+					r_value = (int32_t)MCLinuxXSettingsCard32(p_data + t_offset, t_msb_first);
+					return true;
+				}
+				t_offset += 4;
+				break;
+
+			case 1: // XSettingsTypeString
+				if (p_length - t_offset < 4)
+					return false;
+				t_length = MCLinuxXSettingsCard32(p_data + t_offset, t_msb_first);
+				t_offset += 4;
+				if (p_length - t_offset < MCLinuxXSettingsPad(t_length))
+					return false;
+				t_offset += MCLinuxXSettingsPad(t_length);
+				break;
+
+			case 2: // XSettingsTypeColor
+				if (p_length - t_offset < 8)
+					return false;
+				t_offset += 8;
+				break;
+
+			default:
+				return false;
+		}
+	}
+
+	return false;
+}
+
+// Read the desktop's XSETTINGS. r_has_manager says whether an XSETTINGS
+// manager runs at all; r_scale is set only when it publishes
+// Gdk/WindowScalingFactor.
+static void MCLinuxReadXSettingsScale(GdkDisplay *p_display, bool &r_has_manager, int &r_scale, bool &r_has_scale)
+{
+	r_has_manager = false;
+	r_has_scale = false;
+
+	x11::Display *t_xdisplay;
+	t_xdisplay = x11::gdk_x11_display_get_xdisplay(p_display);
+
+	char t_selection_name[32];
+	snprintf(t_selection_name, sizeof(t_selection_name), "_XSETTINGS_S%d", gdk_screen_get_number(gdk_display_get_default_screen(p_display)));
+
+	x11::Atom t_selection;
+	t_selection = x11::gdk_x11_atom_to_xatom_for_display(p_display, gdk_atom_intern(t_selection_name, FALSE));
+
+	x11::Window t_manager;
+	t_manager = x11::XGetSelectionOwner(t_xdisplay, t_selection);
+	if (t_manager == None)
+		return;
+
+	r_has_manager = true;
+
+	x11::Atom t_settings;
+	t_settings = x11::gdk_x11_atom_to_xatom_for_display(p_display, gdk_atom_intern_static_string("_XSETTINGS_SETTINGS"));
+
+	x11::Atom t_type;
+	int t_format;
+	unsigned long t_count, t_after;
+	uint8_t *t_data = nil;
+
+	// The manager can exit between the two calls: trap the BadWindow.
+	gdk_error_trap_push();
+	int t_status;
+	t_status = x11::XGetWindowProperty(t_xdisplay, t_manager, t_settings, 0, 0x4000, False,
+									   t_settings, &t_type, &t_format, &t_count, &t_after,
+									   (unsigned char **)&t_data);
+	gdk_flush();
+	bool t_error;
+	t_error = gdk_error_trap_pop() != 0;
+
+	if (!t_error && t_status == Success && t_data != nil && t_type == t_settings && t_format == 8)
+	{
+		int32_t t_value;
+		if (MCLinuxXSettingsFindInteger(t_data, t_count, "Gdk/WindowScalingFactor", t_value) &&
+			t_value >= 1 && t_value <= MAX_DESKTOP_SCALE)
+		{
+			r_scale = t_value;
+			r_has_scale = true;
+		}
+	}
+
+	if (t_data != nil)
+		x11::XFree(t_data);
+}
+
+// The scale an Xft.dpi resource in the root window's RESOURCE_MANAGER
+// property gives, if it is 2 or more.
+static bool MCLinuxReadXftDpiScale(GdkDisplay *p_display, int &r_scale)
+{
+	x11::Display *t_xdisplay;
+	t_xdisplay = x11::gdk_x11_display_get_xdisplay(p_display);
+
+	GdkWindow *t_root;
+	t_root = gdk_screen_get_root_window(gdk_display_get_default_screen(p_display));
+
+	x11::Atom t_type;
+	int t_format;
+	unsigned long t_count, t_after;
+	char *t_data = nil;
+
+	int t_status;
+	t_status = x11::XGetWindowProperty(t_xdisplay, x11::gdk_x11_drawable_get_xid(t_root),
+									   x11::gdk_x11_atom_to_xatom_for_display(p_display, gdk_atom_intern_static_string("RESOURCE_MANAGER")),
+									   0, 0x10000, False,
+									   x11::gdk_x11_atom_to_xatom_for_display(p_display, gdk_atom_intern_static_string("STRING")),
+									   &t_type, &t_format, &t_count, &t_after, (unsigned char **)&t_data);
+
+	bool t_found = false;
+	double t_dpi = 0;
+	if (t_status == Success && t_data != nil && t_format == 8)
+	{
+		// Each line is "name:\tvalue"; the last Xft.dpi line wins, as in Xrm.
+		const char *t_line = t_data;
+		const char *t_end = t_data + t_count;
+		while (t_line < t_end)
+		{
+			const char *t_line_end;
+			t_line_end = (const char *)memchr(t_line, '\n', t_end - t_line);
+			if (t_line_end == nil)
+				t_line_end = t_end;
+
+			static const char kXftDpi[] = "Xft.dpi:";
+			if (size_t(t_line_end - t_line) > sizeof(kXftDpi) - 1 &&
+				memcmp(t_line, kXftDpi, sizeof(kXftDpi) - 1) == 0)
+			{
+				char t_value[32];
+				size_t t_value_length;
+				t_value_length = MCMin(size_t(t_line_end - t_line) - (sizeof(kXftDpi) - 1), sizeof(t_value) - 1);
+				memcpy(t_value, t_line + sizeof(kXftDpi) - 1, t_value_length);
+				t_value[t_value_length] = '\0';
+
+				char *t_number_end;
+				double t_number;
+				t_number = strtod(t_value, &t_number_end);
+				if (t_number_end != t_value && t_number > 0)
+				{
+					t_dpi = t_number;
+					t_found = true;
+				}
+			}
+
+			t_line = t_line_end + 1;
+		}
+	}
+
+	if (t_data != nil)
+		x11::XFree(t_data);
+
+	if (!t_found)
+		return false;
+
+	int t_scale;
+	t_scale = (int)floor(t_dpi / 96.0 + 0.25);
+	if (t_scale < 2)
+		return false;
+
+	r_scale = MCMin(t_scale, MAX_DESKTOP_SCALE);
+	return true;
+}
+
+void MCLinuxReadDesktopScale(GdkDisplay *p_display)
+{
+	int t_scale = 1;
+
+	// GDK_SCALE, as GTK 3 reads it: a whole number, and it overrides the desktop
+	// (GDK_SCALE=1 turns the scaling off).
+	if (!MCLinuxScaleFromString(getenv("GDK_SCALE"), t_scale))
+	{
+		bool t_has_manager, t_has_scale;
+		int t_xsettings_scale = 1;
+		MCLinuxReadXSettingsScale(p_display, t_has_manager, t_xsettings_scale, t_has_scale);
+		if (t_has_scale)
+			t_scale = t_xsettings_scale;
+		else if (!t_has_manager)
+		{
+			int t_dpi_scale;
+			if (MCLinuxReadXftDpiScale(p_display, t_dpi_scale))
+				t_scale = t_dpi_scale;
+		}
+	}
+
+	s_linux_desktop_scale = t_scale;
+
+	// The engine set up pixel scaling before the display was open, when it
+	// could not know the desktop's scale: turn it on now, before anything
+	// (the windowBoundingRect first) is measured in logical coords.
+	if (s_linux_desktop_scale != 1)
+		MCResSetUsePixelScaling(true);
+}
+
+MCGFloat MCLinuxGetLogicalToScreenScale(void)
+{
+	// IM-2014-08-08: [[ Bug 12372 ]] (as on Windows) If pixel scaling is
+	// disabled, logical and screen coordinates are the same.
+	if (s_linux_desktop_scale == 1 || !MCResGetUsePixelScaling())
+		return 1.0;
+
+	return (MCGFloat)s_linux_desktop_scale;
+}
+
+// OXT-Beyond: [[ HiDPI ]] Pixel scaling is supported where the desktop scales:
+// on a desktop at 1 it is unsupported, as it always was on Linux.
 bool MCResPlatformSupportsPixelScaling(void)
 {
-	return false;
+	return !MCnoui && s_linux_desktop_scale != 1;
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Pixel scaling not supported on Linux
+// OXT-Beyond: [[ HiDPI ]] Where the desktop scales, usePixelScaling can be set
+// to false (and back), as on macOS, to draw at the screen's pixels.
 bool MCResPlatformCanChangePixelScaling(void)
 {
-	return false;
+	return !MCnoui && s_linux_desktop_scale != 1;
 }
 
-// IM-2014-01-30: [[ HiDPI ]] Pixel scaling not supported on Linux
+// IM-2014-01-30: [[ HiDPI ]] Pixel scale cannot be set on Linux (as on Windows
+// and macOS, the pixelScale stays 1 on the desktop)
 bool MCResPlatformCanSetPixelScale(void)
 {
 	return false;
@@ -460,9 +810,24 @@ MCGFloat MCResPlatformGetUIDeviceScale(void)
 	return 1.0;
 }
 
-// IM-2014-01-30: [[ HiDPI ]] Pixel scaling not supported on Linux
+// OXT-Beyond: [[ HiDPI ]] usePixelScaling changed: keep the windowBoundingRect
+// on the same part of the screen, and reopen the open stacks' windows, which
+// realize() makes at the new backing scale.
 void MCResPlatformHandleScaleChange(void)
 {
+	if (MCnoui)
+		return;
+
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == s_linux_applied_scale)
+		return;
+
+	MCwbr = MCRectangleGetScaledFloorRect(MCwbr, s_linux_applied_scale / t_scale);
+	s_linux_applied_scale = t_scale;
+
+	if (MCstacks != nil)
+		MCstacks->reopenallstackwindows();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

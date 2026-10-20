@@ -435,6 +435,20 @@ What it needs:
   Debian 13), on Fedora `sudo dnf install gtk2`. The launcher checks for
   every library the engine needs and names the missing ones with their
   packages, instead of the engine ending without a word.
+- **HiDPI screens** (after 0.2.7-rc.6): on a desktop scaled to 200% or
+  more, the IDE and every stack are drawn at the desktop's scale, as on
+  Windows and macOS, instead of at half the size of everything else.
+  The scale is the one GTK 3 programs use: `GDK_SCALE` when it is set,
+  else the desktop's own setting (the `Gdk/WindowScalingFactor` that
+  GNOME, Cinnamon, MATE, Xfce and KDE publish), else, on a desktop
+  without a settings daemon, an `Xft.dpi` of about 192 or more. Only
+  whole scales are used, as GTK 3 does, so a desktop at 150% is drawn
+  at 1. Stacks keep their sizes in points, as on a Retina Mac: on a
+  2560 x 1600 screen at 200%, the `screenRect` is 0,0,1280,800 and the
+  `screenPixelScale` 2. `GDK_SCALE=1 ./oxt-beyond` turns the scaling
+  off, and so does `set the usePixelScaling to false` in a script. On
+  a desktop that is not scaled nothing changes: `usePixelScaling` stays
+  false and cannot be set, as before.
 - **The browser widget and revBrowser** (CEF 74) also need NSS, ALSA and a
   few more X11 libraries (the `browser` lines of `linux/libraries.txt` in
   the package). Without them the launcher turns the browser off

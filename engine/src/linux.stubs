@@ -26,6 +26,7 @@ X11 libX11.so.6
 	XDestroyWindow: (pointer, integer) -> ()
 	XCreateWindow: (pointer, integer, integer, integer, integer, integer, integer, integer, integer, pointer, integer, pointer) -> (integer)
 	XSync: (pointer, integer) -> (integer)
+	XGetSelectionOwner: (pointer, integer) -> (integer)
 
 Xinerama libXinerama.so.1
 	XineramaIsActive: (pointer) -> (integer)
@@ -229,6 +230,7 @@ gdk libgdk-x11-2.0.so.0
 	gdk_screen_get_height: (pointer) -> (integer)
 	gdk_screen_get_width_mm: (pointer) -> (integer)
 	gdk_screen_get_height_mm: (pointer) -> (integer)
+	gdk_screen_get_number: (pointer) -> (integer)
 	gdk_window_show: (pointer) -> ()
 	gdk_window_show_unraised: (pointer) -> ()
 	gdk_window_raise: (pointer) -> ()
