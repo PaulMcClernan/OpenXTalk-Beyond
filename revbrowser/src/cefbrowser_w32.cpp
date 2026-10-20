@@ -391,7 +391,7 @@ static INT_PTR CALLBACK AuthDialogProc(HWND p_dialog, UINT p_message, WPARAM p_w
 	{
 	case WM_INITDIALOG:
 		{
-			SetWindowLongPtrW(p_dialog, DWLP_USER, (LONG)p_lparam);
+			SetWindowLongPtrW(p_dialog, DWLP_USER, (LONG_PTR)p_lparam);
 			t_state = (AuthDialogState *)p_lparam;
 
 			SetDlgItemTextWithCString(p_dialog, IDC_AUTH_USERNAME_LABEL, t_state -> strings . username_label);
