@@ -2221,9 +2221,13 @@ it.
    which the About window shows and the GitHub release's title carries;
    change it for a release with a new name, together with its artwork
    (`Installer/oxt-beyond/branding/README.md`).
-   Add a section for the version at the top of
-   [CHANGELOG.md](CHANGELOG.md), one line per commit since the previous
-   release with the number of the pull request that brought it in:
+   Fold the pull requests' changelog fragments into the "Unreleased"
+   section of [CHANGELOG.md](CHANGELOG.md) with
+   `python3 tools/ci/changelog.py fold`, which deletes them
+   ([changelog/README.md](changelog/README.md)), then make that
+   section the version's, at the top of CHANGELOG.md, with one line per
+   commit since the previous release and the number of the pull request
+   that brought it in:
    `git log --reverse --no-merges --format="- %s" v0.1.0..main` gives
    the lines (with the previous release's tag), and
    `git log --first-parent --merges --format="%h %s" v0.1.0..main` the

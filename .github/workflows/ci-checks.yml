@@ -27,7 +27,9 @@
 #     workflows' paths-ignore lists (a change to a file a build uses starts
 #     that build), the checks release.yml makes on the packages before it
 #     publishes them (tools/ci/release_assets.py, release_notes.py), and
-#     the text dictionary's generator (tools/oxt/text_dictionary.py).
+#     the text dictionary's generator (tools/oxt/text_dictionary.py);
+#   - tools/ci/changelog.py check: the changelog fragments of changelog
+#     are CHANGELOG.md's "- " lines, ready to fold into it.
 #
 # A change to this workflow or to the tests alone starts no build (the build
 # workflows' paths-ignore lists have them).
@@ -85,3 +87,6 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null ||
             python3 -m pip install --user --break-system-packages pyyaml
           python3 -m unittest discover -s tools/ci/tests -v
+
+      - name: Check the changelog fragments
+        run: python3 tools/ci/changelog.py check

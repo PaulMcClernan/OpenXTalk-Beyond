@@ -90,6 +90,12 @@ format.
   `test-logs-mac-universal-<arch>`.
 - Keep each pull request to one change, or a few closely related ones.
   Update it by pushing more commits.
+- Merge `main` into your branch only when GitHub reports a conflict, or
+  when your change needs something merged since you started. A pull
+  request does not have to be up to date with `main` to be merged, and
+  every push to it builds and tests all three platforms again (about an
+  hour). Changelog lines go in [changelog](changelog/README.md), so
+  they cause no conflicts.
 
 ### How pull requests are merged
 
@@ -334,7 +340,9 @@ add new ones there. [CHANGELOG.md](CHANGELOG.md) lists every commit
 since Tom Perry's last one, under the release that included it; the
 maintainer adds a release's section in the pull request that sets its
 version (see [BUILDING.md](BUILDING.md#10-making-a-release)), so you do
-not need to edit it. [HISTORY.md](HISTORY.md) records the history up to
+not need to edit it. To give your change its own line, add a file to
+[changelog](changelog/README.md) instead of editing CHANGELOG.md:
+pull requests then never conflict with each other there. [HISTORY.md](HISTORY.md) records the history up to
 OXT-Beyond 0.0.1.
 
 ## Reporting bugs

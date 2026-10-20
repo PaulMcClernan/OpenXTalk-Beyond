@@ -100,13 +100,15 @@ on:
     branches: [ main ]
     paths-ignore: &build-paths-ignore
       # Nothing that goes into this platform's build, packages or checks:
-      # the Markdown files at the top of the repository, GitHub's issue
-      # and pull request forms, the workflows and scripts that build
-      # nothing (screenshots branch, release, runtimes, tagging, checks by
-      # hand, the CI checks), and what only the other platforms' builds
-      # use. A file that is not listed builds; tools/ci/tests checks that
-      # no file a build workflow names is listed in its own list.
+      # the Markdown files at the top of the repository, the changelog
+      # fragments (changelog), GitHub's issue and pull request forms,
+      # the workflows and scripts that build nothing (screenshots branch,
+      # release, runtimes, tagging, checks by hand, the CI checks), and
+      # what only the other platforms' builds use. A file that is not
+      # listed builds; tools/ci/tests checks that no file a build workflow
+      # names is listed in its own list.
       - '*.md'
+      - 'changelog/**'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/pull_request_template.md'
       - '.github/workflows/ci-checks.yml'
@@ -118,6 +120,7 @@ on:
       - '.github/workflows/runtimes.yml'
       - '.github/workflows/tag-release.yml'
       - '.github/workflows/ui-tour.yml'
+      - 'tools/ci/changelog.py'
       - 'tools/ci/ide_screenshots_branch.py'
       - 'tools/ci/release_assets.py'
       - 'tools/ci/release_notes.py'
@@ -177,7 +180,11 @@ concurrency:
   # branch of a dry run, and pushes to that branch must neither cancel the
   # release build nor wait for it (see build-windows.yml)
   group: build-linux-${{ inputs.release && format('release-{0}', github.run_id) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Newer pushes to a branch or pull request replace older runs, on main
+  # too, as in build-windows.yml: a release takes main's build of the
+  # tagged commit, and "Tag a release" tags the newest commit, which still
+  # builds in full. Tag builds always run to completion.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 defaults:
   run:
