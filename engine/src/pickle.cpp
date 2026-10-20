@@ -298,7 +298,7 @@ void MCObject::continuepickling(MCPickleContext *p_context, MCObject *p_object, 
 		uint4 t_chunk_size;
 		t_chunk_size = MCS_tell(t_stream) - t_chunk_start;
 		swap_uint4(&t_chunk_size);
-		MCS_writeat(&t_chunk_size, 4, t_chunk_start - 4, t_stream);
+		t_stat = MCS_writeat(&t_chunk_size, 4, t_chunk_start - 4, t_stream);
 	}
 
 	if (t_stat != IO_NORMAL)

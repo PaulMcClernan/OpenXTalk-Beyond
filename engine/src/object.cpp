@@ -3951,7 +3951,7 @@ IO_stat MCObject::save(IO_handle stream, uint4 p_part, bool p_force_ext, uint32_
 				uint4 t_length;
 				t_length = MCSwapInt32HostToNetwork(t_cur_offset - t_length_offset - 4);
 
-				MCS_writeat(&t_length, sizeof(uint4), t_length_offset, stream);
+				stat = MCS_writeat(&t_length, sizeof(uint4), t_length_offset, stream);
 			}
 			if (stat != IO_NORMAL)
 				return stat;
@@ -3992,7 +3992,7 @@ IO_stat MCObject::save(IO_handle stream, uint4 p_part, bool p_force_ext, uint32_
 				uint4 t_length;
 				t_length = MCSwapInt32HostToNetwork(t_cur_offset - t_length_offset - 4);
 				
-				MCS_writeat(&t_length, sizeof(uint4), t_length_offset, stream);
+				stat = MCS_writeat(&t_length, sizeof(uint4), t_length_offset, stream);
 			}
 			if (stat != IO_NORMAL)
 				return stat;
