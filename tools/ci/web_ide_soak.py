@@ -35,8 +35,8 @@ the IDE opened, the resident memory of the browser's largest web content
 process (MB), the processor time that process took since the last line
 (percent of one core), and the engine's WebAssembly memory (MB). The
 process is found by its command line (Chromium's renderer, WebKit's
-WebKitWebProcess, Firefox's content process), on Linux and macOS; on
-Windows the process columns are empty.
+WebKitWebProcess or WPEWebProcess, Firefox's content process), on Linux
+and macOS; on Windows the process columns are empty.
 
 Every 30 seconds the log has a line with the latest numbers, so that a
 run that ends badly shows how it got there. The page is asked for its
@@ -77,11 +77,12 @@ FAILED = "document.getElementById('error').style.display === 'block'"
 # util/emscripten-javascriptify.py)
 HEAP = "(window.Module && Module.HEAPU8) ? Module.HEAPU8.length : 0"
 
-# A browser's web content processes, by their command line
+# A browser's web content processes, by their command line (Playwright's
+# WebKit on Linux is the WPE port, whose process is WPEWebProcess)
 PROCESSES = {
-    'chromium': '--type=renderer',
-    'webkit': 'WebKitWebProcess',
-    'firefox': '-contentproc',
+    'chromium': ('--type=renderer',),
+    'webkit': ('WebKitWebProcess', 'WPEWebProcess'),
+    'firefox': ('-contentproc',),
 }
 
 SAMPLE = 2
@@ -145,7 +146,8 @@ def web_process(browser):
     best = None
     for line in text.splitlines():
         fields = line.split(None, 2)
-        if len(fields) == 3 and PROCESSES[browser] in fields[2] and fields[1].isdigit():
+        if (len(fields) == 3 and fields[1].isdigit()
+                and any(name in fields[2] for name in PROCESSES[browser])):
             found = (int(fields[0]), int(fields[1]) / 1024.0)
             if best is None or found[1] > best[1]:
                 best = found
