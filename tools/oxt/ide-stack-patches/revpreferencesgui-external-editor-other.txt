@@ -1,0 +1,84 @@
+# Preferences, card "Script Editor", menu "editorsList" (the external script
+# editor, #173): an editor chosen with "Other..." stays in
+# the menu, and "Other..." picks any application (Mac) or program (Linux).
+# Windows, which has no list, is unchanged.
+# Text lines are between bars, so that trailing blanks survive editors.
+file: Toolset/palettes/revpreferencesgui.rev
+object: button "editorsList" of card "Script Editor"
+replace:
+|   --|
+|   if tEditProgs is not empty then set the showname of btn "editorsList" of this card to true|
+|end tUpdateEditors|
+with:
+|   -- OXT-Beyond: an editor chosen with "Other..." stays in the menu, and|
+|   -- "Other..." lets the user pick any application (Mac) or program (Linux)|
+|   -- that the lists above do not have (#173)|
+|   if the platform contains "mac" or the platform contains "lin" then|
+|      local tSavedName, tSavedCommand, tSavedCommands|
+|      put the cExternalScriptEditorName of stack "revPreferences" into tSavedName|
+|      put the cExternalEditorCommand of stack "revPreferences" into tSavedCommand|
+|      if tSavedName is not empty and tSavedCommand is not empty and tSavedName is not among the lines of tEditProgs then|
+|         put the cCommands of me into tSavedCommands|
+|         if tEditProgs is empty then|
+|            put tSavedName into tEditProgs|
+|            put tSavedCommand into tSavedCommands|
+|         else|
+|            put return & tSavedName after tEditProgs|
+|            put return & tSavedCommand after tSavedCommands|
+|         end if|
+|         set the cCommands of me to tSavedCommands|
+|      end if|
+|      if tEditProgs is empty then|
+|         put "Other..." into tEditProgs|
+|      else|
+|         put return & "Other..." after tEditProgs|
+|      end if|
+|      set the text of me to tEditProgs|
+|      if tSavedName is among the lines of tEditProgs then|
+|         lock messages|
+|         repeat with tcount = 1 to the number of lines of tEditProgs|
+|            if line tcount of tEditProgs is tSavedName then|
+|               set the menuHistory of me to tcount|
+|               exit repeat|
+|            end if|
+|         end repeat|
+|         unlock messages|
+|      end if|
+|   end if|
+|   if tEditProgs is not empty then set the showname of btn "editorsList" of this card to true|
+|end tUpdateEditors|
+||
+|-- OXT-Beyond: "Other..." in the menu: any application (Mac) or program|
+|-- (Linux) as the external script editor (#173). The command is stored as|
+|-- the lists store theirs: the application's folder with a slash (Mac), the|
+|-- program's path (Linux, quoted when it has a space)|
+|on tChooseOtherEditor|
+|   local tPath, tName, tCommand|
+|   if the platform contains "mac" then|
+|      answer file "Choose the application to edit scripts in:" with "/Applications" with type "Applications|app|APPL"|
+|   else|
+|      answer file "Choose the program to edit scripts with:" with "/usr/bin"|
+|   end if|
+|   put it into tPath|
+|   if tPath is empty then|
+|      -- cancelled: the menu shows the editor chosen before|
+|      tUpdateEditors|
+|      exit tChooseOtherEditor|
+|   end if|
+|   if the last char of tPath is "/" then delete the last char of tPath|
+|   set the itemdelimiter to "/"|
+|   put the last item of tPath into tName|
+|   set the itemdelimiter to ","|
+|   if the platform contains "mac" then|
+|      if tName ends with ".app" then delete char -4 to -1 of tName|
+|      put tPath & "/" into tCommand|
+|   else if tPath contains space then|
+|      put "'" & tPath & "'" into tCommand|
+|   else|
+|      put tPath into tCommand|
+|   end if|
+|   set the cExternalScriptEditorName of stack "revPreferences" to tName|
+|   set the cExternalEditorCommand of stack "revPreferences" to tCommand|
+|   tUpdateEditors|
+|   set the showname of btn "editorsList" of this card to true|
+|end tChooseOtherEditor|

@@ -1,0 +1,13 @@
+# Preferences, card "Script Editor", menu "editorsList" (the external script
+# editor, #173): the Mac list had only BBEdit and TextEdit, so a Mac without
+# BBEdit offered TextEdit alone (reported with Pulsar installed). It now
+# looks for the usual Mac editors too. "BBedit" is spelled "BBEdit"; the
+# app is found either way on the Mac's case-insensitive disks.
+# Text lines are between bars, so that trailing blanks survive editors.
+file: Toolset/palettes/revpreferencesgui.rev
+object: button "editorsList" of card "Script Editor"
+replace:
+|      put "BBedit,TextEdit" into tProgs|
+with:
+|      -- OXT-Beyond: the usual Mac editors, not only BBEdit and TextEdit (#173)|
+|      put "BBEdit,CotEditor,Sublime Text,Visual Studio Code,VSCodium,Pulsar,Nova,TextMate,Zed,MacVim,CodeEdit,TextEdit" into tProgs|

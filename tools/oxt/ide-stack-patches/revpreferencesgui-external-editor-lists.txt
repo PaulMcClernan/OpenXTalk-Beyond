@@ -1,0 +1,11 @@
+# Preferences, card "Script Editor", menu "editorsList" (the external script
+# editor, #173): the Linux editors looked for in /usr/bin get code, codium,
+# geany, pulsar, subl, xed and zed.
+# Text lines are between bars, so that trailing blanks survive editors.
+file: Toolset/palettes/revpreferencesgui.rev
+object: button "editorsList" of card "Script Editor"
+replace:
+|      put "bluefish,bvi,cream,dav-text,dte,e3,ed,eftp,emacs,emacs-gtk,featherpad,fte,gedit,ghostwriter,gnome-text-editor,gobby,gprompter,jed,joe,jove,juffed,jupp,kakoune,kate,kephra,kwrite,l3afpad,leafpad,le,levee,micro,mousepad,nano,nano-tiny,ne,nedit,notepadqq,nvi,omegat,pluma,retext,tea,the,tilde,vile,vis,yudit,zim" into tProgs|
+with:
+|      -- OXT-Beyond: also code, codium, geany, pulsar, subl, xed and zed (#173)|
+|      put "bluefish,bvi,code,codium,cream,dav-text,dte,e3,ed,eftp,emacs,emacs-gtk,featherpad,fte,geany,gedit,ghostwriter,gnome-text-editor,gobby,gprompter,jed,joe,jove,juffed,jupp,kakoune,kate,kephra,kwrite,l3afpad,leafpad,le,levee,micro,mousepad,nano,nano-tiny,ne,nedit,notepadqq,nvi,omegat,pluma,pulsar,retext,subl,tea,the,tilde,vile,vis,xed,yudit,zed,zim" into tProgs|

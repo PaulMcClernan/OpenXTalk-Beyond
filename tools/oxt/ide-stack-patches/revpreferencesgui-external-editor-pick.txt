@@ -1,0 +1,30 @@
+# Preferences, card "Script Editor", menu "editorsList" (the external script
+# editor, #173): menuPick takes the command on the line of
+# the item picked; lineOffset took the first command that only contained the
+# name ("ed" picked /usr/bin/gedit). The new item "Other..." asks for an
+# editor that the lists do not have (tChooseOtherEditor, added by
+# revpreferencesgui-external-editor-other.txt).
+# Text lines are between bars, so that trailing blanks survive editors.
+file: Toolset/palettes/revpreferencesgui.rev
+object: button "editorsList" of card "Script Editor"
+replace:
+|on menupick pitem|
+|   put the cCommands of me into tCommandsList|
+|   put lineOffset(pitem,tCommandsList) into tFoundOnLine|
+|   put tFoundOnLine into tLine|
+with:
+|on menupick pitem|
+|   -- OXT-Beyond: "Other..." asks for any editor (#173)|
+|   if pitem is "Other..." then|
+|      tChooseOtherEditor|
+|      exit menupick|
+|   end if|
+|   put the cCommands of me into tCommandsList|
+|   -- OXT-Beyond: the command on the line of the item picked. lineOffset|
+|   -- alone took the first command that only contained the name: "ed"|
+|   -- picked /usr/bin/gedit, and "code" would pick any path with "code"|
+|   put the menuHistory of me into tLine|
+|   if tLine is not an integer or line tLine of the text of me is not pitem then|
+|      put lineOffset(pitem,tCommandsList) into tFoundOnLine|
+|      put tFoundOnLine into tLine|
+|   end if|

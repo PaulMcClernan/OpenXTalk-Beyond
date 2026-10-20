@@ -133,7 +133,10 @@ on ideCheckExternalEditors
             -- mac allowance
             if the platform contains "mac" then
                if the last char of tExternalEditorCommand is "/" then delete last char of tExternalEditorCommand
-               put "open '" & tExternalEditorCommand & "'" into tExternalEditorCommand
+               -- OXT-Beyond: "open -a" opens the file in the editor chosen; plain
+               -- "open" started the editor and opened the file in the default
+               -- application for it (TextEdit), whichever editor was chosen (#173)
+               put "open -a '" & tExternalEditorCommand & "'" into tExternalEditorCommand
             end if
             get shell (tExternalEditorCommand & " '" & tFilename & "'" & tNoWaitShellCommand)
             send hPrepScriptEditSetup to me in 1 millisecond
@@ -173,7 +176,10 @@ on ideCheckExternalEditors
                -- mac allowance
                if the platform contains "mac" then
                   if the last char of tExternalEditorCommand is "/" then delete last char of tExternalEditorCommand
-                  put "open '" & tExternalEditorCommand & "'" into tExternalEditorCommand
+                  -- OXT-Beyond: "open -a" opens the file in the editor chosen; plain
+                  -- "open" started the editor and opened the file in the default
+                  -- application for it (TextEdit), whichever editor was chosen (#173)
+                  put "open -a '" & tExternalEditorCommand & "'" into tExternalEditorCommand
                end if
                get shell (tExternalEditorCommand & " '" & tFilename & "'" & tNoWaitShellCommand)
                put tFilename into tfile
