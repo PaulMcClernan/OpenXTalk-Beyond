@@ -217,6 +217,12 @@ STACK_NAME = 'WebProbe'
 STACK_TITLE = 'Web Probe'
 PROBE_DATA = 'probe data 123'
 PROMPT_ANSWER = 'Ada'
+# How long run_browser may take in all before the watchdog fails the
+# check, at the least: a run takes about 25 seconds, and each of its waits
+# at most --timeout (120 by default), so the limit is five of those when
+# that is longer. browser_waiting[0] is what the run is waiting for
+BROWSER_LIMIT = 600
+browser_waiting = ['']
 
 # The checks the probe makes before it is ready, in its order
 PROBE_CHECKS = (
@@ -1028,6 +1034,28 @@ def snapshot_report_ok(report, wanted):
     return True
 
 
+def browser_watchdog(browser_name, limit=BROWSER_LIMIT):
+    """Start and return a timer that fails the check when run_browser
+    has not returned within limit seconds. A Playwright call that never
+    returns cannot be timed out from its own thread, so the timer names
+    what the run was waiting for and ends the process, well inside the
+    job's timeout, where a hang left only "The action has timed out"."""
+    def hung():
+        why = ('the check hung in %s for %d seconds, waiting for %s; the browser stopped answering'
+               % (browser_name, limit, browser_waiting[0]))
+        log('FAILED:')
+        log('  ' + why)
+        annotate('error', 'web check: ' + why)
+        summary('### Web standalone check (%s)\n\n**Failed:** %s\n\n' % (browser_name, why))
+        sys.stdout.flush()
+        os._exit(1)
+
+    timer = threading.Timer(limit, hung)
+    timer.daemon = True
+    timer.start()
+    return timer
+
+
 def run_browser(url, version, work, timeout, url_path=None, browser_widget=None, browser_name='chromium'):
     """Open the page in browser_name and check what the probe and the page do; url_path is
     what must load the probe's URLs, 'engine' or 'libURL' (None: either),
@@ -1036,6 +1064,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
     Returns (problems, lines)."""
     try:
         from playwright.sync_api import sync_playwright, Error as PlaywrightError
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
     except ImportError:
         raise CheckError('the Python package playwright is missing (pip install playwright, then '
                          'python3 -m playwright install chromium)')
@@ -1065,11 +1094,14 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
 
     def answer_page_dialog():
         # The page's dialogs (em-dialog.js), which the engine's answer and
-        # ask show: the default button, after "Ada" in the field if any
-        dialog = page.locator('.oxt-dialog')
-        if dialog.count() == 0 or not dialog.first.is_visible():
+        # ask show: the default button, after "Ada" in the field if any.
+        # Locator.count() never returns once the page has crashed, so the
+        # dialog is looked for with a wait that times out
+        dialog = page.locator('.oxt-dialog').first
+        try:
+            dialog.wait_for(state='visible', timeout=50)
+        except PlaywrightTimeoutError:
             return
-        dialog = dialog.first
         message = dialog.locator('.oxt-dialog-message')
         message = message.first.text_content() if message.count() else ''
         buttons = dialog.locator('.oxt-dialog-button').all_text_contents()
@@ -1093,8 +1125,14 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
         log('  page error: %s' % error)
 
     # The browser's process for the page can die under it ("Target
-    # crashed"): WebKit's did twice in CI before the engine had started,
-    # on commits that passed before and after
+    # crashed"): WebKit's did in CI before the engine had started, on
+    # commits that passed before and after. On 2026-10-20 the run
+    # then hung until the job's 15 minutes ran out, with nothing in the
+    # log: a Playwright call on a crashed page can wait for ever
+    # (Locator.count() in answer_page_dialog did, in Chromium as well).
+    # That call is gone, the crashed page is not touched again, the second
+    # try gets a browser of its own, and browser_watchdog ends a run that
+    # hangs anyway
     crashed = []
 
     def on_crash(crashed_page):
@@ -1102,6 +1140,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
         log('  the page crashed')
 
     def wait_for(predicate, what, seconds):
+        browser_waiting[0] = what
         deadline = time.time() + seconds
         while time.time() < deadline:
             if predicate():
@@ -1116,6 +1155,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
         problems.append('%s did not happen within %d seconds' % (what, seconds))
         return False
 
+    browser_waiting[0] = '%s to start' % browser_name
     with sync_playwright() as p:
         browser = getattr(p, browser_name).launch()
         devtools = browser_name == 'chromium'
@@ -1145,13 +1185,15 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
             # the standalone's: the page gets one more try, which the report
             # names, and a second crash fails the check
             lines.append('the page crashed before the engine started; it was opened again')
-            log('  the page crashed before the engine started; opening it again')
-            try:
-                page.close()
-            except PlaywrightError:
-                pass
+            log('  the page crashed before the engine started; opening it again in a new browser')
+            # The crashed page and its browser are left alone, since a call
+            # on them may never return; sync_playwright's exit stops them
+            # with the driver
+            browser_waiting[0] = 'a new %s to start after the crash' % browser_name
+            browser = getattr(p, browser_name).launch()
             del crashed[:]
             del console[:]
+            browser_waiting[0] = 'the page to open again after the crash'
             page = open_page()
             started = time.time()
             page.goto(url)
@@ -1658,6 +1700,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
                     canvas['width'], canvas['height'], canvas['x'], canvas['y'], shot))
             except (CheckError, PlaywrightError, KeyError, ValueError) as e:
                 problems.append('the interactive checks failed: %s' % e)
+        browser_waiting[0] = 'the browser to close'
         browser.close()
 
     checks = list(PROBE_CHECKS)
@@ -1780,7 +1823,11 @@ def main(argv=None):
         server = make_server(site, PROBE_PAGE_DEFERRED if args.browser == 'webkit' else PROBE_PAGE)
         url = 'http://127.0.0.1:%d/%s' % (server.server_address[1], os.path.basename(page))
         log('Opening %s' % url)
-        p, l = run_browser(url, version, work, args.timeout, url_path, browser_widget, args.browser)
+        watchdog = browser_watchdog(args.browser, max(BROWSER_LIMIT, 5 * args.timeout))
+        try:
+            p, l = run_browser(url, version, work, args.timeout, url_path, browser_widget, args.browser)
+        finally:
+            watchdog.cancel()
         problems += p
         lines += l
         if args.keep_serving:

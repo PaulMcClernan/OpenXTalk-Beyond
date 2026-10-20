@@ -14,7 +14,7 @@ described in [HISTORY.md](HISTORY.md). What each release adds, in
 words, is in the [README](README.md#the-ide) and on the
 [Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases).
 
-## 0.2.7-rc.6 (2026-10-19, pre-release)
+## 0.2.7-rc.6 (2026-10-20, pre-release)
 
 - Learn: the xTalk Suite demos open built, in the middle of the screen (#157)
 - Calendar and Pie Chart: the widgets load in the IDE, with Paul's Pie Chart changes (#156)
@@ -41,6 +41,7 @@ words, is in the [README](README.md#the-ide) and on the
 - xTalk Academy: an interactive course in programming for beginners and schools (#163)
 - Stack Player: HyperCard stacks imported and saved on the desktop now open on the web (they stopped with "can't find handler playerLog"); a stack whose openStack or openCard fails now opens and shows the script error, as on the desktop (#169)
 - Version 0.2.7-rc.6, with its changelog and notes (#170)
+- Web check: a page that crashes is opened again in a new browser, and a check that hangs fails in ten minutes, naming what it waited for (#170)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 
