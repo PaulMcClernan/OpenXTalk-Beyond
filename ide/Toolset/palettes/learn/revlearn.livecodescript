@@ -1780,7 +1780,7 @@ end leRenderLanding
 -- float over it, and its words laid out from the top down (it is as tall
 -- as they need)
 private command leHero pEyebrow, pTitle, pText, pCredit, pColors, pButton1, pButton2, pButton3
-   local tTop, tBottom, tObj, tBg, tIndex, tLeft, tRight, tX, tSize, tY
+   local tTop, tBottom, tObj, tBg, tIndex, tLeft, tRight, tX, tSize, tY, tButton, tName, tWidth
    put sY - 6 into tTop
    put sX + 40 into tLeft
    put sX + sColW - 40 into tRight
@@ -1806,25 +1806,35 @@ private command leHero pEyebrow, pTitle, pText, pCredit, pColors, pButton1, pBut
    put lkLabel("p_heroTitle", lkR(tLeft, tTop + 56, tRight, tTop + 98), pTitle, 34, "255,255,255", "p_hero") into tObj
    set the textStyle of tObj to "bold"
    set the dontWrap of tObj to true
+   -- (a smaller size where the column is too narrow for it on one line)
+   repeat while the formattedWidth of tObj > tRight - tLeft and the textSize of tObj > 20
+      set the textSize of tObj to the textSize of tObj - 2
+   end repeat
    put tTop + 106 into tY
    put lkLabel("p_heroText", lkR(tLeft, tY, min(tRight, tLeft + 700), tY + 40), pText, 15, "255,255,255", "p_hero") into tObj
    leFit tObj
    set the blendLevel of tObj to 8
    put the bottom of tObj + 20 into tY
    put tLeft into tX
+   -- The buttons go in a row, and one that would pass the right edge
+   -- starts the next row: on a 1024 by 768 screen the third ("New to
+   -- coding? Try the Academy") was cut off by the banner
    set the itemDelimiter to "|"
-   if pButton1 is not empty then
-      add 12 + lkButton("p_heroB1", tX, tY, 38, item 1 of pButton1, item 3 of pButton1, "light", \
-            leSectionInfo(sSection, "accent"), "p_hero", item 2 of pButton1, 0, "page") to tX
-   end if
-   if pButton2 is not empty then
-      add 12 + lkButton("p_heroB2", tX, tY, 38, item 1 of pButton2, item 3 of pButton2, "light", \
-            leSectionInfo(sSection, "accent"), "p_hero", item 2 of pButton2, 0, "page") to tX
-   end if
-   if pButton3 is not empty then
-      add 12 + lkButton("p_heroB3", tX, tY, 38, item 1 of pButton3, item 3 of pButton3, "light", \
-            leSectionInfo(sSection, "accent"), "p_hero", item 2 of pButton3, 0, "page") to tX
-   end if
+   repeat with tIndex = 1 to 3
+      put param(5 + tIndex) into tButton
+      if tButton is empty then
+         next repeat
+      end if
+      put "p_heroB" & tIndex into tName
+      put lkButton(tName, tX, tY, 38, item 1 of tButton, item 3 of tButton, "light", \
+            leSectionInfo(sSection, "accent"), "p_hero", item 2 of tButton, 0, "page") into tWidth
+      if tX > tLeft and tX + tWidth > tRight then
+         add 38 + 12 to tY
+         put tLeft into tX
+         set the topLeft of group tName to tX, tY
+      end if
+      add tWidth + 12 to tX
+   end repeat
    set the itemDelimiter to comma
    if tX > tLeft then
       add 38 + 22 to tY
