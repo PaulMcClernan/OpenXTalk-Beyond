@@ -399,7 +399,13 @@ end closeStackRequest
 on msgChanged pHandler, pLine
    local tTarget
    put the long id of the target into tTarget
-   
+   -- What the xTalk Academy's code puts goes to the Academy's output (its
+   -- stage handles msgChanged after this), so it does not open the
+   -- Message Box over the lesson
+   if tTarget contains "stack" && quote & "revAcademyStage" & quote then
+      pass msgChanged
+   end if
+
    local tParams
    put tTarget into tParams[1]
    put pHandler into tParams[2]

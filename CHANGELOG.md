@@ -44,6 +44,7 @@ words, is in the [README](README.md#the-ide) and on the
 - Web check: a page that crashes is opened again in a new browser, and a check that hangs fails in ten minutes, naming what it waited for (#170)
 - MCP Bridge: calls waiting when the server on the port quits are no longer told OXT-Beyond is busy; the pie chart notes corrected (#170)
 - Learn and the Academy: the banner's buttons go on a second row and a long title gets smaller where the window is narrow (the Academy button was cut off on a 1024 by 768 screen); the IDE screenshots open Learn, the Academy, the xTalk Assistant and xTalk Chat (#170)
+- Academy: what a lesson's code puts shows in its output only, without opening the Message Box over the lesson (#170)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 

@@ -1388,14 +1388,12 @@ on tour_academy
       put field "outStatus" of stack kAcademy into tStatus
       put the text of field "out" of stack kAcademy into tOut
       tourRecord "INFO the Academy's output:" && quote & tStatus & quote && "|" && tourJoin(tOut)
-      -- (in 0.2.7-rc.6 the IDE's Message Box opens when an example puts
-      -- a value, over the Academy: noted, and closed for the snapshot)
+      -- What an example puts goes to the Academy's output only (the IDE's
+      -- Message Box opened over the lesson until the IDE left the
+      -- Academy's stage out of it)
       if not tMsgOpen and there is a stack "Message Box" and the mode of stack "Message Box" is not 0 then
-         tourRecord "INFO the Academy: the Message Box opened when the example ran"
          close stack "Message Box"
-         -- (the Academy in front again, as it was)
-         go stack kAcademy
-         tourWait 300
+         throw "the Message Box opened over the Academy when the example ran"
       end if
       tourShotStack kAcademy, "24e-academy-lesson"
       if not (field "playWhat" of stack kAcademy begins with "An example from the lesson") then
