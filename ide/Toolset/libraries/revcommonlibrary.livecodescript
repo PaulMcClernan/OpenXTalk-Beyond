@@ -713,6 +713,14 @@ on revCopyFile pSrcFile, pDestFile
       return empty
    end if
    
+   -- OXT-Beyond: the web engine has no shell, so cp threw "no shell" (an
+   -- .lce installed from the web IDE's Extension Manager showed that error
+   -- while its interface file was copied, though the install went on). It
+   -- copies through the file's bytes instead; the desktop is unchanged.
+   if the platform is "HTML5" then
+      return __revWebCopyFile(pSrcFile, pDestFile)
+   end if
+   
    if the platform is "MacOS" then
       if "applescript" is in the alternateLanguages then
          if there is a file pDestFile then delete file pDestfile -- overwrite before copying
@@ -752,6 +760,66 @@ on revCopyFile pSrcFile, pDestFile
    return the result
 end revCopyFile
 
+-- OXT-Beyond: revCopyFile on the web engine, which has no shell. As cp
+-- does, a destination that is a folder receives the file under its own
+-- name, and an existing file is overwritten. Empty on success, else an
+-- error naming the file.
+private function __revWebCopyFile pSrcFile, pDestFile
+   if there is not a file pSrcFile then
+      return "Error: no file" && pSrcFile
+   end if
+   if there is a folder pDestFile then
+      set the itemDelimiter to slash
+      if char -1 of pDestFile is slash then delete char -1 of pDestFile
+      put slash & item -1 of pSrcFile after pDestFile
+   end if
+   local tData
+   put URL ("binfile:" & pSrcFile) into tData
+   if the result is not empty then
+      return "Error: could not read" && pSrcFile & ":" && the result
+   end if
+   put tData into URL ("binfile:" & pDestFile)
+   if the result is not empty then
+      return "Error: could not write" && pDestFile & ":" && the result
+   end if
+   return empty
+end __revWebCopyFile
+
+-- OXT-Beyond: revCopyFolder on the web engine. As cp -rf does, the source
+-- folder is copied INTO a destination folder that exists, and becomes it
+-- when it does not.
+private function __revWebCopyFolder pSrcFolder, pDestFolder
+   if there is not a folder pSrcFolder then
+      return "Error: no folder" && pSrcFolder
+   end if
+   if char -1 of pDestFolder is slash then delete char -1 of pDestFolder
+   if there is a folder pDestFolder then
+      set the itemDelimiter to slash
+      put slash & item -1 of pSrcFolder after pDestFolder
+   end if
+   return __revWebCopyFolderContents(pSrcFolder, pDestFolder)
+end __revWebCopyFolder
+
+private function __revWebCopyFolderContents pSrcFolder, pDestFolder
+   if there is not a folder pDestFolder then
+      create folder pDestFolder
+      if the result is not empty then
+         return "Error: could not create" && pDestFolder & ":" && the result
+      end if
+   end if
+   local tError
+   repeat for each line tFile in files(pSrcFolder)
+      put __revWebCopyFile(pSrcFolder & slash & tFile, pDestFolder & slash & tFile) into tError
+      if tError is not empty then return tError
+   end repeat
+   repeat for each line tFolder in folders(pSrcFolder)
+      if tFolder is "." or tFolder is ".." then next repeat
+      put __revWebCopyFolderContents(pSrcFolder & slash & tFolder, pDestFolder & slash & tFolder) into tError
+      if tError is not empty then return tError
+   end repeat
+   return empty
+end __revWebCopyFolderContents
+
 private command log pMessage
   put pMessage & return after msg
 end log
@@ -777,6 +845,10 @@ end mouseDoubleUp
 
 on revCopyFolder pSrcFolder, pDestFolder
    if the last char of pSrcFolder is "/" then delete the last char of pSrcFolder
+   -- OXT-Beyond: as revCopyFile, the web engine copies without a shell
+   if the platform is "HTML5" then
+      return __revWebCopyFolder(pSrcFolder, pDestFolder)
+   end if
    if the platform is "MacOS" then
       if "applescript" is in the alternateLanguages then
          if there is not a folder pDestFolder then
