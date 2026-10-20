@@ -19,7 +19,10 @@ script "oxt_ui_tour"
 -- Extension Manager and Builder, the Message Watcher, Search, the Object
 -- Library, the Card Navigator, the About window, the Release Notes
 -- window, the IDE's own dialog in the look of Learn (revIDEKitDialog),
--- the answer and ask dialogs and the icon chooser. Not the Start Center: OpenXTalk Lite 1.15
+-- Learn's lessons, the xTalk Academy (its courses, and a lesson with an
+-- example run in its playground), the xTalk Assistant's window, Settings
+-- and Memory (no key, no request: only the windows), xTalk Chat before it
+-- goes online, the answer and ask dialogs and the icon chooser. Not the Start Center: OpenXTalk Lite 1.15
 -- turned it off (no menu opens it and its Preferences are greyed out),
 -- and opened by a script it is an empty window. For each it
 -- writes a snapshot of the screen around the window (the effective rect
@@ -47,11 +50,22 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-switch,menubar,sample,inspector,inspector-text,inspector-graphic,inspector-multiple,tooltip-inspector,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,menu-builder,extension-manager,extension-builder,message-watcher,search,object-library,navigator,about,release-notes,home,kit-dialog,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-switch,menubar,sample,inspector,inspector-text,inspector-graphic,inspector-multiple,tooltip-inspector,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,menu-builder,extension-manager,extension-builder,message-watcher,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 -- The inspector's sections for a button, as the icons in its header name
 -- them (a section the object has not is skipped)
 constant kButtonSections = "Basic,Icons,Colors,Text,Position,Effects,Custom,Advanced"
+-- The learning windows new in 0.2.7 and the plugins' windows (the steps
+-- learn, academy, xtalk-assistant and xtalk-chat)
+constant kLearn = "revLearn"
+constant kAcademy = "revAcademy"
+constant kXtaMain = "org.openxtalk.plugin.xtalkassistant"
+constant kXtaWindow = "revXTalkAssistant"
+constant kXtaSettings = "revXTalkAssistantSettings"
+constant kXtaMemory = "revXTalkAssistantMemory"
+constant kChatMain = "org.openxtalk.plugin.xtalkchat"
+constant kChatCore = "org.openxtalk.plugin.xtalkchat-core"
+constant kChatWindow = "revXTalkChat"
 
 local sOut, sLog, sOnly, sCount, sStarted, sWatchdog, sWatchdogCount, sReport
 
@@ -1282,6 +1296,351 @@ on tourShotKitDialog
    end if
 end tourShotKitDialog
 
+-- Learn (palettes/learn), as Help > Lessons opens it: the first page of
+-- the lessons, whose banner has "New to coding? Try the Academy", which
+-- must be there, whole, where the page shows it
+on tour_learn
+   local tButton, tLabel, tOwner, tView, tRect, tError
+   dispatch "revMenubarHelpMenuPick" to stack "revMenuBar" with "Lessons"
+   if not tourWaitOpen(kLearn, 10000) then throw "Learn did not open"
+   try
+      -- (its first page, wherever Learn was left this session)
+      dispatch "leShowSection" to stack kLearn with "lessons", 1
+      tourWait 1500
+      tourShotStack kLearn, "24d-learn"
+      if there is not a group "p_heroB3" of this card of stack kLearn then
+         throw "Learn's first page of the lessons has no third button (New to coding? Try the Academy)"
+      end if
+      put the long id of group "p_heroB3" of this card of stack kLearn into tButton
+      put field "p_heroB3_label" of this card of stack kLearn into tLabel
+      tourRecord "INFO Learn's Academy button:" && quote & tLabel & quote && "rect" && the rect of tButton
+      if tLabel is not "New to coding? Try the Academy" then
+         throw "Learn's third button says" && quote & tLabel & quote & ", not New to coding? Try the Academy"
+      end if
+      if not the visible of tButton then throw "Learn's Academy button is hidden"
+      -- whole: inside each group that holds it (each clips what it holds:
+      -- the banner, the page, the part of the window the page shows) and
+      -- inside the window
+      put the rect of tButton into tRect
+      put the long id of the owner of tButton into tOwner
+      repeat while word 1 of tOwner is "group"
+         put the rect of tOwner into tView
+         if item 1 of tRect < item 1 of tView or item 2 of tRect < item 2 of tView \
+               or item 3 of tRect > item 3 of tView or item 4 of tRect > item 4 of tView then
+            throw "Learn's Academy button (" & tRect & ") is cut off by the group" && the short name of tOwner && "(" & tView & ")"
+         end if
+         put the long id of the owner of tOwner into tOwner
+      end repeat
+      if item 3 of tRect > the width of stack kLearn or item 4 of tRect > the height of stack kLearn then
+         throw "Learn's Academy button (" & tRect & ") is cut off by the window (" & the width of stack kLearn & "x" & the height of stack kLearn & ")"
+      end if
+   catch tError
+   end try
+   if there is a stack kLearn and the mode of stack kLearn is not 0 then close stack kLearn
+   if tError is not empty then throw tError
+end tour_learn
+
+-- The xTalk Academy (palettes/academy), as Help > xTalk Academy opens it:
+-- the first page of its first course, with the courses in the sidebar,
+-- then the lesson "Hello, xTalk" with its first example tried in the
+-- playground, as its Try it does, which must have run and put its line.
+-- What the Academy keeps of a learner (the preferences cAcademy: the
+-- place, the lessons done, the drafts) is put back as it was, and the
+-- Message Box closed again when the step opened it.
+on tour_academy
+   local tSaved, tMsgOpen, tError, tCourses, tStatus, tOut, tExample, i
+   if there is not a stack "revPreferences" then throw "no revPreferences stack"
+   put the customProperties["cAcademy"] of stack "revPreferences" into tSaved
+   put (there is a stack "Message Box" and the mode of stack "Message Box" is not 0) into tMsgOpen
+   try
+      dispatch "revMenubarHelpMenuPick" to stack "revMenuBar" with "xTalk Academy"
+      if not tourWaitOpen(kAcademy, 10000) then throw "the Academy did not open"
+      -- the first page of the first course, wherever a learner left it
+      dispatch "acGoTo" to stack kAcademy with "basics", 0
+      tourWait 1500
+      tourShotStack kAcademy, "24e-academy"
+      -- the courses in the sidebar, one each
+      dispatch function "revAcademyCourses" to stack kAcademy
+      put the result into tCourses
+      tourRecord "INFO the Academy's courses:" && tCourses["count"]
+      if not (tCourses["count"] >= 3) then throw "the Academy has" && tCourses["count"] && "courses, not 3 or more"
+      repeat with i = 1 to tCourses["count"]
+         if there is not a control ("nav_" & i) of this card of stack kAcademy then
+            throw "the Academy's sidebar does not list the course" && tCourses[i]["title"]
+         end if
+      end repeat
+      if the number of lines of field "idx" of stack kAcademy < 3 then throw "the Academy's sidebar has no index of the lessons"
+      -- a lesson, and its first example tried: its Try it button is
+      -- p_c<N>_try, N the example's block of the lesson, and sends
+      -- lkAction "try N" (acCodeBlock)
+      dispatch "acGoTo" to stack kAcademy with "basics", "hello"
+      tourWait 1200
+      put empty into tExample
+      repeat with i = 1 to 40
+         if there is a control ("p_c" & i & "_try") of this card of stack kAcademy then
+            put i into tExample
+            exit repeat
+         end if
+      end repeat
+      if tExample is empty then throw "the lesson Hello, xTalk has no Try it button"
+      dispatch "lkAction" to stack kAcademy with "try" && tExample
+      tourWait 1500
+      put field "outStatus" of stack kAcademy into tStatus
+      put the text of field "out" of stack kAcademy into tOut
+      tourRecord "INFO the Academy's output:" && quote & tStatus & quote && "|" && tourJoin(tOut)
+      -- What an example puts goes to the Academy's output only (the IDE's
+      -- Message Box opened over the lesson until the IDE left the
+      -- Academy's stage out of it)
+      if not tMsgOpen and there is a stack "Message Box" and the mode of stack "Message Box" is not 0 then
+         close stack "Message Box"
+         throw "the Message Box opened over the Academy when the example ran"
+      end if
+      tourShotStack kAcademy, "24e-academy-lesson"
+      if not (field "playWhat" of stack kAcademy begins with "An example from the lesson") then
+         throw "the playground does not have the example (" & field "playWhat" of stack kAcademy & ")"
+      end if
+      if tStatus is "Stopped" or not (tStatus begins with "Ran") then
+         throw "the example did not run:" && tStatus & ":" && tourJoin(tOut)
+      end if
+      if line 1 of tOut is not "Hello, world!" then
+         throw "the example put" && quote & tourJoin(tOut) & quote & ", not Hello, world!"
+      end if
+      close stack kAcademy
+   catch tError
+   end try
+   if there is a stack kAcademy and the mode of stack kAcademy is not 0 then close stack kAcademy
+   if not tMsgOpen and there is a stack "Message Box" and the mode of stack "Message Box" is not 0 then close stack "Message Box"
+   set the customProperties["cAcademy"] of stack "revPreferences" to tSaved
+   if tError is not empty then throw tError
+end tour_academy
+
+-- The xTalk Assistant (ide/Extensions/org.openxtalk.plugin.xtalkassistant):
+-- its window, its Settings dialog and its Memory window, in Learn's look.
+-- Only the windows are opened: there is no key (the API keys of the
+-- environment are put aside for the step) and no server of the user's
+-- own, and a model is chosen, so it asks no provider for anything, and
+-- Send is never pressed. With no key it asks for one in its Settings when
+-- it opens, as it does for a user who has just turned it on. Both dialogs
+-- are modal, so each is snapshot and closed (which saves nothing) by a
+-- message sent before it opens. Then it is put back: turned off again as
+-- its More menu does, its windows, error hook and libraries gone (the
+-- frontScripts and the stacksInUse as they were, which the step checks),
+-- and its preferences and the environment as they were.
+local sXta
+
+on tour_xtalk_assistant
+   local tPrefs, tPref, tSaved, tWasOn, tWasOpen, tSockets, tFront, tInUse, tPending, tError
+   if there is not a stack kXtaMain then
+      tourRecord "INFO xtalk-assistant: this IDE has no xTalk Assistant"
+      exit tour_xtalk_assistant
+   end if
+   if toLower($OXTBEYOND_XTALK_ASSISTANT) is among the items of "off,0,false,no" then
+      tourRecord "INFO xtalk-assistant: turned off by OXTBEYOND_XTALK_ASSISTANT, so not opened"
+      exit tour_xtalk_assistant
+   end if
+   put "cXTalkAssistant,enabled" & return & "cXTalkAssistant,provider" & return & \
+         "cXTalkAssistant,model,anthropic" & return & "cXTalkAssistant,baseUrl,anthropic" into tPrefs
+   repeat for each line tPref in tPrefs
+      put revIDEGetPreference(tPref) into tSaved[tPref]
+   end repeat
+   put $ANTHROPIC_API_KEY into tSaved["$ANTHROPIC_API_KEY"]
+   put $OPENAI_API_KEY into tSaved["$OPENAI_API_KEY"]
+   dispatch function "xtaIsEnabled" to stack kXtaMain
+   put (the result is true) into tWasOn
+   put (there is a stack kXtaWindow and the mode of stack kXtaWindow is not 0) into tWasOpen
+   put the openSockets into tSockets
+   put the frontScripts into tFront
+   put the stacksInUse into tInUse
+   put empty into sXta
+   try
+      revIDESetPreference "cXTalkAssistant,enabled", true
+      revIDESetPreference "cXTalkAssistant,provider", "anthropic"
+      revIDESetPreference "cXTalkAssistant,baseUrl,anthropic", empty
+      if revIDEGetPreference("cXTalkAssistant,model,anthropic") is empty then
+         revIDESetPreference "cXTalkAssistant,model,anthropic", "claude-opus-5-5"
+      end if
+      put empty into $ANTHROPIC_API_KEY
+      put empty into $OPENAI_API_KEY
+      -- Development > Plugins > xTalk Assistant; with no key it asks for
+      -- one in its Settings, over its window, at once
+      send "tourShotXta" to me in 2500 milliseconds
+      put the result into tPending
+      dispatch "xtalkAssistantMenuPick" to stack kXtaMain
+      if sXta["settings"] is empty then cancel tPending
+      if not tourWaitOpen(kXtaWindow, 5000) then throw "the xTalk Assistant's window did not open"
+      tourWait 500
+      tourXtaLook kXtaWindow, "Send,Provider,Model,More"
+      if the mode of stack kXtaWindow is not 4 then tourXtaProblem "the window is not a palette (mode" && the mode of stack kXtaWindow & ")"
+      if field "Status" of stack kXtaWindow is empty then tourXtaProblem "the window's status line is empty"
+      tourRecord "INFO xTalk Assistant status:" && field "Status" of stack kXtaWindow
+      tourShotStack kXtaWindow, "24f-xtalk-assistant"
+      -- More > Settings..., when it did not ask for a key as it opened
+      if sXta["settings"] is empty then
+         send "tourShotXta" to me in 1500 milliseconds
+         dispatch "xtaMoreMenuPick" to stack kXtaMain with "Settings..."
+      end if
+      if sXta["settings"] is empty then throw "the xTalk Assistant's Settings did not open"
+      -- More > Memory...
+      send "tourShotXtaMemory" to me in 1500 milliseconds
+      dispatch "xtaMoreMenuPick" to stack kXtaMain with "Memory..."
+      if sXta["memory"] is empty then throw "the xTalk Assistant's Memory window did not open"
+      if sXta["problems"] is not empty then throw "the xTalk Assistant:" && tourJoin(sXta["problems"])
+      if the openSockets is not tSockets then
+         throw "the xTalk Assistant opened a socket:" && tourJoin(the openSockets)
+      end if
+   catch tError
+   end try
+   -- put back
+   if there is a stack kXtaSettings and the mode of stack kXtaSettings is not 0 then close stack kXtaSettings
+   if there is a stack kXtaMemory and the mode of stack kXtaMemory is not 0 then close stack kXtaMemory
+   -- turned off as it was, as More > Turn Off xTalk Assistant does once
+   -- its question is answered Turn Off (xtaTurnOff: its windows, the
+   -- error hook and its libraries go). Not with extensionFinalize, which
+   -- the IDE's own frontscripts hear too: one of them took itself out of
+   -- the message path.
+   if not tWasOn then
+      dispatch function "xtaIsEnabled" to stack kXtaMain
+      if the result is true then
+         send "tourXtaTurnOff" to me in 1000 milliseconds
+         dispatch "xtaMoreMenuPick" to stack kXtaMain with "Turn Off xTalk Assistant"
+      end if
+   else if not tWasOpen and there is a stack kXtaWindow and the mode of stack kXtaWindow is not 0 then
+      close stack kXtaWindow
+   end if
+   repeat for each line tPref in tPrefs
+      revIDESetPreference tPref, tSaved[tPref]
+   end repeat
+   put tSaved["$ANTHROPIC_API_KEY"] into $ANTHROPIC_API_KEY
+   put tSaved["$OPENAI_API_KEY"] into $OPENAI_API_KEY
+   if tError is empty and not tWasOn then
+      if there is a stack kXtaWindow then put "its window is still there" into tError
+      if the frontScripts is not tFront then
+         put "the frontScripts are not as they were:" && tourJoin(the frontScripts) into tError
+      end if
+      if the stacksInUse is not tInUse then
+         put "the stacksInUse are not as they were:" && tourJoin(the stacksInUse) into tError
+      end if
+      if tError is not empty then put "the xTalk Assistant was not put back:" && tError into tError
+   end if
+   if tError is not empty then throw tError
+end tour_xtalk_assistant
+
+-- (sent) Answers the question of More > Turn Off xTalk Assistant with
+-- Turn Off, as a click on that button of the Answer Dialog does
+on tourXtaTurnOff
+   if there is a stack "Answer Dialog" and the mode of stack "Answer Dialog" is not 0 \
+         and there is a button "Turn Off" of stack "Answer Dialog" then
+      send "mouseUp" to button "Turn Off" of stack "Answer Dialog"
+   else
+      tourXtaProblem "Turn Off xTalk Assistant asked nothing"
+      tourCloseDialogs
+   end if
+end tourXtaTurnOff
+
+-- (sent) The assistant's Settings dialog, then closed
+on tourShotXta
+   local tError
+   try
+      if not tourWaitOpen(kXtaSettings, 5000) then throw "the Settings did not open"
+      tourWait 500
+      tourXtaLook kXtaSettings, "Save,Cancel"
+      tourShotStack kXtaSettings, "24f-xtalk-assistant-settings"
+      put true into sXta["settings"]
+   catch tError
+      tourXtaProblem tourJoin(tError)
+   end try
+   -- (closed, as its close box does, it saves nothing: xtaSettingsDone)
+   if there is a stack kXtaSettings and the mode of stack kXtaSettings is not 0 then close stack kXtaSettings
+end tourShotXta
+
+on tourShotXtaMemory
+   local tError
+   try
+      if not tourWaitOpen(kXtaMemory, 5000) then throw "the Memory window did not open"
+      tourWait 500
+      tourXtaLook kXtaMemory, "Save,Cancel,Forget"
+      if there is not a field "You" of stack kXtaMemory then tourXtaProblem "the Memory window has no notes about you"
+      tourShotStack kXtaMemory, "24f-xtalk-assistant-memory"
+      put true into sXta["memory"]
+   catch tError
+      tourXtaProblem tourJoin(tError)
+   end try
+   -- (closed, it answers Cancel: cXtaChoice)
+   if there is a stack kXtaMemory and the mode of stack kXtaMemory is not 0 then close stack kXtaMemory
+end tourShotXtaMemory
+
+-- Learn's look (#167): the card on Learn's slate, the dark header with
+-- the violet mark, and the buttons pButtons
+command tourXtaLook pStack, pButtons
+   local tName
+   if the backgroundColor of this card of stack pStack is not "241,245,249" then
+      tourXtaProblem pStack && "is not on Learn's slate (" & the backgroundColor of this card of stack pStack & ")"
+   end if
+   repeat for each item tName in "uiBand,uiMark"
+      if there is not a graphic tName of this card of stack pStack then tourXtaProblem pStack && "has no" && tName
+   end repeat
+   repeat for each item tName in pButtons
+      if there is not a button tName of this card of stack pStack then tourXtaProblem pStack && "has no button" && tName
+   end repeat
+end tourXtaLook
+
+command tourXtaProblem pText
+   tourRecord "INFO xtalk-assistant:" && pText
+   put pText & return after sXta["problems"]
+end tourXtaProblem
+
+-- xTalk Chat (ide/Extensions/org.openxtalk.plugin.xtalkchat), as
+-- Development > Plugins > xTalk Chat opens it, before going online: its
+-- welcome. It goes online only when the user presses Go online, or when
+-- they were online as they last closed it (its preference autoOnline),
+-- which is turned off for the step, so nothing connects; it must still be
+-- offline, with no relay and no new socket, when it is snapshot. Its
+-- preferences are put back as they were, and closing the window lets its
+-- core go (xtchWindowClosed).
+on tour_xtalk_chat
+   local tPrefs, tPref, tSaved, tSockets, tOnline, tRelays, tError
+   if there is not a stack kChatMain then
+      tourRecord "INFO xtalk-chat: this IDE has no xTalk Chat"
+      exit tour_xtalk_chat
+   end if
+   if toLower($OXTBEYOND_XTALK_CHAT) is among the items of "off,0,false,no" then
+      tourRecord "INFO xtalk-chat: turned off by OXTBEYOND_XTALK_CHAT, so not opened"
+      exit tour_xtalk_chat
+   end if
+   if there is a stack kChatWindow and the mode of stack kChatWindow is not 0 then
+      tourRecord "INFO xtalk-chat: its window is open already, so not snapshot"
+      exit tour_xtalk_chat
+   end if
+   put "autoOnline,showClient,relays,muted,lastView" into tPrefs
+   repeat for each item tPref in tPrefs
+      put revIDEGetPreference("cXTalkChat," & tPref) into tSaved[tPref]
+   end repeat
+   put the openSockets into tSockets
+   try
+      revIDESetPreference "cXTalkChat,autoOnline", false
+      dispatch "xtalkChatMenuPick" to stack kChatMain
+      if not tourWaitOpen(kChatWindow, 10000) then throw "xTalk Chat's window did not open"
+      tourWait 1500
+      dispatch function "xtcIsOnline" to stack kChatCore
+      put the result into tOnline
+      dispatch function "xtcRelayStatus" to stack kChatCore
+      put the result into tRelays
+      tourRecord "INFO xTalk Chat: online" && tOnline & "; relays" && quote & tourJoin(tRelays) & quote
+      tourShotStack kChatWindow, "24g-xtalk-chat"
+      if tOnline is not false then throw "xTalk Chat is online (" & tOnline & ")"
+      if tRelays is not empty then throw "xTalk Chat has relays:" && tourJoin(tRelays)
+      if the openSockets is not tSockets then throw "xTalk Chat opened a socket:" && tourJoin(the openSockets)
+      if there is not a group "welcome" of this card of stack kChatWindow then throw "xTalk Chat does not show its welcome"
+   catch tError
+   end try
+   if there is a stack kChatWindow and the mode of stack kChatWindow is not 0 then close stack kChatWindow
+   tourWait 300
+   repeat for each item tPref in tPrefs
+      revIDESetPreference "cXTalkChat," & tPref, tSaved[tPref]
+   end repeat
+   if tError is not empty then throw tError
+end tour_xtalk_chat
+
 on tour_answer
    send "tourShotDialog" && quote & "25-answer" & quote to me in 1500 milliseconds
    answer warning "A message from the screenshot tour." & return & "Second line." with "Cancel" and "OK"
@@ -1543,6 +1902,15 @@ end tourMoveMouse
 command tourWait pMilliseconds
    wait pMilliseconds milliseconds with messages
 end tourWait
+
+-- Waits, at most pMilliseconds, for the stack pStack to be open and shown
+function tourWaitOpen pStack, pMilliseconds
+   repeat (pMilliseconds div 250) times
+      if there is a stack pStack and the mode of stack pStack is not 0 and the visible of stack pStack then return true
+      tourWait 250
+   end repeat
+   return there is a stack pStack and the mode of stack pStack is not 0 and the visible of stack pStack
+end tourWaitOpen
 
 -- Snapshot of the window of pStack with its frame, on screen
 command tourShotStack pStack, pFile

@@ -837,9 +837,11 @@ class WebLink {
         answer(400, { error: 'not JSON' });
         return;
       }
+      // Written so a time that is not a number is outside the window:
+      // Math.abs(NaN) > RELAY_WINDOW_MS is false
       if (url.pathname === '/relay-cancel') {
         if (!sameText(String(body.proof || ''), hmac(this.key, 'relay-cancel\n' + body.request)) ||
-            Math.abs(Date.now() - Number(request.time)) > RELAY_WINDOW_MS) {
+            !(Math.abs(Date.now() - Number(request.time)) <= RELAY_WINDOW_MS)) {
           log('refused to cancel a relayed call: the request does not hold this server\'s key');
           answer(403, { error: 'refused' });
           return;
@@ -853,7 +855,7 @@ class WebLink {
       }
       if (!sameText(String(body.proof || ''), hmac(this.key, 'relay\n' + body.request)) ||
           !/^[0-9a-f]{64}$/.test(String(request.nonce)) || typeof request.tool !== 'string' ||
-          Math.abs(Date.now() - Number(request.time)) > RELAY_WINDOW_MS || this.relayNonces.has(request.nonce)) {
+          !(Math.abs(Date.now() - Number(request.time)) <= RELAY_WINDOW_MS) || this.relayNonces.has(request.nonce)) {
         log('refused a relayed call: it does not hold this server\'s key, or was sent before');
         answer(403, { error: 'refused' });
         return;
@@ -1087,8 +1089,18 @@ class WebBridge extends Bridge {
       // Nothing listens there now: this server takes the port, and the
       // tab connects to it the next time it tries
       if (e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET') {
-        log('the server that held port ' + port + ' is gone; this one listens there now');
-        this.link.listen();
+        // Not taken from now on, not only once it listens: until then a
+        // call queued behind this one was relayed to this server's own
+        // port, waited behind itself and failed as busy (and the port's
+        // old problem answered the calls after it). Only the first call
+        // to find the port free listens; the error handler marks it
+        // taken again if another program got there first.
+        if (this.link.taken) {
+          log('the server that held port ' + port + ' is gone; this one listens there now');
+          this.link.taken = false;
+          this.link.problem = '';
+          this.link.listen();
+        }
         throw new BridgeError(WEB_NOT_CONNECTED);
       }
       throw new BridgeError(this.link.problem + ' (A call to it failed: ' + e.message + '.)');

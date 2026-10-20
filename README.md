@@ -87,11 +87,17 @@ over OXT DPE's Extension Manager, lets a stack in the Stack Player find
 its files through `specialFolderPath("resources")` and polishes the
 stacks new in 0.2.7 (see
 [0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish)),
-and 0.2.7-rc.5, the last candidate before 0.2.7, makes the scripts of
+and 0.2.7-rc.5 makes the scripts of
 imported HyperCard stacks compile, and adds xTalk Chat, three xTalk
 Suite apps in Learn and a new About window, and fixes the
 Standalone Settings' Web card on macOS 26 (see
-[0.2.7-rc.5](#027-rc5-hypercard-scripts-that-compile-xtalk-chat-and-the-xtalk-suites-apps));
+[0.2.7-rc.5](#027-rc5-hypercard-scripts-that-compile-xtalk-chat-and-the-xtalk-suites-apps)),
+and 0.2.7-rc.6 "Bug Hunt", the candidate frozen for play testing, adds
+the xTalk Academy, a course in programming for beginners, Home and a
+Release Notes window on the desktop, a modern Tools palette and the
+IDE's questions in Learn's look, and makes File > Import Stack work in
+the IDE again and imported HyperCard stacks open on the web (see
+[0.2.7-rc.6](#027-rc6-bug-hunt-the-xtalk-academy-and-the-ide-in-learns-look));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1537,6 +1543,112 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6: Bug Hunt, the xTalk Academy, and the IDE in Learn's look
+
+OXT-Beyond 0.2.7-rc.6 "Bug Hunt", a test release frozen for play
+testing, has everything in 0.2.7-rc.5, and:
+
+- **The xTalk Academy** (*Help > xTalk Academy*, or "New to coding?
+  Try the Academy" in Learn and "Learn to code" on Home): a course in
+  programming for beginners and schools, in conventional xTalk. Its 47
+  lessons are in three courses: Coding with xTalk (31 lessons, from
+  sequence and variables to searching, sorting and recursion), Projects
+  (10 small programs) and For teachers. Each lesson has examples to try,
+  quick checks and a challenge, which is marked by running your code
+  against tests. The playground beside it runs code in a sandbox stack,
+  stops a loop that runs on after ten seconds, explains errors in plain
+  words and marks the line. The courses are text files in
+  `Toolset/palettes/academy/courses` that a teacher can change.
+- **Home on the desktop** (*Help > Welcome to OXT-Beyond*): the
+  six-page welcome with live examples that the web IDE opens at startup,
+  worded for the desktop, with your recent stacks on its last card. It
+  opens at startup only if you turn on "Show Home at startup" in its
+  sidebar.
+- **A Release Notes window** (*Help > Release Notes*, and every Release
+  Notes button), in the look of Home and Learn: every release from the
+  changelog, newest first, with its notes from this README and every
+  change it brought, each linked to its pull request, and a search.
+  **Classic notes** (or the Option (Alt) key) opens the old window.
+- **A modern Tools palette** (*Tools > Modern Tools Palette*): the
+  objects and tools as tiles in Learn's look, light or dark with the
+  system, in sections that fold, with a filter, names that can be shown
+  (a long name shrinks or wraps rather than being cut off), and a window
+  you can size freely. The classic look stays the default and its
+  settings are untouched.
+- **The IDE's questions in Learn's look.** Help > Check for Updates,
+  every window of the xTalk MCP Bridge and the warning before a stack
+  opens use a new dialog: a dark header with the question, Learn's
+  callouts, code on Learn's code panel in colour with a Copy button, and
+  the same buttons as before. The warning before a stack opens adds
+  Cancel, and Peek shows the file's scripts in colour. With the Option
+  (Alt) key down, in the web IDE, or in another xTalk's IDE, the old
+  dialogs open. The xTalk Assistant's windows take Learn's look too.
+- **Windows that can be made bigger**: Home, the new dialogs, About,
+  Release Notes and the xTalk Assistant's Memory window. Each opens at
+  the size it had and cannot be made smaller.
+- **File > Import Stack works in the IDE again.** In 0.2.7-rc.5 it did
+  nothing after the file dialog, because the two HyperCard libraries were
+  loaded but not in the message path. A second import no longer takes
+  the first stack's "HyperCard Library", and the library is no longer
+  left open as the topStack.
+- **HyperCard stacks on the web.** A HyperCard stack imported and saved
+  on the desktop now opens in the Stack Player, where it stopped with
+  "can't find handler playerLog". A stack whose openStack or openCard
+  fails (usually an XCMD it no longer has) opens, and the player shows
+  the error in a dialog, where it said "Could not open".
+- **The xTalk Suite demos open built**, in the middle of the screen,
+  where No Cloud Quick Share and Torrent Client built their windows as
+  you watched.
+- **The Calendar and Pie Chart widgets load** where the IDE cannot
+  compile them, where the Extension Manager showed them red. With Paul
+  McClernan's changes
+  ([#154](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/154)),
+  a new pie chart draws its labels in its own colour and font, so they
+  show in dark mode, and takes its sector colours from `sectorColors`.
+- **The web IDE makes a player** (Object > New Control > Player stopped
+  on a script error), and its Help menu has Release Notes.
+- **The web IDE's MCP Bridge from a Cowork or Code session.** Claude
+  Desktop starts two copies of the bridge's server, and only one can hold
+  the web IDE's port; the other now passes its calls to it, where it
+  failed with "Port 47861 of this computer is taken". The note on
+  Claude Desktop's built-in Node.js under 0.2.7-rc.5 still holds.
+- **The Bug Hunt look**: new splash screens, installer art and banner,
+  and the release name "Bug Hunt" in the About window.
+
+A script sees these differences from 0.2.7-rc.5. The backScripts of
+the IDE hold the two HyperCard libraries, `revHyperCardScriptLibrary`
+and `revHyperCardDiskImageLibrary`, which were loaded but not in the
+message path. A pie chart saved before this release keeps its black
+labels in the default font (its `themedLabels` is false), and draws its
+sectors in the default colours when it opens: 0.2.7-rc.5 did not load
+its colours, so its sectors could not paint. It has two new
+properties, `sectorColors` and `themedLabels`;
+a new one draws its labels in the widget's foreground colour and font
+and starts with twelve sectors. With more sectors than colours every
+sector is painted (painting stopped at the first sector without a
+colour), and `sectorClicked` names the sector under the click after a
+resize or new values (it could name the one from the first paint). In
+the Stack Player, a stack whose openStack or openCard throws opens with
+an error dialog, where the player said "Could not open"; the player's
+handlers that it calls after `go` are private. The IDE's own flow
+differs: Help has two new items (Welcome to OXT-Beyond, at the top, and
+xTalk Academy) and Tools one (Modern Tools Palette);
+`tOpenReleaseNotes` of the Preferences opens the stack
+"revReleaseNotes" (with the Option key down, `ReleaseNotes.oxtstack` as before);
+the warning before a stack opens is modal, so several stacks chosen at
+once are asked about in turn; the MCP Bridge's `mcbAsk` passes its
+asker's `mcbConfirm` an optional fourth parameter; the IDE library has
+`revIDEKitDialog`; and the Academy, Home's startup switch and the
+modern Tools palette keep their settings as new preferences. `answer`,
+`ask` and the classic windows are unchanged, and desktop engines and
+stacks are otherwise unchanged. Pull requests
+[#151](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/151)
+and
+[#156](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/156)
+to
+[#169](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/169)
+list every change.
 
 #### 0.2.7-rc.5: HyperCard scripts that compile, xTalk Chat, and the xTalk Suite's apps
 
