@@ -107,6 +107,8 @@ pango libpango-1.0.so.0
 	pango_matrix_concat: (pointer, pointer) -> ()
 	pango_font_description_get_family: (pointer) -> (pointer)
 	pango_font_description_get_size: (pointer) -> (integer)
+	pango_font_description_get_size_is_absolute: (pointer) -> (integer)
+	pango_font_description_copy: (pointer) -> (pointer)
 	pango_font_describe: (pointer) -> (pointer)
 	pango_context_get_metrics: (pointer, pointer, pointer) -> (pointer)
 	pango_font_metrics_get_strikethrough_position: (pointer) -> (integer)

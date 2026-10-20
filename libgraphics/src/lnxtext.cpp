@@ -155,6 +155,36 @@ void MCGContextDrawPlatformText(MCGContextRef self, const unichar_t *p_text, uin
 	MCGAffineTransform t_transform;
 	t_transform = MCGContextGetDeviceTransform(self);
 
+	// OXT-Beyond: [[ HiDPI ]] Pango's FT2 renderer scales the glyphs of a font
+	// it loaded for a scaled context matrix a second time, so text drawn at a
+	// scale (a HiDPI window's backing scale, or a stack's scaleFactor) came
+	// out at twice its size, overlapping and cut off. For a scale without
+	// rotation, lay the text out in device pixels instead: the font at the
+	// scaled size, and a matrix that only translates. Text drawn at a scale
+	// of 1 (or rotated, or skewed) takes the path it always took.
+	MCGPoint t_location;
+	t_location = p_location;
+	PangoFontDescription *t_scaled_font;
+	t_scaled_font = nil;
+	if (t_success && t_transform . b == 0 && t_transform . c == 0 &&
+		t_transform . a == t_transform . d && t_transform . a > 0 && t_transform . a != 1)
+	{
+		MCGFloat t_scale;
+		t_scale = t_transform . a;
+
+		t_scaled_font = pango_font_description_copy((PangoFontDescription *) p_font . fid);
+		if (t_scaled_font != nil)
+		{
+			if (pango_font_description_get_size_is_absolute(t_scaled_font))
+				pango_font_description_set_absolute_size(t_scaled_font, pango_font_description_get_size(t_scaled_font) * t_scale);
+			else
+				pango_font_description_set_size(t_scaled_font, gint(pango_font_description_get_size(t_scaled_font) * t_scale + 0.5));
+
+			t_transform = MCGAffineTransformMakeTranslation(t_transform . tx, t_transform . ty);
+			t_location = MCGPointMake(p_location . x * t_scale, p_location . y * t_scale);
+		}
+	}
+
 	PangoLayoutLine *t_line;
 	t_line = nil;
 	if (t_success)
@@ -166,7 +196,7 @@ void MCGContextDrawPlatformText(MCGContextRef self, const unichar_t *p_text, uin
 		t_ptransform = MCGAffineTransformToPangoMatrix(t_transform);
 		pango_context_set_matrix(s_pango, &t_ptransform);
 
-		pango_layout_set_font_description(s_layout, (PangoFontDescription *) p_font . fid);
+		pango_layout_set_font_description(s_layout, t_scaled_font != nil ? t_scaled_font : (PangoFontDescription *) p_font . fid);
 		pango_layout_set_text(s_layout, t_text, -1);
 		MCCStringFree(t_text);
 		
@@ -188,7 +218,7 @@ void MCGContextDrawPlatformText(MCGContextRef self, const unichar_t *p_text, uin
 		t_float_text_bounds = MCGRectangleFromPangoRectangle(t_pbounds);
 		
 		// Apply translation to put target location at the origin
-		t_transform = MCGAffineTransformPostTranslate(t_transform, p_location.x, p_location.y);
+		t_transform = MCGAffineTransformPostTranslate(t_transform, t_location.x, t_location.y);
 
 		MCGRectangle t_device_text_bounds;
 		t_device_text_bounds = MCGRectangleApplyAffineTransform(t_float_text_bounds, t_transform);
@@ -199,7 +229,11 @@ void MCGContextDrawPlatformText(MCGContextRef self, const unichar_t *p_text, uin
 		t_bitmap_bounds = MCGRectangleGetBounds(MCGRectangleIntersection(t_device_text_bounds, t_device_clip));
 		
 		if (t_bitmap_bounds.size.width == 0 || t_bitmap_bounds.size.height == 0)
+		{
+			if (t_scaled_font != nil)
+				pango_font_description_free(t_scaled_font);
 			return;
+		}
 	}
 	
 	void *t_data;
@@ -253,6 +287,9 @@ void MCGContextDrawPlatformText(MCGContextRef self, const unichar_t *p_text, uin
 	}
     
 	MCMemoryDelete(t_data);
+	// The layout keeps a copy of its font description, so ours can go.
+	if (t_scaled_font != nil)
+		pango_font_description_free(t_scaled_font);
 	self -> is_valid = t_success;
 }
 
