@@ -62,6 +62,18 @@ static PangoFontMap *s_font_map = NULL;
 static PangoContext *s_pango = NULL;
 static PangoLayout *s_layout = NULL;
 
+// OXT-Beyond: drawing leaves its transform on the shared context; measuring
+// resets it so text is measured the same whatever was drawn last.
+static void lnx_pango_reset_matrix(void)
+{
+	if (s_pango == NULL)
+		return;
+
+	PangoMatrix t_identity;
+	t_identity = MCGAffineTransformToPangoMatrix(MCGAffineTransformMakeIdentity());
+	pango_context_set_matrix(s_pango, &t_identity);
+}
+
 static bool lnx_pango_objects_initialize()
 {
     bool t_success;
@@ -311,6 +323,9 @@ MCGFloat __MCGContextMeasurePlatformText(MCGContextRef self, const unichar_t *p_
 	t_width = 0.0;
 	if (t_success)
 	{
+		// OXT-Beyond: from Tom Perry's OpenXTalk Lite 7 engine.
+		lnx_pango_reset_matrix();
+
 		pango_layout_set_text(s_layout, t_text, -1);
 		pango_layout_set_font_description(s_layout, (PangoFontDescription *) p_font . fid);
 		
