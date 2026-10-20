@@ -6,8 +6,9 @@ request then changes a file no other one touches, so a merge to main
 leaves the other open pull requests without a conflict, and without the
 merge of main and the full builds that settling one used to cost.
 
-Name the file after the pull request's branch, or its number once it has
-one (`changelog/168.md`), and write CHANGELOG.md's own lines, one per
+Name the file after the pull request's branch, with any `/` made a `-`,
+or its number once it has one (`changelog/168.md`; a folder in
+`changelog/` fails the check), and write CHANGELOG.md's own lines, one per
 change, each ending with the pull request's number:
 
 ```

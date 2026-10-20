@@ -26,21 +26,25 @@ section of CHANGELOG.md, so each merge left every other open pull request
 in conflict on that one file, and the merge of main that settled it built
 all three platforms again. Now a pull request writes its lines to a file
 of its own, changelog/<name>.md (any name no other pull request uses:
-its branch's, or its number once it has one), in CHANGELOG.md's own form,
+its branch's with any "/" made a "-", or its number once it has
+one), in CHANGELOG.md's own form,
 one "- " line per change ending with the pull request's number:
 
   - Tools palette: long names shrink or wrap instead of being cut off (#168)
 
-check (CI checks, on every pull request and push): every fragment holds
-at least one line, every line that is not empty starts with "- ", none is
+check (CI checks, on every pull request and push): changelog/ holds
+only .md files (a folder, as a branch name with a "/" would make, is an
+error, since fold would miss it), every fragment holds at least one line, every line that is not empty starts with "- ", none is
 a heading, and CHANGELOG.md has at most one "## Unreleased" section.
 
 fold (the pull request that sets a release's version, before it renames
 "## Unreleased" to the version; BUILDING.md, "Making a release"): appends
 the fragments' lines to the end of "## Unreleased" (made above the newest
 release's section when there is none), in the order the fragments came
-into the repository (the commit that added each, from git; by name when
-git cannot tell, as in a shallow clone), and deletes the fragments. So
+into main (the first-parent commit that added each, from git: a merge
+commit counts when it was merged, not when its branch was written; by
+name when git cannot tell, as in a shallow clone), and deletes the
+fragments. So
 CHANGELOG.md reads exactly as it did when the lines were added to it by
 hand. changelog/README.md is not a fragment. Only the Python 3 standard
 library is used.
@@ -69,6 +73,18 @@ def fragment_names(repo):
     return sorted(f for f in os.listdir(folder)
                   if f.endswith('.md') and f != README
                   and os.path.isfile(os.path.join(folder, f)))
+
+
+def strays(repo):
+    """What changelog/ holds besides its fragments and README.md: a
+    folder (a fragment named after a branch with a "/" in it), or a file
+    that is not .md, which fold would leave out."""
+    folder = os.path.join(repo, FRAGMENTS)
+    if not os.path.isdir(folder):
+        return []
+    return sorted(f for f in os.listdir(folder)
+                  if f != README and not (f.endswith('.md')
+                                          and os.path.isfile(os.path.join(folder, f))))
 
 
 def fragment_lines(repo, name):
@@ -101,7 +117,8 @@ def unreleased_count(lines):
 
 def check(repo):
     """Every problem found, as a list of messages (empty when none)."""
-    problems = []
+    problems = ['%s/%s is not a fragment: write changelog/<name>.md, with no "/" in the name'
+                % (FRAGMENTS, name) for name in strays(repo)]
     for name in fragment_names(repo):
         try:
             fragment_lines(repo, name)
@@ -112,27 +129,33 @@ def check(repo):
     return problems
 
 
-def added_at(repo, name):
-    """When the fragment came into the repository: the commit time of the
-    first commit that added it, or None when git cannot tell (not
-    committed yet, no git, a shallow clone without that commit)."""
+def git_lines(repo, *args):
+    """The lines git prints, or None when it fails (no git, no repository)."""
     try:
-        out = subprocess.run(
-            ['git', 'log', '--diff-filter=A', '--follow', '--format=%ct', '--',
-             FRAGMENTS + '/' + name],
-            cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            universal_newlines=True, check=True).stdout.split()
+        return subprocess.run(['git'] + list(args), cwd=repo, stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, universal_newlines=True,
+                              check=True).stdout.split()
     except (OSError, subprocess.CalledProcessError):
         return None
-    return int(out[-1]) if out else None
 
 
 def ordered(repo, names):
-    """Fragments in the order they came in; uncommitted ones last, and by
-    name among those git cannot date."""
+    """Fragments in the order they were merged: the position on main's
+    first-parent history of the commit that brought each one in (for a
+    pull request merged with a merge commit, that merge, whenever its
+    branch's own commits were made). Uncommitted fragments come last, and
+    those git cannot place (no git, a shallow clone) go by name."""
+    history = git_lines(repo, 'rev-list', '--first-parent', '--reverse', 'HEAD') or []
+    position = dict((sha, i) for i, sha in enumerate(history))
+
     def key(name):
-        t = added_at(repo, name)
-        return (t is None, t or 0, name)
+        # --first-parent: a merge's diff against its first parent, so the
+        # merge that brought a branch's fragment in is the commit that
+        # added it
+        added = git_lines(repo, 'log', '--first-parent', '--diff-filter=A', '--format=%H',
+                          '--', FRAGMENTS + '/' + name) or []
+        at = position.get(added[-1]) if added else None
+        return (at is None, at or 0, name)
     return sorted(names, key=key)
 
 

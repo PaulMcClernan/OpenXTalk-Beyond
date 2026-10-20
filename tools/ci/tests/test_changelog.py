@@ -123,22 +123,49 @@ class ChangelogTest(unittest.TestCase):
         self.assertEqual(self.changelog(), before)
         self.assertEqual(changelog.fragment_names(self.repo), ['a.md', 'b.md'])
 
+    def commit(self, message, when):
+        env = dict(os.environ, GIT_COMMITTER_DATE=when + ' +0000', GIT_AUTHOR_DATE=when + ' +0000')
+        subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q',
+                        '-m', message], cwd=self.repo, check=True, env=env,
+                       stdout=subprocess.DEVNULL)
+
     def test_fragments_fold_in_the_order_they_were_merged(self):
         self.changelog(HEAD + RELEASED)
-        self.git('init', '-q')
+        self.git('init', '-q', '-b', 'main')
         self.git('add', '-A')
-        self.git('commit', '-q', '-m', 'start')
-        # z first, then a, a second apart: the commit order, not the names
-        for name, when in (('z.md', '1700000000'), ('a.md', '1700000100')):
+        self.commit('start', '1700000000')
+        # z on main first, then a: the commit order, not the names
+        for name, when in (('z.md', '1700000100'), ('a.md', '1700000200')):
             self.fragment(name, '- From %s\n' % name[0])
             self.git('add', '-A')
+            self.commit(name, when)
+        # old's commit is older than new's, but old's branch is merged
+        # (with a merge commit) after new's: merge order wins
+        for branch, when in (('old', '1700000300'), ('new', '1700000400')):
+            self.git('checkout', '-q', '-b', branch, 'main')
+            self.fragment(branch + '.md', '- From %s\n' % branch)
+            self.git('add', '-A')
+            self.commit(branch, when)
+            self.git('checkout', '-q', 'main')
+        for branch, when in (('new', '1700000500'), ('old', '1700000600')):
             env = dict(os.environ, GIT_COMMITTER_DATE=when + ' +0000', GIT_AUTHOR_DATE=when + ' +0000')
-            subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q',
-                            '-m', name], cwd=self.repo, check=True, env=env,
-                           stdout=subprocess.DEVNULL)
+            subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', 'merge', '-q',
+                            '--no-ff', '-m', 'merge ' + branch, branch], cwd=self.repo,
+                           check=True, env=env, stdout=subprocess.DEVNULL)
         # not committed yet: last
         self.fragment('m.md', '- From m\n')
-        self.assertEqual(changelog.fold(self.repo), ['- From z', '- From a', '- From m'])
+        self.assertEqual(changelog.fold(self.repo),
+                         ['- From z', '- From a', '- From new', '- From old', '- From m'])
+
+    def test_check_refuses_a_folder_and_other_files(self):
+        self.changelog(HEAD + RELEASED)
+        os.makedirs(os.path.join(self.repo, changelog.FRAGMENTS, 'fix'))
+        self.fragment(os.path.join('fix', 'menu.md'), '- Nested (#2)\n')
+        self.fragment('notes.txt', '- Not markdown (#3)\n')
+        problems = changelog.check(self.repo)
+        self.assertEqual(len(problems), 2, problems)
+        with self.assertRaises(changelog.ChangelogError):
+            changelog.fold(self.repo)
 
     def test_without_git_by_name(self):
         self.changelog(HEAD + RELEASED)
