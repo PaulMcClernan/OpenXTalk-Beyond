@@ -1619,8 +1619,11 @@ testing, has everything in 0.2.7-rc.5, and:
 A script sees these differences from 0.2.7-rc.5. The backScripts of
 the IDE hold the two HyperCard libraries, `revHyperCardScriptLibrary`
 and `revHyperCardDiskImageLibrary`, which were loaded but not in the
-message path. A pie chart saved before this release opens exactly as
-it did, and has two new properties, `sectorColors` and `themedLabels`;
+message path. A pie chart saved before this release keeps its black
+labels in the default font (its `themedLabels` is false), and draws its
+sectors in the default colours when it opens: 0.2.7-rc.5 did not load
+its colours, so its sectors could not paint. It has two new
+properties, `sectorColors` and `themedLabels`;
 a new one draws its labels in the widget's foreground colour and font
 and starts with twelve sectors. With more sectors than colours every
 sector is painted (painting stopped at the first sector without a

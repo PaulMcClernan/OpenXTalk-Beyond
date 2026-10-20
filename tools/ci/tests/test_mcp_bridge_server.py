@@ -919,6 +919,24 @@ class McpBridgeWebServerTest(McpBridgeServerBase):
         self.assertTrue(tab.server_ok)
         self.assertEqual(self.call('list_stacks')['content'][0]['text'], 'stacks')
 
+    def test_web_calls_queued_when_the_first_server_goes_are_not_busy(self):
+        # Three calls at once after the server on the port quit: the first
+        # takes the port, and the two queued behind it were relayed to this
+        # server's own port, waited behind themselves and came back busy
+        self.start_web(OXT_MCP_BUSY_WAIT_MS='3000')
+        self.initialize()
+        first = self.second_server(OXT_MCP_BUSY_WAIT_MS='3000')
+        self.end(first)
+        sent = [self.send('tools/call', {'name': 'list_stacks', 'arguments': {}}) for _ in range(3)]
+        started = time.time()
+        replies = {}
+        for _ in sent:
+            reply = self.receive()
+            replies[reply['id']] = reply['result']['content'][0]['text']
+        self.assertLess(time.time() - started, 2)
+        for id in sent:
+            self.assertIn('not connected', replies[id])
+
     def test_web_a_relayed_call_from_a_page_is_refused(self):
         self.start_web()
         self.initialize()

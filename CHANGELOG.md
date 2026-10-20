@@ -18,7 +18,7 @@ words, is in the [README](README.md#the-ide) and on the
 
 - Learn: the xTalk Suite demos open built, in the middle of the screen (#157)
 - Calendar and Pie Chart: the widgets load in the IDE, with Paul's Pie Chart changes (#156)
-- Pie Chart: old charts keep their look, custom colours are saved, recompiled (#156)
+- Pie Chart: charts saved before keep their black labels and draw their sectors again, custom colours are saved, recompiled (#156)
 - IDE: a Release Notes window with the changelog, in the look of Home and Learn (#158)
 - Release Notes: put the defaultStack back when opening fails (#158)
 - Branding: 0.2.7 "Bug Hunt" splash screens, installer art, banner and release name (#161)
@@ -42,6 +42,7 @@ words, is in the [README](README.md#the-ide) and on the
 - Stack Player: HyperCard stacks imported and saved on the desktop now open on the web (they stopped with "can't find handler playerLog"); a stack whose openStack or openCard fails now opens and shows the script error, as on the desktop (#169)
 - Version 0.2.7-rc.6, with its changelog and notes (#170)
 - Web check: a page that crashes is opened again in a new browser, and a check that hangs fails in ten minutes, naming what it waited for (#170)
+- MCP Bridge: calls waiting when the server on the port quits are no longer told OXT-Beyond is busy; the pie chart notes corrected (#170)
 
 ## 0.2.7-rc.5 (2026-10-19, pre-release)
 
