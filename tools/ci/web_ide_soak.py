@@ -38,12 +38,18 @@ process is found by its command line (Chromium's renderer, WebKit's
 WebKitWebProcess, Firefox's content process), on Linux and macOS; on
 Windows the process columns are empty.
 
+Every 30 seconds the log has a line with the latest numbers, so that a
+run that ends badly shows how it got there. The page is asked for its
+numbers with a time limit: a page whose engine keeps the browser's main
+thread busy does not answer, and the script would wait for it for ever.
+
 The check fails when the IDE does not open, the page reports an error of
 its own (a JavaScript error, or the engine stopping), the browser's web
-process crashes, or the page loads itself again. It does not fail on the
-numbers, which it reports (start, peak, end, and the growth after the
-first minute) in the log and, under GitHub Actions, in the job summary:
-what a browser tolerates differs from one device to the next.
+process crashes, the page loads itself again, or the page does not answer
+for --unresponsive seconds (default 60). It does not fail on the numbers,
+which it reports (start, peak, end, and the growth after the first
+minute) in the log and, under GitHub Actions, in the job summary: what a
+browser tolerates differs from one device to the next.
 
 Exit status 0 when the check passes, 1 otherwise. Needs Python 3.8 or
 later and the Python package playwright with the browser
@@ -80,6 +86,7 @@ PROCESSES = {
 
 SAMPLE = 2
 TURN = 20
+REPORT = 30
 
 
 def log(text):
@@ -103,6 +110,19 @@ def serve(folder):
                                              functools.partial(Handler, directory=folder))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
+
+
+def ask(page, expression, seconds):
+    """The value of a JavaScript expression in the page, or None if the
+    page does not answer within seconds. (page.evaluate() has no time
+    limit; page.wait_for_function() has, and returns the value.)"""
+    try:
+        handle = page.wait_for_function('() => ({value: %s})' % expression, timeout=seconds * 1000)
+    except Exception as e:  # noqa: BLE001 - a time-out, or a page that went away
+        if type(e).__name__ == 'TimeoutError':
+            return None
+        raise
+    return handle.json_value()['value']
 
 
 def ticks_per_second():
@@ -184,6 +204,8 @@ def main():
                     help='the browser (Playwright\'s build)')
     ap.add_argument('--minutes', type=float, default=5, help='how long the page stays open')
     ap.add_argument('--timeout', type=float, default=300, help='seconds for the IDE to open')
+    ap.add_argument('--unresponsive', type=float, default=60,
+                    help='seconds the page may go without answering')
     args = ap.parse_args()
 
     from playwright.sync_api import sync_playwright
@@ -213,6 +235,8 @@ def main():
     with sync_playwright() as p:
         browser = getattr(p, args.browser).launch()
         page = browser.new_page(viewport={'width': WIDTH, 'height': HEIGHT})
+        # A click or a wait gives up rather than waiting for ever
+        page.set_default_timeout(30000)
         page.on('console', lambda m: console.write('%s %s %s\n' % (stamp(), m.type, m.text)))
         state = {'opened': False, 'crashed': False, 'loads': 0}
 
@@ -234,8 +258,8 @@ def main():
         try:
             page.goto(url)
             page.wait_for_function('%s || %s' % (OPENED, FAILED), timeout=args.timeout * 1000)
-            if page.evaluate(FAILED):
-                status = page.evaluate("document.getElementById('error').textContent")
+            status = ask(page, '%s ? document.getElementById("error").textContent : ""' % FAILED, 30)
+            if status:
                 raise RuntimeError('the IDE did not open: %s' % status)
             state['opened'] = True
             loads = state['loads']
@@ -246,17 +270,28 @@ def main():
 
             opened = time.time()
             last_cpu = None
+            last_answer = opened
             next_turn = opened + TURN
+            next_report = opened + REPORT
             while time.time() - opened < args.minutes * 60:
-                page.wait_for_timeout(SAMPLE * 1000)
+                time.sleep(SAMPLE)
                 if state['crashed']:
                     raise RuntimeError('the browser\'s web process crashed')
                 if state['loads'] != loads:
                     raise RuntimeError('the page loaded itself again')
-                if page.evaluate(FAILED):
-                    raise RuntimeError('the page reported: %s'
-                                       % page.evaluate("document.getElementById('error').textContent"))
+                answer = ask(page, '[%s ? document.getElementById("error").textContent : null, %s]'
+                             % (FAILED, HEAP), SAMPLE)
                 now = time.time()
+                if answer is None:
+                    heap = None
+                    console.write('%s NO ANSWER\n' % stamp())
+                    if now - last_answer > args.unresponsive:
+                        raise RuntimeError('the page did not answer for %d seconds' % (now - last_answer))
+                else:
+                    last_answer = now
+                    if answer[0] is not None:
+                        raise RuntimeError('the page reported: %s' % answer[0])
+                    heap = answer[1] / 1048576.0 or None
                 found = web_process(args.browser)
                 rss = cpu = None
                 if found:
@@ -265,12 +300,17 @@ def main():
                     if seconds is not None and last_cpu and last_cpu[0] == found[0]:
                         cpu = 100.0 * (seconds - last_cpu[1]) / max(0.001, now - last_cpu[2])
                     last_cpu = (found[0], seconds, now) if seconds is not None else None
-                heap = page.evaluate(HEAP) / 1048576.0 or None
                 sample = (round(now - opened, 1), rss, cpu, heap)
                 samples.append(sample)
                 csv.write(','.join('' if v is None else ('%.1f' % v) for v in sample) + '\n')
                 csv.flush()
-                if now >= next_turn:
+                if now >= next_report:
+                    next_report = now + REPORT
+                    log('%s web process %s MB, %s%% of a core; WebAssembly memory %s MB'
+                        % (stamp(), '?' if rss is None else '%.0f' % rss,
+                           '?' if cpu is None else '%.0f' % cpu,
+                           'no answer' if heap is None else '%.0f' % heap))
+                if answer is not None and now >= next_turn:
                     next_turn = now + TURN
                     # Home's title bar is the page's own element
                     # (engine/src/em-dc.js): a click there brings Home to
