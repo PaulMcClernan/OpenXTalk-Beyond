@@ -107,6 +107,9 @@ mergeInto(LibraryManager.library, {
                 return;
             }
             LiveCodeDialog._styled = true;
+            ['fullscreenchange', 'webkitfullscreenchange'].forEach(function(type) {
+                document.addEventListener(type, LiveCodeDialog._followFullscreen);
+            });
             var style = document.createElement('style');
             style.textContent =
                 '.oxt-dialog-backdrop{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147483000;' +
@@ -134,6 +137,39 @@ mergeInto(LibraryManager.library, {
                 '.oxt-dialog-button{background:#3a3a3c;border-color:#5a5a5e}' +
                 '.oxt-dialog-default{background:#3478f6;border-color:#3478f6}}';
             document.head.appendChild(style);
+        },
+
+        // OXT-Beyond: where a dialog goes. A browser shows nothing
+        // outside the element that is full screen, so a dialog opened in
+        // <body> while a page's element (a stack's frame) is full screen
+        // stayed hidden until full screen was left: it goes in that
+        // element instead, unless it is one that shows no children (the
+        // canvas itself, a video). With nothing full screen, or the whole
+        // page, it goes in <body> as before.
+        _host: function() {
+            var full = document.fullscreenElement || document.webkitFullscreenElement;
+            if (full && full !== document.documentElement &&
+                !/^(CANVAS|VIDEO|IFRAME|IMG|OBJECT|EMBED)$/.test(full.nodeName)) {
+                return full;
+            }
+            return document.body;
+        },
+
+        // OXT-Beyond: the open dialogs follow full screen in and out
+        // (they hold no frame, so moving them reloads nothing); the one
+        // with the keyboard keeps it
+        _followFullscreen: function() {
+            var host = LiveCodeDialog._host();
+            for (var id in LiveCodeDialog._dialogs) {
+                var element = LiveCodeDialog._dialogs[id].element;
+                if (element && element.parentNode && element.parentNode !== host) {
+                    var active = element.contains(document.activeElement) ? document.activeElement : null;
+                    host.appendChild(element);
+                    if (active) {
+                        active.focus({'preventScroll': true});
+                    }
+                }
+            }
         },
 
         _element: function(tag, className, parent) {
@@ -298,7 +334,7 @@ mergeInto(LibraryManager.library, {
                 }
             });
 
-            document.body.appendChild(backdrop);
+            LiveCodeDialog._host().appendChild(backdrop);
             var focus = input && input.type != 'color' ? input : elements[elements.length - 1];
             if (focus) {
                 focus.focus({'preventScroll': true});
