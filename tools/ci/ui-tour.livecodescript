@@ -776,6 +776,7 @@ end tour_sample
 on tour_inspector
    local tPI, tSection, tShown, tIndex
    put tourInspect(tourSample("Push")) into tPI
+   tourInspectorHeaderCheck tPI
    put 0 into tIndex
    repeat for each item tSection in kButtonSections
       put tourInspectorSection(tPI, tSection) into tShown
@@ -1799,6 +1800,21 @@ end tourCloseInspectors
 -- icon in the inspector's header) of the inspector pStack, as a click on
 -- the icon does (revinspectorbehavior.livecodescript), and returns the
 -- section it shows (the first one when the object has no pSection)
+-- The inspector's header must show its sections as tabs: on macOS 26 a
+-- forum report (viewtopic.php?p=25148) showed a button's inspector with
+-- the header strip empty and no way to reach any section but Basic
+command tourInspectorHeaderCheck pStack
+   local tNav
+   if there is not a widget "header_background" of group "background" of stack pStack then
+      throw pStack && "has no header widget, so no section tabs"
+   end if
+   put the navData of widget "header_background" of group "background" of stack pStack into tNav
+   if the number of elements of tNav < 2 then
+      throw pStack && "shows" && the number of elements of tNav && "section tabs in its header"
+   end if
+   tourRecord "INFO" && pStack && "header:" && the number of elements of tNav && "section tabs"
+end tourInspectorHeaderCheck
+
 function tourInspectorSection pStack, pSection
    local tShown
    if pStack is empty or there is not a stack pStack then throw "no inspector stack"

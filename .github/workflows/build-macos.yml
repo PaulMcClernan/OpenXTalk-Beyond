@@ -1107,7 +1107,9 @@ jobs:
   # the sample stack, Preferences and the Standalone Settings, whose step
   # fails when the Web card has no HTML5 option or no page settings
   # (tools/ci/ui-tour.livecodescript), and a script error in the IDE fails
-  # it too.
+  # it too. The inspector and the Dictionary are toured too: on macOS 26 a
+  # forum report showed the inspector's header with no section tabs and a
+  # Dictionary whose data the first start never made.
   tour-macos-26:
     name: IDE tour on macOS 26 (arm64)
     needs: package
@@ -1151,4 +1153,4 @@ jobs:
         timeout-minutes: 15
         run: |
           python3 tools/ci/ui_tour.py --install "$RUNNER_TEMP/oxt-test" --platform mac-universal \
-            --appearance light --only sample,preferences,standalone-settings --out "$RUNNER_TEMP/ui-tour"
+            --appearance light --only sample,inspector,dictionary,preferences,standalone-settings --out "$RUNNER_TEMP/ui-tour"
