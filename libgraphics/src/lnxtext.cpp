@@ -386,8 +386,14 @@ bool MCGContextMeasurePlatformTextImageBounds(MCGContextRef self, const unichar_
 	bool t_success;
 	t_success = true;
 	
+	// OXT-Beyond: use the objects made at startup, as drawing and measuring
+	// do. This made a new font map, context and layout on every call and
+	// never freed the old ones. A new context had no transform, so reset it.
 	if (t_success)
-		t_success = lnx_pango_objects_initialize();
+		t_success = s_layout != NULL;
+
+	if (t_success)
+		lnx_pango_reset_matrix();
 	
 	char *t_text;
 	t_text = nil;
