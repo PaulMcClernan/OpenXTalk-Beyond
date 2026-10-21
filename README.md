@@ -561,8 +561,12 @@ On macOS:
   `Documentation Cache`); the script copies for an external script
   editor are in `Cache/IDEScriptEdits`
 - IDE logs: `~/Library/Logs/OXT-Beyond/`
-- Your own extensions and plugins: `~/Documents/OXT-Beyond extensions`,
-  unless you choose another folder in Preferences
+- Your own extensions, plugins and other additions: `~/Documents/OXT-Beyond`,
+  unless you choose another folder in Preferences. Before 0.2.7-rc.6.1
+  it was `~/Documents/OXT-Beyond extensions`: the IDE moves that folder
+  on its first start, when nothing is at the new place yet, and leaves a
+  link with the old name so that paths saved into it still work. A folder
+  chosen in Preferences is not moved.
 
 On Linux:
 

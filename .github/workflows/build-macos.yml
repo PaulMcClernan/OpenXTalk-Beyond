@@ -964,6 +964,26 @@ jobs:
           python3 tools/ci/standalone_check.py --install "$RUNNER_TEMP/oxt-test" --platform mac-universal --targets all \
             --log "$LOGS/standalone-check.log"
 
+      # The user folder moves from Documents/OXT-Beyond extensions to
+      # Documents/OXT-Beyond when the IDE starts (0.2.7-rc.6.1,
+      # revInternal__MacUserFolder in ide/Toolset/home.livecodescript). An
+      # old folder with a file in it is put in place before the IDE's first
+      # start here, and looked for after it. With preferences there already
+      # (an IDE started before), the check is skipped: the IDE then keeps
+      # the folder its preferences name.
+      - name: Put an old user folder in place
+        id: oldfolder
+        run: |
+          docs="$HOME/Documents"
+          if [ -e "$HOME/Library/Preferences/OXT-Beyond" ] || [ -e "$docs/OXT-Beyond" ] || [ -e "$docs/OXT-Beyond extensions" ]; then
+            echo "::notice::The IDE has started here before; the user folder move is not checked"
+            echo "seeded=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p "$docs/OXT-Beyond extensions/Extensions"
+          echo "OXT-Beyond CI" > "$docs/OXT-Beyond extensions/Extensions/oxtb-ci-marker.txt"
+          echo "seeded=true" >> "$GITHUB_OUTPUT"
+
       # The IDE as a user starts it, with its home stack, menu bar and
       # palettes, still running after 90 seconds; the other steps run the
       # engine with -ui or a test stack of their own
@@ -972,6 +992,26 @@ jobs:
         timeout-minutes: 5
         run: |
           tools/ci/mac_ide_start.sh "$APP" "$LOGS/ide-start"
+
+      - name: Check that the old user folder moved
+        if: ${{ steps.oldfolder.outputs.seeded == 'true' }}
+        run: |
+          docs="$HOME/Documents"
+          fail() {
+            echo "::error::$*"
+            ls -la "$docs"
+            grep -rh "Customization Path" "$HOME/Library/Logs/OXT-Beyond" 2>/dev/null | tail -20
+            exit 1
+          }
+          [ -f "$docs/OXT-Beyond/Extensions/oxtb-ci-marker.txt" ] ||
+            fail "Documents/OXT-Beyond/Extensions does not hold the old folder's file"
+          [ -L "$docs/OXT-Beyond extensions" ] ||
+            fail "no link is left at Documents/OXT-Beyond extensions"
+          [ -f "$docs/OXT-Beyond extensions/Extensions/oxtb-ci-marker.txt" ] ||
+            fail "the old path does not reach the file through the link"
+          echo "Moved, with a link at the old place:"
+          ls -la "$docs"
+          rm "$docs/OXT-Beyond/Extensions/oxtb-ci-marker.txt"
 
       # A script that changes what is shown at every statement, with the
       # screen unlocked: a Sudoku-shaped stack filling and pruning its 81
