@@ -21,9 +21,8 @@ All of the engine's feature set is available for use in a standalone application
 exception that you cannot set scripts on objects.
 
 The builder itself will let you build standalone applications for any platform it supports,
-from any platform it supports with the exception that iOS standalones must be
-built on Mac OS X. For example you can build a Windows standalone on a Mac OS X
-machine. However, you may wish to check that your application looks and behaves correctly
+from any platform it supports. For example you can build a Windows standalone
+on a Mac OS X machine. However, you may wish to check that your application looks and behaves correctly
 on each platform you intend to support. Please note it is inherently harder to debug an
 application that has been built as a standalone, so you should test your application as
 thoroughly as possible before building it.
@@ -130,7 +129,7 @@ component stacks, or to save changes to them. You may also want to consider crea
 preference files in the appropriate location on your end user's system (see the
 `specialFolderPath`function and query/setRegistry functions for more information).
 
-> **Note:** Adding additional stacks to the stacks tab is not supported for iOS,
+> **Note:** Adding additional stacks to the stacks tab is not supported for
 Android or HTML5 standalones. Additional stacks may be included via the Copy
 Files tab.
 
@@ -247,117 +246,11 @@ Figure 7 – Standalone Settings – Linux
 | **Build for Linux x64**         | Build a standalone for 64-bit Linux                                                                                                                                                                                                                          |
 | **Include**                     | Select built-in dialogs to include. These dialogs are useful if your application may be run on a system that does not include these dialogs as part of the OS. You do not need to include these dialogs if you are running a recent version of GTK. |
 
-## iOS Deployment Settings
-
-![](images/standalone-settings-ios-basic.png)
-
-Figure 8 – Standalone Settings – iOS Basic Settings
-
-| &nbsp;| &nbsp;|
-|---------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Build for iOS iPod, iPhone and iPad**             | Build a standalone iOS iPod, iPhone and iPad                                                                                                                                                      |
-| **Build for iOS iPod and iPhone**                   | Build a standalone iOS iPod and iPhone                                                                                                                                                            |
-| **Build for iOS iPad**                              | Build a standalone iOS iPad                                                                                                                                                                       |
-| **Minimum version**                                 | Choose the minimum version of iOS that your application should run on                                                                                                                             |
-| **Build 32-bit slice only**                         | Only include the 32 bit slice in the standalone instead of both the 32 bit and 64 bit slice                                                                                                       |
-| **Display Name**                                    | The name of the application                                                                                                                                                                       |
-| **Version**                                         | The version number of the application                                                                                                                                                             |
-| **Beta version**                                    | Enable Test Flight distribution                                                                                                                                                                   |
-| **Build No.**                                       | The build number of the application                                                                                                                                                               |
-| **Internal App ID**                                 | The application identifier for your application. This should begin with a reverse domain name of a domain you own.                                                                                |
-| **Profile**                                         | The provisioning profile to sign the application with.                                                                                                                                            |
-| **iPhone Status Bar**                               | Choose whether to show or hide the status bar while the application is running on iPhone                                                                                                          |
-| **iPad Status Bar**                                 | Choose whether to show or hide the status bar while the application is running on iPad                                                                                                            |
-| **Status Bar Style**                                | Set the style of the status bar while the application is running                                                                                                                                  |
-| **iPhone Initial Orientation**                      | Set the orientation on iPhone of the application on the screen when it initialy starts                                                                                                            |
-| **iPad Supported Initial Orientation**              | Set the possible orientations on iPad of the application on the screen when it initialy starts                                                                                                    |
-| **Custom URL Scheme**                               | Add a custom url scheme to the application so that it will launch when a url is opened that uses the scheme                                                                                       |
-| **Mapping file**                                    | Set a font name mapping file which should contain lines of `<mapped name>=<PostScript name>`                                                                                                      |
-| **Telephony**                                       | Choose whether telephony is required, prohibited or not applicable in order for the application to function                                                                                       |
-| **Peer-Peer**                                       | Choose whether peer to peer is required, prohibited or not applicable in order for the application to function                                                                                    |
-| **SMS**                                             | Choose whether SMS is required, prohibited or not applicable in order for the application to function                                                                                             |
-| **Still Camera**                                    | Choose whether a still camera is required, prohibited or not applicable in order for the application to function                                                                                  |
-| **Auto-focus Camera**                               | Choose whether an auto-focus camera is required, prohibited or not applicable in order for the application to function                                                                            |
-| **Front-facing Camera**                             | Choose whether a front-facing camera is required, prohibited or not applicable in order for the application to function                                                                           |
-| **Accelerometer**                                   | Choose whether an accelerometer is required, prohibited or not applicable in order for the application to function                                                                                |
-| **Location Services**                               | Choose whether location services is required, prohibited or not applicable in order for the application to function                                                                               |
-| **GPS**                                             | Choose whether GPS is required, prohibited or not applicable in order for the application to function                                                                                             |
-| **Magnetometer**                                    | Choose whether a magnetometer is required, prohibited or not applicable in order for the application to function                                                                                  |
-| **Microphone**                                      | Choose whether a microphone is required, prohibited or not applicable in order for the application to function                                                                                    |
-| **Game-Kit**                                        | Choose whether Game-Kit is required, prohibited or not applicable in order for the application to function                                                                                        |
-| **WiFi**                                            | Choose whether WiFi is required, prohibited or not applicable in order for the application to function                                                                                            |
-| **Magnetometer**                                    | Choose whether a magnetometer is required, prohibited or not applicable in order for the application to function                                                                                  |
-| **OpenGL ES 1.1**                                   | Choose whether OpenGL ES 1.1 is required, prohibited or not applicable in order for the application to function                                                                                   |
-| **OpenGL ES 2.0**                                   | Choose whether OpenGL ES 2.0 is required, prohibited or not applicable in order for the application to function                                                                                   |
-
-![](images/standalone-settings-ios-requirements.png)
-
-Figure 9 – Standalone Settings – iOS Requirements
-
-| &nbsp;| &nbsp;|
-|---------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Location Authorization Type**             | Choose whether to authorize location services for just when the application is in use or for background use also                                                                                          |
-| **Persistent WiFi**                         | Indicate the application requires persistent WiFi in order to function                                                                                                                                    |
-| **File Sharing**                            | Indicate the application uses file sharing                                                                                                                                                                |
-| **Local Notifications**                     | Indicate the application sends local notifications                                                                                                                                                        |
-| **Push Notifications**                      | Indicate the application sends push notifications                                                                                                                                                         |
-| **Disable ATS**                             | Disabling ATS allows your application to load insecure websites (not recommended).                                                                                                                        |
-| **Enable Background Execution**             | By default applications will exit when the user suspends them. This option allows the applications to remain open while in the background.                                                       |
-| **Background Audio**                        | Enable if the application plays audio while in the background.                                                                                                                                            |
-| **Location Update**                         | Enable if the application recieves location updates while in the background.                                                                                                                              |
-| **VoIP**                                    | Enable if the application handles VoIP calls while in the background.                                                                                                                                     |
-| **Newsstand Downloads**                     | Enable if the application recieves newsstand downloads while in the background.                                                                                                                           |
-| **External Accessory Communication**        | Enable if the application communicates with external accessories while in the background.                                                                                                                 |
-| **Use Bluetooth Low Energy Accessories**    | Enable if the application communicates with bluetooth low energy accessories while in the background.                                                                                                     |
-| **Acts as Bluetooth Low Energy Accessory**  | Enable if the application acts as a bluetooth low energy accessory while in the background.                                                                                                               |
-| **Background Fetch**                        | Enable if the application fetches data while in the background.                                                                                                                                           |
-| **Remote Notifications**                    | Enable if the application handles remote notifications while in the background.                                                                                                                           |
-| **App URL Query Whitelist**                 | Specify a list of url schemes the application needs to query to determine if there is an application on the device capable of handling the scheme.                                                        |
-
-![](images/standalone-settings-ios-icons.png)
-
-Figure 10 – Standalone Settings – iOS Icons
-
-| &nbsp;| &nbsp;|
-|---------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Prerendered Icon**            | Indicate the icons are prerendered for display                                                                                                                                                                                                               |
-| **AppStore**                    | Choose a 1024x1024 pixel png image                                                                                                                                                                                                                           |
-| **iPhone**                      | Choose a 57x57 pixel png image                                                                                                                                                                                                                               |
-| **Hi-Res iPhone**               | Choose a 114x114 pixel png image                                                                                                                                                                                                                             |
-| **iOS 7 Hi-Res iPhone**         | Choose a 120x120 pixel png image                                                                                                                                                                                                                             |
-| **iPhone 6 Plus**               | Choose a 160x160 pixel png image                                                                                                                                                                                                                             |
-| **iPhone X**                    | Choose a 180x180 pixel png image                                                                                                                                                                                                                             |
-| **iPad**                        | Choose a 72x72 pixel png image                                                                                                                                                                                                                               |
-| **Hi-Res iPad**                 | Choose a 144x144 pixel png image                                                                                                                                                                                                                             |
-| **iOS 7 iPad**                  | Choose a 76x76 pixel png image                                                                                                                                                                                                                               |
-| **iOS 7 Hi-Res iPad**           | Choose a 152x152 pixel png image                                                                                                                                                                                                                             |
-| **iPad Pro 12.9**               | Choose a 167x167 pixel png image                                                                                                                                                                                                                             |
-
-![](images/standalone-settings-ios-splash.png)
-
-Figure 11 – Standalone Settings – iOS Splash
-
-| &nbsp;| &nbsp;|
-|-------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| **Launch Image**                                | Choose a png image. This will be centered on screen. |
-| **2x Launch Image**                             | Choose a png image. This will be centered on screen. |
-| **3x Launch Image**                             | Choose a png image. This will be centered on screen. |
-| **Dark Mode Launch Image**                      | Choose a png image for use in dark mode. This will be centered on screen. |
-| **Dark Mode 2x Launch Image**                   | Choose a png image for use in dark mode. This will be centered on screen. |
-| **Dark Mode 3x Launch Image**                   | Choose a png image for use in dark mode. This will be centered on screen. |
-| **Background Color**                            | Choose a background color for transparent areas and/or areas of the screen the launch image does not cover. |
-| **Use system background color**                 | Use the system background color instead of a chosen color. This will use a dark color in dark mode and  light color in light mode. |
-
-Related lessons:
-
-* [How do I Become an iOS Developer?](http://lessons.livecode.com/m/4069/l/565715-how-do-i-become-an-ios-developer)
-* [How do I build an iOS application?](http://lessons.livecode.com/m/4069/l/565713-how-do-i-build-an-ios-application)
-
 ## Android Deployment Settings
 
 ![](images/standalone-settings-android.png)
 
-Figure 12 – Standalone Settings – Android
+Figure 8 – Standalone Settings – Android
 
 | &nbsp;| &nbsp;|
 |---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -416,7 +309,7 @@ Related lessons:
 
 ![](images/standalone-settings-html5.png)
 
-Figure 13 – Standalone Settings – Web (HTML5)
+Figure 9 – Standalone Settings – Web (HTML5)
 
 | &nbsp;| &nbsp;|
 |---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -814,7 +707,7 @@ to your configuration.
 
 ![](images/standalone-settings-bug-reports.png)
 
-Figure 14 – Standalone Settings – Bug Reports
+Figure 10 – Standalone Settings – Bug Reports
 
 | &nbsp;| &nbsp;|
 |---------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -847,6 +740,3 @@ select the target to test deployment to
 
 8) The standalone will be built and deployed to the target and launched.
 
-> **Note:** iOS devices connected via USB are detected as test targets in
-LiveCode Business Edition and apps will be installed on them, however, they will
-not be automatically launched.

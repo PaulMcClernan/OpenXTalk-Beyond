@@ -9,7 +9,7 @@ Set the number of location changes to be retained
 
 Introduced: 8.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -70,6 +70,5 @@ mobileStartTrackingSensor (command),
 mobileGetLocationHistory (function),
 mobileGetLocationHistoryLimit (function),
 mobileSensorAvailable (function), mobileSensorReading (function),
-mobileLocationAuthorizationStatus (function), function (glossary),
-locationChanged (message), trackingError (message)
+function (glossary), locationChanged (message), trackingError (message)
 

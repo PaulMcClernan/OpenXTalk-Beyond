@@ -9,7 +9,7 @@ Sent when the given url has finished loading.
 
 Introduced: 4.5.3
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -35,9 +35,9 @@ the script that created the mobile browser control using
 >*Note:* The <browserFinishedLoading> message is sent in response to the
 > webViewDidFinishLoad delegate method.
 
-References: mobileControlCreate (command), mobileControlDelete (command),
-mobileControlSet (command), mobileControlGet (function),
-mobileControlTarget (function), mobileControls (function),
-browserStartedLoading (message), browserLoadRequest (message),
+References: mobileControlCreate (command),
+mobileControlDelete (command), mobileControlSet (command),
+mobileControlGet (function), mobileControlTarget (function),
+mobileControls (function), browserStartedLoading (message),
 browserLoadFailed (message)
 

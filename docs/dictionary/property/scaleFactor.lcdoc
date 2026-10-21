@@ -48,8 +48,7 @@ pixels to be rendered causing the IDE to run slowly.
         set the scaleFactor of me to 0.75
     end preOpenStack
 
-References: iphoneUseDeviceResolution (command),
-usePixelScaling (property), systemPixelScale (property)
+References: usePixelScaling (property), systemPixelScale (property)
 
 Tags: windowing
 

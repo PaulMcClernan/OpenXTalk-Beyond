@@ -9,7 +9,7 @@ Returns the pixel scale of the main screen.
 
 Introduced: 6.6
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, mobile
 
@@ -22,8 +22,7 @@ The <screenPixelScale> property returns a non-zero real number.
 Description:
 Returns the pixel scale of the main screen.
 
-References: iphoneUseDeviceResolution (command),
-usePixelScaling (property), pixelScale (property),
+References: usePixelScaling (property), pixelScale (property),
 systemPixelScale (property), screenPixelScales (property)
 
 Tags: windowing

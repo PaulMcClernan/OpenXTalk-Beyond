@@ -9,7 +9,7 @@ Sent when the properties of a scroller have changed.
 
 Introduced: 4.5.3
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -37,10 +37,9 @@ properties of groups and fields to get a native scrolling effect.
 The <scrollerDidScroll> message is sent to the object containing the
 script that created the scroller control.
 
-References: mobileControlCreate (command), mobileControlDelete (command),
-mobileControlSet (command), mobileControlGet (function),
-mobileControlTarget (function), mobileControls (function),
-scrollerEndDecelerate (message), scrollerBeginDecelerate (message),
-scrollerBeginDrag (message), scrollerEndDrag (message),
-scrollerScrollToTop (message)
+References: mobileControlCreate (command),
+mobileControlDelete (command), mobileControlSet (command),
+mobileControlGet (function), mobileControlTarget (function),
+mobileControls (function), scrollerBeginDrag (message),
+scrollerEndDrag (message)
 

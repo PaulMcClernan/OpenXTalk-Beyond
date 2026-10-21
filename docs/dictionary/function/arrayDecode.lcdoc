@@ -9,7 +9,7 @@ Converts a serialized array back into the original array.
 
 Introduced: 3.5
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, server, mobile
 

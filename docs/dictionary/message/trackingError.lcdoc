@@ -9,7 +9,7 @@ Sent when sensor tracking could not be started or is terminated.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

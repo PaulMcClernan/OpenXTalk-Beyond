@@ -11,7 +11,7 @@ Shows the status bar on mobile devices.
 
 Introduced: 4.6.3
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -28,6 +28,5 @@ with "hardware buttons" embedded in the status bar. For example:
 "back, home and menu". On these devices, hiding the status bar would
 remove the buttons and prevent the user from exiting the application.
 
-References: mobileHideStatusBar (command),
-iphoneSetStatusBarStyle (command)
+References: mobileHideStatusBar (command)
 

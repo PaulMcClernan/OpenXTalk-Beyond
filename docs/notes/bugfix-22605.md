@@ -1,1 +1,0 @@
-# iOS standalones now use a storyboard based splash with a centered image and background color

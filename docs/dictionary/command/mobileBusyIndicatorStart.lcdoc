@@ -9,7 +9,7 @@ Displays an animated activity indicator on the screen
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -48,10 +48,7 @@ indicator on the top of the OpenXTalk stack that is running.
 You can turn the busy indicator off by calling
 <mobileBusyIndicatorStop>. 
 
-While this busy indicator is displayed, user input is blocked. This is
-different to the behavior from the indicator displayed 
-by <iphoneActivityIndicatorStart>.
+While this busy indicator is displayed, user input is blocked.
 
 
-References: mobileBusyIndicatorStop (command), 
-iphoneActivityIndicatorStart (command)
+References: mobileBusyIndicatorStop (command)

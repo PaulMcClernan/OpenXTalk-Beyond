@@ -9,7 +9,7 @@ Sent when the content stops playing to due to an error.
 
 Introduced: 4.6
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -25,8 +25,6 @@ result of an error.
 Use the <mobileControlGet> function to request more information about
 the player properties.
 
-References: mobileControlGet (function), playerStopped (message),
-playerFinished (message), playerLeaveFullscreen (message),
-playerProgressChanged (message), playerMovieChanged (message),
-playerPropertyAvailable (message), playerEnterFullscreen (message)
+References: mobileControlGet (function), playerFinished (message),
+playerPropertyAvailable (message)
 
