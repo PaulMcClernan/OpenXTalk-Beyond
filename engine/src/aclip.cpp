@@ -736,10 +736,23 @@ Boolean MCAudioClip::open_audio()
 			if (format == AF_ULINEAR && swidth == 2)
 				convert_ulintoslin();
 
-	
-	if ( x11audio != NULL )	
-		return x11audio -> init(NULL, nchannels, swidth);
-	return false ;
+	// OXT-Beyond: this runs on every tick of a playing clip. A PulseAudio
+	//   stream is opened once for each play, and play() then feeds it; the
+	//   samples here are unsigned when 8-bit and signed big-endian when
+	//   16-bit (AF_ULINEAR 16-bit is little-endian, as getmono16 reads it).
+	//   Without a stream EsounD plays it, as before, and without EsounD
+	//   either this is false and the clip takes the no-sound path.
+	if ( x11audio == NULL )
+		return false ;
+	if ( x11audio -> isstreaming() )
+		return true ;
+	if ( x11audio -> openstream(rate, nchannels, swidth, format == AF_ULINEAR) )
+	{
+		curindex = 0 ;
+		endtime = 0.0 ;
+		return true ;
+	}
+	return x11audio -> init(NULL, nchannels, swidth);
 }
 #elif defined(__EMSCRIPTEN__)
 /* Plays the samples, unless they are playing. Without the browser's
@@ -767,6 +780,11 @@ Boolean MCAudioClip::play()
 #ifndef _MOBILE
 	if (!open_audio())
 	{
+#if defined(TARGET_PLATFORM_LINUX)
+		// OXT-Beyond: so the next play tries PulseAudio again
+		if (x11audio != NULL)
+			x11audio -> closestream();
+#endif
 		real8 delay =  MCS_time() + (real8)size / (real8)(rate*nchannels*swidth);
 		MCParameter *newparam = new (nothrow) MCParameter;
 		newparam->setvalueref_argument(getname());
@@ -828,6 +846,50 @@ Boolean MCAudioClip::play()
 		}
 	return True;
 #elif defined(TARGET_PLATFORM_LINUX)
+	// OXT-Beyond: with a PulseAudio stream, keep about a second written
+	//   ahead in chunks of about 100 ms, so neither a write nor the IDE
+	//   waits. Once all of a clip that does not loop is written, it is done
+	//   when what is still queued has been heard.
+	if (x11audio != NULL && x11audio -> isstreaming())
+	{
+		uint4 t_frame = nchannels * swidth;
+		uint4 t_end = size - size % t_frame;
+		uint4 t_chunk = (rate * t_frame / 10) / t_frame * t_frame;
+		if (t_chunk == 0)
+			t_chunk = t_frame;
+		while (curindex < t_end || (looping && t_end != 0))
+		{
+			if (curindex >= t_end)
+				curindex = 0;
+			real8 t_queued = x11audio -> streamlatency();
+			if (t_queued < 0.0)
+			{
+				stop(False);
+				return False;
+			}
+			if (t_queued >= 1.0)
+				return True;
+			uint4 t_count = MCU_min(t_chunk, t_end - curindex);
+			if (!x11audio -> writestream(&samples[curindex], t_count))
+			{
+				stop(False);
+				return False;
+			}
+			curindex += t_count;
+		}
+		if (endtime == 0.0)
+		{
+			real8 t_queued = x11audio -> streamlatency();
+			endtime = MCS_time() + (t_queued > 0.0 ? t_queued : 0.0);
+		}
+		if (MCS_time() >= endtime)
+		{
+			stop(False);
+			return False;
+		}
+		return True;
+	}
+
 	if (looping || curindex < size)
 	{
 		while (True)
@@ -926,6 +988,16 @@ void MCAudioClip::stop(Boolean abort)
 		soundChannel = NULL;
 	}
 #elif defined(_LINUX)
+#if defined(TARGET_PLATFORM_LINUX)
+	// OXT-Beyond: stopping drops what is still queued, and the next play
+	//   starts from the beginning
+	if (x11audio != NULL)
+	{
+		if (x11audio -> isstreaming())
+			curindex = 0;
+		x11audio -> closestream();
+	}
+#endif
 #elif defined(__EMSCRIPTEN__)
 	if (s_web_sound != 0)
 	{
