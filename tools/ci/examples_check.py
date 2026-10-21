@@ -29,7 +29,9 @@ stacks.
    server (xvfb-run when there is no DISPLAY) with
    tools/ci/examples-check.livecodescript: on every card, an arrow key sent
    to the window's frame reaches the card first, as one sent to the card
-   does, and the cards whose programs play the arrow keys keep them.
+   does, and the cards whose programs play the arrow keys keep them. Then,
+   as a report that fails nothing, it opens every card with its messages
+   and lists the script errors.
 3. Each stack built is compared with the one committed in
    ide/Resources/Examples/Remastered: a builder or the frame's script
    changed without its stack being built again shows as a difference.
@@ -95,15 +97,16 @@ def build(install, out, timeout):
     return None
 
 
-def check(install, out, work, timeout):
-    """Runs the key check on the stacks in out; returns its lines and problems"""
+def check(install, out, work, timeout, mode=''):
+    """Runs the key check on the stacks in out (or, with mode 'cards', opens
+    each card); returns its lines and problems"""
     engine = os.path.join(install, 'Runtime', 'Linux', 'x86-64', 'Standalone')
     if not os.path.isfile(engine):
         return [], ['no standalone engine at %s' % engine]
-    result_log = os.path.join(work, 'examples-check-result.log')
+    result_log = os.path.join(work, 'examples-check-result%s.log' % ('-' + mode if mode else ''))
     if os.path.exists(result_log):
         os.remove(result_log)
-    env = dict(os.environ, OXT_EXAMPLES_DIR=out, OXT_EXAMPLES_LOG=result_log)
+    env = dict(os.environ, OXT_EXAMPLES_DIR=out, OXT_EXAMPLES_LOG=result_log, OXT_EXAMPLES_MODE=mode)
     cmd = [engine, SCRIPT]
     if not env.get('DISPLAY'):
         xvfb = shutil.which('xvfb-run')
@@ -190,6 +193,15 @@ def main(argv=None):
             with open(args.log, 'w', encoding='utf-8', newline='\n') as f:
                 f.write('\n'.join(lines) + '\n')
         problems += found
+        log('')
+        # (reported, not a failure: a standalone engine has none of the
+        # IDE's libraries, such as the data grid's, that some cards use)
+        log('Opening every card (a report):')
+        lines, found = check(install, out, work, min(args.timeout, 180), 'cards')
+        for line in lines:
+            log('  ' + line)
+        log('  (%d script error(s); %d other problem(s))' % (sum(1 for x in lines if x.startswith('SCRIPTERROR ')),
+                                                           len([x for x in found if not x.startswith('SCRIPTERROR')])))
         log('')
         log('Comparing with the committed stacks:')
         differ = compare(out, args.print_stacks)

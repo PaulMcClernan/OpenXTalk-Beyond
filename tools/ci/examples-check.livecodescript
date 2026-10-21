@@ -40,6 +40,14 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- $OXT_EXAMPLES_LOG an INFO line or two, a PASS or FAIL line for each
 -- thing checked, ERROR when the check could not go on, then SUMMARY and
 -- QUIT.
+--
+-- With $OXT_EXAMPLES_MODE "cards", instead: each card of each example
+-- opens as it does for someone going through it, its preOpenCard and
+-- openCard run and it has a moment for what they start, and each script
+-- error is a line SCRIPTERROR (with the engine's error lines, | for a
+-- line break), then a line CARD for the card. The examples_check.py
+-- run of it only reports: a standalone engine has none of the IDE's
+-- libraries, such as the data grid's, that some cards use.
 
 global gOxtExProbe
 local sPassed, sFailed
@@ -56,7 +64,11 @@ on startup
    -- (revSpeak, below, for the programs that speak a score)
    insert the script of stack "OXTExamplesCheck" into back
    try
-      runCheck
+      if $OXT_EXAMPLES_MODE is "cards" then
+         runCards
+      else
+         runCheck
+      end if
    catch tError
       logLine "ERROR" && line 1 of tError
    end try
@@ -89,6 +101,44 @@ command runCheck
    checkProgram tDir & "/Balloon Game.oxtstack", "page3", "up", "image", "balloon", "top", -18
    checkProgram tDir & "/Play a Video.oxtstack", "Theater", "right", empty, empty, empty, empty
 end runCheck
+
+-- Each card of each example, opened with its messages
+local sErrors, sWhere
+
+command runCards
+   local tDir, tFiles, tFile, tStack, tCard
+   put $OXT_EXAMPLES_DIR into tDir
+   set the defaultFolder to tDir
+   put the files into tFiles
+   filter tFiles with "*.oxtstack"
+   repeat for each line tFile in tFiles
+      -- (the stack opens without its openStack: some answer when the
+      -- IDE's data grid library is not there, and here it never is)
+      lock messages
+      go stack (tDir & "/" & tFile)
+      put the short name of this stack into tStack
+      unlock messages
+      repeat with tCard = 1 to the number of cards of stack tStack
+         put tStack & ", card" && tCard into sWhere
+         put 0 into sErrors
+         go card tCard of stack tStack
+         put sWhere && "(" & the short name of this card & ")" into sWhere
+         wait 300 milliseconds with messages
+         logLine "CARD" && sWhere & ":" && sErrors && "script error(s)"
+         add 1 to sPassed
+      end repeat
+      put tStack && "closing" into sWhere
+      close stack tStack
+      wait 50 milliseconds with messages
+   end repeat
+end runCards
+
+on errorDialog pError
+   add 1 to sErrors
+   add 1 to sFailed
+   replace return with "|" in pError
+   logLine "SCRIPTERROR" && sWhere & ":" && pError
+end errorDialog
 
 -- The frame of one example, on each of its cards, with probes for the
 -- cards' scripts
