@@ -1,0 +1,86 @@
+/* Copyright (C) 2026 OXT-Beyond contributors.
+
+This file is part of OXT-Beyond.
+
+OXT-Beyond is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License v3 as published by the Free
+Software Foundation.
+
+OXT-Beyond is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License
+along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
+
+/* The xTalk Suite's native libraries in the web IDE (EXPERIMENTAL).
+ *
+ * On the desktop an LCB extension that binds to "c:sodiumxt>sxt_hash" makes
+ * the engine open code/<platform>/sodiumxt.dll (.so, .dylib). A browser
+ * opens no library, so the web IDE's engine (engine.gyp's development-web,
+ * and only it: the web standalone engine does not compile this file) links
+ * the libraries into itself and registers each one here under the name
+ * the extension loads it by, as em-externals.cpp registers revXML and the
+ * other externals. libfoundation/src/system-library-emscripten.hpp then
+ * finds "sodiumxt" by that name, and its symbols in its table.
+ *
+ * Each library comes from its member of the xTalk Suite as
+ * src/code/wasm32-emscripten/<name>.a, pinned in
+ * tools/oxt/xtalk-extensions.json ("web_libraries"): one object with the
+ * library and a function, <name>_web_exports, that returns the table of
+ * every symbol the member's .lcb binds to (the member generates it from
+ * the .lcb). tools/web-ide/xtalk_web_libraries.py fetches the pinned
+ * archives, makes every other symbol of each object local (so two members
+ * that carry the same vendored code, trezor-crypto's in SodiumXT and
+ * CoinXT, cannot clash), and util/emscripten-javascriptify.py links the
+ * objects into the web IDE's engine.
+ *
+ * The functions are declared weak: an engine linked without a library (a
+ * local build that did not fetch them) has a null address for its function,
+ * and that library is simply not registered, so its extension's first call
+ * fails as it does in the released web IDE. The table's layout is
+ * MCSLibraryStaticExport's: { symbol, address } pairs, ended by a null
+ * symbol. */
+
+#include <foundation.h>
+#include <foundation-system.h>
+
+extern "C"
+{
+	__attribute__((weak)) const MCSLibraryStaticExport *sodiumxt_web_exports(void);
+	__attribute__((weak)) const MCSLibraryStaticExport *box2dxt_web_exports(void);
+	__attribute__((weak)) const MCSLibraryStaticExport *coinxt_web_exports(void);
+}
+
+/* The names are those the extensions load: their libraries' files without
+ * the extension */
+static MCSLibraryStaticInfo s_mc_xtalk_web_libraries[] =
+{
+	{ nullptr, "sodiumxt", nullptr },
+	{ nullptr, "box2dxt", nullptr },
+	{ nullptr, "coinxt", nullptr },
+};
+
+/* Registered before main(), as em-externals.cpp's are early in startup:
+ * the registry is a chain of static records that needs nothing else */
+__attribute__((constructor)) static void
+MCEmscriptenRegisterXTalkWebLibraries(void)
+{
+	const MCSLibraryStaticExport *(*t_exports[])(void) =
+	{
+		sodiumxt_web_exports,
+		box2dxt_web_exports,
+		coinxt_web_exports,
+	};
+
+	for (size_t i = 0; i < sizeof(t_exports) / sizeof(t_exports[0]); i++)
+	{
+		if (t_exports[i] == nullptr)
+			continue;
+
+		s_mc_xtalk_web_libraries[i].exports = t_exports[i]();
+		if (s_mc_xtalk_web_libraries[i].exports != nullptr)
+			MCSLibraryRegisterStatic(s_mc_xtalk_web_libraries[i]);
+	}
+}

@@ -1,0 +1,46 @@
+/*
+Copyright (C) 2026 OXT-Beyond contributors.
+
+This file is part of OXT-Beyond.
+
+OXT-Beyond is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License v3 as published by the Free
+Software Foundation.
+
+OXT-Beyond is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License
+along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
+
+-- Foreign handlers that return a CBool, a one-byte result (foreign-cbool.livecodescript)
+library com.livecode.lcs_tests.core.extensions.foreign_cbool
+
+foreign handler MCMemoryAllocate(in pSize as UIntSize, out rBlock as Pointer) returns CBool binds to "<builtin>"
+foreign handler MCMemoryDeallocate(in pBlock as Pointer) returns nothing binds to "<builtin>"
+foreign handler MCDataCreateWithBytes(in pBytes as Pointer, in pCount as CUInt, out rData as Data) returns CBool binds to "<builtin>"
+
+-- Allocates 16 bytes, makes Data of 3 of them, and frees the block: both
+-- engine functions return true
+public handler TestForeignCBoolResults() returns List
+	variable tBlock as Pointer
+	variable tAllocated as Boolean
+	variable tCreated as Boolean
+	variable tData as Data
+	put false into tCreated
+	unsafe
+		put MCMemoryAllocate(16, tBlock) into tAllocated
+		if tAllocated then
+			put MCDataCreateWithBytes(tBlock, 3, tData) into tCreated
+			MCMemoryDeallocate(tBlock)
+		end if
+	end unsafe
+	if not tCreated then
+		put the empty data into tData
+	end if
+	return [tAllocated, tCreated, the number of bytes in tData]
+end handler
+
+end library

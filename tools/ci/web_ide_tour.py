@@ -20,6 +20,7 @@ made in headless Chromium and walks through the IDE's windows.
 
   python3 tools/ci/web_ide_tour.py --site DIR --out DIR [--browser NAME]
       [--timeout SECONDS] [--only STEPS] [--keep-serving]
+      [--tour FILE] [--add FILE]... [--replace PATH=FILE]... [--relay]
 
 --site is the web IDE's site (index.html, the engine and ide.zip). The
 script copies it into <out>/site, adds tools/ci/web-ide-tour.livecodescript
@@ -46,6 +47,16 @@ annotations and a job summary.
 --keep-serving keeps the server running after the tour (Ctrl-C ends it),
 to open the copy in a browser by hand.
 
+--tour FILE runs another tour, written as web-ide-tour.livecodescript is
+(the same lines): it goes in as the extension its script line names.
+tools/ci/web-ide-xtalk.livecodescript is one (the xTalk Suite's libraries
+in the web IDE, EXPERIMENTAL). --add FILE puts FILE into the tour's
+extension folder (in its folder files), for the tour to open; --replace PATH=FILE
+puts FILE into the copy's ide.zip at PATH in place of what is there (an
+extension of the release replaced by the one under test). --relay runs a
+Nostr relay of tools/ci/nostr_test_relay.py on 127.0.0.1 for the tour,
+whose ws:// address the page gives it as window.oxtTour.relay.
+
 Exit status 0 when the tour passes, 1 otherwise. Needs Python 3.8 or later
 and the Python package playwright with its Chromium
 (python3 -m playwright install chromium).
@@ -65,11 +76,10 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOUR = os.path.join(HERE, 'web-ide-tour.livecodescript')
 
-# The extension the tour goes into the IDE as (the name its script and
-# manifest give it)
-EXTENSION = 'oxtwebidetour'
+# The extension a tour goes into the IDE as is the name its script line
+# gives it (tour_extension), the manifest's too
 MANIFEST = '''<package version="0.0">
-  <name>oxtwebidetour</name>
+  <name>%s</name>
   <title>Web IDE tour (CI)</title>
   <author>OXT-Beyond contributors</author>
   <version>1.0.0</version>
@@ -84,6 +94,7 @@ PAGE_SCRIPT = '''
 window.oxtTour = {
   go: false,
   only: '',
+  relay: '',
   done: 0,
   lines: [],
   record: function(line) { this.lines.push(String(line)); },
@@ -108,20 +119,49 @@ def annotate(kind, text):
         print('::%s title=Web IDE tour::%s' % (kind, text.replace('\n', ' ')), flush=True)
 
 
-def make_site(site, out):
-    """A copy of the site whose ide.zip has the tour as an extension."""
+def tour_extension(tour):
+    """The name the tour's script line gives it."""
+    with open(tour, encoding='utf-8') as f:
+        first = f.readline().strip()
+    if not (first.startswith('script "') and first.endswith('"')):
+        raise SystemExit('error: %s does not begin with a script "<name>" line' % tour)
+    return first[len('script "'):-1]
+
+
+def make_site(site, out, tour=TOUR, add=(), replace=()):
+    """A copy of the site whose ide.zip has the tour as an extension (with
+    the files of add beside it), and the files of replace, (path in the zip,
+    file) pairs, in place of the zip's."""
     copy = os.path.join(out, 'site')
     shutil.copytree(site, copy)
     zip_path = os.path.join(copy, 'ide.zip')
     if not os.path.isfile(zip_path):
         raise SystemExit('error: %s has no ide.zip: is it a web IDE site?' % site)
-    folder = 'boot/Extensions/%s/' % EXTENSION
+    if replace:
+        # A zip cannot replace a member: the copy's is written again
+        with zipfile.ZipFile(zip_path) as z:
+            names = z.namelist()
+            for path, _ in replace:
+                if path not in names:
+                    raise SystemExit('error: %s has no %s to replace' % (zip_path, path))
+            entries = [(i, z.read(i.filename)) for i in z.infolist()
+                       if i.filename not in dict(replace)]
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
+            for info, data in entries:
+                z.writestr(info, data)
+            for path, src in replace:
+                z.write(src, path)
+    extension = tour_extension(tour)
+    folder = 'boot/Extensions/%s/' % extension
     with zipfile.ZipFile(zip_path, 'a', zipfile.ZIP_DEFLATED) as z:
         if any(n.startswith(folder) for n in z.namelist()):
             raise SystemExit('error: %s already has %s' % (zip_path, folder))
-        z.writestr(folder + 'manifest.xml', MANIFEST)
-        with open(TOUR, 'rb') as f:
-            z.writestr(folder + EXTENSION + '.livecodescript', f.read())
+        z.writestr(folder + 'manifest.xml', MANIFEST % extension)
+        z.write(tour, folder + extension + '.livecodescript')
+        # (in a folder of their own: the IDE takes an extension's first
+        # script file as the extension)
+        for src in add:
+            z.write(src, folder + 'files/' + os.path.basename(src))
     return copy
 
 
@@ -175,13 +215,25 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--site', required=True, help='the web IDE site (build_site.py --out)')
     ap.add_argument('--out', required=True, help='the folder for the screenshots and logs (replaced)')
-    ap.add_argument('--browser', default='chromium', choices=['chromium'],
+    ap.add_argument('--browser', default='chromium', choices=['chromium', 'firefox', 'webkit'],
                     help='the browser (Playwright\'s build)')
     ap.add_argument('--timeout', type=float, default=600, help='seconds for the whole tour')
     ap.add_argument('--only', default='', metavar='STEPS',
                     help='comma-separated steps of the tour to run (default: all)')
     ap.add_argument('--keep-serving', action='store_true', help='keep serving after the tour')
+    ap.add_argument('--tour', default=TOUR, help='the tour (default: web-ide-tour.livecodescript)')
+    ap.add_argument('--add', action='append', default=[], metavar='FILE',
+                    help='a file to put in the tour\'s extension folder, in files/')
+    ap.add_argument('--replace', action='append', default=[], metavar='PATH=FILE',
+                    help='a file of the copy\'s ide.zip to replace')
+    ap.add_argument('--relay', action='store_true', help='run a local Nostr relay for the tour')
     args = ap.parse_args()
+    replace = []
+    for item in args.replace:
+        path, sep, src = item.partition('=')
+        if not sep or not os.path.isfile(src):
+            raise SystemExit('error: --replace %s: not PATH=FILE of a file' % item)
+        replace.append((path, src))
 
     from playwright.sync_api import sync_playwright
 
@@ -190,11 +242,19 @@ def main():
         shutil.rmtree(out)
     shots_dir = os.path.join(out, 'shots')
     os.makedirs(shots_dir)
-    site = make_site(os.path.abspath(args.site), out)
+    site = make_site(os.path.abspath(args.site), out, os.path.abspath(args.tour),
+                     [os.path.abspath(a) for a in args.add], replace)
     server = serve(site)
     url = 'http://127.0.0.1:%d/' % server.server_address[1]
     log('Site  : %s (a copy of %s, with the tour)' % (site, args.site))
     log('Page  : %s' % url)
+    relay_url = ''
+    if args.relay:
+        sys.path.insert(0, HERE)
+        import nostr_test_relay
+        relay = nostr_test_relay.serve(os.path.join(out, 'relay.txt'))
+        relay_url = 'ws://127.0.0.1:%d/' % relay.server_address[1]
+        log('Relay : %s' % relay_url)
 
     lines, shots, problems = [], [], []
     finished = False
@@ -230,7 +290,8 @@ def main():
             note = page.locator('#note button')
             if note.is_visible():
                 note.click()
-            page.evaluate('only => { window.oxtTour.only = only; window.oxtTour.go = true; }', args.only)
+            page.evaluate('a => { window.oxtTour.only = a[0]; window.oxtTour.relay = a[1]; '
+                          'window.oxtTour.go = true; }', [args.only, relay_url])
 
             while time.time() - started < args.timeout:
                 new = page.evaluate('window.oxtTour.take()')

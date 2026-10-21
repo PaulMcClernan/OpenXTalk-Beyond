@@ -116,6 +116,26 @@ asyncify_remove = [
     ]
 settings['ASYNCIFY_REMOVE'] = asyncify_remove
 
+# The xTalk Suite's native libraries, which only the web IDE's engine links
+# (--xtalk-objects, below): pure computation over buffers, which calls no
+# script back (the suite's rule: no callback runs script), so the engine
+# never yields inside them. Their many calls through function pointers
+# (libsodium picks its implementations at run time, Box2D's solver calls
+# through tables) would otherwise make Asyncify instrument nearly all of
+# them. Added only when they are linked, so the web standalone engine's link
+# is unchanged.
+asyncify_remove_xtalk = [
+    # SodiumXT: the shim and libsodium
+    'sxt_*', 'crypto_*', '_crypto_*', 'sodium_*', 'randombytes*', 'argon2*',
+    'blake2b*', 'fe25519_*', 'ge25519_*', 'sc25519_*', 'ristretto255_*',
+    # Box2Dxt: the shim and Box2D
+    'b2*',
+    # CoinXT: the shim, trezor-crypto and libsecp256k1
+    # (a pattern no function matches is a warning of the link: the families
+    # the shims never reach are left out)
+    'cnx_*', 'ecdsa_*', 'secp256k1_*', 'pbkdf2_*', 'ripemd160*', 'bn_*',
+    ]
+
 # Engine functions that JavaScript calls by name are exported. Those that
 # the engine's own libraries call with ccall() are found in them (below).
 exported_functions = [
@@ -166,6 +186,19 @@ for arg in sys.argv[1:]:
             sys.exit(1)
         options[option].append(arg)
 
+# The xTalk Suite's native libraries (engine/src/em-xtalk-web.cpp): every
+# object in the folder --xtalk-objects names (which
+# tools/web-ide/xtalk_web_libraries.py fetch writes), linked into the engine.
+# A folder that does not exist or holds none links none.
+xtalk_objects = []
+for folder in options.get('xtalk-objects', []):
+    if os.path.isdir(folder):
+        xtalk_objects += sorted(os.path.join(folder, name) for name in os.listdir(folder)
+                                if name.endswith('.o'))
+if xtalk_objects:
+    print('Linking the xTalk Suite libraries: ' + ', '.join(os.path.basename(o) for o in xtalk_objects))
+    settings['ASYNCIFY_REMOVE'] = asyncify_remove + asyncify_remove_xtalk
+
 for required in ['input', 'output']:
     if required not in options or len(options[required]) == 0:
         print('ERROR: missing option \'--{}\''.format(required))
@@ -189,6 +222,7 @@ command = emcc + optimisation_flags + cflags
 
 for input in options['input']:
     command.append(input)
+command += xtalk_objects
 
 command += ['-o', options['output'][0]]
 

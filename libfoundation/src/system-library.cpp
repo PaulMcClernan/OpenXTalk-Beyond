@@ -362,4 +362,10 @@ MCSLibraryRegisterStatic(MCSLibraryStaticInfo& p_info)
 {
     __MCSLibraryHandleEmscripten::Register(p_info);
 }
+
+MC_DLLEXPORT_DEF void
+MCSLibraryRegisterStaticMain(MCSLibraryStaticInfo& p_info)
+{
+    __MCSLibraryHandleEmscripten::RegisterMain(p_info);
+}
 #endif

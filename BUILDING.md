@@ -2761,3 +2761,37 @@ which the web standalone engine's build does not build), then the site
 with [`tools/web-ide/build_site.py`](tools/web-ide/build_site.py). The
 site is static files: serve the folder with any web server (for example
 `python3 -m http.server` in it) and open its `index.html`.
+
+#### The xTalk Suite's libraries in the web IDE (experimental)
+
+A browser opens no native library, so the web IDE's engine links the
+xTalk Suite's SodiumXT, Box2Dxt and CoinXT into itself, and the
+extensions the IDE ships call them unchanged
+([`engine/src/em-xtalk-web.cpp`](engine/src/em-xtalk-web.cpp) says how
+they are registered; the web standalone engine and the desktop engines
+link none). Each member builds its library for the web as
+`src/code/wasm32-emscripten/<name>.a`, and `"web_libraries"` in
+[`tools/oxt/xtalk-extensions.json`](tools/oxt/xtalk-extensions.json) pins
+each archive (repository, commit, SHA-256, and the Emscripten version it
+was built with, which must be `config/emscripten-version`'s).
+`build-web-ide.sh` fetches them with
+[`tools/web-ide/xtalk_web_libraries.py`](tools/web-ide/xtalk_web_libraries.py),
+which makes every symbol of each object local but its table, so that two
+members carrying the same vendored code link side by side:
+
+```sh
+python3 tools/web-ide/xtalk_web_libraries.py list            # the pins
+python3 tools/web-ide/xtalk_web_libraries.py pin --commit SHA  # after the suite rebuilt them
+XTALK_WEB_LOCAL=<xTalk Suite checkout> tools/ci/build-web-ide.sh <installed OXT-Beyond> web-ide-site
+NO_XTALK_WEB=1 tools/ci/build-web-ide.sh <installed OXT-Beyond> web-ide-site   # link none
+```
+
+The job "Web IDE xTalk Suite" of `web-ide.yml` runs
+[`tools/ci/web-ide-xtalk.livecodescript`](tools/ci/web-ide-xtalk.livecodescript)
+in the web IDE in Chromium, Firefox and WebKit (with
+`tools/ci/web_ide_tour.py --tour`): known-answer checks of the three
+libraries, xTalk Chat against a local Nostr relay
+([`tools/ci/nostr_test_relay.py`](tools/ci/nostr_test_relay.py)), Hold'em's
+self-test and the Box2Dxt platformer, with the apps and NostrXT's relay
+library (which has a browser transport) taken from the suite at the
+pinned commit (`xtalk_web_libraries.py test-files`).

@@ -259,5 +259,37 @@
         {"kind": "lcs", "id": "nostr-relay", "folder": "nostr-relay", "stack": "nostr-relay", "main": "src/nostr-relay.livecodescript", "title": "NostrXT relay client", "author": "Seth Morrow Software", "requires": ["nostrxt"], "probe": "nxrVersion()", "expect": "^NostrXT relay NostrXT [0-9]"}
       ]
     }
-  ]
+  ],
+  "web_libraries": {
+    "comment": "EXPERIMENTAL: the native libraries the web IDE engine links in (tools/web-ide/xtalk_web_libraries.py, engine/src/em-xtalk-web.cpp). Rewritten by `xtalk_web_libraries.py pin`.",
+    "libraries": [
+      {
+        "name": "sodiumxt",
+        "repository": "SethMorrowSoftware/xtalk-suite",
+        "commit": "b0e77e603c7d7ed98a33737bdd8f8e92053eb242",
+        "path": "sodiumxt/src/code/wasm32-emscripten/sodiumxt.a",
+        "sha256": "75c9b3700ddff69f3ffba0b266dd7303981799ba765e5e945da4389a006ae446",
+        "size": 339576,
+        "emscripten": "6.0.12"
+      },
+      {
+        "name": "box2dxt",
+        "repository": "SethMorrowSoftware/xtalk-suite",
+        "commit": "b0e77e603c7d7ed98a33737bdd8f8e92053eb242",
+        "path": "box2dxt/src/code/wasm32-emscripten/box2dxt.a",
+        "sha256": "41448d5a12c8499e389389ea0e196ad644727a2dc87ae013e98256a90267b8b1",
+        "size": 665870,
+        "emscripten": "6.0.12"
+      },
+      {
+        "name": "coinxt",
+        "repository": "SethMorrowSoftware/xtalk-suite",
+        "commit": "b0e77e603c7d7ed98a33737bdd8f8e92053eb242",
+        "path": "coinxt/src/code/wasm32-emscripten/coinxt.a",
+        "sha256": "3ffd179e301a32907cd5d64734eb56efc7870e8b4d02ef17c7515cd66268b539",
+        "size": 649612,
+        "emscripten": "6.0.12"
+      }
+    ]
+  }
 }

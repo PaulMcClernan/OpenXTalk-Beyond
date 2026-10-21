@@ -1019,6 +1019,10 @@
 							# which the web IDE does not use
 							'src/dummystartupstack.cpp',
 							'src/main.cpp',
+							# The xTalk Suite's native libraries, which only
+							# the web IDE links (javascriptify-development's
+							# --xtalk-objects): their registration
+							'src/em-xtalk-web.cpp',
 						],
 
 						'include_dirs':
@@ -1085,6 +1089,13 @@
 									'../util/emscripten-javascriptify.py',
 									'--input',
 									'<(PRODUCT_DIR)/development-community.o',
+									# The xTalk Suite's native libraries
+									# (src/em-xtalk-web.cpp), which
+									# tools/web-ide/xtalk_web_libraries.py
+									# fetch writes there; none when the
+									# folder does not exist
+									'--xtalk-objects',
+									'../build-emscripten/xtalk-web',
 									'--output',
 									'<(PRODUCT_DIR)/development-community-<(version_suffix).html',
 									'--shell-file',

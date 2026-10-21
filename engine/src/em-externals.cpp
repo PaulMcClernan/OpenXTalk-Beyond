@@ -89,6 +89,28 @@ static const MCSLibraryStaticExport kMCEmscriptenDBSQLiteExports[] =
 	{ nullptr, nullptr },
 };
 
+/* The engine's own functions that extensions bind to with "<builtin>",
+ * which a desktop engine finds by name in its executable: the xTalk suite's
+ * libraries make and read Data with them, and the tree view widget decodes
+ * text with MCStringDecode. Each address is taken as the function's own
+ * type, so that it is the function the definition is (an overload or a
+ * template of the same name is not). */
+static const MCSLibraryStaticExport kMCEmscriptenEngineExports[] =
+{
+	{ "MCMemoryAllocate", reinterpret_cast<void *>(static_cast<bool (*)(size_t, void *&)>(MCMemoryAllocate)) },
+	{ "MCMemoryDeallocate", reinterpret_cast<void *>(static_cast<void (*)(void *)>(MCMemoryDeallocate)) },
+	{ "MCDataGetBytePtr", reinterpret_cast<void *>(MCDataGetBytePtr) },
+	{ "MCDataGetLength", reinterpret_cast<void *>(MCDataGetLength) },
+	{ "MCDataCreateWithBytes", reinterpret_cast<void *>(MCDataCreateWithBytes) },
+	{ "MCStringCreateWithBytes", reinterpret_cast<void *>(MCStringCreateWithBytes) },
+	{ "MCStringDecode", reinterpret_cast<void *>(MCStringDecode) },
+	{ "MCStringEncode", reinterpret_cast<void *>(MCStringEncode) },
+	{ "MCHandlerGetFunctionPtr", reinterpret_cast<void *>(MCHandlerGetFunctionPtr) },
+	{ nullptr, nullptr },
+};
+
+static MCSLibraryStaticInfo s_mc_emscripten_engine = { nullptr, "<engine>", kMCEmscriptenEngineExports };
+
 /* The names are those of the libraries' files, without the extension */
 static MCSLibraryStaticInfo s_mc_emscripten_externals[] =
 {
@@ -106,4 +128,5 @@ MCEmscriptenRegisterExternals(void)
 	{
 		MCSLibraryRegisterStatic(t_info);
 	}
+	MCSLibraryRegisterStaticMain(s_mc_emscripten_engine);
 }
