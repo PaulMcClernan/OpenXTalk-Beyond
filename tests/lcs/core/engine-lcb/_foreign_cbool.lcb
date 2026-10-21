@@ -18,6 +18,8 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- Foreign handlers that return a CBool, a one-byte result (foreign-cbool.livecodescript)
 library com.livecode.lcs_tests.core.extensions.foreign_cbool
 
+use com.livecode.foreign
+
 foreign handler MCMemoryAllocate(in pSize as UIntSize, out rBlock as Pointer) returns CBool binds to "<builtin>"
 foreign handler MCMemoryDeallocate(in pBlock as Pointer) returns nothing binds to "<builtin>"
 foreign handler MCDataCreateWithBytes(in pBytes as Pointer, in pCount as CUInt, out rData as Data) returns CBool binds to "<builtin>"
