@@ -1,0 +1,1 @@
+- Learn: Texas Hold'em, the xTalk Suite's poker game, with computer opponents and its card art and sounds inside the stack (#PRNUM)

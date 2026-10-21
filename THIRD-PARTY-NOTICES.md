@@ -462,19 +462,24 @@ Notes:
 
 ### xTalk Suite demos
 
-Three apps of the xTalk Suite are in
+Four apps of the xTalk Suite are in
 [`ide/Resources/Examples/xTalk Suite/`](ide/Resources/Examples/xTalk%20Suite/),
 as stacks whose script is the suite's own file (see
 [`tools/examples/README.md`](tools/examples/README.md#xtalk-suite-demos)):
 No Cloud Quick Share (the suite's `nocloud`), Torrent Client
-(`torrentxt/examples`) and Box2D Platformer (`box2dxt/examples`). They
+(`torrentxt/examples`), Box2D Platformer (`box2dxt/examples`) and Texas
+Hold'em (`holde-em`). They
 are MIT, © 2026 Seth Morrow, under the suite's `LICENSE`, like the
 extensions above. No Cloud Quick Share carries OnionXT's script inside
 its own, and Box2D Platformer the Box2Dxt Kit's, both of them MIT, ©
 2026 Seth Morrow. Box2D Platformer's pictures are Kenney's game assets
 (kenney.nl), CC0 1.0 (public domain dedication), from the suite's
 `box2dxt/Spritesheets`, imported into the stack; its sounds are made by
-its script.
+its script. Texas Hold'em's card faces and backs are Kenney's Playing
+Cards Pack and its table sounds eleven sounds of Kenney's Casino Audio
+(kenney.nl/assets/casino-audio, converted from OGG to WAV), both CC0 1.0
+(public domain dedication), from the suite's `holde-em/assets`, whose
+`NOTICE.md` files record them, taken into the stack.
 
 ## Standalone runtimes for other platforms
 
