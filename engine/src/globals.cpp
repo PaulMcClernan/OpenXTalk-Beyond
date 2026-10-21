@@ -520,10 +520,6 @@ MCMainWindowCallback MCmainwindowcallback = nullptr;
 extern MCUIDC *MCCreateScreenDC(void);
 extern void MCU_finalize_names();
 
-#ifdef _IOS_MOBILE
-extern void MCReachabilityEventInitialize();
-extern void MCReachabilityEventFinalize();
-#endif
 
 #ifdef _ANDROID_MOBILE
 void MCAndroidCustomFontsInitialize();
@@ -881,9 +877,6 @@ void X_clear_globals(void)
 	MCAndroidMediaPickInitialize();
 #endif
 	
-#ifdef _IOS_MOBILE
-    MCReachabilityEventInitialize();
-#endif
 	
 	MCDateTimeInitialize();
     
@@ -1526,10 +1519,6 @@ int X_close(void)
 	MCSystemSoundFinalize();
 #endif
 	
-#ifdef _IOS_MOBILE
-	MCSystemSoundFinalize();
-    MCReachabilityEventFinalize();
-#endif
 	
 	MCDateTimeFinalize();
 	

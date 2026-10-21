@@ -89,16 +89,6 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #define MCSSL
 #define FEATURE_NOTIFY 1
 
-#elif defined(_IOS_MOBILE)
-
-#define MCSSL
-#define __MACROMAN__
-#define __LF__
-#define PLATFORM_STRING "iphone"
-
-#define FEATURE_PLATFORM_URL 1
-#define FEATURE_NOTIFY 1
-
 #elif defined(_ANDROID_MOBILE)
 
 #define MCSSL
@@ -154,7 +144,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #elif defined(_LINUX_DESKTOP) || defined(_LINUX_SERVER) || defined(__EMSCRIPTEN__)
 #define _HAS_VSNPRINTF
 #undef _HAS_QSORT_R
-#elif defined(_MAC_DESKTOP) || defined(_MAC_SERVER) || defined(_DARWIN_SERVER) || defined(_IOS_MOBILE)
+#elif defined(_MAC_DESKTOP) || defined(_MAC_SERVER) || defined(_DARWIN_SERVER)
 #define _HAS_VSNPRINTF
 #define _HAS_QSORT_R
 #elif defined(_ANDROID_MOBILE)
@@ -581,12 +571,6 @@ struct MCFontStruct
 #define SECONDS_MIN 0.0
 #define SECONDS_MAX 32535244799.0
 
-#endif
-
-// SN-2015-04-17: [[ Bug 15187 ]] Needed to know whether we are compiling for
-//  iOS Device or iOS Simulator
-#if defined TARGET_SUBPLATFORM_IPHONE
-#include <TargetConditionals.h>
 #endif
 
 //////////////////////////////////////////////////////////////////////

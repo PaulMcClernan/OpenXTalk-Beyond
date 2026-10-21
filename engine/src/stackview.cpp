@@ -684,7 +684,7 @@ void MCStack::view_setacceleratedrendering(bool p_value)
 	t_compositor_type = kMCTileCacheCompositorSoftware;
 	t_tile_size = 32;
 	t_cache_limit = 32 * 1024 * 1024;
-#elif defined(_IOS_MOBILE) || defined(_ANDROID_MOBILE)
+#elif defined(_ANDROID_MOBILE)
 	t_compositor_type = kMCTileCacheCompositorStaticOpenGL;
 	
 	const MCDisplay *t_display;
@@ -929,12 +929,6 @@ void MCStack::view_apply_updates()
 		//   (we can get here if a stack has its window taken over due to go in window).
 		if (window != nil)
 		{
-#ifdef _IOS_MOBILE
-			// MW-2013-03-20: [[ Bug 10748 ]] We defer switching the display class on iOS as
-			//   it causes flashes when switching between stacks.
-			extern void MCIPhoneSyncDisplayClass(void);
-			MCIPhoneSyncDisplayClass();
-#endif
 			
 			// MW-2011-09-08: [[ TileCache ]] If we have a tilecache, then attempt to update
 			//   it.

@@ -21,8 +21,6 @@
 
 #if defined(TARGET_PLATFORM_MACOS_X)
 #include <Carbon/Carbon.h>
-#elif defined(TARGET_SUBPLATFORM_IPHONE)
-#include <CoreGraphics/CoreGraphics.h>
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -35,9 +33,6 @@ bool MCImageGetCGColorSpace(CGColorSpaceRef &r_colorspace)
 #if defined(TARGET_PLATFORM_MACOS_X)
 	// on OSX request sRGB by name.
 	t_colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-#elif defined(TARGET_SUBPLATFORM_IPHONE)
-	// on iOS this isn't supported so we use the deviceRGB colorspace (which is sRGB anyway).
-	t_colorspace = CGColorSpaceCreateDeviceRGB();
 #endif
 	
 	if (t_colorspace == nil)

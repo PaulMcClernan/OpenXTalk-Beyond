@@ -62,7 +62,7 @@ bool MCHandlerInvoke(MCHandlerRef self, MCValueRef *p_arguments, uindex_t p_argu
     return self -> callbacks -> invoke(MCHandlerGetContext(self), p_arguments, p_argument_count, r_value);
 }
 
-#if (defined(TARGET_SUBPLATFORM_IPHONE) || defined(TARGET_SUBPLATFORM_ANDROID)) && !defined(CROSS_COMPILE_HOST)
+#if defined(TARGET_SUBPLATFORM_ANDROID) && !defined(CROSS_COMPILE_HOST)
 struct MCHandlerInvokeTrampolineContext
 {
     MCHandlerRef self;
@@ -90,15 +90,6 @@ bool MCHandlerExternalInvoke(MCHandlerRef self, MCValueRef *p_arguments, uindex_
         extern void co_yield_to_engine_and_call(co_yield_callback_t callback, void *context);
         MCHandlerInvokeTrampolineContext t_context = {self, p_arguments, p_argument_count, r_value, true};
         co_yield_to_engine_and_call(MCHandlerInvokeTrampoline, &t_context);
-        return t_context.return_value;
-    }
-#elif defined(TARGET_SUBPLATFORM_IPHONE) && !defined(CROSS_COMPILE_HOST)
-    extern bool MCIPhoneIsOnScriptFiber(void);
-    if (!MCIPhoneIsOnScriptFiber())
-    {
-        extern void MCIPhoneRunOnScriptFiber(void (*)(void *), void *);
-        MCHandlerInvokeTrampolineContext t_context = {self, p_arguments, p_argument_count, r_value, true};
-        MCIPhoneRunOnScriptFiber(MCHandlerInvokeTrampoline, &t_context);
         return t_context.return_value;
     }
 #endif

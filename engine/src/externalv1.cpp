@@ -1063,15 +1063,7 @@ MCExternal *MCExternalCreateV1(void)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(TARGET_SUBPLATFORM_IPHONE)
-extern bool iphone_run_on_main_thread(void *p_callback, void *p_callback_state, int p_options);
-static MCExternalError MCExternalEngineRunOnMainThread(void *p_callback, void *p_callback_state, MCExternalRunOnMainThreadOptions p_options)
-{
-	if (!iphone_run_on_main_thread(p_callback, p_callback_state, p_options))
-		return kMCExternalErrorNotImplemented;
-	return kMCExternalErrorNone;
-}
-#elif defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
 extern bool android_run_on_main_thread(void *p_callback, void *p_callback_state, int p_options);
 static MCExternalError MCExternalEngineRunOnMainThread(void *p_callback, void *p_callback_state, MCExternalRunOnMainThreadOptions p_options)
 {
@@ -2711,8 +2703,6 @@ static MCExternalError MCExternalWaitBreak(void *unused, unsigned int p_options)
 extern MCGFloat MCResGetPixelScale(void);
 extern MCGFloat MCResGetUIScale(void);
 
-extern void *MCIPhoneGetView(void);
-extern void *MCIPhoneGetViewController(void);
 extern void *MCAndroidGetActivity(void);
 extern void *MCAndroidGetContainer(void);
 
@@ -2733,14 +2723,6 @@ static MCExternalError MCExternalInterfaceQuery(MCExternalInterfaceQueryTag op, 
 			*(double *)r_value = 1.0 / MCResGetUIScale();
 			break;
 			
-#if defined(TARGET_SUBPLATFORM_IPHONE)
-		case kMCExternalInterfaceQueryView:
-			*(void **)r_value = MCIPhoneGetView();
-			break;
-		case kMCExternalInterfaceQueryViewController:
-			*(void **)r_value = MCIPhoneGetViewController();
-			break;
-#endif
 			
 #if defined(TARGET_SUBPLATFORM_ANDROID)
 		case kMCExternalInterfaceQueryActivity:

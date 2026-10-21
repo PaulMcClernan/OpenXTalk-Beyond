@@ -27,7 +27,7 @@
 #include <dlfcn.h>
 #endif
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
 #include <objc/message.h>
 #endif
 
@@ -232,7 +232,7 @@ public:
                   MCTypeInfoRef p_handler_signature,
                   void *p_result_slot_ptr)
     {
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
         /* At this point we have a argument values array which will match
          * the LCB signature - depending on the call type we need to modify
          * it. */
@@ -385,12 +385,7 @@ public:
          * thread. */
         if (p_handler->thread_affinity != kMCScriptThreadAffinityDefault)
         {
-#if defined(TARGET_SUBPLATFORM_IPHONE) && !defined(CROSS_COMPILE_HOST)
-            extern void MCIPhoneRunOnMainFiber(void (*)(void *), void *);
-            CallTrampolineContext t_context = { this, p_handler, p_handler_signature, p_result_slot_ptr, true };
-            MCIPhoneRunOnMainFiber(CallAnyTrampoline, &t_context);
-            return t_context.return_value;
-#elif defined(TARGET_SUBPLATFORM_ANDROID) && !defined(CROSS_COMPILE_HOST)
+#if defined(TARGET_SUBPLATFORM_ANDROID) && !defined(CROSS_COMPILE_HOST)
             typedef void (*co_yield_callback_t)(void *);
             extern void co_yield_to_android_and_call(co_yield_callback_t callback, void *context);
             CallTrampolineContext t_context = { this, p_handler, p_handler_signature, p_result_slot_ptr, true };

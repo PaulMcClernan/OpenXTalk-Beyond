@@ -522,7 +522,7 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(__MAC__) || defined(__IOS__)
+#if defined(__MAC__)
 #include <CoreFoundation/CoreFoundation.h>
 class MCAutoStringRefAsCFString
 {

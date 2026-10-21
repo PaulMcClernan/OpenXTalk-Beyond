@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "cxml.h"
-#if defined _MACOSX || defined ( _LINUX ) || defined (TARGET_SUBPLATFORM_IPHONE) || defined (TARGET_SUBPLATFORM_ANDROID)
+#if defined _MACOSX || defined ( _LINUX ) || defined (TARGET_SUBPLATFORM_ANDROID)
 #define _vsnprintf vsnprintf
 #endif
 

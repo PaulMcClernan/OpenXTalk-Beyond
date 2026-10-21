@@ -1030,30 +1030,3 @@ void *MCSupportLibraryLookupSymbol(void *p_handle, const char *p_symbol)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-struct LibExport
-{
-	const char *name;
-	void *address;
-};
-
-struct LibInfo
-{
-	const char **name;
-	struct LibExport *exports;
-};
-
-static struct LibExport __libexports[] =
-{
-	{ "getXtable", getXtable },
-	{ "configureSecurity", configureSecurity },
-    { "setExternalInterfaceVersion", setExternalInterfaceVersion },
-	{ 0, 0 }
-};
-
-struct LibInfo __libinfo =
-{
-	&g_external_name,
-	__libexports
-};
-#endif

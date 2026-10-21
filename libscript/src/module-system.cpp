@@ -26,9 +26,7 @@ extern "C" MC_DLLEXPORT_DEF void
 MCSystemExecGetOperatingSystem (MCStringRef & r_string)
 {
 	const char t_os[] =
-#if defined(__IOS__)
-		"ios"
-#elif defined(__MAC__)
+#if defined(__MAC__)
 		"mac"
 #elif defined(__WINDOWS__)
 		"windows"

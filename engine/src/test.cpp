@@ -264,7 +264,7 @@ void MCTestDoAssertFalse(const char *p_message, bool p_value, const char *p_file
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
 
 #include <mach-o/loader.h>
 #include <mach-o/getsect.h>

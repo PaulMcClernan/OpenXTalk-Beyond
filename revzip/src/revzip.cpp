@@ -44,7 +44,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #define stricmp strcasecmp
 #endif
 
-#if defined(TARGET_SUBPLATFORM_IPHONE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
 #define stricmp strcasecmp
 #include <unistd.h>
 #endif
@@ -2274,10 +2274,3 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
 #endif
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-extern "C"
-{
-extern struct LibInfo __libinfo;
-__attribute((section("__DATA,__libs"))) volatile struct LibInfo *__libinfoptr_revzip __attribute__((__visibility__("default"))) = &__libinfo;
-}
-#endif

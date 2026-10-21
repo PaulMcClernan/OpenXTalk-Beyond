@@ -26,118 +26,43 @@
 
 #include "prefix.h"
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-#import <CoreText/CoreText.h>
-#import <UIKit/UIFont.h>
-#else
 #import <ApplicationServices/ApplicationServices.h>
 #import <AppKit/NSFont.h>
-#endif
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-// Stored as a global variable
-static MCArrayRef s_font_map = nil;
-
-// Populate the VariableArray s_font_map
-// from the input mapping list (<mapped name>=<PostScript name>).
-// Each <PostScript name> is storred keyed as <mapped name>
-void add_ios_fontmap(const char* p_mapping)
-{
-    if (s_font_map == nil)
-    {
-        if (!MCArrayCreateMutable(s_font_map))
-            return;
-    }
-
-    MCAutoStringRef t_mapping;
-    if (!MCStringCreateWithCString(p_mapping, &t_mapping))
-        return;
-
-    uindex_t t_separator;
-    if (!MCStringFirstIndexOfChar(*t_mapping, '=', 0, kMCStringOptionCompareExact, t_separator))
-        return;
-    
-    MCAutoStringRef t_from, t_to;
-    MCNewAutoNameRef t_from_as_name;
-    if (!MCStringCopySubstring(*t_mapping, MCRangeMake(0, t_separator), &t_from)
-            || !MCNameCreate(*t_from, &t_from_as_name)
-            || !MCStringCopySubstring(*t_mapping, MCRangeMake(t_separator + 1, UINDEX_MAX), &t_to))
-        return;
-
-    MCArrayStoreValue(s_font_map, false, *t_from_as_name, *t_to);
-}
-
-void ios_clear_font_mapping(void)
-{
-    if (s_font_map != nil)
-    {
-        MCValueRelease(s_font_map);
-        s_font_map = nil;
-    }
-}
-#endif
 
 static void* coretext_font_create_system(uint32_t p_size)
 {
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    return [[UIFont systemFontOfSize: p_size] retain];
-#else
     return [[NSFont systemFontOfSize: p_size] retain];
-#endif
 }
 
 static void* coretext_font_create_system_bold(uint32_t p_size)
 {
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    return [[UIFont boldSystemFontOfSize: p_size] retain];
-#else
     return [[NSFont boldSystemFontOfSize: p_size] retain];
-#endif
 }
 
 static void* coretext_font_create_content(uint32_t p_size)
 {
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    return [[UIFont systemFontOfSize: p_size] retain];
-#else
     return [[NSFont controlContentFontOfSize: p_size] retain];
-#endif
 }
 
 static void* coretext_font_create_menu(uint32_t p_size)
 {
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    return [[UIFont systemFontOfSize: p_size] retain];
-#else
     return [[NSFont menuFontOfSize: p_size] retain];
-#endif
 }
 
 static void* coretext_font_create_message(uint32_t p_size)
 {
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    return [[UIFont systemFontOfSize: p_size] retain];
-#else
     return [[NSFont messageFontOfSize: p_size] retain];
-#endif
 }
 
 static void* coretext_font_create_tooltip(uint32_t p_size)
 {
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    return [[UIFont systemFontOfSize: p_size] retain];
-#else
     return [[NSFont toolTipsFontOfSize: p_size] retain];
-#endif
 }
 
 static void* coretext_font_create_user(uint32_t p_size)
 {
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    return [[UIFont systemFontOfSize: p_size] retain];
-#else
     return [[NSFont userFontOfSize: p_size] retain];
-#endif
 }
 
 static void *coretext_font_create_with_name_and_size(MCStringRef p_name, uint32_t p_size)
@@ -180,23 +105,6 @@ static void *coretext_font_create_with_name_and_size(MCStringRef p_name, uint32_
     //  Defaults to the given name if no one matches, or on MacOS
     MCAutoStringRef t_mapped_name;
     
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    if (t_success && s_font_map != nil)
-    {
-        MCValueRef t_entry;
-        MCNewAutoNameRef t_mapped_name_as_name;
-        
-        // SN-2015-04-29: [[ iOS Fontmap ]] Use the given name, if we can't
-        //  fetch it from the font mappings.
-        if (MCNameCreate(p_name, &t_mapped_name_as_name)
-                && MCArrayFetchValue(s_font_map, false, *t_mapped_name_as_name, t_entry))
-            // We only store strings in s_font_map
-            t_mapped_name = (MCStringRef)t_entry;
-        else
-            t_mapped_name = p_name;
-    }
-    else
-#endif
         t_mapped_name = p_name;
     
     MCAutoStringRefAsCFString t_cf_name;

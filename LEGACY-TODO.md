@@ -28,7 +28,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 ### FIXME: engine (33)
 
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
-- [engine/src/dispatch.cpp:1574](engine/src/dispatch.cpp#L1574) FIXME This is horrible
+- [engine/src/dispatch.cpp:1563](engine/src/dispatch.cpp#L1563) FIXME This is horrible
 - [engine/src/em-dc-mainloop.cpp:46](engine/src/em-dc-mainloop.cpp#L46) FIXME these functions are pretty much the same for every X_init()
 - [engine/src/em-event.js:502](engine/src/em-event.js#L502) FIXME Maybe this should be done in the engine?
 - [engine/src/em-event.js:701](engine/src/em-event.js#L701) FIXME not supported
@@ -55,7 +55,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 - [engine/src/funcs.h:1133](engine/src/funcs.h#L1133) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1141](engine/src/funcs.h#L1141) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1574](engine/src/funcs.h#L1574) EE_CHARTONUM_BADSOURCE, PE_CHARTONUM_BADPARAM> // FIXME
-- [engine/src/globals.cpp:985](engine/src/globals.cpp#L985) FIXME use MCProperListRef
+- [engine/src/globals.cpp:978](engine/src/globals.cpp#L978) FIXME use MCProperListRef
 - [engine/src/mcsemaphore.h:61](engine/src/mcsemaphore.h#L61) FIXME mark as explicit
 - [engine/src/sysspec-url.cpp:341](engine/src/sysspec-url.cpp#L341) FIXME if wait() returns non-zero, cancel the URL
 - [engine/src/widget.lcb:911](engine/src/widget.lcb#L911) FIXME not actually implemented
@@ -66,7 +66,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 ### FIXME: libfoundation (10)
 
 - [libfoundation/include/system-commandline.h:81](libfoundation/include/system-commandline.h#L81) FIXME support for getting the command filename isn't implemented
-- [libfoundation/src/foundation-handler.cpp:661](libfoundation/src/foundation-handler.cpp#L661) FIXME Should include information about arguments and return
+- [libfoundation/src/foundation-handler.cpp:652](libfoundation/src/foundation-handler.cpp#L652) FIXME Should include information about arguments and return
 - [libfoundation/src/foundation-private.h:710](libfoundation/src/foundation-private.h#L710) define __MCAssertIsLocale(x)   MCAssert(nil != (x)) /* FIXME
 - [libfoundation/src/system-commandline.cpp:280](libfoundation/src/system-commandline.cpp#L280) return false; /* FIXME proper error
 - [libfoundation/src/system-file-w32.cpp:286](libfoundation/src/system-file-w32.cpp#L286) FIXME Remaining weaknesses:
@@ -246,9 +246,9 @@ Work left for later. 421 notes, by part of the repository:
 - [engine/src/desktop.cpp:107](engine/src/desktop.cpp#L107) TODO[2017-04-05] X_init() failed before initialising global
 - [engine/src/desktop.cpp:659](engine/src/desktop.cpp#L659) PLATFORM-TODO: Should we do more than this? i.e. Should the dragDrop
 - [engine/src/dispatch.cpp:255](engine/src/dispatch.cpp#L255) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/dispatch.cpp:305](engine/src/dispatch.cpp#L305) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/dispatch.cpp:1568](engine/src/dispatch.cpp#L1568) PLATFORM-TODO: This is needed at the moment to make sure that we don't
-- [engine/src/dispatch.cpp:1906](engine/src/dispatch.cpp#L1906) TODO: what about other 'special' chars added by unicode?
+- [engine/src/dispatch.cpp:294](engine/src/dispatch.cpp#L294) TODO[19681]: This can be removed when all engine messages are sent with
+- [engine/src/dispatch.cpp:1557](engine/src/dispatch.cpp#L1557) PLATFORM-TODO: This is needed at the moment to make sure that we don't
+- [engine/src/dispatch.cpp:1895](engine/src/dispatch.cpp#L1895) TODO: what about other 'special' chars added by unicode?
 - [engine/src/dskmac.cpp:790](engine/src/dskmac.cpp#L790) TODO Check whether the double path resolution is an issue
 - [engine/src/dskmac.cpp:1186](engine/src/dskmac.cpp#L1186) TODO assign relevant error code
 - [engine/src/dskmac.cpp:1208](engine/src/dskmac.cpp#L1208) TODO assign relevant error code
@@ -263,7 +263,7 @@ Work left for later. 421 notes, by part of the repository:
 - [engine/src/em-util.js:304](engine/src/em-util.js#L304) TODO - support more value types
 - [engine/src/em-util.js:332](engine/src/em-util.js#L332) TODO - for now, treat functions as objects but we may wish to differentiate them later
 - [engine/src/exec-engine.cpp:519](engine/src/exec-engine.cpp#L519) TODO - create as list?
-- [engine/src/exec-extension.cpp:769](engine/src/exec-extension.cpp#L769) TODO: Augment error
+- [engine/src/exec-extension.cpp:761](engine/src/exec-extension.cpp#L761) TODO: Augment error
 - [engine/src/exec-interface-stack.cpp:121](engine/src/exec-interface-stack.cpp#L121) TODO
 - [engine/src/exec-network.cpp:165](engine/src/exec-network.cpp#L165) TODO - I.M. this is a bit odd, checking if we have permission to resolve a hostname AFTER we've
 - [engine/src/exec-pasteboard.cpp:556](engine/src/exec-pasteboard.cpp#L556) TODO: support multiple items
@@ -425,11 +425,11 @@ Work left for later. 421 notes, by part of the repository:
 - [engine/src/stackcache.cpp:210](engine/src/stackcache.cpp#L210) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackcache.cpp:272](engine/src/stackcache.cpp#L272) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackfileformat.cpp:25](engine/src/stackfileformat.cpp#L25) TODO: change this, and comparisons for version >= 7000 / 5500, etc
-- [engine/src/sysdefs.h:1398](engine/src/sysdefs.h#L1398) TODO[C++11] MCObject *object = nullptr;
-- [engine/src/sysdefs.h:1399](engine/src/sysdefs.h#L1399) TODO[C++11] uint32_t part_id = 0;
-- [engine/src/sysdefs.h:1403](engine/src/sysdefs.h#L1403) TODO[C++11] constexpr MCObjectPtr() = default;
-- [engine/src/sysdefs.h:1405](engine/src/sysdefs.h#L1405) TODO[C++11] constexpr
-- [engine/src/sysspec.cpp:1734](engine/src/sysspec.cpp#L1734) TODO Change to MCDataRef or change Shell to MCStringRef
+- [engine/src/sysdefs.h:1382](engine/src/sysdefs.h#L1382) TODO[C++11] MCObject *object = nullptr;
+- [engine/src/sysdefs.h:1383](engine/src/sysdefs.h#L1383) TODO[C++11] uint32_t part_id = 0;
+- [engine/src/sysdefs.h:1387](engine/src/sysdefs.h#L1387) TODO[C++11] constexpr MCObjectPtr() = default;
+- [engine/src/sysdefs.h:1389](engine/src/sysdefs.h#L1389) TODO[C++11] constexpr
+- [engine/src/sysspec.cpp:1732](engine/src/sysspec.cpp#L1732) TODO Change to MCDataRef or change Shell to MCStringRef
 - [engine/src/text-line.cpp:322](engine/src/text-line.cpp#L322) TODO: implement
 - [engine/src/text-pane.cpp:190](engine/src/text-pane.cpp#L190) TODO: examine the list of blocks in the paragraph for paragraph breaks
 - [engine/src/text-paragraph.cpp:547](engine/src/text-paragraph.cpp#L547) TODO: margins, padding, etc
@@ -651,7 +651,7 @@ Work left for later. 421 notes, by part of the repository:
 - [libscript/src/script-error.cpp:83](libscript/src/script-error.cpp#L83) TODO: Add expected / provided argument counts.
 - [libscript/src/script-execute.cpp:288](libscript/src/script-execute.cpp#L288) _Complex long double (TODO)
 - [libscript/src/script-execute.cpp:306](libscript/src/script-execute.cpp#L306) TODO: Investigate structs containing long doubles
-- [libscript/src/script-execute.cpp:550](libscript/src/script-execute.cpp#L550) TODO: Split UnboxingConvert so that we don't resolve types twice.
+- [libscript/src/script-execute.cpp:545](libscript/src/script-execute.cpp#L545) TODO: Split UnboxingConvert so that we don't resolve types twice.
 - [libscript/src/script-private.h:830](libscript/src/script-private.h#L830) TODO: Make this better for negative numbers.
 - [libscript/src/script-validate.hpp:243](libscript/src/script-validate.hpp#L243) TODO: Validate that p_address is the start of an opcode.
 

@@ -49,7 +49,7 @@ typedef class MCGPaint *MCGPaintRef;
 
 typedef uint32_t MCGPixelFormat;
 
-#if defined(ANDROID) || defined(TARGET_SUBPLATFORM_IPHONE) || defined(_LINUX) || defined(__EMSCRIPTEN__) || defined(__MAC__)
+#if defined(ANDROID) || defined(_LINUX) || defined(__EMSCRIPTEN__) || defined(__MAC__)
 #  define kMCGPixelFormatNative kMCGPixelFormatRGBA
 #elif defined(WIN32)
 #  define kMCGPixelFormatNative kMCGPixelFormatBGRA

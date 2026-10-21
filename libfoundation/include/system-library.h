@@ -120,49 +120,6 @@ __MCSLibraryThrowResolvePathFailed(void);
  * Static binding (iOS only)
  * ================================================================ */
 
-#ifdef __IOS__
-
-/* New style (C++ based) - not implemented yet */
-
-#if defined(MCS_LIBRARY_CXX_IOS_STATIC)
-/* The record which each statically linked library should register using a
- * constructor. */
-struct MCSLibraryStaticInfo
-{
-    MCSLibraryStaticInfo *__next;
-    const char *name;
-    struct {
-        const char *symbol;
-        void *address;
-    } *exports;
-};
-
-/* Register the given statically linked library and required symbols. The
- * record passed as p_info must exist until the foundation library is
- * shutdown. */
-MC_DLLEXPORT void
-MCSLibraryRegisterStatic(MCSLibraryStaticInfo& p_info);
-#endif
-
-/* Old style (section based) */
-
-#if !defined(MCS_LIBRARY_CXX_IOS_STATIC)
-
-struct MCSLibraryStaticLibExport
-{
-    const char *symbol;
-    void *address;
-};
-
-struct MCSLibraryStaticLibInfo
-{
-    char * const * name;
-    const struct MCSLibraryStaticLibExport *exports;
-};
-
-#endif
-
-#endif
 
 /* ================================================================
  * Static binding (web)

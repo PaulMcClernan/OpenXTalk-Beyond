@@ -67,7 +67,7 @@ char *strlwr(char *str)
 
 #endif
 
-#if defined _LINUX || defined(TARGET_SUBPLATFORM_IPHONE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined _LINUX || defined(TARGET_SUBPLATFORM_ANDROID)
 #define stricmp strcasecmp
 
 
@@ -3451,10 +3451,3 @@ BOOL WINAPI DllMain(HINSTANCE tInstance, DWORD dwReason, LPVOID lpReserved)
 }
 #endif
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-extern "C"
-{
-	extern struct LibInfo __libinfo;
-	__attribute((section("__DATA,__libs"))) volatile struct LibInfo *__libinfoptr_revxml __attribute__((__visibility__("default"))) = &__libinfo;
-}
-#endif

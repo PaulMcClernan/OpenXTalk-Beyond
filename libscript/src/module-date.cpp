@@ -66,7 +66,7 @@ MCDateGetTimeInfo(bool t_is_local,
 	return true;
 }
 
-#elif defined(__MAC__) || defined(__IOS__)
+#elif defined(__MAC__)
 static bool
 MCDateGetTimeInfo(bool t_is_local,
                   struct tm & r_timeinfo,

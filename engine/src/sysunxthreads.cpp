@@ -70,7 +70,7 @@ void *MCThreadPoolThreadExecute(void *)
     t_pool = MCMacPlatfromCreateAutoReleasePool();
 #endif
     
-#if defined(_MAC_DESKTOP) || defined(_IOS_MOBILE)
+#if defined(_MAC_DESKTOP)
     pthread_setname_np("Thread Pool Worker");
 #endif
     

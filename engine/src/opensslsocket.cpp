@@ -69,9 +69,7 @@ extern char *osx_cfstring_to_cstring(CFStringRef p_string, bool p_release, bool 
 #include <netinet/in_systm.h>
 
 // MM-2014-02-04: [[ LibOpenSSL 1.0.1e ]] Header netinet/udp.h is not included in the iOS device SDK.
-#if !defined(TARGET_SUBPLATFORM_IPHONE) || defined(__i386__)
 #include <netinet/udp.h>
-#endif
 
 #include <netinet/in.h>
 
@@ -100,7 +98,7 @@ extern char *osx_cfstring_to_cstring(CFStringRef p_string, bool p_release, bool 
 #include "mblandroidjava.h"
 #endif
 
-#if defined(_MAC_DESKTOP) || defined(_LINUX_DESKTOP) || defined(TARGET_SUBPLATFORM_IPHONE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(_MAC_DESKTOP) || defined(_LINUX_DESKTOP) || defined(TARGET_SUBPLATFORM_ANDROID)
 #define USE_AUX_THREAD
 #endif
 
@@ -114,7 +112,7 @@ volatile sig_atomic_t s_socket_poll_thread_enabled;
 static int s_socket_poll_signal_pipe[2];
 #endif
 
-#if !defined(X11) && !defined(_MACOSX) && !defined(TARGET_SUBPLATFORM_IPHONE) && !defined(_LINUX_SERVER) && !defined(_MAC_SERVER) && !defined(TARGET_SUBPLATFORM_ANDROID)
+#if !defined(X11) && !defined(_MACOSX) && !defined(_LINUX_SERVER) && !defined(_MAC_SERVER) && !defined(TARGET_SUBPLATFORM_ANDROID)
 #define socklen_t int
 #endif
 
@@ -2191,7 +2189,7 @@ Boolean MCSocket::initsslcontext()
 	
 	if (t_success)
 	{
-#if defined(TARGET_SUBPLATFORM_IPHONE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
         // MM-2015-06-04: [[ MobileSockets ]] Since iOS and Android don't expose the root certificates directly, we can't use OpenSSL's verification routines.
         //   Instead we'll do it ourselves using the OS APIs.
         SSL_CTX_set_verify(_ssl_context, SSL_VERIFY_NONE, NULL);
@@ -2251,7 +2249,7 @@ Boolean MCSocket::sslconnect()
 	{
 		if (sslverify)
 		{
-#if defined(TARGET_SUBPLATFORM_IPHONE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
             // MM-2015-06-04: [[ MobileSockets ]] On the mobile platforms we verify the certificate ourselves rather than using OpenSSL
             if (!MCSSLVerifyCertificate(_ssl_conn, *t_hostname, sslerror))
             {
@@ -2440,7 +2438,7 @@ Boolean MCSocket::sslaccept()
             else if (MCStringFirstIndexOfChar(*t_hostname, '|', 0, kMCCompareExact, t_pos))
                 /* UNCHECKED */ MCStringRemove(*t_hostname, MCRangeMakeMinMax(t_pos, MCStringGetLength(*t_hostname)));
 			
-#if defined(TARGET_SUBPLATFORM_IPHONE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
             // MM-2015-06-04: [[ MobileSockets ]] On the mobile platforms we verify the certificate ourselves rather than using OpenSSL
             if (!MCSSLVerifyCertificate(_ssl_conn, *t_hostname, sslerror))
             {
