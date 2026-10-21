@@ -21,6 +21,13 @@ constant kTmMinWidth = 96
 constant kTmMinHeight = 160
 constant kTmDefaultWidth = 120
 constant kTmWheel = 36
+-- The engine draws a field's lines from 6 points (its TEXT_Y_OFFSET) above
+-- the top margin, and counts the formattedHeight as if the text reached
+-- that far into the top and bottom margins; so a label with margins of 0
+-- was 12 points shorter than its line, drawn from 4 above its top and cut
+-- off below. Margins of that much above and below put the line inside the
+-- label and make the formattedHeight exact.
+constant kTmTextInset = 6
 -- The sections, top to bottom: a section's key, its title, and the
 -- groups of group "contents" it shows, one after the other
 constant kTmSections = "widget|Widgets|widget\nclassic|Controls|classic\ngraphic|Shapes|graphic\nvector|Vector Tools|graphictools,graphictoolscontrols\npaint|Paint Tools|paint,paintcontrols"
@@ -2412,7 +2419,8 @@ private function tmField pName, pText, pSize, pColor, pGroup
    set the threeD of tObj to false
    set the showFocusBorder of tObj to false
    set the dontWrap of tObj to true
-   set the margins of tObj to 0
+   -- (top and bottom margins, see kTmTextInset; none at the sides)
+   set the margins of tObj to "0," & kTmTextInset & ",0," & kTmTextInset
    set the textSize of tObj to pSize
    set the textColor of tObj to pColor
    set the text of tObj to pText
@@ -3071,7 +3079,7 @@ command tmLayout
    if tAny then
       hide field "tmEmpty" of me
    else
-      set the topLeft of field "tmEmpty" of me to kTmPad + 4, tContentTop + 8
+      set the topLeft of field "tmEmpty" of me to kTmPad + 4, tContentTop + 2
       show field "tmEmpty" of me
    end if
 
