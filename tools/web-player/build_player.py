@@ -520,6 +520,18 @@ def check(site, samples, work):
         third.screenshot(path=os.path.join(shots, '12-hyper.png'))
         third.keyboard.press('Enter')
         third.wait_for_timeout(500)
+
+        # The same stack, from another file, opened while it plays (a newer
+        # copy of a stack being made): it is the file's, and it is still
+        # there once the one it replaced is forgotten
+        got = open_files(third, [os.path.join(samples, 'Hyper.livecode')], 'Hyper again', third_lines)
+        third.wait_for_timeout(500)
+        if third.locator('[class^="oxt-dialog"]').count():
+            third.keyboard.press('Enter')
+            third.wait_for_timeout(500)
+        there = third.evaluate("!!(document.liveCode && document.liveCode.findStackWithName('Hyper'))")
+        expect('reopen-while-playing', any(x.startswith('PLAYER opened Hyper') for x in got) and there,
+               'stack there: %s | %s' % (there, ' | '.join(got[-3:])))
         before = len(third_lines)
         third.click('#home')
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
