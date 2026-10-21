@@ -37,8 +37,16 @@ stacks.
    changed without its stack being built again shows as a difference.
    --compare fail makes a difference a failure (report, the default, only
    lists it), and --print-stacks prints each stack that differs into the
-   log, base64 in lines "STACK <file> <n>/<count> <text>", for a machine
-   without an engine to take the build from.
+   log, for a machine without an engine to take the build from: as a delta
+   from the committed stack, which is most of it, in lines
+   "DELTA <file> <n>/<count> <base64>", or whole in lines
+   "STACK <file> <n>/<count> <base64>" when there is none; then
+   "SHA256 <file> <hex> <bytes>". Spaces in <file> are underscores.
+
+  python3 tools/ci/examples_check.py --from-log FILE
+
+takes those lines from a saved log and writes the stacks they make into
+ide/Resources/Examples/Remastered, each checked against its SHA256 line.
 
 Exit status 0 when the build and the checks passed (and, with --compare
 fail, no stack differs), 1 otherwise. Under GitHub Actions a failure is an
@@ -47,10 +55,13 @@ annotation and the failures go into the job summary.
 
 import argparse
 import base64
+import hashlib
 import os
 import shutil
+import struct
 import subprocess
 import sys
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
@@ -59,6 +70,11 @@ SCRIPT = os.path.join(HERE, 'examples-check.livecodescript')
 COMMITTED = os.path.join(REPO, 'ide', 'Resources', 'Examples', 'Remastered')
 # a line of base64 in the log, as tools/ci/print_images.py writes images
 CHUNK = 4000
+# The delta's matching: the old stack's bytes are indexed every STRIDE
+# bytes, BLOCK at a time, so any run the two share of BLOCK + STRIDE bytes
+# or more is found
+BLOCK = 24
+STRIDE = 8
 
 
 def log(msg=''):
@@ -127,6 +143,125 @@ def check(install, out, work, timeout, mode=''):
     return lines, problems
 
 
+def delta(old, new):
+    """new as copies from old and bytes of its own, zlib-compressed: ops
+    b'C' <offset> <length> and b'L' <length> <bytes>, lengths and offsets
+    unsigned 32-bit big-endian"""
+    index = {}
+    for i in range(0, len(old) - BLOCK + 1, STRIDE):
+        index.setdefault(old[i:i + BLOCK], i)
+    ops = []
+    lit = bytearray()
+    j = 0
+    expect = -1
+    while j < len(new):
+        i = -1
+        if 0 <= expect and old[expect:expect + BLOCK] == new[j:j + BLOCK] and j + BLOCK <= len(new):
+            i = expect
+        elif j + BLOCK <= len(new):
+            i = index.get(bytes(new[j:j + BLOCK]), -1)
+        if i < 0:
+            lit.append(new[j])
+            j += 1
+            continue
+        # back into the bytes of its own, then on as far as the two agree
+        back = 0
+        while back < len(lit) and i - back > 0 and old[i - back - 1] == lit[len(lit) - back - 1]:
+            back += 1
+        if back:
+            del lit[len(lit) - back:]
+        i -= back
+        start = j - back
+        end = j + BLOCK
+        while end < len(new) and i + (end - start) < len(old) and old[i + end - start] == new[end]:
+            end += 1
+        if lit:
+            ops.append(b'L' + struct.pack('>I', len(lit)) + bytes(lit))
+            lit = bytearray()
+        ops.append(b'C' + struct.pack('>II', i, end - start))
+        j = end
+        expect = i + (end - start)
+    if lit:
+        ops.append(b'L' + struct.pack('>I', len(lit)) + bytes(lit))
+    return zlib.compress(b''.join(ops), 9)
+
+
+def undelta(old, data):
+    """The bytes a delta makes from old"""
+    ops = zlib.decompress(data)
+    out = bytearray()
+    k = 0
+    while k < len(ops):
+        if ops[k:k + 1] == b'C':
+            off, length = struct.unpack('>II', ops[k + 1:k + 9])
+            if off + length > len(old):
+                raise ValueError('a copy past the end of the old stack')
+            out += old[off:off + length]
+            k += 9
+        elif ops[k:k + 1] == b'L':
+            (length,) = struct.unpack('>I', ops[k + 1:k + 5])
+            out += ops[k + 5:k + 5 + length]
+            k += 5 + length
+        else:
+            raise ValueError('not a delta')
+    return bytes(out)
+
+
+def print_lines(kind, name, data):
+    text = base64.b64encode(data).decode('ascii')
+    parts = [text[i:i + CHUNK] for i in range(0, len(text), CHUNK)] or ['']
+    for i, part in enumerate(parts, 1):
+        print('%s %s %d/%d %s' % (kind, name.replace(' ', '_'), i, len(parts), part))
+
+
+def from_log(path, committed=COMMITTED):
+    """Writes the stacks of a log's DELTA or STACK and SHA256 lines into
+    committed; returns the problems"""
+    parts = {}
+    sums = {}
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            # (a GitHub log puts a time before each line)
+            words = line.split()
+            for k, w in enumerate(words):
+                if w in ('DELTA', 'STACK') and len(words) >= k + 4 and '/' in words[k + 2]:
+                    n, count = words[k + 2].split('/')
+                    parts.setdefault((w, words[k + 1]), {})[int(n)] = (int(count), words[k + 3])
+                    break
+                if w == 'SHA256' and len(words) >= k + 4:
+                    sums[words[k + 1]] = (words[k + 2], int(words[k + 3]))
+                    break
+    problems = []
+    names = {}
+    for (kind, name), got in parts.items():
+        count = next(iter(got.values()))[0]
+        if sorted(got) != list(range(1, count + 1)):
+            problems.append('%s: %d of its %d lines' % (name, len(got), count))
+            continue
+        names[name] = (kind, base64.b64decode(''.join(got[i][1] for i in range(1, count + 1))))
+    for name, (kind, data) in sorted(names.items()):
+        # (the file the underscores were spaces of)
+        target = None
+        for x in os.listdir(committed):
+            if x.replace(' ', '_') == name:
+                target = os.path.join(committed, x)
+        if target is None:
+            target = os.path.join(committed, name.replace('_', ' '))
+        if kind == 'DELTA':
+            with open(target, 'rb') as f:
+                data = undelta(f.read(), data)
+        if name not in sums:
+            problems.append('%s: no SHA256 line' % name)
+            continue
+        if hashlib.sha256(data).hexdigest() != sums[name][0] or len(data) != sums[name][1]:
+            problems.append('%s: not the stack the log names (its SHA256 or size differs)' % name)
+            continue
+        with open(target, 'wb') as f:
+            f.write(data)
+        log('%s: written (%d bytes)' % (os.path.basename(target), len(data)))
+    return problems
+
+
 def compare(out, print_stacks):
     """The stacks built that are not the committed ones, by file name"""
     built = sorted(x for x in os.listdir(out) if x.endswith('.oxtstack'))
@@ -150,24 +285,34 @@ def compare(out, print_stacks):
                                                         len(data), len(old) if old is not None else 'none'))
         differ.append(name)
         if print_stacks:
-            text = base64.b64encode(data).decode('ascii')
-            parts = [text[i:i + CHUNK] for i in range(0, len(text), CHUNK)]
-            for i, part in enumerate(parts, 1):
-                print('STACK %s %d/%d %s' % (name.replace(' ', '_'), i, len(parts), part))
+            if old is not None:
+                print_lines('DELTA', name, delta(old, data))
+            else:
+                print_lines('STACK', name, data)
+            print('SHA256 %s %s %d' % (name.replace(' ', '_'), hashlib.sha256(data).hexdigest(), len(data)))
             sys.stdout.flush()
     return differ
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Build and check the remastered examples.')
-    ap.add_argument('--install', required=True, metavar='DIR', help='an installed (extracted) OXT-Beyond')
-    ap.add_argument('--out', required=True, metavar='DIR', help='where the examples are built (emptied first)')
+    ap.add_argument('--from-log', metavar='FILE',
+                    help='write the stacks a log of --print-stacks holds into the committed folder, and stop')
+    ap.add_argument('--install', metavar='DIR', help='an installed (extracted) OXT-Beyond')
+    ap.add_argument('--out', metavar='DIR', help='where the examples are built (emptied first)')
     ap.add_argument('--log', metavar='FILE', help='write the check\'s lines here')
     ap.add_argument('--compare', choices=('fail', 'report'), default='report',
                     help='whether a stack that differs from the committed one fails the check (default: %(default)s)')
     ap.add_argument('--print-stacks', action='store_true', help='print each stack that differs, base64, into the log')
     ap.add_argument('--timeout', type=int, default=600, help='seconds for each step (default: %(default)s)')
     args = ap.parse_args(argv)
+    if args.from_log:
+        problems = from_log(args.from_log)
+        for p in problems:
+            log('  ' + p)
+        return 1 if problems else 0
+    if not args.install or not args.out:
+        ap.error('--install and --out are needed')
 
     install = os.path.abspath(args.install)
     out = os.path.abspath(args.out)
