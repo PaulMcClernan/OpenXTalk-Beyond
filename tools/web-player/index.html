@@ -9,8 +9,8 @@ The Stack Player's page (tools/web-player). The player's home, its
 library, its menu bar and the About window are HTML; the stack the user
 opens is drawn by the web engine in the canvas, as in the engine's own
 page (engine/rsrc/emscripten-html-template.html). build_player.py puts
-the engine's file name in place of @ENGINE_JS@ and copies assets/ beside
-the page.
+the engine's file name in place of @ENGINE_JS@ and the site's stamp in
+place of @STAMP@, and copies assets/ beside the page.
 
 The look is openxtalk.org's, "a desk of stacks": windows with a folder
 tab on a dotted desk, solid offset shadows, round buttons that press
@@ -606,6 +606,13 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
   var ready = false;
   window.Module = {
     canvas: $('canvas'),
+    // The engine's script, its WebAssembly and standalone.zip keep their
+    // names from one release to the next, so each is asked for with the
+    // site's stamp (a digest of the three): a browser that kept another
+    // version's copy of one of them cannot start it with this version's
+    // others. (The engine asks here for its WebAssembly, with the folder
+    // of its script, and for standalone.zip, with none.)
+    locateFile: function (path, folder) { return (folder || '') + path + '?v=@STAMP@'; },
     print: function (t) { console.log(t); },
     printErr: function (t) { console.error(t); },
     setStatus: function (t) {
@@ -942,6 +949,6 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
   }).catch(function () { /* no samples */ });
 })();
 </script>
-<script async src="@ENGINE_JS@"></script>
+<script async src="@ENGINE_JS@?v=@STAMP@"></script>
 </body>
 </html>

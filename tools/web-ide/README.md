@@ -99,4 +99,8 @@ cd web-ide-site && python3 -m http.server 8000
 ```
 
 and open `http://localhost:8000/`. The first visit downloads about 59 MB
-(the engine and the IDE), which the browser then keeps in its cache.
+(the engine and the IDE), which the browser then keeps in its cache. The
+page asks for the engine and the IDE with the site's stamp (`?v=`, a
+digest of the three files, which `build_site.py` puts in the page), so a
+browser that kept another version's copies, from the same address, never
+starts them with this version's.

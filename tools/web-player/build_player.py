@@ -54,6 +54,7 @@ Screenshots go into <work>/check.
 
 import argparse
 import functools
+import hashlib
 import http.server
 import json
 import os
@@ -169,10 +170,19 @@ def put_page(site):
     engines = [x for x in os.listdir(site) if re.match(r'^standalone-community-.+\.js$', x)]
     if len(engines) != 1 or 'standalone.zip' not in os.listdir(site):
         raise CheckError('%s does not hold a web standalone: %s' % (site, ', '.join(sorted(os.listdir(site)))))
+    # (a digest of the engine and the stack it opens: see locateFile in
+    # the page)
+    digest = hashlib.sha256()
+    for name in (engines[0], engines[0][:-len('.js')] + '.wasm', 'standalone.zip'):
+        if not os.path.isfile(os.path.join(site, name)):
+            continue
+        with open(os.path.join(site, name), 'rb') as f:
+            for block in iter(lambda: f.read(1 << 20), b''):
+                digest.update(block)
     with open(PAGE, encoding='utf-8') as f:
         page = f.read()
     with open(os.path.join(site, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
-        f.write(page.replace('@ENGINE_JS@', engines[0]))
+        f.write(page.replace('@ENGINE_JS@', engines[0]).replace('@STAMP@', digest.hexdigest()[:16]))
     built = os.path.join(site, BUILT_PAGE)
     if os.path.exists(built):
         os.remove(built)
