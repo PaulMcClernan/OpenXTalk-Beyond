@@ -97,7 +97,12 @@ the xTalk Academy, a course in programming for beginners, Home and a
 Release Notes window on the desktop, a modern Tools palette and the
 IDE's questions in Learn's look, and makes File > Import Stack work in
 the IDE again and imported HyperCard stacks open on the web (see
-[0.2.7-rc.6](#027-rc6-bug-hunt-the-xtalk-academy-and-the-ide-in-learns-look));
+[0.2.7-rc.6](#027-rc6-bug-hunt-the-xtalk-academy-and-the-ide-in-learns-look)),
+and 0.2.7-rc.6.1 fixes what its play testers reported: Linux at HiDPI
+and its audio clips, Safari reloading the web IDE, the Mac menu bar and
+external editor, and the modern Tools palette's labels, and moves the
+macOS user folder to `~/Documents/OXT-Beyond` (see
+[0.2.7-rc.6.1](#027-rc61-the-bug-hunts-fixes));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -435,7 +440,7 @@ What it needs:
   Debian 13), on Fedora `sudo dnf install gtk2`. The launcher checks for
   every library the engine needs and names the missing ones with their
   packages, instead of the engine ending without a word.
-- **HiDPI screens** (after 0.2.7-rc.6): on a desktop scaled to 200% or
+- **HiDPI screens** (0.2.7-rc.6.1): on a desktop scaled to 200% or
   more, the IDE and every stack are drawn at the desktop's scale, as on
   Windows and macOS, instead of at half the size of everything else.
   The scale is the one GTK 3 programs use: `GDK_SCALE` when it is set,
@@ -1561,6 +1566,66 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.1: the Bug Hunt's fixes
+
+OXT-Beyond 0.2.7-rc.6.1 has everything in 0.2.7-rc.6 and the fixes for
+what play testers reported against it:
+
+- **Linux at HiDPI.** On a desktop scaled to 200% or more (GNOME,
+  Cinnamon, MATE, Xfce and KDE publish the scale; `GDK_SCALE` and
+  `Xft.dpi` count too), the IDE and every stack are drawn at the
+  desktop's scale, as on a Retina Mac, where they were half the size of
+  everything else. Text in a scaled stack is no longer drawn twice the
+  size and garbled, and is measured at the size it is drawn. Start with
+  `GDK_SCALE=1`, or set `the usePixelScaling` to false, for the old
+  sizes.
+- **Linux audio clips play** through PulseAudio or PipeWire, where they
+  were silent without EsounD, and the sound becomes "done" when a clip
+  has played, so `wait until the sound is "done"` returns.
+- **Safari no longer reloads the web IDE**: the web engine is built so
+  that Safari's WebAssembly compiler needs a fraction of the memory it
+  did.
+- **The web**: answer and ask dialogs and drop-down menus show in the
+  Stack Player's full screen; a drop-down menu's scroll bar can be
+  clicked and dragged; installing a widget's `.lce` in the web IDE no
+  longer shows a "no shell" error; the web IDE keeps the dictionary's
+  extension docs between visits and its Home draws less while the
+  browser is not in use.
+- **The Mac IDE**: the menu bar's Y offset from the preferences
+  survives a restart, and a Mac with a camera notch docks the menu bar
+  below the notch (#174); any external script editor can be chosen in
+  Preferences, and scripts open in the editor chosen (#173).
+- **The macOS user folder is `~/Documents/OXT-Beyond`**, where it was
+  `~/Documents/OXT-Beyond extensions` (#175). The IDE moves the old
+  folder on its first start, when nothing is at the new place yet, and
+  leaves a link with the old name, so paths saved into it still work.
+  A folder chosen in Preferences is not moved.
+- **The modern Tools palette**: the section captions and the names are
+  no longer cut off at the bottom.
+- **Saving**: a stack save or object copy whose final write fails
+  reports the error, where it reported success with a damaged file.
+- **revBrowser on 64-bit Windows**: a page asking for a user name and
+  password no longer risks a crash.
+
+A script sees these differences from 0.2.7-rc.6. On a Linux desktop
+scaled to 200% or more, the screen rects are in points, `the
+screenPixelScale` and `the systemPixelScale` give the scale and `the
+usePixelScaling` is true; at 1x nothing changes. On any Linux desktop,
+`the formattedWidth` of text in a stack whose `scaleFactor` is not 1
+can differ from rc.6's by fractions of a point per character, and
+`play audioClip` finishes and sends `playStopped`. On macOS, an engine
+run without a UI (`-ui`) finishes a played clip a second after its
+length, where it never finished; with a UI nothing changes. On macOS,
+in the IDE, `revEnvironmentCustomizationPath()` is
+`~/Documents/OXT-Beyond` unless a folder was chosen in Preferences or
+the new place was taken. On every platform a save whose length
+write-back fails returns that error. On the web, an SQLite commit in
+the home folder returns before the browser's storage has it, as every
+other file there already does, and `revCopyFile` and `revCopyFolder`
+copy instead of throwing `no shell`. Pull request
+[#172](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/pull/172)
+lists every change.
 
 #### 0.2.7-rc.6: Bug Hunt, the xTalk Academy, and the IDE in Learn's look
 
