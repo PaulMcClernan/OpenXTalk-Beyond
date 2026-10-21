@@ -703,11 +703,31 @@ command tourTmNamesWhole pWhere
             put the text of tLabel && "cut off (" & the formattedWidth of tLabel & ">" & the width of tLabel & "); " after tBad
          else if not the dontWrap of tLabel and the formattedHeight of tLabel > the height of tLabel then
             put the text of tLabel && "cut off below (" & the formattedHeight of tLabel & ">" & the height of tLabel & "); " after tBad
+         else if tourTmTextCut(tLabel) is not empty then
+            put the text of tLabel && "cut off," && tourTmTextCut(tLabel) & "; " after tBad
          end if
       end repeat
    end repeat
    tourTmCheck tBad is empty, "every name is whole" && pWhere & ":" && tBad
 end tourTmNamesWhole
+
+-- What of a label's text its field cuts off: the box of its first line
+-- above the field's top, or of its last line below its bottom, from the
+-- formattedRect of the lines, which is where they are drawn. (The
+-- formattedHeight cannot tell: with margins of 0 it is 12 points short of
+-- the lines, and sizing the labels by it was what cut the captions off.)
+function tourTmTextCut pLabel
+   local tFirst, tLast
+   do "put the formattedRect of line 1 of" && pLabel && "into tFirst"
+   do "put the formattedRect of line (the number of lines of the text of" && pLabel && ") of" && pLabel && "into tLast"
+   if item 2 of tFirst < the top of pLabel then
+      return "its first line above its top (" & item 2 of tFirst & "<" & the top of pLabel & ")"
+   end if
+   if item 4 of tLast > the bottom of pLabel then
+      return "its last line below its bottom (" & item 4 of tLast & ">" & the bottom of pLabel & ")"
+   end if
+   return empty
+end tourTmTextCut
 
 -- The layout at its size: the header's controls and every tile shown
 -- inside the window's width, below the filter, and no two tiles over
@@ -743,6 +763,14 @@ command tourTmLayoutOK pWhen
          put tR into tRects[the number of elements of tRects + 1]
       end repeat
    end repeat
+   -- the sections' captions, whole in their labels
+   repeat for each item tName in "widget,classic,graphic,vector,paint"
+      put tourTmNamed("tmCapLabel:" & tName) into tLabel
+      if tLabel is empty or not the visible of tLabel or not the visible of the owner of tLabel then next repeat
+      if tourTmTextCut(tLabel) is not empty then
+         put "the caption" && the text of tLabel && "cut off," && tourTmTextCut(tLabel) & "; " after tBad
+      end if
+   end repeat
    repeat with i = 1 to the number of elements of tRects
       put tRects[i] into tR
       repeat with j = i + 1 to the number of elements of tRects
@@ -776,6 +804,7 @@ end tour_sample
 on tour_inspector
    local tPI, tSection, tShown, tIndex
    put tourInspect(tourSample("Push")) into tPI
+   tourInspectorHeaderCheck tPI
    put 0 into tIndex
    repeat for each item tSection in kButtonSections
       put tourInspectorSection(tPI, tSection) into tShown
@@ -1799,6 +1828,21 @@ end tourCloseInspectors
 -- icon in the inspector's header) of the inspector pStack, as a click on
 -- the icon does (revinspectorbehavior.livecodescript), and returns the
 -- section it shows (the first one when the object has no pSection)
+-- The inspector's header must show its sections as tabs: on macOS 26 a
+-- forum report (viewtopic.php?p=25148) showed a button's inspector with
+-- the header strip empty and no way to reach any section but Basic
+command tourInspectorHeaderCheck pStack
+   local tNav
+   if there is not a widget "header_background" of group "background" of stack pStack then
+      throw pStack && "has no header widget, so no section tabs"
+   end if
+   put the navData of widget "header_background" of group "background" of stack pStack into tNav
+   if the number of elements of tNav < 2 then
+      throw pStack && "shows" && the number of elements of tNav && "section tabs in its header"
+   end if
+   tourRecord "INFO" && pStack && "header:" && the number of elements of tNav && "section tabs"
+end tourInspectorHeaderCheck
+
 function tourInspectorSection pStack, pSection
    local tShown
    if pStack is empty or there is not a stack pStack then throw "no inspector stack"

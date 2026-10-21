@@ -45,6 +45,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "lnxdc.h"
 
 #include "resolution.h"
+#include "graphics_util.h"
 
 #include <gdk/gdkkeysyms.h>
 
@@ -54,9 +55,25 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 extern void MCS_handlechildexits(void);
 
 // IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] Where the desktop scales, bound the rect in device
+// coords and give it back in logical ones.
 void MCScreenDC::platform_boundrect(MCRectangle &rect, Boolean title, Window_mode m, Boolean resizable)
 {
-	device_boundrect(rect, title, m);
+	if (MCLinuxGetLogicalToScreenScale() == 1.0)
+	{
+		device_boundrect(rect, title, m);
+		return;
+	}
+
+	MCRectangle t_rect;
+	t_rect = logicaltoscreenrect(rect);
+	device_boundrect(t_rect, title, m);
+
+	// Only the position moves: keep the size as it was given.
+	MCPoint t_origin;
+	t_origin = screentologicalpoint(MCPointMake(t_rect.x, t_rect.y));
+	rect.x = t_origin.x;
+	rect.y = t_origin.y;
 }
 
 void MCScreenDC::device_boundrect(MCRectangle &rect, Boolean title, Window_mode m)
@@ -207,10 +224,15 @@ void MCScreenDC::waitfocus()
     }
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] The pointer's position in logical coords
 void MCScreenDC::platform_querymouse(int16_t &x, int16_t &y)
 {
 	device_querymouse(x, y);
+
+	MCPoint t_loc;
+	t_loc = screentologicalpoint(MCPointMake(x, y));
+	x = t_loc.x;
+	y = t_loc.y;
 }
 
 void MCScreenDC::device_querymouse(int2 &x, int2 &y)
@@ -247,10 +269,12 @@ uint2 MCScreenDC::querymods()
 	return t_rstate;
 }
 
-// IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] Move the pointer to a position in logical coords
 void MCScreenDC::platform_setmouse(int16_t x, int16_t y)
 {
-	device_setmouse(x, y);
+	MCPoint t_loc;
+	t_loc = logicaltoscreenpoint(MCPointMake(x, y));
+	device_setmouse(t_loc.x, t_loc.y);
 }
 
 void MCScreenDC::device_setmouse(int2 x, int2 y)

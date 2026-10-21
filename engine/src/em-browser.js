@@ -43,6 +43,17 @@
 // sandboxed with every other permission. The browser's PDF viewer does not
 // run in a sandboxed frame, so a PDF the stack sends the frame to is shown
 // in a frame without the sandbox.
+//
+// Browsers warn in the console that a frame with both allow-scripts and
+// allow-same-origin "can escape its sandboxing". That is so, and expected:
+// the sandbox is here only to keep a frame's pages from taking the stack's
+// page, not to wall the stack's own pages off from it. They (the htmlText,
+// a file) have the page's origin and need it, so that the engine can reach
+// into them (do ... in widget, the liveCode object, the URL), and the
+// stack's scripts already run in the page itself (do ... as "javascript").
+// A page of another site keeps its own origin, and so reaches nothing of
+// the stack's page whatever its flags. Leaving either flag out would break
+// those widgets, so the warning stays.
 
 mergeInto(LibraryManager.library, {
 

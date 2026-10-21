@@ -8,7 +8,7 @@ Name: dateChanged
 
 Type: message
 
-Syntax: on dateChanged pDate
+Syntax: dateChanged <pDate>
 
 Summary: Sent when a date is selected.
 

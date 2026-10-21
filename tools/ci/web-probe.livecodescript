@@ -544,7 +544,7 @@ end probeObjects
 -- includes them for a stack whose scripts use them, as this one's do, and
 -- web-deploy.livecodescript names them when it builds without the IDE.
 command probeExternals
-   local tTree, tStyleTree, tStyle, tText, tZip, tData, tOut, tResult, tDB, tId, tName
+   local tTree, tStyleTree, tStyle, tText, tZip, tData, tOut, tResult, tDB, tId, tName, tFile
    put revXMLCreateTree("<root><item id='1'>Hello</item><item id='2'>World</item></root>", false, true, false) into tTree
    put revXMLNodeContents(tTree, "root/item[2]") & comma & revXMLAttribute(tTree, "root/item[1]", "id") \
          & comma & revXMLNumberOfChildren(tTree, "root", "item", 0) into tText
@@ -584,6 +584,21 @@ command probeExternals
    put revDataFromQuery(",", ";", tDB, "SELECT * FROM nosuch") into tText
    probeCheck "database-error", tText begins with "revdberr," and tText contains "no such table", tText
    revCloseDatabase tDB
+
+   -- A database in the home folder, which the browser's storage keeps:
+   -- SQLite's sync asks for the folder to be written back to it soon
+   -- (engine/src/em-system.js), and web_check.py looks for this row there
+   put specialFolderPath("documents") & "/probe.db" into tFile
+   if there is a file tFile then
+      delete file tFile
+   end if
+   put revOpenDatabase("sqlite", tFile) into tDB
+   revExecuteSQL tDB, "CREATE TABLE t (name TEXT)"
+   put "kept between visits" into tName
+   revExecuteSQL tDB, "INSERT INTO t VALUES (:1)", "tName"
+   put revDataFromQuery(",", ";", tDB, "SELECT name FROM t") into tText
+   revCloseDatabase tDB
+   probeCheck "database-home", tDB is a number and tText is tName, "connection=" & tDB && "data=" & tText
 end probeExternals
 
 -- encrypt, decrypt and the cipherNames, with the OpenSSL that the web

@@ -610,6 +610,9 @@ command revInternal__SetupCustomizationPath
    # revert to old behavior.
    local tUserCustomizationPath
    put the cCustomizationPath of stack "revPreferences" into tUserCustomizationPath
+   if revEnvironmentPlatform() is "MacOS X" then
+      put revInternal__MacUserFolder(tUserCustomizationPath) into tUserCustomizationPath
+   end if
    if tUserCustomizationPath is not empty then
       put tUserCustomizationPath into sCustomizationPath
    else
@@ -627,7 +630,9 @@ command revInternal__SetupCustomizationPath
             put specialFolderPath(0x0005) & "/OXT-Beyond extensions" into sCustomizationPath
             break
          case "MacOS X"
-            put specialFolderPath("docs") & "/OXT-Beyond extensions" into sCustomizationPath
+            -- (Documents/OXT-Beyond extensions before 0.2.7-rc.6.1; see
+            -- revInternal__MacUserFolder)
+            put specialFolderPath("docs") & "/OXT-Beyond" into sCustomizationPath
             break
       end switch
       set the cCustomizationPath of stack "revPreferences" to sCustomizationPath -- make sure it actually gets set! (tperry 20-1-25)
@@ -636,6 +641,52 @@ command revInternal__SetupCustomizationPath
    
    revInternal__Log "Leave", "Customization Path Setup"
 end revInternal__SetupCustomizationPath
+
+-- macOS: the user folder was "Documents/OXT-Beyond extensions", although it
+-- holds Plugins, Resources, Toolset and the rest as well as Extensions
+-- (forum p=25226); from 0.2.7-rc.6.1 it is "Documents/OXT-Beyond". Returns
+-- the folder to use, or empty for the new default. A folder chosen in
+-- Preferences is kept. The old default is moved to the new place once, when
+-- nothing is there yet, and a symbolic link is left at the old place, so a
+-- path that a stack or script saved into the old folder still reaches its
+-- file. If the new place is taken or the move fails, the old folder stays in
+-- use as before, so nothing anyone installed is lost or hidden.
+private function revInternal__MacUserFolder pSaved
+   local tOld, tNew, tError
+   put specialFolderPath("docs") & "/OXT-Beyond extensions" into tOld
+   put specialFolderPath("docs") & "/OXT-Beyond" into tNew
+   if pSaved is not empty and pSaved is not tOld then return pSaved
+   -- the link a move left behind: the folder has moved already
+   if revInternal__MacIsLink(tOld) then
+      if there is a folder tNew then return tNew
+      return empty
+   end if
+   if there is not a folder tOld then return empty
+   if there is a folder tNew or there is a file tNew then
+      revInternal__Log "Message", "Customization Path: " & tNew & " exists already, so " & tOld & " stays in use"
+      return tOld
+   end if
+   rename folder tOld to tNew
+   put the result into tError
+   if tError is not empty or there is not a folder tNew or there is a folder tOld then
+      revInternal__Log "Message", "Customization Path: could not move " & tOld & " to " & tNew & " (" & tError & "), so it stays in use"
+      return tOld
+   end if
+   get shell("ln -s " & revInternal__ShellQuoted(tNew) & " " & revInternal__ShellQuoted(tOld))
+   revInternal__Log "Message", "Customization Path: moved " & tOld & " to " & tNew & ", with a link at the old place"
+   return tNew
+end revInternal__MacUserFolder
+
+private function revInternal__MacIsLink pPath
+   get shell("test -L " & revInternal__ShellQuoted(pPath) & " && echo link")
+   return word 1 of it is "link"
+end revInternal__MacIsLink
+
+-- A path as one word for sh: in single quotes, each ' written '\''
+private function revInternal__ShellQuoted pText
+   replace "'" with "'\''" in pText
+   return "'" & pText & "'"
+end revInternal__ShellQuoted
    
    function revInternal__StackFiles
       local tPaletteFolder, tFolders

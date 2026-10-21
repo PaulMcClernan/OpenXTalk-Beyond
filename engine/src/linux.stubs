@@ -26,6 +26,7 @@ X11 libX11.so.6
 	XDestroyWindow: (pointer, integer) -> ()
 	XCreateWindow: (pointer, integer, integer, integer, integer, integer, integer, integer, integer, pointer, integer, pointer) -> (integer)
 	XSync: (pointer, integer) -> (integer)
+	XGetSelectionOwner: (pointer, integer) -> (integer)
 
 Xinerama libXinerama.so.1
 	XineramaIsActive: (pointer) -> (integer)
@@ -107,6 +108,8 @@ pango libpango-1.0.so.0
 	pango_matrix_concat: (pointer, pointer) -> ()
 	pango_font_description_get_family: (pointer) -> (pointer)
 	pango_font_description_get_size: (pointer) -> (integer)
+	pango_font_description_get_size_is_absolute: (pointer) -> (integer)
+	pango_font_description_copy: (pointer) -> (pointer)
 	pango_font_describe: (pointer) -> (pointer)
 	pango_context_get_metrics: (pointer, pointer, pointer) -> (pointer)
 	pango_font_metrics_get_strikethrough_position: (pointer) -> (integer)
@@ -227,6 +230,7 @@ gdk libgdk-x11-2.0.so.0
 	gdk_screen_get_height: (pointer) -> (integer)
 	gdk_screen_get_width_mm: (pointer) -> (integer)
 	gdk_screen_get_height_mm: (pointer) -> (integer)
+	gdk_screen_get_number: (pointer) -> (integer)
 	gdk_window_show: (pointer) -> ()
 	gdk_window_show_unraised: (pointer) -> ()
 	gdk_window_raise: (pointer) -> ()

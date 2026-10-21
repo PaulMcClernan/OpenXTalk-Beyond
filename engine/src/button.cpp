@@ -1151,8 +1151,21 @@ Boolean MCButton::mdown(uint2 which)
         t_left_limit = rect.width - MCscrollbarwidth;
         t_right_limit = rect.width;
 #else
-        t_left_limit = rect.x + rect.width - MCscrollbarwidth;
-        t_right_limit = rect.x + rect.width;
+        // OXT-Beyond: where the menu grabs no pointer (the web, whose
+        // grabpointer() does nothing), the mouse is over the menu's own
+        // window, so mx is in the menu's coordinates, as on Mac (its left
+        // is the button's left). Compared with the button's rectangle, a
+        // click on the menu's scroll bar missed it and picked an item.
+        if (MCmousestackptr.IsValid() && MCmousestackptr == menu)
+        {
+            t_left_limit = rect.width - MCscrollbarwidth;
+            t_right_limit = rect.width;
+        }
+        else
+        {
+            t_left_limit = rect.x + rect.width - MCscrollbarwidth;
+            t_right_limit = rect.x + rect.width;
+        }
 #endif
         if (state & CS_SCROLLBAR && mx > t_left_limit
                 && mx < t_right_limit)

@@ -1,0 +1,16 @@
+# Preferences, card "Script Editor", menu "editorsList" (the external script
+# editor, #173): a Mac application in the
+# Applications folder of the user's home folder is found too.
+# Text lines are between bars, so that trailing blanks survive editors.
+file: Toolset/palettes/revpreferencesgui.rev
+object: button "editorsList" of card "Script Editor"
+replace:
+|   put ("/System/Applications/" & tApp & ".app/") into tExecCommandDoubleTap|
+|   |
+with:
+|   put ("/System/Applications/" & tApp & ".app/") into tExecCommandDoubleTap|
+|   -- OXT-Beyond: also the Applications folder in the user's home folder (#173)|
+|   if there is not a folder tExecCommand and there is a folder (specialFolderPath("home") & "/Applications/" & tApp & ".app/") then|
+|      put (specialFolderPath("home") & "/Applications/" & tApp & ".app/") into tExecCommand|
+|   end if|
+|   |

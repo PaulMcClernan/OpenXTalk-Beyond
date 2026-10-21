@@ -96,6 +96,17 @@ void MCNativeLayerX11::updateInputShape()
         gdk_window_input_shape_combine_region(gtk_widget_get_window(GTK_WIDGET(m_child_window)), NULL, 0, 0);
 }
 
+// OXT-Beyond: [[ HiDPI ]] A rect in the stack's coords in its window's pixels:
+// scaled by the window's backing scale, which is 1 unless the desktop scales.
+static MCRectangle MCNativeLayerX11ScaleRect(MCObject *p_object, const MCRectangle &p_rect)
+{
+	MCGFloat t_scale;
+	t_scale = p_object->getstack()->view_getbackingscale();
+	if (t_scale == 1.0)
+		return p_rect;
+	return MCRectangleGetScaledFloorRect(p_rect, t_scale);
+}
+
 void MCNativeLayerX11::doAttach()
 {
     if (m_socket == NULL)
@@ -106,7 +117,7 @@ void MCNativeLayerX11::doAttach()
         
         // Create a new GTK window to hold the socket
         MCRectangle t_rect;
-        t_rect = m_object->getrect();
+        t_rect = MCNativeLayerX11ScaleRect(m_object, m_object->getrect());
         m_child_window = GTK_WINDOW(gtk_window_new(GTK_WINDOW_POPUP));
         gtk_widget_set_parent_window(GTK_WIDGET(m_child_window), getStackGdkWindow());
         gtk_widget_realize(GTK_WIDGET(m_child_window));
@@ -162,16 +173,19 @@ void MCNativeLayerX11::updateContainerGeometry()
 {
 	m_intersect_rect = MCU_intersect_rect(m_viewport_rect, m_rect);
 
+	MCRectangle t_intersect_rect;
+	t_intersect_rect = MCNativeLayerX11ScaleRect(m_object, m_intersect_rect);
+
     // Clear any minimum size parameters for the GTK widgets
     gtk_widget_set_size_request(GTK_WIDGET(m_child_window), -1, -1);
 
     // Resize by adjusting the widget's containing GtkWindow
-    gdk_window_move_resize(gtk_widget_get_window(GTK_WIDGET(m_child_window)), m_intersect_rect.x, m_intersect_rect.y, m_intersect_rect.width, m_intersect_rect.height);
+    gdk_window_move_resize(gtk_widget_get_window(GTK_WIDGET(m_child_window)), t_intersect_rect.x, t_intersect_rect.y, t_intersect_rect.width, t_intersect_rect.height);
 
     // We need to set the requested minimum size in order to get in-process GTK
     // widgets to re-size automatically. Unfortunately, that is the only widget
     // category that this works for... others need to do it themselves.
-    gtk_widget_set_size_request(GTK_WIDGET(m_child_window), m_intersect_rect.width, m_intersect_rect.height);
+    gtk_widget_set_size_request(GTK_WIDGET(m_child_window), t_intersect_rect.width, t_intersect_rect.height);
 }
 
 void MCNativeLayerX11::doSetViewportGeometry(const MCRectangle &p_rect)
@@ -188,10 +202,11 @@ void MCNativeLayerX11::doSetGeometry(const MCRectangle& p_rect)
 	m_rect = p_rect;
 	updateContainerGeometry();
 	
-	MCRectangle t_rect;
-	t_rect = m_rect;
-	t_rect.x -= m_intersect_rect.x;
-	t_rect.y -= m_intersect_rect.y;
+	MCRectangle t_rect, t_intersect_rect;
+	t_rect = MCNativeLayerX11ScaleRect(m_object, m_rect);
+	t_intersect_rect = MCNativeLayerX11ScaleRect(m_object, m_intersect_rect);
+	t_rect.x -= t_intersect_rect.x;
+	t_rect.y -= t_intersect_rect.y;
 	
     // Move the overlay window first, to ensure events don't get stolen
 

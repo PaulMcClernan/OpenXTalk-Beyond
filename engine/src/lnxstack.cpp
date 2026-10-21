@@ -105,14 +105,19 @@ void MCStack::realize()
 		// IM-2013-10-08: [[ FullscreenMode ]] Don't change stack rect if fullscreen
 		/* CODE DELETED */
 
+		// OXT-Beyond: [[ HiDPI ]] The window's rect in logical coords, for
+		// view_platform_setgeom, and in screen coords, for the new window.
+		MCRectangle t_logical_rect;
+		t_logical_rect = view_getrect();
+
+		if (t_logical_rect.width == 0)
+			t_logical_rect.width = MCminsize << 4;
+		if (t_logical_rect.height == 0)
+			t_logical_rect.height = MCminsize << 3;
+
 		MCRectangle t_rect;
 		// IM-2014-01-29: [[ HiDPI ]] Convert logical to screen coords
-		t_rect = MCscreen->logicaltoscreenrect(view_getrect());
-
-		if (t_rect.width == 0)
-			t_rect.width = MCminsize << 4;
-		if (t_rect.height == 0)
-			t_rect.height = MCminsize << 3;
+		t_rect = MCscreen->logicaltoscreenrect(t_logical_rect);
 		
         GdkWindowAttr gdkwa;
         guint gdk_valid_wa;
@@ -129,10 +134,14 @@ void MCStack::realize()
         
         window = gdk_window_new(screen->getroot(), &gdkwa, gdk_valid_wa);
         
+        // OXT-Beyond: [[ HiDPI ]] Draw the window at the desktop's scale (as
+        // on Windows, w32stack.cpp), before its shape is made at that scale.
+        view_setbackingscale(MCLinuxGetLogicalToScreenScale());
+        
         // FG-2014-07-30: [[ Bugfix 12905 ]]
         // This is necessary otherwise the window manager might ignore the
         // position that we have specified for the new window
-        view_platform_setgeom(t_rect);
+        view_platform_setgeom(t_logical_rect);
         
 		// This is necessary to be able to receive drag-and-drop events
         gdk_window_register_dnd(window);
@@ -480,9 +489,30 @@ bool MCStack::view_platform_dirtyviewonresize() const
 }
 
 // IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] Where the desktop scales, the frame in logical
+// coords, worked out as on Windows (w32stack.cpp).
 MCRectangle MCStack::view_platform_getwindowrect(void) const
 {
-	return view_device_getwindowrect();
+	if (MCLinuxGetLogicalToScreenScale() == 1.0)
+		return view_device_getwindowrect();
+
+	GdkRectangle t_frame;
+	gdk_window_get_frame_extents(window, &t_frame);
+	MCRectangle t_frame_rect;
+	t_frame_rect = MCscreen->screentologicalrect(MCRectangleMake(t_frame . x, t_frame . y, t_frame . width, t_frame . height));
+
+	if (MClockscreen != 0)
+	{
+		MCRectangle t_content_rect, t_diff_rect;
+		MCscreen->platform_getwindowgeometry(window, t_content_rect);
+		t_diff_rect.x = rect.x - (t_content_rect.x - t_frame_rect.x);
+		t_diff_rect.y = rect.y - (t_content_rect.y - t_frame_rect.y);
+		t_diff_rect.width = rect.width + (t_frame_rect.width - t_content_rect.width);
+		t_diff_rect.height = rect.height + (t_frame_rect.height - t_content_rect.height);
+		return t_diff_rect;
+	}
+
+	return t_frame_rect;
 }
 
 MCRectangle MCStack::view_device_getwindowrect(void) const
@@ -509,9 +539,24 @@ MCRectangle MCStack::view_device_getwindowrect(void) const
 }
 
 // IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] Where the desktop scales, set the geometry (and the
+// size limits) in screen coords and give back the old rect in logical ones.
 MCRectangle MCStack::view_platform_setgeom(const MCRectangle &p_rect)
 {
-	return view_device_setgeom(p_rect, minwidth, minheight, maxwidth, maxheight);
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale == 1.0)
+		return view_device_setgeom(p_rect, minwidth, minheight, maxwidth, maxheight);
+
+	MCRectangle t_minrect, t_maxrect;
+	t_minrect = MCscreen->logicaltoscreenrect(MCRectangleMake(0, 0, minwidth, minheight));
+	t_maxrect = MCscreen->logicaltoscreenrect(MCRectangleMake(0, 0, maxwidth, maxheight));
+
+	MCRectangle t_old_rect;
+	t_old_rect = view_device_setgeom(MCscreen->logicaltoscreenrect(p_rect),
+									 t_minrect.width, t_minrect.height,
+									 t_maxrect.width, t_maxrect.height);
+	return MCscreen->screentologicalrect(t_old_rect);
 }
 
 // IM-2013-08-12: [[ ResIndependence ]] factor out device-specific window-sizing code
@@ -958,9 +1003,26 @@ public:
 };
 
 // IM-2014-01-29: [[ HiDPI ]] Placeholder method for Linux HiDPI support
+// OXT-Beyond: [[ HiDPI ]] The region to redraw is in logical coords: scale it
+// to the window's backing buffer (as on Windows, w32stack.cpp).
 void MCStack::view_platform_updatewindow(MCRegionRef p_region)
 {
-	view_device_updatewindow(p_region);
+	MCGFloat t_surface_scale;
+	t_surface_scale = view_getbackingscale();
+	if (t_surface_scale == 1.0)
+	{
+		view_device_updatewindow(p_region);
+		return;
+	}
+
+	MCGRegionRef t_scaled_region;
+	t_scaled_region = nil;
+	if (!MCGRegionCopyWithTransform((MCGRegionRef)p_region, MCGAffineTransformMakeScale(t_surface_scale, t_surface_scale), t_scaled_region))
+		return;
+
+	view_device_updatewindow((MCRegionRef)t_scaled_region);
+
+	MCGRegionDestroy(t_scaled_region);
 }
 
 static bool filter_expose(GdkEvent *p_event, void *p_window)

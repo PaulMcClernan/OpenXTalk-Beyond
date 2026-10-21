@@ -11530,6 +11530,31 @@ private function revIDEGetBaseDocsData pWhich
    return tData
 end revIDEGetBaseDocsData 
 
+-- OXT-Beyond: on the web the engine unpacks the IDE into /boot at every
+-- start, so every file there is newer than the docs cache made on the last
+-- visit, and each extension's docs were parsed again, and the dictionary's
+-- database rewritten, at every start (some seconds before the IDE opens).
+-- So on the web an extension's cached docs are kept while what they were
+-- made from has the same content: kWebDocsInputsFile, in the extension's
+-- cache folder, holds __webDocsInputsKey of the inputs the cache was made
+-- from. The desktop goes by the files' dates, as before.
+constant kWebDocsInputsFile = "inputs.md5"
+
+private function __webDocsInputsKey pInputs, pSourceAPI, pExtensionData
+   local tData, tHex, i
+   repeat with i = 1 to the number of elements in pInputs
+      put pInputs[i] & return & url ("binfile:" & pInputs[i]) & return after tData
+   end repeat
+   if there is a file pSourceAPI then
+      put pSourceAPI & return & url ("binfile:" & pSourceAPI) & return after tData
+   end if
+   -- the parser, which the installed IDE does not count as an input
+   put url ("binfile:" & the effective filename of stack "revDocsParser") after tData
+   put return & pExtensionData["title"] & return & pExtensionData["author"] after tData
+   get binaryDecode("H*", md5Digest(textEncode(tData, "UTF-8")), tHex)
+   return tHex
+end __webDocsInputsKey
+
 private function revIDEGetExtensionDocsData pAPI
    -- do not generate if this is turned off
    if __browserDictionaryOff() then exit revIDEGetExtensionDocsData -- we exit this handler if not using it (tperry 24-7-24)
@@ -11567,12 +11592,37 @@ private function revIDEGetExtensionDocsData pAPI
       
       local tNeedUpdate, tError, tAPIDoc
       put tCachedDataFolder & slash & "api.lcdoc" into tAPIDoc
+      
+      local tSourceAPI
+      put tFolder & slash & "api.lcdoc" into tSourceAPI
+      
+      local tAPIJS
+      put tCachedDataFolder & "/api.js" into tAPIJS
+      
+      -- OXT-Beyond: on the web, keep a cache made from these same inputs
+      local tWebKey, tWebKeyFile
+      put empty into tWebKey
+      if revEnvironmentIsWeb() then
+         put tCachedDataFolder & slash & kWebDocsInputsFile into tWebKeyFile
+         put __webDocsInputsKey(tInputs, tSourceAPI, tExtensionData) into tWebKey
+         if there is a file tAPIJS and there is a file tWebKeyFile and \
+               url ("binfile:" & tWebKeyFile) is tWebKey then
+            put revIDEUTF8FileContents(tAPIJS) into tExtensionAPI
+            if tExtensionAPI is not empty then
+               if tData is not empty then
+                  put comma & tExtensionAPI after tData
+               else
+                  put tExtensionAPI into tData
+               end if
+            end if
+            next repeat
+         end if
+      end if
+      
       put revIDEIsFilesetStale(tInputs, tAPIDoc, false, tError) \
             into tNeedUpdate
       
       # If there is an up-to-date api.lcdoc in the source folder, just copy that across
-      local tSourceAPI
-      put tFolder & slash & "api.lcdoc" into tSourceAPI
       if there is a file tSourceAPI then
          if tSource is empty then
             put false into tNeedUpdate
@@ -11615,8 +11665,6 @@ private function revIDEGetExtensionDocsData pAPI
          end if
       end if
       
-      local tAPIJS
-      put tCachedDataFolder & "/api.js" into tAPIJS
       # Check if the .js is out of date
       if tNeedUpdate is not true then
          put tAPIDoc into tInputs[1]
@@ -11641,6 +11689,12 @@ private function revIDEGetExtensionDocsData pAPI
          ideDocsUpdateDatabase pAPI, tLibraryArray, false
          
          revIDESetUTF8FileContents tAPIJS, tExtensionAPI
+      end if
+      
+      -- OXT-Beyond: on the web, note what this cache was made from
+      if tWebKey is not empty and tNeedUpdate is a boolean and \
+            there is a file tAPIJS then
+         put tWebKey into url ("binfile:" & tWebKeyFile)
       end if
       
       if tExtensionAPI is not empty then

@@ -3479,6 +3479,27 @@ on tMenuBar_WDdecorations  --tp 24-1, show revmenubar as standard window
          replace "." with return in tCorrectMacOS
          if word 1 of line 1 of tCorrectMacOS < "11" then put "22" into tOldTop  --compensate for MacOS
          else put "24" into tOldTop  --compensate for MacOS Sonoma+
+         -- OXT-Beyond: dock below the Mac's own menu bar, which is taller
+         -- than 24 on a MacBook with a camera notch (#174). The top of the
+         -- working screenRect is its bottom; with the menu bar hidden it is
+         -- 0, and the old place stays
+         local tWorkingRect, tMacMenuBarBottom
+         put line (the screen of this stack) of the working screenRects into tWorkingRect
+         put item 2 of tWorkingRect into tMacMenuBarBottom
+         if tMacMenuBarBottom is a number and tMacMenuBarBottom > tOldTop and tMacMenuBarBottom < 60 then
+            put tMacMenuBarBottom into tOldTop
+         end if
+         -- OXT-Beyond: a Y set on the Compatibility card of the preferences
+         -- (or by dragging the bar there) that is lower than the docked
+         -- place is kept. This handler runs at every start and records the
+         -- place it chose (hSetMBOffsets below), so it used to put the bar
+         -- back at 24 and overwrite the setting with 24 (#174)
+         local tSavedTop
+         put the cTweakMenuBarT of stack "revPreferences" into tSavedTop
+         if the cTweakMenuBarOffset of stack "revPreferences" is true and tSavedTop is an integer \
+               and tSavedTop > tOldTop and tSavedTop < 60 then
+            put tSavedTop into tOldTop
+         end if
       end if
       --end allowances for macOS
    end if

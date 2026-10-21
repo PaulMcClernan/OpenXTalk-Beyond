@@ -108,6 +108,14 @@ extern Atom MCdndselectionatom;
 
 extern Boolean tripleclick;
 
+// OXT-Beyond: [[ HiDPI ]] The desktop's scale (GDK_SCALE, or the desktop's
+// window scaling setting), read when the display is opened, and the factor
+// from logical (stack) coordinates to the screen's pixels: that scale while
+// usePixelScaling is true, else 1. It is exactly 1 on a desktop that does not
+// scale, and every conversion then leaves its input as it is.
+void MCLinuxReadDesktopScale(GdkDisplay *p_display);
+MCGFloat MCLinuxGetLogicalToScreenScale(void);
+
 class MCScreenDC : public MCUIDC
 {
 	GdkGC* gc = nullptr;		// This is the GC in "Native" (i.e. actual screen) depth

@@ -226,7 +226,11 @@ body:not(.playing) #stage{position:absolute;left:0;top:0;width:100%;height:0;pad
 #stack{display:block}
 #canvas{display:block;border:0 none;padding:0;outline:0}
 #stage .caption{margin:0 auto;font:500 .72rem/1.3 var(--mono);font-stretch:87.5%;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-#stage:fullscreen{justify-content:center;background-color:var(--desk);background-image:radial-gradient(var(--desk-dot) 1.3px,transparent 1.7px);background-size:22px 22px}
+/* Full screen is the whole page's, not #stage's: the engine puts its dialogs
+   (answer, ask) and a stack's other windows in <body>, and a browser shows
+   nothing outside the element that is full screen. The menu bar steps aside. */
+body.fullscreen .menubar{display:none}
+body.fullscreen #stage{box-sizing:border-box;min-height:100vh;justify-content:center}
 
 /* ---------- Loading: a window that fills its bar ---------- */
 #loading{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:1rem;background-color:var(--desk);background-image:radial-gradient(var(--desk-dot) 1.3px,transparent 1.7px);background-size:22px 22px;transition:opacity .3s}
@@ -643,6 +647,8 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
     document.title = on ? name + ' · Stack Player' : 'Stack Player · OXT-Beyond';
     ['home', 'reload', 'download'].forEach(function (id) { $(id).disabled = !on; });
     if (on) { window.scrollTo(0, 0); $('canvas').focus({ preventScroll: true }); }
+    // full screen is for a stack: the library is shown in the page as usual
+    else if (document.fullscreenElement) document.exitFullscreen();
   }
 
   window.oxtPlayer = {
@@ -866,10 +872,16 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
     if (document.body.classList.contains('playing')) call('home');
     else window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+  // The page goes full screen, not #stage: an element that is full screen
+  // shows only what is inside it, and the engine's dialogs and windows are
+  // outside #stage
   $('fullscreen').addEventListener('click', function () {
-    var s = $('stage');
+    var page = document.documentElement;
     if (document.fullscreenElement) document.exitFullscreen();
-    else if (s.requestFullscreen) s.requestFullscreen();
+    else if (page.requestFullscreen) page.requestFullscreen().catch(function () {});
+  });
+  document.addEventListener('fullscreenchange', function () {
+    document.body.classList.toggle('fullscreen', !!document.fullscreenElement);
   });
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() == 'o' && ready) {

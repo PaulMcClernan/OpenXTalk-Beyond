@@ -40,6 +40,22 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #if defined FEATURE_PLATFORM_AUDIO
 #include "platform.h"
 static MCPlatformSoundRef s_current_sound = nil;
+
+// OXT-Beyond: NSSound says it has finished from the main run loop, which
+//   the engine runs only with a UI (MCUIDC::wait does not): without one
+//   (-ui) the sound said it was playing for ever, and a script waiting for
+//   it to be done waited for ever. Without a UI a sound that does not loop
+//   is therefore taken to have finished a second after its length. With a
+//   UI nothing changes: NSSound reports there, and a deadline could cut a
+//   sound short where the output device takes a while to start.
+static real8 s_current_sound_deadline = 0.0;
+
+static bool MCAudioClipSoundIsPlaying(void)
+{
+    if (!MCPlatformSoundIsPlaying(s_current_sound))
+        return false;
+    return s_current_sound_deadline == 0.0 || MCS_time() < s_current_sound_deadline;
+}
 #elif defined _WINDOWS_DESKTOP
 // SN-2014-06-26 [[ PlatformPlayer ]]
 // These 2 definitions must be accessible from exec-interface-aclip
@@ -193,13 +209,24 @@ void MCAudioClip::timer(MCNameRef mptr, MCParameter *params)
     {
         MCscreen->addtimer(this, MCM_internal, looping ? LOOP_RATE: PLAY_RATE);
 #else
-    if (MCPlatformSoundIsPlaying(s_current_sound))
+    if (MCAudioClipSoundIsPlaying())
     {
-        // Do nothing
+        // OXT-Beyond: look again later, so the sound is stopped and
+        //   playStopped sent when it has not said it finished (see
+        //   MCAudioClipSoundIsPlaying). When it does say so, the timer is
+        //   cancelled (MCPlatformHandleSoundFinished), as before.
+        if (!looping)
+            MCscreen->addtimer(this, MCM_internal, PLAY_RATE);
 #endif
     }
 	else
 	{
+#if defined FEATURE_PLATFORM_AUDIO
+        // OXT-Beyond: a sound taken to have finished, rather than one that
+        //   said so, is still to be stopped and released
+        if (MCacptr == this)
+            stop(False);
+#endif
 		MCacptr = nil;
 		if (mstack != NULL)
 		{
@@ -621,6 +648,10 @@ Boolean MCAudioClip::open_audio(void)
     MCPlatformSoundSetProperty(s_current_sound, kMCPlatformSoundPropertyLooping, kMCPlatformPropertyTypeBool, &t_looping);
     
     MCPlatformSoundPlay(s_current_sound);
+
+    s_current_sound_deadline = 0.0;
+    if (MCnoui && !looping && rate != 0 && nchannels != 0 && swidth != 0)
+        s_current_sound_deadline = MCS_time() + (real8)size / (real8)(rate * nchannels * swidth) + 1.0;
     
     return True;
 }
@@ -736,10 +767,23 @@ Boolean MCAudioClip::open_audio()
 			if (format == AF_ULINEAR && swidth == 2)
 				convert_ulintoslin();
 
-	
-	if ( x11audio != NULL )	
-		return x11audio -> init(NULL, nchannels, swidth);
-	return false ;
+	// OXT-Beyond: this runs on every tick of a playing clip. A PulseAudio
+	//   stream is opened once for each play, and play() then feeds it; the
+	//   samples here are unsigned when 8-bit and signed big-endian when
+	//   16-bit (AF_ULINEAR 16-bit is little-endian, as getmono16 reads it).
+	//   Without a stream EsounD plays it, as before, and without EsounD
+	//   either this is false and the clip takes the no-sound path.
+	if ( x11audio == NULL )
+		return false ;
+	if ( x11audio -> isstreaming() )
+		return true ;
+	if ( x11audio -> openstream(rate, nchannels, swidth, format == AF_ULINEAR) )
+	{
+		curindex = 0 ;
+		endtime = 0.0 ;
+		return true ;
+	}
+	return x11audio -> init(NULL, nchannels, swidth);
 }
 #elif defined(__EMSCRIPTEN__)
 /* Plays the samples, unless they are playing. Without the browser's
@@ -767,6 +811,11 @@ Boolean MCAudioClip::play()
 #ifndef _MOBILE
 	if (!open_audio())
 	{
+#if defined(TARGET_PLATFORM_LINUX)
+		// OXT-Beyond: so the next play tries PulseAudio again
+		if (x11audio != NULL)
+			x11audio -> closestream();
+#endif
 		real8 delay =  MCS_time() + (real8)size / (real8)(rate*nchannels*swidth);
 		MCParameter *newparam = new (nothrow) MCParameter;
 		newparam->setvalueref_argument(getname());
@@ -781,7 +830,7 @@ Boolean MCAudioClip::play()
 #if defined FEATURE_PLATFORM_AUDIO
     // MW-2014-07-25: [[ Bug 12946 ]] If the sound is no longer playing the 'stop'
     //   (i.e. send a playStopped message).
-    if (!MCPlatformSoundIsPlaying(s_current_sound))
+    if (!MCAudioClipSoundIsPlaying())
     {
         stop(False);
         return False;
@@ -828,6 +877,50 @@ Boolean MCAudioClip::play()
 		}
 	return True;
 #elif defined(TARGET_PLATFORM_LINUX)
+	// OXT-Beyond: with a PulseAudio stream, keep about a second written
+	//   ahead in chunks of about 100 ms, so neither a write nor the IDE
+	//   waits. Once all of a clip that does not loop is written, it is done
+	//   when what is still queued has been heard.
+	if (x11audio != NULL && x11audio -> isstreaming())
+	{
+		uint4 t_frame = nchannels * swidth;
+		uint4 t_end = size - size % t_frame;
+		uint4 t_chunk = (rate * t_frame / 10) / t_frame * t_frame;
+		if (t_chunk == 0)
+			t_chunk = t_frame;
+		while (curindex < t_end || (looping && t_end != 0))
+		{
+			if (curindex >= t_end)
+				curindex = 0;
+			real8 t_queued = x11audio -> streamlatency();
+			if (t_queued < 0.0)
+			{
+				stop(False);
+				return False;
+			}
+			if (t_queued >= 1.0)
+				return True;
+			uint4 t_count = MCU_min(t_chunk, t_end - curindex);
+			if (!x11audio -> writestream(&samples[curindex], t_count))
+			{
+				stop(False);
+				return False;
+			}
+			curindex += t_count;
+		}
+		if (endtime == 0.0)
+		{
+			real8 t_queued = x11audio -> streamlatency();
+			endtime = MCS_time() + (t_queued > 0.0 ? t_queued : 0.0);
+		}
+		if (MCS_time() >= endtime)
+		{
+			stop(False);
+			return False;
+		}
+		return True;
+	}
+
 	if (looping || curindex < size)
 	{
 		while (True)
@@ -926,6 +1019,16 @@ void MCAudioClip::stop(Boolean abort)
 		soundChannel = NULL;
 	}
 #elif defined(_LINUX)
+#if defined(TARGET_PLATFORM_LINUX)
+	// OXT-Beyond: stopping drops what is still queued, and the next play
+	//   starts from the beginning
+	if (x11audio != NULL)
+	{
+		if (x11audio -> isstreaming())
+			curindex = 0;
+		x11audio -> closestream();
+	}
+#endif
 #elif defined(__EMSCRIPTEN__)
 	if (s_web_sound != 0)
 	{
@@ -938,7 +1041,7 @@ void MCAudioClip::stop(Boolean abort)
 bool MCAudioClip::isPlaying()
 {
 #if defined FEATURE_PLATFORM_AUDIO
-    return MCPlatformSoundIsPlaying(s_current_sound);
+    return MCAudioClipSoundIsPlaying();
 #endif
     return true;
 }

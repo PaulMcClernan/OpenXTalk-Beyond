@@ -36,6 +36,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
  * ---------------------------------------------------------------- */
 
 extern "C" int MCEmscriptenStandaloneGetDataJS(void **r_buffer, int *r_length);
+extern "C" void MCEmscriptenStandaloneUnpackedJS(void);
 
 /* ---------------------------------------------------------------- */
 
@@ -230,6 +231,10 @@ MCEmscriptenStandaloneUnpack()
 	{
 		free(t_buffer);
 	}
+
+	/* OXT-Beyond: the unpacked files give back the room they grew into
+	 * (em-standalone.js) */
+	MCEmscriptenStandaloneUnpackedJS();
 
 	return t_success;
 }

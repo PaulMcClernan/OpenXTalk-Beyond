@@ -93,7 +93,9 @@ Then:
    tree read with revXML and transformed with XSLT, a zip archive written
    and read back with revZip, and an SQLite database with revDB, whose
    error for a missing table must reach the script as revDB's error (SQLite
-   throws a C++ exception for it). The builder includes them because the
+   throws a C++ exception for it), and another in the probe's documents
+   folder, whose row the browser's storage (IndexedDB) must have soon after
+   the probe is ready. The builder includes them because the
    probe's scripts use them, and web-deploy.livecodescript names them when
    it builds without the IDE. Then encrypt and decrypt, with the OpenSSL
    that the web engine links: AES with a key and an IV, and Blowfish (of
@@ -230,7 +232,7 @@ PROBE_CHECKS = (
     'javascript', 'file-roundtrip', 'standalone-folder', 'font-file', 'font-bold', 'url-get', 'url-post', 'url-put',
     'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
-    'xml', 'xslt', 'zip', 'database', 'database-error',
+    'xml', 'xslt', 'zip', 'database', 'database-error', 'database-home',
     'encrypt', 'encrypt-legacy', 'cipher-names', 'speech', 'print',
 )
 
@@ -264,6 +266,38 @@ PROBE_EXTENSIONS = ('com.livecode.library.widgetutils', 'com.livecode.widget.bro
 
 # The file the probe writes to /downloads, which the browser must download
 PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
+
+# The SQLite database that the probe makes in its documents folder, with
+# the one row it writes, which the browser's storage must have soon after
+# the commit (probeExternals). The web engine keeps the home folder with
+# Emscripten's IDBFS (engine/src/em-system.js), which stores each file
+# under its path in the object store FILE_DATA of an IndexedDB database
+# named after the folder; this reads one file's bytes from there as text,
+# or null.
+PROBE_HOME_DATABASE = ('/livecode/Documents/probe.db', 'kept between visits')
+STORED_FILE_JS = '''path => new Promise(resolve => {
+    var request = indexedDB.open('/livecode');
+    request.onerror = () => resolve(null);
+    request.onsuccess = () => {
+        var db = request.result;
+        if (!db.objectStoreNames.contains('FILE_DATA')) {
+            db.close();
+            resolve(null);
+            return;
+        }
+        var get = db.transaction('FILE_DATA').objectStore('FILE_DATA').get(path);
+        get.onerror = () => { db.close(); resolve(null); };
+        get.onsuccess = () => {
+            var contents = get.result && get.result.contents;
+            var text = '';
+            for (var i = 0; contents && i < contents.length; i++) {
+                text += String.fromCharCode(contents[i]);
+            }
+            db.close();
+            resolve(contents ? text : null);
+        };
+    };
+})'''
 
 # What the drag from the field "Drag Source" onto the field "Drag Target"
 # sends, and then the target's text (probeReport("dnd"))
@@ -1219,6 +1253,21 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
                 def at(rect):
                     left, top, right, bottom = parse_rect(rect)
                     return canvas['x'] + (left + right) / 2, canvas['y'] + (top + bottom) / 2
+
+                # the probe's database, in the browser's storage
+                stored = [None]
+
+                def database_stored():
+                    stored[0] = page.evaluate(STORED_FILE_JS, PROBE_HOME_DATABASE[0])
+                    return bool(stored[0]) and stored[0].startswith('SQLite format 3\x00') \
+                        and PROBE_HOME_DATABASE[1] in stored[0]
+                if wait_for(database_stored, 'the probe\'s database reaching the browser\'s storage', 5):
+                    lines.append('the probe\'s SQLite database in its documents folder reached the '
+                                 'browser\'s storage')
+                else:
+                    problems.append('the browser\'s storage has %s for %s, expected an SQLite database '
+                                    'with the row %r' % ('%d bytes' % len(stored[0]) if stored[0] else 'nothing',
+                                                         PROBE_HOME_DATABASE[0], PROBE_HOME_DATABASE[1]))
 
                 # a click on the button, and keys typed into the field
                 page.mouse.click(*at(info['button-rect']))

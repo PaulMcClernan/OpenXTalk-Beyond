@@ -3,7 +3,7 @@ A calendar control. The calendar displays the dates of a month with the selected
 
 Name: dateChanged
 Type: message
-Syntax: on dateChanged pDate
+Syntax: dateChanged <pDate>
 
 Summary: Sent when a date is selected.
 

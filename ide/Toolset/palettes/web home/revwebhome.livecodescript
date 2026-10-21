@@ -39,6 +39,7 @@ constant kSide = 200
 constant kPages = "home,speak,move,draw,web,app"
 constant kFrame = 16
 constant kAwayFrame = 100
+constant kPageCheck = 500
 constant kPool = 120
 constant kStage = "224,96,1000,452"
 constant kTextInset = 4
@@ -50,6 +51,10 @@ local sTick, sNow, sLastFrame, sDt
 -- True while another window is in front: Home then draws ten frames a
 -- second, not sixty, and leaves the browser to the window in use
 local sAway
+-- True while the browser's window is not the one in use (another tab or
+-- program is), asked of the page every kPageCheck milliseconds: Home then
+-- draws ten frames a second too, as when another window is in front
+local sPageAway, sPageCheckAt
 -- The groups that light up when the pointer is over them and do something
 -- when clicked, by name: what each one does and how it looks
 local sCfg, sLiveList, sHover, sHoverAmt, sEnterAmt
@@ -232,6 +237,8 @@ private command hmStartTicking
    hmStopTicking
    put the milliseconds into sLastFrame
    put sLastFrame into sFpsStart
+   put false into sPageAway
+   put 0 into sPageCheckAt
    put 0 into sFpsFrames
    send "hmTick" to me in kFrame milliseconds
    put the result into sTick
@@ -268,13 +275,32 @@ on hmTick
    if tSaved is not empty and there is a stack tSaved then
       set the defaultStack to tSaved
    end if
-   if sAway is true then
+   hmCheckPage
+   if sAway is true or sPageAway is true then
       send "hmTick" to me in kAwayFrame milliseconds
    else
       send "hmTick" to me in kFrame milliseconds
    end if
    put the result into sTick
 end hmTick
+
+-- Is the browser's window the one in use? Sixty frames a second keep
+-- the browser busy even when nobody can see them, and Safari reloads a
+-- page that uses too much of the computer for too long, on a phone above
+-- all. A browser that cannot say is taken to be in use.
+private command hmCheckPage
+   local tAnswer, tError
+   if the platform is not "HTML5" or sNow < sPageCheckAt then
+      exit hmCheckPage
+   end if
+   put sNow + kPageCheck into sPageCheckAt
+   try
+      do "String(document.hidden || !document.hasFocus())" as "JavaScript"
+      put the result into tAnswer
+   catch tError
+   end try
+   put tAnswer is "true" into sPageAway
+end hmCheckPage
 
 ################################################################################
 #

@@ -3,7 +3,7 @@ A pie chart control. A pie chart displays a set of values and labels as sectors 
 
 Name: sectorClicked
 Type: message
-Syntax: on sectorClicked pSectorNumber
+Syntax: sectorClicked <pSectorNumber>
 
 Summary: Sent when a sector of the pie chart is clicked.
 
@@ -11,7 +11,7 @@ Parameters:
 pSectorNumber: The sector number of the clicked segment.
 
 Description:
-The <sectorClicked > message is sent when a sector in the pie chart is clicked. The <pSectorNumber> parameter number of the sector which was clicked.
+The <sectorClicked> message is sent when a sector in the pie chart is clicked. The <pSectorNumber> parameter number of the sector which was clicked.
 **/
 
 widget com.livecode.widget.piechart

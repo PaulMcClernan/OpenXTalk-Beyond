@@ -509,7 +509,10 @@ Boolean MCScreenDC::handle(Boolean dispatch, Boolean anyevent, Boolean& abort, B
                             {
                                 // Send a window focus event
                                 MCdispatcher->enter(t_event->crossing.window);
-                                MCdispatcher->wmfocus(t_event->crossing.window, t_event->crossing.x, t_event->crossing.y);
+                                // OXT-Beyond: [[ HiDPI ]] in logical coords
+                                MCPoint t_crossing_loc;
+                                t_crossing_loc = screentologicalpoint(MCPointMake(t_event->crossing.x, t_event->crossing.y));
+                                MCdispatcher->wmfocus(t_event->crossing.window, t_crossing_loc.x, t_crossing_loc.y);
                             }
                         }
                         else
@@ -542,8 +545,9 @@ Boolean MCScreenDC::handle(Boolean dispatch, Boolean anyevent, Boolean& abort, B
                 setmods(t_event->motion.state, 0, 0, False);
                 
                 // IM-2013-08-12: [[ ResIndependence ]] Scale mouse coords to user space
+                // OXT-Beyond: [[ HiDPI ]] and from the screen's pixels to logical coords
                 MCGFloat t_scale;
-                t_scale = MCResGetPixelScale();
+                t_scale = MCResGetPixelScale() * MCLinuxGetLogicalToScreenScale();
                 
                 MCPoint t_mouseloc;
                 t_mouseloc = MCPointMake(t_event->motion.x / t_scale, t_event->motion.y / t_scale);
@@ -607,8 +611,9 @@ Boolean MCScreenDC::handle(Boolean dispatch, Boolean anyevent, Boolean& abort, B
                     setmods(t_event->scroll.state, 0, 0, False);
                 
                 // IM-2013-08-12: [[ ResIndependence ]] Scale mouse coords to user space
+                // OXT-Beyond: [[ HiDPI ]] and from the screen's pixels to logical coords
                 MCGFloat t_scale;
-                t_scale = MCResGetPixelScale();
+                t_scale = MCResGetPixelScale() * MCLinuxGetLogicalToScreenScale();
                 
                 // NOTE: this depends on the offsets for the x and y positions
                 // of the event being in the same place in the GdkEventButton
@@ -833,6 +838,21 @@ Boolean MCScreenDC::handle(Boolean dispatch, Boolean anyevent, Boolean& abort, B
                 t_geom.max_width = t_stack->getmaxwidth();
                 t_geom.min_height = t_stack->getminheight();
                 t_geom.max_height = t_stack->getmaxheight();
+                
+                // OXT-Beyond: [[ HiDPI ]] The limits are in logical coords, the
+                // event's size in the screen's pixels.
+                MCGFloat t_scale;
+                t_scale = MCLinuxGetLogicalToScreenScale();
+                if (t_scale != 1.0)
+                {
+                    MCRectangle t_minrect, t_maxrect;
+                    t_minrect = logicaltoscreenrect(MCRectangleMake(0, 0, t_stack->getminwidth(), t_stack->getminheight()));
+                    t_maxrect = logicaltoscreenrect(MCRectangleMake(0, 0, t_stack->getmaxwidth(), t_stack->getmaxheight()));
+                    t_geom.min_width = t_minrect.width;
+                    t_geom.min_height = t_minrect.height;
+                    t_geom.max_width = t_maxrect.width;
+                    t_geom.max_height = t_maxrect.height;
+                }
                 
                 gdk_window_constrain_size(&t_geom, t_flags,
                                          t_event->configure.width, t_event->configure.height,
@@ -1254,9 +1274,13 @@ void MCScreenDC::configureIME(int32_t x, int32_t y)
     if (!m_has_gtk)
         return;
     
+    // OXT-Beyond: [[ HiDPI ]] The caret is given in logical coords
+    MCPoint t_loc;
+    t_loc = logicaltoscreenpoint(MCPointMake(x, y));
+    
     GdkRectangle t_cursor;
-    t_cursor.x = x;
-    t_cursor.y = y;
+    t_cursor.x = t_loc.x;
+    t_cursor.y = t_loc.y;
     t_cursor.width = t_cursor.height = 1;
     
     gtk_im_context_set_cursor_location(m_im_context, &t_cursor);
@@ -1320,6 +1344,15 @@ void MCScreenDC::DnDClientEvent(GdkEvent* p_event)
             gdk_window_get_origin(p_event->dnd.window, &ox, &oy);
             wx = p_event->dnd.x_root - ox;
             wy = p_event->dnd.y_root - oy;
+            
+            // OXT-Beyond: [[ HiDPI ]] in logical coords
+            MCGFloat t_scale;
+            t_scale = MCLinuxGetLogicalToScreenScale();
+            if (t_scale != 1.0)
+            {
+                wx = uint32_t(int32_t(wx) / t_scale);
+                wy = uint32_t(int32_t(wy) / t_scale);
+            }
             
             // Temporarily adopt the asynchronous modifier state
             uint16_t t_old_modstate = MCmodifierstate;

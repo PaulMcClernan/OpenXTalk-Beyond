@@ -42,7 +42,7 @@ Example: setWindowToDarkMode the windowID of this stack
 
 Parameters: 
 
-windowID: retrieved from a stack's windowID property.
+pWindowID: retrieved from a stack's windowID property.
 
 Description: This handler will set the macOS dark appearance of the window passed.
 
@@ -59,7 +59,7 @@ Summary: Sets the Mac HFS Creator Code of a file.
 
 Parameters: 
 
-pFilePath: Path to the file to examine.
+pPathToFile: Path to the file to examine.
 
 pFourCharOSType: An 'OSType' four character creator code, such as 'WILD' or 'OXTk'
 
@@ -88,7 +88,7 @@ Summary: Sets the Mac HFS Type Code of a file.
 
 Parameters: 
 
-pFilePath: Path to the file to examine.
+pPathToFile: Path to the file to examine.
 
 pFourCharOSType: An 'OSType' four character type code, such as STAK or JFIF
 
@@ -433,7 +433,7 @@ Example: setWindowToLightMode the windowID of this stack
 
 Parameters: 
 
-windowID: retrieved from a stack's windowID property.
+pWindowID: retrieved from a stack's windowID property.
 
 Description: This handler will set the macOS "light" appearance of the window passed.
 
