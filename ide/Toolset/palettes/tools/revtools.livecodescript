@@ -15,7 +15,10 @@ constant kTmWideCell = 48
 constant kTmSmallCell = 30
 constant kTmCellHeight = 30
 constant kTmNameCell = 150
-constant kTmNameHeight = 28
+-- A tile with its name: tall enough for a name on two lines of 10 points
+-- (30, with the insets of kTmTextInset), one point over and under it;
+-- at 28 the second line of "Mac Native Single-line Field" was cut off
+constant kTmNameHeight = 32
 constant kTmIconBox = 44
 constant kTmMinWidth = 96
 constant kTmMinHeight = 160
