@@ -104,3 +104,5 @@ page asks for the engine and the IDE with the site's stamp (`?v=`, a
 digest of the three files, which `build_site.py` puts in the page), so a
 browser that kept another version's copies, from the same address, never
 starts them with this version's.
+Its script carries `data-cfasync="false"`, so Cloudflare's Rocket Loader
+leaves it as it is.

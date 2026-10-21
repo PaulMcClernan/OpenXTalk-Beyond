@@ -504,7 +504,11 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
   </div>
 </dialog>
 
-<script>
+<!-- data-cfasync="false": a CDN that rewrites a page's scripts to run them
+     later (Cloudflare's Rocket Loader) leaves these two as they are; run its
+     way, the page's script cannot reach the window it was written for, and
+     the engine starts before the page has made its Module -->
+<script data-cfasync="false">
 (function () {
   'use strict';
 
@@ -949,6 +953,6 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
   }).catch(function () { /* no samples */ });
 })();
 </script>
-<script async src="@ENGINE_JS@?v=@STAMP@"></script>
+<script data-cfasync="false" async src="@ENGINE_JS@?v=@STAMP@"></script>
 </body>
 </html>
