@@ -57,7 +57,7 @@
 			[
 				[
 					# Don't compile on android, iOS or emscripten
-					'OS == "android" or OS == "ios" or OS == "emscripten"',
+					'OS == "android" or OS == "emscripten"',
 					{
 						'type': 'none',
 					},

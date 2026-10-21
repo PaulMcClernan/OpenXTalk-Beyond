@@ -13,14 +13,12 @@
             'src/database.h',
             'src/dbcursor.h',
             'src/dbdriver.h',
-            'src/iossupport.h',
             'src/osxsupport.h',
             'src/unxsupport.h',
             'src/w32support.h',
             'src/large_buffer.h',
         
 			'src/revdb.cpp',
-			'src/iossupport.cpp',
 			'src/osxsupport.cpp',
 			'src/unxsupport.cpp',
 			'src/w32support.cpp',
@@ -560,7 +558,7 @@
 					},
 				],
 				[
-					'OS == "mac" or OS == "ios"',
+					'OS == "mac"',
 					{
 						'xcode_settings':
 						{
@@ -749,20 +747,11 @@
 					},
 				],
 				[
-					'OS == "mac" or OS == "ios"',
+					'OS == "mac"',
 					{
 						'sources!': 
 						[
 							'src/unxsupport.cpp',
-						],
-					},
-				],
-				[
-					'OS != "ios"',
-					{
-						'sources!':
-						[
-							'src/iossupport.cpp',
 						],
 					},
 				],
@@ -801,10 +790,6 @@
 				'<@(revdb_sources)',
 			],
 			
-			'sources!':
-			[
-				'src/iossupport.cpp',
-			],
 			'conditions':
 			[
 				[

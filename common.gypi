@@ -20,7 +20,7 @@
 		[
 			# TODO add windows msvc compiler and crt mode to platform id
 			[
-				'(OS == "mac" or OS == "ios")',
+				'OS == "mac"',
 				{
 					'platform_id': 'universal-<(OS)-<(target_sdk)',
 				},

@@ -82,29 +82,6 @@
 			'git_master/src/types.c',
 		],
 		
-		'libffi_ios_source_files':
-		[
-			'git_master/darwin_ios/src/aarch64/ffi_arm64.c',
-			'git_master/darwin_ios/src/aarch64/sysv_arm64.S',
-			'git_master/darwin_ios/src/arm/ffi_armv7.c',
-			'git_master/darwin_ios/src/arm/sysv_armv7.S',
-			'git_master/darwin_ios/src/arm/trampoline_armv7.S',
-			'git_master/darwin_ios/src/x86/ffi_i386.c',
-			'git_master/darwin_ios/src/x86/sysv_i386.S',
-
-			'git_master/src/x86/ffi64.c',
-			'git_master/src/x86/unix64.S',
-			'git_master/src/x86/ffiw64.c',
-			'git_master/src/x86/win64.S',
-
-			'git_master/src/closures.c',
-			'git_master/src/debug.c',
-			'git_master/src/java_raw_api.c',
-			'git_master/src/prep_cif.c',
-			'git_master/src/raw_api.c',
-			'git_master/src/types.c',
-		],
-		
 		'libffi_win32_source_files':
 		[
 			'src/x86/ffi.c',
@@ -241,26 +218,6 @@
 						'sources':
 						[
 							'<@(libffi_mac_arm64_source_files)',
-						],
-
-						'include_dirs':
-						[
-							'git_master/src',
-						],
-					},
-				],
-				[
-					'toolset_os == "ios"',
-					{
-						'platform_include_dirs':
-						[
-							'<@(libffi_public_headers_darwin_ios_dir)',
-						],
-						
-						'sources':
-						[
-							'<@(libffi_ios_source_files)',
-							'<@(libffi_generic_sources)'
 						],
 
 						'include_dirs':

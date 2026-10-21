@@ -43,9 +43,9 @@ Every path of the two trees is looked at once:
                    else changes (fix_arch_priority).
   one build only   an error unless ONE_SIDED explains it.
   SINGLE_ARCH      Mach-O files that hold one architecture by design
-                   (reviphoneproxy, the iOS simulator helper, which both
-                   builds make for x86_64 only): the named build's copy is
-                   taken, whatever the other build has at that path.
+                   (none since the iOS simulator helper, reviphoneproxy,
+                   left the build): the named build's copy is taken,
+                   whatever the other build has at that path.
   symbolic links   must be the same in both, and stay links.
   modes, dates     kept (a file whose mode differs between the builds is
                    an error); folders, empty ones too, are the union.
@@ -100,14 +100,9 @@ UNIVERSAL = ['arm64', 'x86_64']      # sorted, as the check compares them
 # Mach-O files that hold one architecture by design: (pattern, the build
 # whose copy is taken, why). Patterns: "*" within one path component, "**"
 # any number of components ("**/" also none), relative to the tree.
-SINGLE_ARCH = (
-    ('**/reviphoneproxy', 'x86_64',
-     'the iOS simulator helper: revmobile.gyp builds it for x86_64 only, on both runners (it runs '
-     'under Rosetta on Apple Silicon). The arm64 runner\'s copy records that build\'s deployment '
-     'target (11.0); the x86_64 build\'s records 10.13 like the rest of the universal app'),
-    ('**/reviphoneproxy.dSYM/**', 'x86_64',
-     'the debug symbols of reviphoneproxy (x86_64 only, see there), taken from the same build'),
-)
+# The only ones there were, reviphoneproxy (the iOS simulator helper,
+# x86_64 only) and its dSYM, went with the iOS build.
+SINGLE_ARCH = ()
 
 # Files that differ between the two builds for a known reason: (pattern,
 # kind, why). The kind says how the copy is chosen (see plan_differ).

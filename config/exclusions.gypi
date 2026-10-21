@@ -53,17 +53,7 @@
 				},
 			],
 			[
-				'OS != "ios"',
-				{
-					'sources/':
-					[
-						['exclude', '_ios\\.(cpp|mm)$'],
-						['exclude', '(^|/)mbliphone.*\\.(cpp|mm)$'],
-					],
-				},
-			],
-			[
-				'OS != "android" and OS != "ios"',
+				'OS != "android"',
 				{
 					'sources/':
 					[
@@ -72,7 +62,7 @@
 				},
 			],
 			[
-				'OS != "mac" and OS != "ios"',
+				'OS != "mac"',
 				{
 					'sources/':
 					[

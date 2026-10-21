@@ -1803,7 +1803,7 @@
 					},
 				],
                 [
-                    'toolset_os in ("mac", "ios")',
+                    'toolset_os == "mac"',
                     {
                         'sources!':
                         [
@@ -1828,7 +1828,7 @@
                     },
                 ],
 				[
-					'toolset_os not in ("mac","ios")',
+					'toolset_os != "mac"',
 					{
 						'sources/':
 						[
@@ -1907,16 +1907,6 @@
                         'sources/':
                         [
                         ],
-					},
-				],
-				[
-					'toolset_os == "ios"',
-					{
-						'sources!':
-						[
-							'src/ports/SkOSFile_none.cpp',
-							'src/ports/SkTLS_none.cpp',
-						],
 					},
 				],
                 [

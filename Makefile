@@ -23,17 +23,6 @@ XCODEBUILD ?= xcodebuild
 WINE ?= wine
 EMMAKE ?= emmake
 
-# Some magic to control which versions of iOS we try to build.
-IPHONEOS_VERSIONS ?= 11.2 12.1 13.2 14.4 14.5
-IPHONESIMULATOR_VERSIONS ?= 11.2 12.1 13.2 14.4 14.5
-SKIP_IPHONEOS_VERSIONS ?= 9.2 10.2
-SKIP_IPHONESIMULATOR_VERSIONS ?= 6.1 7.1 8.2 9.2 10.2
-
-
-IOS_SDKS ?= \
-	$(addprefix iphoneos,$(IPHONEOS_VERSIONS)) \
-	$(addprefix iphonesimulator,$(IPHONESIMULATOR_VERSIONS))
-
 # Choose the correct build type
 MODE ?= debug
 
@@ -193,51 +182,6 @@ endif
 all-mac:
 	$(MAKE) config-mac
 	$(MAKE) compile-mac
-
-################################################################
-# iOS rules
-################################################################
-
-all-ios-%:
-	$(MAKE) config-ios-$*
-	$(MAKE) compile-ios-$*
-
-config-ios-%:
-	./config.sh --platform ios --generator-output build-ios-$*/livecode -Dtarget_sdk=$*
-
-compile-ios-%:
-	$(XCODEBUILD) -project "build-ios-$*$(BUILD_SUBDIR)/$(BUILD_PROJECT).xcodeproj" -configuration $(BUILDTYPE) -target default
-
-check-ios-%:
-	$(XCODEBUILD) -project "build-ios-$*$(BUILD_SUBDIR)/$(BUILD_PROJECT).xcodeproj" -configuration $(BUILDTYPE) -target check
-
-# Dummy targets to prevent our build system from building old iOS simulators+devices
-$(addprefix config-ios-iphonesimulator,$(SKIP_IPHONESIMULATOR_VERSIONS)):
-	@echo "Skipping $@ (no longer supported)"
-$(addprefix compile-ios-iphonesimulator,$(SKIP_IPHONESIMULATOR_VERSIONS)):
-	@echo "Skipping $@ (no longer supported)"
-$(addprefix check-ios-iphonesimulator,$(SKIP_IPHONESIMULATOR_VERSIONS)):
-	@echo "Skipping $@ (no longer supported)"
-	
-$(addprefix config-ios-iphonesimulator,$(SKIP_IPHONEOS_VERSIONS)):
-	@echo "Skipping $@ (no longer supported)"
-$(addprefix compile-ios-iphonesimulator,$(SKIP_IPHONEOS_VERSIONS)):
-	@echo "Skipping $@ (no longer supported)"
-$(addprefix check-ios-iphonesimulator,$(SKIP_IPHONEOS_VERSIONS)):
-	@echo "Skipping $@ (no longer supported)"
-
-# Provide some synonyms for "latest iOS SDK"
-$(addsuffix -ios-iphoneos,all config compile check): %: %$(lastword $(IPHONEOS_VERSIONS))
-	@true
-$(addsuffix -ios-iphonesimulator,all config compile check): %: %$(lastword ($IPHONESIMULATOR_VERSIONS))
-	@true
-
-all_ios_subplatforms = iphoneos iphonesimulator $(IOS_SDKS)
-
-all-ios: $(addprefix all-ios-,$(IOS_SDKS))
-config-ios: $(addprefix config-ios-,$(IOS_SDKS))
-compile-ios: $(addprefix compile-ios-,$(IOS_SDKS))
-check-ios: $(addprefix check-ios-,$(IOS_SDKS))
 
 ################################################################
 # Windows rules

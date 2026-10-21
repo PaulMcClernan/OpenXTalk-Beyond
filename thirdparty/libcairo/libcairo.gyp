@@ -482,7 +482,7 @@
 							],
 							[
 								# Re-add the OSX- and iOS-specific support
-								'OS == "mac" or OS == "ios"',
+								'OS == "mac"',
 								{
 									'sources/':
 									[

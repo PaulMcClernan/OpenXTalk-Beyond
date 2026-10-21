@@ -27,8 +27,6 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "unxsupport.h"
 #elif defined(_MACOSX) || defined (_MAC_SERVER)
 #include "osxsupport.h"
-#elif defined(TARGET_SUBPLATFORM_IPHONE)
-#include "iossupport.h"
 #endif
 
 #if defined(_WINDOWS)

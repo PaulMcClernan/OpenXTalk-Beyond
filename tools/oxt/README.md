@@ -443,7 +443,7 @@ disagree, the layout follows the IDE:
 | externals | `Externals/revxml.so`, `revzip.so`, `revbrowser.so`, `revdb.so` (no revspeech on Linux) | `Externals/revspeech.bundle`, `revxml.bundle`, `revbrowser.bundle`, `revzip.bundle`, `revdb.bundle` |
 | database drivers | `Externals/Database Drivers/db*.so` | `Externals/Database Drivers/db*.bundle` |
 | CEF (x86_64 only) | `Externals/CEF/` (libcef.so, libEGL.so, libGLESv2.so, the `.pak`, `.dat` and `.bin` files, `swiftshader/`, `locales/`, `revbrowser-cefprocess`), `libbrowser-cefprocess` at the root | none (revbrowser uses WebKit) |
-| mobile | `Externals/revandroid.so` | `Externals/reviphone.bundle`, `revandroid.bundle` |
+| mobile | `Externals/revandroid.so` | `Externals/revandroid.bundle` |
 | toolchain | `Toolchain/lc-compile`, `lc-run`, `lc-compile-ffi-java`, `modules/` | the same |
 | standalone engine | `Runtime/Linux/x86-64/Standalone` with `Support/` and `Externals/` (including CEF and both helpers at its root) | `Runtime/Mac OS X/x86-64/Standalone.app`, `x64-ARM64/Standalone-blank.app` (each with `Support/` and `Externals/`) and `x86-32/Standalone.app`; the Apple Silicon target's externals in `Runtime/Mac OS X/arm64/Externals/` |
 | `packaged_extensions/<id>` | `Extensions/<id>` (the 42 ids; the timezone library brings its own zoneinfo and native code) | the same |
@@ -455,7 +455,7 @@ canvas and ini, and the build's own tools if present (`gentle-target`,
 `reflex-target`, `perfect-target`, `lc-bootstrap-compile*`,
 `lc-compile-stage*`, `zic`, `lcidlc`, `*.a`). On macOS: `*.dSYM`,
 `Installer.app`, `installer-stub`, `server-*`, the root copies of
-`reviphoneproxy`, `tz.dylib` and `inih.dylib`, the app's own `Info.plist`,
+`tz.dylib` and `inih.dylib`, the app's own `Info.plist`,
 `_CodeSignature` and unstripped support files, canvas and ini, and the same
 build tools.
 
@@ -597,7 +597,9 @@ mac-universal") builds the release app from the two CI builds:
    x86_64. Differences are errors unless a rule in the script explains
    them. On the arm64 and x86_64 CI builds of this repository: 41 Mach-O
    files joined, 871 files identical, no file in one build only, and
-   these explained:
+   these explained (counted before the iOS externals left the build in
+   #177: `reviphone.bundle` and its `reviphoneproxy` are no longer
+   built, so the seal row now has one file and `SINGLE_ARCH` none):
 
    | rule | files | why |
    |---|---:|---|

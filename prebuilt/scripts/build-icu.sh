@@ -96,10 +96,6 @@ function buildICU {
 			CONFIG_TYPE=
 			CONFIG_FLAGS="--with-cross-build=${HOST_ICU_DIR}"
 			;;
-		ios)
-			CONFIG_TYPE=
-			CONFIG_FLAGS="--host=arm-apple-darwin --with-cross-build=${HOST_ICU_DIR} --disable-tools"
-			;;
 		win32)
 			CONFIG_TYPE="Cygwin/MSVC"
 			;;
@@ -200,7 +196,7 @@ function buildICU {
 	# Copy libraries
 	for L in ${ICU_LIBS} ; do
 		if [ -f "${INSTALL_DIR}/${NAME}/lib/libicu${L}.a" ] ; then
-			if [ "${PLATFORM}" == "mac" -o "${PLATFORM}" == "ios" ] ; then
+			if [ "${PLATFORM}" == "mac" ] ; then
 				VAR="ICU${L}_LIBS"
 				eval "$VAR+=\"${INSTALL_DIR}/${NAME}/lib/libicu${L}.a \""
 			else
@@ -213,7 +209,7 @@ function buildICU {
 	# Copy executables
 	for B in ${ICU_BINARIES} ; do
 		if [ -f "${INSTALL_DIR}/${NAME}/bin/${B}" ] ; then
-			if [ "${PLATFORM}" == "mac" -o "${PLATFORM}" == "ios" ] ; then
+			if [ "${PLATFORM}" == "mac" ] ; then
 				VAR="ICU${B}_BINARIES"
 				eval "$VAR+=\"${INSTALL_DIR}/${NAME}/bin/${B} \""
 			else

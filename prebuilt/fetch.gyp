@@ -210,7 +210,6 @@
 				'fetch-linux',
 				'fetch-mac',
 				'fetch-win',
-				'fetch-ios',
 				'fetch-emscripten',
 			],
 		},
@@ -271,15 +270,6 @@
 						'dependencies':
 						[
 							'fetch-win#target',
-						],
-					},
-				],
-				[
-					'fetch_os == "ios"',
-					{
-						'dependencies':
-						[
-							'fetch-ios#target',
 						],
 					},
 				],
@@ -428,34 +418,6 @@
 						# Ensure gyp does not treat these parameters as paths
 						'$(not_a_real_variable)win32',
 						'$(not_a_real_variable)>(fetch_arch)',
-					],
-				},
-			],
-		},
-		{
-			'target_name': 'fetch-ios',
-			'type': 'none',
-
-			'actions':
-			[
-				{
-					'action_name': 'fetch',
-					'message': 'Fetching prebuilt libraries for iOS',
-					
-					'inputs':
-					[
-						'fetch-libraries.sh',
-					],
-					
-					'outputs':
-					[
-						'lib/ios',
-					],
-					
-					'action':
-					[
-						'./fetch-libraries.sh',
-						'ios',
 					],
 				},
 			],
