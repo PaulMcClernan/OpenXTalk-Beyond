@@ -55,6 +55,7 @@ annotation and the failures go into the job summary.
 
 import argparse
 import base64
+import binascii
 import hashlib
 import os
 import shutil
@@ -238,7 +239,10 @@ def from_log(path, committed=COMMITTED):
         if sorted(got) != list(range(1, count + 1)):
             problems.append('%s: %d of its %d lines' % (name, len(got), count))
             continue
-        names[name] = (kind, base64.b64decode(''.join(got[i][1] for i in range(1, count + 1))))
+        try:
+            names[name] = (kind, base64.b64decode(''.join(got[i][1] for i in range(1, count + 1))))
+        except binascii.Error:
+            problems.append('%s: its lines are not base64' % name)
     for name, (kind, data) in sorted(names.items()):
         # (the file the underscores were spaces of)
         target = None
@@ -248,8 +252,13 @@ def from_log(path, committed=COMMITTED):
         if target is None:
             target = os.path.join(committed, name.replace('_', ' '))
         if kind == 'DELTA':
-            with open(target, 'rb') as f:
-                data = undelta(f.read(), data)
+            # (a line copied out of a log by hand can be wrong: say so, and go on to the others)
+            try:
+                with open(target, 'rb') as f:
+                    data = undelta(f.read(), data)
+            except (OSError, zlib.error, struct.error, ValueError) as e:
+                problems.append('%s: its delta does not apply (%s)' % (name, e))
+                continue
         if name not in sums:
             problems.append('%s: no SHA256 line' % name)
             continue

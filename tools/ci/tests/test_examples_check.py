@@ -106,6 +106,30 @@ class FromLogTest(unittest.TestCase):
                 self.assertEqual(len(examples_check.from_log(path, tmp)), 1)
             self.assertFalse(os.path.exists(os.path.join(tmp, 'X.oxtstack')))
 
+    def test_a_bad_delta_leaves_the_others(self):
+        # (a line copied out of a log by hand with a slip in it)
+        with tempfile.TemporaryDirectory() as tmp:
+            old = b'the committed stack ' * 500
+            new = old.replace(b'committed', b'built', 3)
+            for name in ('A.oxtstack', 'B.oxtstack'):
+                with open(os.path.join(tmp, name), 'wb') as f:
+                    f.write(old)
+            good = examples_check.delta(old, new)
+            bad = good[:6] + bytes([good[6] ^ 0xff]) + good[7:]
+            text = printed('DELTA', 'A.oxtstack', bad)
+            text += 'SHA256 A.oxtstack %s %d\n' % (hashlib.sha256(new).hexdigest(), len(new))
+            text += printed('DELTA', 'B.oxtstack', good)
+            text += 'SHA256 B.oxtstack %s %d\n' % (hashlib.sha256(new).hexdigest(), len(new))
+            path = os.path.join(tmp, 'log.txt')
+            with open(path, 'w') as f:
+                f.write(text)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(len(examples_check.from_log(path, tmp)), 1)
+            with open(os.path.join(tmp, 'A.oxtstack'), 'rb') as f:
+                self.assertEqual(f.read(), old)
+            with open(os.path.join(tmp, 'B.oxtstack'), 'rb') as f:
+                self.assertEqual(f.read(), new)
+
 
 if __name__ == '__main__':
     unittest.main()
