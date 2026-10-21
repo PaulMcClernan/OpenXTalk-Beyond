@@ -34,8 +34,11 @@ local sChips, sShown
 local sCodeField, sCodeThumb, sCodeGoal, sCodeFont
 -- The Copy button's label, while it says "Copied"
 local sCopyLabel
+-- The group lit, and whether this script has the cursor locked as a hand
+local sLit, sHand
 
 on preOpenCard
+   frameRest
    frameSync
    pass preOpenCard
 end preOpenCard
@@ -315,6 +318,7 @@ on mouseEnter
       -- (a hand over what a click runs)
       lock cursor
       set the cursor to hand
+      put true into sHand
    end if
    pass mouseEnter
 end mouseEnter
@@ -327,6 +331,7 @@ on mouseLeave
       frameLight tGroup, false
    else if tGroup is empty and frameIsProgram(the long id of the target) then
       unlock cursor
+      put false into sHand
    end if
    pass mouseLeave
 end mouseLeave
@@ -357,11 +362,35 @@ private command frameLight pGroup, pLit
       set the backgroundColor of graphic 1 of pGroup to the cLit of pGroup
       lock cursor
       set the cursor to hand
+      put pGroup into sLit
+      put true into sHand
    else
       set the backgroundColor of graphic 1 of pGroup to the cRest of pGroup
       unlock cursor
+      if sLit is pGroup then
+         put empty into sLit
+      end if
+      put false into sHand
    end if
 end frameLight
+
+-- Before a card opens: what the pointer was over is at rest, and the
+-- cursor is the engine's again. A click that goes to another card leaves
+-- the pointer where it was, so the mouseLeave the engine sends as the old
+-- card closes finds it still over what was clicked, which stayed lit, and
+-- the cursor a hand over everything on the new card. (What the pointer
+-- is over once the card is open lights up again: the engine sends it
+-- mouseEnter.)
+private command frameRest
+   if sLit is not empty and exists(sLit) then
+      frameLight sLit, false
+   end if
+   put empty into sLit
+   if sHand then
+      unlock cursor
+      put false into sHand
+   end if
+end frameRest
 
 -- True for this window's own controls: this group, the stage, the panel,
 -- and what they hold

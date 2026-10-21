@@ -28,9 +28,12 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --      the card;
 --    - a card that passes it goes on to the next card, either way;
 --    - up and down never leave the card.
--- Then the cards of Animate a Letter, Balloon Game and Play a Video whose
--- programs play the arrow keys, with their own scripts: the key sent to
--- the frame plays the program, and the card stays.
+-- And a tile of the first card, lit with the pointer over it, is at rest
+-- again, and the cursor no longer locked as a hand, when the card it goes
+-- to opens (the engine finds the pointer still over the tile as the first
+-- card closes). Then the cards of Animate a Letter, Balloon Game and Play
+-- a Video whose programs play the arrow keys, with their own scripts: the
+-- key sent to the frame plays the program, and the card stays.
 --
 -- Messages are locked throughout, so that no card's program starts when
 -- it opens; a key sent here still runs the handlers it reaches. Logs to
@@ -126,8 +129,33 @@ command checkFrame pPath
             "hears a right key sent to the card and passes it, and the frame goes on to card" && tNext
       set the script of card tCard of stack tStack to tScript
    end repeat
+   checkRest tStack
    close stack tStack
 end checkFrame
+
+-- The first tile of the first card, lit, and the second card opened with
+-- an empty script (so that only the frame's preOpenCard runs)
+command checkRest pStack
+   local tTile, tScript
+   go card 1 of stack pStack
+   if there is no group "tile1" of card 1 of stack pStack then
+      expect false, pStack, "has a tile on its first card"
+      exit checkRest
+   end if
+   put the long id of group "tile1" of card 1 of stack pStack into tTile
+   dispatch "mouseEnter" to graphic 1 of tTile
+   expect the backgroundColor of graphic 1 of tTile is the cLit of tTile and the lockCursor, pStack, \
+         "lights its first card's first tile, and locks the cursor, with the pointer over it"
+   go card 2 of stack pStack
+   put the script of this card into tScript
+   set the script of this card to empty
+   dispatch "preOpenCard" to this card
+   set the script of card 2 of stack pStack to tScript
+   expect the backgroundColor of graphic 1 of tTile is the cRest of tTile and not the lockCursor, pStack, \
+         "puts the tile at rest, and unlocks the cursor, when card 2 opens"
+   unlock cursor
+   set the backgroundColor of graphic 1 of tTile to the cRest of tTile
+end checkRest
 
 -- A card whose program plays an arrow key, with its own script: the key
 -- sent to the frame's list plays it, and the card stays. The property
