@@ -172,6 +172,15 @@ on escapeKey
 end escapeKey
 
 on arrowKey pKey
+   -- A key sent to a control of this group comes here before the card:
+   -- the card hears it first, as it does when the focus is anywhere else,
+   -- and what it does not play comes back here from it. (A click can
+   -- leave the focus in the frame, and then the left and right keys of a
+   -- card whose program plays them went to the next card.)
+   if frameHasTarget() then
+      dispatch "arrowKey" to this card with pKey
+      exit arrowKey
+   end if
    -- (a field being typed in keeps its arrow keys)
    if the selectedField is empty and pKey is "left" then
       frameGo "prev"
@@ -181,6 +190,19 @@ on arrowKey pKey
       pass arrowKey
    end if
 end arrowKey
+
+-- Whether the message in hand was sent to this group or to a control in it
+private function frameHasTarget
+   local tObj
+   put the long id of the target into tObj
+   repeat while word 1 of tObj is not "card" and word 1 of tObj is not "stack"
+      if tObj is the long id of me then
+         return true
+      end if
+      put the long id of the owner of tObj into tObj
+   end repeat
+   return false
+end frameHasTarget
 
 -- Goes to the previous or next card, or a card by number or name; the
 -- page slides, and the sidebar stays where it is

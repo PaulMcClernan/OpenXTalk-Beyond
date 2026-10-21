@@ -1163,6 +1163,20 @@ jobs:
           python3 tools/ci/academy_check.py --engine "$OXT_ROOT/oxt-beyond" --toolset "$OXT_ROOT/Toolset" \
             --log "$RUNNER_TEMP/logs/academy-check.log"
 
+      # The remastered examples, built from their builders in
+      # tools/examples by the package's engine; then, opened by its
+      # standalone engine on an Xvfb screen, an arrow key sent to a card's
+      # window frame reaches the card first, and the cards whose programs
+      # play the arrow keys keep them. Each stack built is compared with
+      # the committed one, and one that differs is printed into this log
+      # (tools/ci/examples_check.py)
+      - name: Examples check
+        if: ${{ !cancelled() && env.OXT_ROOT != '' && matrix.arch == 'x86_64' }}
+        timeout-minutes: 20
+        run: |
+          python3 tools/ci/examples_check.py --install "$OXT_ROOT" --out "$RUNNER_TEMP/examples/built" \
+            --print-stacks --log "$RUNNER_TEMP/logs/examples-check.log"
+
       # A standalone built from each runtime of the package (Linux x86-64
       # and x86, Windows x86-64 and x86) by its engine, as the IDE's builder
       # does at its core ("_internal deploy"); the Linux x86-64 one is run,
