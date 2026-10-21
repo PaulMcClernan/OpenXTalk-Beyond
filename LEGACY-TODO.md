@@ -124,7 +124,7 @@ Code its authors knew to be wrong or incomplete. 65 notes, by part of the reposi
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11575](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11575) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11778](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11778) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -313,13 +313,13 @@ Work left for later. 429 notes, by part of the repository:
 - [engine/src/line.cpp:402](engine/src/line.cpp#L402) TODO: when cx > line width, return the last block in visual order
 - [engine/src/lnxans.cpp:337](engine/src/lnxans.cpp#L337) TODO : This needs to be changed to a proper callback function : gdk_event_handler_set()
 - [engine/src/lnxcursor.cpp:104](engine/src/lnxcursor.cpp#L104) TODO: do we need to do this?
-- [engine/src/lnxdcs.cpp:279](engine/src/lnxdcs.cpp#L279) TODO: equivalent in GDK?
-- [engine/src/lnxdcs.cpp:573](engine/src/lnxdcs.cpp#L573) TODO - We may need to do clipboard persistance here
+- [engine/src/lnxdcs.cpp:284](engine/src/lnxdcs.cpp#L284) TODO: equivalent in GDK?
+- [engine/src/lnxdcs.cpp:578](engine/src/lnxdcs.cpp#L578) TODO - We may need to do clipboard persistance here
 - [engine/src/lnxflst.cpp:43](engine/src/lnxflst.cpp#L43) TODO: We need to revise the situation periodically and implement
-- [engine/src/lnxstack.cpp:288](engine/src/lnxstack.cpp#L288) TODO: initial input focus
-- [engine/src/lnxstack.cpp:340](engine/src/lnxstack.cpp#L340) TODO: is this just another way of ensuring on-top-ness?
-- [engine/src/lnxstack.cpp:362](engine/src/lnxstack.cpp#L362) TODO: input modality hints
-- [engine/src/lnxstack.cpp:440](engine/src/lnxstack.cpp#L440) TODO: test if this comment is still true
+- [engine/src/lnxstack.cpp:297](engine/src/lnxstack.cpp#L297) TODO: initial input focus
+- [engine/src/lnxstack.cpp:349](engine/src/lnxstack.cpp#L349) TODO: is this just another way of ensuring on-top-ness?
+- [engine/src/lnxstack.cpp:371](engine/src/lnxstack.cpp#L371) TODO: input modality hints
+- [engine/src/lnxstack.cpp:449](engine/src/lnxstack.cpp#L449) TODO: test if this comment is still true
 - [engine/src/mac-av-player.mm:1552](engine/src/mac-av-player.mm#L1552) TODO: Add more types??
 - [engine/src/mac-av-player.mm:1601](engine/src/mac-av-player.mm#L1601) TODO
 - [engine/src/mac-core.mm:1578](engine/src/mac-core.mm#L1578) 0x47 */ kMCPlatformKeyCodeNumLock, // COCO-TODO: This should be keypad-clear - double-check!
@@ -594,7 +594,7 @@ Work left for later. 429 notes, by part of the repository:
 ### TODO: ide (13)
 
 - [ide/Documentation/html_viewer/js/bootstrap.js:1576](ide/Documentation/html_viewer/js/bootstrap.js#L1576) if (that.$element) { // TODO: Check whether guarding this code with this `if` is really necessary.
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:374](ide/Toolset/libraries/revidelibrary.8.livecodescript#L374) TODO: there should be a more transparent way of ordering these
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:376](ide/Toolset/libraries/revidelibrary.8.livecodescript#L376) TODO: there should be a more transparent way of ordering these
 - [ide/Toolset/libraries/revinitialisationlibrary.livecodescript:34](ide/Toolset/libraries/revinitialisationlibrary.livecodescript#L34) TODO: Remove legacy message name
 - [ide/Toolset/libraries/revinitialisationlibrary.livecodescript:65](ide/Toolset/libraries/revinitialisationlibrary.livecodescript#L65) TODO: Remove legacy message name
 - [ide/Toolset/libraries/revinitialisationlibrary.livecodescript:93](ide/Toolset/libraries/revinitialisationlibrary.livecodescript#L93) TODO: Remove legacy message name
@@ -638,7 +638,7 @@ Work left for later. 429 notes, by part of the repository:
 - [libgraphics/src/graphics-internal.h:474](libgraphics/src/graphics-internal.h#L474) TODO: Shift coordinate appropriately
 - [libgraphics/src/image.cpp:154](libgraphics/src/image.cpp#L154) TODO: Implement
 - [libgraphics/src/image.cpp:160](libgraphics/src/image.cpp#L160) TODO: Implement
-- [libgraphics/src/lnxtext.cpp:138](libgraphics/src/lnxtext.cpp#L138) TODO: RTL
+- [libgraphics/src/lnxtext.cpp:178](libgraphics/src/lnxtext.cpp#L178) TODO: RTL
 - [libgraphics/src/path.cpp:39](libgraphics/src/path.cpp#L39) TODO: Implement
 - [libgraphics/src/w32text.cpp:480](libgraphics/src/w32text.cpp#L480) TODO: RTL
 
