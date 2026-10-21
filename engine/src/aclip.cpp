@@ -40,6 +40,21 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #if defined FEATURE_PLATFORM_AUDIO
 #include "platform.h"
 static MCPlatformSoundRef s_current_sound = nil;
+
+// OXT-Beyond: NSSound says it has finished from the main run loop, which
+//   the engine runs only with a UI (MCUIDC::wait does not): without one
+//   (-ui) the sound said it was playing for ever, and a script waiting for
+//   it to be done waited for ever. A sound that does not loop is therefore
+//   taken to have finished a second after its length; a sound that plays
+//   says it has finished before then, as before.
+static real8 s_current_sound_deadline = 0.0;
+
+static bool MCAudioClipSoundIsPlaying(void)
+{
+    if (!MCPlatformSoundIsPlaying(s_current_sound))
+        return false;
+    return s_current_sound_deadline == 0.0 || MCS_time() < s_current_sound_deadline;
+}
 #elif defined _WINDOWS_DESKTOP
 // SN-2014-06-26 [[ PlatformPlayer ]]
 // These 2 definitions must be accessible from exec-interface-aclip
@@ -193,13 +208,24 @@ void MCAudioClip::timer(MCNameRef mptr, MCParameter *params)
     {
         MCscreen->addtimer(this, MCM_internal, looping ? LOOP_RATE: PLAY_RATE);
 #else
-    if (MCPlatformSoundIsPlaying(s_current_sound))
+    if (MCAudioClipSoundIsPlaying())
     {
-        // Do nothing
+        // OXT-Beyond: look again later, so the sound is stopped and
+        //   playStopped sent when it has not said it finished (see
+        //   MCAudioClipSoundIsPlaying). When it does say so, the timer is
+        //   cancelled (MCPlatformHandleSoundFinished), as before.
+        if (!looping)
+            MCscreen->addtimer(this, MCM_internal, PLAY_RATE);
 #endif
     }
 	else
 	{
+#if defined FEATURE_PLATFORM_AUDIO
+        // OXT-Beyond: a sound taken to have finished, rather than one that
+        //   said so, is still to be stopped and released
+        if (MCacptr == this)
+            stop(False);
+#endif
 		MCacptr = nil;
 		if (mstack != NULL)
 		{
@@ -621,6 +647,10 @@ Boolean MCAudioClip::open_audio(void)
     MCPlatformSoundSetProperty(s_current_sound, kMCPlatformSoundPropertyLooping, kMCPlatformPropertyTypeBool, &t_looping);
     
     MCPlatformSoundPlay(s_current_sound);
+
+    s_current_sound_deadline = 0.0;
+    if (!looping && rate != 0 && nchannels != 0 && swidth != 0)
+        s_current_sound_deadline = MCS_time() + (real8)size / (real8)(rate * nchannels * swidth) + 1.0;
     
     return True;
 }
@@ -799,7 +829,7 @@ Boolean MCAudioClip::play()
 #if defined FEATURE_PLATFORM_AUDIO
     // MW-2014-07-25: [[ Bug 12946 ]] If the sound is no longer playing the 'stop'
     //   (i.e. send a playStopped message).
-    if (!MCPlatformSoundIsPlaying(s_current_sound))
+    if (!MCAudioClipSoundIsPlaying())
     {
         stop(False);
         return False;
@@ -1010,7 +1040,7 @@ void MCAudioClip::stop(Boolean abort)
 bool MCAudioClip::isPlaying()
 {
 #if defined FEATURE_PLATFORM_AUDIO
-    return MCPlatformSoundIsPlaying(s_current_sound);
+    return MCAudioClipSoundIsPlaying();
 #endif
     return true;
 }

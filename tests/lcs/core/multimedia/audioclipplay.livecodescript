@@ -20,8 +20,10 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 A clip that is played finishes: the sound becomes "done" once it has
 played, or at once where there is nothing to play it on. On Linux it
 never did without EsounD (which current distributions do not ship), so
-a script waiting for it waited for ever. Each wait here has a deadline
-instead, so a sound that never finishes fails the test.
+a script waiting for it waited for ever, and on macOS without a UI
+(-ui, as these tests run) NSSound never said it had finished. Each wait
+here has a deadline instead, so a sound that never finishes fails the
+test.
 */
 
 -- A WAV file of pSeconds of silence, 8000 Hz, 16-bit, mono
@@ -58,15 +60,6 @@ end SoundDoneWithin
 
 on TestPlayAudioClipFinishes
    local tClip
-   -- On CI's macOS (NSSound, with no sound device) the sound was still the
-   -- clip's name 10 seconds after a 0.5-second clip was played; whether a
-   -- Mac with speakers finishes needs a pass on one. The fix this tests is
-   -- the Linux one.
-   if the platform is "MacOS" then
-      TestSkip "the sound is done after the clip has played", \
-            "the sound did not finish on CI's macOS; not yet checked on a Mac"
-      exit TestPlayAudioClipFinishes
-   end if
    put ImportSilentClip(0.5) into tClip
    play audioClip tClip
    TestAssert "the sound is done after the clip has played", SoundDoneWithin(10)
