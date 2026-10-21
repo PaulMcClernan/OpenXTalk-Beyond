@@ -44,9 +44,10 @@ static MCPlatformSoundRef s_current_sound = nil;
 // OXT-Beyond: NSSound says it has finished from the main run loop, which
 //   the engine runs only with a UI (MCUIDC::wait does not): without one
 //   (-ui) the sound said it was playing for ever, and a script waiting for
-//   it to be done waited for ever. A sound that does not loop is therefore
-//   taken to have finished a second after its length; a sound that plays
-//   says it has finished before then, as before.
+//   it to be done waited for ever. Without a UI a sound that does not loop
+//   is therefore taken to have finished a second after its length. With a
+//   UI nothing changes: NSSound reports there, and a deadline could cut a
+//   sound short where the output device takes a while to start.
 static real8 s_current_sound_deadline = 0.0;
 
 static bool MCAudioClipSoundIsPlaying(void)
@@ -649,7 +650,7 @@ Boolean MCAudioClip::open_audio(void)
     MCPlatformSoundPlay(s_current_sound);
 
     s_current_sound_deadline = 0.0;
-    if (!looping && rate != 0 && nchannels != 0 && swidth != 0)
+    if (MCnoui && !looping && rate != 0 && nchannels != 0 && swidth != 0)
         s_current_sound_deadline = MCS_time() + (real8)size / (real8)(rate * nchannels * swidth) + 1.0;
     
     return True;
