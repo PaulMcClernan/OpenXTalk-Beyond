@@ -1517,7 +1517,6 @@ command revInternal__InstallFileAssociations
       local tBackList
       put "revidedeveloperextensionlibrary" into tBackList
       put return & "revsaveasstandalone" after tBackList
-      put return & "revsaveasiosstandalone" after tBackList
       put return & "revsaveasandroidstandalone" after tBackList
       put return & "revsaveasemscriptenstandalone" after tBackList
       put return & "revOnlineLibrary" after tBackList

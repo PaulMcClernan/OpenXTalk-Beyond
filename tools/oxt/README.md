@@ -84,7 +84,7 @@ and `builder/package_compiler.livecodescript` (Windows: `TargetFolder`,
 
 | installed path | class | repository path | package.txt |
 |---|---|---|---|
-| `Toolset/libraries/` + the 11 ide-support scripts (revdeploylibrary{android,emscripten,ios}, revdocsparser, revhtml5urllibrary, revliburl, revsaveas{,android,emscripten,ios}standalone, revsblibrary) | ide | `ide-support/<name>` | Toolset: `stack`/`file ide-support:...` |
+| `Toolset/libraries/` + the 9 ide-support scripts (revdeploylibrary{android,emscripten}, revdocsparser, revhtml5urllibrary, revliburl, revsaveas{,android,emscripten}standalone, revsblibrary) | ide | `ide-support/<name>` | Toolset: `stack`/`file ide-support:...` |
 | `Toolset/palettes/dictionary/api.sqlite` | junk | | zero-byte file nothing refers to |
 | `Toolset/**` | ide | `ide/Toolset/**` | Toolset: `rfolder ide:Toolset` |
 | `Plugins/**` | ide | `ide/Plugins/**` | Plugins |

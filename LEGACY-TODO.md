@@ -13,15 +13,15 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 
 | Marker | Notes |
 | --- | --- |
-| [FIXME](#fixme) | 65 |
-| [HACK](#hack) | 33 |
-| [TODO](#todo) | 429 |
+| [FIXME](#fixme) | 64 |
+| [HACK](#hack) | 29 |
+| [TODO](#todo) | 421 |
 
 ## FIXME
 
-Code its authors knew to be wrong or incomplete. 65 notes, by part of the repository:
+Code its authors knew to be wrong or incomplete. 64 notes, by part of the repository:
 
-[engine](#fixme-engine) (33), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide](#fixme-ide) (1), [ide-support](#fixme-ide-support) (1), [util](#fixme-util) (1)
+[engine](#fixme-engine) (33), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide](#fixme-ide) (1), [ide-support](#fixme-ide-support) (1)
 
 <a id="fixme-engine"></a>
 
@@ -124,7 +124,7 @@ Code its authors knew to be wrong or incomplete. 65 notes, by part of the reposi
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11778](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11778) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11872](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11872) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -132,17 +132,11 @@ Code its authors knew to be wrong or incomplete. 65 notes, by part of the reposi
 
 - [ide-support/revsaveasemscriptenstandalone.livecodescript:33](ide-support/revsaveasemscriptenstandalone.livecodescript#L33) FIXME
 
-<a id="fixme-util"></a>
-
-### FIXME: util (1)
-
-- [util/perfect/perfect.gyp:52](util/perfect/perfect.gyp#L52) FIXME Force the perfect executable to be put into
-
 ## HACK
 
-Workarounds their authors were not happy with. 33 notes, by part of the repository:
+Workarounds their authors were not happy with. 29 notes, by part of the repository:
 
-[engine](#hack-engine) (8), [ide](#hack-ide) (8), [ide-support](#hack-ide-support) (4), [extensions](#hack-extensions) (3), [libfoundation](#hack-libfoundation) (3), [prebuilt](#hack-prebuilt) (3), [builder](#hack-builder) (2), [tests](#hack-tests) (2)
+[engine](#hack-engine) (8), [ide](#hack-ide) (8), [libfoundation](#hack-libfoundation) (3), [prebuilt](#hack-prebuilt) (3), [builder](#hack-builder) (2), [ide-support](#hack-ide-support) (2), [tests](#hack-tests) (2), [extensions](#hack-extensions) (1)
 
 <a id="hack-engine"></a>
 
@@ -170,23 +164,6 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 - [ide/Toolset/palettes/script editor/behaviors/revseeditorbehavior.livecodescript:2222](ide/Toolset/palettes/script%20editor/behaviors/revseeditorbehavior.livecodescript#L2222) this is clearly a bit of a hack, but hopefully doing is this way will minimize the risk.
 - [ide/Toolset/palettes/script editor/behaviors/revsevariablespanebehavior.livecodescript:116](ide/Toolset/palettes/script%20editor/behaviors/revsevariablespanebehavior.livecodescript#L116) If the user chooses a large font, we need to increase the size of the template, for now we just hack this as
 
-<a id="hack-ide-support"></a>
-
-### HACK: ide-support (4)
-
-- [ide-support/revdeploylibraryemscripten.livecodescript:258](ide-support/revdeploylibraryemscripten.livecodescript#L258) It will only work if firefox is not already running (or we could try a nasty apple script hack but that susceptible to menu/shortcut changes).
-- [ide-support/revsaveasiosstandalone.livecodescript:299](ide-support/revsaveasiosstandalone.livecodescript#L299) hack to uniquify modules
-- [ide-support/revsaveasiosstandalone.livecodescript:468](ide-support/revsaveasiosstandalone.livecodescript#L468) .embeddedframework is a hack that some SDKs use for single drag and drop of
-- [ide-support/revsaveasstandalone.livecodescript:1908](ide-support/revsaveasstandalone.livecodescript#L1908) For now however, I've added this hack to allow users to work around the issue themselves.
-
-<a id="hack-extensions"></a>
-
-### HACK: extensions (3)
-
-- [extensions/extensions.gyp:201](extensions/extensions.gyp#L201) hack because gyp wants an output
-- [extensions/libraries/ini/inih/inih.gyp:58](extensions/libraries/ini/inih/inih.gyp#L58) loadable_module is overridden for iOS so hack around that
-- [extensions/libraries/timezone/tz/tz.gyp:221](extensions/libraries/timezone/tz/tz.gyp#L221) loadable_module is overridden for iOS so hack around that
-
 <a id="hack-libfoundation"></a>
 
 ### HACK: libfoundation (3)
@@ -200,8 +177,8 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 ### HACK: prebuilt (3)
 
 - [prebuilt/libicu.gyp:57](prebuilt/libicu.gyp#L57) Hack required due to GYP failure / refusal to treat this as a path
-- [prebuilt/libicu.gyp:404](prebuilt/libicu.gyp#L404) Really nasty hack to prevent this from being treated as a path
-- [prebuilt/thirdparty.gyp:782](prebuilt/thirdparty.gyp#L782) Hack to put licuuc after lharfbuzz in library list
+- [prebuilt/libicu.gyp:392](prebuilt/libicu.gyp#L392) Really nasty hack to prevent this from being treated as a path
+- [prebuilt/thirdparty.gyp:728](prebuilt/thirdparty.gyp#L728) Hack to put licuuc after lharfbuzz in library list
 
 <a id="hack-builder"></a>
 
@@ -210,6 +187,13 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 - [builder/builder_tool.livecodescript:38](builder/builder_tool.livecodescript#L38) Hack the arch from the platform. This should really use
 - [builder/release_notes_builder.livecodescript:920](builder/release_notes_builder.livecodescript#L920) Horrible-ish hack for extracting the "real" name of the LiveCode
 
+<a id="hack-ide-support"></a>
+
+### HACK: ide-support (2)
+
+- [ide-support/revdeploylibraryemscripten.livecodescript:258](ide-support/revdeploylibraryemscripten.livecodescript#L258) It will only work if firefox is not already running (or we could try a nasty apple script hack but that susceptible to menu/shortcut changes).
+- [ide-support/revsaveasstandalone.livecodescript:1900](ide-support/revsaveasstandalone.livecodescript#L1900) For now however, I've added this hack to allow users to work around the issue themselves.
+
 <a id="hack-tests"></a>
 
 ### HACK: tests (2)
@@ -217,15 +201,21 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 - [tests/_testrunner.lcb:211](tests/_testrunner.lcb#L211) FIXME HACK HACK HACK
 - [tests/lcb/vm/native-callback.lcb:81](tests/lcb/vm/native-callback.lcb#L81) handler values. We 'hack' this at the moment by massaging the types of
 
+<a id="hack-extensions"></a>
+
+### HACK: extensions (1)
+
+- [extensions/extensions.gyp:201](extensions/extensions.gyp#L201) hack because gyp wants an output
+
 ## TODO
 
-Work left for later. 429 notes, by part of the repository:
+Work left for later. 421 notes, by part of the repository:
 
-[engine](#todo-engine) (266), [libfoundation](#todo-libfoundation) (47), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [ide-support](#todo-ide-support) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
+[engine](#todo-engine) (261), [libfoundation](#todo-libfoundation) (47), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
 
 <a id="todo-engine"></a>
 
-### TODO: engine (266)
+### TODO: engine (261)
 
 - [engine/exec-tests/filters/EvalUniDecode.test:35](engine/exec-tests/filters/EvalUniDecode.test#L35) TODO - add this platform :)
 - [engine/exec-tests/filters/EvalUniEncode.test:35](engine/exec-tests/filters/EvalUniEncode.test#L35) TODO - add this platform :)
@@ -359,11 +349,6 @@ Work left for later. 429 notes, by part of the repository:
 - [engine/src/mblandroidmisc.cpp:1405](engine/src/mblandroidmisc.cpp#L1405) TODO: doing this properly requires a JNI call
 - [engine/src/mblandroidstore.cpp:468](engine/src/mblandroidstore.cpp#L468) TODO - handle errors
 - [engine/src/mblandroidstore.cpp:580](engine/src/mblandroidstore.cpp#L580) TODO - handle errors
-- [engine/src/mbliphonebusyindicator.mm:186](engine/src/mbliphonebusyindicator.mm#L186) TODO - update for unicode. Change false to the appropriate value.
-- [engine/src/mbliphonepick.mm:1094](engine/src/mbliphonepick.mm#L1094) TODO - update to support unicode
-- [engine/src/mbliphoneplayer.mm:97](engine/src/mbliphoneplayer.mm#L97) TODO - update
-- [engine/src/mbliphoneplayer.mm:669](engine/src/mbliphoneplayer.mm#L669) if (t_status == AVPlayerItemStatusFailed) /* TODO - CHECK THIS
-- [engine/src/mbliphonesensor.mm:145](engine/src/mbliphonesensor.mm#L145) TODO: Determine difference between location and heading error properly
 - [engine/src/mcio.cpp:77](engine/src/mcio.cpp#L77) TODO - update processes to use MCNameRef
 - [engine/src/mcio.cpp:449](engine/src/mcio.cpp#L449) TODO[2017-02-06] Refactor so that this doesn't allocate any
 - [engine/src/mixin-refcounted.h:54](engine/src/mixin-refcounted.h#L54) TODO: atomic ops
@@ -684,17 +669,9 @@ Work left for later. 429 notes, by part of the repository:
 
 ### TODO: (top level) (3)
 
-- [Makefile:265](Makefile#L265) TODO Replace with real rules
+- [Makefile:209](Makefile#L209) TODO Replace with real rules
 - [common.gypi:21](common.gypi#L21) TODO add windows msvc compiler and crt mode to platform id
-- [config.py:472](config.py#L472) TODO [2017-04-11]: This should be 2017, but it is not
-
-<a id="todo-ide-support"></a>
-
-### TODO: ide-support (3)
-
-- [ide-support/revdeploylibraryios.livecodescript:702](ide-support/revdeploylibraryios.livecodescript#L702) TODO: Remove this workaround once bug 22887 is fixed
-- [ide-support/revsaveasiosstandalone.livecodescript:317](ide-support/revsaveasiosstandalone.livecodescript#L317) TODO Add support for static libraries and frameworks by linking the engine for a simulator build
-- [ide-support/revsaveasiosstandalone.livecodescript:860](ide-support/revsaveasiosstandalone.livecodescript#L860) TODO build executable
+- [config.py:465](config.py#L465) TODO [2017-04-11]: This should be 2017, but it is not
 
 <a id="todo-revmobile"></a>
 
@@ -716,8 +693,8 @@ Work left for later. 429 notes, by part of the repository:
 
 ### TODO: prebuilt (2)
 
-- [prebuilt/fetch-libraries.sh:462](prebuilt/fetch-libraries.sh#L462) TODO[2017-03-03] Our official architecture name (as used in
-- [prebuilt/fetch-libraries.sh:477](prebuilt/fetch-libraries.sh#L477) TODO[2017-02-17] Monkey-patch in a "Fast" prebuilt
+- [prebuilt/fetch-libraries.sh:459](prebuilt/fetch-libraries.sh#L459) TODO[2017-03-03] Our official architecture name (as used in
+- [prebuilt/fetch-libraries.sh:474](prebuilt/fetch-libraries.sh#L474) TODO[2017-02-17] Monkey-patch in a "Fast" prebuilt
 
 <a id="todo-revdb"></a>
 

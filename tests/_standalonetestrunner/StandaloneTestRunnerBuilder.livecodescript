@@ -31,7 +31,7 @@ constant kMainstack = "StandaloneTestRunnerMainstack"
 -- at the moment there is no emscripten deploy library and
 -- the desktop deploy library can't be used because there's no
 -- way to get the output and result code at present
-constant kDeployPlatforms = "iOS,Android"
+constant kDeployPlatforms = "Android"
 
 local sDidStartup = false
 local sBuilderIsSetup = false
@@ -185,21 +185,6 @@ on __Start
             case "Windows"
                put there is a file revSBEnginePath(tPlatform) into tHaveEngine
                break
-            case "iOS"
-               local tBuildFor
-               if tTarget contains "Simulator" then
-                  put word 2 to -1 of tTarget into tBuildFor
-               else
-                  put "Device" into tBuildFor
-               end if
-               put word 3 of tPlatform into tVersion
-               delete word 2 to -1 of tPlatform
-               dispatch function "revMobileRuntimeFolder" to stack "revSaveAsIOSStandalone" with tBuildFor, tVersion
-               if the result is not empty then
-                  dispatch function "mapFilePath" to stack "revSaveAsIOSStandalone" with the result & slash & "Standalone"
-                  put there is a file the result into tHaveEngine
-               end if
-               break
             case "Android"
                dispatch function "revMobileRuntimeFolder" to stack "revSaveAsAndroidStandalone" with tPlatform
                if the result is not empty then
@@ -259,8 +244,7 @@ private command __Help
          "-p,--platform   Specify the build platform to build and run e.g --platform" && quote & "MacOSX x86-64,Emscripten" & quote & return & \
          "-a,--all        Build and run all platforms" & return & \
          "-t,--target     Specify the build target name for mobile builds. If not specified and the all flag is set" & return & \
-         "                then all targets will be run. e.g --target" && quote & "iPad Simulator 10.3" & quote & return & \
-         "--profile       Specify the iOS provisioning profile UUID. Only necessary for device builds." & return & \
+         "                then all targets will be run." & return & \
          "-a,--all        Build and run all platforms" & return & \
          "-v,--verbose    Output all results instead of just failures" & return into tHelp
    
@@ -293,7 +277,6 @@ Extra options for the build or run. Eg noui -> true will add the -ui flag to
 desktop runs.
 - `noui` - boolean
 - `target` - a deploy target
-- `profile` - a provisioning profile uuid for iOS
 
 */
 
@@ -375,10 +358,6 @@ private command __ConfigureMainstackForPlatform pBuildPlatform, pOptions
    end repeat
    
    switch pBuildPlatform
-      case "iOS"
-         put pOptions["profile"] into tSettingsA["ios,profile"]
-         put "com.livecode.tests.standalonerunner" into tSettingsA["ios,bundle id"]
-         break
       case "Android"
          put true into tSettingsA["android,application permissions"]["INTERNET"]
          put "com.livecode.tests.standalonerunner" into tSettingsA["android,identifier"]
@@ -387,7 +366,7 @@ private command __ConfigureMainstackForPlatform pBuildPlatform, pOptions
    
    set the customProperties["cRevStandaloneSettings"] of stack kMainstack to tSettingsA
    
-   if pBuildPlatform is among the items of "iOS,Android" then
+   if pBuildPlatform is "Android" then
       set the uCallbackURL of stack kMainstack to "http://localhost:" & sServerPort & "/stdio.html"
    end if
    save stack kMainstack
