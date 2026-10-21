@@ -864,6 +864,9 @@ command tourTbMake pName, pLeft, pTop, pScript
    create stack pName
    set the rect of stack pName to pLeft, pTop, pLeft + 320, pTop + 200
    set the script of stack pName to pScript
+   -- create opens the stack (here with messages locked): closed, it opens
+   -- again as a user's does, with preOpenStack
+   close stack pName
    set the defaultStack to tDefault
    unlock messages
 end tourTbMake
