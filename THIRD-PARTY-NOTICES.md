@@ -459,6 +459,13 @@ Notes:
   folder). You may instead delete them from the standalone's `Externals`
   folder and require the Microsoft Visual C++ Redistributable on the
   PCs that run it.
+- **The web IDE (experimental).** A web IDE built with the suite's web
+  libraries (`web_libraries` in `tools/oxt/xtalk-extensions.json`; see
+  "The xTalk Suite's libraries in the web IDE" in
+  [BUILDING.md](BUILDING.md)) links SodiumXT's, Box2Dxt's and CoinXT's
+  `wasm32-emscripten` builds into its engine's `.wasm`, with the
+  components the table names for them. Their licence texts are the
+  same extensions' `licenses/` folders in the web IDE's `ide.zip`.
 
 ### xTalk Suite demos
 
