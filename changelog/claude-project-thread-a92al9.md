@@ -1,5 +1,0 @@
-- Linux: a click into a browser widget's page gives it the keyboard under every window manager, so the Dictionary's search field and a page's text boxes take typing under GNOME (Mutter) and openbox too, not only under Xfce (#PR)
-- Linux: on a desktop at 200% or more, the browser widget draws its page at the desktop's scale instead of at half the size of the rest of the stack (#PR)
-- Linux: the browser widget and the other native layers follow a stack's scaleFactor and fullscreenMode, as on Windows and macOS, instead of keeping their size and place (#PR)
-- Linux: on a desktop at 200% or more, cursors made from images (the IDE's pointing hand and grab hand, and any image a script sets the cursor to) are drawn at the desktop's size, as its own cursors are (#PR)
-- CI: the browser window manager check types into a page, runs under mutter, at a desktop scale of 2, and with a stack at a scaleFactor of 2 (#PR)
