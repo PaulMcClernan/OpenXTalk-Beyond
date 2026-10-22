@@ -264,9 +264,10 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T29: the name of HyperCard", line 5 of tScript is "  put hcHyperCardName(" & q & q & ") into n"
    TestAssert "T29: send to an object: unchanged", line 6 of tScript is "  send " & q & "mouseUp" & q & " to me"
 
-   put _Rewrite("on mouseUp", "  choose tool x", "  choose browse tool", "end mouseUp") into tScript
+   put _Rewrite("on mouseUp", "  choose tool x", "  choose browse tool", "  choose " & q & "Select Tool" & q, "end mouseUp") into tScript
    TestAssert "T30: choose tool x", line 2 of tScript is "  hcChooseTool x"
    TestAssert "T30: choose browse tool: unchanged", line 3 of tScript is "  choose browse tool"
+   TestAssert "T30: choose a tool by a name in an expression", line 4 of tScript is "  hcChooseTool " & q & "Select Tool" & q
 
    put _Rewrite("on mouseUp", "  set the rect of this card to 0,0,512,342", "  set the textStyle of fld 1 to " & q & "bold,condense" & q, "  set the textStyle of fld 1 to bold", "end mouseUp") into tScript
    TestAssert "T32: the rect of this card", line 2 of tScript is "  hcSetCardRect 0,0,512,342"
@@ -640,7 +641,7 @@ on TestHyperCardScriptsBuiltIns
    create button "Cursor"
    set the script of button "Cursor" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set cursor to 4", "  put hcCursor(4) & comma & hcCursor(" & q & "watch" & q & ") & comma & hcCursor(" & q & "busy" & q & ") & comma & hcCursor(77) & comma & hcCursor(" & q & "Blue" & q & ") & comma & hcCursor(" & q & "No such" & q & ") into gHCScriptsTest", "end mouseUp")
    create button "Tool"
-   set the script of button "Tool" to _Lines("on mouseUp", "  global gHCScriptsTest", "  choose tool 4", "  put the tool into gHCScriptsTest", "  choose tool " & q & "browse" & q, "  put comma & the tool after gHCScriptsTest", "  choose tool 99", "  put comma & the result after gHCScriptsTest", "end mouseUp")
+   set the script of button "Tool" to _Lines("on mouseUp", "  global gHCScriptsTest", "  choose tool 4", "  put the tool into gHCScriptsTest", "  choose tool " & q & "Browse" & q, "  put comma & the tool after gHCScriptsTest", "  choose tool 99", "  put comma & the result after gHCScriptsTest", "end mouseUp")
    create button "Tab"
    set the script of button "Tab" to _Lines("on mouseUp", "  tabKey", "end mouseUp")
    create button "Arrow"

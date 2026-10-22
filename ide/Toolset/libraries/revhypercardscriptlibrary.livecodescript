@@ -1575,6 +1575,11 @@ private function _HyperCardRules pLine, pCompiled
             if _T(tTokens, tIdx[i + 1]) is "tool" and i + 2 <= tEnd then
                _Fire "T30 choose tool"
                put "hcChooseTool" && _Span(tTokens, tIdx, i + 2, tEnd) into tNew
+            else if tEnd > i and _T(tTokens, tIdx[tEnd]) is not "tool" then
+               -- choose "Select Tool", choose tName: the tool by a name in
+               -- an expression, which this engine takes in lower case only
+               _Fire "T30 choose tool"
+               put "hcChooseTool" && _Span(tTokens, tIdx, i + 1, tEnd) into tNew
             else if _T(tTokens, tIdx[i + 1]) is among the words of "btn fld" and _T(tTokens, tIdx[i + 2]) is "tool" and i + 2 = tEnd then
                _Fire "T30 choose tool"
                if _T(tTokens, tIdx[i + 1]) is "btn" then

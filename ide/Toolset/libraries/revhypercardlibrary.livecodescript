@@ -646,7 +646,7 @@ end hcTextStyle
 on hcChooseTool pTool
    local tNames
    put "browse,button,field,select,lasso,pencil,brush,eraser,line,spray can,rectangle,round rectangle,bucket,oval,curve,text,regular polygon,polygon" into tNames
-   put word 1 to -1 of pTool into pTool
+   put toLower(word 1 to -1 of pTool) into pTool
    if word -1 of pTool is "tool" then put word 1 to -2 of pTool into pTool
    if pTool is an integer and pTool >= 1 and pTool <= 18 then put item pTool of tNames into pTool
    if pTool is "btn" then put "button" into pTool
