@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!-- The front page of OXT-Beyond's GitHub Pages site (tools/pages/build_pages.py
+     fills in the versions and leaves out the card of a part it was not given) -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OXT-Beyond on the Web</title>
+<meta name="description" content="The OXT-Beyond IDE and the Stack Player, running in your browser with nothing to install.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23243447'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='15' font-weight='700' fill='%23f39c12' text-anchor='middle'%3EX%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2733; --muted: #5b6878;
+    --line: #dde2e8; --accent: #e08a0b; --accent-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141a21; --card: #1d2530; --text: #e8edf2; --muted: #9aa7b6;
+      --line: #2c3744; --accent: #f39c12; --accent-text: #1d2733;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 2rem; margin: 0 0 8px; }
+  .lead { color: var(--muted); margin: 0 0 32px; font-size: 1.1rem; }
+  .cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 24px; display: flex; flex-direction: column;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 1.3rem; }
+  .version { color: var(--muted); font-size: .9rem; margin: 0 0 12px; }
+  .card p { margin: 0 0 20px; flex: 1; }
+  .button {
+    display: inline-block; align-self: flex-start; background: var(--accent);
+    color: var(--accent-text); text-decoration: none; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px;
+  }
+  .button:focus-visible, a:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+  footer { margin-top: 40px; color: var(--muted); font-size: .9rem; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>OXT-Beyond on the Web</h1>
+  <p class="lead">Build and play xTalk stacks in your browser, with nothing to download or install.</p>
+  <div class="cards">
+    <!-- @IDE@ -->
+    <section class="card">
+      <h2>Web IDE</h2>
+      <p class="version">@IDE_VERSION@</p>
+      <p>The OXT-Beyond IDE itself: make stacks with the Tools palette, the Property Inspector and the Script Editor, try the lessons and the xTalk Academy, and read the Dictionary. Your stacks are kept in this browser between visits, and File &gt; Download Stack saves a copy. The first visit downloads about 60 MB.</p>
+      <a class="button" href="ide/">Open the Web IDE</a>
+    </section>
+    <!-- /@IDE@ -->
+    <!-- @PLAYER@ -->
+    <section class="card">
+      <h2>Stack Player</h2>
+      <p class="version">@PLAYER_VERSION@</p>
+      <p>Open any stack from your computer, or a .zip with a stack and its files, and run it in the page. It comes with whole stacks to play, small samples and games, and a plain account of what works on the web.</p>
+      <a class="button" href="player/">Open the Stack Player</a>
+    </section>
+    <!-- /@PLAYER@ -->
+  </div>
+  <footer>
+    OXT-Beyond is free and open source (GPLv3).
+    <a href="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond">Source and desktop downloads on GitHub</a>.
+  </footer>
+</main>
+</body>
+</html>
