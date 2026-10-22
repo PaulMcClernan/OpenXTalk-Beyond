@@ -356,6 +356,8 @@ def act(page, words, shots_dir, shots, problems):
             shots.append(rest[0])
         elif verb == 'click' and len(rest) == 2:
             page.mouse.click(float(rest[0]), float(rest[1]))
+        elif verb == 'move' and len(rest) == 2:
+            page.mouse.move(float(rest[0]), float(rest[1]))
         elif verb == 'key' and len(rest) == 1:
             page.keyboard.press(rest[0])
         elif verb == 'dialog' and not rest:

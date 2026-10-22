@@ -2441,12 +2441,23 @@ Exec_stat MCStack::openrect(const MCRectangle &rel, Window_mode wm, MCStack *par
 		
 		if (mode == WM_CASCADE && rect.x != trect.x)
 		{
+			// OXT-Beyond: where the screen kept it, overlapping its parent
+			int2 t_kept_x = rect.x;
 			trect = rel;
 			trect.x += DEFAULT_BORDER << 1;
 			trect.y -= DEFAULT_BORDER << 1;
 			oldy = rect.y;
 			positionrel(trect, OP_LEFT, OP_ALIGN_TOP);
 			rect.y = oldy;
+
+			// OXT-Beyond: a cascade with no room on the right of its menu
+			// opens on the left of it, but on a narrow screen (a phone's
+			// browser, in portrait) there is no room there either, and it
+			// opened off the left edge, out of reach. It stays where the
+			// screen kept it instead, over its menu's right side. Where it
+			// fits on the left, it opens there as before.
+			if (rect.x < t_workarea.x + MENU_SPACE)
+				rect.x = t_kept_x;
 		}
 
 
