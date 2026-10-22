@@ -585,7 +585,12 @@ function hcCursor pCursor
    local tGroup, i
    if pCursor is an integer then
       if pCursor >= 1 and pCursor <= 4 then return item pCursor of "9,7,13,14"
-      return pCursor
+      if pCursor <= 29 then return pCursor
+      -- a CURS resource with no image here (a copy of the stack without
+      -- its resource fork) gives empty too, where the set stopped
+      if there is an image id pCursor then return pCursor
+      if there is an image id pCursor of stack (the mainStack of me) then return pCursor
+      return empty
    end if
    put word 1 to -1 of pCursor into pCursor
    if pCursor is among the items of "none,busy,cross,ibeam,plus,watch,help,hand,arrow" then

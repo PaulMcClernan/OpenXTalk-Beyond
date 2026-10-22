@@ -639,7 +639,7 @@ on TestHyperCardScriptsBuiltIns
    set the name of it to "HC Pictures"
    set the sharedBehavior of it to true
    create button "Cursor"
-   set the script of button "Cursor" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set cursor to 4", "  put hcCursor(4) & comma & hcCursor(" & q & "watch" & q & ") & comma & hcCursor(" & q & "busy" & q & ") & comma & hcCursor(77) & comma & hcCursor(" & q & "Blue" & q & ") & comma & hcCursor(" & q & "No such" & q & ") into gHCScriptsTest", "end mouseUp")
+   set the script of button "Cursor" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set cursor to 4", "  put hcCursor(4) & comma & hcCursor(" & q & "watch" & q & ") & comma & hcCursor(" & q & "busy" & q & ") & comma & hcCursor(" & tCursor & ") & comma & hcCursor(77777) & comma & hcCursor(" & q & "Blue" & q & ") & comma & hcCursor(" & q & "No such" & q & ") into gHCScriptsTest", "end mouseUp")
    create button "Tool"
    set the script of button "Tool" to _Lines("on mouseUp", "  global gHCScriptsTest", "  choose tool 4", "  put the tool into gHCScriptsTest", "  choose tool " & q & "Browse" & q, "  put comma & the tool after gHCScriptsTest", "  choose tool 99", "  put comma & the result after gHCScriptsTest", "end mouseUp")
    create button "Tab"
@@ -655,7 +655,7 @@ on TestHyperCardScriptsBuiltIns
 
    put empty into gHCScriptsTest
    send "mouseUp" to button "Cursor" of card 1 of stack tStack
-   TestAssert "hcCursor: HyperCard's numbers and names, this engine's, the stack's own, none", gHCScriptsTest is "14,14,6,77," & tCursor & ","
+   TestAssert "hcCursor: HyperCard's numbers and names, this engine's, the stack's own by id, a missing one, by name, none", gHCScriptsTest is "14,14,6," & tCursor & ",," & tCursor & ","
 
    put empty into gHCScriptsTest
    send "mouseUp" to button "Tool" of card 1 of stack tStack
