@@ -192,6 +192,10 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T16: go to a card of this stack: unchanged", line 4 of tScript is "  go to card 3"
    TestAssert "T16: a comment kept", line 5 of tScript is "  do hcGo(" & q & "go to this card of stack tHCStack" & q & ", quote & " & q & "Addresses" & q & " & quote) -- c"
 
+   put _Rewrite("on mouseUp", "  if x then go stack " & q & "A" & q & " else go stack " & q & "B" & q, "  if y then tabKey else set the cursor to 4", "end mouseUp") into tScript
+   TestAssert "T16: both branches of a one-line if", line 2 of tScript is "  if x then do hcGo(" & q & "go stack tHCStack" & q & ", quote & " & q & "A" & q & " & quote) else do hcGo(" & q & "go stack tHCStack" & q & ", quote & " & q & "B" & q & " & quote)"
+   TestAssert "T18, T17: both branches of a one-line if", line 3 of tScript is "  if y then hcTabKey else set the cursor to hcCursor(4)"
+
    put _Rewrite("on mouseUp", "  go to stack " & q & "Home" & q, "  set cursor to " & q & "Blue" & q, "  set the cursor to 4", "  tabKey", "  if y then arrowKey right", "  picture " & q & "Map" & q & ", resource", "end mouseUp") into tScript
    TestAssert "T9: go to stack " & q & "Home" & q, line 2 of tScript is "  hcGoHome"
    TestAssert "T17: the cursor by name", line 3 of tScript is "  set the cursor to hcCursor(" & q & "Blue" & q & ")"

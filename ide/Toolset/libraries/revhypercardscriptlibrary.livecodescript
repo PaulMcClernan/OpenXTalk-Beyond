@@ -1482,15 +1482,18 @@ end _PlayNotes
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
-private function _HyperCardRules pLine, pCompiled
+private function _HyperCardRules pLine, pCompiled, pElse
    local tTokens, tCode, tIdx, n, tItem, i, j, tEnd, tWord, tNew, tPlain
 
-   if pCompiled then put _PlayNotes(pLine) into pLine
+   -- (pElse: the rest of a line from its else, whose phrases are done)
+   if pCompiled and pElse is not true then put _PlayNotes(pLine) into pLine
    if char -1 of word 1 to -1 of _CodeText(pLine) is "\" then return pLine
-   put _MenuItemProperties(pLine) into pLine
-   put _HyperCardWindows(pLine) into pLine
-   put _MessageBoxProperties(pLine) into pLine
-   put _HyperCardObject(pLine) into pLine
+   if pElse is not true then
+      put _MenuItemProperties(pLine) into pLine
+      put _HyperCardWindows(pLine) into pLine
+      put _MessageBoxProperties(pLine) into pLine
+      put _HyperCardObject(pLine) into pLine
+   end if
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
    put 0 into n
@@ -1644,16 +1647,31 @@ private function _HyperCardRules pLine, pCompiled
             if tWord is among the words of "tabkey arrowkey returnkey enterkey returninfield enterinfield functionkey picture" then
                put "hc" & item itemOffset(tWord, "tabkey,arrowkey,returnkey,enterkey,returninfield,enterinfield,functionkey,picture") of "TabKey,ArrowKey,ReturnKey,EnterKey,ReturnInField,EnterInField,FunctionKey,Picture" into tTokens[tIdx[i]]["t"]
                _Fire "T18 key and picture commands"
-               return _Join(tTokens)
+               return _AndElse(tTokens, tIdx, tEnd, n, pCompiled)
             end if
       end switch
       if tNew is not empty then
          _Replace tTokens, tIdx, i, tEnd, tNew
-         return _Join(tTokens)
+         return _AndElse(tTokens, tIdx, tEnd, n, pCompiled)
       end if
    end repeat
    return _Join(tTokens)
 end _HyperCardRules
+
+-- The line, with the rules applied to its else as well when a statement
+-- before it was rewritten ("if x then go stack A else go stack B")
+private function _AndElse @pTokens, pIdx, pEnd, pCount, pCompiled
+   local tHead, tRest, k
+   if pEnd >= pCount then return _Join(pTokens)
+   repeat with k = 1 to pTokens["count"]
+      if k < pIdx[pEnd + 1] then
+         put pTokens[k]["t"] after tHead
+      else
+         put pTokens[k]["t"] after tRest
+      end if
+   end repeat
+   return tHead & _HyperCardRules(tRest, pCompiled, true)
+end _AndElse
 
 -- The text of the code tokens pFrom to pTo, spaces between them included
 private function _Span pTokens, pIdx, pFrom, pTo

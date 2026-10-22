@@ -75,6 +75,8 @@ constant kHyperCardImages = "Player HyperCard Disk Images"
 -- Between a disk image's path and the HFS path of a stack on it, in a
 -- choice (an HFS path never has two colons in a row)
 constant kImageSeparator = "::"
+-- Beside a stack copied out of a disk image: its line of sFromImage
+constant kFromImageSuffix = ".hcimage"
 
 ----------------------------------------------------------------
 -- Start-up
@@ -464,10 +466,21 @@ private function playerIsHyperCard pPath
    return "(This file must be converted with BinHex" is in tHeader
 end playerIsHyperCard
 
--- The HyperCard stacks on the Mac disk images among the files of pFolder:
--- "image path::HFS path" lines, as revHyperCardImageStacks lists them
+-- The HyperCard stacks on the Mac disk images among the files of pFolder
+-- and its folders: "image path::HFS path" lines, as
+-- revHyperCardImageStacks lists them
 private function playerImageStacks pFolder
-   local tFile, tPath, tList, tLine, tResult, tError
+   local tFile, tPath, tList, tLine, tResult, tError, tSub
+   repeat for each line tSub in folders(pFolder)
+      -- (__MACOSX holds the resource forks of the files beside it)
+      if tSub is "." or tSub is ".." or tSub is "__MACOSX" then
+         next repeat
+      end if
+      put playerImageStacks(pFolder & slash & tSub) into tList
+      if tList is not empty then
+         put tList & return after tResult
+      end if
+   end repeat
    repeat for each line tFile in files(pFolder)
       put pFolder & slash & tFile into tPath
       try
@@ -514,6 +527,12 @@ private command playerOpenFromImage pChoice
       exit playerOpenFromImage
    end if
    put tImage & return & tStack into sFromImage[tPath]
+   -- and beside the stack, for a later visit, when the library is read
+   -- again and sFromImage is empty
+   try
+      put sFromImage[tPath] into url ("binfile:" & tPath & kFromImageSuffix)
+   catch tError
+   end try
    playerOpenFile tPath
 end playerOpenFromImage
 
@@ -725,6 +744,9 @@ command playerOpenFile pPath
          put the short name of tStack into tName
          -- where it came from, as File > Import Stack notes it
          set the uHyperCard["file"] of tStack to pPath
+         if sFromImage[pPath] is empty and there is a file (pPath & kFromImageSuffix) then
+            put url ("binfile:" & pPath & kFromImageSuffix) into sFromImage[pPath]
+         end if
          if sFromImage[pPath] is not empty then
             set the uHyperCard["image"] of tStack to line 1 of sFromImage[pPath]
             set the uHyperCard["imagepath"] of tStack to line 2 of sFromImage[pPath]

@@ -82,9 +82,11 @@ zip's `__MACOSX` folder), a MacBinary or BinHex copy, or an AppleSingle
 file. It is imported once, with messages locked, its scripts are made to
 compile here (`revHyperCardFixScripts`) and it is given the HyperCard
 Library, and then it opens with its own messages. A Mac disk image (raw
-HFS, DiskCopy 4.2, or a CD image with an Apple partition map) lists its
-stacks to choose from; the one chosen is copied out of it, with its
-resource fork, into the image's folder of the library.
+HFS, DiskCopy 4.2, or a CD image with an Apple partition map), given
+alone or in a folder or zip, lists its stacks to choose from; the one
+chosen is copied out of it, with its resource fork, into the image's
+folder of the library, beside a `Name.hcimage` file that names the image,
+so that its scripts find the image's other stacks on a later visit too.
 
 **A stack is a program.** In the player it can do what the page can:
 run JavaScript, read and write what other stacks saved for that site, and
