@@ -796,6 +796,9 @@ def build_with_ide(args, work, timeout):
                     if ui_tour.mac_screen(os.path.join(work, 'ide-screen-at-the-end.png')):
                         log('  (the screen when the build stopped: ide-screen-at-the-end.png)')
                     ui_tour.mac_sample(proc.pid, os.path.join(work, 'ide-sample-at-the-end.txt'))
+                    if ui_tour.mac_app(lay.engine):
+                        ui_tour.mac_ask(ui_tour.mac_app(lay.engine))
+                    ui_tour.mac_tools_log()
             finally:
                 ui_tour.stop(proc)
         browser = None

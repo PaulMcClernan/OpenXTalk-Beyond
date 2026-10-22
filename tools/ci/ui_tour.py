@@ -237,6 +237,81 @@ def mac_screen(path):
     return os.path.isfile(path)
 
 
+# What a Mac's IDE says about itself when it stopped: the engine answers
+# AppleScript's "evaluate" (engine/rsrc/terminology.sdef) from its event
+# loop, which a sample showed idle, so these say which start-up step it
+# never finished and the error that stopped it
+MAC_QUESTIONS = (
+    'the cREVLaunching of stack "Home"',
+    'the statusMessage of stack "revSplash"',
+    'the defaultStack',
+    'the openStacks',
+    'the pendingMessages',
+    'the cLastError of card 1 of stack "revErrorDisplay"',
+    'the cCurrentObject of card 1 of stack "revErrorDisplay"',
+    'the executionError of stack "revErrorDisplay"',
+    'the mode of stack "revErrorDisplay" && the visible of stack "revErrorDisplay" && '
+    'the rect of stack "revErrorDisplay"',
+    'the mode of stack "revTools" && the visible of stack "revTools" && the blendLevel of stack "revTools" && '
+    'the number of controls of stack "revTools" && the rect of stack "revTools"',
+)
+
+
+def mac_ask(app, questions=MAC_QUESTIONS, timeout=20):
+    """Ask the running IDE at app (its .app) each of questions, logging each
+    answer. False when the engine could not be asked: osascript missing, the
+    app's bundle id unread, or no answer in timeout seconds (macOS may be
+    asking whether the runner may control the app)."""
+    import plistlib
+    if not shutil.which('osascript'):
+        return False
+    try:
+        with open(os.path.join(app, 'Contents', 'Info.plist'), 'rb') as f:
+            bundle = plistlib.load(f)['CFBundleIdentifier']
+    except (OSError, KeyError, ValueError, plistlib.InvalidFileException):
+        return False
+    log('::group::What the IDE says (AppleScript to %s)' % bundle)
+    try:
+        for q in questions:
+            text = 'tell application id "%s" to evaluate "%s"' % (
+                bundle, q.replace('\\', '\\\\').replace('"', '\\"'))
+            try:
+                proc = subprocess.run(['osascript', '-e', text], stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                log('%s: no answer in %d s; asking no more' % (q, timeout))
+                return False
+            except OSError as e:
+                log('%s: %s' % (q, e))
+                return False
+            answer = proc.stdout.decode('utf-8', 'replace').strip().replace('\r', '\n')
+            log('%s:%s%s' % (q, '\n' if '\n' in answer else ' ', answer or '(empty)'))
+    finally:
+        log('::endgroup::')
+    return True
+
+
+def mac_tools_log(lines=80):
+    """Log the end of the IDE's own start-up log (revInternal__Log in
+    ide/Toolset/home.livecodescript)."""
+    path = os.path.expanduser('~/Library/Logs/OXT-Beyond/OXT-BeyondToolsLog.txt')
+    if not os.path.isfile(path):
+        log('(no IDE tools log at %s)' % path)
+        return False
+    with open(path, encoding='utf-8', errors='replace') as f:
+        text = f.read().replace('\r', '\n').splitlines()
+    log('::group::The IDE\'s tools log (last %d of %d lines)' % (min(lines, len(text)), len(text)))
+    for x in text[-lines:]:
+        log(x)
+    log('::endgroup::')
+    return True
+
+
+def mac_app(engine):
+    """The .app an engine path is inside, or None."""
+    return engine[:engine.index('.app/') + 4] if '.app/' in engine else None
+
+
 def mac_sample(pid, path, seconds=5, lines=400):
     """Where the engine is, for when the script did not end on a Mac: the
     process's state, then a sample of it (sample, as field_speed_test.py
@@ -377,6 +452,9 @@ def main(argv=None):
                     if mac_screen(os.path.join(shots, 'zz-screen-at-the-end.png')):
                         log('(the screen when the run stopped: zz-screen-at-the-end.png)')
                     mac_sample(proc.pid, os.path.join(out, 'sample-at-the-end.txt'))
+                    if mac_app(lay.engine):
+                        mac_ask(mac_app(lay.engine))
+                    mac_tools_log()
             finally:
                 stop(proc)
         log('The script %s.' % status)
