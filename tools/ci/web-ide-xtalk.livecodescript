@@ -411,11 +411,16 @@ on xt_platformer
    local tHud
    -- Placeholder art: no question about the art folder
    put true into gArtDeclined
+   -- (each stage is recorded as it ends, so that a stage that never ends
+   -- is the one after the last line)
    xtAppStack kPlatformer, "box2dxt-platformer.livecodescript"
+   tourRecord "INFO the platformer's stack is made"
    go stack kPlatformer
+   tourRecord "INFO the platformer is open"
    tourWait 3000
    tourShot "x06-platformer-title"
    send "pfStartGame" to card 1 of stack kPlatformer
+   tourRecord "INFO level 1 started"
    tourWait 8000
    tourShot "x07-platformer-level-1"
    if there is a field "pfHud" of stack kPlatformer then
@@ -571,7 +576,12 @@ end tourWait
 
 command tourShot pFile
    if the lockScreen then
-      repeat while the lockScreen
+      -- (at most 20 times: should a lock outlast its unlock, the shot is
+      -- taken locked rather than the check stopping here)
+      repeat 20 times
+         if not the lockScreen then
+            exit repeat
+         end if
          unlock screen
       end repeat
       tourWait 300
@@ -590,9 +600,16 @@ command tourAct pAction
    end repeat
 end tourAct
 
+-- A step still running after a minute: what it is waiting in (the
+-- handlers under this one) and what is queued, again every minute while it
+-- runs, so that a step that never ends says where it stopped
 on tourWatchdog pStep
    tourRecord "INFO" && pStep && "still running after 60 s; open stacks:" && tourJoin(the openStacks)
+   tourRecord "INFO   in:" && tourJoin(the executionContexts)
+   tourRecord "INFO   queued:" && tourJoin(the pendingMessages)
    tourCloseDialogs true
+   send "tourWatchdog" && quote & pStep & quote to me in 60 seconds
+   put the result into sWatchdog
 end tourWatchdog
 
 function tourPageDialog
