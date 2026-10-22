@@ -40,15 +40,15 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 - [engine/src/em-preamble.js:57](engine/src/em-preamble.js#L57) FIXME Should this be moved into the engine?
 - [engine/src/em-preamble.js:81](engine/src/em-preamble.js#L81) FIXME Can we cache the capsule locally?
 - [engine/src/em-standalone.js:43](engine/src/em-standalone.js#L43) FIXME maybe this needs a helper function in LiveCodeUtil
-- [engine/src/em-system.cpp:406](engine/src/em-system.cpp#L406) FIXME Implement CreateAlias() using symlink(2)
-- [engine/src/em-system.cpp:417](engine/src/em-system.cpp#L417) FIXME Implement ResolveAlias() using readlink(2)
-- [engine/src/em-system.cpp:427](engine/src/em-system.cpp#L427) FIXME use get_current_dir_name() once it's available in Emscripten's
-- [engine/src/em-system.cpp:523](engine/src/em-system.cpp#L523) FIXME use scandirat() once it's available in emscripten's libc
-- [engine/src/em-system.cpp:736](engine/src/em-system.cpp#L736) FIXME Implement GetFreeDiskSpace()
-- [engine/src/em-system.cpp:745](engine/src/em-system.cpp#L745) FIXME Implement GetDevices()
-- [engine/src/em-system.cpp:754](engine/src/em-system.cpp#L754) FIXME Implement GetDrives()
-- [engine/src/em-system.cpp:914](engine/src/em-system.cpp#L914) FIXME Implement OpenDevice()
-- [engine/src/em-system.cpp:967](engine/src/em-system.cpp#L967) FIXME Implement ResolvePath()
+- [engine/src/em-system.cpp:408](engine/src/em-system.cpp#L408) FIXME Implement CreateAlias() using symlink(2)
+- [engine/src/em-system.cpp:419](engine/src/em-system.cpp#L419) FIXME Implement ResolveAlias() using readlink(2)
+- [engine/src/em-system.cpp:429](engine/src/em-system.cpp#L429) FIXME use get_current_dir_name() once it's available in Emscripten's
+- [engine/src/em-system.cpp:525](engine/src/em-system.cpp#L525) FIXME use scandirat() once it's available in emscripten's libc
+- [engine/src/em-system.cpp:738](engine/src/em-system.cpp#L738) FIXME Implement GetFreeDiskSpace()
+- [engine/src/em-system.cpp:747](engine/src/em-system.cpp#L747) FIXME Implement GetDevices()
+- [engine/src/em-system.cpp:756](engine/src/em-system.cpp#L756) FIXME Implement GetDrives()
+- [engine/src/em-system.cpp:916](engine/src/em-system.cpp#L916) FIXME Implement OpenDevice()
+- [engine/src/em-system.cpp:969](engine/src/em-system.cpp#L969) FIXME Implement ResolvePath()
 - [engine/src/em-url.js:59](engine/src/em-url.js#L59) FIXME maybe this needs a helper function in LiveCodeUtil
 - [engine/src/em-url.js:303](engine/src/em-url.js#L303) FIXME this isn't quite correct; we don't correctly
 - [engine/src/funcs.h:1118](engine/src/funcs.h#L1118) class MCNativeCharToNum : public MCUnaryFunctionCtxt<MCStringRef, uinteger_t, MCStringsEvalNativeCharToNum, EE_CHARTONUM_BADSOURCE, PE_CHARTONUM_BADPARAM> //...
@@ -124,7 +124,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11872](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11872) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11892](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11892) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -325,7 +325,7 @@ Work left for later. 421 notes, by part of the repository:
 - [engine/src/mac-window.mm:569](engine/src/mac-window.mm#L569) COCOA-TODO: Make sure this is necessary, apparantly things should
 - [engine/src/mac-window.mm:2003](engine/src/mac-window.mm#L2003) COCOA-TODO: Sort out changes that affect window type (not needed at the moment
 - [engine/src/mac-window.mm:2040](engine/src/mac-window.mm#L2040) COCOA-TODO: At the moment force a re-display here to stop redraw artifacts.
-- [engine/src/mac-window.mm:2301](engine/src/mac-window.mm#L2301) COCOA-TODO: Make display update more specific.
+- [engine/src/mac-window.mm:2330](engine/src/mac-window.mm#L2330) COCOA-TODO: Make display update more specific.
 - [engine/src/mblandroidad.cpp:171](engine/src/mblandroidad.cpp#L171) TODO - Should probably improve this to use a similar method to native controls.
 - [engine/src/mblandroidcalendar.cpp:79](engine/src/mblandroidcalendar.cpp#L79) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
 - [engine/src/mblandroidcalendar.cpp:92](engine/src/mblandroidcalendar.cpp#L92) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
@@ -633,9 +633,9 @@ Work left for later. 421 notes, by part of the repository:
 
 - [libbrowser/src/libbrowser_android.cpp:601](libbrowser/src/libbrowser_android.cpp#L601) TODO - implement (not needed when used with native layers)
 - [libbrowser/src/libbrowser_android.cpp:607](libbrowser/src/libbrowser_android.cpp#L607) TODO - implement (not needed when used with native layers)
-- [libbrowser/src/libbrowser_cef.cpp:419](libbrowser/src/libbrowser_cef.cpp#L419) TODO[Bug 19381] On Linux and Windows, the in-git-checkout
-- [libbrowser/src/libbrowser_cef.cpp:1134](libbrowser/src/libbrowser_cef.cpp#L1134) TODO - Implement OnDownload callback
-- [libbrowser/src/libbrowser_cef.cpp:1870](libbrowser/src/libbrowser_cef.cpp#L1870) TODO - IMPLEMENT
+- [libbrowser/src/libbrowser_cef.cpp:450](libbrowser/src/libbrowser_cef.cpp#L450) TODO[Bug 19381] On Linux and Windows, the in-git-checkout
+- [libbrowser/src/libbrowser_cef.cpp:1177](libbrowser/src/libbrowser_cef.cpp#L1177) TODO - Implement OnDownload callback
+- [libbrowser/src/libbrowser_cef.cpp:1913](libbrowser/src/libbrowser_cef.cpp#L1913) TODO - IMPLEMENT
 - [libbrowser/src/libbrowser_cef_lnx.cpp:222](libbrowser/src/libbrowser_cef_lnx.cpp#L222) TODO - implement
 - [libbrowser/src/libbrowser_cef_lnx.cpp:229](libbrowser/src/libbrowser_cef_lnx.cpp#L229) TODO - implement
 - [libbrowser/src/libbrowser_cef_lnx.cpp:236](libbrowser/src/libbrowser_cef_lnx.cpp#L236) TODO - implement

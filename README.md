@@ -102,7 +102,12 @@ and 0.2.7-rc.6.1 fixes what its play testers reported: Linux at HiDPI
 and its audio clips, Safari reloading the web IDE, the Mac menu bar and
 external editor, and the modern Tools palette's labels, and moves the
 macOS user folder to `~/Documents/OXT-Beyond` (see
-[0.2.7-rc.6.1](#027-rc61-the-bug-hunts-fixes));
+[0.2.7-rc.6.1](#027-rc61-the-bug-hunts-fixes)), and 0.2.7-rc.6.2 fixes
+the Mac IDE's start-up stall, Linux's browser widget, the modern Tools
+palette and many more imported HyperCard scripts, brings the xTalk
+Suite and a downloadable zip to the web IDE, and lets the xTalk
+Assistant use a local model (see
+[0.2.7-rc.6.2](#027-rc62-the-bug-hunt-round-two));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1570,6 +1575,117 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.2: the Bug Hunt, round two
+
+OXT-Beyond 0.2.7-rc.6.2 has everything in 0.2.7-rc.6.1. In the spirit
+of the Bug Hunt, here is every change since then, each listed as the
+bug it squashes:
+
+- **macOS: a start-up that never finished.** The IDE could stop with
+  the splash still open and the palettes never shown, because the
+  engine waited forever for a window hidden before its redraw came. It
+  now lets go of that wait, and waits at most half a second for a
+  redraw that is slow to come (#183).
+- **Linux: a browser widget that would not take typing.** A click into
+  a browser widget's page did not give it the keyboard under GNOME
+  (Mutter) or openbox, so the Dictionary's search field stayed empty
+  (#180).
+- **Linux: tiny pages and cursors at HiDPI.** On a desktop at 200% or
+  more, the browser widget drew its page at half size and cursors made
+  from images (the IDE's pointing and grab hands) were tiny; the
+  browser widget and the other native layers also ignored a stack's
+  `scaleFactor` and `fullscreenMode` (#180).
+- **The modern Tools palette.** On Windows, turning a section on or
+  off from its menu, or choosing Classic Look, left the palette empty; a
+  look changed while the palette was closed stopped at an error and left
+  a narrow strip of tiles; and it drew piece by piece for seconds, where
+  it now builds in about 0.2 seconds. The last bug was that the nicer
+  palette hid behind a menu: the modern look is now the default, and
+  anyone who chose the classic look keeps it (#181).
+- **A title bar out of reach.** A stack that opened with its title bar
+  above the screen, or too far to a side (a HyperCard stack at 0,0, or
+  one a script moved), could not be dragged. The IDE now moves it just
+  far enough onto the screen to grab, and does not mark it as changed
+  (#177).
+- **The remastered examples.** After a click, the arrow keys turned the
+  page instead of playing Animate a Letter, Play a Video's Theater and
+  the Balloon Game; a tile clicked to go to another card was still lit
+  when you came back to it; and the cursor stayed a hand over
+  everything (#177).
+- **No card game in Learn.** Texas Hold'em, the xTalk Suite's poker
+  game, is in Learn, with computer opponents and its card art and
+  sounds inside the stack (#178).
+- **HyperCard stacks that stopped with errors** (#182). Imported scripts
+  stopped on dozens of HyperTalk forms that now do what HyperCard did:
+  `go` to a stack that is not open (found beside the file or on its
+  disk image), `go home`, HyperCard's cursors, `flash`, `picture`, the
+  message box's properties, HyperCard 2.2's menus, `choose tool`,
+  `set the scale`, statements continued with `\`, and more. Handlers the
+  parser refused (variables named like keywords, `field next`, `global`
+  lists over several lines, `answer ... with "A", "B"`, and more) now
+  compile instead of being left out. A call to a stack's own XCMD gets a
+  stand-in that says so in the result, instead of stopping the script
+  with "can't find handler". Deleting one imported stack no longer
+  breaks the HyperCard Library of every other. The Stack Player opens
+  HyperCard stacks the way File > Import Stack does, whatever the file
+  is named, and lists the stacks on a Mac disk image.
+- **The web engine's extensions.** A C `bool` that an extension returned
+  as false could come back true (#179). The web IDE had none of the
+  xTalk Suite: SodiumXT, Box2Dxt, CoinXT and DataChannelXT (over the
+  browser's WebRTC) now run in it, with xTalk Chat, the Box2D platformer
+  and Hold'em (#179). A call into an extension the web engine does not
+  have said `<name>.so: not found`, and now says the library is not
+  linked into the web engine (#179).
+- **The web on a phone.** In portrait, File's submenus opened off the
+  left edge of the screen, out of reach; a submenu with no room on
+  either side now opens over its menu, on the screen (#186).
+- **A web home folder with the old name.** The web home folder was
+  still called `/livecode`; it is `/openxtalk` now. `/livecode` stays as
+  a link to it, so scripts and saved paths that name it keep working,
+  and what the browser kept for `/livecode` is copied over on the first
+  visit, leaving the old copy as it was (#186).
+- **Web pages that would not start.** A browser that kept another
+  version's copy of an engine file stopped with "import object field
+  ... is not a Function", and a site behind Cloudflare's Rocket Loader
+  with "The engine could not start in this browser"; the Stack Player
+  showed the old copy of a stack when a newer one of the same name was
+  opened (#177).
+- **No web IDE of your own.** Every release now has
+  `OXT-Beyond-<version>-web-ide.zip`, the web IDE with a small server
+  (`serve.py`, `Start Web IDE.bat`) to run on your own computer or web
+  server (#185), and the web IDE and the Stack Player are on the
+  repository's GitHub Pages site (#187, #188, #189).
+- **An assistant that needed the cloud.** The xTalk Assistant's
+  Settings have a Local menu that uses a model running on your own
+  computer in LM Studio or Ollama, with no key; it skips a local
+  model's thinking and says what to try when the server is not running
+  or the model's context is too short. Anthropic stays the default
+  (#184).
+- **An iOS build nobody could use.** OXT-Beyond does not support iOS,
+  so the iOS build and its libraries are gone from the source. Desktop,
+  Android and web builds are unchanged (#177).
+
+A script sees these differences from 0.2.7-rc.6.1. On the web,
+`specialFolderPath("home")`, and the documents, desktop, preferences
+and support folders under it, are under `/openxtalk` instead of
+`/livecode`, and a path resolved through the old name reads
+`/openxtalk` (files read and write under both names). In the web
+engine, an extension's C `bool` result of false is false, and a call
+into an extension the web engine lacks still throws `unable to load
+foreign library '<name>'`, with the reason
+`<name>.so: not linked into this web engine (a browser loads no native
+library)` instead of `<name>.so: not found`. A HyperCard stack imported
+from now on has its library substack named
+`HyperCard Library (<stack name>)` instead of `HyperCard Library`, and
+more of its scripts are rewritten as they are imported; stacks
+imported and saved before are left as they are, and ordinary stacks
+are untouched. In the IDE, a stack that opens with its title bar off
+the screen is moved onto it, so its `rect` differs from the one saved.
+On Linux, a browser widget follows the stack's `scaleFactor` and
+`fullscreenMode`, as on Windows and macOS. The IDE's iOS deploy
+libraries are gone; the Preferences' calls to them answer that no iOS
+SDK is installed, as on a computer without Xcode.
 
 #### 0.2.7-rc.6.1: the Bug Hunt's fixes
 
