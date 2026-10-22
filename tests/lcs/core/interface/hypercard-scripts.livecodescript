@@ -25,6 +25,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 on TestSetup
    TestSkipIfNot "ide"
    start using stack (TestGetIDERepositoryPath() & "/Toolset/libraries/revhypercardscriptlibrary.livecodescript")
+   start using stack (TestGetIDERepositoryPath() & "/Toolset/libraries/revhypercarddiskimagelibrary.livecodescript")
 end TestSetup
 
 private function _Compiles pScript
@@ -72,6 +73,11 @@ private function _ImportFile pPath, pStack
    TestAssert pPath && "imports", tError is empty and there is a stack pStack
    return pStack
 end _ImportFile
+
+-- The name of the library revHyperCardFixScripts adds to a stack
+private function _Library pStack
+   return "HyperCard Library (" & the short name of stack pStack & ")"
+end _Library
 
 -- The original of an object's script, kept by revHyperCardFixScripts
 private function _Kept pObject
@@ -132,7 +138,146 @@ on TestHyperCardScriptsRules
 
    put revHyperCardRewriteScript(_Lines("on mouseUp", "  popUp the short name of me, true", "end mouseUp"), "PopUp") into tScript
    TestAssert "T13: an external named like a command", line 2 of tScript is "  hcX_popUp the short name of me, true"
+
+   put _Rewrite("on doMenu menuItem, menu", "  if menuItem is " & quote & "Quit" & quote & " then put menu into x", "  put the short name of this card into this", "  put line this of field " & quote & "List" & quote & " into item", "  get item 2 of item", "  pass doMenu", "end doMenu") into tScript
+   TestAssert "T2: parameters named like words of the grammar", line 1 of tScript is "on hcDoMenu hc_menuItem, hc_menu"
+   TestAssert "T2: renamed where a variable stands", line 2 of tScript is "  if hc_menuItem is " & quote & "Quit" & quote & " then put hc_menu into x"
+   TestAssert "T2: this, the word and the variable", line 3 of tScript is "  put the short name of this card into hc_this"
+   TestAssert "T2: a chunk's number", line 4 of tScript is "  put line hc_this of field " & quote & "List" & quote & " into hc_item"
+   TestAssert "T2: the chunk word kept", line 5 of tScript is "  get item 2 of hc_item"
+
+   put _Rewrite("on mouseUp", "  global gOne, \", "    button", "  put 1 into button", "  get card fld button", "end mouseUp", "on mouseDown", "  get field next", "  put card fld button into t", "  put line 1 of bkgnd field title of this card into t", "  put the number of card buttons into n", "end mouseDown") into tScript
+   TestAssert "T2: a global over two lines", line 3 of tScript is "    hc_button" and line 4 of tScript is "  put 1 into hc_button"
+   TestAssert "T2: the variable as an object's name", line 5 of tScript is "  get card fld hc_button"
+   TestAssert "T3: field next", line 8 of tScript is "  get field " & quote & "next" & quote
+   TestAssert "T3: card fld button", line 9 of tScript is "  put card fld " & quote & "button" & quote & " into t"
+   TestAssert "T3: a name before of this card", line 10 of tScript is "  put line 1 of bkgnd field " & quote & "title" & quote & " of this card into t"
+   TestAssert "T3: card buttons: unchanged", line 11 of tScript is "  put the number of card buttons into n"
+
+   put _Rewrite("on mouseUp", "  answer file " & quote & "Which stack?" & quote & " of type stack", "  answer " & quote & "Go?" & quote & " with " & quote & "Cancel" & quote & "," & quote & "OK" & quote, "  create stack " & quote & "New" & quote & " with bkgnd 1 in a new window", "  go to first card of " & quote & "Home" & quote, "  if x then delete item 2 to the number of items in line 3 of fld 1 of line 3 of fld 1", "  return top of window", "  choose tool 4", "  choose btn tool", "end mouseUp") into tScript
+   TestAssert "T31: answer file of type stack", line 2 of tScript is "  answer file " & quote & "Which stack?" & quote & " of type " & quote & "STAK" & quote
+   TestAssert "T31: answer with replies between commas", line 3 of tScript is "  answer " & quote & "Go?" & quote & " with " & quote & "Cancel" & quote & " or " & quote & "OK" & quote
+   TestAssert "T31: create stack in a new window", line 4 of tScript is "  create stack " & quote & "New" & quote & " with bkgnd 1"
+   TestAssert "T31: of a stack named without stack", line 5 of tScript is "  do hcGo(" & quote & "go to first card of stack tHCStack" & quote & ", quote & " & quote & "Home" & quote & " & quote)"
+   TestAssert "T31: the number of items in a chunk of the same chunk", line 6 of tScript is "  if x then delete item 2 to (the number of items in line 3 of fld 1) of line 3 of fld 1"
+   TestAssert "T11: of window", line 7 of tScript is "  return top of this stack"
+   TestAssert "T30: choose tool 4", line 8 of tScript is "  hcChooseTool 4"
+   TestAssert "T30: choose btn tool", line 9 of tScript is "  choose button tool"
+
+   put _Rewrite("on readIt this, machine", "  read from file this for 100", "  set the hilite of btn machine of cd 1 to true", "  go to first card of stack", "  put the number of items in fld " & quote & "F" & quote & " in card " & quote & "K" & quote & " into x", "  put number of cards into n", "  if version < 2 then beep", "  domenu " & quote & "Quit HyperCard", "  delete menuItem " & quote & "New Card" & quote & " from menu " & quote & "Edit" & quote, "  play harpsichord tempo t c5e d e", "  put card field cards into x", "end readIt") into tScript
+   TestAssert "T2: a variable before for", line 2 of tScript is "  read from file hc_this for 100"
+   TestAssert "T2: a variable as an object's name before of", line 3 of tScript is "  set the hilite of btn hc_machine of cd 1 to true"
+   TestAssert "T11: of stack", line 4 of tScript is "  go to first card of this stack"
+   TestAssert "T11: in card for of card", line 5 of tScript is "  put the number of items in fld " & quote & "F" & quote & " of card " & quote & "K" & quote & " into x"
+   TestAssert "T7: number of without the", line 6 of tScript is "  put the number of cards into n"
+   TestAssert "T7: version without the", line 7 of tScript is "  if hcVersion() < 2 then beep"
+   TestAssert "T31: a string closed at the end of the line", line 8 of tScript is "  domenu " & quote & "Quit HyperCard" & quote
+   TestAssert "T22: delete menuItem from menu", line 9 of tScript is "  hcDeleteMenuItem " & quote & "Edit" & quote & ", " & quote & "New Card" & quote
+   TestAssert "T5: notes after a tempo in a variable", line 10 of tScript is "  play harpsichord tempo t " & quote & "c5e d e" & quote
+   TestAssert "T3: a field named cards", line 11 of tScript is "  put card field " & quote & "cards" & quote & " into x"
+
+   put _Rewrite("on mouseUp", "  set the visible of tool window to not the visible of tool window", "  if the visible of the message watcher then beep", "end mouseUp") into tScript
+   TestAssert "T28: HyperCard's own windows: set", line 2 of tScript is "  hcSetWindow " & quote & "visible" & quote & ", " & quote & "tool" & quote & ", not hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "tool" & quote & ")"
+   TestAssert "T28: the message watcher is not the message box", line 3 of tScript is "  if hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "message watcher" & quote & ") then beep"
 end TestHyperCardScriptsRules
+
+on TestHyperCardScriptsRulesForAll
+   -- the rules that apply to every script, compiling or not: each takes
+   -- a statement that stops with an error here where HyperCard went on
+   local tScript, q
+   put quote into q
+   put _Rewrite("on mouseUp", "  go to stack " & q & "Other" & q, "  if x then go to card 2 of stack tName in a new window else beep", "  go to card 3", "  go to this card of stack " & q & "Addresses" & q & " -- c", "end mouseUp") into tScript
+   TestAssert "T16: go to a stack", line 2 of tScript is "  do hcGo(" & q & "go to stack tHCStack" & q & ", quote & " & q & "Other" & q & " & quote)"
+   TestAssert "T16: the statement up to else, its window kept", line 3 of tScript is "  if x then do hcGo(" & q & "go to card 2 of stack tHCStack in a new window" & q & ", " & q & "tName" & q & ") else beep"
+   TestAssert "T16: go to a card of this stack: unchanged", line 4 of tScript is "  go to card 3"
+   TestAssert "T16: a comment kept", line 5 of tScript is "  do hcGo(" & q & "go to this card of stack tHCStack" & q & ", quote & " & q & "Addresses" & q & " & quote) -- c"
+
+   put _Rewrite("on mouseUp", "  if x then go stack " & q & "A" & q & " else go stack " & q & "B" & q, "  if y then tabKey else set the cursor to 4", "end mouseUp") into tScript
+   TestAssert "T16: both branches of a one-line if", line 2 of tScript is "  if x then do hcGo(" & q & "go stack tHCStack" & q & ", quote & " & q & "A" & q & " & quote) else do hcGo(" & q & "go stack tHCStack" & q & ", quote & " & q & "B" & q & " & quote)"
+   TestAssert "T18, T17: both branches of a one-line if", line 3 of tScript is "  if y then hcTabKey else set the cursor to hcCursor(4)"
+
+   put _Rewrite("on mouseUp", "  go to stack " & q & "Home" & q, "  set cursor to " & q & "Blue" & q, "  set the cursor to 4", "  tabKey", "  if y then arrowKey right", "  picture " & q & "Map" & q & ", resource", "end mouseUp") into tScript
+   TestAssert "T9: go to stack " & q & "Home" & q, line 2 of tScript is "  hcGoHome"
+   TestAssert "T17: the cursor by name", line 3 of tScript is "  set the cursor to hcCursor(" & q & "Blue" & q & ")"
+   TestAssert "T17: the cursor by number", line 4 of tScript is "  set the cursor to hcCursor(4)"
+   TestAssert "T18: tabKey", line 5 of tScript is "  hcTabKey"
+   TestAssert "T18: arrowKey after then", line 6 of tScript is "  if y then hcArrowKey right"
+   TestAssert "T18: picture", line 7 of tScript is "  hcPicture " & q & "Map" & q & ", resource"
+
+   put _Rewrite("on mouseUp", "  hide card picture", "  show bg pict of card 3", "  hide window " & q & "scroll" & q, "  close window " & q & "Map" & q, "  show window " & q & "Map" & q & " at 10,20", "  hide scroll window", "end mouseUp") into tScript
+   TestAssert "T19: hide card picture", line 2 of tScript is "  hcShowPicture " & q & "card" & q & ", false"
+   TestAssert "T19: show bg pict of a card", line 3 of tScript is "  hcShowPicture " & q & "background" & q & ", true, the long id of card 3"
+   TestAssert "T21: hide window", line 4 of tScript is "  hcWindow " & q & "hide" & q & ", " & q & "scroll" & q
+   TestAssert "T21: close window", line 5 of tScript is "  hcWindow " & q & "close" & q & ", " & q & "Map" & q
+   TestAssert "T21: show window at", line 6 of tScript is "  hcWindow " & q & "show" & q & ", " & q & "Map" & q & ", 10,20"
+   TestAssert "T21: HyperCard's own windows", line 7 of tScript is "  hcWindow " & q & "hide" & q & ", " & q & "scroll" & q
+
+   put _Rewrite("on mouseUp", "  put fileName(" & q & "STAK" & q & ") into f", "  put the fileName of this stack into g", "end mouseUp") into tScript
+   TestAssert "T20: fileName()", line 2 of tScript is "  put hcX_fileName(" & q & "STAK" & q & ") into f"
+   TestAssert "T20: the fileName property: unchanged", line 3 of tScript is "  put the fileName of this stack into g"
+
+   put _Rewrite("on mouseUp", "  put fld 1 after menu " & q & "Keys" & q, "  disable menuItem " & q & "Two" & q & " of menu " & q & "Tools" & q, "  set the checkMark of menuItem 1 of menu " & q & "Tools" & q & " to true", "  if the checkmark of menuItem 1 of menu " & q & "Tools" & q & " then beep", "  delete menuItem 1 of menu " & q & "Tools" & q, "end mouseUp") into tScript
+   TestAssert "T22: put after menu", line 2 of tScript is "  hcPutIntoMenu fld 1, " & q & "after" & q & ", " & q & "Keys" & q & ", empty, empty"
+   TestAssert "T22: disable menuItem", line 3 of tScript is "  hcEnableMenu false, " & q & "Tools" & q & ", " & q & "Two" & q
+   TestAssert "T22: set the checkMark of menuItem", line 4 of tScript is "  hcSetMenuItem " & q & "checkmark" & q & ", " & q & "Tools" & q & ", 1, true"
+   TestAssert "T22: the checkMark of menuItem", line 5 of tScript is "  if hcMenuItem(" & q & "checkmark" & q & ", " & q & "Tools" & q & ", 1) then beep"
+   TestAssert "T22: delete menuItem", line 6 of tScript is "  hcDeleteMenuItem " & q & "Tools" & q & ", 1"
+
+   put _Rewrite("on mouseUp", "  start using stack " & q & "Lib" & q, "  stop using stack tName", "  print card field " & q & "Notes" & q, "  print card 3", "end mouseUp") into tScript
+   TestAssert "T23: start using a stack", line 2 of tScript is "  hcStartUsing " & q & "Lib" & q
+   TestAssert "T23: stop using a stack", line 3 of tScript is "  hcStopUsing tName"
+   TestAssert "T24: print a field", line 4 of tScript is "  PrintField the long id of card field " & q & "Notes" & q
+   TestAssert "T24: print a card: unchanged", line 5 of tScript is "  print card 3"
+
+   put _Rewrite("on mouseUp", "  go " & q & "Addresses" & q, "  go to it in a new window", "  go to first card in bkgnd " & q & "Index" & q, "  go to the next card", "  go back", "end mouseUp") into tScript
+   TestAssert "T25: go to a stack by its name", line 2 of tScript is "  hcGoTo " & q & "Addresses" & q
+   TestAssert "T25: go to an expression, its window kept", line 3 of tScript is "  hcGoTo it, " & q & "in a new window" & q
+   TestAssert "T25: in for of", line 4 of tScript is "  go to first card of bkgnd " & q & "Index" & q
+   TestAssert "T25: go to the next card: unchanged", line 5 of tScript is "  go to the next card"
+   TestAssert "T25: go back: unchanged", line 6 of tScript is "  go back"
+
+   put _Rewrite("on mouseUp", "  set the scale of window pictureWindow to -1", "  set scroll of window " & q & "Map" & q & " to " & q & "10,10" & q, "  set hilitedButton of wd " & q & "Tools" & q & " to 0", "  set the scroll of card window to 0,0", "  set the loc of window " & q & "Map" & q & " to 10,10", "end mouseUp") into tScript
+   TestAssert "T26: the scale of a window", line 2 of tScript is "  hcSetWindow " & q & "scale" & q & ", pictureWindow, -1"
+   TestAssert "T26: the scroll of a window", line 3 of tScript is "  hcSetWindow " & q & "scroll" & q & ", " & q & "Map" & q & ", " & q & "10,10" & q
+   TestAssert "T26: the hilitedButton of a palette", line 4 of tScript is "  hcSetWindow " & q & "hilitedbutton" & q & ", " & q & "Tools" & q & ", 0"
+   TestAssert "T26: the scroll of the card window", line 5 of tScript is "  hcSetWindow " & q & "scroll" & q & ", " & q & "card window" & q & ", 0,0"
+   TestAssert "T26: the loc of a window: unchanged", line 6 of tScript is "  set the loc of window " & q & "Map" & q & " to 10,10"
+
+   put _Rewrite("on mouseUp", "  doMenu new card", "  if x then doMenu Compact Stack", "  doMenu tItem", "  doMenu the short name of me", "end mouseUp") into tScript
+   TestAssert "T27: doMenu with the item not in quotes", line 2 of tScript is "  doMenu " & q & "new card" & q
+   TestAssert "T27: after then, its spelling kept", line 3 of tScript is "  if x then doMenu " & q & "Compact Stack" & q
+   TestAssert "T27: a variable: unchanged", line 4 of tScript is "  doMenu tItem"
+   TestAssert "T27: an expression: unchanged", line 5 of tScript is "  doMenu the short name of me"
+
+   put _Rewrite("on mouseUp", "  put the visible of msg into v", "  if the visible of window " & q & "Message" & q & " then hide msg", "  set the loc of the message box to 18,30", "  set loc of msg to x", "  put the length of msg into n", "  put the rect of window " & q & "Map" & q & " into r", "end mouseUp") into tScript
+   TestAssert "T28: the visible of msg", line 2 of tScript is "  put hcMessageBox(" & q & "visible" & q & ") into v"
+   TestAssert "T28: the visible of window " & q & "Message" & q, line 3 of tScript is "  if hcMessageBox(" & q & "visible" & q & ") then hide msg"
+   TestAssert "T28: set the loc of the message box", line 4 of tScript is "  hcSetMessageBox " & q & "loc" & q & ", 18,30"
+   TestAssert "T28: set loc of msg", line 5 of tScript is "  hcSetMessageBox " & q & "loc" & q & ", x"
+   TestAssert "T28: the length of msg: unchanged", line 6 of tScript is "  put the length of msg into n"
+   TestAssert "T28: another window: unchanged", line 7 of tScript is "  put the rect of window " & q & "Map" & q & " into r"
+
+   put _Rewrite("on mouseUp", "  put " & q & "Again" & q & " after menuItem " & q & "Find" & q & " of menu " & q & "Go" & q & " \", "    with menuMessages " & q & "StartSearch" & q, "  beep", "end mouseUp") into tScript
+   TestAssert "T22: a statement continued over lines, taken whole", line 2 of tScript is "  hcPutIntoMenu " & q & "Again" & q & ", " & q & "after" & q & ", " & q & "Go" & q & ", " & q & "StartSearch" & q & ", " & q & "Find" & q
+   TestAssert "T22: its second line left empty, the lines after it kept", line 3 of tScript is empty and line 4 of tScript is "  beep"
+
+   put _Rewrite("on mouseUp", "  put lastItem(the long name of HyperCard) into h", "  if the version of HyperCard < 2 then beep", "  send " & q & "doMenu Copy Text" & q & " to HyperCard", "  put the name of HyperCard into n", "  send " & q & "mouseUp" & q & " to me", "end mouseUp") into tScript
+   TestAssert "T29: the long name of HyperCard", line 2 of tScript is "  put lastItem(hcHyperCardName(" & q & "long" & q & ")) into h"
+   TestAssert "T29: the version of HyperCard", line 3 of tScript is "  if hcVersion() < 2 then beep"
+   TestAssert "T29: send to HyperCard", line 4 of tScript is "  hcSendToHyperCard " & q & "doMenu Copy Text" & q
+   TestAssert "T29: the name of HyperCard", line 5 of tScript is "  put hcHyperCardName(" & q & q & ") into n"
+   TestAssert "T29: send to an object: unchanged", line 6 of tScript is "  send " & q & "mouseUp" & q & " to me"
+
+   put _Rewrite("on mouseUp", "  choose tool x", "  choose browse tool", "  choose " & q & "Select Tool" & q, "end mouseUp") into tScript
+   TestAssert "T30: choose tool x", line 2 of tScript is "  hcChooseTool x"
+   TestAssert "T30: choose browse tool: unchanged", line 3 of tScript is "  choose browse tool"
+   TestAssert "T30: choose a tool by a name in an expression", line 4 of tScript is "  hcChooseTool " & q & "Select Tool" & q
+
+   put _Rewrite("on mouseUp", "  set the rect of this card to 0,0,512,342", "  set the textStyle of fld 1 to " & q & "bold,condense" & q, "  set the textStyle of fld 1 to bold", "end mouseUp") into tScript
+   TestAssert "T32: the rect of this card", line 2 of tScript is "  hcSetCardRect 0,0,512,342"
+   TestAssert "T32: a text style of HyperCard's", line 3 of tScript is "  set the textStyle of fld 1 to hcTextStyle(" & q & "bold,condense" & q & ")"
+   TestAssert "T32: a text style of this engine's: unchanged", line 4 of tScript is "  set the textStyle of fld 1 to bold"
+end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
    -- a stack as an import leaves it: scripts that do not compile, one that
@@ -173,9 +318,9 @@ on TestHyperCardScriptsFix
    TestAssert "the report kept on the stack", tSet["scripts"] is tReport
 
    -- the library, as the stack's behavior
-   TestAssert "library added", "HyperCard Library" is among the lines of the substacks of stack tStack
-   TestAssert "library is the behavior", the short name of the behavior of stack tStack is "HyperCard Library"
-   TestAssert "library compiles", _Compiles(the script of stack "HyperCard Library" of stack tStack)
+   TestAssert "library added, named after the stack", _Library(tStack) is among the lines of the substacks of stack tStack
+   TestAssert "library is the behavior", the short name of the behavior of stack tStack is _Library(tStack)
+   TestAssert "library compiles", _Compiles(the script of stack _Library(tStack) of stack tStack)
    _Close tStack
 
    -- a substack the import made with the library's name (a palette, say)
@@ -183,14 +328,14 @@ on TestHyperCardScriptsFix
    put "HCClash" & the milliseconds into tStack
    lock messages
    create invisible stack tStack
-   create invisible stack "HyperCard Library"
+   create invisible stack _Library(tStack)
    set the mainStack of it to tStack
-   set the script of stack "HyperCard Library" of stack tStack to _Lines("on palette", "end palette")
+   set the script of stack _Library(tStack) of stack tStack to _Lines("on palette", "end palette")
    set the script of stack tStack to _Lines("on openStack", "  put the message box into x", "end openStack")
    unlock messages
    get revHyperCardFixScripts(tStack)
-   TestAssert "a clash: the library under a free name", the short name of the behavior of stack tStack is "HyperCard Library 2"
-   TestAssert "a clash: the other substack untouched", the script of stack "HyperCard Library" of stack tStack is _Lines("on palette", "end palette") & return or the script of stack "HyperCard Library" of stack tStack is _Lines("on palette", "end palette")
+   TestAssert "a clash: the library under a free name", the short name of the behavior of stack tStack is _Library(tStack) && "2"
+   TestAssert "a clash: the other substack untouched", the script of stack _Library(tStack) of stack tStack is _Lines("on palette", "end palette") & return or the script of stack _Library(tStack) of stack tStack is _Lines("on palette", "end palette")
    _Close tStack
 end TestHyperCardScriptsFix
 
@@ -229,7 +374,8 @@ end TestHyperCardScriptsLoadedByIDE
 on TestHyperCardScriptsTwoImports
    -- each imported stack gets its own library, closed, whatever library
    -- of a stack imported before is in memory
-   local tFirst, tSecond
+   local tFirst, tSecond, tError
+   global gHCScriptsTest
    put "HCFirst" & the milliseconds into tFirst
    put "HCSecond" & the milliseconds into tSecond
    lock messages
@@ -238,10 +384,25 @@ on TestHyperCardScriptsTwoImports
    unlock messages
    get revHyperCardFixScripts(the long id of stack tFirst)
    get revHyperCardFixScripts(the long id of stack tSecond)
-   TestAssert "the first stack has its library", "HyperCard Library" is among the lines of the substacks of stack tFirst
-   TestAssert "the second stack has its own library", "HyperCard Library" is among the lines of the substacks of stack tSecond
-   TestAssert "the second library is marked as the library", the uHyperCard["library"] of stack "HyperCard Library" of stack tSecond is true
-   TestAssert "the libraries are not left open", "HyperCard Library" is not among the lines of the openStacks
+   TestAssert "the first stack has its library", _Library(tFirst) is among the lines of the substacks of stack tFirst
+   TestAssert "the second stack has its own library", _Library(tSecond) is among the lines of the substacks of stack tSecond
+   TestAssert "the second library is marked as the library", the uHyperCard["library"] of stack _Library(tSecond) of stack tSecond is true
+   TestAssert "the libraries are not left open", _Library(tFirst) is not among the lines of the openStacks and _Library(tSecond) is not among the lines of the openStacks
+   -- (the engine knows a behavior by its stack's name: with one name for
+   -- both, deleting the second stack took the first one's library)
+   lock messages
+   set the defaultStack to tFirst
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the version into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(the long id of stack tFirst)
+   _Close tSecond
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "B" of stack tFirst
+   catch tError
+   end try
+   TestAssert "the second stack deleted, the first one's library still answers", gHCScriptsTest is "2.4.1"
    _Close tFirst
    _Close tSecond
 end TestHyperCardScriptsTwoImports
@@ -254,6 +415,7 @@ on TestHyperCardScriptsStandIns
    put "HCStandIns" & the milliseconds into tStack
    lock messages
    create invisible stack tStack
+   set the uHyperCard["imagepath"] of stack tStack to "Old Disk:Stacks:Main"
    set the defaultStack to tStack
    create button "B"
    set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", \
@@ -269,11 +431,27 @@ on TestHyperCardScriptsStandIns
          "end mouseUp")
    create button "Balloon"
    set the script of button "Balloon" to _Lines("on mouseEnter", "  HCBalloon " & quote & "Click me" & quote, "end mouseEnter")
+   create button "Volume"
+   set the script of button "Volume" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put volume(4) into gHCScriptsTest", \
+         "  put comma & volume(9) & comma & SndVolume() after gHCScriptsTest", \
+         "  put comma & hcHyperCardName(" & quote & "long" & quote & ") & comma & hcHyperCardName(" & quote & quote & ") after gHCScriptsTest", \
+         "  put comma & objectExists(" & quote & "button " & quote & " & quote & " & quote & "Volume" & quote & " & quote) & comma & objectExists(" & quote & "button 99" & quote & ") & comma & objectExists(" & quote & "no such thing" & quote & ") after gHCScriptsTest", \
+         "  put the loc of msg into tOldLoc", \
+         "  set the loc of msg to 18,30", \
+         "  put comma & (the visible of msg is among the words of " & quote & "true false" & quote & ") & comma & (the loc of msg is " & quote & "18,30" & quote & ") after gHCScriptsTest", \
+         "  if tOldLoc is not empty then set the loc of msg to tOldLoc", \
+         "  cHCcolorize", \
+         "  cHCunColorize", \
+         "end mouseUp")
    unlock messages
    get revHyperCardFixScripts(tStack)
    put empty into gHCScriptsTest
    send "mouseUp" to button "B" of stack tStack
    TestAssert "MaxDepth, NewMenu, DeleteMenu, ShowMenu, HCBalloon query, Dialoger", gHCScriptsTest is "true,1,2,,HyperCard menus are not supported yet,false,The Dialoger external is not supported"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Volume" of stack tStack
+   TestAssert "volume and SndVolume keep the level; objectExists; the message box's properties; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4,Old Disk:Stacks:HyperCard,HyperCard,true,false,false,true,true"
    send "mouseEnter" to button "Balloon" of stack tStack
    TestAssert "HCBalloon: balloons off, no tooltip", the toolTip of button "Balloon" of stack tStack is empty
    send "HCBalloon" && quote & "on" & quote to button "B" of stack tStack
@@ -284,10 +462,47 @@ on TestHyperCardScriptsStandIns
          and value("hcPopUpItems(" & quote & "a,b" & quote & ")", button "B" of stack tStack) is _Lines("a", "b")
    TestAssert "HPopUpMenu: a submenu choice is line,item", \
          value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "File|Save" & quote & ")", button "B" of stack tStack) is "2,2"
+   TestAssert "hcTextStyle: condense and extend by this engine's names, outline and shadow left out", \
+         value("hcTextStyle(" & quote & "bold,condense,outline" & quote & ")", button "B" of stack tStack) is "bold,condensed" \
+         and value("hcTextStyle(" & quote & "shadow" & quote & ")", button "B" of stack tStack) is "plain"
+   TestAssert "hcWindowProperty: a window of HyperCard's own never shown", value("hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "tool" & quote & ")", button "B" of stack tStack) is false
+   send "hcSetWindow " & quote & "visible" & quote & ", " & quote & "tool" & quote & ", true" to button "B" of stack tStack
+   TestAssert "hcSetWindow: what a script sets reads back", value("hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "tool" & quote & ")", button "B" of stack tStack) is true
+   send "hcSetCardRect 0,0,400,300" to button "B" of stack tStack
+   TestAssert "hcSetCardRect: the stack's window takes the card's size", the width of stack tStack is 400 and the height of stack tStack is 300
    TestAssert "HPopUpMenu: an entry with no submenu is line,0", \
          value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "Edit" & quote & ")", button "B" of stack tStack) is "1,0"
    _Close tStack
 end TestHyperCardScriptsStandIns
+
+on TestHyperCardScriptsExternals
+   -- the stack's external commands get stand-ins that leave a note in
+   -- the result; its external functions, and the externals its scripts
+   -- or the library define, get none. And doMenu "New Button" names the
+   -- button as HyperCard did
+   local tStack, tReport, tTab
+   global gHCScriptsTest
+   put "HCExternals" & the milliseconds into tStack
+   put numToChar(9) into tTab
+   lock messages
+   create invisible stack tStack
+   set the uHyperCard["externals"] of stack tStack to _Lines("XCMD" & tTab & "FPlay", "XCMD" & tTab & "PopUp", "XFCN" & tTab & "SysEnv", "XCMD" & tTab & "Mine", "XCMD" & tTab & "Two Words")
+   set the script of stack tStack to _Lines("on Mine", "end Mine")
+   set the defaultStack to tStack
+   create button "X"
+   set the script of button "X" to _Lines("on mouseUp", "  global gHCScriptsTest", "  FPlay " & quote & "boing" & quote, "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "N"
+   set the script of button "N" to _Lines("on mouseUp", "  doMenu " & quote & "new button" & quote, "  set the name of button " & quote & "new button" & quote & " to " & quote & "Made" & quote, "end mouseUp")
+   unlock messages
+   put revHyperCardFixScripts(tStack) into tReport
+   TestAssert "the report names the stand-ins", "do nothing when called: FPlay" & return is in tReport
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "X" of stack tStack
+   TestAssert "a stand-in: the script goes on, the result says why", gHCScriptsTest is "FPlay is not available"
+   send "mouseUp" to button "N" of stack tStack
+   TestAssert "doMenu New Button: the button HyperCard named", there is a button "Made" of stack tStack
+   _Close tStack
+end TestHyperCardScriptsExternals
 
 on TestHyperCardScriptsImported
    -- a stack the engine imports: every script compiles afterwards, and
@@ -295,7 +510,10 @@ on TestHyperCardScriptsImported
    local tStack, tReport, tLine, tObject, tFailed
    put _ImportFile("TestV1.stack", "TestV1.stack") into tStack
    put revHyperCardFixScripts(tStack) into tReport
-   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 4 rewritten" is in tReport
+   -- (4 scripts that did not compile; 33 that did, for "go home",
+   -- "arrowKey", the cursor and "go" to another stack, by "stack" or by
+   -- its name alone)
+   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 37 rewritten" is in tReport
    set the itemDelimiter to tab
    repeat for each line tLine in tReport
       if item 2 of tLine is empty then next repeat
@@ -306,3 +524,223 @@ on TestHyperCardScriptsImported
    TestAssert "TestV1: every rewritten script compiles", tFailed is empty
    _Close tStack
 end TestHyperCardScriptsImported
+
+on TestHyperCardScriptsGoStack
+   -- "go" to a stack that is not open: found beside the file the stack
+   -- was imported from, or on its disk image, imported with its scripts
+   -- fixed; one that cannot be found leaves the result set, not an error
+   local tStack, tFolder, tError, q
+   global gHCScriptsTest
+   put quote into q
+   put the temporary folder & "/hcgo" & the milliseconds into tFolder
+   create folder tFolder
+   put url ("binfile:" & TestGetInputFile("hypercard/TestV1.stack")) into url ("binfile:" & tFolder & "/Sibling")
+   put "HCGo" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the uHyperCard["file"] of stack tStack to tFolder & "/Main"
+   set the defaultStack to tStack
+   create button "Sibling"
+   set the script of button "Sibling" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack " & q & "Sibling" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "Missing"
+   set the script of button "Missing" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack " & q & "No Such HyperCard Stack" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "ByName"
+   set the script of button "ByName" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go " & q & "Sibling" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "Where"
+   set the script of button "Where" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put " & q & "card 2" & q & " into tWhere", "  go to tWhere", "  put the number of this card into gHCScriptsTest", "  go to " & q & "No Such HyperCard Stack" & q, "  put comma & the result after gHCScriptsTest", "end mouseUp")
+   create card
+   go to card 1 of stack tStack
+   create button "Image"
+   set the script of button "Image" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to card 1 of stack " & q & "Synthetic Stack" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "a go to a stack, in a script that compiles, rewritten", "do hcGo(" is in the script of button "Sibling" of card 1 of stack tStack
+
+   put "unset" into gHCScriptsTest
+   try
+      send "mouseUp" to button "Sibling" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "a stack beside the file: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Sibling"
+   if there is a stack "Sibling" then
+      TestAssert "a stack beside the file: its scripts fixed", _Library("Sibling") is among the lines of the substacks of stack "Sibling"
+      TestAssert "a stack beside the file: where it came from noted", the uHyperCard["file"] of stack "Sibling" is tFolder & "/Sibling"
+   end if
+   _Close "Sibling"
+
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "Missing" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "a stack that cannot be found: no error, the result set", tError is empty and gHCScriptsTest is not empty and gHCScriptsTest is not "unset"
+
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "ByName" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "go to a stack by its name alone: found beside the file", tError is empty and gHCScriptsTest is empty and there is a stack "Sibling"
+   _Close "Sibling"
+
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "Where" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "go to a card given by a variable; to a name that is no stack: no error, the result set", tError is empty and gHCScriptsTest is "2,No such card"
+   go to card 1 of stack tStack
+
+   lock messages
+   set the uHyperCard["file"] of stack tStack to empty
+   set the uHyperCard["image"] of stack tStack to TestGetInputFile("hypercard/forks/Stacks.dc42")
+   set the uHyperCard["imagepath"] of stack tStack to "Old Disk:Stacks:Main"
+   unlock messages
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "Image" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "a stack on the disk image: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Synthetic Stack"
+   if there is a stack "Synthetic Stack" then
+      TestAssert "a stack on the disk image: its scripts fixed", _Library("Synthetic Stack") is among the lines of the substacks of stack "Synthetic Stack"
+      TestAssert "a stack on the disk image: where it came from noted", the uHyperCard["imagepath"] of stack "Synthetic Stack" is "Old Disk:Stacks:Synthetic Stack"
+   end if
+   _Close "Synthetic Stack"
+
+   _Close tStack
+   delete file (tFolder & "/Sibling")
+   delete folder tFolder
+end TestHyperCardScriptsGoStack
+
+on TestHyperCardScriptsBuiltIns
+   -- HyperCard's commands this engine does not have, as the rewritten
+   -- scripts call them: cursors, key commands, card pictures, picture
+   -- windows, flash
+   local tStack, tImage, tCursor, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCBuiltIns" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create card
+   go to card 1 of stack tStack
+   set the script of card 1 of stack tStack to _Lines("on tabKey", "  global gHCScriptsTest", "  put " & q & "tab" & q & " into gHCScriptsTest", "end tabKey")
+   create image
+   put the long id of it into tImage
+   create image "Blue"
+   put the id of it into tCursor
+   group it
+   set the name of it to "HC cursors"
+   set the sharedBehavior of it to true
+   create image "Map"
+   group it
+   set the name of it to "HC Pictures"
+   set the sharedBehavior of it to true
+   create button "Cursor"
+   set the script of button "Cursor" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set cursor to 4", "  put hcCursor(4) & comma & hcCursor(" & q & "watch" & q & ") & comma & hcCursor(" & q & "busy" & q & ") & comma & hcCursor(" & tCursor & ") & comma & hcCursor(77777) & comma & hcCursor(" & q & "Blue" & q & ") & comma & hcCursor(" & q & "No such" & q & ") into gHCScriptsTest", "end mouseUp")
+   create button "Tool"
+   set the script of button "Tool" to _Lines("on mouseUp", "  global gHCScriptsTest", "  choose tool 4", "  put the tool into gHCScriptsTest", "  choose tool " & q & "Browse" & q, "  put comma & the tool after gHCScriptsTest", "  choose tool 99", "  put comma & the result after gHCScriptsTest", "end mouseUp")
+   create button "Tab"
+   set the script of button "Tab" to _Lines("on mouseUp", "  tabKey", "end mouseUp")
+   create button "Arrow"
+   set the script of button "Arrow" to _Lines("on mouseUp", "  arrowKey right", "end mouseUp")
+   create button "Picture"
+   set the script of button "Picture" to _Lines("on mouseUp", "  hide card picture", "end mouseUp")
+   create button "Window"
+   set the script of button "Window" to _Lines("on mouseUp", "  global gHCScriptsTest", "  picture " & q & "Map" & q & ", resource, plain, false", "  put there is a stack " & q & "Map" & q & " into gHCScriptsTest", "  close window " & q & "Map" & q, "  put comma & (there is a stack " & q & "Map" & q & ") after gHCScriptsTest", "  flash 1", "  put comma & the number of graphics of this card after gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Cursor" of card 1 of stack tStack
+   TestAssert "hcCursor: HyperCard's numbers and names, this engine's, the stack's own by id, a missing one, by name, none", gHCScriptsTest is "14,14,6," & tCursor & ",," & tCursor & ","
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Tool" of card 1 of stack tStack
+   TestAssert "hcChooseTool: by HyperCard's number, by name, none", gHCScriptsTest is "select tool,browse tool,No such tool"
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Tab" of card 1 of stack tStack
+   TestAssert "tabKey: the message goes to the card", gHCScriptsTest is "tab"
+
+   send "mouseUp" to button "Arrow" of card 1 of stack tStack
+   TestAssert "arrowKey right: no handler, the next card", the number of this card of stack tStack is 2
+   go to card 1 of stack tStack
+
+   send "mouseUp" to button "Picture" of card 1 of stack tStack
+   TestAssert "hide card picture: the card's image with no name hidden", not the visible of tImage
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Window" of card 1 of stack tStack
+   TestAssert "picture opens a window, close window closes it, flash leaves nothing", gHCScriptsTest is "true,false,0"
+
+   -- a picture window's scroll and a palette's hilitedButton
+   lock messages
+   create button "Scroll" in card 1 of stack tStack
+   set the script of button "Scroll" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  picture " & q & "Map" & q & ", resource, plain, false", \
+         "  set the scroll of window " & q & "Map" & q & " to 10,20", \
+         "  put the topLeft of image " & q & "Picture" & q & " of stack " & q & "Map" & q & " into gHCScriptsTest", \
+         "  close window " & q & "Map" & q, \
+         "  set the scale of window " & q & "Map" & q & " to 1", \
+         "  put comma & the result after gHCScriptsTest", \
+         "  set the hilitedButton of window " & q & "HCBuiltInsPalette" & q & " to 2", \
+         "  put comma & the hilite of button 1 of stack " & q & "HCBuiltInsPalette" & q & " & comma & the hilite of button 2 of stack " & q & "HCBuiltInsPalette" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   create invisible stack "HCBuiltInsPalette"
+   set the defaultStack to "HCBuiltInsPalette"
+   create button
+   create button
+   set the defaultStack to tStack
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Scroll" of card 1 of stack tStack
+   TestAssert "the scroll of a picture window; a window not open; the hilitedButton of a palette", gHCScriptsTest is "-10,-20,No such window,false,true"
+   _Close "HCBuiltInsPalette"
+
+   -- HyperCard 2.2's menus, kept as the scripts make them
+   lock messages
+   create button "Menus" in card 1 of stack tStack
+   set the script of button "Menus" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "One,Two,Three..." & q & " into menu " & q & "Tools" & q & " with menuMsgs " & q & "m1,m2,m3" & q, \
+         "  disable menuItem " & q & "Two" & q & " of menu " & q & "Tools" & q, \
+         "  set the checkMark of menuItem 1 of menu " & q & "Tools" & q & " to true", \
+         "  put the checkMark of menuItem 1 of menu " & q & "Tools" & q & " & comma & the enabled of menuItem " & q & "Two" & q & " of menu " & q & "Tools" & q & " into gHCScriptsTest", \
+         "  put comma & the name of menuItem " & q & "Three" & q & " of menu " & q & "Tools" & q & " after gHCScriptsTest", \
+         "  delete menuItem 1 of menu " & q & "Tools" & q, \
+         "  put comma & the name of menuItem 1 of menu " & q & "Tools" & q & " after gHCScriptsTest", \
+         "  put comma & hcMenuMessage(" & q & "Two" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Menus" of card 1 of stack tStack
+   TestAssert "HyperCard menus: items, checkmarks, enabled, delete, menu messages", gHCScriptsTest is "true,false,Three...,Two,m2"
+
+   -- start using a stack HyperCard found by name, and one it could not
+   lock messages
+   create invisible stack "HCBuiltInsLib"
+   create button "Using" in card 1 of stack tStack
+   set the script of button "Using" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  start using stack " & q & "No Such Library" & q, \
+         "  put the result into gHCScriptsTest", \
+         "  start using stack " & q & "HCBuiltInsLib" & q, \
+         "  put comma & (" & q & "HCBuiltInsLib" & q & " is among the lines of the stacksInUse) after gHCScriptsTest", \
+         "  stop using stack " & q & "HCBuiltInsLib" & q, \
+         "  put comma & (" & q & "HCBuiltInsLib" & q & " is among the lines of the stacksInUse) after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Using" of card 1 of stack tStack
+   TestAssert "start using: a stack not found goes on with the result", gHCScriptsTest is "Can't find stack No Such Library,true,false"
+   _Close "HCBuiltInsLib"
+   _Close tStack
+end TestHyperCardScriptsBuiltIns

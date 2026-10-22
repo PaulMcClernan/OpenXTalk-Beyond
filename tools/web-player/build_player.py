@@ -49,6 +49,11 @@ stack the home page offers, then
          and an openCard that calls an XCMD it does not have: the player
          must say it opened, report that error, and go home again
 
+and two HyperCard files from tests/lcs-input-files/hypercard: Surf, a
+stack file with no extension, which the player must import with its
+scripts fixed as File > Import Stack fixes them, and Stacks.dc42, a
+DiskCopy 4.2 image, whose stacks it must list and open the one chosen.
+
 Screenshots go into <work>/check.
 """
 
@@ -537,6 +542,58 @@ def check(site, samples, work):
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
         expect('hyper-home', not any(x.startswith('PLAYER script error') for x in third_lines[before:]),
                ' | '.join(third_lines[before:][-3:]))
+
+        # HyperCard: a stack file with no extension, imported and its
+        # scripts fixed (revHyperCardFixScripts), and a disk image whose
+        # stacks the player lists, one of them then copied out and opened
+        hc_dir = os.path.join(work, 'hypercard')
+        shutil.rmtree(hc_dir, ignore_errors=True)
+        os.makedirs(hc_dir)
+        hc_input = os.path.join(REPO, 'tests', 'lcs-input-files', 'hypercard')
+        shutil.copyfile(os.path.join(hc_input, 'games', 'Surf.stack'), os.path.join(hc_dir, 'Surf'))
+        shutil.copyfile(os.path.join(hc_input, 'forks', 'Stacks.dc42'), os.path.join(hc_dir, 'Stacks.dc42'))
+        got = open_files(third, [os.path.join(hc_dir, 'Surf')], 'Surf', third_lines)
+        fixed = [x for x in got if x.startswith('PLAYER hypercard')]
+        expect('hypercard-opens', any(x.startswith('PLAYER opened Surf') for x in got), ' | '.join(got[-3:]))
+        expect('hypercard-fixed', len(fixed) == 1 and 'HyperCard scripts:' in fixed[0], ' | '.join(fixed or got[-3:]))
+        third.wait_for_timeout(500)
+        if third.locator('[class^="oxt-dialog"]').count():
+            third.keyboard.press('Enter')
+            third.wait_for_timeout(500)
+        third.screenshot(path=os.path.join(shots, '13-hypercard.png'))
+        before = len(third_lines)
+        third.click('#home')
+        wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
+        library = [x for x in third_lines[before:] if x.startswith('PLAYER library')]
+        expect('hypercard-library', bool(library) and 'Surf' in library[-1], library[-1] if library else '')
+
+        before = len(third_lines)
+        for attempt in range(3):
+            try:
+                with third.expect_file_chooser(timeout=10000) as fc:
+                    third.click('#open')
+                fc.value.set_files([os.path.join(hc_dir, 'Stacks.dc42')])
+                break
+            except Exception:
+                log('  the file chooser did not open (attempt %d)' % (attempt + 1))
+        wait_for(third, lambda: third.locator('#choose').is_visible(), 'the disk image\'s stacks', 60)
+        choices = third.locator('#choose-list button').all_inner_texts()
+        expect('disk-image-list', 'Old Disk:Stacks:Synthetic Stack' in choices, ', '.join(choices))
+        third.screenshot(path=os.path.join(shots, '14-disk-image.png'))
+        third.locator('#choose-list button', has_text='Synthetic Stack').click()
+        wait_for(third, lambda: any(x.startswith('PLAYER opened') or x.startswith('PLAYER status Could')
+                                    for x in third_lines[before:]), 'opening the disk image\'s stack', 60)
+        got = third_lines[before:]
+        expect('disk-image-opens', any(x.startswith('PLAYER opened Synthetic Stack') for x in got), ' | '.join(got[-3:]))
+        third.wait_for_timeout(800)
+        if third.locator('[class^="oxt-dialog"]').count():
+            third.keyboard.press('Enter')
+            third.wait_for_timeout(500)
+        third.screenshot(path=os.path.join(shots, '15-disk-image-stack.png'))
+        before = len(third_lines)
+        third.click('#home')
+        wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
+
         third_context.close()
         browser.close()
     server.shutdown()

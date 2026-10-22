@@ -7495,7 +7495,7 @@ on revIDEImportHyperCardFromDiskImage pImage, pStackPath
       return __revIDEError(tError)
    end if
 
-   revIDEImportHyperCardStack tPath
+   revIDEImportHyperCardStack tPath, pImage, pStackPath
    put the result into tResult
    __revIDEDeleteHyperCardCopy tFolder
    return tResult
@@ -7515,6 +7515,12 @@ Imports a HyperCard stack without running its scripts.
 
 pFilePath (String): The path of a HyperCard stack: the stack itself, or
 a MacBinary or BinHex copy of it.
+
+pImage (String): For a stack copied out of a disk image, the path of the
+image (optional).
+
+pImagePath (String): For a stack copied out of a disk image, its HFS path
+on the image (optional).
 
 Example:
 revIDEImportHyperCardStack "/Users/me/Stacks/Home"
@@ -7542,11 +7548,15 @@ HyperTalk of each script that changes is kept in the custom property
 uHyperCard["script"] of its object, and the import log (the
 hcImportStat) says how many changed. Open Stack does not do this.
 
+The stack's uHyperCard["file"] (or, from a disk image, its
+uHyperCard["image"] and uHyperCard["imagepath"]) says where it came
+from, so that a "go" to another stack finds one beside it.
+
 References: revIDEActionImportHyperCardStack (command), revIDEOpenStack (command), revHyperCardFixScripts (function)
 
 Tags: ide
 */
-on revIDEImportHyperCardStack pFilePath
+on revIDEImportHyperCardStack pFilePath, pImage, pImagePath
    local tError, tStack, tWasLocked
 
    if there is not a file pFilePath then return __revIDEError("Specified file does not exist")
@@ -7562,6 +7572,16 @@ on revIDEImportHyperCardStack pFilePath
    go stack pFilePath
    put the result into tError
    if tError is empty then put the long id of the defaultStack into tStack
+   -- OXT-Beyond: where it came from, so that a "go" to a stack beside it
+   -- finds that stack (the HyperCard Library's hcStackName)
+   if tError is empty then
+      if pImage is empty then
+         set the uHyperCard["file"] of tStack to pFilePath
+      else
+         set the uHyperCard["image"] of tStack to pImage
+         set the uHyperCard["imagepath"] of tStack to pImagePath
+      end if
+   end if
    -- OXT-Beyond: HyperTalk that compiles here, unless turned off
    if tError is empty and revIDEGetPreference("cHyperCardFixScripts") is not false then
       get revHyperCardFixScripts(tStack)

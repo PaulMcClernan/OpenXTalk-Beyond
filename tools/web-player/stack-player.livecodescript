@@ -60,9 +60,23 @@ local sPageArgs
 -- The names playerLinkResources linked into the resources folder for the
 -- open stack, one a line
 local sLinked
+-- For a HyperCard stack copied out of a disk image, by the path of the
+-- copy: the image's path and the stack's HFS path on it, so that a "go"
+-- to another stack of the image finds it there (the HyperCard Library's
+-- hcStackName)
+local sFromImage
 
 constant kStackExtensions = "livecode,oxtstack,rev,mc,livecodescript,lc,stack"
 constant kLibraryName = "Stack Player"
+-- The IDE's HyperCard libraries, as the build gives them to the player
+-- (build-player.livecodescript, makeHyperCardLibraries)
+constant kHyperCardScripts = "Player HyperCard Scripts"
+constant kHyperCardImages = "Player HyperCard Disk Images"
+-- Between a disk image's path and the HFS path of a stack on it, in a
+-- choice (an HFS path never has two colons in a row)
+constant kImageSeparator = "::"
+-- Beside a stack copied out of a disk image: its line of sFromImage
+constant kFromImageSuffix = ".hcimage"
 
 ----------------------------------------------------------------
 -- Start-up
@@ -88,9 +102,26 @@ command playerStart
       put "page" into sMode
    end if
    playerInstallErrorHandler
+   playerUseHyperCardLibraries
    playerLog "ready" && the version && the platform && sMode
    playerTellPage "ready", the version
 end playerStart
+
+-- The IDE's HyperCard libraries, substacks of the player (see
+-- playerFixHyperCard and playerImageStacks): their handlers all begin
+-- with revHyperCard
+private command playerUseHyperCardLibraries
+   local tName
+   -- a HyperCard stack's "go home" comes back to the player (the
+   -- HyperCard Library's hcGoHome)
+   global gHyperCardHome
+   put the long id of me into gHyperCardHome
+   repeat for each item tName in kHyperCardScripts & comma & kHyperCardImages
+      if there is a stack tName then
+         start using stack tName
+      end if
+   end repeat
+end playerUseHyperCardLibraries
 
 -- The value of pName in a query string (?a=1&b=2)
 function playerParam pQuery, pName
@@ -202,7 +233,9 @@ on playerDo pWhat
          playerTakeFromPage tArgs
          break
       case "openpath"
-         if playerInLibrary(line 1 of tArgs) then
+         if kImageSeparator is in line 1 of tArgs then
+            playerOpenFromImage line 1 of tArgs
+         else if playerInLibrary(line 1 of tArgs) then
             playerOpenFile line 1 of tArgs
          end if
          break
@@ -285,17 +318,25 @@ command playerTake pPaths
       end if
    end repeat
    put playerStacksIn(tFolder) into tStacks
+   -- a Mac disk image: its HyperCard stacks, to choose from (one is
+   -- copied out of it only once it is chosen: a CD can hold thousands)
+   if tStacks is empty then
+      put playerImageStacks(tFolder) into tStacks
+   end if
    if tStacks is empty then
       put kStackExtensions into tExtensions
       replace comma with ", ." in tExtensions
       playerStatus "There is no stack among the files you gave." && \
-            "A stack file ends in ." & tExtensions & ".", "error"
+            "A stack file ends in ." & tExtensions & \
+            ", or is a HyperCard stack or a Mac disk image with HyperCard stacks on it.", "error"
       playerRemoveFolder tFolder
       exit playerTake
    end if
    playerShowLibrary
-   if the number of lines of tStacks is 1 then
+   if the number of lines of tStacks is 1 and kImageSeparator is not in tStacks then
       playerOpenFile line 1 of tStacks
+   else if the number of lines of tStacks is 1 then
+      playerOpenFromImage line 1 of tStacks
    else
       put tStacks into sChoices
       playerShowChoices
@@ -325,8 +366,10 @@ private command playerUnzip pZip, pFolder
    put revZipEnumerateItems(pZip) into tItems
    set the itemDelimiter to slash
    repeat for each line tItem in tItems
-      -- the macOS Finder's extra files, and folders (which end in a slash)
-      if tItem begins with "__MACOSX/" or char -1 of tItem is slash then
+      -- folders (which end in a slash). The macOS Finder's extra files,
+      -- in __MACOSX, are kept: for a HyperCard stack they are its
+      -- resource fork (__MACOSX/<folder>/._Name), which the import reads
+      if char -1 of tItem is slash then
          next repeat
       end if
       put pFolder & slash & tItem into tTarget
@@ -374,17 +417,137 @@ function playerStacksIn pFolder
    repeat for each line tFile in tFiles
       if playerExtension(tFile) is among the items of kStackExtensions then
          put pFolder & slash & tFile & return after tResult
+      else if playerIsHyperCard(pFolder & slash & tFile) then
+         -- a HyperCard stack has no extension of its own (or any, as
+         -- "Grimoire 1.0"): it is known by its first bytes
+         put pFolder & slash & tFile & return after tResult
       end if
    end repeat
    put folders(pFolder) into tFolders
    repeat for each line tSub in tFolders
-      if tSub is "." or tSub is ".." then
+      -- (__MACOSX holds the resource forks of the stacks beside it)
+      if tSub is "." or tSub is ".." or tSub is "__MACOSX" then
          next repeat
       end if
       put playerStacksIn(pFolder & slash & tSub) after tResult
    end repeat
    return tResult
 end playerStacksIn
+
+-- Whether pPath is a HyperCard stack, by the tests hc_import
+-- (engine/src/hc.cpp) and File > Import Stack make of its first bytes: a
+-- data fork (STAK at offset 4), an AppleSingle file, a MacBinary file of
+-- type STAK, or a BinHex file. Its resource fork (Name.rsrc, ._Name)
+-- is not one.
+private function playerIsHyperCard pPath
+   local tHeader, tName
+   set the itemDelimiter to slash
+   put item -1 of pPath into tName
+   if tName begins with "._" or playerExtension(tName) is "rsrc" then
+      return false
+   end if
+   open file pPath for binary read
+   if the result is not empty then
+      return false
+   end if
+   read from file pPath for 256
+   put it into tHeader
+   close file pPath
+   if byte 5 to 8 of tHeader is "STAK" then
+      return true
+   end if
+   if byte 1 to 4 of tHeader is (numToByte(0) & numToByte(5) & numToByte(22) & numToByte(0)) then
+      return true
+   end if
+   if the number of bytes of tHeader >= 128 and byteToNum(byte 1 of tHeader) is 0 \
+         and byteToNum(byte 75 of tHeader) is 0 and byteToNum(byte 83 of tHeader) is 0 then
+      return byte 66 to 69 of tHeader is "STAK"
+   end if
+   return "(This file must be converted with BinHex" is in tHeader
+end playerIsHyperCard
+
+-- The HyperCard stacks on the Mac disk images among the files of pFolder
+-- and its folders: "image path::HFS path" lines, as
+-- revHyperCardImageStacks lists them
+private function playerImageStacks pFolder
+   local tFile, tPath, tList, tLine, tResult, tError, tSub
+   repeat for each line tSub in folders(pFolder)
+      -- (__MACOSX holds the resource forks of the files beside it)
+      if tSub is "." or tSub is ".." or tSub is "__MACOSX" then
+         next repeat
+      end if
+      put playerImageStacks(pFolder & slash & tSub) into tList
+      if tList is not empty then
+         put tList & return after tResult
+      end if
+   end repeat
+   repeat for each line tFile in files(pFolder)
+      put pFolder & slash & tFile into tPath
+      try
+         if not revHyperCardIsDiskImage(tPath) then
+            next repeat
+         end if
+         put revHyperCardImageStacks(tPath) into tList
+      catch tError
+         next repeat
+      end try
+      set the itemDelimiter to tab
+      repeat for each line tLine in tList
+         put tPath & kImageSeparator & item 1 of tLine & return after tResult
+      end repeat
+   end repeat
+   delete the last char of tResult
+   return tResult
+end playerImageStacks
+
+-- Copies a stack chosen on a disk image ("image path::HFS path") out of
+-- it, with its resource fork beside it, into the image's folder of the
+-- library, and opens it. The library lists it from then on.
+private command playerOpenFromImage pChoice
+   local tImage, tStack, tAt, tFolder, tPath, tError
+   put offset(kImageSeparator, pChoice) into tAt
+   put char 1 to tAt - 1 of pChoice into tImage
+   put char tAt + the number of chars of kImageSeparator to -1 of pChoice into tStack
+   if not playerInLibrary(tImage) then
+      exit playerOpenFromImage
+   end if
+   set the itemDelimiter to slash
+   put item 1 to -2 of tImage into tFolder
+   try
+      put revHyperCardImageExtract(tImage, tStack, tFolder) into tPath
+      put the result into tError
+   catch tError
+      put playerErrorText(tError) into tError
+   end try
+   if tPath is empty then
+      if tError is empty then
+         put "it is not on the image" into tError
+      end if
+      playerStatus "Could not copy" && tStack && "out of the disk image:" && tError, "error"
+      exit playerOpenFromImage
+   end if
+   put tImage & return & tStack into sFromImage[tPath]
+   -- and beside the stack, for a later visit, when the library is read
+   -- again and sFromImage is empty
+   try
+      put sFromImage[tPath] into url ("binfile:" & tPath & kFromImageSuffix)
+   catch tError
+   end try
+   playerOpenFile tPath
+end playerOpenFromImage
+
+-- A HyperCard stack the player has just read, with messages locked: its
+-- scripts are rewritten so that they compile here and it is given the
+-- HyperCard Library, as File > Import Stack does on the desktop
+-- (revHyperCardFixScripts, the IDE's revhypercardscriptlibrary)
+private command playerFixHyperCard pStack
+   local tError
+   try
+      playerLog "hypercard" && the last line of revHyperCardFixScripts(pStack)
+   catch tError
+      playerLog "hypercard-fix-failed" && playerErrorText(tError)
+   end try
+end playerFixHyperCard
 
 -- The extension of a file name (after its last full stop), or empty
 private function playerExtension pName
@@ -465,9 +628,7 @@ private command playerShowChoices
    local tLine, tText, tLibrary, tList
    put playerLibraryFolder() & slash into tLibrary
    repeat for each line tLine in sChoices
-      put tLine into tText
-      replace tLibrary with empty in tText
-      put tText & return after tList
+      put playerChoiceLabel(tLine, tLibrary) & return after tList
    end repeat
    delete the last char of tList
    put tList into field "Library" of card 1 of me
@@ -482,20 +643,32 @@ private command playerShowChoices
    -- "path in the library<tab>full path" lines
    put empty into tText
    repeat for each line tLine in sChoices
-      put tLine into tList
-      replace tLibrary with empty in tList
-      put tList & tab & tLine & return after tText
+      put playerChoiceLabel(tLine, tLibrary) & tab & tLine & return after tText
    end repeat
    delete the last char of tText
    playerTellPage "choices", tText
 end playerShowChoices
+
+-- How a choice reads in the list: its path in the library, or for a stack
+-- on a disk image its HFS path on the volume
+private function playerChoiceLabel pChoice, pLibrary
+   local tAt
+   put offset(kImageSeparator, pChoice) into tAt
+   if tAt > 0 then
+      return char tAt + the number of chars of kImageSeparator to -1 of pChoice
+   end if
+   replace pLibrary with empty in pChoice
+   return pChoice
+end playerChoiceLabel
 
 -- A click on a line of the list (field "Library" sends it)
 command playerLibraryClicked pLine
    local tLine
    put line pLine of the cPaths of field "Library" of card 1 of me into tLine
    set the itemDelimiter to tab
-   if item 2 of tLine is not empty then
+   if kImageSeparator is in item 2 of tLine then
+      playerOpenFromImage item 2 of tLine
+   else if item 2 of tLine is not empty then
       playerOpenFile item 2 of tLine
    end if
 end playerLibraryClicked
@@ -538,7 +711,7 @@ end playerForgetFolder
 ----------------------------------------------------------------
 
 command playerOpenFile pPath
-   local tRect, tName, tError, tResult, tFolder, tOpenError
+   local tRect, tName, tError, tResult, tFolder, tOpenError, tHyperCard, tStack
    -- With a stack open, first home, and the stack opened after the one
    -- that goes is forgotten (as playerReload does): until then it is in
    -- memory, and a stack of the same name from another file (a newer copy
@@ -553,14 +726,42 @@ command playerOpenFile pPath
    put the mainStacks into sStacksBefore
    set the itemDelimiter to slash
    put item 1 to -2 of pPath into tFolder
+   -- A HyperCard stack is imported as it is read, and the stack it becomes
+   -- has no file: each "stack <its path>" would import it again, as a new
+   -- stack of the same name. So it is read once, with messages locked (as
+   -- File > Import Stack reads it: a HyperCard virus runs from the
+   -- stack's scripts), its scripts fixed, and then named by its long id.
+   put playerIsHyperCard(pPath) into tHyperCard
+   if tHyperCard then
+      lock messages
+   end if
    try
       -- reading the stack: its size, which "go ... in window" would give
       -- up for the player's, and its name
-      put the rect of stack pPath into tRect
-      put the short name of stack pPath into tName
+      if tHyperCard then
+         put the long id of stack pPath into tStack
+         put the rect of tStack into tRect
+         put the short name of tStack into tName
+         -- where it came from, as File > Import Stack notes it
+         set the uHyperCard["file"] of tStack to pPath
+         if sFromImage[pPath] is empty and there is a file (pPath & kFromImageSuffix) then
+            put url ("binfile:" & pPath & kFromImageSuffix) into sFromImage[pPath]
+         end if
+         if sFromImage[pPath] is not empty then
+            set the uHyperCard["image"] of tStack to line 1 of sFromImage[pPath]
+            set the uHyperCard["imagepath"] of tStack to line 2 of sFromImage[pPath]
+         end if
+         playerFixHyperCard tStack
+      else
+         put the rect of stack pPath into tRect
+         put the short name of stack pPath into tName
+      end if
    catch tError
       put "the file is not a stack this engine can read (" & playerErrorText(tError) & ")" into tResult
    end try
+   if tHyperCard then
+      unlock messages
+   end if
    if tResult is empty and tName is the short name of me then
       put "it has the player's own name" into tResult
    end if
@@ -575,7 +776,11 @@ command playerOpenFile pPath
    put tName into sCurrent
    put pPath into sCurrentFile
    try
-      if sMode is "page" then
+      if tHyperCard and sMode is "page" then
+         go tStack in window (the short name of me)
+      else if tHyperCard then
+         go tStack
+      else if sMode is "page" then
          go stack pPath in window (the short name of me)
       else
          go stack pPath
@@ -587,7 +792,14 @@ command playerOpenFile pPath
       -- HyperCard stack calling an XCMD it no longer has): the stack is
       -- open, as it is on the desktop, and the error is reported once it
       -- shows
-      if there is a stack pPath then
+      if tHyperCard then
+         if exists(tStack) then
+            if the mode of tStack > 0 then
+               put tError into tOpenError
+               put empty into tResult
+            end if
+         end if
+      else if there is a stack pPath then
          if the mode of stack pPath > 0 then
             put tError into tOpenError
             put empty into tResult
@@ -751,7 +963,13 @@ command playerDownload
    put sCurrent into tName
    put the filename of stack tName into tFile
    set the itemDelimiter to slash
-   put specialFolderPath("downloads") & slash & item -1 of tFile into tCopy
+   if tFile is empty then
+      -- a HyperCard stack, imported as it opened, has no file of its own:
+      -- the copy is the stack it became
+      put specialFolderPath("downloads") & slash & tName & ".oxtstack" into tCopy
+   else
+      put specialFolderPath("downloads") & slash & item -1 of tFile into tCopy
+   end if
    try
       save stack tName as tCopy
       set the filename of stack tName to tFile
