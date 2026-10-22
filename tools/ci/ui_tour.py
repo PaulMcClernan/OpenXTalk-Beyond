@@ -56,6 +56,7 @@ later).
 import argparse
 import base64
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -236,6 +237,48 @@ def mac_screen(path):
     return os.path.isfile(path)
 
 
+def mac_sample(pid, path, seconds=5, lines=400):
+    """Where the engine is, for when the script did not end on a Mac: the
+    process's state, then a sample of it (sample, as field_speed_test.py
+    takes one) into path, whose main thread's call graph goes into the log
+    too, as the job's log is read where its artifacts cannot be fetched.
+    An IDE that sometimes stopped at start-up left only a screenshot of its
+    splash; this says which handler it was in."""
+    if not shutil.which('sample'):
+        return False
+    try:
+        state = subprocess.run(['ps', '-o', 'stat=,rss=,pcpu=', '-p', str(pid)], stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, timeout=30)
+        log('(the engine, pid %d: %s)' % (pid, ' '.join(state.stdout.decode('utf-8', 'replace').split()) or 'gone'))
+        subprocess.run(['sample', str(pid), str(seconds), '-file', path], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=seconds + 60)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    if not os.path.isfile(path):
+        return False
+    # the call graph of the first thread (the main thread), cut at lines
+    with open(path, encoding='utf-8', errors='replace') as f:
+        text = f.read().splitlines()
+    try:
+        start = next(i for i, x in enumerate(text) if x.startswith('Call graph:'))
+    except StopIteration:
+        return True
+    graph = []
+    for x in text[start + 1:]:
+        # each thread starts "    <count> Thread_<id> ..."; its frames are
+        # "    + ..." under it
+        if not x.strip() or (graph and re.match(r'^    \d+ Thread_', x)):
+            break
+        graph.append(x.rstrip())
+    log('::group::The engine\'s main thread (%s)' % os.path.basename(path))
+    for x in graph[:lines]:
+        log(x)
+    if len(graph) > lines:
+        log('... (%d lines more in %s)' % (len(graph) - lines, os.path.basename(path)))
+    log('::endgroup::')
+    return True
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Screenshots of the IDE\'s windows, light or dark.')
     ap.add_argument('--install', metavar='DIR', help='installed layout')
@@ -333,6 +376,7 @@ def main(argv=None):
                 if not finished and p.family == 'mac' and proc.poll() is None:
                     if mac_screen(os.path.join(shots, 'zz-screen-at-the-end.png')):
                         log('(the screen when the run stopped: zz-screen-at-the-end.png)')
+                    mac_sample(proc.pid, os.path.join(out, 'sample-at-the-end.txt'))
             finally:
                 stop(proc)
         log('The script %s.' % status)
