@@ -2762,6 +2762,17 @@ on xtaSettingsLocal pItem
    end if
    unlock messages
    xtaSettingsGetModels
+   -- Ollama runs a model with 4096 tokens of context unless told
+   -- otherwise, and cuts a longer prompt short without a word (the guide
+   -- alone is longer: on a real Ollama, 2050 of its tokens arrived), so
+   -- the model would answer without most of it. LM Studio refuses such a
+   -- request instead, and xtaLocalServerHint says what to do then.
+   if pItem begins with "Ollama" and there is a stack kSettingsWindow then
+      if field "Result" of stack kSettingsWindow contains "listed" then
+         xtaSettingsResult field "Result" of stack kSettingsWindow && \
+               "Ollama gives a model 4096 tokens unless its Context length is raised (16000 or more), or tick Short guide.", "ok"
+      end if
+   end if
 end xtaSettingsLocal
 
 private command xtaKeepDraft pProvider
