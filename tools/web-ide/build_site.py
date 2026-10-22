@@ -19,7 +19,7 @@
 page by the web IDE's engine.
 
   python3 tools/web-ide/build_site.py --install DIR --engine DIR --out DIR
-      [--repo DIR] [--source-url URL]
+      [--repo DIR] [--source-url URL] [--zip FILE]
 
 --install is an installed (or extracted) Linux OXT-Beyond: its Toolset,
 Plugins, Extensions, Resources and documentation go into the site.
@@ -63,6 +63,18 @@ window shows, in Toolset/palettes/updates/notes.
 
 --source-url is the address of the source the site was built from, for
 the page's "Source" link (GPL); by default the repository's.
+
+--zip FILE also writes the site as a zip to download and run (the
+release's OXT-Beyond-<version>-web-ide.zip): one folder, named after
+the zip, with the site's files and three more that only the zip has:
+
+  serve.py                                a web server for this computer
+                                          (tools/web-ide/serve.py)
+  Start Web IDE.bat                       starts serve.py on Windows
+  README.txt                              how to run it, and how to put
+                                          it on a web server
+
+The site's folder (--out) is left as it is, without them.
 
 Needs Python 3.8 or later, standard library only.
 """
@@ -108,6 +120,11 @@ LEAVE_OUT = (
 # file managers leave behind
 NATIVE = re.compile(r'\.(so|dll|dylib|bundle|exe|lib|a)$', re.I)
 JUNK = ('.DS_Store', 'Thumbs.db', 'desktop.ini')
+
+# What --zip adds beside the site's files (see the module comment), and
+# the ones Windows wants with CRLF line ends
+ZIP_EXTRAS = ('serve.py', 'Start Web IDE.bat', 'README.txt')
+CRLF = ('Start Web IDE.bat', 'README.txt')
 
 # Text compresses well in the zip; images and media are stored as they are
 STORED = re.compile(r'\.(png|jpe?g|gif|webp|mp3|mp4|m4a|ogg|webm|zip|gz|xz|woff2?)$', re.I)
@@ -254,6 +271,56 @@ def site_stamp(out, names):
     return digest.hexdigest()[:16]
 
 
+def inside(path, folder):
+    """True when path is folder or anywhere below it (links resolved)"""
+    path, folder = os.path.realpath(path), os.path.realpath(folder)
+    return os.path.commonpath([path, folder]) == folder
+
+
+def write_download_zip(path, out, version, source_url):
+    """The site of out and ZIP_EXTRAS in one folder, named after path, of
+    a new zip at path. Returns the number of files."""
+    top = os.path.basename(path)
+    if top.lower().endswith('.zip'):
+        top = top[:-4]
+    if not top:
+        raise BuildError('--zip %s: the zip needs a name' % path)
+    if inside(path, out):
+        raise BuildError('--zip %s is in the site\'s folder; write it somewhere else' % path)
+    entries = []
+    for name in sorted(os.listdir(out)):
+        source = os.path.join(out, name)
+        if not os.path.isfile(source):
+            raise BuildError('%s is not a file: the site is files only' % source)
+        if name in ZIP_EXTRAS:
+            raise BuildError('the site has its own %s, which --zip would replace' % name)
+        entries.append((name, source, None))
+    for name in ZIP_EXTRAS:
+        with open(os.path.join(HERE, name), encoding='utf-8') as f:
+            text = f.read().replace('\r\n', '\n')
+        text = text.replace('@VERSION@', version).replace('@SOURCE_URL@', source_url)
+        if re.search(r'@[A-Z_]+@', text):
+            raise BuildError('%s has a placeholder that is not filled in' % name)
+        if name in CRLF:
+            text = text.replace('\n', '\r\n')
+        entries.append((name, None, text.encode('utf-8')))
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    with zipfile.ZipFile(path + '.tmp', 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for name, source, data in entries:
+            arcname = top + '/' + name
+            if data is not None:
+                info = zipfile.ZipInfo(arcname, date_time=(2026, 1, 1, 0, 0, 0))
+                info.external_attr = (0o755 if name.endswith('.py') else 0o644) << 16
+                info.compress_type = zipfile.ZIP_DEFLATED
+                z.writestr(info, data)
+            else:
+                kind = zipfile.ZIP_STORED if STORED.search(name) else zipfile.ZIP_DEFLATED
+                z.write(source, arcname, compress_type=kind)
+    os.replace(path + '.tmp', path)
+    return len(entries)
+
+
 def ide_version(install):
     path = os.path.join(install, '.version')
     if os.path.isfile(path):
@@ -272,6 +339,8 @@ def main(argv=None):
     ap.add_argument('--repo', metavar='DIR', help='a checkout whose script-only IDE stacks to use')
     ap.add_argument('--source-url', default=DEFAULT_SOURCE, metavar='URL',
                     help='the address of the source code, for the page\'s link')
+    ap.add_argument('--zip', metavar='FILE',
+                    help='also write the site, with serve.py and a README, as this zip')
     args = ap.parse_args(argv)
 
     try:
@@ -279,6 +348,9 @@ def main(argv=None):
         out = os.path.abspath(args.out)
         if os.path.exists(out) and os.listdir(out):
             raise BuildError('%s exists and is not empty' % out)
+        # Before anything is built: the zip never goes into the site
+        if args.zip and inside(os.path.abspath(args.zip), out):
+            raise BuildError('--zip %s is in the site\'s folder; write it somewhere else' % args.zip)
         os.makedirs(out, exist_ok=True)
 
         base, engine_version = find_engine(args.engine)
@@ -305,6 +377,10 @@ def main(argv=None):
         wasm = os.path.getsize(os.path.join(out, base + '.wasm'))
         log('  %s.wasm: %.1f MB' % (base, wasm / 1e6))
         log('Site: %s (%.1f MB)' % (out, (zipped + wasm) / 1e6))
+        if args.zip:
+            count = write_download_zip(os.path.abspath(args.zip), out, version or engine_version,
+                                       args.source_url)
+            log('Zip: %s (%d files, %.1f MB)' % (args.zip, count, os.path.getsize(args.zip) / 1e6))
     except (BuildError, OSError) as e:
         print('error: %s' % e, file=sys.stderr)
         return 1

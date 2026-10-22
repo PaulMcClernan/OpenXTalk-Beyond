@@ -43,9 +43,26 @@
 # reloads a page whose web process it kills, and the record (the artifact
 # web-ide-soak-<browser>) shows how the page uses memory as it runs.
 #
+# The job Web IDE download zips the same site, with a small web server
+# and a README beside it (build_site.py --zip), as the artifact
+# OXT-Beyond-web-ide: OXT-Beyond-<version>-web-ide.zip and its SHA256SUMS,
+# for anyone who wants to run the web IDE on their own computer or put it
+# on their own web server.
+#
 # It runs on a pull request or a push to main that changes the IDE, the web
-# IDE or the web engine's own files, and by hand. Nothing else waits on it,
-# and it changes nothing in the builds.
+# IDE or the web engine's own files, and by hand. Nothing else waits on it
+# there, and it changes nothing in the builds.
+#
+# Releases: .github/workflows/release.yml calls this workflow
+# (workflow_call) with the input release, and publishes the artifact
+# OXT-Beyond-web-ide with the platforms' packages
+# (tools/ci/release_assets.py). A called release run builds the engine and
+# the download zip only (the screenshots, the soak and the xTalk Suite
+# check are left to the runs above), and takes the IDE from the release's
+# own Linux x86_64 package
+# (the artifact OXT-Beyond-linux-x86_64 of the input linux-run, or of the
+# caller's run when it is empty) as it is, with no checkout's scripts over
+# it, as build-linux.yml builds the Stack Player from the package's IDE.
 
 name: Web IDE screenshots
 
@@ -100,13 +117,33 @@ on:
         description: The release whose Linux package the site takes its IDE from (for example v0.2.6); empty for the latest one
         type: string
         default: ''
+  workflow_call:
+    inputs:
+      release:
+        description: >-
+          Build the download zip for a release, from the release's own
+          Linux x86_64 package, and nothing else (see the header)
+        type: boolean
+        required: false
+        default: false
+      linux-run:
+        description: >-
+          The run whose artifact OXT-Beyond-linux-x86_64 holds the release's
+          Linux package (main's build of the commit); empty for the caller's
+          run
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: web-ide-${{ github.ref }}
-  cancel-in-progress: true
+  # A called release run gets a group of its own, the caller's run id, as
+  # the build workflows do: pushes to the branch of a dry run must neither
+  # cancel it nor wait for it
+  group: web-ide-${{ inputs.release && format('release-{0}', github.run_id) || github.ref }}
+  cancel-in-progress: ${{ !inputs.release }}
 
 defaults:
   run:
@@ -300,6 +337,7 @@ jobs:
   tour:
     name: Web IDE screenshots
     needs: engine
+    if: ${{ !inputs.release }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -379,6 +417,7 @@ jobs:
   soak:
     name: Web IDE soak (${{ matrix.browser }})
     needs: engine
+    if: ${{ !inputs.release }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -457,6 +496,7 @@ jobs:
   xtalk:
     name: Web IDE xTalk Suite (${{ matrix.browser }})
     needs: engine
+    if: ${{ !inputs.release }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -531,3 +571,140 @@ jobs:
           path: ${{ runner.temp }}/web-ide-xtalk
           if-no-files-found: ignore
           retention-days: 14
+
+  # The site as a zip to download (build_site.py --zip): its folder holds
+  # the site's files, serve.py and "Start Web IDE.bat" (a web server for
+  # the user's own computer) and a README. Uploaded with a SHA256SUMS, as
+  # the artifact OXT-Beyond-web-ide that release.yml publishes
+  # (tools/ci/release_assets.py checks it against that file).
+  download:
+    name: Web IDE download
+    needs: engine
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # main's build of the release's commit (linux-run)
+      actions: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download the engine
+        uses: actions/download-artifact@v8
+        with:
+          name: web-ide-engine
+          path: ${{ runner.temp }}/web-ide-engine
+
+      # A release: its own Linux package, from the caller's run or main's
+      # build of the commit (which takes the token; an empty one means
+      # this run)
+      - name: Download the release's Linux package (release)
+        if: inputs.release
+        uses: actions/download-artifact@v8
+        with:
+          name: OXT-Beyond-linux-x86_64
+          path: ${{ runner.temp }}/dist
+          run-id: ${{ inputs.linux-run || github.run_id }}
+          github-token: ${{ inputs.linux-run != '' && github.token || '' }}
+
+      # Otherwise, as the screenshots' job: the newest release's (or the
+      # input tag's)
+      - name: Download the newest release's Linux package
+        if: ${{ !inputs.release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release list --repo "$REPO" --limit 30 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]' | head -n 1)
+          fi
+          echo "Release: $TAG"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/dist"
+          gh release download "$TAG" --repo "$REPO" --pattern "*-linux-x86_64.tar.xz" --dir "$RUNNER_TEMP/dist"
+
+      - name: Extract the Linux package
+        run: |
+          ls -l "$RUNNER_TEMP/dist"
+          packages=("$RUNNER_TEMP"/dist/*-linux-x86_64.tar.xz)
+          if [ "${#packages[@]}" != 1 ] || [ ! -f "${packages[0]}" ]; then
+            echo "::error::expected one *-linux-x86_64.tar.xz, found: ${packages[*]}"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/oxt"
+          tar -xJf "${packages[0]}" -C "$RUNNER_TEMP/oxt"
+          home=$(find "$RUNNER_TEMP/oxt" -maxdepth 4 -path '*/Toolset/home.livecodescript' | head -n 1)
+          if [ -z "$home" ]; then echo "::error::the package has no Toolset/home.livecodescript"; exit 1; fi
+          echo "OXT_ROOT=$(dirname "$(dirname "$home")")" >> "$GITHUB_ENV"
+
+      # A release takes the package's IDE as it is; other runs put this
+      # checkout's scripts over the release's, as the screenshots do. The
+      # zip is named after ide/.version (a release's tag is v<it>,
+      # release.yml checks), the name release_assets.py expects.
+      - name: Build the site and its zip
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          version=$(head -n 1 ide/.version | tr -d '[:space:]')
+          if [ -z "$version" ]; then echo "::error::ide/.version is empty"; exit 1; fi
+          repo=(--repo .)
+          if [ "$RELEASE" = true ]; then repo=(); fi
+          mkdir -p "$RUNNER_TEMP/download"
+          zip="OXT-Beyond-$version-web-ide.zip"
+          python3 tools/web-ide/build_site.py --install "$OXT_ROOT" \
+            --engine "$RUNNER_TEMP/web-ide-engine" --out "$RUNNER_TEMP/site" "${repo[@]}" \
+            --zip "$RUNNER_TEMP/download/$zip"
+          # The zip opens, and has the page, the engine, the IDE and the
+          # server in its one folder
+          python3 - "$RUNNER_TEMP/download/$zip" <<'PY'
+          import sys, zipfile
+          path = sys.argv[1]
+          top = path.rsplit('/', 1)[1][:-len('.zip')]
+          with zipfile.ZipFile(path) as z:
+              bad = z.testzip()
+              if bad:
+                  sys.exit('%s is damaged in the zip' % bad)
+              names = set(z.namelist())
+          want = ['index.html', 'ide.zip', 'serve.py', 'Start Web IDE.bat', 'README.txt']
+          missing = [n for n in want if top + '/' + n not in names]
+          if not any(n.startswith(top + '/development-community-') and n.endswith('.wasm') for n in names):
+              missing.append('development-community-<version>.wasm')
+          if missing or any(not n.startswith(top + '/') for n in names):
+              sys.exit('the zip is not one folder %s/ with the site: missing %s' % (top, missing))
+          print('%s: %d files in %s/' % (path, len(names), top))
+          PY
+          cd "$RUNNER_TEMP/download"
+          sha256sum "$zip" > SHA256SUMS
+          ls -l
+          cat SHA256SUMS
+
+      - name: Upload the zip
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: OXT-Beyond-web-ide
+          path: ${{ runner.temp }}/download/
+          if-no-files-found: error
+          retention-days: ${{ inputs.release && 30 || 14 }}
+          # The zip is compressed already
+          compression-level: 0
+
+      - name: Link in the summary
+        if: steps.upload.outputs.artifact-url != ''
+        env:
+          URL: ${{ steps.upload.outputs.artifact-url }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          {
+            if [ "$RELEASE" = true ]; then
+              echo "The IDE is the release's Linux package's, as it is."
+            else
+              echo "The IDE's binary stacks and extensions are $RELEASE_TAG's, its scripts this commit's."
+            fi
+            echo
+            echo "[Download the web IDE zip]($URL): extract it and run serve.py (or Start Web IDE.bat) in its folder."
+          } >> "$GITHUB_STEP_SUMMARY"
