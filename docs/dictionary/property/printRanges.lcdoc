@@ -11,7 +11,7 @@ Reports the pages that should be printed in the next print job.
 
 Introduced: 2.9
 
-OS: mac, windows, linux, ios
+OS: mac, windows, linux
 
 Platforms: desktop, server, mobile
 

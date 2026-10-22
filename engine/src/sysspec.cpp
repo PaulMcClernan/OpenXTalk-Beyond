@@ -41,7 +41,7 @@
 #include "foundation.h"
 #include "foundation-system.h"
 
-#if defined(_IOS_MOBILE) || defined(_ANDROID_MOBILE)
+#if defined(_ANDROID_MOBILE)
 #include "mblcontrol.h"
 #endif
 
@@ -207,7 +207,7 @@ static void handle_signal(int p_signal)
 #endif
 #endif
 
-#if defined(_IOS_MOBILE) || defined(_ANDROID_MOBILE)
+#if defined(_ANDROID_MOBILE)
 extern bool MCIsPlatformMessage(MCNameRef name);
 extern bool MCHandlePlatformMessage(MCNameRef name, MCParameter *parameters, Exec_stat& r_result);
 static MCHookGlobalHandlersDescriptor s_global_handlers_desc =
@@ -234,7 +234,7 @@ void MCS_common_init(void)
 	
 	MCinfinity = HUGE_VAL;
     
-#if defined(_IOS_MOBILE) || defined(_ANDROID_MOBILE)
+#if defined(_ANDROID_MOBILE)
     MCHookRegister(kMCHookGlobalHandlers, &s_global_handlers_desc);
     MCHookRegister(kMCHookNativeControls, &s_native_control_desc);
 #endif
@@ -256,8 +256,6 @@ void MCS_preinit()
     MCsystem = MCDesktopCreateWindowsSystem();
 #elif defined(_LINUX_DESKTOP)
     MCsystem = MCDesktopCreateLinuxSystem();
-#elif defined (_IOS_MOBILE)
-    MCsystem = MCMobileCreateIPhoneSystem();
 #elif defined (_ANDROID_MOBILE)
     MCsystem = MCMobileCreateAndroidSystem();
 #elif defined (__EMSCRIPTEN__)

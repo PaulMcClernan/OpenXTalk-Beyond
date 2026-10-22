@@ -43,15 +43,6 @@
 			},
 		],
 		[
-			'OS == "ios"',
-			{
-				'includes':
-				[
-					'ios.gypi',
-				],
-			},
-		],
-		[
 			'OS == "emscripten"',
 			{
 				'includes':

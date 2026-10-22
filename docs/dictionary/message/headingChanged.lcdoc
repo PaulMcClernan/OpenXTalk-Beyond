@@ -10,7 +10,7 @@ device changes.
 
 Introduced: 4.6.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -35,8 +35,7 @@ defaultStack when the heading of the device changes.
 If heading tracking cannot be started (typically due to a lack of
 calibration) then a <trackingError> message is sent instead.
 
-References: iphoneSetHeadingCalibrationTimeout (command),
-mobileCanTrackHeading (function), mobileCanTrackLocation (function),
-mobileCurrentHeading (function),
-iphoneHeadingCalibrationTimeout (function), trackingError (message)
+References: mobileCanTrackHeading (function),
+mobileCanTrackLocation (function), mobileCurrentHeading (function),
+trackingError (message)
 

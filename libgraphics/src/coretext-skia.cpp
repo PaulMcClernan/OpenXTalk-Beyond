@@ -19,12 +19,7 @@
 
 #import <CoreFoundation/CoreFoundation.h>
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-#import <CoreText/CoreText.h>
-#import <CoreGraphics/CoreGraphics.h>
-#else
 #import <ApplicationServices/ApplicationServices.h>
-#endif
 
 #include <SkFont.h>
 #include <SkTypeface.h>
@@ -44,12 +39,7 @@ void MCGPlatformInitialize(void)
     s_measure_context = NULL;
     s_measure_data = NULL;
     const CGFloat t_colour_components[] = {1.0, 1.0};
-#ifdef TARGET_SUBPLATFORM_IPHONE
-    // iOS doesn't support device-independent or generic color spaces
-    s_colour_space = CGColorSpaceCreateDeviceGray();
-#else
     s_colour_space = CGColorSpaceCreateWithName(kCGColorSpaceGenericGray);
-#endif
     s_text_colour = CGColorCreate(s_colour_space, t_colour_components);
     
     /* UNCHECKED */ MCMemoryAllocate(1, s_measure_data);

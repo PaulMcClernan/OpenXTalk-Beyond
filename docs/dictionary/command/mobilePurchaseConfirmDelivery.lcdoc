@@ -10,7 +10,7 @@ user.
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -32,8 +32,7 @@ This command should only be called once a purchase request in the
 
 References: mobilePurchaseSet (command),
 mobileDisablePurchaseUpdates (command), mobilePurchaseVerify (command),
-mobileRestorePurchases (command), iphoneRequestProductDetails (command),
-mobilePurchaseSendRequest (command),
+mobileRestorePurchases (command), mobilePurchaseSendRequest (command),
 mobileEnablePurchaseUpdates (command), mobilePurchaseCreate (command),
 mobilePurchaseState (function), mobilePurchaseError (function),
 mobileCanMakePurchase (function), mobilePurchaseGet (function),

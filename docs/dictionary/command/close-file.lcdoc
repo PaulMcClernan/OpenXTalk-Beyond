@@ -9,7 +9,7 @@ Closes a <file> that was opened with the <open file> <command>.
 
 Introduced: 1.0
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, server, mobile
 

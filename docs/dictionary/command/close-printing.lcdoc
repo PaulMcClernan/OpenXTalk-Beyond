@@ -9,7 +9,7 @@ Sends the current <print job> to the printer.
 
 Introduced: 1.0
 
-OS: mac, windows, linux, ios
+OS: mac, windows, linux
 
 Platforms: desktop, mobile
 

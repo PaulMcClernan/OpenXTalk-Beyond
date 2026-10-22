@@ -9,7 +9,7 @@ Returns a list of all known, active purchases.
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

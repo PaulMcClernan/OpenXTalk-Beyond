@@ -605,27 +605,6 @@ extern MCNameRef MCM_product_request_error;
 extern MCNameRef MCM_nfc_tag_received;
 #endif
 
-#ifdef _IOS_MOBILE
-extern MCNameRef MCM_browser_load_request;
-extern MCNameRef MCM_browser_load_requested;
-extern MCNameRef MCM_scroller_begin_decelerate;
-extern MCNameRef MCM_scroller_end_decelerate;
-extern MCNameRef MCM_scroller_scroll_to_top;
-extern MCNameRef MCM_player_progress_changed;
-extern MCNameRef MCM_player_enter_fullscreen;
-extern MCNameRef MCM_player_leave_fullscreen;
-extern MCNameRef MCM_player_state_changed;
-extern MCNameRef MCM_player_movie_changed;
-extern MCNameRef MCM_player_stopped;
-extern MCNameRef MCM_reachability_changed;
-//extern MCNameRef MCM_product_details_received;
-//extern MCNameRef MCM_product_request_error;
-extern MCNameRef MCM_protected_data_available;
-extern MCNameRef MCM_protected_data_unavailable;
-
-// MW-2013-05-30: [[ RemoteControl ]] Message sent when a remote control event is received.
-extern MCNameRef MCM_remote_control_received;
-#endif
 
 // Names for the "special" fonts that resolve to the platform's default font
 extern MCNameRef MCN_font_default;          // Default font for this control type

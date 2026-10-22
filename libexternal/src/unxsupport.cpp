@@ -18,7 +18,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include <cctype>
 #include <cstdlib>
 #include <unistd.h>
-#if !defined(TARGET_SUBPLATFORM_ANDROID) && !defined(TARGET_SUBPLATFORM_IPHONE)
+#if !defined(TARGET_SUBPLATFORM_ANDROID)
 #include <pwd.h>
 #endif
 #include <sys/stat.h>
@@ -110,7 +110,7 @@ char *os_path_resolve(const char *p_native_path)
 		return get_current_directory();
 	char *tildepath;
 	
-#if !defined(TARGET_SUBPLATFORM_ANDROID) && !defined(TARGET_SUBPLATFORM_IPHONE)
+#if !defined(TARGET_SUBPLATFORM_ANDROID)
 	if (p_native_path[0] == '~')
 	{
 		char *tpath = strclone(p_native_path);

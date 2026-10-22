@@ -9,7 +9,7 @@ Returns the default pixel scale of the system.
 
 Introduced: 6.5
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, mobile
 
@@ -48,7 +48,6 @@ For example:
 >*Note:*  Currently the <systemPixelScale> returns the correct value for
 > mobile devices, returning '1' on desktop platforms.
 
-References: iphoneUseDeviceResolution (command), screenRect (function),
-pixelScale (property)
+References: screenRect (function), pixelScale (property)
 
 Tags: windowing

@@ -1,1 +1,0 @@
-# mobilePick, mobilePickDate and ask dialog on iOS now use the correct colors in dark mode.

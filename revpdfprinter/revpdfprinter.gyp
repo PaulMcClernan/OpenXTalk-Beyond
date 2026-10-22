@@ -34,7 +34,6 @@
 				'src/revpdfprinter_osx.cpp',
 				'src/revpdfprinter_w32.cpp',
 				'src/revpdfprinter_coretext.mm',
-				'src/revpdfprinter_ios.mm',
 				'src/revpdfprinter_android.cpp',
 			],
 			
@@ -42,7 +41,6 @@
 			'sources!':
 			[
 				'src/revpdfprinter_osx.cpp',
-				'src/revpdfprinter_ios.mm',
 			],
 			
 			'conditions':

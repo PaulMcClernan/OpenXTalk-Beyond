@@ -187,15 +187,6 @@
 						},
 					],
 					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libz.a',
-							],
-						},
-					],
-					[
 						'toolset_os == "linux"',
 						{
 							'libraries':
@@ -285,15 +276,6 @@
 										],
 									},
 								],
-							],
-						},
-					],
-					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libgif.a',
 							],
 						},
 					],
@@ -391,15 +373,6 @@
 						},
 					],
 					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libjpeg.a',
-							],
-						},
-					],
-					[
 						'toolset_os == "linux"',
 						{
 							'libraries':
@@ -489,15 +462,6 @@
 										],
 									},
 								],
-							],
-						},
-					],
-					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libpng.a',
 							],
 						},
 					],
@@ -646,24 +610,6 @@
 										],
 									},
 								],
-							],
-						},
-					],
-					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libskia.a',
-								'lib/ios/$(SDK_NAME)/libskia.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_none.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_arm.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_sse2.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_sse3.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_sse41.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_sse42.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_avx.a',
-								'lib/ios/$(SDK_NAME)/libskia_opt_hsw.a',
 							],
 						},
 					],
@@ -943,16 +889,7 @@
 						},
 					],
 					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libcairo.a',
-							],
-						},
-					],
-					[
-						'toolset_os == "mac" or toolset_os == "ios"',
+						'toolset_os == "mac"',
 						{
 							'libraries':
 							[
@@ -1054,15 +991,6 @@
 						},
 					],
 					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libpcre.a',
-							],
-						},
-					],
-					[
 						'toolset_os == "linux"',
 						{
 							'libraries':
@@ -1158,15 +1086,6 @@
 										],
 									},
 								],
-							],
-						},
-					],
-					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libxml.a',
 							],
 						},
 					],
@@ -1275,15 +1194,6 @@
 										],
 									},
 								],
-							],
-						},
-					],
-					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libxslt.a',
 							],
 						},
 					],
@@ -1448,15 +1358,6 @@
 					},
 				],
 				[
-					'toolset_os == "ios"',
-					{
-						'platform_include_dirs':
-						[
-							'<@(libffi_public_headers_darwin_ios_dir)',
-						],
-					},
-				],
-				[
 					# (Upstream also gives x86 Linux the Darwin headers, first
 					# in the list; they do not describe arm64, which uses only
 					# the include_linux/arm64 headers below)
@@ -1566,15 +1467,6 @@
 						},
 					],
 					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libffi.a',
-							],
-						},
-					],
-					[
 						'toolset_os == "linux"',
 						{
 							'libraries':
@@ -1664,15 +1556,6 @@
 										],
 									},
 								],
-							],
-						},
-					],
-					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libzip.a',
 							],
 						},
 					],
@@ -1906,15 +1789,6 @@
 						},
 					],
 					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libmysql.a',
-							],
-						},
-					],
-					[
 						'toolset_os == "linux"',
 						{
 							'libraries':
@@ -1997,15 +1871,6 @@
 										],
 									},
 								],
-							],
-						},
-					],
-					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libsqlite.a',
 							],
 						},
 					],

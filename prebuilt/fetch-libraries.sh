@@ -37,21 +37,18 @@ if [ "${PREBUILT_SKIP_FETCH}" = "1" ] ; then
 fi
 
 # Libraries to fetch
-PLATFORMS=( mac linux win32 android ios emscripten )
+PLATFORMS=( mac linux win32 android emscripten )
 ARCHS_android=( armv7 arm64 x86 x86_64 )
 ARCHS_mac=( Universal )
-ARCHS_ios=( Universal )
 ARCHS_win32=( x86 x86_64 )
 ARCHS_linux=( i386 x86_64 arm64 )
 ARCHS_emscripten=( js )
 LIBS_android=( Thirdparty OpenSSL ICU )
 LIBS_mac=( Thirdparty OpenSSL ICU )
-LIBS_ios=( Thirdparty OpenSSL ICU )
 LIBS_win32=( Thirdparty OpenSSL Curl ICU CEF )
 LIBS_linux=( Thirdparty OpenSSL Curl ICU CEF )
 LIBS_emscripten=( Thirdparty OpenSSL ICU )
 
-SUBPLATFORMS_ios=(iPhoneSimulator11.2 iPhoneSimulator12.1 iPhoneSimulator13.2 iPhoneSimulator14.4 iPhoneSimulator14.5 iPhoneOS11.2 iPhoneOS12.1 iPhoneOS13.2 iPhoneOS14.4 iPhoneOS14.5)
 SUBPLATFORMS_win32=(v141_static_release)
 SUBPLATFORMS_android=(ndk16r15)
 

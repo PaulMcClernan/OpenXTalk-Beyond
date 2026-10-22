@@ -9,7 +9,7 @@ Sends a message to an object via the normal message path.
 
 Introduced: 3.5
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, server, mobile
 

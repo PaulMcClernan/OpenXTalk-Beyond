@@ -475,51 +475,6 @@
 			'src/mblandroidtextmessaging.cpp',
 			'src/mblandroidurl.cpp',
 			
-			# Group "Mobile - iOS"
-			'src/mbliphone.h',
-			'src/mbliphoneapp.h',
-			'src/mbliphonecontrol.h',
-			'src/mbliphoneview.h',
-			'src/mbliphone.mm',
-			'src/mbliphonead.mm',
-			'src/mbliphoneactivityindicator.mm',
-			'src/mbliphoneapp.mm',
-			'src/mbliphoneappview.mm',
-			'src/mbliphonebrowser.mm',
-			'src/mbliphonebusyindicator.mm',
-			'src/mbliphonecalendar.mm',
-			'src/mbliphonecamera.mm',
-			'src/mbliphonecontact.mm',
-			'src/mbliphonecontrol.mm',
-			'src/mbliphonedc.mm',
-			'src/mbliphonedialog.mm',
-			#'src/mbliphoneembedded.mm',
-			#'src/mbliphoneembeddedtest.mm',
-			'src/mbliphoneextra.mm',
-			'src/mbliphonefs.mm',
-			'src/mbliphonegfx.mm',
-			'src/mbliphonehooks.cpp',
-			'src/mbliphoneidletimer.mm',
-			'src/mbliphoneinput.mm',
-			'src/mbliphonemail.mm',
-			'src/mbliphonemediapick.mm',
-			'src/mbliphonemisc.mm',
-			'src/mbliphonenfc.mm',
-			'src/mbliphonenotification.mm',
-			'src/mbliphoneorientation.mm',
-			'src/mbliphonepick.mm',
-			'src/mbliphonepickdate.mm',
-			'src/mbliphoneplayer.mm',
-			'src/mbliphonereachability.mm',
-			'src/mbliphonescroller.mm',
-			'src/mbliphonesensor.mm',
-			'src/mbliphonesound.mm',
-			'src/mbliphonestack.mm',
-			'src/mbliphonestore.mm',
-			#'src/mbliphonetextlayout.mm',
-			'src/mbliphonetextmessaging.mm',
-			'src/mbliphoneurl.mm',
-			'src/mbliphonevideo.mm',
 			
 			# Group "System"
 			'src/globdefs.h',
@@ -597,7 +552,6 @@
 			'src/linux-theme.cpp',
 			'src/mac-theme.mm',
 			'src/mblandroid-theme.cpp',
-			'src/mbliphone-theme.mm',
 			'src/windows-theme.cpp',
 			
 			# Other files
@@ -608,7 +562,6 @@
 			'src/lnx-clipboard.h',
 			'src/mac-clipboard.h',
 			'src/mblandroid-clipboard.h',
-			'src/mbliphone-clipboard.h',
 			'src/raw-clipboard.h',
 			'src/w32-clipboard.h',
 			'src/clipboard.cpp',
@@ -616,7 +569,6 @@
 			'src/lnx-clipboard.cpp',
 			'src/mac-clipboard.mm',
 			'src/mblandroid-clipboard.cpp',
-			'src/mbliphone-clipboard.mm',
 			'src/raw-clipboard.cpp',
 			'src/w32-clipboard.cpp',
 
@@ -658,8 +610,6 @@
 			'src/native-layer.h',
 			'src/native-layer-android.cpp',
 			'src/native-layer-android.h',
-			'src/native-layer-ios.h',
-			'src/native-layer-ios.mm',
 			'src/native-layer-mac.h',
 			'src/native-layer-mac.mm',
 			'src/native-layer-win32.cpp',
@@ -1150,20 +1100,6 @@
 				},
 			],
 			[
-				'OS != "ios"',
-				{
-					'sources/':
-					[
-						['exclude', '-ios\.(mm|cpp)$'],
-					],
-
-					'sources!':
-					[
-						'src/native-layer-ios.mm',
-					],
-				},
-			],
-			[
 				'OS == "win"',
 				{
 					'sources/':
@@ -1216,7 +1152,7 @@
                 },
             ],
 			[
-				'OS != "mac" and OS != "ios"',
+				'OS != "mac"',
 				{
 					'sources!':
 					[
@@ -1269,33 +1205,6 @@
 						'src/player-platform.cpp',
 						'src/sysunxnetwork.cpp',
 						'src/tilecachegl.cpp',
-
-						'src/desktop.cpp',
-						'src/desktop-ans.cpp',
-						'src/desktop-dc.cpp',
-						'src/desktop-image.cpp',
-						'src/desktop-menu.cpp',
-						'src/desktop-stack.cpp',
-						'src/platform.cpp',
-						'src/platform-recorder.cpp',
-						'src/platform-surface.cpp',
-						'src/platform-window.cpp',
-					],
-				},
-			],
-			[
-				'OS == "ios"',
-				{
-					'sources!':
-					[
-						'src/player-platform.cpp',
-						'src/stacke.cpp',
-						'src/sysunxdate.cpp',
-						'src/sysunxrandom.cpp',
-						'src/tilecachegl.cpp',
-						
-						'src/mbliphoneembedded.mm',
-						'src/mbliphoneembeddedtest.mm',
 
 						'src/desktop.cpp',
 						'src/desktop-ans.cpp',

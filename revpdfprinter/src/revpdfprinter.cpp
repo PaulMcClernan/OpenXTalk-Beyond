@@ -1375,37 +1375,5 @@ bool custom_printer_clusters_to_cairo_clusters(const uint32_t *p_cp_clusters, ui
 
 // The static function export table for iOS external linkage requirements.
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-extern "C" {
-	
-struct LibExport
-{
-	const char *name;
-	void *address;
-};
-
-struct LibInfo
-{
-	const char **name;
-	struct LibExport *exports;
-};
-
-static const char *__libname = "revpdfprinter";
-
-static struct LibExport __libexports[] =
-{
-	{ "MCCustomPrinterCreate", (void *)MCCustomPrinterCreate },
-	{ 0, 0 }
-};
-
-struct LibInfo __libinfo =
-{
-	&__libname,
-	__libexports
-};
-
-__attribute((section("__DATA,__libs"))) volatile struct LibInfo *__libinfoptr_revpdfprinter __attribute__((__visibility__("default"))) = &__libinfo;
-}
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -407,7 +407,7 @@ bool MCStringCreateWithBytes(const byte_t *p_bytes, uindex_t p_byte_count, MCStr
         case kMCStringEncodingWindows1252:
             break;
 #endif
-#if !defined(__MAC__) && !defined(__IOS__)
+#if !defined(__MAC__)
         case kMCStringEncodingMacRoman:
             break;
 #endif
@@ -2651,7 +2651,7 @@ bool MCStringConvertToBytes(MCStringRef self, MCStringEncoding p_encoding, bool 
     case kMCStringEncodingWindows1252:
         break;
 #endif
-#if !defined(__MAC__) && !defined(__IOS__)
+#if !defined(__MAC__)
     case kMCStringEncodingMacRoman:
         break;
 #endif

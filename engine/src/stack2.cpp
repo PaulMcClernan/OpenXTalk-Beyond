@@ -2866,7 +2866,6 @@ void MCStack::dirtywindowname(void)
 	MCRedrawScheduleUpdateForStack(this);
 }
 
-#ifndef TARGET_SUBPLATFORM_IPHONE
 
 // OpenGL stuff must be done on the system thread, so the iOS version of this handler
 // does it on a block.
@@ -2890,7 +2889,6 @@ bool MCStack::snapshottilecache(MCRectangle p_area, MCGImageRef& r_pixmap)
 	return view_snapshottilecache(p_area, r_pixmap);
 }
 
-#endif
 
 void MCStack::applyupdates(void)
 {

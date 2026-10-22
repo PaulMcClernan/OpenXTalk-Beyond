@@ -9,7 +9,7 @@ Specifies whether dragged <object|objects> are snapped to a grid.
 
 Introduced: 1.0
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, server, mobile
 

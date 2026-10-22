@@ -74,7 +74,7 @@
 			'target_conditions':
 			[
 				[
-					'toolset_os != "mac" and toolset_os != "ios"',
+					'toolset_os != "mac"',
 					{
 						'sources!':
 						[
@@ -133,16 +133,6 @@
                             ],
                         },
                     ],
-					[
-						'OS == "ios"',
-						{
-							'libraries':
-							[
-								'$(SDKROOT)/System/Library/Frameworks/CoreGraphics.framework',
-								'$(SDKROOT)/System/Library/Frameworks/CoreText.framework',
-							],
-						},
-					],
 				],
 			},
 		},

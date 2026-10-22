@@ -132,7 +132,7 @@ void __MCUnreachable(void)
 	abort();
 }
 
-#elif defined(_MACOSX) || defined(_LINUX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#elif defined(_MACOSX) || defined(_LINUX)
 
 #include <unistd.h>
 
@@ -148,7 +148,7 @@ void __MCAssert(const char *p_file, uint32_t p_line, const char *p_message)
     abort();
 }
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
 extern "C"
 {
 #include    <CoreFoundation/CoreFoundation.h>
@@ -163,7 +163,7 @@ static void MCLogV(const char *p_file, uint32_t p_line,
 	MCAutoStringRef t_string;
     /* UNCHECKED */ MCStringFormatV(&t_string, p_format, p_args);
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
     CFStringRef t_cf_string;
     if (MCStringConvertToCFStringRef(*t_string, t_cf_string))
     {

@@ -9,7 +9,7 @@ Returns the reading from the named sensor.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

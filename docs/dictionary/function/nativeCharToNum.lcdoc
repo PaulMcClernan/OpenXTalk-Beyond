@@ -11,7 +11,7 @@ Returns the 8-bit value corresponding to a native character.
 
 Introduced: 7.0
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, server, mobile
 

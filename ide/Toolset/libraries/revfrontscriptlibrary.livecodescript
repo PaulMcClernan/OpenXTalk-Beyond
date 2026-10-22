@@ -274,8 +274,15 @@ on preOpenStack
       # IM-2016-03-01: [[ Bug 16244 ]] IDE stacks should always hide invisible objects
       set the showInvisibles of stack tStack to false
       set the _ideoverride of stack tStack to true
+   else
+      -- OXT-Beyond: once the stack's own openStack is done, a window that
+      -- opened with its title bar off the screen (a HyperCard stack at 0,0)
+      -- is moved to where it can be dragged
+      local tOpening
+      put ideStackOfObject(tTarget) into tOpening
+      send "revIDEKeepTitleBarOnScreen tOpening" to stack "revIDELibrary" in 0 milliseconds
    end if
-   
+
    if not gREVSuppressMessages or (gREVSuppressMessages and revOKTarget()) then pass preOpenStack
 end preOpenStack
 

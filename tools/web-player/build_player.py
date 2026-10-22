@@ -54,6 +54,7 @@ Screenshots go into <work>/check.
 
 import argparse
 import functools
+import hashlib
 import http.server
 import json
 import os
@@ -169,10 +170,19 @@ def put_page(site):
     engines = [x for x in os.listdir(site) if re.match(r'^standalone-community-.+\.js$', x)]
     if len(engines) != 1 or 'standalone.zip' not in os.listdir(site):
         raise CheckError('%s does not hold a web standalone: %s' % (site, ', '.join(sorted(os.listdir(site)))))
+    # (a digest of the engine and the stack it opens: see locateFile in
+    # the page)
+    digest = hashlib.sha256()
+    for name in (engines[0], engines[0][:-len('.js')] + '.wasm', 'standalone.zip'):
+        if not os.path.isfile(os.path.join(site, name)):
+            continue
+        with open(os.path.join(site, name), 'rb') as f:
+            for block in iter(lambda: f.read(1 << 20), b''):
+                digest.update(block)
     with open(PAGE, encoding='utf-8') as f:
         page = f.read()
     with open(os.path.join(site, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
-        f.write(page.replace('@ENGINE_JS@', engines[0]))
+        f.write(page.replace('@ENGINE_JS@', engines[0]).replace('@STAMP@', digest.hexdigest()[:16]))
     built = os.path.join(site, BUILT_PAGE)
     if os.path.exists(built):
         os.remove(built)
@@ -510,6 +520,18 @@ def check(site, samples, work):
         third.screenshot(path=os.path.join(shots, '12-hyper.png'))
         third.keyboard.press('Enter')
         third.wait_for_timeout(500)
+
+        # The same stack, from another file, opened while it plays (a newer
+        # copy of a stack being made): it is the file's, and it is still
+        # there once the one it replaced is forgotten
+        got = open_files(third, [os.path.join(samples, 'Hyper.livecode')], 'Hyper again', third_lines)
+        third.wait_for_timeout(500)
+        if third.locator('[class^="oxt-dialog"]').count():
+            third.keyboard.press('Enter')
+            third.wait_for_timeout(500)
+        there = third.evaluate("!!(document.liveCode && document.liveCode.findStackWithName('Hyper'))")
+        expect('reopen-while-playing', any(x.startswith('PLAYER opened Hyper') for x in got) and there,
+               'stack there: %s | %s' % (there, ' | '.join(got[-3:])))
         before = len(third_lines)
         third.click('#home')
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)

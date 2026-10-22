@@ -9,7 +9,7 @@ Enables the receipt of purchaseStateUpdate messages
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -29,8 +29,7 @@ command enables the receipt of <purchaseStateUpdate> messages.
 
 References: mobilePurchaseSet (command),
 mobileDisablePurchaseUpdates (command), mobilePurchaseVerify (command),
-mobileRestorePurchases (command), iphoneRequestProductDetails (command),
-mobilePurchaseSendRequest (command),
+mobileRestorePurchases (command), mobilePurchaseSendRequest (command),
 mobilePurchaseConfirmDelivery (command), mobilePurchaseCreate (command),
 mobilePurchaseState (function), mobilePurchaseError (function),
 mobileCanMakePurchase (function), mobilePurchaseGet (function),

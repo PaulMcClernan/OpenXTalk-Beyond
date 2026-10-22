@@ -9,7 +9,7 @@ Specifies which set of theming parameters should be used for an object.
 
 Introduced: 8.0
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, server, mobile
 

@@ -12,7 +12,7 @@ Associations: stack
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -49,8 +49,6 @@ application is not currently running. If the application is running,
 then a badge value update does not take place, as the application can
 handle the message without being launched.
 
-References: iphoneSetNotificationBadgeValue (command),
-iphoneGetNotificationBadgeValue (function),
-pushNotificationRegistered (message),
+References: pushNotificationRegistered (message),
 pushNotificationRegistrationError (message),
 mobileGetDeviceToken (function)

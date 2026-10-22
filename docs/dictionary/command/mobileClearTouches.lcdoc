@@ -11,7 +11,7 @@ Remove all pending touch interactions from the event queue.
 
 Introduced: 6.0
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

@@ -26,17 +26,11 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "region.h"
 #include "tilecache.h"
 
-#ifdef _IOS_MOBILE
-#include <CoreGraphics/CoreGraphics.h>
-#else
 #include <ApplicationServices/ApplicationServices.h>
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef _IOS_MOBILE
 #define CGFloat float
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
