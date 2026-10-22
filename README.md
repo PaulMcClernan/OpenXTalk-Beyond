@@ -454,7 +454,10 @@ What it needs:
   `screenPixelScale` 2. `GDK_SCALE=1 ./oxt-beyond` turns the scaling
   off, and so does `set the usePixelScaling to false` in a script. On
   a desktop that is not scaled nothing changes: `usePixelScaling` stays
-  false and cannot be set, as before.
+  false and cannot be set, as before. After 0.2.7-rc.6.1, cursors made
+  from images (the IDE's pointing hand and grab hand) are drawn at the
+  desktop's size too, and the browser widget draws its page at the
+  desktop's scale.
 - **The browser widget and revBrowser** (CEF 74) also need NSS, ALSA and a
   few more X11 libraries (the `browser` lines of `linux/libraries.txt` in
   the package). Without them the launcher turns the browser off

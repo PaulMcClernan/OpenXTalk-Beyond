@@ -96,15 +96,23 @@ void MCNativeLayerX11::updateInputShape()
         gdk_window_input_shape_combine_region(gtk_widget_get_window(GTK_WIDGET(m_child_window)), NULL, 0, 0);
 }
 
-// OXT-Beyond: [[ HiDPI ]] A rect in the stack's coords in its window's pixels:
-// scaled by the window's backing scale, which is 1 unless the desktop scales.
+// OXT-Beyond: [[ HiDPI ]] A rect in the stack's coords in its window's pixels,
+// as on Windows (IM-2016-02-18: [[ Bug 16603 ]]): through the stack's view
+// transform (its scaleFactor, a fullscreenMode) and the window's backing
+// scale, which is 1 unless the desktop scales. Before, the view transform was
+// left out, so a native layer (the browser widget, the player) kept its size
+// and place at 1 when the stack's scaleFactor was not. With no scaleFactor or
+// fullscreenMode, at a backing scale of 1, the rect is returned untouched.
 static MCRectangle MCNativeLayerX11ScaleRect(MCObject *p_object, const MCRectangle &p_rect)
 {
-	MCGFloat t_scale;
-	t_scale = p_object->getstack()->view_getbackingscale();
-	if (t_scale == 1.0)
+	MCGAffineTransform t_transform;
+	t_transform = p_object->getstack()->getdevicetransform();
+	if (MCGAffineTransformIsIdentity(t_transform))
 		return p_rect;
-	return MCRectangleGetScaledFloorRect(p_rect, t_scale);
+	// The floor and ceiling rect, as the window's own geometry is scaled
+	// (MCScreenDC::logicaltoscreenrect), so the layer keeps its pixel size
+	// wherever it is
+	return MCRectangleGetTransformedFloorRect(p_rect, t_transform);
 }
 
 void MCNativeLayerX11::doAttach()
