@@ -331,6 +331,55 @@ def mac_app(engine):
     return engine[:engine.index('.app/') + 4] if '.app/' in engine else None
 
 
+# The binaries the package renames: OXT-Beyond.app's engine is the
+# build's LiveCode-Community.app, whose dSYM keeps the build's name
+MAC_BUILD_NAMES = {'OXT-Beyond': 'LiveCode-Community'}
+
+
+def mac_dwarf(name):
+    """The DWARF file of the binary name in the dSYM bundles under
+    $OXT_DSYM_DIR (the build's debug symbols, which the macOS test job
+    unpacks there), or None."""
+    root = os.environ.get('OXT_DSYM_DIR')
+    if not root or not os.path.isdir(root):
+        return None
+    names = [name, MAC_BUILD_NAMES.get(name)]
+    for d, dirs, files in os.walk(root):
+        if os.path.basename(d) == 'DWARF':
+            for n in names:
+                if n and n in files:
+                    return os.path.join(d, n)
+    return None
+
+
+def mac_symbolicate(graph):
+    """graph, a sample's call graph, with the engine's frames, which the
+    stripped binary leaves as "??? (in OXT-Beyond)", named by atos from
+    its dSYM where there is one."""
+    pattern = re.compile(r'\?\?\?  \(in (\S+)\)  load address (0x[0-9a-f]+) \+ 0x[0-9a-f]+  \[(0x[0-9a-f]+)\]')
+    frames = [m for m in (pattern.search(x) for x in graph) if m]
+    if not frames or not shutil.which('atos'):
+        return graph
+    dwarf = mac_dwarf(frames[0].group(1))
+    if not dwarf:
+        log('(no dSYM for %s under $OXT_DSYM_DIR: the engine\'s frames stay unnamed)' % frames[0].group(1))
+        return graph
+    addresses = sorted(set(m.group(3) for m in frames if m.group(1) == frames[0].group(1)))
+    try:
+        proc = subprocess.run(['atos', '-o', dwarf, '-arch', os.uname().machine, '-l', frames[0].group(2)] + addresses,
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=120)
+    except (subprocess.TimeoutExpired, OSError):
+        return graph
+    names = dict(zip(addresses, proc.stdout.decode('utf-8', 'replace').splitlines()))
+    out = []
+    for x in graph:
+        m = pattern.search(x)
+        if m and m.group(3) in names:
+            x = x[:m.start()] + names[m.group(3)] + '  [%s]' % m.group(3) + x[m.end():]
+        out.append(x)
+    return out
+
+
 def mac_sample(pid, path, seconds=5, lines=400):
     """Where the engine is, for when the script did not end on a Mac: the
     process's state, then a sample of it (sample, as field_speed_test.py
@@ -364,6 +413,7 @@ def mac_sample(pid, path, seconds=5, lines=400):
         if not x.strip() or (graph and re.match(r'^    \d+ Thread_', x)):
             break
         graph.append(x.rstrip())
+    graph = mac_symbolicate(graph)
     log('::group::The engine\'s main thread (%s)' % os.path.basename(path))
     for x in graph[:lines]:
         log(x)
