@@ -821,6 +821,58 @@ on hcPicture pName, pType, pStyle, pVisible, pDepth, pFloating
    return empty
 end hcPicture
 
+/*
+set the P of window W to V (rule T26), for the properties of HyperCard's
+picture and palette windows that this engine's windows do not have:
+scale (-5 to 5, the picture shown at 2 to that power) and scroll (the
+point of the picture at the window's top left) of a picture window;
+hilitedButton (its number, 0 for none) of a palette; globalLoc and
+globalRect, the window's place on the screen. The card window ("card
+window") always shows the whole card here, so its scroll is left as it
+is, as are zoom and dithering. A window that is not open leaves "No
+such window" in the result, as HyperCard said, rather than an error
+*/
+on hcSetWindow pProp, pWindow, pValue
+   local tStack, tImage, i
+   -- (a point or a rect not in quotes comes as more than one parameter)
+   repeat with i = 4 to paramCount()
+      put comma & param(i) after pValue
+   end repeat
+   if pWindow is "card window" then return empty
+   if there is not a stack pWindow then return "No such window"
+   put the long id of stack pWindow into tStack
+   if there is an image "Picture" of card 1 of tStack then
+      put the long id of image "Picture" of card 1 of tStack into tImage
+   end if
+   switch pProp
+      case "scale"
+         if tImage is empty or pValue is not an integer then return empty
+         put max(-5, min(5, pValue)) into pValue
+         lock screen
+         set the width of tImage to max(1, round(the formattedWidth of tImage * 2 ^ pValue))
+         set the height of tImage to max(1, round(the formattedHeight of tImage * 2 ^ pValue))
+         set the topLeft of tImage to 0,0
+         unlock screen
+         break
+      case "scroll"
+         if tImage is empty or item 1 of pValue is not a number or item 2 of pValue is not a number then return empty
+         set the topLeft of tImage to -(item 1 of pValue), -(item 2 of pValue)
+         break
+      case "hilitedbutton"
+         repeat with i = 1 to the number of buttons of card 1 of tStack
+            set the hilite of button i of card 1 of tStack to (i = pValue)
+         end repeat
+         break
+      case "globalloc"
+         set the topLeft of tStack to pValue
+         break
+      case "globalrect"
+         set the rect of tStack to pValue
+         break
+   end switch
+   return empty
+end hcSetWindow
+
 ----------------------------------------------------------------------
 -- Stand-ins for the externals stacks call most
 --
@@ -841,26 +893,33 @@ local sHCPopUp
 -- (Standard File's open dialog), or empty if they cancel. File types
 -- are four characters; anything longer is taken as the prompt
 function FileName
-   local tPrompt, i
-   put "Choose a file:" into tPrompt
+   local tParams, i
    repeat with i = 1 to paramCount()
-      if (the number of chars of param(i)) > 4 then put param(i) into tPrompt
+      put param(i) & return after tParams
+   end repeat
+   return _HCFileName(tParams)
+end FileName
+
+-- fileName(...) after the import (rule T20; this engine reads
+-- "fileName(" as the property, here as in value()): FileName, above
+function hcX_FileName
+   local tParams, i
+   repeat with i = 1 to paramCount()
+      put param(i) & return after tParams
+   end repeat
+   return _HCFileName(tParams)
+end hcX_FileName
+
+private function _HCFileName pParams
+   local tPrompt, tParam
+   put "Choose a file:" into tPrompt
+   repeat for each line tParam in pParams
+      if the number of chars of tParam > 4 then put tParam into tPrompt
    end repeat
    answer file tPrompt
    if the result is "Cancel" then return empty
    return it
-end FileName
-
--- fileName(...) after the import (rule T20; this engine reads
--- "fileName(" as the property): FileName, above
-function hcX_FileName
-   local tParams, i
-   repeat with i = 1 to paramCount()
-      put "param(" & i & ")," after tParams
-   end repeat
-   delete the last char of tParams
-   return value("FileName(" & tParams & ")")
-end hcX_FileName
+end _HCFileName
 
 -- splashDialog id, seconds, ...: a splash screen while the stack starts,
 -- from a resource that is not imported; nothing is shown
@@ -1070,6 +1129,18 @@ private function _HCVolume pLevel
    if pLevel is an integer and pLevel >= 0 and pLevel <= 7 then put pLevel into sHCVolume
    return tOld
 end _HCVolume
+
+-- objectExists(description), the XFCN: whether there is such an object
+-- ("bg button " & quote & "Next" & quote)
+function objectExists pObject
+   local tExists
+   try
+      do "put there is a" && pObject && "into tExists"
+   catch tError
+      return false
+   end try
+   return tExists is true
+end objectExists
 
 -- MaxDepth(): the deepest colour of the screens
 function MaxDepth

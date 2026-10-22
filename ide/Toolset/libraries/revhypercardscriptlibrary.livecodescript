@@ -15,7 +15,7 @@ script "revHyperCardScriptLibrary"
 --
 -- 1. rewrites the HyperTalk forms below, outside string literals and
 --    comments, one token at a time (the rules are named T0 to T14 in the
---    log; T15 to T25 are below);
+--    log; T15 to T27 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
 --    and keeps those that compile, putting in place of each one that does
 --    not a handler of the same name that passes its message on, with the
@@ -32,7 +32,9 @@ script "revHyperCardScriptLibrary"
 -- cursor, T18 tabKey and the other key commands and "picture", T19 "show
 -- card picture", T20 "fileName(", T21 "show", "hide" and "close window",
 -- T22 HyperCard 2.2's menus, T23 "start using" and "stop using" a stack,
--- T24 "print" a field, T25 "go" to a destination given by an expression).
+-- T24 "print" a field, T25 "go" to a destination given by an expression,
+-- T26 the properties of picture and palette windows, T27 "doMenu" with
+-- the item's name not in quotes).
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -77,6 +79,10 @@ constant kLibraryName = "HyperCard Library"
 
 -- The properties of a menu and a menu item in HyperCard 2.2's menus
 constant kMenuProperties = "checkmark commandchar cmdchar enabled markchar name textstyle menumessage menumsg"
+
+-- The properties of HyperCard's picture and palette windows that this
+-- engine's windows do not have (T26)
+constant kWindowProperties = "scale scroll hilitedbutton zoom dithering globalloc globalrect"
 
 -- the words a "go" names its destination with, as against an expression
 -- whose value is the destination (T25)
@@ -1094,12 +1100,12 @@ private function _PlayNotes pLine
    return pLine
 end _PlayNotes
 
--- T9 and T16 to T25: statements that stop with an error here where
+-- T9 and T16 to T27: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
 private function _HyperCardRules pLine, pCompiled
-   local tTokens, tCode, tIdx, n, tItem, i, j, tEnd, tWord, tNew
+   local tTokens, tCode, tIdx, n, tItem, i, j, tEnd, tWord, tNew, tPlain
 
    if pCompiled then put _PlayNotes(pLine) into pLine
    if char -1 of word 1 to -1 of _CodeText(pLine) is "\" then return pLine
@@ -1155,6 +1161,7 @@ private function _HyperCardRules pLine, pCompiled
          case "set"
             put _SetCursor(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetMenuItem(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetWindow(tTokens, tIdx, i, tEnd) into tNew
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
@@ -1192,6 +1199,25 @@ private function _HyperCardRules pLine, pCompiled
          case "hide"
          case "close"
             put _ShowHide(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "domenu"
+         case "hcdomenu"
+            -- T27: doMenu with the item's name not in quotes ("doMenu
+            -- New Card"), which HyperCard took as the text it was;
+            -- here two names side by side are no expression
+            if tEnd > i + 1 then
+               put true into tPlain
+               repeat with j = i + 1 to tEnd
+                  if tTokens[tIdx[j]]["k"] is not "w" or _T(tTokens, tIdx[j]) is among the words of "the of and or not is in contains div mod within among" then
+                     put false into tPlain
+                     exit repeat
+                  end if
+               end repeat
+               if tPlain then
+                  _Fire "T27 doMenu with the item not in quotes"
+                  put tTokens[tIdx[i]]["t"] && quote & _Span(tTokens, tIdx, i + 1, tEnd) & quote into tNew
+               end if
+            end if
             break
          default
             -- T18: tabKey and HyperCard's other key commands, and the
@@ -1341,6 +1367,31 @@ private function _FindWord pTokens, pIdx, pFrom, pTo, pWord, pNext
    end repeat
    return empty
 end _FindWord
+
+-- T26: the properties of HyperCard's picture and palette windows, and of
+-- the card window, which this engine's windows (stacks) do not have: set
+-- [the] P of window W to V, set [the] P of card window to V: hcSetWindow
+-- "P", W, V ("card window" for the card window, as for "this stack")
+private function _SetWindow pTokens, pIdx, pAt, pEnd
+   local j, tProperty, tTo, tWindow
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "the" then add 1 to j
+   put _T(pTokens, pIdx[j]) into tProperty
+   if tProperty is not among the words of kWindowProperties or _T(pTokens, pIdx[j + 1]) is not "of" then return empty
+   put _FindWord(pTokens, pIdx, j + 2, pEnd, "to", empty) into tTo
+   if tTo is empty or tTo = pEnd then return empty
+   if _T(pTokens, pIdx[j + 2]) is among the words of "window wd" and j + 3 < tTo then
+      put _Span(pTokens, pIdx, j + 3, tTo - 1) into tWindow
+   else if _T(pTokens, pIdx[j + 2]) is among the words of "card cd" and _T(pTokens, pIdx[j + 3]) is among the words of "window wd" and j + 4 = tTo then
+      put quote & "card window" & quote into tWindow
+   else if _T(pTokens, pIdx[j + 2]) is "this" and _T(pTokens, pIdx[j + 3]) is "stack" and j + 4 = tTo and tProperty is "scroll" then
+      put quote & "card window" & quote into tWindow
+   else
+      return empty
+   end if
+   _Fire "T26 window properties"
+   return "hcSetWindow" && quote & tProperty & quote & comma && tWindow & comma && _Span(pTokens, pIdx, tTo + 1, pEnd)
+end _SetWindow
 
 -- set [the] P of menuItem I of menu M to V, set [the] P of menu M to V:
 -- hcSetMenuItem "P", M, I, V

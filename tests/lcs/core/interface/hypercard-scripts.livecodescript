@@ -190,6 +190,19 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T25: in for of", line 4 of tScript is "  go to first card of bkgnd " & q & "Index" & q
    TestAssert "T25: go to the next card: unchanged", line 5 of tScript is "  go to the next card"
    TestAssert "T25: go back: unchanged", line 6 of tScript is "  go back"
+
+   put _Rewrite("on mouseUp", "  set the scale of window pictureWindow to -1", "  set scroll of window " & q & "Map" & q & " to " & q & "10,10" & q, "  set hilitedButton of wd " & q & "Tools" & q & " to 0", "  set the scroll of card window to 0,0", "  set the loc of window " & q & "Map" & q & " to 10,10", "end mouseUp") into tScript
+   TestAssert "T26: the scale of a window", line 2 of tScript is "  hcSetWindow " & q & "scale" & q & ", pictureWindow, -1"
+   TestAssert "T26: the scroll of a window", line 3 of tScript is "  hcSetWindow " & q & "scroll" & q & ", " & q & "Map" & q & ", " & q & "10,10" & q
+   TestAssert "T26: the hilitedButton of a palette", line 4 of tScript is "  hcSetWindow " & q & "hilitedbutton" & q & ", " & q & "Tools" & q & ", 0"
+   TestAssert "T26: the scroll of the card window", line 5 of tScript is "  hcSetWindow " & q & "scroll" & q & ", " & q & "card window" & q & ", 0,0"
+   TestAssert "T26: the loc of a window: unchanged", line 6 of tScript is "  set the loc of window " & q & "Map" & q & " to 10,10"
+
+   put _Rewrite("on mouseUp", "  doMenu new card", "  if x then doMenu Compact Stack", "  doMenu tItem", "  doMenu the short name of me", "end mouseUp") into tScript
+   TestAssert "T27: doMenu with the item not in quotes", line 2 of tScript is "  doMenu " & q & "new card" & q
+   TestAssert "T27: after then, its spelling kept", line 3 of tScript is "  if x then doMenu " & q & "Compact Stack" & q
+   TestAssert "T27: a variable: unchanged", line 4 of tScript is "  doMenu tItem"
+   TestAssert "T27: an expression: unchanged", line 5 of tScript is "  doMenu the short name of me"
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
@@ -347,6 +360,7 @@ on TestHyperCardScriptsStandIns
    set the script of button "Volume" to _Lines("on mouseUp", "  global gHCScriptsTest", \
          "  put volume(4) into gHCScriptsTest", \
          "  put comma & volume(9) & comma & SndVolume() after gHCScriptsTest", \
+         "  put comma & objectExists(" & quote & "button " & quote & " & quote & " & quote & "Volume" & quote & " & quote) & comma & objectExists(" & quote & "button 99" & quote & ") & comma & objectExists(" & quote & "no such thing" & quote & ") after gHCScriptsTest", \
          "  cHCcolorize", \
          "  cHCunColorize", \
          "end mouseUp")
@@ -357,7 +371,7 @@ on TestHyperCardScriptsStandIns
    TestAssert "MaxDepth, NewMenu, DeleteMenu, ShowMenu, HCBalloon query, Dialoger", gHCScriptsTest is "true,1,2,,HyperCard menus are not supported yet,false,The Dialoger external is not supported"
    put empty into gHCScriptsTest
    send "mouseUp" to button "Volume" of stack tStack
-   TestAssert "volume and SndVolume keep the level; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4"
+   TestAssert "volume and SndVolume keep the level; objectExists; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4,true,false,false"
    send "mouseEnter" to button "Balloon" of stack tStack
    TestAssert "HCBalloon: balloons off, no tooltip", the toolTip of button "Balloon" of stack tStack is empty
    send "HCBalloon" && quote & "on" & quote to button "B" of stack tStack
@@ -542,6 +556,31 @@ on TestHyperCardScriptsBuiltIns
    put empty into gHCScriptsTest
    send "mouseUp" to button "Window" of card 1 of stack tStack
    TestAssert "picture opens a window, close window closes it, flash leaves nothing", gHCScriptsTest is "true,false,0"
+
+   -- a picture window's scroll and a palette's hilitedButton
+   lock messages
+   create button "Scroll" in card 1 of stack tStack
+   set the script of button "Scroll" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  picture " & q & "Map" & q & ", resource, plain, false", \
+         "  set the scroll of window " & q & "Map" & q & " to 10,20", \
+         "  put the topLeft of image " & q & "Picture" & q & " of stack " & q & "Map" & q & " into gHCScriptsTest", \
+         "  close window " & q & "Map" & q, \
+         "  set the scale of window " & q & "Map" & q & " to 1", \
+         "  put comma & the result after gHCScriptsTest", \
+         "  set the hilitedButton of window " & q & "HCBuiltInsPalette" & q & " to 2", \
+         "  put comma & the hilite of button 1 of stack " & q & "HCBuiltInsPalette" & q & " & comma & the hilite of button 2 of stack " & q & "HCBuiltInsPalette" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   create invisible stack "HCBuiltInsPalette"
+   set the defaultStack to "HCBuiltInsPalette"
+   create button
+   create button
+   set the defaultStack to tStack
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Scroll" of card 1 of stack tStack
+   TestAssert "the scroll of a picture window; a window not open; the hilitedButton of a palette", gHCScriptsTest is "-10,-20,No such window,false,true"
+   _Close "HCBuiltInsPalette"
 
    -- HyperCard 2.2's menus, kept as the scripts make them
    lock messages
