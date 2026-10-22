@@ -799,6 +799,45 @@ on TestSettingsForAKey
    TestAssert "the status line says there is no key", field "Status" of stack kWindow contains "no API key yet (More > Settings...)"
 end TestSettingsForAKey
 
+-- Local, in the dialog: a server on this computer (LM Studio's here) on
+-- OpenAI's API, at its address, with no key and none of OpenAI's models;
+-- what was typed for the provider shown before is kept, and nothing is
+-- kept until Save
+on TestSettingsLocalServer
+   local tPrefs, tResult
+   revIDESetPreference "cXTalkAssistant,enabled", true
+   revIDESetPreference "cXTalkAssistant,provider", "anthropic"
+   revIDESetPreference "cXTalkAssistant,baseUrl,anthropic", empty
+   revIDESetPreference "cXTalkAssistant,baseUrl,openai", empty
+   revIDESetPreference "cXTalkAssistant,model,openai", empty
+   dispatch "xtaSettingsPrepare" to stack kMain with empty
+   TestAssert "the dialog offers the local servers", the text of button "Local" of stack kSettings is \
+         ("LM Studio (localhost:1234)" & return & "Ollama (localhost:11434)")
+   TestAssert "and says what Local is for", field "Base URL Note" of stack kSettings contains "LM Studio or Ollama"
+   put "sk-ant-typed-local" into field "Key" of stack kSettings
+   -- Nothing listens on LM Studio's port here (if something does, it lists
+   -- its models): Get Models says what to try
+   dispatch "menuPick" to button "Local" of stack kSettings with "LM Studio (localhost:1234)"
+   TestAssert "OpenAI's API", the label of button "Provider" of stack kSettings is "OpenAI (or compatible)"
+   TestAssert "at LM Studio's address", field "Base URL" of stack kSettings is "http://localhost:1234/v1"
+   TestAssert "with no key", field "Key" of stack kSettings is empty
+   put field "Result" of stack kSettings into tResult
+   TestDiagnostic tResult
+   TestAssert "the server was asked for its models", tResult contains "Is the server running?" or tResult contains "listed"
+   TestAssert "and none of OpenAI's is offered", not (the text of button "Model" of stack kSettings contains "gpt-6") \
+         and not (the label of button "Model" of stack kSettings contains "gpt-6")
+   dispatch "menuPick" to button "Local" of stack kSettings with "Ollama (localhost:11434)"
+   TestAssert "Ollama's address", field "Base URL" of stack kSettings is "http://localhost:11434/v1"
+   dispatch "menuPick" to button "Provider" of stack kSettings with "Anthropic"
+   TestAssert "what was typed for Anthropic is kept", field "Key" of stack kSettings is "sk-ant-typed-local" \
+         and field "Base URL" of stack kSettings is empty
+   send "mouseUp 1" to button "Cancel" of stack kSettings
+   dispatch function "xtaSettingsDone" to stack kMain
+   put xtaTestPrefs() into tPrefs
+   TestAssert "Cancel keeps no base URL", tPrefs["cXTalkAssistant,baseUrl,openai"] is empty \
+         and tPrefs["cXTalkAssistant,provider"] is "anthropic"
+end TestSettingsLocalServer
+
 --------------------------------------------------------------------------------
 -- Tools
 

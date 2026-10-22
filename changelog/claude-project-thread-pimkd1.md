@@ -1,0 +1,3 @@
+- xTalk Assistant: a Local menu in its Settings uses a model running on this computer, in LM Studio (http://localhost:1234/v1) or Ollama, with no key, and asks it for its models at once; Anthropic stays the default and nothing kept changes (#PR)
+- xTalk Assistant: a local model's thinking at the start of its answer (<think> ... </think>) is not shown or compile-checked, and a server's model that only makes embeddings is not chosen for chat (#PR)
+- xTalk Assistant: a local server that is not running, or a model loaded with too short a context for the guide, says what to try (#PR)

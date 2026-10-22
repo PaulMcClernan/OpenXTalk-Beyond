@@ -15,7 +15,10 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --    "openai"     the OpenAI Chat Completions API (POST <base>/chat/completions,
 --                 the key as a Bearer token). Base: https://api.openai.com/v1.
 --                 Other services and local servers that speak the same API
---                 work with their own base URL; they may need no key.
+--                 work with their own base URL; they may need no key. On
+--                 this computer, LM Studio's server is at
+--                 http://localhost:1234/v1 and Ollama's at
+--                 http://localhost:11434/v1 (xtaLocalServers).
 --
 -- Model names change faster than this IDE does, so the window asks the
 -- provider for its list (xtaModelsUrl, xtaParseModels), which also names
@@ -45,6 +48,13 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --    xtaMaxTokens(pProvider, pMaxTokens)   the longest answer a request
 --                                          asks for (empty: none)
 --    xtaParseReply(pProvider, pStatus, pBody)
+--    xtaWithoutThinking(pText)             an answer without the thinking a
+--                                          local model put before it
+--    xtaLocalServers()                     the local servers the Settings
+--                                          offer, and their base URLs
+--    xtaLocalServerHint(pBaseUrl, pStatus, pError)
+--                                          what to try when a server of the
+--                                          user's own did not answer
 --    xtaParseModels(pProvider, pStatus, pBody)
 --    xtaDefaultModel(pProvider, pIds, pCreated)  the model to begin with
 --    xtaSuggestedModels(pProvider), xtaModelMenu(pProvider, pIds)
@@ -79,6 +89,10 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 constant kAnthropicVersion = "2023-06-01"
 constant kAnthropicBaseUrl = "https://api.anthropic.com"
 constant kOpenAIBaseUrl = "https://api.openai.com/v1"
+-- The servers on the user's own computer that speak OpenAI's API, at the
+-- addresses they listen on unless told otherwise
+constant kLMStudioBaseUrl = "http://localhost:1234/v1"
+constant kOllamaBaseUrl = "http://localhost:11434/v1"
 -- Anthropic requires max_tokens; this is used when the settings give none.
 -- Its models think before they answer (Claude Opus 5.5 always does), and
 -- the thinking counts toward max_tokens: with the 4096 of 0.2.5-rc.4 a
@@ -988,7 +1002,7 @@ function xtaParseReply pProvider, pStatus, pBody
             put "The answer had no message." into tReply["error"]
             return tReply
          end if
-         put xtaJsonText(tPart) into tText
+         put xtaWithoutThinking(xtaJsonText(tPart)) into tText
          put xtaJsonGet(tDoc, "choices/1/message/tool_calls") into tParts
          repeat with tIndex = 1 to xtaJsonCount(tParts)
             put xtaJsonItem(tParts, tIndex) into tPart
@@ -1022,6 +1036,62 @@ function xtaParseReply pProvider, pStatus, pBody
    put true into tReply["ok"]
    return tReply
 end xtaParseReply
+
+-- pText without the thinking a model put before its answer. Local models
+-- that think (Qwen3, DeepSeek R1, Gemma's thinking ones) may write it in
+-- the answer itself, between <think> and </think>, when the server does
+-- not take it out (LM Studio can, into reasoning_content, which is not
+-- read). The window would show it all, and the compile check would check
+-- its drafts of code. Only thinking that opens the answer goes: a tag
+-- anywhere else is the answer's own, and so is an answer with only the
+-- closing tag (a server that put the opening one in the prompt), which
+-- could be one that writes about the tag. Thinking that never closes (cut
+-- off at the length limit) is all there is, so nothing is left. OpenAI's
+-- own models never write the tags, so their answers are as they were.
+function xtaWithoutThinking pText
+   local tAt
+   if not (word 1 of pText begins with "<think>") then
+      return pText
+   end if
+   put offset("</think>", pText) into tAt
+   if tAt is 0 then
+      return empty
+   end if
+   put char tAt + the number of chars of "</think>" to -1 of pText into pText
+   repeat while pText is not empty and char 1 of pText is in (return & numToChar(13) & space & tab)
+      delete char 1 of pText
+   end repeat
+   return pText
+end xtaWithoutThinking
+
+-- The local servers the Settings offer: one per line, a name, a tab and
+-- the base URL their server listens on
+function xtaLocalServers
+   return "LM Studio" & tab & kLMStudioBaseUrl & return & "Ollama" & tab & kOllamaBaseUrl
+end xtaLocalServers
+
+-- What to try when a server of the user's own (pBaseUrl, not empty) did
+-- not answer, or answered with pError: empty when there is nothing to
+-- add. Local models are loaded with a short context (LM Studio's is 4096
+-- tokens unless the user changes it), and the guide alone is longer, so
+-- the server refuses the request; and a server that was never started
+-- refuses the connection. The words never say "tool": xtaToolsRefused
+-- takes an error that does for a server without them.
+function xtaLocalServerHint pBaseUrl, pStatus, pError
+   if word 1 to -1 of pBaseUrl is empty then
+      return empty
+   end if
+   if pError contains "context" or pError contains "n_ctx" or pError contains "tokens to keep" then
+      return "The model's context is too short for the assistant's guide. Load it with a longer one (in LM Studio, Context Length, 16000 or more), or tick Short guide in the Settings."
+   end if
+   if pStatus is empty and pError contains "could not be reached" then
+      if the platform is "HTML5" then
+         return "Is the server running? LM Studio starts it on its Developer tab; in the web IDE, turn on its Enable CORS setting too."
+      end if
+      return "Is the server running? LM Studio starts it on its Developer tab (or lms server start); Ollama, when it is open."
+   end if
+   return empty
+end xtaLocalServerHint
 
 -- The arguments of a call as JSON text, from their parsed value in pBody:
 -- an object exactly as it was sent, anything else as no arguments
@@ -1138,7 +1208,8 @@ end xtaParseModels
 -- and mixes in models that do not chat (embeddings, speech, images), so
 -- the first of its suggested models it lists (xtaSuggestedModels), else
 -- the newest whose name is just "gpt-" and a version (gpt-4o, gpt-5.1).
--- Otherwise, and for a local server, the first one listed.
+-- Otherwise, and for a local server, the first one listed that is not
+-- for embeddings.
 function xtaDefaultModel pProvider, pIds, pCreated
    local tId, tBest, tBestCreated
    switch pProvider
@@ -1172,6 +1243,14 @@ function xtaDefaultModel pProvider, pIds, pCreated
          end if
          break
    end switch
+   -- A local server lists the models it has downloaded, which may include
+   -- one that only makes embeddings (LM Studio comes with one) and cannot
+   -- chat: the first that can
+   repeat for each line tId in pIds
+      if not (tId contains "embed") then
+         return tId
+      end if
+   end repeat
    return line 1 of pIds
 end xtaDefaultModel
 
@@ -1328,9 +1407,16 @@ function xtaAsk pSettings, pSystem, pTurns, pTools
    if tAnswer["status"] is empty then
       put false into tReply["ok"]
       put tAnswer["error"] into tReply["error"]
-      return tReply
+   else
+      put xtaParseReply(tProvider, tAnswer["status"], tAnswer["body"]) into tReply
    end if
-   return xtaParseReply(tProvider, tAnswer["status"], tAnswer["body"])
+   if tReply["ok"] is not true and tProvider is "openai" then
+      put xtaLocalServerHint(pSettings["baseUrl"], tAnswer["status"], tReply["error"]) into tError
+      if tError is not empty then
+         put return & tError after tReply["error"]
+      end if
+   end if
+   return tReply
 end xtaAsk
 
 -- The model names the provider offers, as xtaParseModels returns them.
@@ -1353,9 +1439,16 @@ function xtaListModels pSettings
    put empty into tHeaders
    if tAnswer["status"] is empty then
       put tAnswer["error"] into tResult["error"]
-      return tResult
+   else
+      put xtaParseModels(tProvider, tAnswer["status"], tAnswer["body"]) into tResult
    end if
-   return xtaParseModels(tProvider, tAnswer["status"], tAnswer["body"])
+   if tResult["error"] is not empty and tProvider is "openai" then
+      put xtaLocalServerHint(pSettings["baseUrl"], tAnswer["status"], tResult["error"]) into tError
+      if tError is not empty then
+         put return & tError after tResult["error"]
+      end if
+   end if
+   return tResult
 end xtaListModels
 
 -- A thrown error as the words after "xTalk Assistant: ", for the user.

@@ -536,6 +536,39 @@ on TestParseReplyOpenAI
    TestAssert "no message", tReply["ok"] is false
 end TestParseReplyOpenAI
 
+-- A local model's thinking, written in its answer, is not shown; a tag
+-- anywhere but at the start is the answer's own
+on TestWithoutThinking
+   local tBody, tReply
+   TestAssert "an answer without thinking is as it was", xtaWithoutThinking("Hello" & return & "there") is ("Hello" & return & "there")
+   TestAssert "the thinking goes", xtaWithoutThinking("<think>" & return & "They want a loop." & return & "</think>" & return & return & "Use repeat.") is "Use repeat."
+   TestAssert "after white space too", xtaWithoutThinking(space & return & "<think>x</think>Answer") is "Answer"
+   TestAssert "with code drafted in it", xtaWithoutThinking("<think>```" & return & "put 1" & return & "```</think>" & return & "Done.") is "Done."
+   TestAssert "thinking that never closes leaves nothing", xtaWithoutThinking("<think>" & return & "Let me see") is empty
+   TestAssert "a tag later on stays", xtaWithoutThinking("Qwen writes <think>...</think> first.") is "Qwen writes <think>...</think> first."
+   TestAssert "a closing tag alone stays", xtaWithoutThinking("Close it with </think>.") is "Close it with </think>."
+   TestAssert "nothing is nothing", xtaWithoutThinking(empty) is empty
+   put "{" & TestQ("choices") & ":[{" & TestQ("message") & ":{" & TestQ("role") & ":" & TestQ("assistant") & "," & \
+         TestQ("content") & ":" & TestQ("<think>\nHmm.\n</think>\n\nHello") & "}," & TestQ("finish_reason") & ":" & TestQ("stop") & "}]}" into tBody
+   put xtaParseReply("openai", 200, tBody) into tReply
+   TestAssert "an OpenAI-style answer is read without it", tReply["ok"] is true and tReply["text"] is "Hello"
+end TestWithoutThinking
+
+-- What a server of the user's own is told to try
+on TestLocalServerHint
+   local tHint
+   TestAssert "the local servers", xtaLocalServers() is ("LM Studio" & tab & "http://localhost:1234/v1" & return & "Ollama" & tab & "http://localhost:11434/v1")
+   TestAssert "nothing for the providers' own", xtaLocalServerHint(empty, empty, "The server could not be reached: error") is empty
+   put xtaLocalServerHint("http://localhost:1234/v1", empty, "The server could not be reached: error Connection refused") into tHint
+   TestDiagnostic tHint
+   TestAssert "a server that is not running", tHint begins with "Is the server running?" and tHint contains "LM Studio"
+   put xtaLocalServerHint("http://localhost:1234/v1", 400, "The provider answered with an error (400)." & return & \
+         "Trying to keep the first 9000 tokens when context the overflows. However, the model is loaded with context length of only 4096 tokens") into tHint
+   TestAssert "a context too short", tHint contains "context is too short" and tHint contains "Short guide"
+   TestAssert "never says tool (xtaToolsRefused)", not (tHint contains "tool")
+   TestAssert "nothing for another error", xtaLocalServerHint("http://localhost:1234/v1", 404, "The provider has no such address or model (404).") is empty
+end TestLocalServerHint
+
 on TestParseReplyToolCalls
    local tInput, tBody, tReply
    put "{" & TestQ("term") & ": " & TestQ("put") & ", " & TestQ("n") & ": [1, 2.5]}" into tInput
@@ -608,6 +641,10 @@ on TestDefaultModel
          xtaDefaultModel("openai", "whisper-1" & return & "gpt-4.1" & return & "gpt-5", empty) is "gpt-4.1"
    TestAssert "OpenAI: its suggested model first, when it lists it", \
          xtaDefaultModel("openai", "gpt-6-astra" & return & "gpt-5" & return & "gpt-6.1-sol", tCreated) is "gpt-6.1-sol"
+   TestAssert "a local server: not a model that only makes embeddings (LM Studio comes with one)", \
+         xtaDefaultModel("openai", "text-embedding-nomic-embed-text-v1.5" & return & "qwen/qwen3-coder-30b", empty) is "qwen/qwen3-coder-30b"
+   TestAssert "a local server with nothing else: the first listed", \
+         xtaDefaultModel("openai", "text-embedding-nomic-embed-text-v1.5", empty) is "text-embedding-nomic-embed-text-v1.5"
 end TestDefaultModel
 
 -- The model menu: the providers' current recommendations before the list
@@ -1218,6 +1255,10 @@ on TestAskNoServer
    TestDiagnostic tReply["error"]
    TestAssert "not ok", tReply["ok"] is false
    TestAssert "says why", tReply["error"] is not empty
+   TestAssert "and what to try, for a server of the user's own", line 2 of tReply["error"] begins with "Is the server running?"
+   put "anthropic" into tSettings["provider"]
+   put xtaAsk(tSettings, empty, TestTurns()) into tReply
+   TestAssert "not for Anthropic's API", the number of lines of tReply["error"] is 1
 end TestAskNoServer
 
 on TestListModels
