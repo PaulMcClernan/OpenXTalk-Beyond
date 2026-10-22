@@ -95,13 +95,6 @@ function buildOpenSSL {
 				SPEC="android"
 			fi
 			;;
-		ios)
-			if [ "${ARCH}" == "x86_64" ] ; then
-				SPEC="darwin64-x86_64-cc"
-			else
-				SPEC="iphoneos-cross"
-			fi
-			;;
 		emscripten)
 			# OXT-Beyond: the web engine's, which links it into itself for
 			# encrypt, decrypt and the cipherNames: 32-bit WebAssembly in C
@@ -163,16 +156,6 @@ function buildOpenSSL {
 
 		echo "Configuring OpenSSL for ${NAME}"
 		./Configure ${OPENSSL_ARCH_CONFIG}
-		
-		# iOS requires some tweaks to the source when building for devices
-		if [ "${PLATFORM}" == "ios" -a "${ARCH}" != "i386 " ] ; then
-			sed -i "" -e "s!static volatile sig_atomic_t intr_signal;!static volatile intr_signal;!" "crypto/ui/ui_openssl.c"
-		fi
-		
-		# iOS SDKs don't work with makedepend
-		if [ "${PLATFORM}" == "ios" ] ; then
-			sed -i "" -e "s/MAKEDEPPROG=makedepend/MAKEDEPPROG=$\(CC\) -M/" Makefile
-		fi
 
 		echo "Building OpenSSL for ${NAME}"
 		make clean && make ${MAKEFLAGS} && make install_sw
@@ -190,7 +173,7 @@ function buildOpenSSL {
 		echo "Found existing OpenSSL build for ${NAME}"
 	fi
 
-	if [ "${PLATFORM}" == "mac" -o "${PLATFORM}" == "ios" ] ; then
+	if [ "${PLATFORM}" == "mac" ] ; then
 		CRYPTO_LIBS+="${INSTALL_DIR}/${NAME}/lib/libcrypto.a "
 		SSL_LIBS+="${INSTALL_DIR}/${NAME}/lib/libssl.a "
 	else

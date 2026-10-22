@@ -36,7 +36,7 @@ __declspec(allocate(".test")) volatile MCLowLevelTest *Name##_Ptr = &Name;
 #elif defined(_LINUX) || defined(TARGET_SUBPLATFORM_ANDROID)
 #define TEST_DEFINE_SECTION(Name) \
 __attribute__((section(".test"))) volatile MCLowLevelTest *Name##_Ptr = &Name;
-#elif defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#elif defined(_MACOSX)
 #define TEST_DEFINE_SECTION(Name) \
 __attribute__((section("__TEST,__test"))) volatile MCLowLevelTest *Name##_Ptr = &Name;
 #endif

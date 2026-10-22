@@ -16,8 +16,8 @@ mkdir -p "${OUTPUT_DIR}"
 export PLATFORM=$1
 export ARCH=$2
 
-#only ios and android subplatforms are used
-if [ "${PLATFORM}" == "ios" ] || [ "${PLATFORM}" == "android" ] ; then
+#only android subplatforms are used
+if [ "${PLATFORM}" == "android" ] ; then
 	export SUBPLATFORM=$3
 else
 	export SUBPLATFORM=
@@ -35,9 +35,6 @@ case "${PLATFORM}" in
 		PREBUILT_LIBS="openssl icu thirdparty"
 		;;
 	mac)
-		PREBUILT_LIBS="openssl icu thirdparty"
-		;;
-	ios)
 		PREBUILT_LIBS="openssl icu thirdparty"
 		;;
 	win32)

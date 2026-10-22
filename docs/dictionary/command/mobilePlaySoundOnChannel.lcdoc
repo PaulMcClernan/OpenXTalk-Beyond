@@ -11,7 +11,7 @@ Plays a sound on a given channel.
 
 Introduced: 4.6
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -60,10 +60,11 @@ a given channel, a <soundFinishedOnChannel> message is sent to the
 object which played the sound.
 
 References: mobileDeleteSoundChannel (command),
-mobilePlaySoundOnChannel (command), mobileSetSoundChannelVolume (command),
+mobilePlaySoundOnChannel (command),
+mobileSetSoundChannelVolume (command),
 mobilePausePlayingOnChannel (command),
 mobileStopPlayingOnChannel (command),
-mobileResumePlayingOnChannel (command), iphoneSetAudioCategory (command),
+mobileResumePlayingOnChannel (command),
 mobileSoundChannelVolume (function), mobileSoundOnChannel (function),
 mobileNextSoundOnChannel (function), mobileSoundChannels (function),
 mobileSoundChannelStatus (function), soundFinishedOnChannel (message)

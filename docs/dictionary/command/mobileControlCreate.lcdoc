@@ -11,7 +11,7 @@ Creates a native iOS or Android control.
 
 Introduced: 4.6
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

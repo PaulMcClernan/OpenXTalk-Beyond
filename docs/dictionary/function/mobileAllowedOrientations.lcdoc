@@ -11,7 +11,7 @@ Returns a list of the currently allowed orientations.
 
 Introduced: 4.5.3
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

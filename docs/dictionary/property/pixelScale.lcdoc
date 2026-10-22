@@ -9,7 +9,7 @@ Determines the scaling factor between logical and device pixels.
 
 Introduced: 6.5
 
-OS: ios, android
+OS: android
 
 Platforms: desktop, mobile
 
@@ -47,8 +47,8 @@ and use the additional pixels provided by higher density devices.
 >*Note:*  The <pixelScale> is initialised to the systemPixelScale
 > property on startup but can be modified at any point.
 
-References: iphoneUseDeviceResolution (command), screenRect (function),
-usePixelScaling (property), systemPixelScale (property)
+References: screenRect (function), usePixelScaling (property),
+systemPixelScale (property)
 
 Tags: windowing
 

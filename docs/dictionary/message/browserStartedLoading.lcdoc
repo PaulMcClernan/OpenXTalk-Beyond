@@ -9,7 +9,7 @@ Sent when the given url has started to load.
 
 Introduced: 4.5.3
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -31,9 +31,9 @@ The <browserStartedLoading> message is sent to the object containing the
 script that created the browser control after a request has been allowed
 and the URL has started loading.
 
-References: mobileControlCreate (command), mobileControlDelete (command),
-mobileControlSet (command), mobileControlGet (function),
-mobileControlTarget (function), mobileControls (function),
-browserLoadRequest (message), browserLoadFailed (message),
+References: mobileControlCreate (command),
+mobileControlDelete (command), mobileControlSet (command),
+mobileControlGet (function), mobileControlTarget (function),
+mobileControls (function), browserLoadFailed (message),
 browserFinishedLoading (message)
 

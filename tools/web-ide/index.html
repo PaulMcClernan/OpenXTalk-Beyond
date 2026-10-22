@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   The web IDE's page (tools/web-ide/build_site.py fills in @ENGINE@,
-  @VERSION@ and @SOURCE_URL@).
+  @VERSION@, @STAMP@ and @SOURCE_URL@).
 
   The page is the IDE's desktop: it fills the browser's window, and the
   IDE's windows (the menu bar, the palettes, the stacks) are drawn on it
@@ -284,12 +284,23 @@
       <button title="Close" aria-label="Close">&#x2715;</button>
     </div>
 
-    <script>
+    <!-- data-cfasync="false": a CDN that rewrites a page's scripts to run
+         them later (Cloudflare's Rocket Loader) leaves this one as it is -->
+    <script data-cfasync="false">
       (function() {
         'use strict';
 
         var ENGINE = '@ENGINE@';
         var IDE = 'ide.zip';
+        // The engine's script and WebAssembly and the IDE keep their names
+        // from one release to the next, so each is asked for with this
+        // site's stamp (a digest of the three files): a browser that kept
+        // another version's copy of one of them in its cache cannot start
+        // that copy with this version's others
+        var STAMP = '@STAMP@';
+        function stamped(url) {
+          return url + '?v=' + STAMP;
+        }
 
         var loading = document.getElementById('loading');
         var fill = document.getElementById('fill');
@@ -417,14 +428,14 @@
         };
         var engineBinary = null;
 
-        Promise.all([download(ENGINE + '.wasm', 'engine'), download(IDE, 'ide')]).then(function(done) {
+        Promise.all([download(stamped(ENGINE + '.wasm'), 'engine'), download(stamped(IDE), 'ide')]).then(function(done) {
           engineBinary = done[0].response;
           Module.livecodeStandaloneRequest = done[1];
           fill.style.width = '100%';
           fill.classList.add('busy');
           setStatus('Starting the engine...');
           var script = document.createElement('script');
-          script.src = ENGINE + '.js';
+          script.src = stamped(ENGINE + '.js');
           script.onerror = function() {
             fail('The web IDE\'s engine could not be loaded.');
           };

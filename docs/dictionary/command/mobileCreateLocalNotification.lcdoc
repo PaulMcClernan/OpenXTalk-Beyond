@@ -9,7 +9,7 @@ Schedules a new Local Notification with the operating system.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

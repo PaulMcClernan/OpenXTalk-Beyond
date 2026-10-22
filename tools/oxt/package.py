@@ -831,7 +831,7 @@ def _mac(arch):
         engine_support=(('revsecurity.dylib', app + '/Contents/MacOS/revsecurity.dylib'),
                         ('revpdfprinter.bundle', app + '/Contents/MacOS/revpdfprinter.bundle')),
         # component Mobile.MacOSX (its Resources/Mobile Examples come from ide/)
-        mobile=('reviphone.bundle', 'revandroid.bundle'),
+        mobile=('revandroid.bundle',),
         toolchain=('lc-compile', 'lc-run', 'lc-compile-ffi-java'),
         cef=None,
         runtimes=tuple(MAC_RUNTIMES[f] for f in folders),
@@ -840,7 +840,6 @@ def _mac(arch):
             ('Installer.app/**', 'LiveCode\'s installer; OXT-Beyond ships the app in a disk image'),
             ('installer-stub', 'LiveCode\'s installer'),
             ('server-*', 'LiveCode Server engine and its externals; package.txt installs no server'),
-            ('reviphoneproxy', 'iOS simulator helper; the copy inside reviphone.bundle is installed'),
             ('tz.dylib', 'native code of the timezone library; its packaged_extensions copy is installed'),
             ('inih.dylib', 'native code of com.livecode.library.ini, which package.txt does not install'),
             ('LiveCode-Community.app/Contents/Info.plist',

@@ -65,19 +65,6 @@
 									},
 								},
 							],
-							[
-								'OS == "ios"',
-								{
-									'direct_dependent_settings':
-									{
-										'variables':
-										{
-											# Work-around for Xcode/Gyp impedance mismatch
-											'lc-compile-ffi-java_host': '<(mac_tools_dir)/lc-compile-ffi-java-host',
-										},
-									},
-								},
-							],
 						],
 						
 						'direct_dependent_settings':

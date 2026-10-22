@@ -69,6 +69,7 @@ Needs Python 3.8 or later, standard library only.
 
 import argparse
 import glob
+import hashlib
 import os
 import re
 import shutil
@@ -242,6 +243,17 @@ def find_engine(folder):
     return base, base[len('development-community-'):]
 
 
+def site_stamp(out, names):
+    """A digest of the site's files of names, short: the page asks for
+    each with it, so that a cached copy of another version's is not used"""
+    digest = hashlib.sha256()
+    for name in names:
+        with open(os.path.join(out, name), 'rb') as f:
+            for block in iter(lambda: f.read(1 << 20), b''):
+                digest.update(block)
+    return digest.hexdigest()[:16]
+
+
 def ide_version(install):
     path = os.path.join(install, '.version')
     if os.path.isfile(path):
@@ -282,8 +294,9 @@ def main(argv=None):
             shutil.copyfile(os.path.join(args.engine, base + ext), os.path.join(out, base + ext))
         with open(PAGE, encoding='utf-8') as f:
             page = f.read()
+        stamp = site_stamp(out, (base + '.js', base + '.wasm', 'ide.zip'))
         for key, value in (('@ENGINE@', base), ('@VERSION@', version or engine_version),
-                           ('@SOURCE_URL@', args.source_url)):
+                           ('@STAMP@', stamp), ('@SOURCE_URL@', args.source_url)):
             if key not in page:
                 raise BuildError('%s has no %s' % (PAGE, key))
             page = page.replace(key, value)

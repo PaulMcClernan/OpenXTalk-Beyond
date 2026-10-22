@@ -11,7 +11,7 @@ Determine whether the idleTimer is currently locked.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

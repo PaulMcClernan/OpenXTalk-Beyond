@@ -9,7 +9,7 @@ Returns the value of a property of an in-app purchase.
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

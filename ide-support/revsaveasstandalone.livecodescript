@@ -408,14 +408,6 @@ command revDoSaveAsStandalone pStack, pFolder, pSettings, @xStandalonePaths
          
          -- we have our target platforms (specified in revSBLibrary) -- look for "constant kDesktopTargets" 
          switch tPlatform
-            case "iOS"
-               if not (the platform begins with "MacOS") then
-                  next repeat
-               end if
-               put tTargetFolder & slash & sStandaloneSettingsA["name"] & ".app" into xStandalonePaths[tPlatform]
-               dispatch "revSaveAsMobileStandalone" to stack "revSaveAsIOSStandalone" with \
-                     pStack, xStandalonePaths[tPlatform], "Device", sStandaloneSettingsA
-               break
             case "Android"
                put tTargetFolder & slash & sStandaloneSettingsA["name"] & ".apk" into xStandalonePaths[tPlatform]
                dispatch "revSaveAsMobileStandalone" to stack "revSaveAsAndroidStandalone" with \

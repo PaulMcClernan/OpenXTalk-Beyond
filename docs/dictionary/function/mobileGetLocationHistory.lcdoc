@@ -10,7 +10,7 @@ Get the mobile location samples since the last call to
 
 Introduced: 8.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -74,6 +74,5 @@ References: mobileSetLocationHistoryLimit (command),
 mobileStopTrackingSensor (command), mobileStartTrackingSensor (command),
 mobileGetLocationHistoryLimit (function),
 mobileSensorAvailable (function), mobileSensorReading (function),
-mobileLocationAuthorizationStatus (function),
 locationChanged (message), trackingError (message)
 

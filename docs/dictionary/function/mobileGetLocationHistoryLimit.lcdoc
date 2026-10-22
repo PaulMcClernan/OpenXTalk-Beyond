@@ -9,7 +9,7 @@ Get the number of location changes to be retained
 
 Introduced: 8.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -63,7 +63,6 @@ the last sample in the history). e.g.
 References: mobileSetLocationHistoryLimit (command),
 mobileStopTrackingSensor (command), mobileStartTrackingSensor (command),
 mobileGetLocationHistory (function), mobileSensorAvailable (function),
-mobileSensorReading (function),
-mobileLocationAuthorizationStatus (function), array (glossary),
-function (glossary), locationChanged (message), trackingError (message)
+mobileSensorReading (function), array (glossary), function (glossary),
+locationChanged (message), trackingError (message)
 

@@ -69,7 +69,6 @@
 							'revdb/revdb.gyp:dbodbc',
 							'revdb/revdb.gyp:dbpostgresql',
 							'revmobile/revmobile.gyp:external-revandroid',
-							'revmobile/revmobile.gyp:external-reviphone',
 							'revspeech/revspeech.gyp:external-revspeech',
 							
 							# Server externals
@@ -98,15 +97,6 @@
 							'revdb/revdb.gyp:dbsqlite-server',
 							'revxml/revxml.gyp:external-revxml-server',
 							'revzip/revzip.gyp:external-revzip-server',
-						],
-					},
-				],
-				[
-					'OS == "ios"',
-					{
-						'dependencies':
-						[
-							'engine/engine.gyp:ios-standalone-executable',
 						],
 					},
 				],
@@ -280,16 +270,6 @@
 						[
 							'<@(thirdparty_libs_native)',
 							'<@(thirdparty_libs_desktop)',
-						],
-					},
-				],
-				[
-					'OS == "ios"',
-					{
-						'dependencies':
-						[
-							'<@(thirdparty_libs_native)',
-							'thirdparty/libcairo/libcairo.gyp:libcairo',
 						],
 					},
 				],

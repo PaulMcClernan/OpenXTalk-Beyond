@@ -94,7 +94,7 @@ Subcommands
 
 "Managed" repository files are the files under the repository side of the
 class (a) rules (ide/Toolset, ide/Plugins, ide/Resources, ide/Documentation,
-ide/Extensions, the listed ide/ root files and the 11 ide-support files),
+ide/Extensions, the listed ide/ root files and the 9 ide-support files),
 except names starting with "." (upstream never packages them) and
 ide/Resources/Mobile Examples (installed on macOS only, so a Windows install
 says nothing about them). Nothing outside that set is ever written or
@@ -137,13 +137,11 @@ CLASS_ORDER = (IDE, BUILD, EXTERNAL, XTALK, JUNK, EXCLUDED, UNKNOWN)
 IDE_SUPPORT_FILES = (
     'revdeploylibraryandroid.livecodescript',
     'revdeploylibraryemscripten.livecodescript',
-    'revdeploylibraryios.livecodescript',
     'revdocsparser.livecodescript',
     'revhtml5urllibrary.livecodescript',
     'revliburl.livecodescript',
     'revsaveasandroidstandalone.livecodescript',
     'revsaveasemscriptenstandalone.livecodescript',
-    'revsaveasiosstandalone.livecodescript',
     'revsaveasstandalone.livecodescript',
     'revsblibrary.livecodescript',
 )

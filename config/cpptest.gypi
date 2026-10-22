@@ -10,20 +10,7 @@
 	'targets': [
 		{
 			'target_name': 'test-<(module_name)',
-
-			'conditions':
-			[
-				[
-					'OS == "ios"',
-					{
-						# We can't compile to an executable, but we can at least compile.
-						'type': 'static_library',
-					},
-					{
-						'type': 'executable',
-					}
-				],
-			],
+			'type': 'executable',
 
 			'dependencies':
 			[
@@ -84,9 +71,9 @@
 					},
 				],
 				[
-					'OS == "ios" or OS == "android"',
+					'OS == "android"',
 					{
-						# We can't run the tests on these platform so use `true`
+						# We can't run the tests on this platform so use `true`
 						# as the wrapper
 						'variables':
 						{

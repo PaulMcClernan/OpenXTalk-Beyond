@@ -11,7 +11,7 @@ Plays a movie or sound.
 
 Introduced: 1.0
 
-OS: mac, windows, linux, ios
+OS: mac, windows, linux
 
 Platforms: desktop, server, mobile
 
@@ -123,13 +123,12 @@ References: audioClip (object), beep (command), callbacks (property),
 command (glossary), current card (glossary), currentTime (property),
 dontRefresh (property), environment variable (glossary),
 execute (glossary), frameCount (property), function (control structure),
-import (command), iphoneSetAudioCategory (command), looping (property),
-MCISendString (function), message (glossary),
-playDestination (property), player (object), playLoudness (property),
-playRate (property), playStarted (message), playStopped (message),
-prepare (command), QTVersion (function),  QuickTime (glossary),
-result (function), return (glossary), revStopAnimation (command),
-showSelection (property), sound (function), start (command),
-stop (command), Unix (glossary), videoClip (object)
+import (command), looping (property), MCISendString (function),
+message (glossary), playDestination (property), player (object),
+playLoudness (property), playRate (property), playStarted (message),
+playStopped (message), prepare (command), QTVersion (function),
+QuickTime (glossary), result (function), return (glossary),
+revStopAnimation (command), showSelection (property), sound (function),
+start (command), stop (command), Unix (glossary), videoClip (object)
 
 Tags: multimedia

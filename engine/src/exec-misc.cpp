@@ -402,27 +402,7 @@ void MCMiscExecExportImageToAlbum(MCExecContext& ctxt, MCStringRef p_data_or_id,
 		}
 
         // SN-2014-12-18: [[ Bug 13860 ]] Only allow the use of the dataref as storing a filename for iOS
-#ifdef __IOS__
-        // PM-2014-12-12: [[ Bug 13860 ]] For referenced images we need the filename rather than the raw data
-        if (t_image -> isReferencedImage())
-        {
-            // SN-2014-12-18: [[ Bug 13860 ]] We store the UTF-8 filename in the dataref for referenced images.
-            MCAutoStringRef t_filename;
-            char *t_utf8_filename;
-            uindex_t t_byte_count;
-            t_image -> getimagefilename(&t_filename);
-            MCStringConvertToUTF8(*t_filename, t_utf8_filename, t_byte_count);
-            MCDataCreateWithBytesAndRelease((byte_t*)t_utf8_filename, t_byte_count, &t_raw_data);
-            t_is_raw_data = false;
-        }
-        else
-        {
-            t_image -> getrawdata(&t_raw_data);
-            t_is_raw_data = true;
-        }
-#else
         t_image -> getrawdata(&t_raw_data);
-#endif
     }
     // SN-2014-12-18: [[ Bug 13860 ]] If an extension was found, then we have raw data
     else

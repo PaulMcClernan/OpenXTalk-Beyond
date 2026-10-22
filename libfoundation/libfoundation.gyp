@@ -155,7 +155,6 @@
                 'src/system-library.cpp',
                 'src/system-library-android.hpp',
                 'src/system-library-emscripten.hpp',
-                'src/system-library-ios.hpp',
                 'src/system-library-mac.hpp',
                 'src/system-library-posix.hpp',
                 'src/system-library-static.hpp',
@@ -196,7 +195,7 @@
 			'conditions':
 			[
 				[
-					'OS != "mac" and OS != "ios"',
+					'OS != "mac"',
 					{
                         'sources':
                         [
@@ -235,15 +234,6 @@
                     },
                 ],
                 [
-                    'OS != "ios"',
-                    {
-                        'sources/':
-                        [
-                            ['exclude', '.*-ios\\.cpp$'],
-                        ],
-                    },
-                ],
-                [
                     'OS != "linux"',
                     {
                         'sources/':
@@ -264,7 +254,7 @@
                 
                 # Set java-related defines and includes
                 [
-					'host_os == "mac" and OS != "ios" and OS != "emscripten"',
+					'host_os == "mac" and OS != "emscripten"',
 					{
 						'defines':
 						[
@@ -346,7 +336,7 @@
 				'target_conditions':
 				[
 					[
-						'toolset_os == "mac" or toolset_os == "ios"',
+						'toolset_os == "mac"',
 						{
 							'conditions':
 							[

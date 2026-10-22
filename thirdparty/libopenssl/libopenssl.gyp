@@ -6,27 +6,10 @@
 	
 	'target_defaults':
 	{
-		'conditions':
-		[
-			[
-				'OS != "ios"',
-				{
-					'variables':
-					{
-						'ssl_stubs_file': 'ssl.stubs',
-					},
-				}
-			],
-			[
-				'OS == "ios"',
-				{
-					'variables':
-					{
-						'ssl_stubs_file': 'ssl_ios.stubs',
-					},
-				}
-			],
-		],
+		'variables':
+		{
+			'ssl_stubs_file': 'ssl.stubs',
+		},
 	},
 
 	'targets':
@@ -326,101 +309,6 @@
 					},
 				],
 			}
-		],
-		[
-			'OS == "ios"',
-			{
-				'targets':
-				[
-					{
-						'target_name': 'revsecurity',
-						'type': 'loadable_module',
-						'product_prefix': '',
-						'product_name': 'revsecurity',
-
-						'dependencies':
-						[
-							'../../prebuilt/libopenssl.gyp:libopenssl',
-							'libopenssl_symbol_list',
-						],
-
-						'sources':
-						[
-							'<(SHARED_INTERMEDIATE_DIR)/src/libopenssl-libinfo.ios.cpp',
-						],
-						
-						'xcode_settings':
-						{
-							'EXPORTED_SYMBOLS_FILE': '<(SHARED_INTERMEDIATE_DIR)/src/sslstubs.mac.symlist',
-						},
-						
-						'variables':
-						{
-							'ios_external_symbols': [],
-							'ios_external_symbol_list': '<(SHARED_INTERMEDIATE_DIR)/src/sslstubs.ios.symlist',
-						},
-						
-						'all_dependent_settings':
-						{
-							'variables':
-							{
-								'dist_files': [ '<(PRODUCT_DIR)/<(_product_name)>(ext_bundle_suffix)' ],
-							},
-						},
-					},
-					
-					{
-						'target_name': 'libopenssl_symbol_list',
-						'type': 'none',
-						
-						'actions':
-						[
-							{
-								'action_name': 'libopenssl_symbol_list',
-								'inputs':
-								[
-									'../../util/list_stub_symbols.pl',
-									'>(ssl_stubs_file)',
-								],
-								'outputs':
-								[
-									'<(SHARED_INTERMEDIATE_DIR)/src/sslstubs.ios.symlist',
-								],
-								
-								'action':
-								[
-									'<@(perl)',
-									'../../util/list_stub_symbols.pl',
-									'_',
-									'>(ssl_stubs_file)',
-									'<@(_outputs)',
-								],
-							},
-							{
-								'action_name': 'libopenssl_libinfo',
-								'inputs':
-								[
-									'../../util/build_libinfo.pl',
-									'>(ssl_stubs_file)',
-								],
-								'outputs':
-								[
-									'<(SHARED_INTERMEDIATE_DIR)/src/libopenssl-libinfo.ios.cpp',
-								],
-								
-								'action':
-								[
-									'<@(perl)',
-									'../../util/build_libinfo.pl',
-									'revsecurity',
-									'>(ssl_stubs_file)',
-									'<@(_outputs)',
-								],
-							},
-						],
-					},
-				],
-			},
 		],
 		[
 			'OS == "emscripten"',

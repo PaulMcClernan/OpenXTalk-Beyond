@@ -6994,6 +6994,97 @@ on revIDEEnsureOnScreen pStackName
 end revIDEEnsureOnScreen
 
 /*
+Summary: Move a stack's window so that its title bar can be reached
+
+Parameters:
+pStack (string): The long id of a stack
+
+Description:
+When a stack has opened with its title bar outside every screen's working
+area (above the top of the screen, or too far to a side to grab), moves the
+window just far enough onto the screen it is on that the title bar can be
+dragged. A window whose title bar can be reached is left where it is, and
+its size never changes.
+
+The front script sends it as each stack that is not the IDE's opens
+(preOpenStack, run once the stack's own openStack is done), and the
+HyperCard import as the stack it imported opens. The engine keeps a new
+window below the top of the screen, but allows 16 pixels for a title bar
+that is twice that (and twice again on a scaled Linux screen), and does not
+look at all when a script has placed the stack: a HyperCard stack is at
+0,0, and its scripts often move the card window to where it sat on a Mac.
+
+OXT-Beyond: the move is made with messages locked, so the stack's
+scripts see no moveStack they did not see before, and it does not mark the
+stack as changed. It is the IDE's only: a standalone opens its windows
+where the engine always has.
+*/
+on revIDEKeepTitleBarOnScreen pStack
+   local tWasLocked, tDecorations, tRect, tFrame, tTitle, tEdge, tGrip
+   local tArea, tReachable, tLeft, tTop, tWidth, tHeight
+   if pStack is empty or not exists(pStack) then exit revIDEKeepTitleBarOnScreen
+   -- Only a window with a title bar to grab: one that shows, of a mode
+   -- the user moves (not a menu, sheet or drawer), not full screen or shaped
+   if not the visible of pStack or the mode of pStack < 1 or the mode of pStack > 5 then
+      exit revIDEKeepTitleBarOnScreen
+   end if
+   if the fullScreen of pStack or (the windowShape of pStack is not empty and the windowShape of pStack is not 0) then
+      exit revIDEKeepTitleBarOnScreen
+   end if
+   put the decorations of pStack into tDecorations
+   if tDecorations is not "default" and "title" is not among the items of tDecorations then
+      exit revIDEKeepTitleBarOnScreen
+   end if
+
+   put the rect of pStack into tRect
+   -- The frame: the title bar above the card and the border round it, at
+   -- least what the platforms draw while the window manager has not said
+   put the effective rect of pStack into tFrame
+   put max(32, item 2 of tRect - item 2 of tFrame) into tTitle
+   put max(8, item 1 of tRect - item 1 of tFrame) into tEdge
+   put item 3 of tRect - item 1 of tRect into tWidth
+   put item 4 of tRect - item 2 of tRect into tHeight
+   -- enough of the title bar to take hold of, or all of a narrow one
+   put min(64, tWidth + 2 * tEdge) into tGrip
+
+   -- Reachable on any screen: the whole height of the title bar inside
+   -- its working area, and tGrip of its width
+   put false into tReachable
+   repeat for each line tArea in the working screenRects
+      if item 2 of tRect - tTitle >= item 2 of tArea and item 2 of tRect <= item 4 of tArea \
+            and min(item 3 of tRect + tEdge, item 3 of tArea) - max(item 1 of tRect - tEdge, item 1 of tArea) >= tGrip then
+         put true into tReachable
+         exit repeat
+      end if
+   end repeat
+   if tReachable then exit revIDEKeepTitleBarOnScreen
+
+   put line (the screen of pStack) of the working screenRects into tArea
+   if tArea is empty then put line 1 of the working screenRects into tArea
+   if item 3 of tArea <= item 1 of tArea or item 4 of tArea <= item 2 of tArea then
+      exit revIDEKeepTitleBarOnScreen
+   end if
+   put item 1 of tRect into tLeft
+   put item 2 of tRect into tTop
+   if tTop - tTitle < item 2 of tArea then
+      put item 2 of tArea + tTitle into tTop
+   else if tTop > item 4 of tArea - tTitle then
+      put max(item 2 of tArea + tTitle, item 4 of tArea - tHeight - tEdge) into tTop
+   end if
+   if tLeft + tWidth + tEdge < item 1 of tArea + tGrip then
+      put item 1 of tArea + tEdge into tLeft
+   else if tLeft - tEdge > item 3 of tArea - tGrip then
+      put max(item 1 of tArea + tEdge, item 3 of tArea - tWidth - tEdge) into tLeft
+   end if
+   if tLeft is not item 1 of tRect or tTop is not item 2 of tRect then
+      put the lockMessages into tWasLocked
+      lock messages
+      set the topLeft of pStack to tLeft, tTop
+      set the lockMessages to tWasLocked
+   end if
+end revIDEKeepTitleBarOnScreen
+
+/*
 Summary: Get the screenRect for a stack based on the screen the stack is on
 
 Parameters:
@@ -7483,6 +7574,9 @@ on revIDEImportHyperCardStack pFilePath
       return __revIDEError(tError)
    end if
 
+   -- OXT-Beyond: it opened with messages locked, so the front script did
+   -- not see it: a HyperCard stack is at 0,0, its title bar off the screen
+   send "revIDEKeepTitleBarOnScreen tStack" to me in 0 milliseconds
    ideMessageSend "ideOpenStack", tStack
    return empty
 end revIDEImportHyperCardStack

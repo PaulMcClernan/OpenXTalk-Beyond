@@ -24,7 +24,7 @@
 #include "script-private.h"
 #include "script-bytecode.hpp"
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
 #include <objc/runtime.h>
 #endif
 
@@ -795,7 +795,7 @@ __MCScriptResolveForeignFunctionBindingForC(MCScriptInstanceRef p_instance,
     return true;
 }
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
 /* objc:library>class.method[?thread] */
 static bool
 __MCScriptResolveForeignFunctionBindingForObjC(MCScriptInstanceRef p_instance,
@@ -1521,7 +1521,7 @@ __MCScriptResolveForeignFunctionBinding(MCScriptInstanceRef p_instance,
                                                                r_bound);
             break;
         case kMCScriptForeignHandlerLanguageObjC:
-#if !defined(_MACOSX) && !defined(TARGET_SUBPLATFORM_IPHONE)
+#if !defined(_MACOSX)
             
             if (r_bound == nil)
             {

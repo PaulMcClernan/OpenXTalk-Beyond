@@ -39,8 +39,10 @@ Commits do not need a `Signed-off-by` line.
 - This project builds, packages and tests Windows x86-64, macOS (one
   universal app for Apple Silicon and Intel) and Linux x86-64, and
   builds Linux arm64 without packaging it. Code for other platforms
-  (iOS, Android and others) is still in the tree; try not to break it,
-  but CI does not build it. The Linux and macOS builds run in CI (see
+  (Android and others) is still in the tree; try not to break it,
+  but CI does not build it. iOS is not supported and its build is gone
+  from the tree (the iOS Native Button widget stays, for the stacks that
+  use it); please don't add iOS code back. The Linux and macOS builds run in CI (see
   [BUILDING.md](BUILDING.md#12-building-on-linux), sections 12 and 13),
   so the checks of a pull request build and test a change on all three
   platforms.

@@ -790,33 +790,7 @@ specification for more details.
 
 ###### Dynamic Linking
 
-On all platforms with the exception of iOS devices only dynamically linked
-libraries are supported. Static linking is not yet supported in iOS simulator
-builds. On iOS 8+ devices dynamically linked frameworks (`.framework`) are
-supported.
-
-###### Static Code Libraries for iOS Device Builds
-
-Static libraries and frameworks for iOS must be compiled into a lcext object.
-Use the [build-module-lcext-ios.sh shell script](https://github.com/livecode/livecode/blob/develop/tools/build-module-lcext-ios.sh)
-as an example of how to do so.
-
-The script has the following inputs in order:
-
-- The path to the module compiled to C++ with using `lc-compile` with the
-`--forcebuiltins --outputauxc OUTPUTFILE` options. The output file inclues both
-the module and shims for any C foreign bindings. Use a `.cpp` extension so the
-compiler treats the file correctly.
-- The deps file which is a text file listing required dependencies when linking
-the object where each line is in the form `{library | [weak-]framework} <name>`
-- Lcext output file path (must use the lcext extesion).
-- The full name of the module. For example, `com.livecode.library.timezone`.
-- The output file path for the ios module. This should be named `module.lcm` and
-be next to the lcext object in the code folder. This is a dummy module we include
-in standalones that is just the name to be loaded as the actual module code is
-already linked into the executable.
-- one or more full paths to static libraries. If linking a static framework the
-static library is located at `<name>.framework/<name>`
+Only dynamically linked libraries are supported.
 
 ###### Java and Android Libraries
 
@@ -840,9 +814,6 @@ code folder `jvm`.
     code/armv6-android/library.so
     code/jvm-android/library.aar
     code/jvm/library.jar
-    code/universal-ios-iphoneos11.4/library.lcext
-    code/universal-ios-iphoneos11.4/module.lcm
-    code/universal-ios-iphonesimulator11.4/library.dylib
 
 #### Java
 

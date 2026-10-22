@@ -11,7 +11,7 @@ Returns the current interface orientation.
 
 Introduced: 4.5.2
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

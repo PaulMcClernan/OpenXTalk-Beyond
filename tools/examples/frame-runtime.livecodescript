@@ -34,8 +34,11 @@ local sChips, sShown
 local sCodeField, sCodeThumb, sCodeGoal, sCodeFont
 -- The Copy button's label, while it says "Copied"
 local sCopyLabel
+-- The group lit, and whether this script has the cursor locked as a hand
+local sLit, sHand
 
 on preOpenCard
+   frameRest
    frameSync
    pass preOpenCard
 end preOpenCard
@@ -172,6 +175,15 @@ on escapeKey
 end escapeKey
 
 on arrowKey pKey
+   -- A key sent to a control of this group comes here before the card:
+   -- the card hears it first, as it does when the focus is anywhere else,
+   -- and what it does not play comes back here from it. (A click can
+   -- leave the focus in the frame, and then the left and right keys of a
+   -- card whose program plays them went to the next card.)
+   if frameHasTarget() then
+      dispatch "arrowKey" to this card with pKey
+      exit arrowKey
+   end if
    -- (a field being typed in keeps its arrow keys)
    if the selectedField is empty and pKey is "left" then
       frameGo "prev"
@@ -181,6 +193,19 @@ on arrowKey pKey
       pass arrowKey
    end if
 end arrowKey
+
+-- Whether the message in hand was sent to this group or to a control in it
+private function frameHasTarget
+   local tObj
+   put the long id of the target into tObj
+   repeat while word 1 of tObj is not "card" and word 1 of tObj is not "stack"
+      if tObj is the long id of me then
+         return true
+      end if
+      put the long id of the owner of tObj into tObj
+   end repeat
+   return false
+end frameHasTarget
 
 -- Goes to the previous or next card, or a card by number or name; the
 -- page slides, and the sidebar stays where it is
@@ -293,6 +318,7 @@ on mouseEnter
       -- (a hand over what a click runs)
       lock cursor
       set the cursor to hand
+      put true into sHand
    end if
    pass mouseEnter
 end mouseEnter
@@ -305,6 +331,7 @@ on mouseLeave
       frameLight tGroup, false
    else if tGroup is empty and frameIsProgram(the long id of the target) then
       unlock cursor
+      put false into sHand
    end if
    pass mouseLeave
 end mouseLeave
@@ -335,11 +362,35 @@ private command frameLight pGroup, pLit
       set the backgroundColor of graphic 1 of pGroup to the cLit of pGroup
       lock cursor
       set the cursor to hand
+      put pGroup into sLit
+      put true into sHand
    else
       set the backgroundColor of graphic 1 of pGroup to the cRest of pGroup
       unlock cursor
+      if sLit is pGroup then
+         put empty into sLit
+      end if
+      put false into sHand
    end if
 end frameLight
+
+-- Before a card opens: what the pointer was over is at rest, and the
+-- cursor is the engine's again. A click that goes to another card leaves
+-- the pointer where it was, so the mouseLeave the engine sends as the old
+-- card closes finds it still over what was clicked, which stayed lit, and
+-- the cursor a hand over everything on the new card. (What the pointer
+-- is over once the card is open lights up again: the engine sends it
+-- mouseEnter.)
+private command frameRest
+   if sLit is not empty and exists(sLit) then
+      frameLight sLit, false
+   end if
+   put empty into sLit
+   if sHand then
+      unlock cursor
+      put false into sHand
+   end if
+end frameRest
 
 -- True for this window's own controls: this group, the stage, the panel,
 -- and what they hold

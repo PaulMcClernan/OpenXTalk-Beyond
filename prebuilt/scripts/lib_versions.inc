@@ -22,7 +22,7 @@ function readVersion {
 	for PLATFORM_FILE in "${script_dir}/../versions/${LIBNAME_LC}"_* ; do
 		local SUFFIX="${PLATFORM_FILE##*/${LIBNAME_LC}_}"
 		case "${SUFFIX}" in
-			win32|linux|mac|ios|android|emscripten)
+			win32|linux|mac|android|emscripten)
 				local PLATFORM_VERSION=$(cat "${PLATFORM_FILE}")
 				eval ${LIBNAME}_VERSION_${SUFFIX}='"${PLATFORM_VERSION}"'
 				;;
@@ -59,6 +59,5 @@ Thirdparty_LIBS_FONTS="libharfbuzz libfreetype"
 Thirdparty_LIBS_mac="$Thirdparty_LIBS_CORE $Thirdparty_LIBS_NATIVE $Thirdparty_LIBS_DESKTOP"
 Thirdparty_LIBS_linux="$Thirdparty_LIBS_CORE $Thirdparty_LIBS_NATIVE $Thirdparty_LIBS_DESKTOP"
 Thirdparty_LIBS_win32="$Thirdparty_LIBS_CORE $Thirdparty_LIBS_NATIVE $Thirdparty_LIBS_DESKTOP"
-Thirdparty_LIBS_ios="$Thirdparty_LIBS_CORE $Thirdparty_LIBS_NATIVE libcairo"
 Thirdparty_LIBS_emscripten="$Thirdparty_LIBS_CORE $Thirdparty_LIBS_FONTS libsqlite libxml libxslt libzip"
 Thirdparty_LIBS_android="$Thirdparty_LIBS_CORE $Thirdparty_LIBS_NATIVE $Thirdparty_LIBS_FONTS libexpat libcairo"

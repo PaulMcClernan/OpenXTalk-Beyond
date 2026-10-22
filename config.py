@@ -25,7 +25,7 @@ import shutil
 KNOWN_PLATFORMS = (
     'linux-x86', 'linux-x86_64', 'linux-armv6hf', 'linux-armv7', 'linux-arm64',
     'android-armv6', 'android-armv7', 'android-arm64', 'android-x86', 'android-x86_64',
-    'mac', 'ios', 
+    'mac',
     'win-x86', 'win-x86_64', 
     'emscripten'
 )
@@ -259,13 +259,6 @@ def guess_xcode_arch(target_sdk):
         if machine in ('arm64', 'aarch64'):
             return 'arm64'
         return 'x86_64'
-    if sdk == 'iphoneos':
-        if int(ver) < 8:
-            return 'armv7'
-        else:
-            return 'armv7 arm64'
-    if sdk == 'iphonesimulator':
-        return 'x86_64'
 
 def validate_target_arch(opts):
     if opts['TARGET_ARCH'] is None:
@@ -283,7 +276,7 @@ def validate_target_arch(opts):
             opts['UNIFORM_ARCH'] = opts['TARGET_ARCH']
             return
 
-        if re.match('^(ios|mac)', platform) is not None:
+        if re.match('^mac', platform) is not None:
             validate_xcode_sdks(opts)
             arch = guess_xcode_arch(opts['XCODE_TARGET_SDK'])
             if arch is not None:
@@ -312,7 +305,7 @@ def validate_gyp_settings(opts):
         build_os = opts['OS']
         if build_os in ('linux', 'android', 'emscripten'):
             format = 'make-linux'
-        elif build_os in ('mac', 'ios'):
+        elif build_os == 'mac':
             format = 'xcode'
         elif build_os in ('win'):
             format = 'msvs'
@@ -474,7 +467,7 @@ def validate_windows_tools(opts):
         opts['WIN_MSVS_VERSION'] = '2015'
 
 ################################################################
-# Mac & iOS-specific options
+# Mac-specific options
 ################################################################
 
 def validate_xcode_sdks(opts):
@@ -482,15 +475,11 @@ def validate_xcode_sdks(opts):
         validate_os(opts)
         if opts['OS'] == 'mac':
             opts['XCODE_TARGET_SDK'] = 'macosx'
-        elif opts['OS'] == 'ios':
-            opts['XCODE_TARGET_SDK'] = 'iphoneos'
 
     if opts['XCODE_HOST_SDK'] is None:
         validate_os(opts)
         if opts['OS'] == 'mac':
             opts['XCODE_HOST_SDK'] = opts['XCODE_TARGET_SDK']
-        elif opts['OS'] == 'ios':
-            opts['XCODE_HOST_SDK'] = 'macosx'
 
 ################################################################
 # Android-specific options
@@ -792,9 +781,6 @@ def configure_mac(opts):
                                   '-Djavahome=' + opts['JAVA_SDK']]
     exec_gyp(args + opts['GYP_OPTIONS'])
 
-def configure_ios(opts):
-    configure_mac(opts)
-
 def configure(args):
     opts = {}
     process_env_options(opts)
@@ -807,7 +793,6 @@ def configure(args):
         'android': configure_android,
         'win': configure_win,
         'mac': configure_mac,
-        'ios': configure_ios,
     }
     configure_procs[opts['OS']](opts)
 

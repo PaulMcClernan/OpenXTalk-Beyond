@@ -17,7 +17,7 @@ In version 7.0 the language was changed to handle unicode
 transparently. This means that language functionality which previously
 aided unicode text manipulation is no longer required. 
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, server, mobile
 

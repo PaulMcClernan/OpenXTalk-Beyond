@@ -17,6 +17,14 @@ cd StackPlayer && python3 -m http.server 8000
 # then open http://localhost:8000/index.html
 ```
 
+The page asks for the engine and `standalone.zip` with the site's stamp
+(`?v=`, a digest of those files, which `build_player.py` puts in the
+page), so a browser or a CDN that kept another version's copies under the
+same names never starts them with this version's. Its scripts carry
+`data-cfasync="false"`, so Cloudflare's Rocket Loader leaves them as they
+are. Behind a CDN, purge its cache when the site is updated from a release
+before this one, which had no stamp.
+
 The home page offers **Open a stack**, **Open a folder** and a drop zone
 (a stack file, a folder, or a `.zip` holding a stack and the files it
 uses), three whole stacks to play (**OXT-Beyond on the Web**, a tour of

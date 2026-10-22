@@ -40,8 +40,6 @@ static MCStringRef sMCSLibraryAndroidNativeLibPath = nullptr;
 #include "system-library-w32.hpp"
 #elif defined(__MAC__)
 #include "system-library-mac.hpp"
-#elif defined(__IOS__)
-#include "system-library-ios.hpp"
 #elif defined(__LINUX__)
 #include "system-library-linux.hpp"
 #elif defined(__ANDROID__)

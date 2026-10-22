@@ -9,7 +9,7 @@ Sent when the point at which the user is touching the screen changes.
 
 Introduced: 4.5.2
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

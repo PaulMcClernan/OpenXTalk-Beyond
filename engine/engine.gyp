@@ -295,54 +295,6 @@
 					},
 				],
 				[
-					'OS == "ios"',
-					{
-						'product_name': 'standalone-mobile-lib-community',
-						'product_prefix': '',
-						'product_extension': 'lcext',
-						'app_plist': 'rsrc/standalone-mobile-Info.plist',
-						
-						# Forces all dependencies to be linked properly
-						'type': 'shared_library',
-                        
-						'conditions':
-						[
-							[
-								'("11" not in target_sdk) and ("12" not in target_sdk) and ("13" not in target_sdk)',
-								{
-									'variables':
-									{
-										'deps_file': '${SRCROOT}/standalone14.ios',
-									},
-								},
-								{
-									'variables':
-									{
-										'deps_file': '${SRCROOT}/standalone.ios',
-									},
-								}
-							],
-						],
-						
-						'xcode_settings':
-						{
-							'DEAD_CODE_STRIPPING': 'NO',
-							'DYLIB_COMPATIBILITY_VERSION': '',
-							'DYLIB_CURRENT_VERSION': '',
-							'MACH_O_TYPE': 'mh_object',
-							'LINK_WITH_STANDARD_LIBRARIES': 'NO',
-							'OTHER_LDFLAGS':
-							[
-								'-Wl,-sectcreate,__MISC,__deps,<(deps_file)',
-								'-Wl,-u,_main',
-								'-Wl,-u,_load_module',
-								'-Wl,-u,_resolve_symbol',
-								#'-all_load',		# Dead stripping later will remove un-needed symbols
-							],
-						},
-					},
-				],
-				[
 					# Use a linker script to add the project and payload sections to the Linux executable
 					'OS == "linux"',
 					{
@@ -511,31 +463,6 @@
 					},
 				],
 				[
-					'OS == "ios"',
-					{
-						'all_dependent_settings':
-						{
-							'variables':
-							{
-								'dist_aux_files':
-								[
-									'rsrc/fontmap',
-									'rsrc/mobile-device-template.plist',
-									'rsrc/mobile-remote-notification-template.plist',
-									'rsrc/mobile-template.plist',
-									'rsrc/mobile-url-scheme-template.plist',
-									'rsrc/mobile-disable-ats-template.plist',
-									'rsrc/template-entitlements.xcent',
-									'rsrc/template-beta-report-entitlement.xcent',
-									'rsrc/template-remote-notification-entitlements.xcent',
-									'rsrc/template-remote-notification-store-entitlements.xcent',
-									'rsrc/template.storyboard',
-								],
-							},
-						},
-					},
-				],
-				[
 					'OS == "emscripten"',
 					{
 						'all_dependent_settings':
@@ -574,19 +501,13 @@
 							},
 						],
 						[
-							'OS == "ios"',
-							{
-								'dist_files': [ '<(PRODUCT_DIR)/standalone-mobile-community.ios-engine' ],
-							},
-						],
-						[
 							'OS == "emscripten"',
 							{
 								'dist_files': [],
 							}
 						],
 						[
-							'OS != "android" and OS != "ios" and OS != "emscripten"',
+							'OS != "android" and OS != "emscripten"',
 							{
 								'dist_files': [ '<(PRODUCT_DIR)/<(_product_name)>(app_bundle_suffix)' ],
 							}
@@ -811,35 +732,6 @@
 						'include_dirs':
 						[
 							'../libfoundation/include',
-						],
-					},
-				],
-				[
-					'OS == "ios"',
-					{
-						'actions':
-						[
-							{
-								'action_name': 'bind-output',
-								'message': 'Bind output',
-								
-								'inputs':
-								[
-									'<(PRODUCT_DIR)/standalone-mobile-lib-community.lcext',
-								],
-								
-								'outputs':
-								[
-									'<(PRODUCT_DIR)/standalone-mobile-community.ios-engine',
-								],
-								
-								'action':
-								[
-									'./bind-ios-standalone.sh',
-									'<@(_inputs)',
-									'<@(_outputs)',
-								],
-							},
 						],
 					},
 				],

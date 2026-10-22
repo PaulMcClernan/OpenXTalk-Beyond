@@ -11,7 +11,7 @@ Returns the Device Token used for Push Notification.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
