@@ -291,19 +291,38 @@ def mac_ask(app, questions=MAC_QUESTIONS, timeout=20):
     return True
 
 
-def mac_tools_log(lines=80):
-    """Log the end of the IDE's own start-up log (revInternal__Log in
-    ide/Toolset/home.livecodescript)."""
+def mac_tools_log(lines=400):
+    """Log the IDE's own log of its last start-up (revInternal__Log in
+    ide/Toolset/home.livecodescript), at most its last lines lines, the
+    clock's time now beside it, and what macOS logged of the clock being
+    set while the IDE ran: the engine's pending messages wait on the wall
+    clock (gettimeofday), so a clock set back holds every one of them."""
     path = os.path.expanduser('~/Library/Logs/OXT-Beyond/OXT-BeyondToolsLog.txt')
     if not os.path.isfile(path):
         log('(no IDE tools log at %s)' % path)
         return False
     with open(path, encoding='utf-8', errors='replace') as f:
         text = f.read().replace('\r', '\n').splitlines()
-    log('::group::The IDE\'s tools log (last %d of %d lines)' % (min(lines, len(text)), len(text)))
+    starts = [i for i, x in enumerate(text) if 'Startup Started' in x]
+    if starts:
+        text = text[starts[-1]:]
+    log('::group::The IDE\'s tools log of its last start-up (last %d of %d lines; the time now %.3f)' % (
+        min(lines, len(text)), len(text), time.time()))
     for x in text[-lines:]:
         log(x)
     log('::endgroup::')
+    if shutil.which('log'):
+        try:
+            proc = subprocess.run(['log', 'show', '--last', '15m', '--style', 'compact', '--predicate',
+                                   'process == "timed" OR eventMessage CONTAINS[c] "settimeofday"'],
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+            found = proc.stdout.decode('utf-8', 'replace').splitlines()
+            log('::group::The clock set while the IDE ran (macOS log, timed: %d lines)' % len(found))
+            for x in found[-60:]:
+                log(x)
+            log('::endgroup::')
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log('(the macOS log could not be read: %s)' % e)
     return True
 
 
