@@ -115,8 +115,11 @@ public:
             }
         }
         
+        /* Said in plain words: the library is not missing from a folder,
+         * the page cannot load one at all (only those linked into the
+         * engine and registered above exist here). */
         return __MCSLibraryThrowCreateWithNativePathFailed(p_native_path,
-                                                           nullptr);
+                                                           MCSTR("not linked into this web engine (a browser loads no native library)"));
     }
     
     bool CreateWithAddress(void *p_address)

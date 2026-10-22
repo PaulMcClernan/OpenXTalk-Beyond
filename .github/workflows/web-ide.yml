@@ -520,6 +520,7 @@ jobs:
             --out "$RUNNER_TEMP/web-ide-xtalk" --browser "$BROWSER" --timeout 2400 \
             --tour tools/ci/web-ide-xtalk.livecodescript --relay \
             --add "$files/holdem.livecodescript" --add "$files/box2dxt-platformer.livecodescript" \
+            --add "$files/datachannel-selftest.livecodescript" \
             --replace "boot/Extensions/nostr-relay/nostr-relay.livecodescript=$files/nostr-relay.livecodescript"
 
       - name: Upload the record

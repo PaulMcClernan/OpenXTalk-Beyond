@@ -462,9 +462,11 @@ Notes:
 - **The web IDE (experimental).** A web IDE built with the suite's web
   libraries (`web_libraries` in `tools/oxt/xtalk-extensions.json`; see
   "The xTalk Suite's libraries in the web IDE" in
-  [BUILDING.md](BUILDING.md)) links SodiumXT's, Box2Dxt's and CoinXT's
+  [BUILDING.md](BUILDING.md)) links SodiumXT's, Box2Dxt's, CoinXT's and DataChannelXT's
   `wasm32-emscripten` builds into its engine's `.wasm`, with the
-  components the table names for them. Their licence texts are the
+  components the table names for them, except that DataChannelXT's web
+  build contains no libdatachannel, libjuice, usrsctp or OpenSSL (it
+  uses the browser's WebRTC) and is DataChannelXT's own code alone. Their licence texts are the
   same extensions' `licenses/` folders in the web IDE's `ide.zip`.
 
 ### xTalk Suite demos

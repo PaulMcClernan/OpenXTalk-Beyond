@@ -134,6 +134,10 @@ asyncify_remove_xtalk = [
     # (a pattern no function matches is a warning of the link: the families
     # the shims never reach are left out)
     'cnx_*', 'ecdsa_*', 'secp256k1_*', 'pbkdf2_*', 'ripemd160*', 'bn_*',
+    # DataChannelXT: the shim over the browser's WebRTC, whose one
+    # JavaScript import only reads and queues (its events are drained by
+    # dcx_poll, never delivered by a call into the engine)
+    'dcx_*',
     ]
 
 # Engine functions that JavaScript calls by name are exported. Those that

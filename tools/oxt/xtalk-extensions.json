@@ -266,7 +266,7 @@
       {
         "name": "sodiumxt",
         "repository": "SethMorrowSoftware/xtalk-suite",
-        "commit": "b0e77e603c7d7ed98a33737bdd8f8e92053eb242",
+        "commit": "7b6a1c14927c90bff1aef700afb447c5d6d66b51",
         "path": "sodiumxt/src/code/wasm32-emscripten/sodiumxt.a",
         "sha256": "75c9b3700ddff69f3ffba0b266dd7303981799ba765e5e945da4389a006ae446",
         "size": 339576,
@@ -275,7 +275,7 @@
       {
         "name": "box2dxt",
         "repository": "SethMorrowSoftware/xtalk-suite",
-        "commit": "b0e77e603c7d7ed98a33737bdd8f8e92053eb242",
+        "commit": "7b6a1c14927c90bff1aef700afb447c5d6d66b51",
         "path": "box2dxt/src/code/wasm32-emscripten/box2dxt.a",
         "sha256": "41448d5a12c8499e389389ea0e196ad644727a2dc87ae013e98256a90267b8b1",
         "size": 665870,
@@ -284,10 +284,19 @@
       {
         "name": "coinxt",
         "repository": "SethMorrowSoftware/xtalk-suite",
-        "commit": "b0e77e603c7d7ed98a33737bdd8f8e92053eb242",
+        "commit": "7b6a1c14927c90bff1aef700afb447c5d6d66b51",
         "path": "coinxt/src/code/wasm32-emscripten/coinxt.a",
         "sha256": "3ffd179e301a32907cd5d64734eb56efc7870e8b4d02ef17c7515cd66268b539",
         "size": 649612,
+        "emscripten": "6.0.12"
+      },
+      {
+        "name": "datachannelxt",
+        "repository": "SethMorrowSoftware/xtalk-suite",
+        "commit": "7b6a1c14927c90bff1aef700afb447c5d6d66b51",
+        "path": "datachannelxt/src/code/wasm32-emscripten/datachannelxt.a",
+        "sha256": "17c9f0193499a5c5d768cd8f53265ff0a7ee731761bc5caa2e0c5b600cac2ac3",
+        "size": 23532,
         "emscripten": "6.0.12"
       }
     ]

@@ -11,9 +11,11 @@ script "oxtwebxtalk"
 --       --tour tools/ci/web-ide-xtalk.livecodescript --relay \
 --       --add <suite>/holde-em/src/holdem.livecodescript \
 --       --add <suite>/box2dxt/examples/box2dxt-platformer.livecodescript \
+--       --add <suite>/datachannelxt/tests/datachannel-selftest.livecodescript \
 --       --replace boot/Extensions/nostr-relay/nostr-relay.livecodescript=<suite>/nostrxt/src/nostr-relay.livecodescript
 --
--- The web IDE's engine links SodiumXT, Box2Dxt and CoinXT into itself
+-- The web IDE's engine links SodiumXT, Box2Dxt, CoinXT and DataChannelXT
+-- (a shim over the browser's WebRTC) into itself
 -- (engine/src/em-xtalk-web.cpp), and the extensions the IDE ships call
 -- them unchanged. Each step calls one of them, or an app built on them,
 -- as a user's script does, and checks what comes back against a value
@@ -39,6 +41,15 @@ script "oxtwebxtalk"
 --                runs with nothing failing
 --    platformer  The Box2Dxt platformer: the title, then level 1 built
 --                and playing
+--    datachannel DataChannelXT over the browser's RTCPeerConnection: its
+--                own harness (datachannelxt/tests/datachannel-selftest.
+--                livecodescript, --add) runs to its summary, the live
+--                in-page loopback included, with nothing failing
+--    unavailable TorrentXT and ENetXT, which need raw TCP and UDP that a
+--                page cannot open, are not in the web engine: a call to
+--                each throws an error the script can catch, and the IDE
+--                goes on; OnionXT's pure-script half works, and it cannot
+--                reach a tor daemon
 -- A step that throws fails; a step whose app is not beside this file (no
 -- --add) or that has no relay (no --relay) fails as well, so that a
 -- check that ran nothing cannot pass.
@@ -51,7 +62,7 @@ Runs the xTalk Suite's libraries and apps in the web IDE for its CI job
 (tools/ci/web_ide_tour.py --tour). Only CI's copy of the site has it.
 */
 
-constant kSteps = "start,sodium,pwhash,box2d,coinxt,nostr,chat,holdem,platformer"
+constant kSteps = "start,sodium,pwhash,box2d,coinxt,nostr,chat,holdem,platformer,datachannel,unavailable"
 constant kBlake2bAbc = "bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319"
 constant kSha256Abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 constant kKeccakEmpty = "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
@@ -61,6 +72,11 @@ constant kBip340Pub = "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113b
 constant kBip340Sig = "e907831f80848d1069a5371b402410364bdf1c5f8307b0084c55f1ce2dca821525f66a4a85ea8b71e482a74f382d2ce5ebeee8fdb2172f477df4900d310536c0"
 constant kHoldem = "oxtWebHoldem"
 constant kPlatformer = "oxtWebPlatformer"
+constant kDataChannel = "oxtWebDataChannel"
+-- The Tor Project's onion address, and the same with its first letter
+-- changed (its checksum then fails)
+constant kOnionGood = "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion"
+constant kOnionBad = "3gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion"
 
 -- The platformer's: true skips its question about the art folder (it
 -- then draws its placeholder art)
@@ -408,6 +424,88 @@ on xt_platformer
    end if
    close stack kPlatformer
 end xt_platformer
+
+on xt_datachannel
+   local tReport, tLine, tPassed, tFailed, tSkipped
+   xtAppStack kDataChannel, "datachannel-selftest.livecodescript"
+   -- Its openStack builds the window and runs the whole harness; the
+   -- loopback half is pumped by a timer, so wait for its summary
+   go stack kDataChannel
+   xtWaitTrue "oxtWebDcDone()", 45000
+   dispatch function "stReportText" to stack kDataChannel
+   put the result into tReport
+   repeat for each line tLine in tReport
+      if tLine begins with "==" then
+         tourRecord "INFO   " & tLine
+      end if
+      switch word 1 of tLine
+         case "PASS"
+            add 1 to tPassed
+            break
+         case "FAIL"
+            add 1 to tFailed
+            tourRecord "INFO   " & tLine
+            break
+         case "SKIP"
+            add 1 to tSkipped
+            tourRecord "INFO   " & tLine
+            break
+      end switch
+   end repeat
+   tourRecord "INFO DataChannelXT's harness:" && tPassed + 0 && "passed," && tFailed + 0 && "failed," && tSkipped + 0 && "skipped"
+   tourShot "x08-datachannel-selftest"
+   if tFailed + 0 > 0 or tPassed + 0 < 40 then
+      throw "DataChannelXT's harness:" && tPassed + 0 && "passed," && tFailed + 0 && "failed"
+   end if
+   close stack kDataChannel
+end xt_datachannel
+
+function oxtWebDcDone
+   local tReport
+   dispatch function "stReportText" to stack kDataChannel
+   put the result into tReport
+   return "== summary ==" is in tReport and "RUN NOT FINISHED" is not in tReport
+end oxtWebDcDone
+
+on xt_unavailable
+   local tError, tGot
+   -- TorrentXT and ENetXT: a catchable error, not a crash
+   repeat for each item tGot in "btStartSession(),btLastError(),enInitialize(),enLibraryVersion()"
+      put empty into tError
+      try
+         get value(tGot)
+      catch tError
+      end try
+      if tError is empty then
+         throw tGot && "answered" && quote & it & quote && "in the browser, where it cannot work"
+      end if
+      -- The library is named, so that a script (and the web Stack
+      -- Player's message) can say which one is missing
+      if "unable to load foreign library" is not in tError then
+         throw tGot && "failed, but not by naming its library:" && tourJoin(tError)
+      end if
+      tourRecord "INFO" && tGot && "refused:" && tourJoin(tError)
+   end repeat
+   -- And the engine goes on
+   sxInit
+   xtExpect "BLAKE2b-256 of abc after them", sxBin2Hex(sxHash("abc", 32)), kBlake2bAbc
+   -- OnionXT is script: what needs no daemon works, and the daemon is out
+   -- of reach (a page opens no TCP socket)
+   tourRecord "INFO oxVersion()" && oxVersion()
+   xtExpect "a valid onion address", oxIsValidAddress(kOnionGood), true
+   xtExpect "one with a bad checksum", oxIsValidAddress(kOnionBad), false
+   put empty into tError
+   put empty into tGot
+   try
+      oxConnectControl
+      put the result into tGot
+   catch tError
+   end try
+   tourRecord "INFO oxConnectControl:" && tourJoin(tGot && tError)
+   tourWait 3000
+   xtExpect "the control connection authenticated", oxIsControlAuthenticated(), false
+   oxDisconnectControl
+end xt_unavailable
 
 -- A new stack pName whose script is the app pFile, which web_ide_tour.py
 -- --add put in the folder files beside this file, as its HOW TO RUN says (a new stack, the

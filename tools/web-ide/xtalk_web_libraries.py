@@ -90,7 +90,7 @@ EMSCRIPTEN_VERSION_FILE = os.path.join(REPO, 'config', 'emscripten-version')
 
 # The names the engine registers (engine/src/em-xtalk-web.cpp): a library
 # whose name is not here would be linked and never found
-KNOWN = ('sodiumxt', 'box2dxt', 'coinxt')
+KNOWN = ('sodiumxt', 'box2dxt', 'coinxt', 'datachannelxt')
 
 
 class WebLibraryError(Exception):
@@ -404,6 +404,7 @@ TEST_FILES = [
     ('holdem.livecodescript', 'holde-em/src/holdem.livecodescript'),
     ('box2dxt-platformer.livecodescript', 'box2dxt/examples/box2dxt-platformer.livecodescript'),
     ('nostr-relay.livecodescript', 'nostrxt/src/nostr-relay.livecodescript'),
+    ('datachannel-selftest.livecodescript', 'datachannelxt/tests/datachannel-selftest.livecodescript'),
 ]
 
 
