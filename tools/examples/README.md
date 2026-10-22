@@ -71,7 +71,7 @@ run had imported the suite's `box2dxt/Spritesheets` and its sounds into
 it, so that it opens without that folder, renamed from "Untitled 1";
 every line of its script but the Box2Dxt Kit's doc comments is the
 suite's file at `34221ae`. Texas Hold'em is holde-em v0.25.7 (xtalk-suite
-pull request #164), made on 2026-10-21 on Windows the way
+pull requests #164 and #167), made on 2026-10-21 on Windows the way
 `prebuild-suite-demos.livecodescript` makes it, with the suite's
 `holde-em/assets` as the default folder: its table built, the Kenney card
 faces and backs taken in through the Box2Dxt Kit, which keeps an atlas
