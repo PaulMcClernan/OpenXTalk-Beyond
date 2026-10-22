@@ -56,6 +56,7 @@ later).
 import argparse
 import base64
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -236,6 +237,192 @@ def mac_screen(path):
     return os.path.isfile(path)
 
 
+# What a Mac's IDE says about itself when it stopped: the engine answers
+# AppleScript's "evaluate" (engine/rsrc/terminology.sdef) from its event
+# loop, which a sample showed idle, so these say which start-up step it
+# never finished and the error that stopped it
+MAC_QUESTIONS = (
+    'the cREVLaunching of stack "Home"',
+    'the statusMessage of stack "revSplash"',
+    'the defaultStack',
+    'the openStacks',
+    'the pendingMessages',
+    'the cLastError of card 1 of stack "revErrorDisplay"',
+    'the cCurrentObject of card 1 of stack "revErrorDisplay"',
+    'the executionError of stack "revErrorDisplay"',
+    'the mode of stack "revErrorDisplay" && the visible of stack "revErrorDisplay" && '
+    'the rect of stack "revErrorDisplay"',
+    'the mode of stack "revTools" && the visible of stack "revTools" && the blendLevel of stack "revTools" && '
+    'the number of controls of stack "revTools" && the rect of stack "revTools"',
+)
+
+
+def mac_ask(app, questions=MAC_QUESTIONS, timeout=20):
+    """Ask the running IDE at app (its .app) each of questions, logging each
+    answer. False when the engine could not be asked: osascript missing, the
+    app's bundle id unread, or no answer in timeout seconds (macOS may be
+    asking whether the runner may control the app)."""
+    import plistlib
+    if not shutil.which('osascript'):
+        return False
+    try:
+        with open(os.path.join(app, 'Contents', 'Info.plist'), 'rb') as f:
+            bundle = plistlib.load(f)['CFBundleIdentifier']
+    except (OSError, KeyError, ValueError, plistlib.InvalidFileException):
+        return False
+    log('::group::What the IDE says (AppleScript to %s)' % bundle)
+    try:
+        for q in questions:
+            text = 'tell application id "%s" to evaluate "%s"' % (
+                bundle, q.replace('\\', '\\\\').replace('"', '\\"'))
+            try:
+                proc = subprocess.run(['osascript', '-e', text], stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                log('%s: no answer in %d s; asking no more' % (q, timeout))
+                return False
+            except OSError as e:
+                log('%s: %s' % (q, e))
+                return False
+            answer = proc.stdout.decode('utf-8', 'replace').strip().replace('\r', '\n')
+            log('%s:%s%s' % (q, '\n' if '\n' in answer else ' ', answer or '(empty)'))
+    finally:
+        log('::endgroup::')
+    return True
+
+
+def mac_tools_log(lines=400):
+    """Log the IDE's own log of its last start-up (revInternal__Log in
+    ide/Toolset/home.livecodescript), at most its last lines lines, the
+    clock's time now beside it, and what macOS logged of the clock being
+    set while the IDE ran: the engine's pending messages wait on the wall
+    clock (gettimeofday), so a clock set back holds every one of them."""
+    path = os.path.expanduser('~/Library/Logs/OXT-Beyond/OXT-BeyondToolsLog.txt')
+    if not os.path.isfile(path):
+        log('(no IDE tools log at %s)' % path)
+        return False
+    with open(path, encoding='utf-8', errors='replace') as f:
+        text = f.read().replace('\r', '\n').splitlines()
+    starts = [i for i, x in enumerate(text) if 'Startup Started' in x]
+    if starts:
+        text = text[starts[-1]:]
+    log('::group::The IDE\'s tools log of its last start-up (last %d of %d lines; the time now %.3f)' % (
+        min(lines, len(text)), len(text), time.time()))
+    for x in text[-lines:]:
+        log(x)
+    log('::endgroup::')
+    if shutil.which('log'):
+        try:
+            proc = subprocess.run(['log', 'show', '--last', '15m', '--style', 'compact', '--predicate',
+                                   'process == "timed" OR eventMessage CONTAINS[c] "settimeofday"'],
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+            found = proc.stdout.decode('utf-8', 'replace').splitlines()
+            log('::group::The clock set while the IDE ran (macOS log, timed: %d lines)' % len(found))
+            for x in found[-60:]:
+                log(x)
+            log('::endgroup::')
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log('(the macOS log could not be read: %s)' % e)
+    return True
+
+
+def mac_app(engine):
+    """The .app an engine path is inside, or None."""
+    return engine[:engine.index('.app/') + 4] if '.app/' in engine else None
+
+
+# The binaries the package renames: OXT-Beyond.app's engine is the
+# build's LiveCode-Community.app, whose dSYM keeps the build's name
+MAC_BUILD_NAMES = {'OXT-Beyond': 'LiveCode-Community'}
+
+
+def mac_dwarf(name):
+    """The DWARF file of the binary name in the dSYM bundles under
+    $OXT_DSYM_DIR (the build's debug symbols, which the macOS test job
+    unpacks there), or None."""
+    root = os.environ.get('OXT_DSYM_DIR')
+    if not root or not os.path.isdir(root):
+        return None
+    names = [name, MAC_BUILD_NAMES.get(name)]
+    for d, dirs, files in os.walk(root):
+        if os.path.basename(d) == 'DWARF':
+            for n in names:
+                if n and n in files:
+                    return os.path.join(d, n)
+    return None
+
+
+def mac_symbolicate(graph):
+    """graph, a sample's call graph, with the engine's frames, which the
+    stripped binary leaves as "??? (in OXT-Beyond)", named by atos from
+    its dSYM where there is one."""
+    pattern = re.compile(r'\?\?\?  \(in (\S+)\)  load address (0x[0-9a-f]+) \+ 0x[0-9a-f]+  \[(0x[0-9a-f]+)\]')
+    frames = [m for m in (pattern.search(x) for x in graph) if m]
+    if not frames or not shutil.which('atos'):
+        return graph
+    dwarf = mac_dwarf(frames[0].group(1))
+    if not dwarf:
+        log('(no dSYM for %s under $OXT_DSYM_DIR: the engine\'s frames stay unnamed)' % frames[0].group(1))
+        return graph
+    addresses = sorted(set(m.group(3) for m in frames if m.group(1) == frames[0].group(1)))
+    try:
+        proc = subprocess.run(['atos', '-o', dwarf, '-arch', os.uname().machine, '-l', frames[0].group(2)] + addresses,
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=120)
+    except (subprocess.TimeoutExpired, OSError):
+        return graph
+    names = dict(zip(addresses, proc.stdout.decode('utf-8', 'replace').splitlines()))
+    out = []
+    for x in graph:
+        m = pattern.search(x)
+        if m and m.group(3) in names:
+            x = x[:m.start()] + names[m.group(3)] + '  [%s]' % m.group(3) + x[m.end():]
+        out.append(x)
+    return out
+
+
+def mac_sample(pid, path, seconds=5, lines=400):
+    """Where the engine is, for when the script did not end on a Mac: the
+    process's state, then a sample of it (sample, as field_speed_test.py
+    takes one) into path, whose main thread's call graph goes into the log
+    too, as the job's log is read where its artifacts cannot be fetched.
+    An IDE that sometimes stopped at start-up left only a screenshot of its
+    splash; this says which handler it was in."""
+    if not shutil.which('sample'):
+        return False
+    try:
+        state = subprocess.run(['ps', '-o', 'stat=,rss=,pcpu=', '-p', str(pid)], stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, timeout=30)
+        log('(the engine, pid %d: %s)' % (pid, ' '.join(state.stdout.decode('utf-8', 'replace').split()) or 'gone'))
+        subprocess.run(['sample', str(pid), str(seconds), '-file', path], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=seconds + 60)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    if not os.path.isfile(path):
+        return False
+    # the call graph of the first thread (the main thread), cut at lines
+    with open(path, encoding='utf-8', errors='replace') as f:
+        text = f.read().splitlines()
+    try:
+        start = next(i for i, x in enumerate(text) if x.startswith('Call graph:'))
+    except StopIteration:
+        return True
+    graph = []
+    for x in text[start + 1:]:
+        # each thread starts "    <count> Thread_<id> ..."; its frames are
+        # "    + ..." under it
+        if not x.strip() or (graph and re.match(r'^    \d+ Thread_', x)):
+            break
+        graph.append(x.rstrip())
+    graph = mac_symbolicate(graph)
+    log('::group::The engine\'s main thread (%s)' % os.path.basename(path))
+    for x in graph[:lines]:
+        log(x)
+    if len(graph) > lines:
+        log('... (%d lines more in %s)' % (len(graph) - lines, os.path.basename(path)))
+    log('::endgroup::')
+    return True
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Screenshots of the IDE\'s windows, light or dark.')
     ap.add_argument('--install', metavar='DIR', help='installed layout')
@@ -333,6 +520,10 @@ def main(argv=None):
                 if not finished and p.family == 'mac' and proc.poll() is None:
                     if mac_screen(os.path.join(shots, 'zz-screen-at-the-end.png')):
                         log('(the screen when the run stopped: zz-screen-at-the-end.png)')
+                    mac_sample(proc.pid, os.path.join(out, 'sample-at-the-end.txt'))
+                    if mac_app(lay.engine):
+                        mac_ask(mac_app(lay.engine))
+                    mac_tools_log()
             finally:
                 stop(proc)
         log('The script %s.' % status)
