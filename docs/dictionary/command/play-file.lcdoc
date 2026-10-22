@@ -9,7 +9,7 @@ Plays a sound.
 
 Introduced: 4.5.2
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -59,9 +59,8 @@ formats.
 > and iOS platforms, although the list of supported audio formats will
 > vary between devices.
 
-References: play video (command), play (command),
-iphoneSetAudioCategory (command), result (function), sound (function),
-playLoudness (property)
+References: play video (command), play (command), result (function),
+sound (function), playLoudness (property)
 
 Tags: multimedia
 

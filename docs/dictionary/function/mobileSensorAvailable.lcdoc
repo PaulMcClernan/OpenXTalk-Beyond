@@ -9,7 +9,7 @@ Returns the availability of the given sensor.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

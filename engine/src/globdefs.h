@@ -43,9 +43,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #define _MOBILE
 #endif
 
-#if defined(TARGET_SUBPLATFORM_IPHONE)
-#define _IOS_MOBILE
-#elif defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
 #define _ANDROID_MOBILE
 #endif
 

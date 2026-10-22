@@ -13,13 +13,6 @@
 					},
 				],
 				[
-					# iOS builds are always cross-compiled
-					'OS == "ios"',
-					{
-						'cross_compile': 1,
-					},
-				],
-				[
 					# Android builds are always cross-compiled
 					'OS == "android"',
 					{

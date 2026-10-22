@@ -9,7 +9,7 @@ Sent when the given URL fails to load.
 
 Introduced: 4.5.3
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -33,9 +33,9 @@ fails to load in a native mobile browser created using
 The <browserLoadFailed> message is sent to the object containing the
 script that created the mobile browser control when a URL fails to load.
 
-References: mobileControlCreate (command), mobileControlDelete (command),
-mobileControlSet (command), mobileControlGet (function),
-mobileControlTarget (function), mobileControls (function),
-browserStartedLoading (message), browserLoadRequest (message),
+References: mobileControlCreate (command),
+mobileControlDelete (command), mobileControlSet (command),
+mobileControlGet (function), mobileControlTarget (function),
+mobileControls (function), browserStartedLoading (message),
 browserFinishedLoading (message)
 

@@ -15,7 +15,6 @@ otehrwise load it into memory
   - `<options>` is an array of extra build options:
     - `noui` - boolean
     - `target` - a deploy target
-    - `profile` - a provisioning profile uuid for iOS
 
 ```
 dispatch "BuildAndRun" to stack "StandaloneTestRunnerBuilder" with <buildplatform>, <options>; put the result
@@ -26,9 +25,8 @@ dispatch "BuildAndRun" to stack "StandaloneTestRunnerBuilder" with <buildplatfor
 - `-h,--help`       Basically the same as this
 - `-p,--platform`   Specify the build platform to build and run e.g --platform "MacOSX x86-64"
 - `-a,--all`        Build and run all platforms
-- `-t,--target`     Specify the build target name for mobile builds. If not specified and the all flag is set" & return & \
-  then all targets will be run. e.g --target" && quote & "iPad Simulator 10.3" & quote & return & \
-- `--profile`       Specify the iOS provisioning profile. Only necessary for device builds." & return & \         
+- `-t,--target`     Specify the build target name for mobile builds. If not specified and the all flag is set,
+  then all targets will be run.
 - `-v,--verbose`    Output all results instead of just failures
 
 In the following command examples `lcide` is an alias to the community

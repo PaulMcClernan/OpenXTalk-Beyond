@@ -11,7 +11,7 @@ Returns the current location of the device.
 
 Introduced: 4.5.2
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

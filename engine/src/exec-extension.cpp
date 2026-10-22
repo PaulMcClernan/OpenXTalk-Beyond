@@ -302,14 +302,6 @@ static bool MCEngineLoadLibrary(MCScriptModuleRef p_module, MCStringRef p_name, 
         return MCEngineThrowLoadLibraryFailed(*t_reason);
     }
     
-#if defined(__IOS__)
-    // On iOS we fallback to the engine because with the exception of
-    // dynamic frameworks libraries will be static linked
-    if (t_library == nullptr)
-    {
-        t_library = MCValueRetain(MCScriptGetLibrary());
-    }
-#endif
 
     if (t_library == nullptr)
     {

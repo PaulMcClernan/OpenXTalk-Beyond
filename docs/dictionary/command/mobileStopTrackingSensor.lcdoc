@@ -9,7 +9,7 @@ Stops listening for readings from the named sensor.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

@@ -9,7 +9,7 @@ Sets the value of a property of an in-app purchase.
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -52,7 +52,6 @@ purchase, the property being set and its value.
 
 References: mobileDisablePurchaseUpdates (command),
 mobilePurchaseVerify (command), mobileRestorePurchases (command),
-iphoneRequestProductDetails (command),
 mobilePurchaseSendRequest (command),
 mobilePurchaseConfirmDelivery (command),
 mobileEnablePurchaseUpdates (command), mobilePurchaseCreate (command),

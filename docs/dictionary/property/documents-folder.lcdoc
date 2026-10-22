@@ -9,7 +9,7 @@ Returns the path to the current user's documents folder.
 
 Introduced: 5.0.2
 
-OS: mac, windows, ios, android
+OS: mac, windows, android
 
 Platforms: desktop, mobile
 

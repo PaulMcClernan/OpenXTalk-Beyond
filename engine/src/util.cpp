@@ -3240,7 +3240,7 @@ MCSLibraryRef MCU_library_load(MCStringRef p_path,
     }
     else
     {
-#if defined(__MAC__) || defined(__IOS__)
+#if defined(__MAC__)
         __MCU_library_load_adding_extension(*t_library_path,
                                             "framework",
                                             &t_library,

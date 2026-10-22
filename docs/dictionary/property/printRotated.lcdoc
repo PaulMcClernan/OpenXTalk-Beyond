@@ -12,7 +12,7 @@ Introduced: 1.0
 
 Deprecated: 2.9
 
-OS: ios
+OS: mac, windows, linux
 
 Platforms: desktop, server, mobile
 

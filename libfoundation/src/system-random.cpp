@@ -22,7 +22,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #  include <Wincrypt.h>
 #endif
 
-#if defined(__MAC__) || defined(__IOS__)
+#if defined(__MAC__)
 #  include <dlfcn.h>
 #endif
 
@@ -132,7 +132,7 @@ __MCSRandomBytes (void *x_buffer,
                   size_t p_buffer_length)
 {
 
-#	if defined(__MAC__) || defined(__IOS__)
+#	if defined(__MAC__)
 	/* ---------- arc4random(3) library function
 	 *
 	 * On OSX >= 10.7 and on most versions of iOS, there's an
@@ -157,7 +157,7 @@ __MCSRandomBytes (void *x_buffer,
 			return true;
 		}
 	}
-#	endif /* __MAC__ || __IOS__ */
+#	endif /* __MAC__ */
 
 	/* ---------- POSIX random number device
 	 *

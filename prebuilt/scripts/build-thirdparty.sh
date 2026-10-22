@@ -41,10 +41,6 @@ elif [ "$PLATFORM" == "linux" ]; then
 	LIBS="${Thirdparty_LIBS_linux}"
 	BUILDPATH="../build-linux-$ARCH/livecode/out/Release/obj.target/thirdparty"
 	LIBPATH="lib/linux/$ARCH"
-elif [ "$PLATFORM" == "ios" ]; then
-	LIBS="${Thirdparty_LIBS_ios}"
-	BUILDPATH="../_build/ios/$SUBPLATFORM/Release"
-	LIBPATH="lib/ios/$SUBPLATFORM"
 elif [ "$PLATFORM" == "emscripten" ]; then
 	MAKE_TARGET=emscripten
 	LIBS="${Thirdparty_LIBS_emscripten}"
@@ -62,7 +58,7 @@ fi
 
 make -C .. config-$MAKE_TARGET
 
-if [ "$PLATFORM" == "mac" ] || [ "$PLATFORM" == "ios" ] ; then
+if [ "$PLATFORM" == "mac" ] ; then
 	# XCODEBUILD_FLAGS: extra xcodebuild options, e.g. to keep building after errors
 	${XCODEBUILD} -project "../build-$TARGET_NAME/livecode/livecode.xcodeproj" -configuration "Release" -target "thirdparty-prebuilts" ${XCODEBUILD_FLAGS}
 elif [ "$PLATFORM" == "linux" ] ; then
@@ -79,7 +75,7 @@ fi
 mkdir -p "$LIBPATH"
 
 for t_lib in $LIBS ; do
-	if [ "$PLATFORM" == "mac" ] || [ "$PLATFORM" == "ios" ] ; then
+	if [ "$PLATFORM" == "mac" ] ; then
 		cp "$BUILDPATH/${t_lib}.a" "$LIBPATH"
 		if [ "${t_lib}" == "libskia" ]; then
 			cp "$BUILDPATH/${t_lib}"_*.a "$LIBPATH"

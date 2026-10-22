@@ -178,18 +178,6 @@
 						},
 					],
 					[
-						'toolset_os == "ios"',
-						{
-							'libraries':
-							[
-								'lib/ios/$(SDK_NAME)/libicui18n.a',
-								'lib/ios/$(SDK_NAME)/libicuio.a',
-								'lib/ios/$(SDK_NAME)/libicuuc.a',
-								'lib/ios/$(SDK_NAME)/libicudata.a',
-							],
-						},
-					],
-					[
 						'toolset_os == "linux"',
 						{
 							# Gyp doesn't seem to handle non-absolute paths here properly...

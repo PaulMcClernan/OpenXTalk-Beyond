@@ -11,7 +11,7 @@ Returns the capabilities of the devices camera(s)
 
 Introduced: 4.6
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

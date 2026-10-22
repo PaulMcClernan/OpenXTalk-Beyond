@@ -25,7 +25,7 @@ end extensionFinalize
 -- history for which the stack is configured. This is then used to pick the last chosen
 -- target for this platform.
 
-constant kSupportedPlatforms = "iOS Android Desktop Emscripten"
+constant kSupportedPlatforms = "Android Desktop Emscripten"
 
 -- The mapping from deploy target to platform
 local sDeployTargetPlatforms
@@ -201,9 +201,6 @@ command revIDEDeployInitialize
    if tDeployPlatforms is not empty then
       put tDeployPlatforms into sDeployPlatforms
       put tDeployTargets into sDeployTargets
-   else if the cSimulatorFamily of stack "revPreferences" is not empty then
-      put "ios," into sDeployPlatforms
-      put the cSimulatorFamily of stack "revPreferences" && "Simulator" && the cSimulatorVersion of stack "revPreferences" into sDeployTargets["ios"] 
    end if
 end revIDEDeployInitialize
 
@@ -229,69 +226,61 @@ end revIDEDeployTargetsChanged
 //  calls provide this in a sane manner.
 //
 
+-- OXT-Beyond does not build for iOS, so the iOS deploy library
+-- (revDeployLibraryiOS) is no longer part of the IDE. These wrappers stay,
+-- because the Preferences' Mobile Support card and other stacks call
+-- them, and answer as the library did on a computer with no usable Xcode:
+-- no SDKs and no simulators, so the card's iOS group stays disabled.
+-- revIDEDeployIOSSanitizeSystemVersion answers 0, below the 10.7 the card
+-- asks for, so that it never reaches the library's other handlers.
+
 function revIDEDeployIOSIsValidSDK pVersion, pPath
-   dispatch function "deployIsValidSDK" to stack "revDeployLibraryiOS" with pVersion, pPath
-   return the result
+   return false
 end revIDEDeployIOSIsValidSDK
 
 function revIDEDeployIOSGetSimulatorVersions
-   dispatch function "deployGetSimulatorVersions" to stack "revDeployLibraryiOS"
-   return the result
+   return empty
 end revIDEDeployIOSGetSimulatorVersions
 
 function revIDEDeployIOSGetSDKVersions
-   dispatch function "deployGetSDKVersions" to stack "revDeployLibraryiOS"
-   return the result
+   return empty
 end revIDEDeployIOSGetSDKVersions
 
 // SN-2015-05-01: [[ Refactor iOS SDK Version ]] Wrappers added
 function revIDEDeployIOSGetMinimumVersions
-   dispatch function "deployGetIosMinimumVersions" to stack "revDeployLibraryiOS"
-   return the result
+   return empty
 end revIDEDeployIOSGetMinimumVersions
 
 function revIDEDeployIOSGetIphoneOSes
-   dispatch function "deployGetIphoneOSes" to stack "revDeployLibraryiOS"
-   return the result
+   return empty
 end revIDEDeployIOSGetIphoneOSes
 
 command revIDEDeployIOSUpdateSimulators
-   dispatch "deployUpdateSimulators" to stack "revDeployLibraryiOS"
 end revIDEDeployIOSUpdateSimulators
 
 command revIDEDeployIOSUpdateSDKs
-   dispatch "deployUpdateSDKs" to stack "revDeployLibraryiOS"
 end revIDEDeployIOSUpdateSDKs
 
 function revIDEDeployIOSUsableSDKs
-   dispatch function "deployUsableIosSdk" to stack "revDeployLibraryiOS"
-   return the result
+   return empty
 end revIDEDeployIOSUsableSDKs
 
 function revIDEDeployIOSGetDeviceSDK pVersion
-   dispatch function "deployGetDeviceSDK" to stack "revDeployLibraryiOS" with pVersion
-   return the result
+   return empty
 end revIDEDeployIOSGetDeviceSDK
 
 function revIDEDeployIOSSanitizeSystemVersion
-   dispatch function "deploySanitizeSystemVersion" to stack "revDeployLibraryiOS"
-   return the result
+   return 0
 end revIDEDeployIOSSanitizeSystemVersion
 
 //SN-2015-04-30: [[ Bug 15300 ]]  Refactor functions used from revDeployLibraryIOS
 function revIDEDeployIOSGetInvalidityMessage piOSXcodePairs
-   dispatch function "deployGetInvalidityMessage" to stack "revDeployLibraryIOS" with piOSXcodePairs
-   return the result
+   return empty
 end revIDEDeployIOSGetInvalidityMessage
 
 function revIDEDeployIOSGetLatestSDKInstalled @rVersion
-   local tTooltip // Not used
-   local tVersions
-   dispatch function "deployCheckLatestSDKIsInstalled" to stack "revDeployLibraryIOS" with tTooltip, tVersions
-   put the last item of tVersions into tVersions
-   if char 1 of tVersions is space then delete char 1 of tVersions
-   put tVersions into rVersion
-   return the result
+   put empty into rVersion
+   return false
 end revIDEDeployIOSGetLatestSDKInstalled
 
 ////////////////////////////////////////////////////////////////////////////////

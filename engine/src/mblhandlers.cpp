@@ -4920,52 +4920,11 @@ bool MCIsPlatformMessage(MCNameRef handler_name)
     return found;
 }
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-struct handle_context_t
-{
-	MCPlatformMessageHandler handler;
-	void *context;
-	MCParameter *parameters;
-	Exec_stat result;
-};
-
-static void invoke_platform(void *p_context)
-{
-	handle_context_t *ctxt;
-	ctxt = (handle_context_t *)p_context;
-	ctxt -> result = ctxt -> handler(ctxt -> context, ctxt -> parameters);
-}
-
-extern void MCIPhoneCallOnMainFiber(void (*)(void *), void *);
-
-bool MCDoHandlePlatformMessage(bool p_waitable, MCPlatformMessageHandler p_handler, void *p_context, MCParameter *p_parameters, Exec_stat& r_result)
-{
-    // MW-2012-07-31: [[ Fibers ]] If the method doesn't need script / wait, then
-    //   jump to the main fiber for it.
-    if (!p_waitable)
-    {
-        handle_context_t ctxt;
-        ctxt . handler = p_handler;
-        ctxt . context = p_context;
-        ctxt . parameters = p_parameters;
-        MCIPhoneCallOnMainFiber(invoke_platform, &ctxt);
-        r_result = ctxt . result;
-        return true;
-    }
-    
-    // Execute the method as normal, in this case the method will have to jump
-    // to the main fiber to do any system stuff.
-    r_result = p_handler(p_context, p_parameters);
-    return true;
-    
-}
-#else // Android
 bool MCDoHandlePlatformMessage(bool p_waitable, MCPlatformMessageHandler p_handler, void *p_context, MCParameter *p_parameters, Exec_stat& r_result)
 {
     r_result = p_handler(p_context, p_parameters);
     return true;
 }
-#endif
 
 bool MCHandlePlatformMessage(MCNameRef p_message, MCParameter *p_parameters, Exec_stat& r_result)
 {

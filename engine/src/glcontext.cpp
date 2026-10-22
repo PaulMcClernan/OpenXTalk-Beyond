@@ -16,10 +16,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "prefix.h"
 
-#if defined(_IOS_MOBILE)
-#import <OpenGLES/ES3/gl.h>
-#import <OpenGLES/ES3/glext.h>
-#elif defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
 #define GL_GLEXT_PROTOTYPES
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>

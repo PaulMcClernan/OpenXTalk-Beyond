@@ -12,7 +12,7 @@ Associations: stack
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -50,7 +50,5 @@ handle the message without being launched.
 
 References: mobileCancelAllLocalNotifications (command),
 mobileCreateLocalNotification (command),
-mobileCancelLocalNotification (command),
-iphoneSetNotificationBadgeValue (command),
-iphoneGetNotificationBadgeValue (function)
+mobileCancelLocalNotification (command)
 

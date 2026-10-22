@@ -40,11 +40,6 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #define USE_PIPE
 #elif defined(_WINDOWS_DESKTOP) || defined(_WINDOWS_SERVER)
 #define USE_WINTHREADS
-#elif defined(_IOS_MOBILE)
-#include <pthread.h>
-#define USE_PTHREADS
-#define USE_PING
-#define PING_FUNC MCIPhoneBreakWait
 #elif defined(_ANDROID_MOBILE)
 #include <pthread.h>
 #define USE_PTHREADS

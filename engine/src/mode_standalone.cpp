@@ -97,8 +97,6 @@ __declspec(allocate(".project")) volatile MCCapsuleInfo MCcapsule = {0, {0, 0, 0
 __attribute__((section(".project"))) volatile MCCapsuleInfo MCcapsule = {0, {0, 0, 0}};
 #elif defined(_MACOSX)
 __attribute__((section("__PROJECT,__project"))) volatile MCCapsuleInfo MCcapsule = {0, {0, 0, 0}};
-#elif defined(TARGET_SUBPLATFORM_IPHONE)
-__attribute__((section("__PROJECT,__project"))) volatile MCCapsuleInfo MCcapsule = {0, {0, 0, 0}};
 #elif defined(TARGET_SUBPLATFORM_ANDROID)
 __attribute__((section(".project"))) volatile MCCapsuleInfo MCcapsule = {0, {0, 0, 0}};
 #elif defined(TARGET_PLATFORM_MOBILE)
@@ -234,9 +232,6 @@ bool MCStandaloneCapsuleCallback(void *p_self, const uint8_t *p_digest, MCCapsul
 			return false;
 		}
 		
-#ifdef TARGET_SUBPLATFORM_IPHONE
-		add_simulator_redirect(t_redirect);
-#endif
 
 		delete t_redirect;
 	}
@@ -252,10 +247,6 @@ bool MCStandaloneCapsuleCallback(void *p_self, const uint8_t *p_digest, MCCapsul
             return false;
         }
         
-#ifdef TARGET_SUBPLATFORM_IPHONE
-        // The font mapping is only viable (and needed) on iOS
-        add_ios_fontmap(t_fontmap);
-#endif
         
         delete[] t_fontmap;
     }

@@ -9,7 +9,7 @@ Returns an array giving details about a local notification
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

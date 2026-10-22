@@ -9,7 +9,7 @@ Sent when a scroll initiating drag is started.
 
 Introduced: 4.5.3
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -30,10 +30,9 @@ properties of groups and fields to get a native scrolling effect.
 The <scrollerBeginDrag> message is sent to the object containing the
 script that created the scroller control.
 
-References: mobileControlCreate (command), mobileControlDelete (command),
-mobileControlSet (command), mobileControlGet (function),
-mobileControlTarget (function), mobileControls (function),
-scrollerEndDecelerate (message), scrollerBeginDecelerate (message),
-scrollerEndDrag (message), scrollerDidScroll (message),
-scrollerScrollToTop (message)
+References: mobileControlCreate (command),
+mobileControlDelete (command), mobileControlSet (command),
+mobileControlGet (function), mobileControlTarget (function),
+mobileControls (function), scrollerEndDrag (message),
+scrollerDidScroll (message)
 

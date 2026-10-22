@@ -9,7 +9,7 @@ Create a new purchase.
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -36,8 +36,7 @@ iTunesConnect/Market Place and wish to purchase.
 
 References: mobilePurchaseSet (command),
 mobileDisablePurchaseUpdates (command), mobilePurchaseVerify (command),
-mobileRestorePurchases (command), iphoneRequestProductDetails (command),
-mobilePurchaseSendRequest (command),
+mobileRestorePurchases (command), mobilePurchaseSendRequest (command),
 mobilePurchaseConfirmDelivery (command),
 mobileEnablePurchaseUpdates (command), mobilePurchaseState (function),
 mobilePurchaseError (function), mobileCanMakePurchase (function),

@@ -11,7 +11,7 @@ Returns the current status of the given channel.
 
 Introduced: 4.6
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

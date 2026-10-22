@@ -9,7 +9,9 @@ script "oxt_ui_tour"
 -- windows one by one: the Tools palette (also in its modern look, at its
 -- first size, wide, and with its names, and checks of how that look
 -- behaves: tools-modern-check, -sizes, -use and -switch), a stack of
--- the user with the usual controls, the Property Inspector (each section for a button, the
+-- the user with the usual controls (and stacks opened with their title
+-- bars above the screen, which the IDE moves where they can be dragged:
+-- title-bar), the Property Inspector (each section for a button, the
 -- Text section of a field, the Colors section of a graphic and of several
 -- objects), the Script Editor (and its results of a Find All), the
 -- Message Box, the Project Browser, LiveCode's Dictionary (with the
@@ -50,7 +52,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-switch,menubar,sample,inspector,inspector-text,inspector-graphic,inspector-multiple,tooltip-inspector,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,menu-builder,extension-manager,extension-builder,message-watcher,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-switch,menubar,sample,title-bar,inspector,inspector-text,inspector-graphic,inspector-multiple,tooltip-inspector,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,menu-builder,extension-manager,extension-builder,message-watcher,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 -- The inspector's sections for a button, as the icons in its header name
 -- them (a section the object has not is skipped)
@@ -800,6 +802,74 @@ on tour_sample
    tourWait 800
    tourShotStack kSample, "04-sample-stack"
 end tour_sample
+
+-- A stack opened with its title bar above the top of the screen (a
+-- HyperCard stack at 0,0, or a stack whose own preOpenStack puts it there)
+-- is moved down just far enough to be dragged (revIDEKeepTitleBarOnScreen,
+-- sent by the front script); one whose title bar shows stays where it is,
+-- and a window with no title bar is left alone. None is marked as changed.
+on tour_title_bar
+   local tArea, tName, tFails, tRect, tFrame, tTitle, tEdited, tWant
+   put line 1 of the working screenRects into tArea
+   tourTbMake "oxt_tb_above", item 1 of tArea + 40, item 2 of tArea - 200, empty
+   tourTbMake "oxt_tb_script", item 1 of tArea + 80, item 2 of tArea + 120, \
+         "on preOpenStack" & return & "   set the topLeft of this stack to 0,0" & return & "end preOpenStack"
+   tourTbMake "oxt_tb_fine", item 1 of tArea + 120, item 2 of tArea + 140, empty
+   tourTbMake "oxt_tb_plain", item 1 of tArea + 160, item 2 of tArea - 100, empty
+   lock messages
+   set the decorations of stack "oxt_tb_plain" to empty
+   unlock messages
+   repeat for each item tName in "oxt_tb_above,oxt_tb_script,oxt_tb_fine,oxt_tb_plain"
+      put revIDEStackIsEdited(tName) into tEdited[tName]
+      go stack tName
+   end repeat
+   tourWait 1000
+   repeat for each item tName in "oxt_tb_above,oxt_tb_script,oxt_tb_fine,oxt_tb_plain"
+      put the rect of stack tName into tRect
+      put the effective rect of stack tName into tFrame
+      put max(32, item 2 of tRect - item 2 of tFrame) into tTitle
+      tourRecord "INFO title-bar" && tName & ": rect" && tRect & ", effective rect" && tFrame & ", working screenRect" && tArea
+      if revIDEStackIsEdited(tName) is not tEdited[tName] then
+         put tName && "was marked as changed" & return after tFails
+      end if
+      switch tName
+         case "oxt_tb_above"
+         case "oxt_tb_script"
+            if item 2 of tRect - tTitle < item 2 of tArea or item 2 of tRect > item 2 of tArea + tTitle + 40 then
+               put tName && "has its title bar off the screen or was moved too far (" & tRect & ")" & return after tFails
+            end if
+            break
+         case "oxt_tb_fine"
+            put item 1 of tArea + 120, item 2 of tArea + 140 into tWant
+            if item 1 to 2 of tRect is not tWant then
+               put tName && "was moved from" && tWant && "to" && item 1 to 2 of tRect & return after tFails
+            end if
+            break
+      end switch
+   end repeat
+   tourShotScreen "04b-title-bar"
+   lock messages
+   repeat for each item tName in "oxt_tb_above,oxt_tb_script,oxt_tb_fine,oxt_tb_plain"
+      if there is a stack tName then delete stack tName
+   end repeat
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_title_bar
+
+command tourTbMake pName, pLeft, pTop, pScript
+   local tDefault
+   put the defaultStack into tDefault
+   lock messages
+   if there is a stack pName then delete stack pName
+   create stack pName
+   set the rect of stack pName to pLeft, pTop, pLeft + 320, pTop + 200
+   set the script of stack pName to pScript
+   -- create opens the stack (here with messages locked): closed, it opens
+   -- again as a user's does, with preOpenStack
+   close stack pName
+   set the defaultStack to tDefault
+   unlock messages
+end tourTbMake
 
 on tour_inspector
    local tPI, tSection, tShown, tIndex

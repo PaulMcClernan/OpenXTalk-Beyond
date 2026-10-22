@@ -10,7 +10,7 @@ initiated.
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -32,7 +32,7 @@ state.
 
 References: mobilePurchaseSet (command),
 mobileDisablePurchaseUpdates (command), mobilePurchaseVerify (command),
-mobileRestorePurchases (command), iphoneRequestProductDetails (command),
+mobileRestorePurchases (command),
 mobilePurchaseConfirmDelivery (command),
 mobileEnablePurchaseUpdates (command), mobilePurchaseCreate (command),
 mobilePurchaseState (function), mobilePurchaseError (function),

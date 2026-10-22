@@ -32,9 +32,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include "graphics_util.h"
 
-#ifndef _IOS_MOBILE
 #define CGFloat float
-#endif
 
 //-- tperry 18th October 2025
 // Import modern AppKit controls to replace deprecated HITheme

@@ -9,7 +9,7 @@ Returns the URL that was used to launch the application.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

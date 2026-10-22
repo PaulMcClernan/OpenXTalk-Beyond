@@ -11,7 +11,7 @@ Disables the receipt of purchaseStateUpdate messages.
 
 Introduced: 6.7
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

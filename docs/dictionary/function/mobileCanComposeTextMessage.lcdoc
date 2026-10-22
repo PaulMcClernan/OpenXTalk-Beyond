@@ -9,7 +9,7 @@ Returns true if the device can compose text messages, false otherwise.
 
 Introduced: 5.5
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

@@ -4,7 +4,7 @@
 	'conditions':
 	[
 		[
-			'OS == "mac" or OS == "ios"',
+			'OS == "mac"',
 			{
 				'target_conditions':
 				[

@@ -521,11 +521,6 @@ void MCScreenDC::refresh_window(Window p_window)
 		// IM-2016-08-17: [[ Bug 18100 ]] Attach new stack to window
 		t_new_stack->OnAttach();
 		
-#ifdef _IOS_MOBILE
-		// MW-2012-03-05: [[ ViewStack ]] Make sure we tell the app's view
-		//   which stack to use.
-		do_show_stack_in_window(t_new_stack);
-#endif
 		
 		do_fit_window(false, true);
 		

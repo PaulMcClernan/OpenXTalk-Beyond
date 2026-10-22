@@ -9,7 +9,7 @@ Creates a widget from the supplied state array.
 
 Introduced: 8.0
 
-OS: mac, windows, linux, ios, android
+OS: mac, windows, linux, android
 
 Platforms: desktop, mobile
 

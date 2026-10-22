@@ -277,17 +277,6 @@ Exec_stat MCDispatch::handle(Handler_type htype, MCNameRef mess, MCParameter *pa
         }
 	}
 
-//#ifdef TARGET_SUBPLATFORM_IPHONE
-//	extern Exec_stat MCIPhoneHandleMessage(MCNameRef message, MCParameter *params);
-//	if (stat == ES_NOT_HANDLED || stat == ES_PASS)
-//	{
-//		stat = MCIPhoneHandleMessage(mess, params);
-//		
-//		if (stat != ES_NOT_HANDLED && stat != ES_PASS)
-//			return stat;
-//	}
-//#endif
-//
 //#ifdef _MOBILE
 //	if (stat == ES_NOT_HANDLED || stat == ES_PASS)
 //	{
@@ -1856,7 +1845,7 @@ MCFontStruct *MCDispatch::loadfont(MCNameRef fname, uint2 &size, uint2 style, Bo
 
 MCFontStruct *MCDispatch::loadfontwithhandle(MCSysFontHandle p_handle, MCNameRef p_name)
 {
-#if defined(_MACOSX) || defined (_MAC_SERVER) || defined (TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX) || defined (_MAC_SERVER)
     if (fonts == nil)
         fonts = new (nothrow) MCFontlist;
     return fonts->getfontbyhandle(p_handle, p_name);

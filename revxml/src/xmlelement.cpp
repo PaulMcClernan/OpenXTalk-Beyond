@@ -17,7 +17,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "cxml.h"
 #include <revolution/support.h>
 
-#if defined _MACOSX || defined ( _LINUX ) || defined (TARGET_SUBPLATFORM_IPHONE) || defined (TARGET_SUBPLATFORM_ANDROID)
+#if defined _MACOSX || defined ( _LINUX ) || defined (TARGET_SUBPLATFORM_ANDROID)
 #define _snprintf snprintf
 #endif
 /*GetName

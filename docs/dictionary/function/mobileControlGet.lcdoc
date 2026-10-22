@@ -12,7 +12,7 @@ Gets the value of a <property> of a native mobile control created using
 
 Introduced: 4.6
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 

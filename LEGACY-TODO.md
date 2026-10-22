@@ -13,22 +13,22 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 
 | Marker | Notes |
 | --- | --- |
-| [FIXME](#fixme) | 65 |
-| [HACK](#hack) | 33 |
-| [TODO](#todo) | 429 |
+| [FIXME](#fixme) | 64 |
+| [HACK](#hack) | 29 |
+| [TODO](#todo) | 421 |
 
 ## FIXME
 
-Code its authors knew to be wrong or incomplete. 65 notes, by part of the repository:
+Code its authors knew to be wrong or incomplete. 64 notes, by part of the repository:
 
-[engine](#fixme-engine) (33), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide](#fixme-ide) (1), [ide-support](#fixme-ide-support) (1), [util](#fixme-util) (1)
+[engine](#fixme-engine) (33), [libfoundation](#fixme-libfoundation) (10), [tests](#fixme-tests) (8), [toolchain](#fixme-toolchain) (6), [extensions](#fixme-extensions) (2), [libscript](#fixme-libscript) (2), [builder](#fixme-builder) (1), [ide](#fixme-ide) (1), [ide-support](#fixme-ide-support) (1)
 
 <a id="fixme-engine"></a>
 
 ### FIXME: engine (33)
 
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
-- [engine/src/dispatch.cpp:1574](engine/src/dispatch.cpp#L1574) FIXME This is horrible
+- [engine/src/dispatch.cpp:1563](engine/src/dispatch.cpp#L1563) FIXME This is horrible
 - [engine/src/em-dc-mainloop.cpp:46](engine/src/em-dc-mainloop.cpp#L46) FIXME these functions are pretty much the same for every X_init()
 - [engine/src/em-event.js:502](engine/src/em-event.js#L502) FIXME Maybe this should be done in the engine?
 - [engine/src/em-event.js:701](engine/src/em-event.js#L701) FIXME not supported
@@ -55,7 +55,7 @@ Code its authors knew to be wrong or incomplete. 65 notes, by part of the reposi
 - [engine/src/funcs.h:1133](engine/src/funcs.h#L1133) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1141](engine/src/funcs.h#L1141) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1574](engine/src/funcs.h#L1574) EE_CHARTONUM_BADSOURCE, PE_CHARTONUM_BADPARAM> // FIXME
-- [engine/src/globals.cpp:985](engine/src/globals.cpp#L985) FIXME use MCProperListRef
+- [engine/src/globals.cpp:978](engine/src/globals.cpp#L978) FIXME use MCProperListRef
 - [engine/src/mcsemaphore.h:61](engine/src/mcsemaphore.h#L61) FIXME mark as explicit
 - [engine/src/sysspec-url.cpp:341](engine/src/sysspec-url.cpp#L341) FIXME if wait() returns non-zero, cancel the URL
 - [engine/src/widget.lcb:911](engine/src/widget.lcb#L911) FIXME not actually implemented
@@ -66,7 +66,7 @@ Code its authors knew to be wrong or incomplete. 65 notes, by part of the reposi
 ### FIXME: libfoundation (10)
 
 - [libfoundation/include/system-commandline.h:81](libfoundation/include/system-commandline.h#L81) FIXME support for getting the command filename isn't implemented
-- [libfoundation/src/foundation-handler.cpp:661](libfoundation/src/foundation-handler.cpp#L661) FIXME Should include information about arguments and return
+- [libfoundation/src/foundation-handler.cpp:652](libfoundation/src/foundation-handler.cpp#L652) FIXME Should include information about arguments and return
 - [libfoundation/src/foundation-private.h:710](libfoundation/src/foundation-private.h#L710) define __MCAssertIsLocale(x)   MCAssert(nil != (x)) /* FIXME
 - [libfoundation/src/system-commandline.cpp:280](libfoundation/src/system-commandline.cpp#L280) return false; /* FIXME proper error
 - [libfoundation/src/system-file-w32.cpp:286](libfoundation/src/system-file-w32.cpp#L286) FIXME Remaining weaknesses:
@@ -124,7 +124,7 @@ Code its authors knew to be wrong or incomplete. 65 notes, by part of the reposi
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11778](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11778) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:11872](ide/Toolset/libraries/revidelibrary.8.livecodescript#L11872) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -132,17 +132,11 @@ Code its authors knew to be wrong or incomplete. 65 notes, by part of the reposi
 
 - [ide-support/revsaveasemscriptenstandalone.livecodescript:33](ide-support/revsaveasemscriptenstandalone.livecodescript#L33) FIXME
 
-<a id="fixme-util"></a>
-
-### FIXME: util (1)
-
-- [util/perfect/perfect.gyp:52](util/perfect/perfect.gyp#L52) FIXME Force the perfect executable to be put into
-
 ## HACK
 
-Workarounds their authors were not happy with. 33 notes, by part of the repository:
+Workarounds their authors were not happy with. 29 notes, by part of the repository:
 
-[engine](#hack-engine) (8), [ide](#hack-ide) (8), [ide-support](#hack-ide-support) (4), [extensions](#hack-extensions) (3), [libfoundation](#hack-libfoundation) (3), [prebuilt](#hack-prebuilt) (3), [builder](#hack-builder) (2), [tests](#hack-tests) (2)
+[engine](#hack-engine) (8), [ide](#hack-ide) (8), [libfoundation](#hack-libfoundation) (3), [prebuilt](#hack-prebuilt) (3), [builder](#hack-builder) (2), [ide-support](#hack-ide-support) (2), [tests](#hack-tests) (2), [extensions](#hack-extensions) (1)
 
 <a id="hack-engine"></a>
 
@@ -170,23 +164,6 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 - [ide/Toolset/palettes/script editor/behaviors/revseeditorbehavior.livecodescript:2222](ide/Toolset/palettes/script%20editor/behaviors/revseeditorbehavior.livecodescript#L2222) this is clearly a bit of a hack, but hopefully doing is this way will minimize the risk.
 - [ide/Toolset/palettes/script editor/behaviors/revsevariablespanebehavior.livecodescript:116](ide/Toolset/palettes/script%20editor/behaviors/revsevariablespanebehavior.livecodescript#L116) If the user chooses a large font, we need to increase the size of the template, for now we just hack this as
 
-<a id="hack-ide-support"></a>
-
-### HACK: ide-support (4)
-
-- [ide-support/revdeploylibraryemscripten.livecodescript:258](ide-support/revdeploylibraryemscripten.livecodescript#L258) It will only work if firefox is not already running (or we could try a nasty apple script hack but that susceptible to menu/shortcut changes).
-- [ide-support/revsaveasiosstandalone.livecodescript:299](ide-support/revsaveasiosstandalone.livecodescript#L299) hack to uniquify modules
-- [ide-support/revsaveasiosstandalone.livecodescript:468](ide-support/revsaveasiosstandalone.livecodescript#L468) .embeddedframework is a hack that some SDKs use for single drag and drop of
-- [ide-support/revsaveasstandalone.livecodescript:1908](ide-support/revsaveasstandalone.livecodescript#L1908) For now however, I've added this hack to allow users to work around the issue themselves.
-
-<a id="hack-extensions"></a>
-
-### HACK: extensions (3)
-
-- [extensions/extensions.gyp:201](extensions/extensions.gyp#L201) hack because gyp wants an output
-- [extensions/libraries/ini/inih/inih.gyp:58](extensions/libraries/ini/inih/inih.gyp#L58) loadable_module is overridden for iOS so hack around that
-- [extensions/libraries/timezone/tz/tz.gyp:221](extensions/libraries/timezone/tz/tz.gyp#L221) loadable_module is overridden for iOS so hack around that
-
 <a id="hack-libfoundation"></a>
 
 ### HACK: libfoundation (3)
@@ -200,8 +177,8 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 ### HACK: prebuilt (3)
 
 - [prebuilt/libicu.gyp:57](prebuilt/libicu.gyp#L57) Hack required due to GYP failure / refusal to treat this as a path
-- [prebuilt/libicu.gyp:404](prebuilt/libicu.gyp#L404) Really nasty hack to prevent this from being treated as a path
-- [prebuilt/thirdparty.gyp:782](prebuilt/thirdparty.gyp#L782) Hack to put licuuc after lharfbuzz in library list
+- [prebuilt/libicu.gyp:392](prebuilt/libicu.gyp#L392) Really nasty hack to prevent this from being treated as a path
+- [prebuilt/thirdparty.gyp:728](prebuilt/thirdparty.gyp#L728) Hack to put licuuc after lharfbuzz in library list
 
 <a id="hack-builder"></a>
 
@@ -210,6 +187,13 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 - [builder/builder_tool.livecodescript:38](builder/builder_tool.livecodescript#L38) Hack the arch from the platform. This should really use
 - [builder/release_notes_builder.livecodescript:920](builder/release_notes_builder.livecodescript#L920) Horrible-ish hack for extracting the "real" name of the LiveCode
 
+<a id="hack-ide-support"></a>
+
+### HACK: ide-support (2)
+
+- [ide-support/revdeploylibraryemscripten.livecodescript:258](ide-support/revdeploylibraryemscripten.livecodescript#L258) It will only work if firefox is not already running (or we could try a nasty apple script hack but that susceptible to menu/shortcut changes).
+- [ide-support/revsaveasstandalone.livecodescript:1900](ide-support/revsaveasstandalone.livecodescript#L1900) For now however, I've added this hack to allow users to work around the issue themselves.
+
 <a id="hack-tests"></a>
 
 ### HACK: tests (2)
@@ -217,15 +201,21 @@ Workarounds their authors were not happy with. 33 notes, by part of the reposito
 - [tests/_testrunner.lcb:211](tests/_testrunner.lcb#L211) FIXME HACK HACK HACK
 - [tests/lcb/vm/native-callback.lcb:81](tests/lcb/vm/native-callback.lcb#L81) handler values. We 'hack' this at the moment by massaging the types of
 
+<a id="hack-extensions"></a>
+
+### HACK: extensions (1)
+
+- [extensions/extensions.gyp:201](extensions/extensions.gyp#L201) hack because gyp wants an output
+
 ## TODO
 
-Work left for later. 429 notes, by part of the repository:
+Work left for later. 421 notes, by part of the repository:
 
-[engine](#todo-engine) (266), [libfoundation](#todo-libfoundation) (47), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [ide-support](#todo-ide-support) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
+[engine](#todo-engine) (261), [libfoundation](#todo-libfoundation) (47), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
 
 <a id="todo-engine"></a>
 
-### TODO: engine (266)
+### TODO: engine (261)
 
 - [engine/exec-tests/filters/EvalUniDecode.test:35](engine/exec-tests/filters/EvalUniDecode.test#L35) TODO - add this platform :)
 - [engine/exec-tests/filters/EvalUniEncode.test:35](engine/exec-tests/filters/EvalUniEncode.test#L35) TODO - add this platform :)
@@ -256,9 +246,9 @@ Work left for later. 429 notes, by part of the repository:
 - [engine/src/desktop.cpp:107](engine/src/desktop.cpp#L107) TODO[2017-04-05] X_init() failed before initialising global
 - [engine/src/desktop.cpp:659](engine/src/desktop.cpp#L659) PLATFORM-TODO: Should we do more than this? i.e. Should the dragDrop
 - [engine/src/dispatch.cpp:255](engine/src/dispatch.cpp#L255) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/dispatch.cpp:305](engine/src/dispatch.cpp#L305) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/dispatch.cpp:1568](engine/src/dispatch.cpp#L1568) PLATFORM-TODO: This is needed at the moment to make sure that we don't
-- [engine/src/dispatch.cpp:1906](engine/src/dispatch.cpp#L1906) TODO: what about other 'special' chars added by unicode?
+- [engine/src/dispatch.cpp:294](engine/src/dispatch.cpp#L294) TODO[19681]: This can be removed when all engine messages are sent with
+- [engine/src/dispatch.cpp:1557](engine/src/dispatch.cpp#L1557) PLATFORM-TODO: This is needed at the moment to make sure that we don't
+- [engine/src/dispatch.cpp:1895](engine/src/dispatch.cpp#L1895) TODO: what about other 'special' chars added by unicode?
 - [engine/src/dskmac.cpp:790](engine/src/dskmac.cpp#L790) TODO Check whether the double path resolution is an issue
 - [engine/src/dskmac.cpp:1186](engine/src/dskmac.cpp#L1186) TODO assign relevant error code
 - [engine/src/dskmac.cpp:1208](engine/src/dskmac.cpp#L1208) TODO assign relevant error code
@@ -273,7 +263,7 @@ Work left for later. 429 notes, by part of the repository:
 - [engine/src/em-util.js:304](engine/src/em-util.js#L304) TODO - support more value types
 - [engine/src/em-util.js:332](engine/src/em-util.js#L332) TODO - for now, treat functions as objects but we may wish to differentiate them later
 - [engine/src/exec-engine.cpp:519](engine/src/exec-engine.cpp#L519) TODO - create as list?
-- [engine/src/exec-extension.cpp:769](engine/src/exec-extension.cpp#L769) TODO: Augment error
+- [engine/src/exec-extension.cpp:761](engine/src/exec-extension.cpp#L761) TODO: Augment error
 - [engine/src/exec-interface-stack.cpp:121](engine/src/exec-interface-stack.cpp#L121) TODO
 - [engine/src/exec-network.cpp:165](engine/src/exec-network.cpp#L165) TODO - I.M. this is a bit odd, checking if we have permission to resolve a hostname AFTER we've
 - [engine/src/exec-pasteboard.cpp:556](engine/src/exec-pasteboard.cpp#L556) TODO: support multiple items
@@ -359,11 +349,6 @@ Work left for later. 429 notes, by part of the repository:
 - [engine/src/mblandroidmisc.cpp:1405](engine/src/mblandroidmisc.cpp#L1405) TODO: doing this properly requires a JNI call
 - [engine/src/mblandroidstore.cpp:468](engine/src/mblandroidstore.cpp#L468) TODO - handle errors
 - [engine/src/mblandroidstore.cpp:580](engine/src/mblandroidstore.cpp#L580) TODO - handle errors
-- [engine/src/mbliphonebusyindicator.mm:186](engine/src/mbliphonebusyindicator.mm#L186) TODO - update for unicode. Change false to the appropriate value.
-- [engine/src/mbliphonepick.mm:1094](engine/src/mbliphonepick.mm#L1094) TODO - update to support unicode
-- [engine/src/mbliphoneplayer.mm:97](engine/src/mbliphoneplayer.mm#L97) TODO - update
-- [engine/src/mbliphoneplayer.mm:669](engine/src/mbliphoneplayer.mm#L669) if (t_status == AVPlayerItemStatusFailed) /* TODO - CHECK THIS
-- [engine/src/mbliphonesensor.mm:145](engine/src/mbliphonesensor.mm#L145) TODO: Determine difference between location and heading error properly
 - [engine/src/mcio.cpp:77](engine/src/mcio.cpp#L77) TODO - update processes to use MCNameRef
 - [engine/src/mcio.cpp:449](engine/src/mcio.cpp#L449) TODO[2017-02-06] Refactor so that this doesn't allocate any
 - [engine/src/mixin-refcounted.h:54](engine/src/mixin-refcounted.h#L54) TODO: atomic ops
@@ -440,11 +425,11 @@ Work left for later. 429 notes, by part of the repository:
 - [engine/src/stackcache.cpp:210](engine/src/stackcache.cpp#L210) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackcache.cpp:272](engine/src/stackcache.cpp#L272) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackfileformat.cpp:25](engine/src/stackfileformat.cpp#L25) TODO: change this, and comparisons for version >= 7000 / 5500, etc
-- [engine/src/sysdefs.h:1398](engine/src/sysdefs.h#L1398) TODO[C++11] MCObject *object = nullptr;
-- [engine/src/sysdefs.h:1399](engine/src/sysdefs.h#L1399) TODO[C++11] uint32_t part_id = 0;
-- [engine/src/sysdefs.h:1403](engine/src/sysdefs.h#L1403) TODO[C++11] constexpr MCObjectPtr() = default;
-- [engine/src/sysdefs.h:1405](engine/src/sysdefs.h#L1405) TODO[C++11] constexpr
-- [engine/src/sysspec.cpp:1734](engine/src/sysspec.cpp#L1734) TODO Change to MCDataRef or change Shell to MCStringRef
+- [engine/src/sysdefs.h:1382](engine/src/sysdefs.h#L1382) TODO[C++11] MCObject *object = nullptr;
+- [engine/src/sysdefs.h:1383](engine/src/sysdefs.h#L1383) TODO[C++11] uint32_t part_id = 0;
+- [engine/src/sysdefs.h:1387](engine/src/sysdefs.h#L1387) TODO[C++11] constexpr MCObjectPtr() = default;
+- [engine/src/sysdefs.h:1389](engine/src/sysdefs.h#L1389) TODO[C++11] constexpr
+- [engine/src/sysspec.cpp:1732](engine/src/sysspec.cpp#L1732) TODO Change to MCDataRef or change Shell to MCStringRef
 - [engine/src/text-line.cpp:322](engine/src/text-line.cpp#L322) TODO: implement
 - [engine/src/text-pane.cpp:190](engine/src/text-pane.cpp#L190) TODO: examine the list of blocks in the paragraph for paragraph breaks
 - [engine/src/text-paragraph.cpp:547](engine/src/text-paragraph.cpp#L547) TODO: margins, padding, etc
@@ -666,7 +651,7 @@ Work left for later. 429 notes, by part of the repository:
 - [libscript/src/script-error.cpp:83](libscript/src/script-error.cpp#L83) TODO: Add expected / provided argument counts.
 - [libscript/src/script-execute.cpp:288](libscript/src/script-execute.cpp#L288) _Complex long double (TODO)
 - [libscript/src/script-execute.cpp:306](libscript/src/script-execute.cpp#L306) TODO: Investigate structs containing long doubles
-- [libscript/src/script-execute.cpp:550](libscript/src/script-execute.cpp#L550) TODO: Split UnboxingConvert so that we don't resolve types twice.
+- [libscript/src/script-execute.cpp:545](libscript/src/script-execute.cpp#L545) TODO: Split UnboxingConvert so that we don't resolve types twice.
 - [libscript/src/script-private.h:830](libscript/src/script-private.h#L830) TODO: Make this better for negative numbers.
 - [libscript/src/script-validate.hpp:243](libscript/src/script-validate.hpp#L243) TODO: Validate that p_address is the start of an opcode.
 
@@ -684,17 +669,9 @@ Work left for later. 429 notes, by part of the repository:
 
 ### TODO: (top level) (3)
 
-- [Makefile:265](Makefile#L265) TODO Replace with real rules
+- [Makefile:209](Makefile#L209) TODO Replace with real rules
 - [common.gypi:21](common.gypi#L21) TODO add windows msvc compiler and crt mode to platform id
-- [config.py:472](config.py#L472) TODO [2017-04-11]: This should be 2017, but it is not
-
-<a id="todo-ide-support"></a>
-
-### TODO: ide-support (3)
-
-- [ide-support/revdeploylibraryios.livecodescript:702](ide-support/revdeploylibraryios.livecodescript#L702) TODO: Remove this workaround once bug 22887 is fixed
-- [ide-support/revsaveasiosstandalone.livecodescript:317](ide-support/revsaveasiosstandalone.livecodescript#L317) TODO Add support for static libraries and frameworks by linking the engine for a simulator build
-- [ide-support/revsaveasiosstandalone.livecodescript:860](ide-support/revsaveasiosstandalone.livecodescript#L860) TODO build executable
+- [config.py:465](config.py#L465) TODO [2017-04-11]: This should be 2017, but it is not
 
 <a id="todo-revmobile"></a>
 
@@ -716,8 +693,8 @@ Work left for later. 429 notes, by part of the repository:
 
 ### TODO: prebuilt (2)
 
-- [prebuilt/fetch-libraries.sh:462](prebuilt/fetch-libraries.sh#L462) TODO[2017-03-03] Our official architecture name (as used in
-- [prebuilt/fetch-libraries.sh:477](prebuilt/fetch-libraries.sh#L477) TODO[2017-02-17] Monkey-patch in a "Fast" prebuilt
+- [prebuilt/fetch-libraries.sh:459](prebuilt/fetch-libraries.sh#L459) TODO[2017-03-03] Our official architecture name (as used in
+- [prebuilt/fetch-libraries.sh:474](prebuilt/fetch-libraries.sh#L474) TODO[2017-02-17] Monkey-patch in a "Fast" prebuilt
 
 <a id="todo-revdb"></a>
 

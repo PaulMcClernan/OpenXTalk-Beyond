@@ -10,7 +10,7 @@ available.
 
 Introduced: 4.6
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -35,8 +35,5 @@ Handle the <playerPropertyAvailable> message when sufficient information
 about a given player property has become available so that
 information about that property can be accessed.
 
-References: playerFinished (message), playerError (message),
-playerLeaveFullscreen (message), playerStopped (message),
-playerProgressChanged (message), playerMovieChanged (message),
-playerEnterFullscreen (message)
+References: playerFinished (message), playerError (message)
 

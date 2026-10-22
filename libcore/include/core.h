@@ -53,7 +53,7 @@ typedef wchar_t *BSTR;
 typedef uint16_t unichar_t;
 #endif
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
 typedef const struct __CFString * CFStringRef;
 typedef const struct __CFData * CFDataRef;
 #endif
@@ -318,7 +318,7 @@ bool MCCStringToNative(const char *string, char*& r_string);
 bool MCCStringFromNative(const char *string, char*& r_string);
 bool MCCStringFromNativeSubstring(const char *string, uint32_t length, char*& r_string);
 
-#if defined(_MACOSX) || defined(TARGET_SUBPLATFORM_IPHONE)
+#if defined(_MACOSX)
 bool MCCStringToCFString(const char *string, CFStringRef& r_cfstring);
 bool MCCStringFromCFString(CFStringRef cfstring, char*& r_cstring);
 #endif

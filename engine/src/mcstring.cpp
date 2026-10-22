@@ -606,23 +606,6 @@ MCNameRef MCM_product_request_error;
 MCNameRef MCM_nfc_tag_received;
 #endif
 
-#ifdef _IOS_MOBILE
-MCNameRef MCM_browser_load_request;
-MCNameRef MCM_browser_load_requested;
-MCNameRef MCM_scroller_begin_decelerate;
-MCNameRef MCM_scroller_end_decelerate;
-MCNameRef MCM_scroller_scroll_to_top;
-MCNameRef MCM_player_progress_changed;
-MCNameRef MCM_player_enter_fullscreen;
-MCNameRef MCM_player_leave_fullscreen;
-MCNameRef MCM_player_state_changed;
-MCNameRef MCM_player_movie_changed;
-MCNameRef MCM_player_stopped;
-MCNameRef MCM_reachability_changed;
-MCNameRef MCM_protected_data_available;
-MCNameRef MCM_protected_data_unavailable;
-MCNameRef MCM_remote_control_received;
-#endif
 
 MCNameRef MCN_font_default;
 MCNameRef MCN_font_usertext;
@@ -1055,23 +1038,6 @@ const struct { const char *cstring; MCNameRef *name_var; } kInitialNames[] =
 	{ "nfcTagReceived", &MCM_nfc_tag_received },
 #endif
 	
-#ifdef _IOS_MOBILE
-	{ "browserLoadRequest", &MCM_browser_load_request },
-	{ "browserLoadRequested", &MCM_browser_load_requested },
-	{ "scrollerBeginDecelerate", &MCM_scroller_begin_decelerate },
-	{ "scrollerEndDecelerate", &MCM_scroller_end_decelerate },
-	{ "scrollerScrollToTop", &MCM_scroller_scroll_to_top },
-	{ "playerProgressChanged", &MCM_player_progress_changed },
-	{ "playerEnterFullscreen", &MCM_player_enter_fullscreen },
-	{ "playerLeaveFullscreen", &MCM_player_leave_fullscreen },
-	{ "playerStateChanged", &MCM_player_state_changed },
-	{ "playerMovieChanged", &MCM_player_movie_changed },
-	{ "playerStopped", &MCM_player_stopped },
-	{ "reachabilityChanged", &MCM_reachability_changed },
-    { "protectedDataDidBecomeAvailable", &MCM_protected_data_available },
-    { "protectedDataWillBecomeUnavailable", &MCM_protected_data_unavailable },
-	{ "remoteControlReceived", &MCM_remote_control_received },
-#endif
     
     { "(Default)", &MCN_font_default },
     { "(Styled Text)", &MCN_font_usertext },

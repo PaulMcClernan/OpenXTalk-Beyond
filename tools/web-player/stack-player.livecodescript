@@ -539,8 +539,15 @@ end playerForgetFolder
 
 command playerOpenFile pPath
    local tRect, tName, tError, tResult, tFolder, tOpenError
+   -- With a stack open, first home, and the stack opened after the one
+   -- that goes is forgotten (as playerReload does): until then it is in
+   -- memory, and a stack of the same name from another file (a newer copy
+   -- of it, opened while it plays) would be read as that one, and then
+   -- forgotten with it, while it shows
    if sCurrent is not empty then
       playerGoHome
+      send "playerOpenFile" && quote & pPath & quote to me in 10 milliseconds
+      exit playerOpenFile
    end if
    playerStatus "Opening" && pPath
    put the mainStacks into sStacksBefore

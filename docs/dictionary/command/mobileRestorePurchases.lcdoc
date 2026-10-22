@@ -10,7 +10,7 @@ previously completed purchases.
 
 Introduced: 5.0.1
 
-OS: ios, android
+OS: android
 
 Platforms: mobile
 
@@ -32,7 +32,6 @@ app.
 
 References: mobilePurchaseSet (command),
 mobileDisablePurchaseUpdates (command), mobilePurchaseVerify (command),
-iphoneRequestProductDetails (command),
 mobilePurchaseSendRequest (command),
 mobilePurchaseConfirmDelivery (command),
 mobileEnablePurchaseUpdates (command), mobilePurchaseCreate (command),

@@ -30,11 +30,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include <pthread.h>
 
-#if defined(_IOS_MOBILE)
-#include <CoreGraphics/CoreGraphics.h>
-#import <OpenGLES/ES1/gl.h>
-#import <OpenGLES/ES1/glext.h>
-#elif defined(TARGET_SUBPLATFORM_ANDROID)
+#if   defined(TARGET_SUBPLATFORM_ANDROID)
 #define GL_GLEXT_PROTOTYPES
 #include <GLES/gl.h>
 #include <GLES/glext.h>

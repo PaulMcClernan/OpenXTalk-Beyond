@@ -439,13 +439,6 @@ static MCExecEnumTypeElementInfo _kMCNativeControlInputReturnKeyTypeElementInfo[
 	{"search", kMCNativeControlInputReturnKeyTypeSearch, false},
 	{"send", kMCNativeControlInputReturnKeyTypeSend, false},
     {"done", kMCNativeControlInputReturnKeyTypeDone, false},
-#if defined(TARGET_SUBPLATFORM_IPHONE)
-    {"route", kMCNativeControlInputReturnKeyTypeRoute},
-	{"yahoo", kMCNativeControlInputReturnKeyTypeYahoo},
-    {"google", kMCNativeControlInputReturnKeyTypeGoogle},
-	{"join", kMCNativeControlInputReturnKeyTypeJoin},
-	{"emergency call", kMCNativeControlInputReturnKeyTypeEmergencyCall},
-#endif
 };
 
 static MCExecEnumTypeInfo _kMCNativeControlInputReturnKeyTypeTypeInfo =
@@ -875,64 +868,6 @@ void _MCNativeControlDo(MCExecContext &ctxt, MCNativeControlPtr *p_control, MCNa
 	ctxt . Throw();
 }
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-struct handle_context_t
-{
-	MCExecContext *ctxt;
-	MCNativeControlPtr *control;
-	MCNativeControlActionInfo *info;
-	MCValueRef *arguments;
-	uindex_t argument_count;
-};
-
-static void invoke_platform(void *p_context)
-{
-	handle_context_t *ctxt;
-	ctxt = (handle_context_t *)p_context;
-	
-	_MCNativeControlDo(*(ctxt->ctxt), ctxt->control, ctxt->info, ctxt->arguments, ctxt->argument_count);
-}
-
-extern void MCIPhoneCallOnMainFiber(void (*)(void *), void *);
-
-void MCNativeControlExecDo(MCExecContext& ctxt, MCStringRef p_control_name, MCStringRef p_action_name, MCValueRef *p_arguments, uindex_t p_argument_count)
-{
-	MCNativeControl *t_native_control;
-	if (!MCNativeControl::FindByNameOrId(p_control_name, t_native_control))
-		return;
-	
-	MCNativeControlAction t_action;
-    if (!MCLookupNativeControlAction(p_action_name, (intenum_t&)t_action))
-		return;
-	
-	MCNativeControlActionInfo *t_info;
-	t_info = lookup_control_action(t_native_control -> getactiontable(), t_action);
-	if (t_info != nil)
-	{
-		MCNativeControlPtr t_control;
-		t_control . control = t_native_control;
-		
-		// MW-2012-07-31: [[ Fibers ]] If the method doesn't need script / wait, then
-		//   jump to the main fiber for it.
-		if (!t_info -> waitable)
-		{
-			handle_context_t t_context;
-			t_context.ctxt = &ctxt;
-			t_context.control = &t_control;
-			t_context.info = t_info;
-			t_context.arguments = p_arguments;
-			t_context.argument_count = p_argument_count;
-			
-			MCIPhoneCallOnMainFiber(invoke_platform, &t_context);
-			return;
-		}
-		
-		// Execute the method as normal, in this case the method will have to jump
-		// to the main fiber to do any system stuff.
-		_MCNativeControlDo(ctxt, &t_control, t_info, p_arguments, p_argument_count);
-	}
-}
-#else // Android
 void MCNativeControlExecDo(MCExecContext& ctxt, MCStringRef p_control_name, MCStringRef p_action_name, MCValueRef *p_arguments, uindex_t p_argument_count)
 {
 	MCNativeControl *t_native_control;
@@ -953,4 +888,3 @@ void MCNativeControlExecDo(MCExecContext& ctxt, MCStringRef p_control_name, MCSt
 		_MCNativeControlDo(ctxt, &t_control, t_info, p_arguments, p_argument_count);
 	}
 }
-#endif

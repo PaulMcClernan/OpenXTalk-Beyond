@@ -47,13 +47,6 @@ case "${PLATFORM}" in
 		export CC_BASE="${CUSTOM_CC:-gcc}"
 		export CXX_BASE="${CUSTOM_CXX:-g++}"
 		;;
-	ios)
-		source "${BASEDIR}/scripts/ios.inc"
-		if [ "${ARCH}" == "universal" ] ; then
-			queryiOS "${SUBPLATFORM}"
-			export UNIVERSAL_ARCHS="${ARCHS}"
-		fi
-		;;
 esac
 
 if [ "${PLATFORM}" == "android" ] ; then
@@ -159,28 +152,6 @@ function setCCForTarget {
 			OBJCOPY="${ANDROID_OBJCOPY}"
 			RANLIB="${ANDROID_RANLIB}"
 			STRIP="${ANDROID_STRIP}"
-			;;
-		ios)
-			queryiOS "${SUBPLATFORM}"
-			
-			CROSS_TOP="${XCODE}/Platforms/${SUBPLATFORM_NAME}.platform/Developer"
-			CROSS_SDK="${SUBPLATFORM_NAME}${VERSION}.sdk"
-			
-			if [ "${ARCH}" == "armv7" -o "${ARCH}" == "armv7s" ] ; then
-				ARCH_FLAGS="-mthumb"
-			else
-				ARCH_FLAGS=
-			fi
-			
-			if [ -x "${CROSS_TOP}/usr/bin/gcc" ] ; then
-				CCPATH="${CROSS_TOP}/usr/bin"
-			else
-				CCPATH="${XCODE}/usr/bin"
-			fi
-			
-			CC="${CCPATH}/gcc -arch ${ARCH} ${ARCH_FLAGS} -isysroot ${CROSS_TOP}/SDKs/${CROSS_SDK} -miphoneos-version-min=7.0"
-			CXX="${CCPATH}/g++ -arch ${ARCH} ${ARCH_FLAGS} -isysroot ${CROSS_TOP}/SDKs/${CROSS_SDK} -miphoneos-version-min=7.0"
-			LDFLAGS="-L${CROSS_TOP}/SDKs/${CROSS_SDK}/usr/lib -isysroot ${CROSS_TOP}/SDKs/${CROSS_SDK} -Wl,-dead_strip"
 			;;
 		emscripten)
 			echo "CUSTOM_EMMAKE: ${CUSTOM_EMMAKE}"

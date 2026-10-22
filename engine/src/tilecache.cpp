@@ -500,12 +500,12 @@ bool MCTileCacheSupportsCompositor(MCTileCacheCompositorType p_type)
 		p_type == kMCTileCacheCompositorSoftware)
 		return true;
 	
-#if defined(_IOS_MOBILE) || defined(_MAC_DESKTOP)
+#if defined(_MAC_DESKTOP)
 	if (p_type == kMCTileCacheCompositorCoreGraphics)
 		return true;
 #endif
 	
-#if defined(_IOS_MOBILE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
 	if (p_type == kMCTileCacheCompositorStaticOpenGL)
 		return true;
 #endif
@@ -528,12 +528,12 @@ static void MCTileCacheConfigureCompositor(MCTileCacheRef self, MCTileCacheCompo
 		case kMCTileCacheCompositorSoftware:
 			MCTileCacheSoftwareCompositorConfigure(self, self -> compositor);
 			break;
-#if defined(_IOS_MOBILE) || defined(_MAC_DESKTOP)
+#if defined(_MAC_DESKTOP)
 		case kMCTileCacheCompositorCoreGraphics:
 			MCTileCacheCoreGraphicsCompositorConfigure(self, self -> compositor);
 			break;
 #endif
-#if defined(_IOS_MOBILE) || defined(TARGET_SUBPLATFORM_ANDROID)
+#if defined(TARGET_SUBPLATFORM_ANDROID)
 		case kMCTileCacheCompositorStaticOpenGL:
 			MCTileCacheOpenGLCompositorConfigure(self, self -> compositor);
 			break;

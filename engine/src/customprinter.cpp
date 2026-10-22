@@ -1051,10 +1051,6 @@ static bool dotextmark_callback(void *p_context, const MCTextLayoutSpan *p_span)
 #elif defined(_LINUX_DESKTOP)
 	t_font_size = context -> font_size;
 	t_font_handle = p_span -> font;
-#elif defined(_IOS_MOBILE)
-	extern int32_t MCCustomPrinterComputeFontSize(void *font);
-	t_font_size = MCCustomPrinterComputeFontSize(p_span -> font);
-	t_font_handle = p_span -> font;
 #elif defined(ANDROID)
 	t_font_size = context->font_size;
 	t_font_handle = p_span->font;

@@ -27,8 +27,6 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "unxsupport.h"
 #elif defined(_MACOSX) || defined (_MAC_SERVER)
 #include "osxsupport.h"
-#elif defined(TARGET_SUBPLATFORM_IPHONE)
-#include "iossupport.h"
 #endif
 
 #if defined(_WINDOWS)
@@ -2350,10 +2348,3 @@ EXTERNAL_BEGIN_DECLARATIONS("revDB")
 	EXTERNAL_DECLARE_FUNCTION("revdb_valentina", REVDB_Valentina)
 EXTERNAL_END_DECLARATIONS
 
-#ifdef TARGET_SUBPLATFORM_IPHONE
-extern "C"
-{
-	extern struct LibInfo __libinfo;
-	__attribute((section("__DATA,__libs"))) volatile struct LibInfo *__libinfoptr_revdb __attribute__((__visibility__("default"))) = &__libinfo;
-}
-#endif
