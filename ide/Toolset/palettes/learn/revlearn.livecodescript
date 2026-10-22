@@ -2166,6 +2166,10 @@ private function leExampleTable
          "jumping and coin collecting, with real physics: rope bridges, boulders, crushers and a bestiary of " & \
          "enemies.|Seth Morrow, 2026, from the xTalk Suite; art by Kenney (CC0)|suite|gamepad-2|emerald|" & \
          "game physics platformer box2d box2dxt" & return after tTable
+   put "Resources/Examples/xTalk Suite/Texas Holdem.oxtstack|Texas Hold'em|No-limit Texas Hold'em for up " & \
+         "to six: play the computer, pass one screen around, or deal online with no server.|" & \
+         "Seth Morrow, 2026, from the xTalk Suite; art and sounds by Kenney (CC0)|suite|heart|rose|" & \
+         "game cards poker holdem box2dxt torrentxt sodiumxt" & return after tTable
    -- The Stack Player's stacks, when this copy of the IDE has them
    put leShowcaseTable() after tTable
    return tTable
@@ -2289,7 +2293,7 @@ private function leExampleGroups
          "tours|Tours|Guided tours of the Data Grid and of SQLite, a card at a time." & return & \
          "apps|Small apps to take apart|Each does one thing, in a few short scripts: open one, then read its scripts." & return & \
          "suite|xTalk Suite demos|Whole apps on the xTalk Suite extensions built into OXT-Beyond: share files " & \
-         "with no server, download torrents, and play a physics platformer." & return & \
+         "with no server, download torrents, play a physics platformer, and play poker." & return & \
          "samples|Start Center samples|LiveCode Community's samples: a game, a database and a template." & return & \
          "mobile|For phones and tablets|These use the mobile engine's commands: they open here, but do their work on a phone."
 end leExampleGroups
