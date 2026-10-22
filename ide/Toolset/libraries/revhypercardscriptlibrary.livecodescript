@@ -243,12 +243,17 @@ end revHyperCardRewriteScript
 The script of the substack "HyperCard Library" that
 <revHyperCardFixScripts> adds to an imported stack: the file
 revhypercardlibrary.livecodescript beside this library, without its
-first line.
+first line. A copy of this library with no such file beside it (the web
+Stack Player carries one in its own stack) keeps that script in its
+custom property cHyperCardLibraryScript.
 
 Returns (String): The script.
 */
 function revHyperCardLibraryScript
    local tPath, tScript
+   if the cHyperCardLibraryScript of me is not empty then
+      return the cHyperCardLibraryScript of me
+   end if
    set the itemDelimiter to slash
    put the effective filename of me into tPath
    put "revhypercardlibrary.livecodescript" into item -1 of tPath

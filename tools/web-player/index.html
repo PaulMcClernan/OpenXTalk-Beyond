@@ -354,7 +354,7 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
       <div class="drop" id="drop" tabindex="0" role="button" aria-label="Open a stack: drop files here, or press to choose">
         <img src="assets/px/px-stack.svg" alt="" width="64" height="64">
         <span class="note">Drop a stack, a folder or a .zip here, or click to choose</span>
-        <span class="exts">.livecode · .oxtstack · .livecodescript · .rev · .zip</span>
+        <span class="exts">.livecode · .oxtstack · .livecodescript · .rev · .zip · HyperCard stacks and disk images</span>
       </div>
 
       <section id="library-section">
@@ -531,7 +531,8 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
     ['Printing and PDF', 'print opens the browser\'s print dialog, where you can print or save a PDF; open printing to pdf makes a PDF download.'],
     ['Keyboard, mouse, touch and clipboard', 'Typing, shortcuts, the mouse wheel, touch screens, copy and paste, and drag and drop inside the page.'],
     ['Encryption', 'encrypt, decrypt, hashes and random bytes.'],
-    ['JavaScript', 'do ... as "JavaScript" runs JavaScript in the page.']
+    ['JavaScript', 'do ... as "JavaScript" runs JavaScript in the page.'],
+    ['HyperCard stacks', 'A HyperCard stack opens as File > Import Stack opens it on the desktop: its scripts are made to compile here, and the common externals it calls have stand-ins. It can be the stack file itself, a MacBinary (.bin) or BinHex (.hqx) copy, or a Mac disk image (.dsk, .img, .image, DiskCopy 4.2), from which you pick a stack. Put its resource fork beside it (Name.rsrc or ._Name) for its icons, sounds and pictures.']
   ];
   var DIFFERS = [
     ['The look of controls', 'Buttons and fields are drawn by the engine in a classic, light style, the same on every computer, not in your system\'s style.'],
@@ -550,7 +551,6 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
     ['MySQL, PostgreSQL and ODBC', 'They need sockets. SQLite works.'],
     ['Dragging out of the page', 'Something dragged out of a stack can\'t be dropped in another application.'],
     ['Window tricks', 'Shaped windows, minimizing and maximizing.'],
-    ['HyperCard files, for now', 'OXT-Beyond imports HyperCard stacks on the desktop. Save one there and the Stack Player opens it; a HyperCard file itself doesn\'t open here yet. This is being worked on.'],
     ['Extensions that don\'t ship with OXT-Beyond, for now', 'A widget the player doesn\'t carry shows as an empty box.'],
     ['Opening a stack from a web address, for now', 'Download the stack and open the file instead.']
   ];

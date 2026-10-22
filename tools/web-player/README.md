@@ -69,10 +69,22 @@ Not yet: extensions that are a layer over a native library (box2dxt's
 Box2D, so the platformer and the Box2D games; sodiumxt, coinxt, torrents,
 ENet, WebRTC data channels). They have no web build, so such a stack opens
 and stops where it first calls one, and the player names the extension
-instead of showing its error trace. Also HyperCard's own files (they import and draw, but `go` never returns
-on the web, an engine bug still to fix: a HyperCard stack imported and
-saved on the desktop opens), opening a stack from a URL, and
+instead of showing its error trace. Also opening a stack from a URL, and
 extensions that are not installed with OXT-Beyond.
+
+HyperCard stacks open as File > Import Stack opens them on the desktop.
+The player carries the IDE's HyperCard libraries
+(`revhypercardscriptlibrary` and `revhypercarddiskimagelibrary`, made
+substacks of the player by `build-player.livecodescript`). A file is a
+HyperCard stack by its first bytes, whatever its name: the stack itself
+(with its resource fork beside it as `Name.rsrc` or `._Name`, or in a
+zip's `__MACOSX` folder), a MacBinary or BinHex copy, or an AppleSingle
+file. It is imported once, with messages locked, its scripts are made to
+compile here (`revHyperCardFixScripts`) and it is given the HyperCard
+Library, and then it opens with its own messages. A Mac disk image (raw
+HFS, DiskCopy 4.2, or a CD image with an Apple partition map) lists its
+stacks to choose from; the one chosen is copied out of it, with its
+resource fork, into the image's folder of the library.
 
 **A stack is a program.** In the player it can do what the page can:
 run JavaScript, read and write what other stacks saved for that site, and

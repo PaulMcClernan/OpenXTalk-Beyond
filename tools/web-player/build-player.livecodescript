@@ -30,6 +30,9 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --      revZip, revDB with SQLite, revSpeech) and every widget and library
 --      extension installed for the web, so that a stack the player opens
 --      finds what its own standalone would carry;
+--      it carries the IDE's HyperCard script and disk image libraries
+--      as substacks, so that it opens a HyperCard stack as File > Import
+--      Stack does (see makeHyperCardLibraries);
 --   3. with OXT_PLAYER_SAMPLES, saves there the stacks that
 --      player_check.py opens in the player: they use the Data Grid, a
 --      widget, a substack, a script error, revXML, SQLite and a file beside
@@ -222,6 +225,8 @@ private command makePlayer
    playerField "Status", "20,420,700,470", 13, empty
    set the textColor of field "Status" to "#555555"
 
+   makeHyperCardLibraries tStack
+
    -- the back script for script errors (see playerInstallErrorHandler)
    create invisible button "Error Handler"
    set the script of button "Error Handler" to \
@@ -231,6 +236,41 @@ private command makePlayer
          "end errorDialog"
    save stack kPlayerName as (specialFolderPath("temporary") & "/StackPlayer.livecode")
 end makePlayer
+
+-- The IDE's HyperCard libraries, as invisible substacks of the player
+-- under names of their own (the IDE has the originals open): the script
+-- library rewrites the scripts of a HyperCard stack the player opens, as
+-- File > Import Stack does, and the disk image library reads the stacks
+-- on a Mac disk image. The library that the script library gives each
+-- stack it fixes is read from a file beside it in the IDE; the player has
+-- no such file, so it is kept in a custom property of the substack
+-- (revHyperCardLibraryScript reads it from there).
+private command makeHyperCardLibraries pPlayer
+   local tName
+   put "Player HyperCard Scripts" into tName
+   create invisible stack tName
+   set the mainStack of stack tName to the short name of pPlayer
+   set the script of stack tName of pPlayer to the script of stack "revHyperCardScriptLibrary"
+   if the result is not empty then
+      throw "the HyperCard script library: " & the result
+   end if
+   set the cHyperCardLibraryScript of stack tName of pPlayer to \
+         revHyperCardLibraryScript()
+   if the cHyperCardLibraryScript of stack tName of pPlayer is empty then
+      throw "the HyperCard library's script is empty"
+   end if
+   close stack tName of pPlayer
+
+   put "Player HyperCard Disk Images" into tName
+   create invisible stack tName
+   set the mainStack of stack tName to the short name of pPlayer
+   set the script of stack tName of pPlayer to the script of stack "revHyperCardDiskImageLibrary"
+   if the result is not empty then
+      throw "the HyperCard disk image library: " & the result
+   end if
+   close stack tName of pPlayer
+   set the defaultStack to the short name of pPlayer
+end makeHyperCardLibraries
 
 private command playerField pName, pRect, pSize, pStyle
    create field pName
