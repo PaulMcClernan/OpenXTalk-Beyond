@@ -29,8 +29,8 @@
  * (a browser cannot look a function up by name). A handle made with a
  * native path is one of
  * the libraries that the web engine links into itself (a browser loads
- * none) and registers with MCSLibraryRegisterStatic: as on iOS
- * (system-library-static.hpp), the library is found by the name of its file
+ * none) and registers with MCSLibraryRegisterStatic: as in
+ * system-library-static.hpp, the library is found by the name of its file
  * without the folder and the extension, so "<folder>/revxml.so" finds the
  * library registered as "revxml", and its symbols are those it registered.
  * OXT-Beyond: the registry is new; before it, a handle made with a path
