@@ -72,7 +72,7 @@ script "org.openxtalk.plugin.xtalkassistant"
 --    xtaMoreMenuPick, xtaNoteClicked, xtaConversationLink, xtaAnswerAsk,
 --    xtaWindowClosed,
 --    xtaSettingsSave, xtaSettingsGetModels, xtaSettingsForgetKey,
---    xtaSettingsProvider             (the Settings dialog)
+--    xtaSettingsProvider, xtaSettingsLocal   (the Settings dialog)
 --    xtaSettingsPrepare, xtaSettingsDone()   (before and after it)
 --    xtaIsEnabled()
 
@@ -282,7 +282,7 @@ command xtalkAssistantMenuPick
       exit xtalkAssistantMenuPick
    end if
    if not xtaIsEnabled() then
-      answer question "The xTalk Assistant helps you write scripts with an AI model of your choice, from Anthropic or OpenAI (or a service or local server with OpenAI's API), using your own API key." & return & return & \
+      answer question "The xTalk Assistant helps you write scripts with an AI model of your choice, from Anthropic or OpenAI (or a service or local server with OpenAI's API), using your own API key. Or run a model on your own computer, with LM Studio or Ollama, which needs no key (More > Settings..., Local)." & return & return & \
             "When you press Send, what you typed is sent to that provider, with the script open in the Script Editor while" && quote & "Include the open script" & quote && "is ticked (it is to begin with), and nothing else is. Using it may cost money on your account with the provider." & return & return & \
             "It stays off until you turn it on, and you can turn it off again from its window." \
             with "Cancel" or "Turn On" titled kTitle
@@ -2458,7 +2458,16 @@ private command xtaBuildSettings
 
    add 32 to tTop
    xtaSettingsLabel "Base URL", tTop
-   xtaSettingsField "Base URL", tLeft, tTop, tRight
+   xtaSettingsField "Base URL", tLeft, tTop, tRight - 108
+   -- The servers that run a model on this computer, at their own
+   -- addresses: the way to them, for a user who would not know the URL
+   create button "Local"
+   set the style of button "Local" to "menu"
+   set the menuMode of button "Local" to "pulldown"
+   set the label of button "Local" to "Local"
+   set the text of button "Local" to xtaLocalServerItems()
+   set the rect of button "Local" to tRight - 100, tTop, tRight, tTop + 24
+   set the tooltip of button "Local" to "Use a model running on this computer, in LM Studio or Ollama (no key needed)"
    add 25 to tTop
    xtaSettingsNote "Base URL Note", tLeft, tTop, tRight, 31
 
@@ -2596,7 +2605,9 @@ private command xtaFillSettings pProvider, pAll
    put xtaKeyNote(pProvider) into field "Key Note" of stack kSettingsWindow
    put "Empty means" && xtaDefaultBaseUrl(pProvider) & "." into tNote
    if pProvider is "openai" then
-      put " For a local server with OpenAI's API, for example http://localhost:11434/v1 (Ollama), which may need no key." after tNote
+      put " For a model on this computer, choose LM Studio or Ollama from Local (no key needed), or type its server's URL." after tNote
+   else
+      put " Local switches to a model on this computer, in LM Studio or Ollama." after tNote
    end if
    put tNote into field "Base URL Note" of stack kSettingsWindow
    xtaSettingsResult empty
@@ -2694,6 +2705,76 @@ on xtaSettingsProvider pName
    end repeat
 end xtaSettingsProvider
 
+-- The Local menu of the dialog: one item per server (xtaLocalServers),
+-- named with where it listens
+private function xtaLocalServerItems
+   local tItems, tLine
+   set the itemDelimiter to tab
+   repeat for each line tLine in xtaLocalServers()
+      put item 1 of tLine && "(" & xtaHostOf(item 2 of tLine) & ")" & return after tItems
+   end repeat
+   delete the last char of tItems
+   return tItems
+end xtaLocalServerItems
+
+-- The host and port of a URL ("localhost:1234")
+private function xtaHostOf pUrl
+   if pUrl contains "://" then
+      put char offset("://", pUrl) + 3 to -1 of pUrl into pUrl
+   end if
+   set the itemDelimiter to "/"
+   return item 1 of pUrl
+end xtaHostOf
+
+-- A server on this computer chosen from Local: OpenAI's API, which those
+-- servers speak, at its address. What was typed for the provider shown is
+-- kept as a draft, as the Provider menu keeps it. A model of OpenAI's own
+-- is not one the server has, so it goes, and Get Models asks the server
+-- for its models at once: that chooses one, or says the server is not
+-- running. Nothing is kept until Save.
+on xtaSettingsLocal pItem
+   local tLine, tUrl, tModel
+   if there is not a stack kSettingsWindow then
+      exit xtaSettingsLocal
+   end if
+   set the itemDelimiter to tab
+   repeat for each line tLine in xtaLocalServers()
+      if pItem begins with item 1 of tLine then
+         put item 2 of tLine into tUrl
+         exit repeat
+      end if
+   end repeat
+   if tUrl is empty then
+      exit xtaSettingsLocal
+   end if
+   if sSettingsProvider is not "openai" then
+      xtaKeepDraft sSettingsProvider
+      put "openai" into sSettingsProvider
+      xtaFillSettings "openai", false
+   end if
+   lock messages
+   put tUrl into field "Base URL" of stack kSettingsWindow
+   put the label of button "Model" of stack kSettingsWindow into tModel
+   if tModel is empty or tModel is among the lines of xtaSuggestedModels("openai") then
+      set the label of button "Model" of stack kSettingsWindow to empty
+      set the text of button "Model" of stack kSettingsWindow to empty
+      put empty into sDrafts["openai"]["menu"]
+   end if
+   unlock messages
+   xtaSettingsGetModels
+   -- Ollama runs a model with 4096 tokens of context unless told
+   -- otherwise, and cuts a longer prompt short without a word (the guide
+   -- alone is longer: on a real Ollama, 2050 of its tokens arrived), so
+   -- the model would answer without most of it. LM Studio refuses such a
+   -- request instead, and xtaLocalServerHint says what to do then.
+   if pItem begins with "Ollama" and there is a stack kSettingsWindow then
+      if field "Result" of stack kSettingsWindow contains "listed" then
+         xtaSettingsResult field "Result" of stack kSettingsWindow && \
+               "Ollama gives a model 4096 tokens unless its Context length is raised (16000 or more), or tick Short guide.", "ok"
+      end if
+   end if
+end xtaSettingsLocal
+
 private command xtaKeepDraft pProvider
    put field "Key" of stack kSettingsWindow into sDrafts[pProvider]["key"]
    put field "Base URL" of stack kSettingsWindow into sDrafts[pProvider]["baseUrl"]
@@ -2713,7 +2794,7 @@ end xtaSettingsForgetKey
 
 -- Get Models: the provider's list, asked with what is in the dialog
 on xtaSettingsGetModels
-   local tProvider, tSettings, tResult, tMenu, tCount
+   local tProvider, tSettings, tResult, tMenu, tCount, tKeyless
    if there is not a stack kSettingsWindow then
       exit xtaSettingsGetModels
    end if
@@ -2737,6 +2818,8 @@ on xtaSettingsGetModels
    xtaSettingsResult "Asking" && xtaProviderName(tProvider) && "for its models..."
    set the enabled of button "Get Models" of stack kSettingsWindow to false
    put xtaListModels(tSettings) into tResult
+   -- A local server needs no key, and the words for a list say so
+   put (tSettings["key"] is empty) into tKeyless
    put empty into tSettings
    -- Closed meanwhile (Cancel works while it waits), or switched provider
    if there is not a stack kSettingsWindow then
@@ -2759,7 +2842,11 @@ on xtaSettingsGetModels
       set the label of button "Model" of stack kSettingsWindow to tResult["default"]
    end if
    unlock messages
-   xtaSettingsResult xtaProviderName(tProvider) && "listed" && tCount && "models, so it takes the key. Choose one, then Save.", "ok"
+   if tKeyless then
+      xtaSettingsResult xtaProviderName(tProvider) && "listed" && tCount && "models. Choose one, then Save.", "ok"
+   else
+      xtaSettingsResult xtaProviderName(tProvider) && "listed" && tCount && "models, so it takes the key. Choose one, then Save.", "ok"
+   end if
 end xtaSettingsGetModels
 
 -- What the dialog holds, checked: "drafts" (by provider: "key", "baseUrl"
