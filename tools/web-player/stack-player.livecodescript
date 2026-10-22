@@ -60,6 +60,11 @@ local sPageArgs
 -- The names playerLinkResources linked into the resources folder for the
 -- open stack, one a line
 local sLinked
+-- For a HyperCard stack copied out of a disk image, by the path of the
+-- copy: the image's path and the stack's HFS path on it, so that a "go"
+-- to another stack of the image finds it there (the HyperCard Library's
+-- hcStackName)
+local sFromImage
 
 constant kStackExtensions = "livecode,oxtstack,rev,mc,livecodescript,lc,stack"
 constant kLibraryName = "Stack Player"
@@ -105,6 +110,10 @@ end playerStart
 -- with revHyperCard
 private command playerUseHyperCardLibraries
    local tName
+   -- a HyperCard stack's "go home" comes back to the player (the
+   -- HyperCard Library's hcGoHome)
+   global gHyperCardHome
+   put the long id of me into gHyperCardHome
    repeat for each item tName in kHyperCardScripts & comma & kHyperCardImages
       if there is a stack tName then
          start using stack tName
@@ -504,6 +513,7 @@ private command playerOpenFromImage pChoice
       playerStatus "Could not copy" && tStack && "out of the disk image:" && tError, "error"
       exit playerOpenFromImage
    end if
+   put tImage & return & tStack into sFromImage[tPath]
    playerOpenFile tPath
 end playerOpenFromImage
 
@@ -713,6 +723,12 @@ command playerOpenFile pPath
          put the long id of stack pPath into tStack
          put the rect of tStack into tRect
          put the short name of tStack into tName
+         -- where it came from, as File > Import Stack notes it
+         set the uHyperCard["file"] of tStack to pPath
+         if sFromImage[pPath] is not empty then
+            set the uHyperCard["image"] of tStack to line 1 of sFromImage[pPath]
+            set the uHyperCard["imagepath"] of tStack to line 2 of sFromImage[pPath]
+         end if
          playerFixHyperCard tStack
       else
          put the rect of stack pPath into tRect

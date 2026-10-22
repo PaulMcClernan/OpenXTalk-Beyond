@@ -15,28 +15,33 @@ script "revHyperCardScriptLibrary"
 --
 -- 1. rewrites the HyperTalk forms below, outside string literals and
 --    comments, one token at a time (the rules are named T0 to T14 in the
---    log; T15 is the doMenu routing, below);
+--    log; T15 to T21 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
 --    and keeps those that compile, putting in place of each one that does
 --    not a handler of the same name that passes its message on, with the
 --    HyperTalk commented out inside it ("salvage": in effect what
 --    HyperCard did, which ran a handler until it reached a bad line).
 --
--- Scripts that compile are left alone, except that in a stack with an
--- "on doMenu" handler (renamed hcDoMenu, as no handler here can be called
--- doMenu) every "doMenu" command becomes "hcDoMenu", so that the stack's
--- handler sees the menu choices its own scripts make, as in HyperCard. A
--- script whose rewrite would not compile when it did before is left as it
--- was. Each object whose script changes keeps its HyperTalk in the custom
--- property uHyperCard["script"], and the stack's uHyperCard["scripts"]
--- lists every change.
+-- Scripts that compile are rewritten only where they do something else
+-- here than in HyperCard. In a stack with an "on doMenu" handler (renamed
+-- hcDoMenu, as no handler here can be called doMenu) every "doMenu"
+-- command becomes "hcDoMenu", so that the stack's handler sees the menu
+-- choices its own scripts make (T15). And in every script, the statements
+-- that stop with an error here where HyperCard went on, or do something
+-- else, go to the library (T9 "go home", T16 "go" to a stack, T17 the
+-- cursor, T18 tabKey and the other key commands and "picture", T19 "show
+-- card picture", T20 "fileName(", T21 "show", "hide" and "close window").
+-- A script whose rewrite would not compile when it did before is left as
+-- it was. Each object whose script changes keeps its HyperTalk in the
+-- custom property uHyperCard["script"], and the stack's
+-- uHyperCard["scripts"] lists every change.
 --
 -- The rewritten scripts call a few handlers HyperCard had and this engine
 -- does not (hcDoMenu, hcVersion(), hcGoHome...): they are in the
--- substack "HyperCard Library" this adds to the stack, which is the
--- stack's behavior, so that it comes at the end of the stack's message
--- path where HyperCard's Home stack and HyperCard itself were, and goes
--- wherever the stack goes.
+-- substack "HyperCard Library (<the stack's name>)" this adds to the
+-- stack, which is the stack's behavior, so that it comes at the end of
+-- the stack's message path where HyperCard's Home stack and HyperCard
+-- itself were, and goes wherever the stack goes.
 
 -- Names that this engine refuses as variable names (measured on 0.2.7-rc.4
 -- over the names HyperCard stacks use), from the script sweep of
@@ -122,11 +127,13 @@ Description:
 Each script that does not compile is rewritten (HyperTalk forms this
 engine refuses, outside strings and comments) and, if it still does not
 compile, salvaged one handler at a time. A script that compiles is left
-as it is, except for the doMenu routing described in the library's
+as it is, except for the doMenu routing and the statements that stop
+with an error here where HyperCard went on, described in the library's
 header. Every object whose script changes keeps its HyperTalk in its
 custom property uHyperCard["script"]; the stack's uHyperCard["scripts"]
 holds the report, and the summary line is added to the hcImportStat.
-The substack "HyperCard Library" is added as the stack's behavior.
+The substack "HyperCard Library (<stack name>)" is added as the stack's
+behavior.
 
 Messages are locked while it runs, so that no handler of the stack runs.
 */
@@ -240,7 +247,7 @@ function revHyperCardRewriteScript pScript, pExternals
 end revHyperCardRewriteScript
 
 /*
-The script of the substack "HyperCard Library" that
+The script of the substack "HyperCard Library (<stack name>)" that
 <revHyperCardFixScripts> adds to an imported stack: the file
 revhypercardlibrary.livecodescript beside this library, without its
 first line. A copy of this library with no such file beside it (the web
@@ -321,19 +328,22 @@ end _Externals
 -- Add the library as a substack of the stack and make it the stack's
 -- behavior. Returns a line for the report, or empty if it was there.
 private function _AddLibrary pStack
-   local tName, tCount
+   local tName, tCount, tBase
    if the behavior of pStack is not empty then
       return "Not added: the HyperCard library (the stack already has a behavior)"
    end if
-   -- A substack of the import may have the name already (a PLTE palette
-   -- is one): this library is the one marked as it, under the first free
-   -- name
-   put kLibraryName into tName
+   -- Named after the stack: the engine knows a behavior by its stack's
+   -- name alone, so the libraries of two imports with one name were one
+   -- library to it, and deleting either stack broke the other's. A
+   -- substack of the import may have the name already: this library is
+   -- the one marked as it, under the first free name
+   put kLibraryName && "(" & the short name of pStack & ")" into tBase
+   put tBase into tName
    put 1 into tCount
    repeat while tName is among the lines of the substacks of pStack \
          and the uHyperCard["library"] of stack tName of pStack is not true
       add 1 to tCount
-      put kLibraryName && tCount into tName
+      put tBase && tCount into tName
    end repeat
    if tName is not among the lines of the substacks of pStack then
       -- made under a name no other stack has, as the library of a stack
@@ -573,10 +583,12 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
    if pCompiled then
       -- Only what changes what a script that compiles does, to what it did
       -- in HyperCard: the doMenu routing (in a stack with an "on doMenu"
-      -- handler) and HyperCard's version
+      -- handler), HyperCard's version, and the statements that stop with
+      -- an error here where HyperCard went on (_HyperCardRules)
       repeat with i = 1 to tCount
          if tRenameHandlers["domenu"] is not empty then put _RouteDoMenu(tLines[i]) into tLines[i]
          put _VersionRule(tLines[i]) into tLines[i]
+         if tCovered[i] then put _HyperCardRules(tLines[i], true) into tLines[i]
       end repeat
       return _JoinLines(tLines, tCount)
    end if
@@ -601,6 +613,7 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       end repeat
       repeat with tKey = tSpans[i]["start"] to tSpans[i]["end"]
          put _RewriteLine(tLines[tKey], tVars, tRename, pExternals, tRenameHandlers) into tLines[tKey]
+         put _HyperCardRules(tLines[tKey], false) into tLines[tKey]
       end repeat
       _ContinuedCommands tLines, tSpans[i]["start"], tSpans[i]["end"]
    end repeat
@@ -1053,7 +1066,8 @@ private function _GoHome @pTokens, pIdx, pAt, pCount
    put pAt + 1 into j
    if _T(pTokens, pIdx[j]) is "to" then add 1 to j
    if _T(pTokens, pIdx[j]) is "stack" then add 1 to j
-   if _T(pTokens, pIdx[j]) is not "home" or j <> pCount then return false
+   if _T(pTokens, pIdx[j]) is not "home" and _T(pTokens, pIdx[j]) is not quote & "home" & quote then return false
+   if j <> pCount then return false
    _Replace pTokens, pIdx, pAt, j, "hcGoHome"
    return true
 end _GoHome
@@ -1070,6 +1084,194 @@ private function _PlayNotes pLine
    end if
    return pLine
 end _PlayNotes
+
+-- T9 and T16 to T21: statements that stop with an error here where
+-- HyperCard went on, or that do something else here; in every script,
+-- compiling or not, one statement a line at most (a statement continued
+-- with \ is left as it is)
+private function _HyperCardRules pLine, pCompiled
+   local tTokens, tCode, tIdx, n, tItem, i, j, tEnd, tWord, tNew
+
+   if pCompiled then put _PlayNotes(pLine) into pLine
+   if char -1 of word 1 to -1 of _CodeText(pLine) is "\" then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+
+   repeat with i = 1 to n
+      if tTokens[tIdx[i]]["k"] is not "w" then next repeat
+      put _T(tTokens, tIdx[i]) into tWord
+
+      -- T20: fileName(...), the XFCN, which this engine reads as the
+      -- property: the library's stand-in (any statement)
+      if tWord is "filename" and _T(tTokens, tIdx[i + 1]) is "(" and _T(tTokens, tIdx[i - 1]) is not among the words of "the of" then
+         put "hcX_" & tTokens[tIdx[i]]["t"] into tTokens[tIdx[i]]["t"]
+         _Fire "T20 fileName()"
+         next repeat
+      end if
+
+      if i > 1 and _T(tTokens, tIdx[i - 1]) is not among the words of "then else" then next repeat
+      -- the statement: to the end of the line, or to an else
+      put n into tEnd
+      repeat with j = i + 1 to n
+         if _T(tTokens, tIdx[j]) is "else" then
+            put j - 1 into tEnd
+            exit repeat
+         end if
+      end repeat
+
+      put empty into tNew
+      switch tWord
+         case "go"
+            if pCompiled and _GoHome(tTokens, tIdx, i, n) then
+               _Fire "T9 go home"
+               return _Join(tTokens)
+            end if
+            put _GoStack(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "set"
+            put _SetCursor(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "show"
+         case "hide"
+         case "close"
+            put _ShowHide(tTokens, tIdx, i, tEnd) into tNew
+            break
+         default
+            -- T18: tabKey and HyperCard's other key commands, and the
+            -- picture command
+            if tWord is among the words of "tabkey arrowkey returnkey enterkey returninfield enterinfield functionkey picture" then
+               put "hc" & item itemOffset(tWord, "tabkey,arrowkey,returnkey,enterkey,returninfield,enterinfield,functionkey,picture") of "TabKey,ArrowKey,ReturnKey,EnterKey,ReturnInField,EnterInField,FunctionKey,Picture" into tTokens[tIdx[i]]["t"]
+               _Fire "T18 key and picture commands"
+               return _Join(tTokens)
+            end if
+      end switch
+      if tNew is not empty then
+         _Replace tTokens, tIdx, i, tEnd, tNew
+         return _Join(tTokens)
+      end if
+   end repeat
+   return _Join(tTokens)
+end _HyperCardRules
+
+-- The text of the code tokens pFrom to pTo, spaces between them included
+private function _Span pTokens, pIdx, pFrom, pTo
+   if pFrom > pTo then return empty
+   return _Raw(pTokens, pIdx[pFrom], pIdx[pTo])
+end _Span
+
+-- Where the expression that starts at pFrom ends, before pTo or before
+-- the first of pWords outside parentheses
+private function _ExpressionEnd pTokens, pIdx, pFrom, pTo, pWords
+   local j, tDepth
+   put 0 into tDepth
+   repeat with j = pFrom to pTo
+      if _T(pTokens, pIdx[j]) is "(" then add 1 to tDepth
+      if _T(pTokens, pIdx[j]) is ")" then subtract 1 from tDepth
+      if tDepth = 0 and j > pFrom and _T(pTokens, pIdx[j]) is among the words of pWords then return j - 1
+   end repeat
+   return pTo
+end _ExpressionEnd
+
+-- pText as a string literal, quotes and all
+private function _Literal pText
+   local tOut, tChar
+   put quote into tOut
+   repeat for each char tChar in pText
+      if tChar is quote then
+         put quote & " & quote & " & quote after tOut
+      else
+         put tChar after tOut
+      end if
+   end repeat
+   put quote after tOut
+   if char 1 to 5 of tOut is (quote & quote & " & ") then delete char 1 to 5 of tOut
+   if char -5 to -1 of tOut is (" & " & quote & quote) then delete char -5 to -1 of tOut
+   return tOut
+end _Literal
+
+-- T16: go to a stack. HyperCard looked for a stack that was not open
+-- (asking "Where is ...?" if need be) and, failing that, went on with
+-- "No such card" in the result; this engine stops with an error. The
+-- statement is run by the library's hcGo, which finds the stack first
+-- (the files beside the one imported, the disk image it came from) and
+-- runs it with the stack expression in the variable tHCStack
+private function _GoStack pTokens, pIdx, pAt, pEnd
+   local j, k, tLast
+   repeat with j = pAt + 1 to pEnd
+      if _T(pTokens, pIdx[j]) is "stack" and _T(pTokens, pIdx[j - 1]) is not "this" then
+         put j into k
+         exit repeat
+      end if
+   end repeat
+   if k is empty or k = pEnd then return empty
+   if _T(pTokens, pIdx[k + 1]) is among the words of "id this" then return empty
+   put _ExpressionEnd(pTokens, pIdx, k + 1, pEnd, "in as without") into tLast
+   _Fire "T16 go to a stack not open"
+   return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[k + 1] - 1) & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(_Span(pTokens, pIdx, k + 1, tLast)) & ")"
+end _GoStack
+
+-- The text of the tokens pFrom to pTo
+private function _Raw pTokens, pFrom, pTo
+   local tText, k
+   repeat with k = pFrom to pTo
+      put pTokens[k]["t"] after tText
+   end repeat
+   return tText
+end _Raw
+
+-- T17: set the cursor to HyperCard's cursor numbers (1 to 4), names, and
+-- the stack's own cursors (CURS resources, imported as the images of the
+-- group "HC cursors"), which this engine refuses: the library's hcCursor()
+-- gives this engine's number for each
+private function _SetCursor pTokens, pIdx, pAt, pEnd
+   local j
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "the" then add 1 to j
+   if _T(pTokens, pIdx[j]) is not "cursor" or _T(pTokens, pIdx[j + 1]) is not "to" or j + 2 > pEnd then return empty
+   if _T(pTokens, pIdx[j + 2]) is "hccursor" then return empty
+   _Fire "T17 cursor"
+   return "set the cursor to hcCursor(" & _Span(pTokens, pIdx, j + 2, pEnd) & ")"
+end _SetCursor
+
+-- T19: show and hide card picture, background picture (which this engine
+-- reads as a card named "picture"); T21: show, hide and close window,
+-- and HyperCard's own windows (the scroll window, the tool window...),
+-- which are not stacks here
+private function _ShowHide pTokens, pIdx, pAt, pEnd
+   local j, tVerb, tWhich, tShow, tLast
+   put _T(pTokens, pIdx[pAt]) into tVerb
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "the" then add 1 to j
+   if tVerb is not "close" and _T(pTokens, pIdx[j]) is among the words of "card cd background bkgnd bg" \
+         and _T(pTokens, pIdx[j + 1]) is among the words of "picture pict" then
+      put "card" into tWhich
+      if _T(pTokens, pIdx[j]) is not among the words of "card cd" then put "background" into tWhich
+      put (tVerb is "show") into tShow
+      _Fire "T19 card and background picture"
+      if j + 1 = pEnd then return "hcShowPicture" && quote & tWhich & quote & comma && tShow
+      if _T(pTokens, pIdx[j + 2]) is not "of" or j + 2 = pEnd then return empty
+      return "hcShowPicture" && quote & tWhich & quote & comma && tShow & comma && "the long id of" && _Span(pTokens, pIdx, j + 3, pEnd)
+   end if
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "window" and j < pEnd then
+      put _ExpressionEnd(pTokens, pIdx, j + 1, pEnd, "at") into tLast
+      _Fire "T21 windows"
+      if tLast = pEnd then return "hcWindow" && quote & tVerb & quote & comma && _Span(pTokens, pIdx, j + 1, pEnd)
+      if tLast + 1 = pEnd then return empty
+      return "hcWindow" && quote & tVerb & quote & comma && _Span(pTokens, pIdx, j + 1, tLast) & comma && _Span(pTokens, pIdx, tLast + 2, pEnd)
+   end if
+   if _T(pTokens, pIdx[j]) is among the words of "tool tools pattern patterns scroll fatbits navigator" \
+         and _T(pTokens, pIdx[j + 1]) is "window" and j + 1 = pEnd then
+      _Fire "T21 windows"
+      return "hcWindow" && quote & tVerb & quote & comma && quote & _T(pTokens, pIdx[j]) & quote
+   end if
+   return empty
+end _ShowHide
 
 -- T12 and T8: HyperCard commands this engine does not have, to the
 -- library's handlers; and "group" in a text style, which is not a style
