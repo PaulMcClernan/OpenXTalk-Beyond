@@ -170,6 +170,13 @@ on TestHyperCardScriptsRulesForAll
    put _Rewrite("on mouseUp", "  put fileName(" & q & "STAK" & q & ") into f", "  put the fileName of this stack into g", "end mouseUp") into tScript
    TestAssert "T20: fileName()", line 2 of tScript is "  put hcX_fileName(" & q & "STAK" & q & ") into f"
    TestAssert "T20: the fileName property: unchanged", line 3 of tScript is "  put the fileName of this stack into g"
+
+   put _Rewrite("on mouseUp", "  put fld 1 after menu " & q & "Keys" & q, "  disable menuItem " & q & "Two" & q & " of menu " & q & "Tools" & q, "  set the checkMark of menuItem 1 of menu " & q & "Tools" & q & " to true", "  if the checkmark of menuItem 1 of menu " & q & "Tools" & q & " then beep", "  delete menuItem 1 of menu " & q & "Tools" & q, "end mouseUp") into tScript
+   TestAssert "T22: put after menu", line 2 of tScript is "  hcPutIntoMenu fld 1, " & q & "after" & q & ", " & q & "Keys" & q & ", empty, empty"
+   TestAssert "T22: disable menuItem", line 3 of tScript is "  hcEnableMenu false, " & q & "Tools" & q & ", " & q & "Two" & q
+   TestAssert "T22: set the checkMark of menuItem", line 4 of tScript is "  hcSetMenuItem " & q & "checkmark" & q & ", " & q & "Tools" & q & ", 1, true"
+   TestAssert "T22: the checkMark of menuItem", line 5 of tScript is "  if hcMenuItem(" & q & "checkmark" & q & ", " & q & "Tools" & q & ", 1) then beep"
+   TestAssert "T22: delete menuItem", line 6 of tScript is "  hcDeleteMenuItem " & q & "Tools" & q & ", 1"
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
@@ -487,5 +494,24 @@ on TestHyperCardScriptsBuiltIns
    put empty into gHCScriptsTest
    send "mouseUp" to button "Window" of card 1 of stack tStack
    TestAssert "picture opens a window, close window closes it, flash leaves nothing", gHCScriptsTest is "true,false,0"
+
+   -- HyperCard 2.2's menus, kept as the scripts make them
+   lock messages
+   create button "Menus" in card 1 of stack tStack
+   set the script of button "Menus" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "One,Two,Three..." & q & " into menu " & q & "Tools" & q & " with menuMsgs " & q & "m1,m2,m3" & q, \
+         "  disable menuItem " & q & "Two" & q & " of menu " & q & "Tools" & q, \
+         "  set the checkMark of menuItem 1 of menu " & q & "Tools" & q & " to true", \
+         "  put the checkMark of menuItem 1 of menu " & q & "Tools" & q & " & comma & the enabled of menuItem " & q & "Two" & q & " of menu " & q & "Tools" & q & " into gHCScriptsTest", \
+         "  put comma & the name of menuItem " & q & "Three" & q & " of menu " & q & "Tools" & q & " after gHCScriptsTest", \
+         "  delete menuItem 1 of menu " & q & "Tools" & q, \
+         "  put comma & the name of menuItem 1 of menu " & q & "Tools" & q & " after gHCScriptsTest", \
+         "  put comma & hcMenuMessage(" & q & "Two" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Menus" of card 1 of stack tStack
+   TestAssert "HyperCard menus: items, checkmarks, enabled, delete, menu messages", gHCScriptsTest is "true,false,Three...,Two,m2"
    _Close tStack
 end TestHyperCardScriptsBuiltIns

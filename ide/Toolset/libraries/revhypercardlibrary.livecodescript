@@ -16,6 +16,14 @@ script "revHyperCardLibrary"
 -- can be called doMenu). A choice that reaches here does what the
 -- engine's doMenu command does with it.
 on hcDoMenu pItem, pMenu
+   local tMessage
+   -- an item of a menu the stack made, with a menu message: the message,
+   -- as HyperCard sent it
+   put hcMenuMessage(pItem) into tMessage
+   if tMessage is not empty then
+      send tMessage to this card
+      return the result
+   end if
    doMenu pItem
    return the result
 end hcDoMenu
@@ -247,20 +255,214 @@ on hcDial pNumber, pModemCommands
    return "dial with modem is not supported"
 end hcDial
 
--- put ... into menu ... with menuMsg: HyperCard 2.2's menus, which this
--- engine's menus do not take yet
-on hcPutIntoMenu pItems, pPreposition, pMenu, pMessages
-   return "HyperCard menus are not supported yet"
-end hcPutIntoMenu
+----------------------------------------------------------------------
+-- HyperCard 2.2's menus (rule T22)
+--
+-- A HyperCard stack made its own menus with "create menu", "put ... into
+-- menu ... with menuMsgs", "enable menuItem" and "set the checkMark of
+-- menuItem". An imported stack has no menu bar here, and this engine's
+-- "menu" names a button of one, so each of those statements stopped the
+-- script with an error. They come here instead, and the menus are kept
+-- as the scripts make them: what a script puts in a menu, checks,
+-- disables or renames reads back as it was (hcMenuItem), and a doMenu of
+-- an item with a menu message sends that message. A menu HyperCard had
+-- (File, Edit, Go...) is made empty the first time a script names it.
+-- The menus are not shown: verified statically and by the importer's
+-- tests; the stack has no menu bar to show them in.
 
--- create menu, delete menu: HyperCard 2.2's menus, as above
+-- The menus: sHCMenus["order"], the names one a line; for each menu (by
+-- its name in lower case) ["name"], ["enabled"] and, for each item by
+-- number, [n]["name"], [n]["enabled"], [n]["checkmark"], [n]["menumessage"]...
+local sHCMenus
+
 on hcCreateMenu pMenu
-   return "HyperCard menus are not supported yet"
+   get _HCMenu(pMenu, true)
+   return empty
 end hcCreateMenu
 
 on hcDeleteMenu pMenu
-   return "HyperCard menus are not supported yet"
+   local tKey, tOrder
+   put toLower(pMenu) into tKey
+   if sHCMenus[tKey] is empty then return "Can't find menu" && pMenu
+   delete variable sHCMenus[tKey]
+   put sHCMenus["order"] into tOrder
+   if pMenu is among the lines of tOrder then delete line lineOffset(pMenu, tOrder) of tOrder
+   put tOrder into sHCMenus["order"]
+   return empty
 end hcDeleteMenu
+
+-- put pItems into (after, before) menu pMenu [with menuMsgs pMessages],
+-- put pItems into menuItem pItem of menu pMenu. The items are separated
+-- by returns, else by commas; "-" is a line between items
+on hcPutIntoMenu pItems, pPreposition, pMenu, pMessages, pItem
+   local tKey, tCount, tNew, tLine, i, tAt, tOld, tMessage
+   put _HCMenu(pMenu, true) into tKey
+   if return is in pItems then
+      set the itemDelimiter to return
+   end if
+   put the number of items of pItems into tCount
+   if pItem is not empty then
+      put _HCMenuItemNumber(tKey, pItem) into tAt
+      if tAt is 0 then return "Can't find menu item" && pItem
+      put item 1 of pItems into sHCMenus[tKey][tAt]["name"]
+      return empty
+   end if
+   put sHCMenus[tKey]["count"] into tOld
+   if pPreposition is "into" then
+      repeat with i = 1 to tOld
+         delete variable sHCMenus[tKey][i]
+      end repeat
+      put 0 into tOld
+      put 0 into tAt
+   else if pPreposition is "before" then
+      -- the items there move down
+      repeat with i = tOld down to 1
+         put sHCMenus[tKey][i] into sHCMenus[tKey][i + tCount]
+      end repeat
+      put 0 into tAt
+   else
+      put tOld into tAt
+   end if
+   repeat with i = 1 to tCount
+      put item i of pItems into tLine
+      delete variable sHCMenus[tKey][tAt + i]
+      put tLine into sHCMenus[tKey][tAt + i]["name"]
+      put true into sHCMenus[tKey][tAt + i]["enabled"]
+      put false into sHCMenus[tKey][tAt + i]["checkmark"]
+   end repeat
+   put tOld + tCount into sHCMenus[tKey]["count"]
+   -- the menu messages, one per item, separated as the items are
+   set the itemDelimiter to comma
+   if return is in pMessages then set the itemDelimiter to return
+   repeat with i = 1 to tCount
+      put item i of pMessages into tMessage
+      put word 1 to -1 of tMessage into sHCMenus[tKey][tAt + i]["menumessage"]
+   end repeat
+   return empty
+end hcPutIntoMenu
+
+-- enable and disable menu pMenu, or menuItem pItem of it
+on hcEnableMenu pEnabled, pMenu, pItem
+   local tKey, tAt
+   put _HCMenu(pMenu, true) into tKey
+   if pItem is empty then
+      put pEnabled into sHCMenus[tKey]["enabled"]
+      return empty
+   end if
+   put _HCMenuItemNumber(tKey, pItem) into tAt
+   if tAt is 0 then return "Can't find menu item" && pItem
+   put pEnabled into sHCMenus[tKey][tAt]["enabled"]
+   return empty
+end hcEnableMenu
+
+-- set the pProperty of menuItem pItem of menu pMenu (of menu pMenu, if
+-- pItem is empty) to pValue
+on hcSetMenuItem pProperty, pMenu, pItem, pValue
+   local tKey, tAt
+   put _HCMenu(pMenu, true) into tKey
+   put _HCMenuProperty(pProperty) into pProperty
+   if pItem is empty then
+      put pValue into sHCMenus[tKey][pProperty]
+      return empty
+   end if
+   put _HCMenuItemNumber(tKey, pItem) into tAt
+   if tAt is 0 then return "Can't find menu item" && pItem
+   put pValue into sHCMenus[tKey][tAt][pProperty]
+   return empty
+end hcSetMenuItem
+
+-- the pProperty of menuItem pItem of menu pMenu, as a script set it, or
+-- HyperCard's default (enabled, no checkmark, plain)
+function hcMenuItem pProperty, pMenu, pItem
+   local tKey, tAt, tValue
+   put _HCMenu(pMenu, true) into tKey
+   put _HCMenuProperty(pProperty) into pProperty
+   put _HCMenuItemNumber(tKey, pItem) into tAt
+   if tAt is not 0 then put sHCMenus[tKey][tAt][pProperty] into tValue
+   if tValue is empty then
+      switch pProperty
+         case "enabled"
+            return true
+         case "checkmark"
+            return false
+         case "textstyle"
+            return "plain"
+         case "name"
+            if pItem is not an integer then return pItem
+      end switch
+   end if
+   return tValue
+end hcMenuItem
+
+on hcDeleteMenuItem pMenu, pItem
+   local tKey, tAt, i, tCount
+   put _HCMenu(pMenu, true) into tKey
+   put _HCMenuItemNumber(tKey, pItem) into tAt
+   if tAt is 0 then return "Can't find menu item" && pItem
+   put sHCMenus[tKey]["count"] into tCount
+   repeat with i = tAt to tCount - 1
+      put sHCMenus[tKey][i + 1] into sHCMenus[tKey][i]
+   end repeat
+   delete variable sHCMenus[tKey][tCount]
+   put tCount - 1 into sHCMenus[tKey]["count"]
+   return empty
+end hcDeleteMenuItem
+
+-- The menu message of a menu item the stack made, by its name, or empty
+-- (hcDoMenu sends it, as HyperCard did)
+function hcMenuMessage pItem
+   local tMenu, tKey, i
+   repeat for each line tMenu in sHCMenus["order"]
+      put toLower(tMenu) into tKey
+      repeat with i = 1 to sHCMenus[tKey]["count"]
+         if sHCMenus[tKey][i]["name"] is pItem then return sHCMenus[tKey][i]["menumessage"]
+      end repeat
+   end repeat
+   return empty
+end hcMenuMessage
+
+-- The key of pMenu in sHCMenus, the menu made if pCreate and it is not
+-- there yet
+private function _HCMenu pMenu, pCreate
+   local tKey
+   put toLower(pMenu) into tKey
+   if sHCMenus[tKey]["name"] is empty and pCreate then
+      put pMenu into sHCMenus[tKey]["name"]
+      put true into sHCMenus[tKey]["enabled"]
+      put 0 into sHCMenus[tKey]["count"]
+      if sHCMenus["order"] is empty then
+         put pMenu into sHCMenus["order"]
+      else
+         put return & pMenu after sHCMenus["order"]
+      end if
+   end if
+   return tKey
+end _HCMenu
+
+-- The number of an item of a menu, by its number or its name (with or
+-- without its "..."), 0 if there is none
+private function _HCMenuItemNumber pKey, pItem
+   local i, tName
+   if pItem is an integer then
+      if pItem >= 1 and pItem <= sHCMenus[pKey]["count"] then return pItem
+      return 0
+   end if
+   repeat with i = 1 to sHCMenus[pKey]["count"]
+      put sHCMenus[pKey][i]["name"] into tName
+      if tName is pItem or (tName ends with "..." and char 1 to -4 of tName is pItem) then return i
+   end repeat
+   return 0
+end _HCMenuItemNumber
+
+private function _HCMenuProperty pProperty
+   switch pProperty
+      case "cmdchar"
+         return "commandchar"
+      case "menumsg"
+         return "menumessage"
+   end switch
+   return toLower(pProperty)
+end _HCMenuProperty
 
 -- set the cursor to ... (rule T17): this engine's number for HyperCard's
 -- cursor numbers (1 iBeam, 2 cross, 3 plus, 4 watch) and names, and the
