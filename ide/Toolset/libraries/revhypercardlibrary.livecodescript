@@ -98,6 +98,35 @@ function hcGo pStatement, pStack
 end hcGo
 
 /*
+go to a destination given by an expression (rule T25): pDest, its value;
+pWindow, what followed it ("in a new window"). What "go" here takes (a
+card's description, a stack that is open) it goes to; else a stack found
+as hcGo finds one; else it leaves "No such card" in the result, as
+HyperCard did, where "go" here stops with an error
+*/
+on hcGoTo pDest, pWindow
+   local tStack
+   if _HCLastPart(pDest) is "Home" then
+      hcGoHome
+      return the result
+   end if
+   try
+      do "go to pDest" && pWindow
+      return the result
+   catch tError
+   end try
+   if word 1 of pDest is among the words of "card cd background bkgnd bg stack" then return "No such card"
+   put hcStackName(pDest) into tStack
+   if tStack is empty then return "No such card"
+   try
+      do "go to stack tStack" && pWindow
+      return the result
+   catch tError
+   end try
+   return "No such card"
+end hcGoTo
+
+/*
 The stack "go" should go to for pStack, which HyperCard may have named
 by its HFS path ("Disk:Stacks:Name"): pStack itself when there is such a
 stack; else a HyperCard stack of that name beside the file this stack was
@@ -1007,6 +1036,40 @@ end HCBalloon
 on ColorizeHC
    return empty
 end ColorizeHC
+
+-- cHCcolorize and cHCunColorize: the handlers of "Colorizing HyperCard",
+-- which a stack that used it called from a shared stack of its own; the
+-- colours are the importer's colour layer here, so nothing to do (a stack
+-- with these handlers in its own script still runs its own)
+on cHCcolorize
+   return empty
+end cHCcolorize
+
+on cHCunColorize
+   return empty
+end cHCunColorize
+
+-- volume(level) and SndVolume(level), the XFCNs: the sound volume, 0 to
+-- 7, as the Mac's control panel had it. The level is kept, so a script
+-- that saves the old level and puts it back sees what it set; the
+-- engine's own volume is left alone
+local sHCVolume
+
+function volume pLevel
+   return _HCVolume(pLevel)
+end volume
+
+function SndVolume pLevel
+   return _HCVolume(pLevel)
+end SndVolume
+
+private function _HCVolume pLevel
+   local tOld
+   if sHCVolume is empty then put 7 into sHCVolume
+   put sHCVolume into tOld
+   if pLevel is an integer and pLevel >= 0 and pLevel <= 7 then put pLevel into sHCVolume
+   return tOld
+end _HCVolume
 
 -- MaxDepth(): the deepest colour of the screens
 function MaxDepth

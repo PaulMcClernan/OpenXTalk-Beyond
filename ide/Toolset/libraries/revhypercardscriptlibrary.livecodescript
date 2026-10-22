@@ -15,7 +15,7 @@ script "revHyperCardScriptLibrary"
 --
 -- 1. rewrites the HyperTalk forms below, outside string literals and
 --    comments, one token at a time (the rules are named T0 to T14 in the
---    log; T15 to T24 are below);
+--    log; T15 to T25 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
 --    and keeps those that compile, putting in place of each one that does
 --    not a handler of the same name that passes its message on, with the
@@ -32,7 +32,7 @@ script "revHyperCardScriptLibrary"
 -- cursor, T18 tabKey and the other key commands and "picture", T19 "show
 -- card picture", T20 "fileName(", T21 "show", "hide" and "close window",
 -- T22 HyperCard 2.2's menus, T23 "start using" and "stop using" a stack,
--- T24 "print" a field).
+-- T24 "print" a field, T25 "go" to a destination given by an expression).
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -77,6 +77,10 @@ constant kLibraryName = "HyperCard Library"
 
 -- The properties of a menu and a menu item in HyperCard 2.2's menus
 constant kMenuProperties = "checkmark commandchar cmdchar enabled markchar name textstyle menumessage menumsg"
+
+-- the words a "go" names its destination with, as against an expression
+-- whose value is the destination (T25)
+constant kGoPlaces = "card cd cards background bkgnd bg backgrounds stack stacks this next prev previous first last back forth home help recent any middle mid second third fourth fifth sixth seventh eighth ninth tenth marked id window url"
 
 -- What the probes found: a name's verdict, so that each name is compiled
 -- once (keys are the name in lower case)
@@ -1090,7 +1094,7 @@ private function _PlayNotes pLine
    return pLine
 end _PlayNotes
 
--- T9 and T16 to T24: statements that stop with an error here where
+-- T9 and T16 to T25: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
@@ -1137,7 +1141,16 @@ private function _HyperCardRules pLine, pCompiled
                _Fire "T9 go home"
                return _Join(tTokens)
             end if
+            -- T25: "in" for "of" before a background or a stack, which
+            -- HyperCard took ("go to first card in bkgnd 2")
+            repeat with j = i + 1 to tEnd - 1
+               if _T(tTokens, tIdx[j]) is "in" and _T(tTokens, tIdx[j + 1]) is among the words of "bkgnd bg background stack" then
+                  _Fire "T25 go: in for of"
+                  put "of" into tTokens[tIdx[j]]["t"]
+               end if
+            end repeat
             put _GoStack(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _GoTo(tTokens, tIdx, i, tEnd) into tNew
             break
          case "set"
             put _SetCursor(tTokens, tIdx, i, tEnd) into tNew
@@ -1253,6 +1266,25 @@ private function _GoStack pTokens, pIdx, pAt, pEnd
    _Fire "T16 go to a stack not open"
    return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[k + 1] - 1) & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(_Span(pTokens, pIdx, k + 1, tLast)) & ")"
 end _GoStack
+
+-- T25: go to a destination given by an expression ("go " & quote &
+-- "Addresses" & quote, "go to it", "go tWhere"), which HyperCard took for
+-- a stack's name when it was not a card's description. This engine stops
+-- with an error when there is no such stack open, or no such card; the
+-- library's hcGoTo goes to the card, or finds the stack as hcGo does,
+-- and failing both leaves "No such card" in the result
+private function _GoTo pTokens, pIdx, pAt, pEnd
+   local j, tLast, tTail
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "to" then add 1 to j
+   if j > pEnd then return empty
+   if _T(pTokens, pIdx[j]) is among the words of kGoPlaces then return empty
+   if _T(pTokens, pIdx[j]) is "the" and _T(pTokens, pIdx[j + 1]) is among the words of kGoPlaces then return empty
+   put _ExpressionEnd(pTokens, pIdx, j, pEnd, "in") into tLast
+   if tLast < pEnd then put ", " & _Literal(_Span(pTokens, pIdx, tLast + 1, pEnd)) into tTail
+   _Fire "T25 go to a destination by its name"
+   return "hcGoTo" && _Span(pTokens, pIdx, j, tLast) & tTail
+end _GoTo
 
 -- The text of the tokens pFrom to pTo
 private function _Raw pTokens, pFrom, pTo

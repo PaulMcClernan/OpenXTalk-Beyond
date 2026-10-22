@@ -183,6 +183,13 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T23: stop using a stack", line 3 of tScript is "  hcStopUsing tName"
    TestAssert "T24: print a field", line 4 of tScript is "  PrintField the long id of card field " & q & "Notes" & q
    TestAssert "T24: print a card: unchanged", line 5 of tScript is "  print card 3"
+
+   put _Rewrite("on mouseUp", "  go " & q & "Addresses" & q, "  go to it in a new window", "  go to first card in bkgnd " & q & "Index" & q, "  go to the next card", "  go back", "end mouseUp") into tScript
+   TestAssert "T25: go to a stack by its name", line 2 of tScript is "  hcGoTo " & q & "Addresses" & q
+   TestAssert "T25: go to an expression, its window kept", line 3 of tScript is "  hcGoTo it, " & q & "in a new window" & q
+   TestAssert "T25: in for of", line 4 of tScript is "  go to first card of bkgnd " & q & "Index" & q
+   TestAssert "T25: go to the next card: unchanged", line 5 of tScript is "  go to the next card"
+   TestAssert "T25: go back: unchanged", line 6 of tScript is "  go back"
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
@@ -336,11 +343,21 @@ on TestHyperCardScriptsStandIns
          "end mouseUp")
    create button "Balloon"
    set the script of button "Balloon" to _Lines("on mouseEnter", "  HCBalloon " & quote & "Click me" & quote, "end mouseEnter")
+   create button "Volume"
+   set the script of button "Volume" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put volume(4) into gHCScriptsTest", \
+         "  put comma & volume(9) & comma & SndVolume() after gHCScriptsTest", \
+         "  cHCcolorize", \
+         "  cHCunColorize", \
+         "end mouseUp")
    unlock messages
    get revHyperCardFixScripts(tStack)
    put empty into gHCScriptsTest
    send "mouseUp" to button "B" of stack tStack
    TestAssert "MaxDepth, NewMenu, DeleteMenu, ShowMenu, HCBalloon query, Dialoger", gHCScriptsTest is "true,1,2,,HyperCard menus are not supported yet,false,The Dialoger external is not supported"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Volume" of stack tStack
+   TestAssert "volume and SndVolume keep the level; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4"
    send "mouseEnter" to button "Balloon" of stack tStack
    TestAssert "HCBalloon: balloons off, no tooltip", the toolTip of button "Balloon" of stack tStack is empty
    send "HCBalloon" && quote & "on" & quote to button "B" of stack tStack
@@ -362,9 +379,10 @@ on TestHyperCardScriptsImported
    local tStack, tReport, tLine, tObject, tFailed
    put _ImportFile("TestV1.stack", "TestV1.stack") into tStack
    put revHyperCardFixScripts(tStack) into tReport
-   -- (4 scripts that did not compile; 29 that did, for "go home",
-   -- "arrowKey", the cursor and "go" to another stack)
-   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 33 rewritten" is in tReport
+   -- (4 scripts that did not compile; 33 that did, for "go home",
+   -- "arrowKey", the cursor and "go" to another stack, by "stack" or by
+   -- its name alone)
+   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 37 rewritten" is in tReport
    set the itemDelimiter to tab
    repeat for each line tLine in tReport
       if item 2 of tLine is empty then next repeat
@@ -395,15 +413,21 @@ on TestHyperCardScriptsGoStack
    set the script of button "Sibling" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack " & q & "Sibling" & q, "  put the result into gHCScriptsTest", "end mouseUp")
    create button "Missing"
    set the script of button "Missing" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack " & q & "No Such HyperCard Stack" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "ByName"
+   set the script of button "ByName" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go " & q & "Sibling" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "Where"
+   set the script of button "Where" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put " & q & "card 2" & q & " into tWhere", "  go to tWhere", "  put the number of this card into gHCScriptsTest", "  go to " & q & "No Such HyperCard Stack" & q, "  put comma & the result after gHCScriptsTest", "end mouseUp")
+   create card
+   go to card 1 of stack tStack
    create button "Image"
    set the script of button "Image" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to card 1 of stack " & q & "Synthetic Stack" & q, "  put the result into gHCScriptsTest", "end mouseUp")
    unlock messages
    get revHyperCardFixScripts(tStack)
-   TestAssert "a go to a stack, in a script that compiles, rewritten", "do hcGo(" is in the script of button "Sibling" of stack tStack
+   TestAssert "a go to a stack, in a script that compiles, rewritten", "do hcGo(" is in the script of button "Sibling" of card 1 of stack tStack
 
    put "unset" into gHCScriptsTest
    try
-      send "mouseUp" to button "Sibling" of stack tStack
+      send "mouseUp" to button "Sibling" of card 1 of stack tStack
    catch tError
    end try
    TestAssert "a stack beside the file: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Sibling"
@@ -416,10 +440,28 @@ on TestHyperCardScriptsGoStack
    put "unset" into gHCScriptsTest
    put empty into tError
    try
-      send "mouseUp" to button "Missing" of stack tStack
+      send "mouseUp" to button "Missing" of card 1 of stack tStack
    catch tError
    end try
    TestAssert "a stack that cannot be found: no error, the result set", tError is empty and gHCScriptsTest is not empty and gHCScriptsTest is not "unset"
+
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "ByName" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "go to a stack by its name alone: found beside the file", tError is empty and gHCScriptsTest is empty and there is a stack "Sibling"
+   _Close "Sibling"
+
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "Where" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "go to a card given by a variable; to a name that is no stack: no error, the result set", tError is empty and gHCScriptsTest is "2,No such card"
+   go to card 1 of stack tStack
 
    lock messages
    set the uHyperCard["file"] of stack tStack to empty
@@ -429,7 +471,7 @@ on TestHyperCardScriptsGoStack
    put "unset" into gHCScriptsTest
    put empty into tError
    try
-      send "mouseUp" to button "Image" of stack tStack
+      send "mouseUp" to button "Image" of card 1 of stack tStack
    catch tError
    end try
    TestAssert "a stack on the disk image: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Synthetic Stack"
