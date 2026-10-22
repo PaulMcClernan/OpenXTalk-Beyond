@@ -15,7 +15,7 @@ script "revHyperCardScriptLibrary"
 --
 -- 1. rewrites the HyperTalk forms below, outside string literals and
 --    comments, one token at a time (the rules are named T0 to T14 and
---    T31 in the log; T15 to T30 are below);
+--    T31 in the log; T15 to T30 and T32 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
 --    and keeps those that compile, putting in place of each one that does
 --    not a handler of the same name that passes its message on, with the
@@ -36,7 +36,8 @@ script "revHyperCardScriptLibrary"
 -- T26 the properties of picture and palette windows, T27 "doMenu" with
 -- the item's name not in quotes, T28 the properties of the message box,
 -- T29 HyperCard the application: its name and version, send to it, T30
--- "choose tool" by HyperCard's number or by a name in a variable).
+-- "choose tool" by HyperCard's number or by a name in a variable, T32 the
+-- card's rect and HyperCard's text styles).
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -1140,7 +1141,7 @@ private function _PhraseRules pLine
          _Fire "T4 the message box"
          next repeat
       end if
-      if tWord is among the words of "message msg" and tPrev is "the" and tNext is not "of" then
+      if tWord is among the words of "message msg" and tPrev is "the" and tNext is not "of" and tNext is not "watcher" then
          put empty into tTokens[tIdx[i - 1]]["t"]
          _ClearSpaceAfter tTokens, tIdx[i - 1]
          put "msg" into tTokens[tIdx[i]]["t"]
@@ -1477,7 +1478,7 @@ private function _PlayNotes pLine
    return pLine
 end _PlayNotes
 
--- T9 and T16 to T30: statements that stop with an error here where
+-- T9, T16 to T30 and T32: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
@@ -1487,6 +1488,7 @@ private function _HyperCardRules pLine, pCompiled
    if pCompiled then put _PlayNotes(pLine) into pLine
    if char -1 of word 1 to -1 of _CodeText(pLine) is "\" then return pLine
    put _MenuItemProperties(pLine) into pLine
+   put _HyperCardWindows(pLine) into pLine
    put _MessageBoxProperties(pLine) into pLine
    put _HyperCardObject(pLine) into pLine
    put _Tokens(pLine) into tTokens
@@ -1542,6 +1544,7 @@ private function _HyperCardRules pLine, pCompiled
             if tNew is empty then put _SetMenuItem(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetWindow(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetMessageBox(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetCardAndStyle(tTokens, tIdx, i, tEnd) into tNew
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
@@ -1781,6 +1784,8 @@ private function _MessageBoxRef pTokens, pIdx, pAt
    end if
    if tWord is among the words of "msg message" then
       if _T(pTokens, pIdx[pAt + 1]) is among the words of "box window" then return 2
+      -- (the message watcher is a window of its own)
+      if _T(pTokens, pIdx[pAt + 1]) is "watcher" then return 0
       return 1
    end if
    if tWord is among the words of "window wd" and _T(pTokens, pIdx[pAt + 1]) is among the items of (quote & "message" & quote & comma & quote & "message box" & quote & comma & quote & "msg" & quote) then return 2
@@ -1827,6 +1832,52 @@ private function _SetMessageBox pTokens, pIdx, pAt, pEnd
    _Fire "T28 message box properties"
    return "hcSetMessageBox" && quote & tProperty & quote & comma && _Span(pTokens, pIdx, j + 3 + tRef, pEnd)
 end _SetMessageBox
+
+-- T28: the properties of HyperCard's own windows ("the visible of tool
+-- window", "set the visible of the variable watcher to true"), which
+-- this engine does not have: what a script sets reads back
+-- (hcWindowProperty and hcSetWindow in the library)
+private function _HyperCardWindows pLine
+   local tTokens, tCode, tIdx, n, tItem, i, j, k, tStart, tProperty, tName, tEnd
+   if "window" is not in pLine and "watcher" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = 2 to n - 2
+      if _T(tTokens, tIdx[i]) is not "of" or tTokens[tIdx[i - 1]]["k"] is not "w" then next repeat
+      put i + 1 into j
+      if _T(tTokens, tIdx[j]) is "the" then add 1 to j
+      put empty into tName
+      if _T(tTokens, tIdx[j]) is among the words of "tool tools pattern patterns scroll fatbits navigator" and _T(tTokens, tIdx[j + 1]) is "window" then
+         put _T(tTokens, tIdx[j]) into tName
+      else if _T(tTokens, tIdx[j]) is among the words of "variable message" and _T(tTokens, tIdx[j + 1]) is "watcher" then
+         put _T(tTokens, tIdx[j]) && "watcher" into tName
+      end if
+      if tName is empty then next repeat
+      put j + 1 into k
+      put _T(tTokens, tIdx[i - 1]) into tProperty
+      put i - 1 into tStart
+      if _T(tTokens, tIdx[tStart - 1]) is "the" then subtract 1 from tStart
+      _Fire "T28 message box properties"
+      if _T(tTokens, tIdx[tStart - 1]) is "set" and (tStart = 2 or _T(tTokens, tIdx[tStart - 2]) is among the words of "then else") \
+            and _T(tTokens, tIdx[k + 1]) is "to" and k + 1 < n then
+         put _FindWord(tTokens, tIdx, k + 2, n, "else", empty) into tEnd
+         if tEnd is empty then
+            put n into tEnd
+         else
+            subtract 1 from tEnd
+         end if
+         _Replace tTokens, tIdx, tStart - 1, tEnd, "hcSetWindow" && quote & tProperty & quote & comma && quote & tName & quote & comma && _HyperCardWindows(_Span(tTokens, tIdx, k + 2, tEnd))
+         return _Join(tTokens)
+      end if
+      _Replace tTokens, tIdx, tStart, k, "hcWindowProperty(" & quote & tProperty & quote & comma && quote & tName & quote & ")"
+   end repeat
+   return _Join(tTokens)
+end _HyperCardWindows
 
 -- T29: HyperCard, the application, as an object: "the long name of
 -- HyperCard" (its path, which scripts take apart for the folder of their
@@ -1885,6 +1936,50 @@ private function _FindWord pTokens, pIdx, pFrom, pTo, pWord, pNext
    end repeat
    return empty
 end _FindWord
+
+-- T32: the rect of the card, which in HyperCard 2.2 resized the card
+-- (here, the stack's window) and here cannot be set: the library's
+-- hcSetCardRect; and a text style of HyperCard's that this engine does
+-- not have (outline, shadow, condense, extend, group), which here stops
+-- the script: the style through the library's hcTextStyle, which gives
+-- this engine's names for condense, extend and group and leaves out
+-- outline and shadow
+private function _SetCardAndStyle pTokens, pIdx, pAt, pEnd
+   local j, k, tProperty, tTo, tObject, tValue, tNeeded, tWord
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "the" then add 1 to j
+   put _T(pTokens, pIdx[j]) into tProperty
+   if _T(pTokens, pIdx[j + 1]) is not "of" then return empty
+   put _FindWord(pTokens, pIdx, j + 2, pEnd, "to", empty) into tTo
+   if tTo is empty or tTo = pEnd then return empty
+   if tProperty is among the words of "rect rectangle" then
+      put _Lower(_Span(pTokens, pIdx, j + 2, tTo - 1)) into tObject
+      if tObject is not among the items of "card,cd,this card,this cd" then return empty
+      _Fire "T32 card size and text styles"
+      return "hcSetCardRect" && _Span(pTokens, pIdx, tTo + 1, pEnd)
+   end if
+   if tProperty is not "textstyle" then return empty
+   put false into tNeeded
+   repeat with k = tTo + 1 to pEnd
+      put _Lower(pTokens[pIdx[k]]["t"]) into tValue
+      replace quote with space in tValue
+      replace comma with space in tValue
+      repeat for each word tWord in tValue
+         if tWord is among the words of "outline shadow condense extend group" then put true into tNeeded
+      end repeat
+   end repeat
+   put empty into tValue
+   if not tNeeded then return empty
+   repeat with k = pIdx[tTo + 1] to pIdx[pEnd]
+      if pTokens[k]["k"] is "w" and _Lower(pTokens[k]["t"]) is "group" then
+         put quote & pTokens[k]["t"] & quote after tValue
+      else
+         put pTokens[k]["t"] after tValue
+      end if
+   end repeat
+   _Fire "T32 card size and text styles"
+   return _Span(pTokens, pIdx, pAt, tTo) && "hcTextStyle(" & tValue & ")"
+end _SetCardAndStyle
 
 -- T26: the properties of HyperCard's picture and palette windows, and of
 -- the card window, which this engine's windows (stacks) do not have: set

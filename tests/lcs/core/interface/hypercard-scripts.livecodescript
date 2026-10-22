@@ -175,6 +175,10 @@ on TestHyperCardScriptsRules
    TestAssert "T22: delete menuItem from menu", line 9 of tScript is "  hcDeleteMenuItem " & quote & "Edit" & quote & ", " & quote & "New Card" & quote
    TestAssert "T5: notes after a tempo in a variable", line 10 of tScript is "  play harpsichord tempo t " & quote & "c5e d e" & quote
    TestAssert "T3: a field named cards", line 11 of tScript is "  put card field " & quote & "cards" & quote & " into x"
+
+   put _Rewrite("on mouseUp", "  set the visible of tool window to not the visible of tool window", "  if the visible of the message watcher then beep", "end mouseUp") into tScript
+   TestAssert "T28: HyperCard's own windows: set", line 2 of tScript is "  hcSetWindow " & quote & "visible" & quote & ", " & quote & "tool" & quote & ", not hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "tool" & quote & ")"
+   TestAssert "T28: the message watcher is not the message box", line 3 of tScript is "  if hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "message watcher" & quote & ") then beep"
 end TestHyperCardScriptsRules
 
 on TestHyperCardScriptsRulesForAll
@@ -263,6 +267,11 @@ on TestHyperCardScriptsRulesForAll
    put _Rewrite("on mouseUp", "  choose tool x", "  choose browse tool", "end mouseUp") into tScript
    TestAssert "T30: choose tool x", line 2 of tScript is "  hcChooseTool x"
    TestAssert "T30: choose browse tool: unchanged", line 3 of tScript is "  choose browse tool"
+
+   put _Rewrite("on mouseUp", "  set the rect of this card to 0,0,512,342", "  set the textStyle of fld 1 to " & q & "bold,condense" & q, "  set the textStyle of fld 1 to bold", "end mouseUp") into tScript
+   TestAssert "T32: the rect of this card", line 2 of tScript is "  hcSetCardRect 0,0,512,342"
+   TestAssert "T32: a text style of HyperCard's", line 3 of tScript is "  set the textStyle of fld 1 to hcTextStyle(" & q & "bold,condense" & q & ")"
+   TestAssert "T32: a text style of this engine's: unchanged", line 4 of tScript is "  set the textStyle of fld 1 to bold"
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
@@ -448,6 +457,14 @@ on TestHyperCardScriptsStandIns
          and value("hcPopUpItems(" & quote & "a,b" & quote & ")", button "B" of stack tStack) is _Lines("a", "b")
    TestAssert "HPopUpMenu: a submenu choice is line,item", \
          value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "File|Save" & quote & ")", button "B" of stack tStack) is "2,2"
+   TestAssert "hcTextStyle: condense and extend by this engine's names, outline and shadow left out", \
+         value("hcTextStyle(" & quote & "bold,condense,outline" & quote & ")", button "B" of stack tStack) is "bold,condensed" \
+         and value("hcTextStyle(" & quote & "shadow" & quote & ")", button "B" of stack tStack) is "plain"
+   TestAssert "hcWindowProperty: a window of HyperCard's own never shown", value("hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "tool" & quote & ")", button "B" of stack tStack) is false
+   send "hcSetWindow " & quote & "visible" & quote & ", " & quote & "tool" & quote & ", true" to button "B" of stack tStack
+   TestAssert "hcSetWindow: what a script sets reads back", value("hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "tool" & quote & ")", button "B" of stack tStack) is true
+   send "hcSetCardRect 0,0,400,300" to button "B" of stack tStack
+   TestAssert "hcSetCardRect: the stack's window takes the card's size", the width of stack tStack is 400 and the height of stack tStack is 300
    TestAssert "HPopUpMenu: an entry with no submenu is line,0", \
          value("hcHPopUpChoice(" & quote & "Edit" & quote & " & return & " & quote & "File,Open,Save" & quote & ", " & quote & "Edit" & quote & ")", button "B" of stack tStack) is "1,0"
    _Close tStack

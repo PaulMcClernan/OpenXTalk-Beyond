@@ -602,6 +602,42 @@ function hcCursor pCursor
    return empty
 end hcCursor
 
+-- set the rect of this card (rule T32): HyperCard 2.2 resized the card,
+-- and with it the card window; here the stack's window takes the size
+on hcSetCardRect pRect
+   local i
+   repeat with i = 2 to paramCount()
+      put comma & param(i) after pRect
+   end repeat
+   if the number of items of pRect is not 4 then return "Invalid card size"
+   repeat for each item i in pRect
+      if i is not an integer then return "Invalid card size"
+   end repeat
+   set the width of this stack to item 3 of pRect - item 1 of pRect
+   set the height of this stack to item 4 of pRect - item 2 of pRect
+   return empty
+end hcSetCardRect
+
+-- A text style as HyperCard named it (rule T32): condense and extend are
+-- condensed and expanded here, group is this engine's group (link), and
+-- outline and shadow, which this engine does not have, are left out
+function hcTextStyle
+   local i, tStyles, tStyle, tOut
+   repeat with i = 1 to paramCount()
+      put param(i) & comma after tStyles
+   end repeat
+   repeat for each item tStyle in tStyles
+      put word 1 to -1 of tStyle into tStyle
+      if tStyle is "condense" then put "condensed" into tStyle
+      if tStyle is "extend" then put "expanded" into tStyle
+      if tStyle is empty or tStyle is among the words of "outline shadow" then next repeat
+      put tStyle & comma after tOut
+   end repeat
+   delete the last char of tOut
+   if tOut is empty then return "plain"
+   return tOut
+end hcTextStyle
+
 -- choose tool N (rule T30): HyperCard's tools by their numbers in the
 -- tools palette (1 browse to 18 polygon), or by a name with or without
 -- "tool" after it; this engine's "choose tool x" stops with an error
@@ -786,11 +822,17 @@ on hcShowPicture pWhich, pShow, pObject
    return empty
 end hcShowPicture
 
+-- HyperCard's own windows, which this engine does not have: their
+-- properties as scripts set them (rule T28), and whether they are shown
+constant kHCOwnWindows = "tool,tools,pattern,patterns,scroll,fatbits,navigator,variable watcher,message watcher"
+local sHCWindows
+
 -- show, hide and close window (rule T21): a window that is a stack here
 -- (a palette the import made, a picture the picture command opened, or
 -- any stack), the message box, and HyperCard's own windows, which are
 -- not here (the tool, pattern, scroll, FatBits and navigator windows):
--- left alone, as an error here would stop the script
+-- left alone, as an error here would stop the script, but shown or
+-- hidden as far as hcWindowProperty("visible", ...) reads
 on hcWindow pVerb, pName, pLocation
    local i
    -- (a location written h,v comes as two parameters)
@@ -805,7 +847,10 @@ on hcWindow pVerb, pName, pLocation
       end if
       return empty
    end if
-   if pName is among the words of "tool tools pattern patterns scroll fatbits navigator" then return empty
+   if pName is among the words of "tool tools pattern patterns scroll fatbits navigator" then
+      put (pVerb is "show") into sHCWindows[pName]["visible"]
+      return empty
+   end if
    if there is not a stack pName then return "Can't find window" && pName
    switch pVerb
       case "show"
@@ -913,6 +958,13 @@ window") always shows the whole card here, so its scroll is left as it
 is, as are zoom and dithering. A window that is not open leaves "No
 such window" in the result, as HyperCard said, rather than an error
 */
+-- the visible (or another property) of one of HyperCard's own windows:
+-- what a script set, or false for the visible of one never shown
+function hcWindowProperty pProp, pWindow
+   if sHCWindows[pWindow][pProp] is empty and pProp is "visible" then return false
+   return sHCWindows[pWindow][pProp]
+end hcWindowProperty
+
 on hcSetWindow pProp, pWindow, pValue
    local tStack, tImage, i
    -- (a point or a rect not in quotes comes as more than one parameter)
@@ -920,6 +972,10 @@ on hcSetWindow pProp, pWindow, pValue
       put comma & param(i) after pValue
    end repeat
    if pWindow is "card window" then return empty
+   if pWindow is among the items of kHCOwnWindows then
+      put pValue into sHCWindows[pWindow][pProp]
+      return empty
+   end if
    if there is not a stack pWindow then return "No such window"
    put the long id of stack pWindow into tStack
    if there is an image "Picture" of card 1 of tStack then
