@@ -271,6 +271,12 @@ def site_stamp(out, names):
     return digest.hexdigest()[:16]
 
 
+def inside(path, folder):
+    """True when path is folder or anywhere below it (links resolved)"""
+    path, folder = os.path.realpath(path), os.path.realpath(folder)
+    return os.path.commonpath([path, folder]) == folder
+
+
 def write_download_zip(path, out, version, source_url):
     """The site of out and ZIP_EXTRAS in one folder, named after path, of
     a new zip at path. Returns the number of files."""
@@ -279,7 +285,7 @@ def write_download_zip(path, out, version, source_url):
         top = top[:-4]
     if not top:
         raise BuildError('--zip %s: the zip needs a name' % path)
-    if os.path.dirname(os.path.abspath(path)) == os.path.abspath(out):
+    if inside(path, out):
         raise BuildError('--zip %s is in the site\'s folder; write it somewhere else' % path)
     entries = []
     for name in sorted(os.listdir(out)):
@@ -342,6 +348,9 @@ def main(argv=None):
         out = os.path.abspath(args.out)
         if os.path.exists(out) and os.listdir(out):
             raise BuildError('%s exists and is not empty' % out)
+        # Before anything is built: the zip never goes into the site
+        if args.zip and inside(os.path.abspath(args.zip), out):
+            raise BuildError('--zip %s is in the site\'s folder; write it somewhere else' % args.zip)
         os.makedirs(out, exist_ok=True)
 
         base, engine_version = find_engine(args.engine)
