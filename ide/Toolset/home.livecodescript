@@ -353,6 +353,9 @@ on revInternal__openStack
    revInternal__setSplashStatus "IDE loaded.."
    --
    send tdelayClosingSplash to me in 3 ticks
+   -- OXT-Beyond: what is due when, for a start-up that never closes its
+   -- splash (the IDE screenshots on macOS once waited in vain for it)
+   revInternal__Log "Message", "Pending at" && the long seconds & ":" & return & the pendingMessages
 end revInternal__openStack
    
 on tdelayClosingSplash
