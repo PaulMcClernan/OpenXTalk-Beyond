@@ -791,6 +791,14 @@ def build_with_ide(args, work, timeout):
                         progress = time.time()
                         log('  after %.0f s: %s' % (progress - started, done[-1] if done else '(no lines yet)'))
                     time.sleep(0.5)
+                # where a Mac's IDE stopped (ui_tour.py does the same)
+                if status and p.family == 'mac' and proc.poll() is None:
+                    if ui_tour.mac_screen(os.path.join(work, 'ide-screen-at-the-end.png')):
+                        log('  (the screen when the build stopped: ide-screen-at-the-end.png)')
+                    ui_tour.mac_sample(proc.pid, os.path.join(work, 'ide-sample-at-the-end.txt'))
+                    if ui_tour.mac_app(lay.engine):
+                        ui_tour.mac_ask(ui_tour.mac_app(lay.engine))
+                    ui_tour.mac_tools_log()
             finally:
                 ui_tour.stop(proc)
         browser = None

@@ -2164,6 +2164,11 @@ void MCMacPlatformWindow::DoHide(void)
 {
 	s_hiding = true;
 	
+	// A hidden window gets no drawRect, so a deferred draw still pending
+	// would never sync (see FlushPendingDraws); drop it with the window.
+	m_waiting_for_draw = false;
+	m_has_pending_draw = false;
+	
 	if (m_parent != nil)
 	{
 		[NSApp endSheet: m_window_handle];
@@ -2260,12 +2265,36 @@ void MCMacPlatformWindow::FlushPendingDraws(void)
 	if (!m_has_pending_draw || !m_waiting_for_draw)
 		return;
 	
-	// Wait for the pending draw to complete (same logic as old DoUpdate)
+	// A window hidden or closed before its deferred draw arrived never gets
+	// drawRect, so DrawSync never clears m_waiting_for_draw, and the loop
+	// below would spin forever: the engine sat idle in it at every wait and
+	// the IDE's start-up never finished (the Mac CI's start-up stalls, most
+	// often once the Tools palette drawn and then hidden at launch became
+	// the default). Such a window has nothing left to show, so drop its
+	// pending draw.
+	if (m_window_handle == nil || ![m_window_handle isVisible])
+	{
+		m_waiting_for_draw = false;
+		m_has_pending_draw = false;
+		return;
+	}
+	
+	// Wait for the pending draw to complete (same logic as old DoUpdate),
+	// but not without end: AppKit may skip or postpone the draw of a window
+	// that is still visible (occluded, mid-animation), and a draw that comes
+	// later shows just the same; only the wait for it is given up.
 	if (MCMacPlatformIsEventCheckingEnabled() && !s_inside_focus_event)
 	{
+		NSDate *t_deadline = [NSDate dateWithTimeIntervalSinceNow: 0.5];
 		NSMutableArray *t_popped_events = [[NSMutableArray alloc] init];
 		while (m_waiting_for_draw)
 		{
+			if ([t_deadline timeIntervalSinceNow] <= 0)
+			{
+				m_waiting_for_draw = false;
+				break;
+			}
+			
 			NSEvent *t_event;
 			t_event = [NSApp nextEventMatchingMask: NSApplicationDefinedMask
 										 untilDate: [NSDate dateWithTimeIntervalSinceNow: 0.02]
