@@ -24,6 +24,12 @@ on hcDoMenu pItem, pMenu
       send tMessage to this card
       return the result
    end if
+   -- New Button: HyperCard named the button "New Button"; this engine's
+   -- doMenu makes one with no name
+   if pItem is "New Button" then
+      create button "New Button"
+      return empty
+   end if
    doMenu pItem
    return the result
 end hcDoMenu
@@ -331,6 +337,13 @@ on hcDial pNumber, pModemCommands
    return "dial with modem is not supported"
 end hcDial
 
+-- dial without a modem: HyperCard played the number's touch tones
+-- through the speaker; here the call reaches the library by its name and
+-- does nothing but say so in the result
+on dial pNumber
+   return "dial is not supported"
+end dial
+
 -- start using and stop using a stack (rule T23), found as hcStackName
 -- finds the stack of a "go": a library stack beside this one, or on its
 -- disk image; one that cannot be found leaves the result set, where this
@@ -588,6 +601,27 @@ function hcCursor pCursor
    end if
    return empty
 end hcCursor
+
+-- choose tool N (rule T30): HyperCard's tools by their numbers in the
+-- tools palette (1 browse to 18 polygon), or by a name with or without
+-- "tool" after it; this engine's "choose tool x" stops with an error
+-- whatever x is. A tool that is none of these leaves the tool as it was
+-- and "No such tool" in the result
+on hcChooseTool pTool
+   local tNames
+   put "browse,button,field,select,lasso,pencil,brush,eraser,line,spray can,rectangle,round rectangle,bucket,oval,curve,text,regular polygon,polygon" into tNames
+   put word 1 to -1 of pTool into pTool
+   if word -1 of pTool is "tool" then put word 1 to -2 of pTool into pTool
+   if pTool is an integer and pTool >= 1 and pTool <= 18 then put item pTool of tNames into pTool
+   if pTool is "btn" then put "button" into pTool
+   if pTool is "fld" then put "field" into pTool
+   if pTool is "spray" then put "spray can" into pTool
+   if pTool is among the items of tNames or pTool is "pointer" then
+      choose (pTool && "tool")
+      return empty
+   end if
+   return "No such tool"
+end hcChooseTool
 
 -- tabKey, arrowKey, returnKey, enterKey, returnInField, enterInField and
 -- functionKey as commands (rule T18): HyperCard sent the message to the
