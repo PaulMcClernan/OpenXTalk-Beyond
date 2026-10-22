@@ -71,11 +71,27 @@ if ! command -v emcc >/dev/null 2>&1 && [ -n "${EMSDK:-}" ] ; then
 fi
 export PREBUILT_SKIP_FETCH=1
 
-# 2. The web IDE's engine
+# 2. The xTalk Suite's native libraries that the web IDE's engine links
+# into itself (EXPERIMENTAL; engine/src/em-xtalk-web.cpp): the archives
+# pinned in tools/oxt/xtalk-extensions.json ("web_libraries"), or with
+# XTALK_WEB_LOCAL=<xTalk Suite checkout> that checkout's, written as
+# objects into build-emscripten/xtalk-web. NO_XTALK_WEB=1 links none (the
+# extensions then load and fail on their first call, as in the released
+# web IDE). The linked engine is deleted, so that the link below runs
+# again with what is there now: its gyp inputs do not list the objects.
 cd "${REPO}"
+rm -rf build-emscripten/xtalk-web
+if [ "${NO_XTALK_WEB:-}" != 1 ] ; then
+	python3 "${REPO}/tools/web-ide/xtalk_web_libraries.py" fetch --out build-emscripten/xtalk-web \
+		${XTALK_WEB_LOCAL:+--local "${XTALK_WEB_LOCAL}"}
+fi
+rm -f build-emscripten/livecode/out/Release/development-community-*.js \
+	build-emscripten/livecode/out/Release/development-community-*.wasm
+
+# 3. The web IDE's engine
 make config-emscripten
 BUILDTYPE=Release emmake make -C build-emscripten/livecode javascriptify-development -j"${JOBS}"
 
-# 3. The site
+# 4. The site
 python3 "${REPO}/tools/web-ide/build_site.py" --install "${INSTALL}" \
 	--engine "${REPO}/build-emscripten/livecode/out/Release" --out "${OUT}" --repo "${REPO}"

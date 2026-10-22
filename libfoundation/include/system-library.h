@@ -154,6 +154,14 @@ struct MCSLibraryStaticInfo
 MC_DLLEXPORT void
 MCSLibraryRegisterStatic(MCSLibraryStaticInfo& p_info);
 
+/* Register symbols of the engine itself: those that LCB code binds to with
+ * "<builtin>" or with no library ("c:>name"), which a desktop engine finds
+ * in its own executable and a browser's cannot look up by name. The library
+ * that a handle made with an address stands for (the engine) has them. The
+ * record's name is not used. */
+MC_DLLEXPORT void
+MCSLibraryRegisterStaticMain(MCSLibraryStaticInfo& p_info);
+
 #endif
 
 /* ================================================================
