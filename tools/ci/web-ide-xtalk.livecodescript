@@ -78,10 +78,6 @@ constant kDataChannel = "oxtWebDataChannel"
 constant kOnionGood = "2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion"
 constant kOnionBad = "3gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion"
 
--- The platformer's: true skips its question about the art folder (it
--- then draws its placeholder art)
-global gArtDeclined
-
 local sStarted, sAct, sWatchdog, sFlag, sNostr
 
 on extensionInitialize
@@ -409,8 +405,11 @@ end xt_holdem
 
 on xt_platformer
    local tHud
-   -- Placeholder art: no question about the art folder
-   put true into gArtDeclined
+   -- It asks for its art folder (answer folder) and, cancelled, draws its
+   -- placeholder art: the page's folder picker is cancelled as a user
+   -- cancels it (headless Chromium cancels it by itself; Firefox and
+   -- WebKit wait for an answer)
+   send "xtCancelPicker 60" to me in 500 milliseconds
    -- (each stage is recorded as it ends, so that a stage that never ends
    -- is the one after the last line)
    xtAppStack kPlatformer, "box2dxt-platformer.livecodescript"
@@ -511,6 +510,19 @@ on xt_unavailable
    xtExpect "the control connection authenticated", oxIsControlAuthenticated(), false
    oxDisconnectControl
 end xt_unavailable
+
+-- Cancels the page's file or folder picker (em-dialog.js pickFiles) when
+-- there is one, trying every half second pTries more times
+on xtCancelPicker pTries
+   local tGot
+   put tourJS("(function(){var i=document.querySelector('input[type=file]');" & \
+         "if(!i)return 'none';i.dispatchEvent(new Event('cancel'));return 'cancelled';})()") into tGot
+   if tGot is "cancelled" then
+      tourRecord "INFO cancelled the folder picker"
+   else if pTries > 0 then
+      send "xtCancelPicker" && pTries - 1 to me in 500 milliseconds
+   end if
+end xtCancelPicker
 
 -- A new stack pName whose script is the app pFile, which web_ide_tour.py
 -- --add put in the folder files beside this file, as its HOW TO RUN says (a new stack, the
