@@ -134,8 +134,13 @@ jobs:
             (cd "$RUNNER_TEMP/ide-artifact" && sha256sum -c SHA256SUMS)
             cp "$RUNNER_TEMP"/ide-artifact/*-web-ide.zip "$RUNNER_TEMP/dist/"
             echo "IDE_FROM=Web IDE run $run" >> "$GITHUB_ENV"
+          elif [ -n "$RUN" ]; then
+            # Asked for by hand: a run without the artifact is a mistake, and
+            # deploying would take the web IDE off the site
+            echo "::error::Web IDE run $RUN has no artifact OXT-Beyond-web-ide (expired, or another workflow's run)"
+            exit 1
           else
-            echo "::warning::no web IDE zip in $TAG or in Web IDE run ${run:-(none on main)}; the site has the Stack Player alone"
+            echo "::warning::no web IDE zip in $TAG or in main's Web IDE runs; the site has the Stack Player alone"
           fi
 
       - name: Build the site
