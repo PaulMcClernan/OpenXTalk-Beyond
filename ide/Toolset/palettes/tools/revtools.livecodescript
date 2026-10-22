@@ -263,6 +263,9 @@ on generatePalette
       tmGenerate
       exit generatePalette
    end if
+   -- OXT-Beyond: what the modern look made, left when the look was
+   -- changed while the palette was closed (tmDropModern)
+   tmDropModern
    lock screen
    # Clean up existing UI
    repeat while there is a group "contents"
@@ -555,6 +558,8 @@ on layoutPalette
    end if
    lock screen
    
+   -- OXT-Beyond: as in generatePalette (tmDropModern)
+   tmDropModern
    if there is not a group "contents" of me then generatePalette  
    
    # Get the space that the content should fill
@@ -1547,7 +1552,11 @@ on menuPick pWhich
    -- don't need this, so deleted. (tperry 25-4-24)
    -- OXT-Beyond: the modern look's options menu
    if the short name of the target is "tmMenu" and tmIsModern() then
-      tmMenuPick pWhich
+      -- (once the popup has closed and the click that opened it is over:
+      -- a section turned on or off, or the classic look, makes the palette
+      -- again, which deletes this menu and its button while the engine is
+      -- still in them, and on Windows the palette came out empty)
+      send "tmMenuPick pWhich" to me in 0 milliseconds
    end if
 end menuPick
 
@@ -2226,11 +2235,11 @@ end hPositionAccentsInTools
 #
 # OXT-Beyond: the modern look
 #
--- Tools > Modern Tools Palette (the preference revTools_look, "modern")
--- draws this palette in the look of Learn and the About window: a dark
--- header with Run and Edit and a menu, a filter, and the objects and
--- tools in sections that fold, as rounded tiles, with or without their
--- names. The window can be made any size: the tiles fill its width in as
+-- Tools > Modern Tools Palette (the preference revTools_look, "modern",
+-- or empty: it is the default) draws this palette in the look of Learn
+-- and the About window: a dark header with Run and Edit and a menu, a
+-- filter, and the objects and tools in sections that fold, as rounded
+-- tiles, with or without their names. The window can be made any size: the tiles fill its width in as
 -- many columns as fit, and what does not fit its height scrolls, with the
 -- wheel or the slim thumb at its right. A drag on the header moves it and
 -- a drag on the corner at its foot sizes it, also where the window has
@@ -2250,9 +2259,11 @@ end hPositionAccentsInTools
 -- anywhere on a tile is a click on the button. What the classic look
 -- adds of its own (the "*" button, the section titles, the macOS accent
 -- dots) is taken away while this look is on, and made again by the
--- classic code when it is off. Off is the default, and then nothing of
--- this runs: each classic handler that leads here does so on its first
--- line, only when tmIsModern() is true.
+-- classic code when it is off. When it is off (revTools_look "classic",
+-- which a user who turns it off keeps) nothing of this runs: each
+-- classic handler that leads here does so on its first line, only when
+-- tmIsModern() is true, and the classic look's own code and settings
+-- (revTools_show, revTools_columns) are as they were.
 --
 -- Run and Edit, the menu, the filter and the folds are drawn with Lucide's
 -- icons (lucide-static 0.469.0), the inside of each icon's <svg>, under
@@ -2295,8 +2306,10 @@ private function tmSections
    return tOut
 end tmSections
 
+-- The modern look is the default: only "classic", which Tools > Modern
+-- Tools Palette and the menu's Classic Look save, gives the classic one
 function tmIsModern
-   return revIDEGetPreference("revTools_look") is "modern"
+   return revIDEGetPreference("revTools_look") is not "classic"
 end tmIsModern
 
 -- The colours: Learn's (revLearnKit's lkColor), light or dark
@@ -2554,8 +2567,11 @@ private function tmViewOrder pView, @pData
 end tmViewOrder
 
 -- Takes away what either look made, and puts the window back as the
--- classic look opens it
-command tmTeardown
+-- classic look opens it, unless pKeepWindow is true: then the modern look
+-- is made again at once and sets the window up itself, and the window is
+-- left as it is (on Windows, turning resizable off and on again redrew
+-- the window, empty, while the palette was being made again)
+command tmTeardown pKeepWindow
    local tCard, i, tName
    lock screen
    lock messages
@@ -2582,21 +2598,48 @@ command tmTeardown
          delete graphic i of tCard
       end if
    end repeat
-   set the backgroundColor of me to empty
-   set the resizable of me to false
-   set the minHeight of me to 32
-   set the maxHeight of me to 65535
-   set the minWidth of me to 32
-   set the maxWidth of me to 65535
+   if pKeepWindow is not true then
+      set the backgroundColor of me to empty
+      set the resizable of me to false
+      set the minHeight of me to 32
+      set the maxHeight of me to 65535
+      set the minWidth of me to 32
+      set the maxWidth of me to 65535
+   end if
    unlock messages
    unlock screen
 end tmTeardown
 
+-- The palette hears no preference while it is closed (the palette
+-- behavior's closeStack unsubscribes it), so a look changed then finds
+-- the other look's controls when it opens again: the classic look takes
+-- away what the modern one made, as tmGenerate takes away the classic
+-- look's, and the modern look gives the window its kept size again
+-- rather than the size the classic look left it at
+command tmDropModern
+   if there is a group "tmHeader" of me then tmTeardown
+end tmDropModern
+
+on closeStack
+   -- OXT-Beyond: the modern look sizes the window again when it next opens
+   put true into sTmNeedSize
+   pass closeStack
+end closeStack
+
 -- Tools > Modern Tools Palette, or the menu's Classic Look
 command tmSwitchLook
    lock screen
-   tmTeardown
+   tmTeardown tmIsModern()
    put true into sTmNeedSize
+   -- the modern look takes its kept size before it is made, rather than
+   -- being drawn at the classic look's size first
+   if tmIsModern() and tmKeptSize() is not empty then
+      put false into sTmNeedSize
+      -- (the classic look's fixed width would hold it)
+      lock messages
+      tmWindowLimits
+      tmApplySize false
+   end if
    generatePalette
    layoutPalette
    unlock screen
@@ -2606,7 +2649,7 @@ command tmGenerate
    local tThemePath, tData, tView, tOrder, tTypeID, tImageID, tSection
    local tTooltip, tSum, tName, tSections
    lock screen
-   tmTeardown
+   tmTeardown true
    lock messages
 
    -- Dark or light as the classic look decides it (its generatePalette):
@@ -2900,12 +2943,19 @@ command tmLayout
    end if
    lock screen
    lock messages
+   tmWindowLimits
 
-   set the resizable of me to true
-   set the minWidth of me to kTmMinWidth
-   set the minHeight of me to kTmMinHeight
-   set the maxWidth of me to 4000
-   set the maxHeight of me to 4000
+   -- a size kept from before is taken now, so that the window is not
+   -- laid out and drawn at the size the classic look left it at first,
+   -- then sized and laid out again (the first size, which depends on what
+   -- the palette shows, is still taken after the layout, below)
+   if sTmNeedSize is not false and tmKeptSize() is not empty then
+      put false into sTmNeedSize
+      tmApplySize false
+      -- (which unlocks them)
+      lock messages
+   end if
+
    put the width of me into tW
    put the height of me into tH
    put tmShowNames() into tNames
@@ -3109,14 +3159,35 @@ command tmLayout
    end if
 end tmLayout
 
--- The size the window opens at: the one kept, else as wide as two
--- columns and as tall as what it shows, on the screen
-private command tmApplySize
-   local tSize, tW, tH, tRect, tScreen
+-- The window can be sized, between these limits; each is set only when
+-- it changes (see tmTeardown)
+private command tmWindowLimits
+   if not the resizable of me then set the resizable of me to true
+   if the minWidth of me is not kTmMinWidth then set the minWidth of me to kTmMinWidth
+   if the minHeight of me is not kTmMinHeight then set the minHeight of me to kTmMinHeight
+   if the maxWidth of me is not 4000 then set the maxWidth of me to 4000
+   if the maxHeight of me is not 4000 then set the maxHeight of me to 4000
+end tmWindowLimits
+
+-- The size kept from before (revTools_modernSize), or empty
+private function tmKeptSize
+   local tSize
    put revIDEGetPreference("revTools_modernSize") into tSize
    if item 1 of tSize is a number and item 2 of tSize is a number then
-      put max(kTmMinWidth, item 1 of tSize) into tW
-      put max(kTmMinHeight, item 2 of tSize) into tH
+      return max(kTmMinWidth, item 1 of tSize) & comma & max(kTmMinHeight, item 2 of tSize)
+   end if
+   return empty
+end tmKeptSize
+
+-- The size the window opens at: the one kept, else as wide as two
+-- columns and as tall as what it shows, on the screen; it lays the
+-- palette out again only when it changed the size and pLayout is not false
+private command tmApplySize pLayout
+   local tSize, tW, tH, tRect, tScreen
+   put tmKeptSize() into tSize
+   if tSize is not empty then
+      put item 1 of tSize into tW
+      put item 2 of tSize into tH
    else
       put kTmDefaultWidth into tW
       put kTmHeadHeight + kTmSearchHeight + kTmPad * 2 + sTmContentHeight into tH
@@ -3130,7 +3201,7 @@ private command tmApplySize
    lock messages
    set the rect of me to item 1 of tRect, item 2 of tRect, item 1 of tRect + tW, item 2 of tRect + tH
    unlock messages
-   tmLayout
+   if pLayout is not false then tmLayout
 end tmApplySize
 
 -- Keeps the window's size for the next time, once the user stops sizing

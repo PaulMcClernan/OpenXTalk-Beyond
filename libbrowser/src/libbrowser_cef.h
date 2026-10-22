@@ -197,6 +197,12 @@ bool MCCefDictionaryToBrowserDictionary(CefRefPtr<CefDictionaryValue> p_dict, MC
 bool MCCefPlatformEnableHiDPI();
 bool MCCefPlatformGetHiDPIEnabled();
 
+#if defined(TARGET_PLATFORM_LINUX)
+// OXT-Beyond: [[ HiDPI ]] The scale CEF draws its pages at (the engine's
+// logical-to-screen scale; 1 where the desktop does not scale)
+double MCCefPlatformGetDeviceScaleFactor();
+#endif
+
 //////////
 
 #define MC_CEFMSG_EXECUTE_SCRIPT "cefbrowser_request_execute_script"
@@ -206,6 +212,11 @@ bool MCCefPlatformGetHiDPIEnabled();
 #define MC_CEFMSG_SET_JS_HANDLER_LIST "cebrowser_request_set_js_handler_list"
 
 #define MC_CEFMSG_JS_HANDLER "cefbrowser_js_handler"
+
+// OXT-Beyond: the render process tells the browser process that the page was
+// clicked, so that the browser takes the keyboard (Linux only: see
+// MCCefRenderApp::OnContextCreated)
+#define MC_CEFMSG_TAKE_FOCUS "cefbrowser_take_focus"
 
 #define MC_CEFMSG_RESULT "cefbrowser_result"
 

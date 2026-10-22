@@ -107,6 +107,11 @@ on tourRun
    tourRecord "INFO screenRect" && the screenRect
    tourRecord "INFO openStacks" && tourJoin(the openStacks)
    tourCatchErrors
+   -- The Tools palette opens in its modern look, the default; the steps
+   -- before the modern look's take it in its classic look, as they always
+   -- have, and the modern look's steps turn it on themselves
+   tourRecord "INFO tools look at start" && quote & revIDEGetPreference("revTools_look") & quote
+   tourToolsClassic
    repeat for each item tStep in kSteps
       if sOnly is not empty and tStep is not among the items of sOnly then next repeat
       put "tour_" & tStep into tHandler
@@ -255,7 +260,8 @@ function tourToolsModern pWidth, pNames
 end tourToolsModern
 
 command tourToolsClassic
-   if revIDEGetPreference("revTools_look") is "modern" then
+   -- (an empty preference is the modern look, the default)
+   if revIDEGetPreference("revTools_look") is not "classic" then
       revIDESetPreference "revTools_look", "classic"
       tourWait 500
    end if
@@ -541,6 +547,21 @@ on tour_tools_modern_switch
    tourTmCheck tourTmNamed("tmHeader") is empty and tourTmNamed("tmGrip") is empty and tourTmNamed("tmThumb") is empty, "and with nothing of the modern look"
    tourTmCheck tourTmNamed("toolsOVERRIDEmenu") is not empty, "and with its own options button"
    tourTmCheck revIDEGetPreference("revTools_show") & "|" & revIDEGetPreference("revTools_columns") is sTmClassicPrefs, "and its own settings"
+   -- a look changed while the palette is closed, when it hears no
+   -- preference: it opens in that look, with nothing of the other one
+   -- (the classic look stopped at an error on the modern look's controls)
+   close stack "revTools"
+   revIDESetPreference "revTools_look", "modern"
+   revIDEOpenPalette "tools"
+   tourWait 600
+   tourTmCheck tourTmNamed("tmHeader") is not empty and tourTmNamed("toolsOVERRIDEmenu") is empty, \
+         "a palette closed in the classic look opens in the modern look chosen meanwhile"
+   close stack "revTools"
+   revIDESetPreference "revTools_look", "classic"
+   revIDEOpenPalette "tools"
+   tourWait 600
+   tourTmCheck tourTmNamed("tmHeader") is empty and tourTmNamed("toolsOVERRIDEmenu") is not empty, \
+         "and one closed in the modern look opens in the classic look chosen meanwhile"
    tourTmFinish "tools-modern-switch"
    tourTmReset
 end tour_tools_modern_switch
