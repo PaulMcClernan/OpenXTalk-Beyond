@@ -777,6 +777,14 @@ MCGFloat MCLinuxGetLogicalToScreenScale(void)
 	return (MCGFloat)s_linux_desktop_scale;
 }
 
+// OXT-Beyond: [[ HiDPI ]] The scale the browser widget's CEF draws its pages
+// at (libbrowser_cef_lnx.cpp): the same as the stacks', so a page fills its
+// widget at the size it has on Windows and macOS. Read once, when CEF starts.
+extern "C" double MCLinuxGetBrowserDeviceScale(void)
+{
+	return MCLinuxGetLogicalToScreenScale();
+}
+
 // OXT-Beyond: [[ HiDPI ]] Pixel scaling is supported where the desktop scales:
 // on a desktop at 1 it is unsupported, as it always was on Linux.
 bool MCResPlatformSupportsPixelScaling(void)
@@ -828,6 +836,10 @@ void MCResPlatformHandleScaleChange(void)
 
 	if (MCstacks != nil)
 		MCstacks->reopenallstackwindows();
+
+	// The cursors made from images are scaled by the scale they were made at
+	// (MCScreenDC::createcursor, lnxcursor.cpp): make them again
+	MCscreen->resetcursors();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

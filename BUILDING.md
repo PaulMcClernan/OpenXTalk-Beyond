@@ -1499,18 +1499,24 @@ macOS starts the release's IDE as well (`tools/ci/mac_ide_start.sh`).
 
 [`tools/ci/browser_wm_check.py`](tools/ci/browser_wm_check.py) runs the
 browser widget in a standalone of the Linux package on an Xvfb screen
-under real window managers, xfwm4 and openbox in turn, with
+under real window managers, xfwm4, openbox and mutter (GNOME's) in turn,
+and mutter again on a screen at a desktop scale of 2 (`GDK_SCALE=2`), with
 [`tools/ci/browser-wm-check.livecodescript`](tools/ci/browser-wm-check.livecodescript),
-and checks from outside the engine (xdotool, xwininfo and ImageMagick's
-`import`) that the page is on the screen in a new stack, in that stack
-closed and opened again and in a second stack, that typing goes to a
-field of the stack after the page loaded and after a click into the
-browser, and that the application gets no `suspend` while the keyboard is
-in the browser. Up to 0.2.3 the browser's window could stay unmapped under
-openbox and kept the keyboard under xfwm4 (pull request #57).
+and checks from outside the engine (xdotool and ImageMagick's `import`)
+that the page is on the screen in a new stack, in that stack closed and
+opened again, in a second stack and in that stack at a scaleFactor of 2;
+that the page is drawn at the desktop's scale (its `devicePixelRatio`);
+that typing goes to a field of the stack after the page loaded, to the
+page's text box after a click into it, and to the field again after a
+click on it; and that the application gets no `suspend` while the
+keyboard is in the browser. Up to 0.2.3 the browser's window could stay
+unmapped under openbox and kept the keyboard under xfwm4 (pull request
+#57); up to 0.2.7-rc.6.1 a click into a page gave it the keyboard under
+xfwm4 only, a page on a 2x desktop was drawn at half its size, and the
+browser kept its size and place at any scaleFactor.
 
 ```sh
-sudo apt-get install xvfb xfwm4 openbox xdotool x11-utils imagemagick
+sudo apt-get install xvfb xfwm4 openbox mutter xdotool x11-utils imagemagick
 python3 tools/ci/browser_wm_check.py --install <folder> --shots <folder>
 ```
 

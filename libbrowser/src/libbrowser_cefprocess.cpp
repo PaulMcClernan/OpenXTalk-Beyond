@@ -564,10 +564,82 @@ public:
 	IMPLEMENT_REFCOUNTING(MCCefLCFuncHandler);
 };
 
+#if defined(TARGET_PLATFORM_LINUX)
+// OXT-Beyond: the page's mousedown listener (MCCefRenderApp::OnContextCreated)
+class MCCefTakeFocusHandler : public CefV8Handler
+{
+public:
+	virtual bool Execute(const CefString &p_name, CefRefPtr<CefV8Value> p_object, const CefV8ValueList &p_args, CefRefPtr<CefV8Value> &r_retval, CefString &r_exception) OVERRIDE
+	{
+		CefRefPtr<CefV8Context> t_context;
+		t_context = CefV8Context::GetCurrentContext();
+		
+		CefRefPtr<CefBrowser> t_browser;
+		if (t_context != nil)
+			t_browser = t_context->GetBrowser();
+		
+		if (t_browser != nil)
+		{
+			CefRefPtr<CefProcessMessage> t_message;
+			t_message = CefProcessMessage::Create(MC_CEFMSG_TAKE_FOCUS);
+			if (t_message != nil)
+				/* UNCHECKED */ t_browser->SendProcessMessage(PID_BROWSER, t_message);
+		}
+		
+		r_retval = CefV8Value::CreateUndefined();
+		return true;
+	}
+	
+	IMPLEMENT_REFCOUNTING(MCCefTakeFocusHandler);
+};
+#endif
+
 class MCCefRenderApp : public CefApp, CefRenderProcessHandler
 {
 public:
 	virtual CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() OVERRIDE { return this; }
+	
+#if defined(TARGET_PLATFORM_LINUX)
+	// OXT-Beyond: on Linux the browser's window took the X input focus when it
+	// was clicked only under some window managers (xfwm4), so under openbox,
+	// Mutter (GNOME, X11 or Xwayland) and others the keys stayed with the
+	// stack, and nothing could be typed into a page (the Dictionary's search
+	// field). A click into a page, in each of its frames, now asks the browser
+	// process to give the browser the focus (MC_CEFMSG_TAKE_FOCUS). The
+	// listener is added to the window before any script of the page runs, in
+	// the capture phase, so a page cannot stop it; it does nothing to the
+	// event itself. Only a click: a page that focuses one of its fields as it
+	// loads does not take the keyboard (OnSetFocus in libbrowser_cef.cpp).
+	virtual void OnContextCreated(CefRefPtr<CefBrowser> p_browser, CefRefPtr<CefFrame> p_frame, CefRefPtr<CefV8Context> p_context) OVERRIDE
+	{
+		CefRefPtr<CefV8Value> t_window;
+		t_window = p_context->GetGlobal();
+		if (t_window == nil)
+			return;
+		
+		CefRefPtr<CefV8Value> t_add_listener;
+		t_add_listener = t_window->GetValue("addEventListener");
+		if (t_add_listener == nil || !t_add_listener->IsFunction())
+			return;
+		
+		CefRefPtr<CefV8Handler> t_handler;
+		t_handler = new (nothrow) MCCefTakeFocusHandler();
+		if (t_handler == nil)
+			return;
+		
+		CefRefPtr<CefV8Value> t_listener;
+		t_listener = CefV8Value::CreateFunction("oxtTakeFocus", t_handler);
+		if (t_listener == nil)
+			return;
+		
+		CefV8ValueList t_args;
+		t_args.push_back(CefV8Value::CreateString("mousedown"));
+		t_args.push_back(t_listener);
+		t_args.push_back(CefV8Value::CreateBool(true));
+		
+		/* UNCHECKED */ t_add_listener->ExecuteFunction(t_window, t_args);
+	}
+#endif
 	
 	virtual void OnBeforeCommandLineProcessing(const CefString &p_process_type, CefRefPtr<CefCommandLine> p_command_line) OVERRIDE
 	{
