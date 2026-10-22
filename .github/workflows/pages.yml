@@ -35,11 +35,21 @@
 # over it. With neither, the site has the Stack Player alone, and the summary says
 # so.
 #
-# It runs when the Release workflow finishes well, and by hand (Actions >
-# Web pages > Run workflow). Releases are published with the workflow's
-# own token, which starts no "release" event, so it follows the workflow
-# instead. A dry run publishes nothing, so the site it deploys is the one
-# already there. It needs GitHub Pages turned on with "GitHub Actions" as
+# A build that is not released yet (a release dry run, or a Linux build of
+# the commit to be released) goes on the site with the input build-run: its
+# run id. Both zips are then taken from that run's artifacts
+# (release-dry-run, OXT-Beyond-linux-x86_64, OXT-Beyond-web-ide), the input
+# tag is not used, and a run that lacks either zip fails, so that a site
+# with both never loses one. The next release's run puts the released
+# files back.
+#
+# It runs when the Release workflow finishes well on a tag v<version> (a
+# release it published: that release goes on the site), and by hand
+# (Actions > Web pages > Run workflow). Releases are published with the
+# workflow's own token, which starts no "release" event, so it follows the
+# workflow instead. A dry run, which runs on a branch and publishes
+# nothing, starts nothing here, so a test build put on the site by hand
+# stays until the release. It needs GitHub Pages turned on with "GitHub Actions" as
 # its source (Settings > Pages); until then the deploy job fails and
 # nothing else is touched. It changes no release, package or build.
 
@@ -53,6 +63,13 @@ on:
     inputs:
       tag:
         description: The release to put on the site (for example v0.2.7-rc.6.1); empty for the newest one
+        type: string
+        default: ''
+      build-run:
+        description: >-
+          A run whose artifacts hold both web zips, to put a build that is
+          not released yet on the site (a release dry run's, or a Linux
+          build's with a Web IDE run's); empty for a release
         type: string
         default: ''
       ide-run:
@@ -79,7 +96,9 @@ defaults:
 jobs:
   site:
     name: Build the site
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -96,15 +115,39 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          TAG: ${{ inputs.tag }}
+          # By hand, the input; after a release, its tag
+          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+          BUILD_RUN: ${{ inputs.build-run }}
+          IDE_RUN: ${{ inputs.ide-run }}
         run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          if [ -n "$BUILD_RUN" ]; then
+            for run in $BUILD_RUN $IDE_RUN; do
+              if ! [[ "$run" =~ ^[0-9]+$ ]]; then echo "::error::build-run and ide-run are run ids (digits)"; exit 1; fi
+              # The artifacts that can hold a web zip; gh fails only when
+              # none of them is in the run
+              gh run download "$run" --repo "$REPO" --dir "$RUNNER_TEMP/build-$run" \
+                --pattern release-dry-run --pattern OXT-Beyond-linux-x86_64 --pattern OXT-Beyond-web-ide
+            done
+            for kind in web-player web-ide; do
+              found=$(find "$RUNNER_TEMP"/build-* -name "OXT-Beyond-*-$kind.zip" | sort | head -n 1)
+              if [ -z "$found" ]; then
+                echo "::error::run $BUILD_RUN${IDE_RUN:+ (and $IDE_RUN)} has no OXT-Beyond-<version>-$kind.zip"
+                exit 1
+              fi
+              cp "$found" "$RUNNER_TEMP/dist/"
+            done
+            echo "TAG=run $BUILD_RUN (not released)" >> "$GITHUB_ENV"
+            echo "UNRELEASED=1" >> "$GITHUB_ENV"
+            ls -l "$RUNNER_TEMP/dist"
+            exit 0
+          fi
           if [ -z "$TAG" ]; then
             TAG=$(gh release list --repo "$REPO" --exclude-drafts --limit 30 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]' | head -n 1)
           fi
           if [ -z "$TAG" ]; then echo "::error::no release to put on the site"; exit 1; fi
           echo "Release: $TAG"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/dist"
           # One pattern at a time: gh refuses the whole download when a
           # pattern matches nothing, and an older release has no web IDE zip
           for pattern in '*-web-player.zip' '*-web-ide.zip'; do
@@ -151,10 +194,12 @@ jobs:
           if [ -n "$ide" ]; then
             version=$(basename "$ide" -web-ide.zip); version=${version#OXT-Beyond-}
             [ -n "${IDE_FROM:-}" ] && version="$version (with newer IDE scripts)"
+            [ -n "${UNRELEASED:-}" ] && version="$version (test build)"
             args+=(--ide "$ide" --ide-version "$version")
           fi
           if [ -n "$player" ]; then
             version=$(basename "$player" -web-player.zip); version=${version#OXT-Beyond-}
+            [ -n "${UNRELEASED:-}" ] && version="$version (test build)"
             args+=(--player "$player" --player-version "$version")
           fi
           python3 tools/pages/build_pages.py --out "$RUNNER_TEMP/site" "${args[@]}"
