@@ -1529,6 +1529,9 @@ on errorDialog pWhatError, pWhatError2
    
    ######################
    close printing
+   -- OXT-Beyond: an error while the IDE starts goes in its tools log
+   -- (home.livecodescript), which says where the start-up was
+   if there is a stack "Home" then dispatch "revInternal__LogStartupError" to stack "Home" with pWhatError
    global gREVSuppressErrors, gREVDevelopment
    if gREVDevelopment then write the params & cr & the long time & cr & "--------" & cr & cr to stdOut
    if gREVSuppressErrors then exit errorDialog

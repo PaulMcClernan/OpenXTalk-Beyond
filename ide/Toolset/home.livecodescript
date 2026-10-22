@@ -255,7 +255,9 @@ on revInternal__openStack
    -- calling late inits
    revInternal__setSplashStatus "Finishing loading the IDE..."
    revInternal__Log "Leave", "revInternal__openStack"
-   revInternal__Log "End"
+   -- OXT-Beyond: the log goes on until the splash closes (tCloseSplashFully):
+   -- the palettes open below and in tdelayClosingSplash, and a start-up
+   -- that stopped there said nothing in the log of where
    
    
    -- tperry 15-1-24, make sure my recently added preferences aren't set to empty
@@ -354,6 +356,7 @@ on revInternal__openStack
 end revInternal__openStack
    
 on tdelayClosingSplash
+   revInternal__Log "Message", "Closing the splash..."
    -- Now the home stack has loaded, we can allow interrupts..
    set the allowInterrupts to true
    
@@ -385,6 +388,7 @@ on tdelayClosingSplash
 end tdelayClosingSplash
 
 on tCloseSplashFully
+   revInternal__Log "Message", "Showing the palettes..."
    set the cREVLaunching of stack "Home" to false
    if there is a stack "revsplash" then
       set the destroyStack of stack "revSplash" to true
@@ -412,6 +416,7 @@ on tCloseSplashFully
       send "tOpenHome" to stack "revMenubar" in 200 milliseconds
    end if
    
+   revInternal__Log "End"
 end tCloseSplashFully
 
 on revInternal__setSplashStatus pMessage
@@ -1350,6 +1355,15 @@ command revInternal__InstallFileAssociations
          revInternal__LogToFile pType, pMessage
       end if
    end revInternal__Log
+   
+   -- OXT-Beyond: an error while the IDE starts (the backscript's
+   -- errorDialog sends it here) goes in the tools log too, so the log says
+   -- why a start-up stopped where it did; once the start-up has ended, or
+   -- in the test environment, it does nothing
+   command revInternal__LogStartupError pError
+      if sLogPath is empty then exit revInternal__LogStartupError
+      revInternal__LogToFile "Error", pError
+   end revInternal__LogStartupError
    
    --------------------------------------------------------------------------------
    -- Internal Initialisation Functions
