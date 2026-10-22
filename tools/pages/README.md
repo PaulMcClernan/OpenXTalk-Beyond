@@ -20,6 +20,12 @@ the newest). A release that has no web IDE zip takes the web IDE from a Web IDE
 run's artifact instead (the input `ide-run`, or main's newest run); the
 header of the workflow says how.
 
+A build that is not released yet, such as a release dry run's, goes on
+the site by hand with the input `build-run` (that run's id): both zips are
+then taken from its artifacts, and the front page marks them "test build".
+A dry run starts no deploy itself, so the test build stays until the
+release's own run puts the released files there.
+
 Both sites ask for their files with relative addresses, so they run from
 a folder of the site. The web engine uses no threads, so GitHub Pages needs
 no special headers, and it serves `.wasm` as `application/wasm`. Its
