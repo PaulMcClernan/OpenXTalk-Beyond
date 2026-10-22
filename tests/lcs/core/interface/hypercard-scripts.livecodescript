@@ -203,6 +203,14 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T27: after then, its spelling kept", line 3 of tScript is "  if x then doMenu " & q & "Compact Stack" & q
    TestAssert "T27: a variable: unchanged", line 4 of tScript is "  doMenu tItem"
    TestAssert "T27: an expression: unchanged", line 5 of tScript is "  doMenu the short name of me"
+
+   put _Rewrite("on mouseUp", "  put the visible of msg into v", "  if the visible of window " & q & "Message" & q & " then hide msg", "  set the loc of the message box to 18,30", "  set loc of msg to x", "  put the length of msg into n", "  put the rect of window " & q & "Map" & q & " into r", "end mouseUp") into tScript
+   TestAssert "T28: the visible of msg", line 2 of tScript is "  put hcMessageBox(" & q & "visible" & q & ") into v"
+   TestAssert "T28: the visible of window " & q & "Message" & q, line 3 of tScript is "  if hcMessageBox(" & q & "visible" & q & ") then hide msg"
+   TestAssert "T28: set the loc of the message box", line 4 of tScript is "  hcSetMessageBox " & q & "loc" & q & ", 18,30"
+   TestAssert "T28: set loc of msg", line 5 of tScript is "  hcSetMessageBox " & q & "loc" & q & ", x"
+   TestAssert "T28: the length of msg: unchanged", line 6 of tScript is "  put the length of msg into n"
+   TestAssert "T28: another window: unchanged", line 7 of tScript is "  put the rect of window " & q & "Map" & q & " into r"
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
@@ -361,6 +369,10 @@ on TestHyperCardScriptsStandIns
          "  put volume(4) into gHCScriptsTest", \
          "  put comma & volume(9) & comma & SndVolume() after gHCScriptsTest", \
          "  put comma & objectExists(" & quote & "button " & quote & " & quote & " & quote & "Volume" & quote & " & quote) & comma & objectExists(" & quote & "button 99" & quote & ") & comma & objectExists(" & quote & "no such thing" & quote & ") after gHCScriptsTest", \
+         "  put the loc of msg into tOldLoc", \
+         "  set the loc of msg to 18,30", \
+         "  put comma & (the visible of msg is among the words of " & quote & "true false" & quote & ") & comma & (the loc of msg is " & quote & "18,30" & quote & ") after gHCScriptsTest", \
+         "  if tOldLoc is not empty then set the loc of msg to tOldLoc", \
          "  cHCcolorize", \
          "  cHCunColorize", \
          "end mouseUp")
@@ -371,7 +383,7 @@ on TestHyperCardScriptsStandIns
    TestAssert "MaxDepth, NewMenu, DeleteMenu, ShowMenu, HCBalloon query, Dialoger", gHCScriptsTest is "true,1,2,,HyperCard menus are not supported yet,false,The Dialoger external is not supported"
    put empty into gHCScriptsTest
    send "mouseUp" to button "Volume" of stack tStack
-   TestAssert "volume and SndVolume keep the level; objectExists; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4,true,false,false"
+   TestAssert "volume and SndVolume keep the level; objectExists; the message box's properties; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4,true,false,false,true,true"
    send "mouseEnter" to button "Balloon" of stack tStack
    TestAssert "HCBalloon: balloons off, no tooltip", the toolTip of button "Balloon" of stack tStack is empty
    send "HCBalloon" && quote & "on" & quote to button "B" of stack tStack

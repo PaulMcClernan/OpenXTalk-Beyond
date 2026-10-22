@@ -873,6 +873,51 @@ on hcSetWindow pProp, pWindow, pValue
    return empty
 end hcSetWindow
 
+/*
+The properties of the message box (rule T28): "the visible of msg" and
+"set the loc of the message box to ..." name the message box's text
+here, and stop with an error. In the IDE they are those of its Message
+Box; where there is none (the Stack Player), the values a script set
+read back, and the message box is not visible
+*/
+local sHCMessageBox
+
+function hcMessageBox pProp
+   local tValue
+   if there is a stack "Message Box" then
+      try
+         do "put the" && pProp && "of stack" && quote & "Message Box" & quote && "into tValue"
+         return tValue
+      catch tError
+      end try
+   end if
+   if pProp is "visible" and sHCMessageBox["visible"] is empty then return false
+   return sHCMessageBox[pProp]
+end hcMessageBox
+
+on hcSetMessageBox pProp, pValue
+   local i
+   -- (a point or a rect not in quotes comes as more than one parameter)
+   repeat with i = 3 to paramCount()
+      put comma & param(i) after pValue
+   end repeat
+   put pValue into sHCMessageBox[pProp]
+   if there is not a stack "Message Box" then return empty
+   try
+      if pProp is "visible" then
+         if pValue is true then
+            show message box
+         else
+            hide message box
+         end if
+      else
+         do "set the" && pProp && "of stack" && quote & "Message Box" & quote && "to pValue"
+      end if
+   catch tError
+   end try
+   return empty
+end hcSetMessageBox
+
 ----------------------------------------------------------------------
 -- Stand-ins for the externals stacks call most
 --

@@ -15,7 +15,7 @@ script "revHyperCardScriptLibrary"
 --
 -- 1. rewrites the HyperTalk forms below, outside string literals and
 --    comments, one token at a time (the rules are named T0 to T14 in the
---    log; T15 to T27 are below);
+--    log; T15 to T28 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
 --    and keeps those that compile, putting in place of each one that does
 --    not a handler of the same name that passes its message on, with the
@@ -34,7 +34,7 @@ script "revHyperCardScriptLibrary"
 -- T22 HyperCard 2.2's menus, T23 "start using" and "stop using" a stack,
 -- T24 "print" a field, T25 "go" to a destination given by an expression,
 -- T26 the properties of picture and palette windows, T27 "doMenu" with
--- the item's name not in quotes).
+-- the item's name not in quotes, T28 the properties of the message box).
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -83,6 +83,9 @@ constant kMenuProperties = "checkmark commandchar cmdchar enabled markchar name 
 -- The properties of HyperCard's picture and palette windows that this
 -- engine's windows do not have (T26)
 constant kWindowProperties = "scale scroll hilitedbutton zoom dithering globalloc globalrect"
+
+-- The properties of the message box that scripts read and set (T28)
+constant kMessageBoxProperties = "visible loc location rect rectangle top left bottom right width height topleft bottomright textfont textsize textstyle textalign"
 
 -- the words a "go" names its destination with, as against an expression
 -- whose value is the destination (T25)
@@ -1100,7 +1103,7 @@ private function _PlayNotes pLine
    return pLine
 end _PlayNotes
 
--- T9 and T16 to T27: statements that stop with an error here where
+-- T9 and T16 to T28: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
@@ -1110,6 +1113,7 @@ private function _HyperCardRules pLine, pCompiled
    if pCompiled then put _PlayNotes(pLine) into pLine
    if char -1 of word 1 to -1 of _CodeText(pLine) is "\" then return pLine
    put _MenuItemProperties(pLine) into pLine
+   put _MessageBoxProperties(pLine) into pLine
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
    put 0 into n
@@ -1162,6 +1166,7 @@ private function _HyperCardRules pLine, pCompiled
             put _SetCursor(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetMenuItem(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetWindow(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetMessageBox(tTokens, tIdx, i, tEnd) into tNew
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
@@ -1353,6 +1358,69 @@ private function _MenuItemProperties pLine
    if not tChanged then return pLine
    return _Join(tTokens)
 end _MenuItemProperties
+
+-- T28: the properties of the message box ("the visible of msg", "set
+-- the loc of the message box to 18,30", "window " & quote & "Message" &
+-- quote), which this engine reads as the text in the message box and so
+-- stops with an error: the library's hcMessageBox("P") and
+-- hcSetMessageBox "P", V
+
+-- How many tokens from pAt name the message box (msg, message, message
+-- box, message window, window "message"), or 0
+private function _MessageBoxRef pTokens, pIdx, pAt
+   local tWord
+   put _T(pTokens, pIdx[pAt]) into tWord
+   if tWord is "the" and _T(pTokens, pIdx[pAt + 1]) is among the words of "msg message" then
+      return 1 + _MessageBoxRef(pTokens, pIdx, pAt + 1)
+   end if
+   if tWord is among the words of "msg message" then
+      if _T(pTokens, pIdx[pAt + 1]) is among the words of "box window" then return 2
+      return 1
+   end if
+   if tWord is among the words of "window wd" and _T(pTokens, pIdx[pAt + 1]) is among the items of (quote & "message" & quote & comma & quote & "message box" & quote & comma & quote & "msg" & quote) then return 2
+   return 0
+end _MessageBoxRef
+
+-- the P of the message box, in an expression (not after set, which
+-- _SetMessageBox rewrites): hcMessageBox("P")
+private function _MessageBoxProperties pLine
+   local tTokens, tCode, tIdx, n, tItem, i, tChanged, tRef
+   if "msg" is not in pLine and "message" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = n - 3 down to 1
+      if _T(tTokens, tIdx[i]) is "the" and _T(tTokens, tIdx[i - 1]) is not "set" \
+            and _T(tTokens, tIdx[i + 1]) is among the words of kMessageBoxProperties \
+            and _T(tTokens, tIdx[i + 2]) is "of" then
+         put _MessageBoxRef(tTokens, tIdx, i + 3) into tRef
+         if tRef > 0 then
+            _Replace tTokens, tIdx, i, i + 2 + tRef, "hcMessageBox(" & quote & _T(tTokens, tIdx[i + 1]) & quote & ")"
+            _Fire "T28 message box properties"
+            put true into tChanged
+         end if
+      end if
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _MessageBoxProperties
+
+-- set [the] P of the message box to V: hcSetMessageBox "P", V
+private function _SetMessageBox pTokens, pIdx, pAt, pEnd
+   local j, tProperty, tRef
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "the" then add 1 to j
+   put _T(pTokens, pIdx[j]) into tProperty
+   if tProperty is not among the words of kMessageBoxProperties or _T(pTokens, pIdx[j + 1]) is not "of" then return empty
+   put _MessageBoxRef(pTokens, pIdx, j + 2) into tRef
+   if tRef = 0 or _T(pTokens, pIdx[j + 2 + tRef]) is not "to" or j + 3 + tRef > pEnd then return empty
+   _Fire "T28 message box properties"
+   return "hcSetMessageBox" && quote & tProperty & quote & comma && _Span(pTokens, pIdx, j + 3 + tRef, pEnd)
+end _SetMessageBox
 
 -- The first code token from pFrom to pTo, outside parentheses, that is
 -- pWord followed by one of pNext (empty for any), or empty
