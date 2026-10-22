@@ -255,6 +255,28 @@ on hcDial pNumber, pModemCommands
    return "dial with modem is not supported"
 end hcDial
 
+-- start using and stop using a stack (rule T23), found as hcStackName
+-- finds the stack of a "go": a library stack beside this one, or on its
+-- disk image; one that cannot be found leaves the result set, where this
+-- engine stopped with an error
+on hcStartUsing pStack
+   local tStack
+   put hcStackName(pStack) into tStack
+   if tStack is empty then return "Can't find stack" && pStack
+   if word 1 of tStack is "stack" then
+      start using tStack
+   else
+      start using stack tStack
+   end if
+   return empty
+end hcStartUsing
+
+on hcStopUsing pStack
+   if there is not a stack pStack then return "Can't find stack" && pStack
+   stop using stack pStack
+   return empty
+end hcStopUsing
+
 ----------------------------------------------------------------------
 -- HyperCard 2.2's menus (rule T22)
 --

@@ -177,6 +177,12 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T22: set the checkMark of menuItem", line 4 of tScript is "  hcSetMenuItem " & q & "checkmark" & q & ", " & q & "Tools" & q & ", 1, true"
    TestAssert "T22: the checkMark of menuItem", line 5 of tScript is "  if hcMenuItem(" & q & "checkmark" & q & ", " & q & "Tools" & q & ", 1) then beep"
    TestAssert "T22: delete menuItem", line 6 of tScript is "  hcDeleteMenuItem " & q & "Tools" & q & ", 1"
+
+   put _Rewrite("on mouseUp", "  start using stack " & q & "Lib" & q, "  stop using stack tName", "  print card field " & q & "Notes" & q, "  print card 3", "end mouseUp") into tScript
+   TestAssert "T23: start using a stack", line 2 of tScript is "  hcStartUsing " & q & "Lib" & q
+   TestAssert "T23: stop using a stack", line 3 of tScript is "  hcStopUsing tName"
+   TestAssert "T24: print a field", line 4 of tScript is "  PrintField the long id of card field " & q & "Notes" & q
+   TestAssert "T24: print a card: unchanged", line 5 of tScript is "  print card 3"
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
@@ -513,5 +519,24 @@ on TestHyperCardScriptsBuiltIns
    put empty into gHCScriptsTest
    send "mouseUp" to button "Menus" of card 1 of stack tStack
    TestAssert "HyperCard menus: items, checkmarks, enabled, delete, menu messages", gHCScriptsTest is "true,false,Three...,Two,m2"
+
+   -- start using a stack HyperCard found by name, and one it could not
+   lock messages
+   create invisible stack "HCBuiltInsLib"
+   create button "Using" in card 1 of stack tStack
+   set the script of button "Using" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  start using stack " & q & "No Such Library" & q, \
+         "  put the result into gHCScriptsTest", \
+         "  start using stack " & q & "HCBuiltInsLib" & q, \
+         "  put comma & (" & q & "HCBuiltInsLib" & q & " is among the lines of the stacksInUse) after gHCScriptsTest", \
+         "  stop using stack " & q & "HCBuiltInsLib" & q, \
+         "  put comma & (" & q & "HCBuiltInsLib" & q & " is among the lines of the stacksInUse) after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Using" of card 1 of stack tStack
+   TestAssert "start using: a stack not found goes on with the result", gHCScriptsTest is "Can't find stack No Such Library,true,false"
+   _Close "HCBuiltInsLib"
    _Close tStack
 end TestHyperCardScriptsBuiltIns

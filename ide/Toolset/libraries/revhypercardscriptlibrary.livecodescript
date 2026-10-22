@@ -15,7 +15,7 @@ script "revHyperCardScriptLibrary"
 --
 -- 1. rewrites the HyperTalk forms below, outside string literals and
 --    comments, one token at a time (the rules are named T0 to T14 in the
---    log; T15 to T21 are below);
+--    log; T15 to T24 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
 --    and keeps those that compile, putting in place of each one that does
 --    not a handler of the same name that passes its message on, with the
@@ -30,7 +30,9 @@ script "revHyperCardScriptLibrary"
 -- that stop with an error here where HyperCard went on, or do something
 -- else, go to the library (T9 "go home", T16 "go" to a stack, T17 the
 -- cursor, T18 tabKey and the other key commands and "picture", T19 "show
--- card picture", T20 "fileName(", T21 "show", "hide" and "close window").
+-- card picture", T20 "fileName(", T21 "show", "hide" and "close window",
+-- T22 HyperCard 2.2's menus, T23 "start using" and "stop using" a stack,
+-- T24 "print" a field).
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -1088,7 +1090,7 @@ private function _PlayNotes pLine
    return pLine
 end _PlayNotes
 
--- T9 and T16 to T21: statements that stop with an error here where
+-- T9 and T16 to T24: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
@@ -1149,6 +1151,29 @@ private function _HyperCardRules pLine, pCompiled
          case "create"
          case "delete"
             put _MenuCommand(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "start"
+         case "stop"
+            -- T23: start and stop using a stack that is not open, which
+            -- the library finds as it finds the stack of a "go"
+            if _T(tTokens, tIdx[i + 1]) is "using" and _T(tTokens, tIdx[i + 2]) is "stack" and i + 3 <= tEnd then
+               _Fire "T23 start using a stack not open"
+               if tWord is "start" then
+                  put "hcStartUsing" && _Span(tTokens, tIdx, i + 3, tEnd) into tNew
+               else
+                  put "hcStopUsing" && _Span(tTokens, tIdx, i + 3, tEnd) into tNew
+               end if
+            end if
+            break
+         case "print"
+            -- T24: print a field, which HyperCard printed and this engine
+            -- does not (it prints cards): the library's PrintField
+            put i + 1 into j
+            if _T(tTokens, tIdx[j]) is among the words of "card cd background bkgnd bg" then add 1 to j
+            if _T(tTokens, tIdx[j]) is among the words of "field fld" and j < tEnd then
+               _Fire "T24 print a field"
+               put "PrintField the long id of" && _Span(tTokens, tIdx, i + 1, tEnd) into tNew
+            end if
             break
          case "show"
          case "hide"
