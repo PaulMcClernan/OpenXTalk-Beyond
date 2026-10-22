@@ -1,0 +1,233 @@
+# Copyright (C) 2026 OXT-Beyond contributors.
+#
+# This file is part of OXT-Beyond.
+#
+# OXT-Beyond is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License v3 as published by the Free
+# Software Foundation.
+#
+# OXT-Beyond is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
+
+
+# The web IDE (tools/web-ide) and the Stack Player (tools/web-player) on
+# the repository's GitHub Pages site, with a front page that links to both
+# (tools/pages/build_pages.py):
+#
+#   <site>/          the front page (tools/pages/index.html)
+#   <site>/ide/      the web IDE
+#   <site>/player/   the Stack Player
+#
+# Both are taken as a release ships them, from its files
+# OXT-Beyond-<version>-web-ide.zip and OXT-Beyond-<version>-web-player.zip,
+# so the site is always a released build and this workflow builds nothing.
+# The release is the input tag, or else the newest one that is not a draft
+# (prereleases count: every 0.2.7 build is one). A release with no web IDE
+# zip (those before it was a release file) takes the web IDE from the
+# artifact OXT-Beyond-web-ide of the input ide-run (a Web IDE run,
+# web-ide.yml, such as a pull request's), or else of the newest successful
+# Web IDE run on main; its IDE is a release's with that commit's scripts
+# over it. With neither, the site has the Stack Player alone, and the summary says
+# so.
+#
+# A build that is not released yet (a release dry run, or a Linux build of
+# the commit to be released) goes on the site with the input build-run: its
+# run id. Both zips are then taken from that run's artifacts
+# (release-dry-run, OXT-Beyond-linux-x86_64, OXT-Beyond-web-ide), the input
+# tag is not used, and a run that lacks either zip fails, so that a site
+# with both never loses one. The next release's run puts the released
+# files back.
+#
+# It runs when the Release workflow finishes well on a tag v<version> (a
+# release it published: that release goes on the site), and by hand
+# (Actions > Web pages > Run workflow). Releases are published with the
+# workflow's own token, which starts no "release" event, so it follows the
+# workflow instead. A dry run, which runs on a branch and publishes
+# nothing, starts nothing here, so a test build put on the site by hand
+# stays until the release. It needs GitHub Pages turned on with "GitHub Actions" as
+# its source (Settings > Pages); until then the deploy job fails and
+# nothing else is touched. It changes no release, package or build.
+
+name: Web pages
+
+on:
+  workflow_run:
+    workflows: [ Release ]
+    types: [ completed ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to put on the site (for example v0.2.7-rc.6.1); empty for the newest one
+        type: string
+        default: ''
+      build-run:
+        description: >-
+          A run whose artifacts hold both web zips, to put a build that is
+          not released yet on the site (a release dry run's, or a Linux
+          build's with a Web IDE run's); empty for a release
+        type: string
+        default: ''
+      ide-run:
+        description: >-
+          A Web IDE run (web-ide.yml) whose artifact OXT-Beyond-web-ide to
+          use when the release has no web IDE zip, for example a pull
+          request's run; empty for main's newest
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# One deploy at a time, and a newer one waits instead of cancelling one
+# that has started
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  site:
+    name: Build the site
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # the fallback's artifact from web-ide.yml
+      actions: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download the release's web files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # By hand, the input; after a release, its tag
+          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+          BUILD_RUN: ${{ inputs.build-run }}
+          IDE_RUN: ${{ inputs.ide-run }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          if [ -n "$BUILD_RUN" ]; then
+            for run in $BUILD_RUN $IDE_RUN; do
+              if ! [[ "$run" =~ ^[0-9]+$ ]]; then echo "::error::build-run and ide-run are run ids (digits)"; exit 1; fi
+              # The artifacts that can hold a web zip; gh fails only when
+              # none of them is in the run
+              gh run download "$run" --repo "$REPO" --dir "$RUNNER_TEMP/build-$run" \
+                --pattern release-dry-run --pattern OXT-Beyond-linux-x86_64 --pattern OXT-Beyond-web-ide
+            done
+            for kind in web-player web-ide; do
+              found=$(find "$RUNNER_TEMP"/build-* -name "OXT-Beyond-*-$kind.zip" | sort | head -n 1)
+              if [ -z "$found" ]; then
+                echo "::error::run $BUILD_RUN${IDE_RUN:+ (and $IDE_RUN)} has no OXT-Beyond-<version>-$kind.zip"
+                exit 1
+              fi
+              cp "$found" "$RUNNER_TEMP/dist/"
+            done
+            echo "TAG=run $BUILD_RUN (not released)" >> "$GITHUB_ENV"
+            echo "UNRELEASED=1" >> "$GITHUB_ENV"
+            ls -l "$RUNNER_TEMP/dist"
+            exit 0
+          fi
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release list --repo "$REPO" --exclude-drafts --limit 30 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]' | head -n 1)
+          fi
+          if [ -z "$TAG" ]; then echo "::error::no release to put on the site"; exit 1; fi
+          echo "Release: $TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          # One pattern at a time: gh refuses the whole download when a
+          # pattern matches nothing, and an older release has no web IDE zip
+          for pattern in '*-web-player.zip' '*-web-ide.zip'; do
+            gh release download "$TAG" --repo "$REPO" --pattern "$pattern" --dir "$RUNNER_TEMP/dist" ||
+              echo "$TAG has no $pattern"
+          done
+          ls -l "$RUNNER_TEMP/dist"
+
+      - name: Fall back to main's web IDE
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ inputs.ide-run }}
+        run: |
+          if compgen -G "$RUNNER_TEMP/dist/*-web-ide.zip" > /dev/null; then
+            echo "The release has its web IDE zip"
+            exit 0
+          fi
+          run=$RUN
+          if [ -n "$run" ] && ! [[ "$run" =~ ^[0-9]+$ ]]; then echo "::error::ide-run is a run id (digits)"; exit 1; fi
+          if [ -z "$run" ]; then
+            run=$(gh run list --repo "$REPO" --workflow web-ide.yml --branch main --event push --status success \
+                    --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          fi
+          if [ -n "$run" ] &&
+             gh run download "$run" --repo "$REPO" --name OXT-Beyond-web-ide --dir "$RUNNER_TEMP/ide-artifact"; then
+            (cd "$RUNNER_TEMP/ide-artifact" && sha256sum -c SHA256SUMS)
+            cp "$RUNNER_TEMP"/ide-artifact/*-web-ide.zip "$RUNNER_TEMP/dist/"
+            echo "IDE_FROM=Web IDE run $run" >> "$GITHUB_ENV"
+          elif [ -n "$RUN" ]; then
+            # Asked for by hand: a run without the artifact is a mistake, and
+            # deploying would take the web IDE off the site
+            echo "::error::Web IDE run $RUN has no artifact OXT-Beyond-web-ide (expired, or another workflow's run)"
+            exit 1
+          else
+            echo "::warning::no web IDE zip in $TAG or in main's Web IDE runs; the site has the Stack Player alone"
+          fi
+
+      - name: Build the site
+        run: |
+          args=()
+          ide=$(compgen -G "$RUNNER_TEMP/dist/*-web-ide.zip" | head -n 1 || true)
+          player=$(compgen -G "$RUNNER_TEMP/dist/*-web-player.zip" | head -n 1 || true)
+          if [ -n "$ide" ]; then
+            version=$(basename "$ide" -web-ide.zip); version=${version#OXT-Beyond-}
+            [ -n "${IDE_FROM:-}" ] && version="$version (with newer IDE scripts)"
+            [ -n "${UNRELEASED:-}" ] && version="$version (test build)"
+            args+=(--ide "$ide" --ide-version "$version")
+          fi
+          if [ -n "$player" ]; then
+            version=$(basename "$player" -web-player.zip); version=${version#OXT-Beyond-}
+            [ -n "${UNRELEASED:-}" ] && version="$version (test build)"
+            args+=(--player "$player" --player-version "$version")
+          fi
+          python3 tools/pages/build_pages.py --out "$RUNNER_TEMP/site" "${args[@]}"
+          describe() { if [ -n "$1" ]; then basename "$1"; else echo "not on the site"; fi; }
+          {
+            echo "Release: $TAG"
+            echo
+            echo "- Web IDE: $(describe "$ide")${ide:+${IDE_FROM:+, from $IDE_FROM}}"
+            echo "- Stack Player: $(describe "$player")"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4

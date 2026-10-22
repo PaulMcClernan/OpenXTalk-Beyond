@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+# Copyright (C) 2026 OXT-Beyond contributors.
+#
+# This file is part of OXT-Beyond.
+#
+# OXT-Beyond is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License v3 as published by the Free
+# Software Foundation.
+#
+# OXT-Beyond is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License
+# along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
+
+"""Make the GitHub Pages site (.github/workflows/pages.yml) from a release's
+web zips: the web IDE and the Stack Player, each in a folder of its own,
+with a front page that links to both.
+
+  python3 tools/pages/build_pages.py --out DIR
+      [--ide ZIP --ide-version V] [--player ZIP --player-version V]
+
+  DIR/index.html     the front page (tools/pages/index.html)
+  DIR/ide/           OXT-Beyond-<version>-web-ide.zip's site (tools/web-ide)
+  DIR/player/        OXT-Beyond-<version>-web-player.zip's site
+                     (tools/web-player)
+
+Each zip holds its site in one folder (StackPlayer/, or the web IDE's
+folder named after its zip); the folder with index.html is the one taken.
+The web IDE zip's local server and its notes (serve.py, Start Web IDE.bat,
+README.txt) are for running it on a computer, so they are left out. The
+sites are copied as they are: both ask for their engine with relative
+addresses and their own ?v= stamp, so they run from any folder, and the
+web engine uses no threads, so GitHub Pages needs no special headers.
+
+A part that is not given is left out, and the front page leaves out its
+card. GitHub Pages refuses a file over 100 MB, so a bigger one stops the
+build here, where the message says which file it is.
+"""
+
+import argparse
+import html
+import os
+import shutil
+import sys
+import tempfile
+import zipfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+LIMIT = 100 * 1000 * 1000
+LOCAL_ONLY = {'serve.py', 'Start Web IDE.bat', 'README.txt'}
+
+
+class BuildError(Exception):
+    pass
+
+
+def site_root(folder):
+    """The shallowest folder under folder that has index.html."""
+    found = []
+    for root, dirs, names in os.walk(folder):
+        if 'index.html' in names:
+            found.append(root)
+    if not found:
+        raise BuildError('no index.html in the zip')
+    found.sort(key=lambda p: (p.count(os.sep), p))
+    return found[0]
+
+
+def unpack(zip_path, target, drop=()):
+    with tempfile.TemporaryDirectory() as tmp:
+        with zipfile.ZipFile(zip_path) as z:
+            for info in z.infolist():
+                name = info.filename
+                if name.startswith('/') or '..' in name.replace('\\', '/').split('/'):
+                    raise BuildError('%s: unsafe name %r' % (zip_path, name))
+            z.extractall(tmp)
+        root = site_root(tmp)
+        shutil.copytree(root, target, ignore=lambda d, names:
+                        [n for n in names if d == root and n in drop])
+
+
+def check_sizes(folder):
+    for root, dirs, names in os.walk(folder):
+        for name in names:
+            path = os.path.join(root, name)
+            if os.path.getsize(path) > LIMIT:
+                raise BuildError('%s is %d bytes; GitHub Pages takes no file over 100 MB'
+                                 % (os.path.relpath(path, folder), os.path.getsize(path)))
+
+
+def front_page(out, parts):
+    with open(os.path.join(HERE, 'index.html'), encoding='utf-8') as f:
+        page = f.read()
+    for key in ('IDE', 'PLAYER'):
+        start, end = '<!-- @%s@ -->' % key, '<!-- /@%s@ -->' % key
+        if start not in page or end not in page:
+            raise BuildError('tools/pages/index.html has no %s ... %s' % (start, end))
+        version = parts.get(key)
+        if version is None:
+            page = page[:page.index(start)] + page[page.index(end) + len(end):]
+        else:
+            page = page.replace('@%s_VERSION@' % key, html.escape(version))
+    page = page.replace('<!-- @IDE@ -->', '').replace('<!-- /@IDE@ -->', '')
+    page = page.replace('<!-- @PLAYER@ -->', '').replace('<!-- /@PLAYER@ -->', '')
+    with open(os.path.join(out, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(page)
+
+
+def build(args):
+    if not args.ide and not args.player:
+        raise BuildError('nothing to put on the site: give --ide, --player or both')
+    out = os.path.abspath(args.out)
+    if os.path.exists(out) and os.listdir(out):
+        raise BuildError('%s is not empty' % out)
+    os.makedirs(out, exist_ok=True)
+    parts = {}
+    if args.ide:
+        unpack(args.ide, os.path.join(out, 'ide'), drop=LOCAL_ONLY)
+        parts['IDE'] = args.ide_version or ''
+    if args.player:
+        unpack(args.player, os.path.join(out, 'player'))
+        parts['PLAYER'] = args.player_version or ''
+    front_page(out, parts)
+    check_sizes(out)
+    for key, version in sorted(parts.items()):
+        print('%s: %s' % (key.lower(), version or '(no version given)'))
+    print('Site: %s' % out)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    ap.add_argument('--out', required=True, help='the site folder (new or empty)')
+    ap.add_argument('--ide', metavar='ZIP', help='OXT-Beyond-<version>-web-ide.zip')
+    ap.add_argument('--ide-version', metavar='V', help='shown on the front page')
+    ap.add_argument('--player', metavar='ZIP', help='OXT-Beyond-<version>-web-player.zip')
+    ap.add_argument('--player-version', metavar='V', help='shown on the front page')
+    args = ap.parse_args()
+    try:
+        build(args)
+    except (BuildError, zipfile.BadZipFile, OSError) as e:
+        print('build_pages.py: %s' % e, file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

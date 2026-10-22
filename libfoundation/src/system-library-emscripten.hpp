@@ -25,14 +25,16 @@
 
 /* The __MCSLibraryHandleEmscripten class stands for one of two things. A
  * handle made with an address notionally represents the main executable,
- * in which it finds no symbols. A handle made with a native path is one of
+ * in which it finds the symbols registered with MCSLibraryRegisterStaticMain
+ * (a browser cannot look a function up by name). A handle made with a
+ * native path is one of
  * the libraries that the web engine links into itself (a browser loads
- * none) and registers with MCSLibraryRegisterStatic: as on iOS
- * (system-library-static.hpp), the library is found by the name of its file
+ * none) and registers with MCSLibraryRegisterStatic: as in
+ * system-library-static.hpp, the library is found by the name of its file
  * without the folder and the extension, so "<folder>/revxml.so" finds the
  * library registered as "revxml", and its symbols are those it registered.
  * OXT-Beyond: the registry is new; before it, a handle made with a path
- * was never made. */
+ * was never made, and the main executable had no symbols. */
 
 #include <link.h>
 #include <sys/stat.h>
@@ -113,34 +115,43 @@ public:
             }
         }
         
+        /* Said in plain words: the library is not missing from a folder,
+         * the page cannot load one at all (only those linked into the
+         * engine and registered above exist here). */
         return __MCSLibraryThrowCreateWithNativePathFailed(p_native_path,
-                                                           nullptr);
+                                                           MCSTR("not linked into this web engine (a browser loads no native library)"));
     }
     
     bool CreateWithAddress(void *p_address)
     {
         m_defined = true;
+        m_main = true;
         return true;
     }
     
     void *LookupSymbol(MCStringRef p_symbol) const
     {
+        if (m_main)
+        {
+            for(const MCSLibraryStaticInfo *t_info = s_main_chain;
+                t_info != nullptr;
+                t_info = t_info->__next)
+            {
+                void *t_address = LookupSymbolIn(t_info, p_symbol);
+                if (t_address != nullptr)
+                {
+                    return t_address;
+                }
+            }
+            return nullptr;
+        }
+        
         if (m_static == nullptr)
         {
             return nullptr;
         }
         
-        for(size_t i = 0; m_static->exports[i].symbol != nullptr; i++)
-        {
-            if (MCStringIsEqualToCString(p_symbol,
-                                         m_static->exports[i].symbol,
-                                         kMCStringOptionCompareExact))
-            {
-                return m_static->exports[i].address;
-            }
-        }
-        
-        return nullptr;
+        return LookupSymbolIn(m_static, p_symbol);
     }
     
     bool CopyNativePath(MCStringRef& r_native_path) const
@@ -156,8 +167,20 @@ public:
     
     static void Register(MCSLibraryStaticInfo& p_info)
     {
+        AddToChain(s_chain, p_info);
+    }
+    
+    static void RegisterMain(MCSLibraryStaticInfo& p_info)
+    {
+        AddToChain(s_main_chain, p_info);
+    }
+
+private:
+    static void AddToChain(MCSLibraryStaticInfo *& x_chain,
+                           MCSLibraryStaticInfo& p_info)
+    {
         /* A library registered twice would make the chain a loop */
-        for(const MCSLibraryStaticInfo *t_info = s_chain;
+        for(const MCSLibraryStaticInfo *t_info = x_chain;
             t_info != nullptr;
             t_info = t_info->__next)
         {
@@ -167,20 +190,40 @@ public:
             }
         }
         
-        p_info.__next = s_chain;
-        s_chain = &p_info;
+        p_info.__next = x_chain;
+        x_chain = &p_info;
     }
-
-private:
+    
+    static void *LookupSymbolIn(const MCSLibraryStaticInfo *p_info,
+                                MCStringRef p_symbol)
+    {
+        for(size_t i = 0; p_info->exports[i].symbol != nullptr; i++)
+        {
+            if (MCStringIsEqualToCString(p_symbol,
+                                         p_info->exports[i].symbol,
+                                         kMCStringOptionCompareExact))
+            {
+                return p_info->exports[i].address;
+            }
+        }
+        
+        return nullptr;
+    }
+    
     bool m_defined = false;
+    /* Made with an address: the main executable (the engine) */
+    bool m_main = false;
     /* The registered library, if it is one */
     const MCSLibraryStaticInfo *m_static = nullptr;
     /* The path it was found by */
     MCStringRef m_native_path = nullptr;
     
     static MCSLibraryStaticInfo *s_chain;
+    /* The symbols of the main executable */
+    static MCSLibraryStaticInfo *s_main_chain;
 };
 
 MCSLibraryStaticInfo *__MCSLibraryHandleEmscripten::s_chain = nullptr;
+MCSLibraryStaticInfo *__MCSLibraryHandleEmscripten::s_main_chain = nullptr;
 
 typedef class __MCSLibraryHandleEmscripten __MCSLibraryHandle;

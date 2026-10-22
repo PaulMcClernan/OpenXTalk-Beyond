@@ -93,13 +93,21 @@ EM_JS(void, __MCFfiCallJS, (void *p_fn,
 	}
 
 	if (p_rvalue_type) {
-		// As in libffi, an integer smaller than a word is returned
-		// in a whole word.
+		// An integer smaller than a word is written byte by byte, in its
+		// own size: its slot need not be aligned to a word (a CBool's is
+		// one byte, at any address), and setValue writes a word at the
+		// word boundary below an unaligned address, which left the slot
+		// as it was. (OXT-Beyond: it was written as a word, as libffi
+		// returns it.)
 		var type = UTF8ToString(p_rvalue_type);
 		if (type == 'i8' || type == 'i16') {
-			type = 'i32';
+			var size = type == 'i8' ? 1 : 2;
+			for (var b = 0; b < size; ++b) {
+				setValue(x_rvalue + b, (result >> (8 * b)) & 0xff, 'i8');
+			}
+		} else {
+			setValue(x_rvalue, result, type);
 		}
-		setValue(x_rvalue, result, type);
 	}
 });
 

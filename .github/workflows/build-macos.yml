@@ -100,7 +100,7 @@ on:
       # Nothing that goes into this platform's build, packages or checks:
       # the Markdown files at the top of the repository, the changelog
       # fragments (changelog), GitHub's issue and pull request forms,
-      # the workflows and scripts that build nothing (screenshots branch,
+      # the workflows and scripts that build nothing (screenshots branch, Pages,
       # release, runtimes, tagging, checks by hand, the CI checks), and
       # what only the other platforms' builds use. A file that is not
       # listed builds; tools/ci/tests checks that no file a build workflow
@@ -118,6 +118,8 @@ on:
       - '.github/workflows/runtimes.yml'
       - '.github/workflows/tag-release.yml'
       - '.github/workflows/ui-tour.yml'
+      - '.github/workflows/pages.yml'
+      - 'tools/pages/**'
       - 'tools/ci/changelog.py'
       - 'tools/ci/ide_screenshots_branch.py'
       - 'tools/ci/release_assets.py'
@@ -1030,6 +1032,25 @@ jobs:
             --solve-ms 3000 --limit fill-and-prune=5000 --limit write-unlocked=20 \
             --limit try-digit-unlocked=25
 
+      # The build's debug symbols, so that a stop at start-up's sample of the
+      # engine names its frames (tools/ci/ui_tour.py, mac_symbolicate); a
+      # run goes on without them
+      - name: Download the debug symbols
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: actions/download-artifact@v8
+        with:
+          name: OXT-Beyond-mac-${{ matrix.arch }}-symbols
+          path: ${{ runner.temp }}/oxt-symbols
+
+      - name: Unpack the debug symbols
+        continue-on-error: true
+        run: |
+          cd "$RUNNER_TEMP/oxt-symbols"
+          tar -xJf OXT-Beyond-mac-${{ matrix.arch }}-symbols.tar.xz
+          echo "OXT_DSYM_DIR=$RUNNER_TEMP/oxt-symbols" >> "$GITHUB_ENV"
+          find . -maxdepth 2 -name '*.dSYM' | wc -l | tr -d ' ' | sed 's/$/ dSYM bundles/'
+
       # The IDE's own windows, as a user sees them with the Mac light and
       # dark: tools/ci/ui_tour.py starts the app's IDE with
       # tools/ci/ui-tour.livecodescript, which opens the palettes, the
@@ -1181,6 +1202,25 @@ jobs:
           done
           ditto "$mnt/OXT-Beyond.app" "$RUNNER_TEMP/oxt-test/OXT-Beyond.app"
           hdiutil detach "$mnt" || hdiutil detach -force "$mnt"
+
+      # The build's debug symbols, so that a stop at start-up's sample of the
+      # engine names its frames (tools/ci/ui_tour.py, mac_symbolicate); a
+      # run goes on without them
+      - name: Download the debug symbols
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: actions/download-artifact@v8
+        with:
+          name: OXT-Beyond-mac-arm64-symbols
+          path: ${{ runner.temp }}/oxt-symbols
+
+      - name: Unpack the debug symbols
+        continue-on-error: true
+        run: |
+          cd "$RUNNER_TEMP/oxt-symbols"
+          tar -xJf OXT-Beyond-mac-arm64-symbols.tar.xz
+          echo "OXT_DSYM_DIR=$RUNNER_TEMP/oxt-symbols" >> "$GITHUB_ENV"
+          find . -maxdepth 2 -name '*.dSYM' | wc -l | tr -d ' ' | sed 's/$/ dSYM bundles/'
 
       - name: IDE tour
         timeout-minutes: 15
