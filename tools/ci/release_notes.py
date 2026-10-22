@@ -158,6 +158,10 @@ The Stack Player: OXT-Beyond's web engine with a stack that opens any stack you 
 
 - `{root}-web-player.zip`: the Stack Player's folder.
 
+The web IDE: the OXT-Beyond IDE itself in a web page, run by its own engine built for the web, with the Script Editor, the Property Inspector, the Message Box, the Dictionary and the xTalk Academy. Extract the zip and, in its folder, double-click `Start Web IDE.bat` on Windows or run `python3 serve.py` on macOS and Linux (it needs Python 3); your browser then opens it at `http://localhost:8000/`. Or put the folder's files on any web server. Stacks you make are kept in the browser, and File > Download Stack gives you a copy. Experimental: building standalones and a few other things a browser cannot do are left out (see `tools/web-ide/README.md`).
+
+- `{root}-web-ide.zip`: the web IDE's folder, with its README.
+
 ## All platforms
 
 - `{root}-xtalk-sources.zip`: every file of the bundled xTalk Suite extensions as this release took it from their repositories, with the manifest that pins them, so that the release can be rebuilt without those repositories (see BUILDING.md, "xTalk Suite extensions").

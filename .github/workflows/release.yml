@@ -22,10 +22,19 @@
 #                                         symbols tar.xz
 #               OXT-Beyond-linux-arm64    the same, for 64-bit ARM Linux
 #             each with its own SHA256SUMS;
-#   publish   runs only when every job of the three builds has passed (or
-#             was not needed). It downloads those four artifacts, from
-#             this run or from main's build (not the logs or the
-#             per-architecture build outputs), builds the plugin packages
+#   web-ide   web-ide.yml, called as a reusable workflow with the input
+#             release once the Linux x86_64 package is there (built here or
+#             main's build of the commit): it builds the web IDE's engine
+#             from this commit and zips it with that package's IDE as the
+#             web IDE to download and run, uploaded as the artifact
+#               OXT-Beyond-web-ide        the web IDE zip
+#             with its own SHA256SUMS. It runs in every release: no build
+#             of main makes it (web-ide.yml's engine cache, keyed by the
+#             trees it is built from, usually spares the engine's build);
+#   publish   runs only when every job of the three builds and the web IDE
+#             has passed (or was not needed). It downloads those five
+#             artifacts, from this run or from main's build (not the logs
+#             or the per-architecture build outputs), builds the plugin packages
 #             for other xTalks' IDEs (tools/plugins), checks each against its
 #             SHA256SUMS and the release's file list, writes one combined
 #             SHA256SUMS (tools/ci/release_assets.py) and the release notes
@@ -352,15 +361,34 @@ jobs:
       build-number: ${{ needs.prepare.outputs.build-number }}
       release: true
 
+  # The web IDE zip, from this commit's web IDE engine and the release's
+  # own Linux x86_64 package: this run's, or main's build of the commit
+  # (linux-run) when the Linux build was skipped for it
+  web-ide:
+    name: Web IDE
+    needs: [prepare, linux]
+    if: >-
+      !cancelled() && needs.prepare.result == 'success' &&
+      (needs.linux.result == 'success' || (needs.linux.result == 'skipped' && needs.prepare.outputs.linux-run != ''))
+    permissions:
+      contents: read
+      # main's build's Linux package
+      actions: read
+    uses: ./.github/workflows/web-ide.yml
+    with:
+      release: true
+      linux-run: ${{ needs.prepare.outputs.linux-run }}
+
   # Runs only when every job of the three builds passed (the called
   # workflows' results cover all their jobs: the macOS tests after its
   # package, both Linux packages), or was skipped because main's build of
-  # the platform passed. The only job that may write.
+  # the platform passed, and the web IDE zip was made. The only job that
+  # may write.
   publish:
     name: ${{ needs.prepare.outputs.dry-run == 'true' && 'Assemble the release (dry run)' || 'Publish GitHub Release' }}
-    needs: [prepare, windows, linux, macos]
+    needs: [prepare, windows, linux, macos, web-ide]
     if: >-
-      !cancelled() && needs.prepare.result == 'success' &&
+      !cancelled() && needs.prepare.result == 'success' && needs.web-ide.result == 'success' &&
       (needs.windows.result == 'success' || (needs.windows.result == 'skipped' && needs.prepare.outputs.windows-run != '')) &&
       (needs.linux.result == 'success' || (needs.linux.result == 'skipped' && needs.prepare.outputs.linux-run != '')) &&
       (needs.macos.result == 'success' || (needs.macos.result == 'skipped' && needs.prepare.outputs.macos-run != ''))
@@ -418,6 +446,13 @@ jobs:
           path: ${{ runner.temp }}/artifacts/OXT-Beyond-linux-arm64
           run-id: ${{ needs.prepare.outputs.linux-run || github.run_id }}
           github-token: ${{ needs.prepare.outputs.linux-run != '' && github.token || '' }}
+
+      # Always this run's (the job web-ide)
+      - name: Download the web IDE zip
+        uses: actions/download-artifact@v8
+        with:
+          name: OXT-Beyond-web-ide
+          path: ${{ runner.temp }}/artifacts/OXT-Beyond-web-ide
 
       # The xTalk Assistant and the xTalk MCP Bridge as extension packages
       # for other xTalks' IDEs (LiveCode Community 9, HyperXTalk,

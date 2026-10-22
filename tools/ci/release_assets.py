@@ -30,6 +30,8 @@ after it, as actions/download-artifact writes a named artifact:
   OXT-Beyond-mac-universal  build-macos.yml, job "Package mac-universal"
   OXT-Beyond-linux-x86_64   build-linux.yml, job "Package linux-x86_64"
   OXT-Beyond-linux-arm64    build-linux.yml, job "Package linux-arm64"
+  OXT-Beyond-web-ide        web-ide.yml, job "Web IDE download" (called
+                            with the input release)
 
 and writes one more folder itself, before assemble:
 
@@ -129,6 +131,13 @@ ASSETS = (
     ('OXT-Beyond-plugins', 'plugins', (
         '-xtalk-assistant-plugin.lce',
         '-mcp-bridge-plugin.lce',
+    )),
+    # The web IDE (tools/web-ide) as a folder to run on one's own computer
+    # (its serve.py) or put on a web server: this commit's web IDE engine
+    # with the Linux x86_64 package's IDE (build_site.py --zip), built by
+    # web-ide.yml when release.yml calls it; added after 0.2.7-rc.6.1
+    ('OXT-Beyond-web-ide', 'web-ide', (
+        '-web-ide.zip',
     )),
 )
 

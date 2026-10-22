@@ -50,6 +50,28 @@ keeps some shortcuts for itself (Ctrl+W closes the tab, Ctrl+N and Ctrl+T
 open windows), so their menu items are picked with the mouse. The page asks
 before it is closed once the IDE has started.
 
+## Downloading it
+
+Releases carry the web IDE as `OXT-Beyond-<version>-web-ide.zip`, from
+the release after 0.2.7-rc.6.1 on. Extract it and, in its folder,
+double-click `Start Web IDE.bat` on Windows or run `python3 serve.py`
+on macOS and Linux: [serve.py](serve.py) serves the folder on this
+computer only, at `http://localhost:8000/` (`python3 serve.py 8080` for
+another port), and opens it in the browser. It needs Python 3 and
+nothing else. To put it on a web site instead, copy the folder's files
+to any web server (see "Serving it" below); serve.py and the `.bat` are
+not needed there. The zip's [README.txt](README.txt) says the same for
+the people who download it.
+
+The release's zip is made by `.github/workflows/web-ide.yml` when
+`.github/workflows/release.yml` calls it: the web IDE's engine built
+from the release's commit, with the IDE of the release's own Linux
+x86_64 package as it is (`build_site.py --zip`). Every other run of
+`web-ide.yml` (a pull request or a push to main that changes the web
+IDE, or a run by hand) makes the same zip, from the newest release's
+IDE with the commit's scripts over it, as the artifact
+`OXT-Beyond-web-ide`, which the run's summary links.
+
 ## How it is put together
 
 | Part | Where |
@@ -58,6 +80,7 @@ before it is closed once the IDE has started.
 | The IDE's web branches | `revEnvironmentIsWeb()` in `ide/Toolset/home.livecodescript`, and the library `revWebIDELibrary`, which Home loads only on the web |
 | The page | [index.html](index.html) |
 | The site | [build_site.py](build_site.py): the page, the engine and `ide.zip` (the IDE, which the engine unpacks into `/boot`) |
+| The download | `build_site.py --zip`: the site in one folder, with [serve.py](serve.py), [Start Web IDE.bat](Start%20Web%20IDE.bat) and [README.txt](README.txt) |
 
 Every change to the engine for the web IDE is in code that only the web
 engine compiles, and every change to the IDE's scripts asks
@@ -88,6 +111,9 @@ python3 tools/web-ide/build_site.py --install <installed OXT-Beyond> \
     --engine build-emscripten/livecode/out/Release --out web-ide-site --repo .
 ```
 
+Add `--zip OXT-Beyond-<version>-web-ide.zip` to also write the
+download zip (the zip goes outside the site's folder).
+
 ## Serving it
 
 The site is static files. Any web server can serve it, with `.wasm` served
@@ -97,6 +123,9 @@ address. To try it on your own computer:
 ```sh
 cd web-ide-site && python3 -m http.server 8000
 ```
+
+(or run `python3 tools/web-ide/serve.py` from a copy of it in the site's
+folder, as the download zip has it)
 
 and open `http://localhost:8000/`. The first visit downloads about 59 MB
 (the engine and the IDE), which the browser then keeps in its cache. The
