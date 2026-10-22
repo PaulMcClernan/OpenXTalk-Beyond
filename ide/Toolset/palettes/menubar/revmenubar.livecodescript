@@ -1440,7 +1440,7 @@ private function revMenubarToolsMenu pContext
    put "-" & return after tTools
    put toggleMenuItem("&Tools Palette/T", revIDEPaletteIsVisible("tools")) & return after tTools
    -- OXT-Beyond: the modern Tools palette keeps its own sections
-   if revIDEGetPreference("revTools_look") is "modern" and there is a stack "revTools" then
+   if revIDEGetPreference("revTools_look") is not "classic" and there is a stack "revTools" then
       -- (dispatch function puts "handled" in it, and the sections in the result)
       dispatch function "tmShownSections" to stack "revTools"
       put toggleMenuItem("&Paint and Draw Tools", "paint" is among the items of the result) & return after tTools
@@ -1448,7 +1448,7 @@ private function revMenubarToolsMenu pContext
       put toggleMenuItem("&Paint and Draw Tools", "paint" is among the items of revIDEGetPreference("revTools_show")) & return after tTools
    end if
    -- OXT-Beyond: the Tools palette in the look of Learn (revtools.livecodescript)
-   put toggleMenuItem("Modern Tools Palette", revIDEGetPreference("revTools_look") is "modern") & return after tTools
+   put toggleMenuItem("Modern Tools Palette", revIDEGetPreference("revTools_look") is not "classic") & return after tTools
    put "-" & return after tTools
    put toggleMenuItem("Project Browser/^@P", revIDEPaletteIsVisible("project browser")) & return after tTools -- tperry, 21-12-23 added shortcut for project browser
    put toggleMenuItem("&Message Box/M", revIDEPaletteIsVisible("message box")) & return after tTools
@@ -2685,15 +2685,16 @@ on revMenubarToolsMenuPick pWhich
          break
       case "paint and draw tools"
          -- OXT-Beyond: the modern Tools palette keeps its own sections
-         if revIDEGetPreference("revTools_look") is "modern" and there is a stack "revTools" then
+         if revIDEGetPreference("revTools_look") is not "classic" and there is a stack "revTools" then
             dispatch "tmToggleSection" to stack "revTools" with "paint"
          else
             revIDETogglePaintAndDrawTools
          end if
          break
       case "Modern Tools Palette"
-         -- the palette follows the preference (idePreferenceChanged)
-         if revIDEGetPreference("revTools_look") is "modern" then
+         -- the palette follows the preference (idePreferenceChanged); the
+         -- modern look is the default, with the preference still empty
+         if revIDEGetPreference("revTools_look") is not "classic" then
             revIDESetPreference "revTools_look", "classic"
          else
             revIDESetPreference "revTools_look", "modern"

@@ -264,4 +264,16 @@ bool MCCefPlatformGetHiDPIEnabled()
     return false;
 }
 
+// OXT-Beyond: [[ HiDPI ]] The engine's scale from points to the screen's
+// pixels (lnxdc.cpp), weak so that an engine without the desktop's display
+// code (the server engine, which never makes a browser) still links.
+extern "C" double MCLinuxGetBrowserDeviceScale(void) __attribute__((weak));
+
+double MCCefPlatformGetDeviceScaleFactor()
+{
+	if (MCLinuxGetBrowserDeviceScale == nullptr)
+		return 1.0;
+	return MCLinuxGetBrowserDeviceScale();
+}
+
 ////////////////////////////////////////////////////////////////////////////////

@@ -967,13 +967,13 @@ jobs:
           apt=(sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30)
           retry "${apt[@]}" update
           # mplayer, Xvfb and xauth: the browser and player check; the
-          # window managers, xdotool, xwininfo (x11-utils) and ImageMagick:
-          # the browser window manager check; the Adwaita GTK 2 themes, light
+          # window managers (mutter: GNOME's), xdotool, xwininfo (x11-utils)
+          # and ImageMagick: the browser window manager check; the Adwaita GTK 2 themes, light
           # and dark, as a desktop has them: the IDE screenshots; python3-xlib:
           # the clipboard check's clipboard manager; xsettingsd and the
           # DejaVu fonts: the HiDPI check's settings manager and its text
           pkgs=(desktop-file-utils shared-mime-info xz-utils mplayer xvfb xauth
-                xfwm4 openbox xdotool x11-utils imagemagick
+                xfwm4 openbox mutter xdotool x11-utils imagemagick
                 gnome-themes-extra gtk2-engines-pixbuf python3-xlib
                 xsettingsd fonts-dejavu-core)
           while read -r soname use deb rpm rest; do
@@ -1216,10 +1216,13 @@ jobs:
           python3 tools/ci/hidpi_check.py --engine "$OXT_ROOT/Runtime/Linux/$folder/Standalone" \
             --log "$RUNNER_TEMP/logs/hidpi-check.log" --shots "$RUNNER_TEMP/logs/hidpi-shots"
 
-      # The browser widget in a standalone under xfwm4 and openbox: the page
-      # is on the screen in a new stack, a stack opened again and a second
-      # stack, and the keys go to a field of the stack, not on to the
-      # browser (tools/ci/browser_wm_check.py)
+      # The browser widget in a standalone under xfwm4, openbox and mutter,
+      # and under mutter at a desktop scale of 2 too: the page is on the
+      # screen in a new stack, a stack opened again, a second stack and that
+      # stack at a scaleFactor of 2, it is drawn at the desktop's scale, a
+      # click into it lets its text box be typed into, and otherwise the
+      # keys go to a field of the stack, not on to the browser
+      # (tools/ci/browser_wm_check.py)
       - name: Browser window manager check
         if: ${{ !cancelled() && env.OXT_ROOT != '' && matrix.arch == 'x86_64' }}
         timeout-minutes: 15

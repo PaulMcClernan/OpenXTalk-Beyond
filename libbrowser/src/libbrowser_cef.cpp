@@ -16,6 +16,7 @@
 
 #include <core.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "libbrowser_cef.h"
@@ -295,13 +296,43 @@ public:
 	{
 		if (MCCefPlatformGetHiDPIEnabled())
 			p_command_line->AppendSwitch(MC_CEF_HIDPI_SWITCH);
+#if defined(TARGET_PLATFORM_LINUX)
+		AppendDeviceScaleFactor(p_command_line);
+#endif
 	}
 	
 	virtual void OnBeforeCommandLineProcessing(const CefString &p_process_type, CefRefPtr<CefCommandLine> p_command_line) OVERRIDE
 	{
 		// Enable WebRTC
 		p_command_line->AppendSwitch("enable-media-stream");
+#if defined(TARGET_PLATFORM_LINUX)
+		AppendDeviceScaleFactor(p_command_line);
+#endif
 	}
+	
+#if defined(TARGET_PLATFORM_LINUX)
+	// OXT-Beyond: [[ HiDPI ]] CEF on Linux takes no scale from the desktop (a
+	// Chromium of its own gets it from GTK), so on a desktop at 200% the
+	// browser's window had the right size and the page in it was drawn at
+	// half the size of the rest of the stack. Where the engine scales its
+	// windows (MCLinuxGetLogicalToScreenScale), CEF now draws at that scale,
+	// as Chromium does on Windows and macOS: CSS pixels stay the stack's
+	// points. The renderer and GPU processes are given the switch too. At a
+	// scale of 1 nothing is added, as before.
+	static void AppendDeviceScaleFactor(CefRefPtr<CefCommandLine> p_command_line)
+	{
+		static const char kForceDeviceScaleFactor[] = "force-device-scale-factor";
+		
+		double t_scale;
+		t_scale = MCCefPlatformGetDeviceScaleFactor();
+		if (t_scale <= 1.0 || p_command_line->HasSwitch(kForceDeviceScaleFactor))
+			return;
+		
+		char t_value[32];
+		snprintf(t_value, sizeof(t_value), "%g", t_scale);
+		p_command_line->AppendSwitchWithValue(kForceDeviceScaleFactor, t_value);
+	}
+#endif
 
 	IMPLEMENT_REFCOUNTING(MCCefBrowserApp);
 };
@@ -946,6 +977,18 @@ public:
 			
 			return true;
 		}
+#if defined(TARGET_PLATFORM_LINUX)
+		else if (t_message_name == MC_CEFMSG_TAKE_FOCUS)
+		{
+			// The page was clicked: give the browser the keyboard, as CEF
+			// does itself only under some window managers (see
+			// MCCefRenderApp::OnContextCreated). OnSetFocus lets this one
+			// through (FOCUS_SOURCE_SYSTEM).
+			if (m_owner != nil && p_browser != nil)
+				p_browser->GetHost()->SetFocus(true);
+			return true;
+		}
+#endif
 		
 		return CefClient::OnProcessMessageReceived(p_browser, p_source_process, p_message);
 	}
@@ -1313,8 +1356,8 @@ public:
 	// message box) got no more key presses on window managers that do not set
 	// the focus again on a click into the window they think is active already
 	// (xfwm4, Mutter and others). The browser still takes the focus when it is
-	// clicked (FOCUS_SOURCE_SYSTEM), and the engine takes it back when one of
-	// its windows is clicked (MCScreenDC, lnxdclnx.cpp).
+	// clicked (FOCUS_SOURCE_SYSTEM: MC_CEFMSG_TAKE_FOCUS), and the engine takes
+	// it back when one of its windows is clicked (MCScreenDC, lnxdclnx.cpp).
 	virtual bool OnSetFocus(CefRefPtr<CefBrowser> p_browser, FocusSource p_source) OVERRIDE
 	{
 #if defined(TARGET_PLATFORM_LINUX)

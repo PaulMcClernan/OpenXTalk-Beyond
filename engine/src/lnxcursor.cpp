@@ -162,6 +162,41 @@ MCCursorRef MCScreenDC::createcursor(MCImageBitmap *p_image, int2 p_xhot, int2 p
 {
 	if (p_image == nil)
         return nil;
+	
+	// OXT-Beyond: [[ HiDPI ]] An X cursor is in the screen's pixels, so on a
+	// desktop at 200% a cursor made from an image (the IDE's pointing hand and
+	// grab hand, any image a script sets the cursor to) came out at half the
+	// size of the desktop's own cursors, which the cursor theme draws at the
+	// desktop's size. Such an image is now scaled by the stacks' scale, as
+	// far as the largest cursor the display allows, its hot spot with it.
+	// Nearest-neighbour, as an image larger than that size is scaled down
+	// (MCImage::createcursor), so its pixels stay sharp. At a scale of 1 the
+	// image is used as it is, as before.
+	MCImageBitmap *t_scaled = nil;
+	MCGFloat t_scale;
+	t_scale = MCLinuxGetLogicalToScreenScale();
+	if (t_scale > 1.0 && p_image->width > 0 && p_image->height > 0)
+	{
+		uint32_t t_largest_side;
+		t_largest_side = MCMax(p_image->width, p_image->height);
+		if (t_largest_side * t_scale > MCcursormaxsize)
+			t_scale = MCcursormaxsize / (MCGFloat)t_largest_side;
+		
+		if (t_scale > 1.0)
+		{
+			uindex_t t_width, t_height;
+			t_width = (uindex_t)(p_image->width * t_scale);
+			t_height = (uindex_t)(p_image->height * t_scale);
+			if (MCImageScaleBitmap(p_image, t_width, t_height, INTERPOLATION_NEAREST, t_scaled))
+			{
+				p_image = t_scaled;
+				p_xhot = (int2)(p_xhot * t_scale);
+				p_yhot = (int2)(p_yhot * t_scale);
+			}
+			else
+				t_scaled = nil;
+		}
+	}
 		
 	// Create a pixbuf from the image data
     GdkPixbuf *t_cursor_pixbuf;
@@ -174,6 +209,10 @@ MCCursorRef MCScreenDC::createcursor(MCImageBitmap *p_image, int2 p_xhot, int2 p
     
     // We don't need the pixmap any more
     g_object_unref(t_cursor_pixbuf);
+    
+    // Nor the scaled image (GDK has copied the pixels into the cursor)
+    if (t_scaled != nil)
+        MCImageFreeBitmap(t_scaled);
     
 	return create_cursor(PI_NONE, t_cursor);
 }
