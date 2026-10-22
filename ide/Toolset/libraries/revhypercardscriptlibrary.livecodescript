@@ -15,7 +15,7 @@ script "revHyperCardScriptLibrary"
 --
 -- 1. rewrites the HyperTalk forms below, outside string literals and
 --    comments, one token at a time (the rules are named T0 to T14 in the
---    log; T15 to T28 are below);
+--    log; T15 to T29 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
 --    and keeps those that compile, putting in place of each one that does
 --    not a handler of the same name that passes its message on, with the
@@ -34,7 +34,8 @@ script "revHyperCardScriptLibrary"
 -- T22 HyperCard 2.2's menus, T23 "start using" and "stop using" a stack,
 -- T24 "print" a field, T25 "go" to a destination given by an expression,
 -- T26 the properties of picture and palette windows, T27 "doMenu" with
--- the item's name not in quotes, T28 the properties of the message box).
+-- the item's name not in quotes, T28 the properties of the message box,
+-- T29 HyperCard the application: its name and version, send to it).
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -606,7 +607,9 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       repeat with i = 1 to tCount
          if tRenameHandlers["domenu"] is not empty then put _RouteDoMenu(tLines[i]) into tLines[i]
          put _VersionRule(tLines[i]) into tLines[i]
-         if tCovered[i] then put _HyperCardRules(tLines[i], true) into tLines[i]
+      end repeat
+      repeat with i = 1 to tSpanCount
+         _HyperCardRulesLines tLines, tSpans[i]["start"], tSpans[i]["end"], true
       end repeat
       return _JoinLines(tLines, tCount)
    end if
@@ -631,9 +634,9 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       end repeat
       repeat with tKey = tSpans[i]["start"] to tSpans[i]["end"]
          put _RewriteLine(tLines[tKey], tVars, tRename, pExternals, tRenameHandlers) into tLines[tKey]
-         put _HyperCardRules(tLines[tKey], false) into tLines[tKey]
       end repeat
       _ContinuedCommands tLines, tSpans[i]["start"], tSpans[i]["end"]
+      _HyperCardRulesLines tLines, tSpans[i]["start"], tSpans[i]["end"], false
    end repeat
    return _JoinLines(tLines, tCount)
 end _Rewrite
@@ -668,6 +671,38 @@ private command _ContinuedCommands @pLines, pStart, pEnd
       put j + 1 into i
    end repeat
 end _ContinuedCommands
+
+-- _HyperCardRules on the lines pStart to pEnd, a statement continued
+-- over lines taken whole ("put ... after menuItem ... of menu M \" and
+-- "with menuMsg ..." on the next line): when a rule rewrites it, it is put
+-- on its first line and the lines it took after that are left empty, as
+-- _ContinuedCommands does
+private command _HyperCardRulesLines @pLines, pStart, pEnd, pCompiled
+   local i, j, k, tMerged, tNew
+   put pStart into i
+   repeat while i <= pEnd
+      if char -1 of word 1 to -1 of _CodeText(pLines[i]) is not "\" then
+         put _HyperCardRules(pLines[i], pCompiled) into pLines[i]
+         add 1 to i
+         next repeat
+      end if
+      put pLines[i] into tMerged
+      put i into j
+      repeat while j < pEnd and char -1 of word 1 to -1 of _CodeText(pLines[j]) is "\"
+         put _WithoutContinuation(tMerged) into tMerged
+         add 1 to j
+         put space & word 1 to -1 of pLines[j] after tMerged
+      end repeat
+      put _HyperCardRules(tMerged, pCompiled) into tNew
+      if tNew is not tMerged then
+         put tNew into pLines[i]
+         repeat with k = i + 1 to j
+            put empty into pLines[k]
+         end repeat
+      end if
+      put j + 1 into i
+   end repeat
+end _HyperCardRulesLines
 
 -- A line without the \ that continues it (the last one, outside strings
 -- and comments)
@@ -1103,7 +1138,7 @@ private function _PlayNotes pLine
    return pLine
 end _PlayNotes
 
--- T9 and T16 to T28: statements that stop with an error here where
+-- T9 and T16 to T29: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
@@ -1114,6 +1149,7 @@ private function _HyperCardRules pLine, pCompiled
    if char -1 of word 1 to -1 of _CodeText(pLine) is "\" then return pLine
    put _MenuItemProperties(pLine) into pLine
    put _MessageBoxProperties(pLine) into pLine
+   put _HyperCardObject(pLine) into pLine
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
    put 0 into n
@@ -1204,6 +1240,14 @@ private function _HyperCardRules pLine, pCompiled
          case "hide"
          case "close"
             put _ShowHide(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "send"
+            -- T29: send ... to HyperCard, the application, which had the
+            -- message's built-in handler: hcSendToHyperCard
+            if tEnd > i + 2 and _T(tTokens, tIdx[tEnd]) is "hypercard" and _T(tTokens, tIdx[tEnd - 1]) is "to" then
+               _Fire "T29 HyperCard the application"
+               put "hcSendToHyperCard" && _Span(tTokens, tIdx, i + 1, tEnd - 2) into tNew
+            end if
             break
          case "domenu"
          case "hcdomenu"
@@ -1422,6 +1466,50 @@ private function _SetMessageBox pTokens, pIdx, pAt, pEnd
    return "hcSetMessageBox" && quote & tProperty & quote & comma && _Span(pTokens, pIdx, j + 3 + tRef, pEnd)
 end _SetMessageBox
 
+-- T29: HyperCard, the application, as an object: "the long name of
+-- HyperCard" (its path, which scripts take apart for the folder of their
+-- stacks), "the version of HyperCard"; here an object of that name is not
+-- found. hcHyperCardName("long"), hcVersion(), hcLongVersion()
+private function _HyperCardObject pLine
+   local tTokens, tCode, tIdx, n, tItem, i, tChanged, tForm
+   if "hypercard" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = n down to 4
+      if _T(tTokens, tIdx[i]) is not "hypercard" or _T(tTokens, tIdx[i - 1]) is not "of" then next repeat
+      if _T(tTokens, tIdx[i - 2]) is "name" then
+         put empty into tForm
+         if _T(tTokens, tIdx[i - 3]) is among the words of "long short abbr abbrev abbreviated" then put _T(tTokens, tIdx[i - 3]) into tForm
+         if tForm is not empty and _T(tTokens, tIdx[i - 4]) is "the" then
+            _Replace tTokens, tIdx, i - 4, i, "hcHyperCardName(" & quote & tForm & quote & ")"
+         else if tForm is empty and _T(tTokens, tIdx[i - 3]) is "the" then
+            _Replace tTokens, tIdx, i - 3, i, "hcHyperCardName(" & quote & quote & ")"
+         else
+            next repeat
+         end if
+      else if _T(tTokens, tIdx[i - 2]) is "version" then
+         if _T(tTokens, tIdx[i - 3]) is "long" and _T(tTokens, tIdx[i - 4]) is "the" then
+            _Replace tTokens, tIdx, i - 4, i, "hcLongVersion()"
+         else if _T(tTokens, tIdx[i - 3]) is "the" then
+            _Replace tTokens, tIdx, i - 3, i, "hcVersion()"
+         else
+            next repeat
+         end if
+      else
+         next repeat
+      end if
+      _Fire "T29 HyperCard the application"
+      put true into tChanged
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _HyperCardObject
+
 -- The first code token from pFrom to pTo, outside parentheses, that is
 -- pWord followed by one of pNext (empty for any), or empty
 private function _FindWord pTokens, pIdx, pFrom, pTo, pWord, pNext
@@ -1494,20 +1582,20 @@ private function _PutIntoMenu pTokens, pIdx, pAt, pEnd
    if tPrep is empty or tPrep + 2 > pEnd then return empty
    put "empty" into tMessages
    put "empty" into tItem
+   -- with menuMsgs X, after the menu or the item
+   put _FindWord(pTokens, pIdx, tPrep + 2, pEnd, "with", "menumsg menumsgs menumessage menumessages") into tWith
+   if tWith is not empty then
+      if tWith + 2 > pEnd or tWith = tPrep + 2 then return empty
+      put _Span(pTokens, pIdx, tWith + 2, pEnd) into tMessages
+      put tWith - 1 into pEnd
+   end if
    if _T(pTokens, pIdx[tPrep + 1]) is "menuitem" then
       put _FindWord(pTokens, pIdx, tPrep + 2, pEnd, "of", "menu") into tMenu
       if tMenu is empty or tMenu = tPrep + 2 or tMenu + 2 > pEnd then return empty
       put _Span(pTokens, pIdx, tPrep + 2, tMenu - 1) into tItem
       put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else
-      put _FindWord(pTokens, pIdx, tPrep + 2, pEnd, "with", "menumsg menumsgs menumessage menumessages") into tWith
-      if tWith is empty then
-         put _Span(pTokens, pIdx, tPrep + 2, pEnd) into tMenu
-      else
-         if tWith + 2 > pEnd or tWith = tPrep + 2 then return empty
-         put _Span(pTokens, pIdx, tPrep + 2, tWith - 1) into tMenu
-         put _Span(pTokens, pIdx, tWith + 2, pEnd) into tMessages
-      end if
+      put _Span(pTokens, pIdx, tPrep + 2, pEnd) into tMenu
    end if
    _Fire "T22 HyperCard menus"
    return "hcPutIntoMenu" && _Span(pTokens, pIdx, pAt + 1, tPrep - 1) & comma && quote & _T(pTokens, pIdx[tPrep]) & quote & comma && tMenu & comma && tMessages & comma && tItem

@@ -211,6 +211,17 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T28: set loc of msg", line 5 of tScript is "  hcSetMessageBox " & q & "loc" & q & ", x"
    TestAssert "T28: the length of msg: unchanged", line 6 of tScript is "  put the length of msg into n"
    TestAssert "T28: another window: unchanged", line 7 of tScript is "  put the rect of window " & q & "Map" & q & " into r"
+
+   put _Rewrite("on mouseUp", "  put " & q & "Again" & q & " after menuItem " & q & "Find" & q & " of menu " & q & "Go" & q & " \", "    with menuMessages " & q & "StartSearch" & q, "  beep", "end mouseUp") into tScript
+   TestAssert "T22: a statement continued over lines, taken whole", line 2 of tScript is "  hcPutIntoMenu " & q & "Again" & q & ", " & q & "after" & q & ", " & q & "Go" & q & ", " & q & "StartSearch" & q & ", " & q & "Find" & q
+   TestAssert "T22: its second line left empty, the lines after it kept", line 3 of tScript is empty and line 4 of tScript is "  beep"
+
+   put _Rewrite("on mouseUp", "  put lastItem(the long name of HyperCard) into h", "  if the version of HyperCard < 2 then beep", "  send " & q & "doMenu Copy Text" & q & " to HyperCard", "  put the name of HyperCard into n", "  send " & q & "mouseUp" & q & " to me", "end mouseUp") into tScript
+   TestAssert "T29: the long name of HyperCard", line 2 of tScript is "  put lastItem(hcHyperCardName(" & q & "long" & q & ")) into h"
+   TestAssert "T29: the version of HyperCard", line 3 of tScript is "  if hcVersion() < 2 then beep"
+   TestAssert "T29: send to HyperCard", line 4 of tScript is "  hcSendToHyperCard " & q & "doMenu Copy Text" & q
+   TestAssert "T29: the name of HyperCard", line 5 of tScript is "  put hcHyperCardName(" & q & q & ") into n"
+   TestAssert "T29: send to an object: unchanged", line 6 of tScript is "  send " & q & "mouseUp" & q & " to me"
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsFix
@@ -349,6 +360,7 @@ on TestHyperCardScriptsStandIns
    put "HCStandIns" & the milliseconds into tStack
    lock messages
    create invisible stack tStack
+   set the uHyperCard["imagepath"] of stack tStack to "Old Disk:Stacks:Main"
    set the defaultStack to tStack
    create button "B"
    set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", \
@@ -368,6 +380,7 @@ on TestHyperCardScriptsStandIns
    set the script of button "Volume" to _Lines("on mouseUp", "  global gHCScriptsTest", \
          "  put volume(4) into gHCScriptsTest", \
          "  put comma & volume(9) & comma & SndVolume() after gHCScriptsTest", \
+         "  put comma & hcHyperCardName(" & quote & "long" & quote & ") & comma & hcHyperCardName(" & quote & quote & ") after gHCScriptsTest", \
          "  put comma & objectExists(" & quote & "button " & quote & " & quote & " & quote & "Volume" & quote & " & quote) & comma & objectExists(" & quote & "button 99" & quote & ") & comma & objectExists(" & quote & "no such thing" & quote & ") after gHCScriptsTest", \
          "  put the loc of msg into tOldLoc", \
          "  set the loc of msg to 18,30", \
@@ -383,7 +396,7 @@ on TestHyperCardScriptsStandIns
    TestAssert "MaxDepth, NewMenu, DeleteMenu, ShowMenu, HCBalloon query, Dialoger", gHCScriptsTest is "true,1,2,,HyperCard menus are not supported yet,false,The Dialoger external is not supported"
    put empty into gHCScriptsTest
    send "mouseUp" to button "Volume" of stack tStack
-   TestAssert "volume and SndVolume keep the level; objectExists; the message box's properties; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4,true,false,false,true,true"
+   TestAssert "volume and SndVolume keep the level; objectExists; the message box's properties; cHCcolorize and cHCunColorize do nothing", gHCScriptsTest is "7,4,4,Old Disk:Stacks:HyperCard,HyperCard,true,false,false,true,true"
    send "mouseEnter" to button "Balloon" of stack tStack
    TestAssert "HCBalloon: balloons off, no tooltip", the toolTip of button "Balloon" of stack tStack is empty
    send "HCBalloon" && quote & "on" & quote to button "B" of stack tStack

@@ -44,6 +44,53 @@ function hcSuspended
    return false
 end hcSuspended
 
+-- HyperCard's name (rule T29): "HyperCard", or with pForm "long" its
+-- path as HyperCard gave it, a Mac path with colons. Scripts take the
+-- folder from it and add a stack's name, so it is put in the folder the
+-- stack was imported from (on its disk image, the folder there), where
+-- "go" finds the stacks beside it by their names
+function hcHyperCardName pForm
+   local tSet, tFolder
+   if pForm is not "long" then
+      return "HyperCard"
+   end if
+   put the customProperties["uHyperCard"] of me into tSet
+   if tSet["imagepath"] is not empty then
+      set the itemDelimiter to ":"
+      put item 1 to -2 of tSet["imagepath"] into tFolder
+   else if tSet["file"] is not empty then
+      set the itemDelimiter to slash
+      put item 1 to -2 of tSet["file"] into tFolder
+      replace slash with ":" in tFolder
+      if char 1 of tFolder is ":" then
+         delete char 1 of tFolder
+      end if
+   else
+      put "HyperCard" into tFolder
+   end if
+   return tFolder & ":HyperCard"
+end hcHyperCardName
+
+-- send message to HyperCard (rule T29): the message's built-in handler,
+-- passing the stack's own; "doMenu Copy Text", the item not in quotes,
+-- as HyperCard read it
+on hcSendToHyperCard pMessage
+   local tItem
+   if word 1 of pMessage is "doMenu" then
+      put word 2 to -1 of pMessage into tItem
+      if char 1 of tItem is quote and char -1 of tItem is quote then delete char 1 of tItem
+      if char -1 of tItem is quote then delete char -1 of tItem
+      doMenu tItem
+      return the result
+   end if
+   try
+      do pMessage
+   catch tError
+      return "Can't understand" && pMessage
+   end try
+   return the result
+end hcSendToHyperCard
+
 -- reset menubar put HyperCard's own menus back; there are none here
 on hcResetMenubar
 end hcResetMenubar
