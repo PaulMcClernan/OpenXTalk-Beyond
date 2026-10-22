@@ -29,9 +29,10 @@
 # The release is the input tag, or else the newest one that is not a draft
 # (prereleases count: every 0.2.7 build is one). A release with no web IDE
 # zip (those before it was a release file) takes the web IDE from the
-# artifact OXT-Beyond-web-ide of the newest successful Web IDE run on main
-# (web-ide.yml), whose IDE is that release's with main's scripts over it;
-# with neither, the site has the Stack Player alone, and the summary says
+# artifact OXT-Beyond-web-ide of the input ide-run (a Web IDE run,
+# web-ide.yml, such as a pull request's), or else of the newest successful
+# Web IDE run on main; its IDE is a release's with that commit's scripts
+# over it. With neither, the site has the Stack Player alone, and the summary says
 # so.
 #
 # It runs when the Release workflow finishes well, and by hand (Actions >
@@ -52,6 +53,13 @@ on:
     inputs:
       tag:
         description: The release to put on the site (for example v0.2.7-rc.6.1); empty for the newest one
+        type: string
+        default: ''
+      ide-run:
+        description: >-
+          A Web IDE run (web-ide.yml) whose artifact OXT-Beyond-web-ide to
+          use when the release has no web IDE zip, for example a pull
+          request's run; empty for main's newest
         type: string
         default: ''
 
@@ -109,20 +117,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          RUN: ${{ inputs.ide-run }}
         run: |
           if compgen -G "$RUNNER_TEMP/dist/*-web-ide.zip" > /dev/null; then
             echo "The release has its web IDE zip"
             exit 0
           fi
-          run=$(gh run list --repo "$REPO" --workflow web-ide.yml --branch main --event push --status success \
-                  --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          run=$RUN
+          if [ -n "$run" ] && ! [[ "$run" =~ ^[0-9]+$ ]]; then echo "::error::ide-run is a run id (digits)"; exit 1; fi
+          if [ -z "$run" ]; then
+            run=$(gh run list --repo "$REPO" --workflow web-ide.yml --branch main --event push --status success \
+                    --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          fi
           if [ -n "$run" ] &&
              gh run download "$run" --repo "$REPO" --name OXT-Beyond-web-ide --dir "$RUNNER_TEMP/ide-artifact"; then
             (cd "$RUNNER_TEMP/ide-artifact" && sha256sum -c SHA256SUMS)
             cp "$RUNNER_TEMP"/ide-artifact/*-web-ide.zip "$RUNNER_TEMP/dist/"
-            echo "IDE_FROM=main's Web IDE run $run" >> "$GITHUB_ENV"
+            echo "IDE_FROM=Web IDE run $run" >> "$GITHUB_ENV"
           else
-            echo "::warning::no web IDE zip in $TAG or in main's Web IDE runs; the site has the Stack Player alone"
+            echo "::warning::no web IDE zip in $TAG or in Web IDE run ${run:-(none on main)}; the site has the Stack Player alone"
           fi
 
       - name: Build the site
@@ -132,7 +145,7 @@ jobs:
           player=$(compgen -G "$RUNNER_TEMP/dist/*-web-player.zip" | head -n 1 || true)
           if [ -n "$ide" ]; then
             version=$(basename "$ide" -web-ide.zip); version=${version#OXT-Beyond-}
-            [ -n "${IDE_FROM:-}" ] && version="$version (with main's scripts)"
+            [ -n "${IDE_FROM:-}" ] && version="$version (with newer IDE scripts)"
             args+=(--ide "$ide" --ide-version "$version")
           fi
           if [ -n "$player" ]; then

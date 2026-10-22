@@ -1,0 +1,1 @@
+- Web pages: the input ide-run picks the Web IDE run whose web IDE goes on the site when the release has none
