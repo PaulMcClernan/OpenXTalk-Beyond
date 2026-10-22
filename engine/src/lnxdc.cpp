@@ -838,8 +838,12 @@ void MCResPlatformHandleScaleChange(void)
 		MCstacks->reopenallstackwindows();
 
 	// The cursors made from images are scaled by the scale they were made at
-	// (MCScreenDC::createcursor, lnxcursor.cpp): make them again
-	MCscreen->resetcursors();
+	// (MCScreenDC::createcursor, lnxcursor.cpp): make them again, once they
+	// have been made. At start-up the display turns pixel scaling on while it
+	// opens (MCLinuxReadDesktopScale), before the stacks the cursors come from
+	// exist; the cursors are made later, at the right scale.
+	if (MCcursors[PI_ARROW] != nil)
+		MCscreen->resetcursors();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
