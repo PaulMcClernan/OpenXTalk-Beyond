@@ -16,8 +16,9 @@ it takes the two sites as a release ships them
 puts them in their folders with [build_pages.py](build_pages.py) and
 deploys the result. It runs when the Release workflow finishes well, and by
 hand (Actions > Web pages > Run workflow, with a release's tag or none for
-the newest). A release that has no web IDE zip takes the web IDE from main's
-newest Web IDE run instead; the header of the workflow says how.
+the newest). A release that has no web IDE zip takes the web IDE from a Web IDE
+run's artifact instead (the input `ide-run`, or main's newest run); the
+header of the workflow says how.
 
 Both sites ask for their files with relative addresses, so they run from
 a folder of the site. The web engine uses no threads, so GitHub Pages needs
