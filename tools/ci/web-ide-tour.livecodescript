@@ -16,8 +16,9 @@ script "oxtwebidetour"
 -- a stack of the user with the usual controls, the Property Inspector,
 -- the Script Editor, the Message Box, the Project Browser, a click in
 -- browse mode that opens an answer dialog, the Dictionary, Preferences,
--- the File menu, one of each control Object > New Control makes, and the
--- page made narrow. For each it asks for a
+-- the File menu, one of each control Object > New Control makes, the
+-- page made narrow, and a cascade of the File menu on a page as narrow as
+-- a phone in portrait. For each it asks for a
 -- screenshot of the page. A step still running after 30 seconds (a
 -- dialog it waits on) has its modal dialogs closed. Script errors in the
 -- IDE's windows are recorded instead of shown.
@@ -28,6 +29,7 @@ script "oxtwebidetour"
 --    ERROR <a script error, its lines joined with " | ">
 --    ACT <id> shot <file>          a screenshot of the page
 --    ACT <id> click <x> <y>        a click at a point of the page
+--    ACT <id> move <x> <y>         the pointer moved to a point of the page
 --    ACT <id> key <key>            a key (Playwright's name, "Escape")
 --    ACT <id> size <width> <height>  the page's size
 --    ACT <id> dialog               a click on the default button of the
@@ -45,7 +47,7 @@ Screenshots of the web IDE for its CI job (tools/ci/web_ide_tour.py).
 Only CI's copy of the site has it.
 */
 
-constant kSteps = "start,sample,inspector,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow"
+constant kSteps = "start,sample,inspector,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow,phone-menu"
 constant kSample = "Web Tour Sample"
 -- The classic controls of Object > New Control (revMenubar), by the last
 -- part of their kind
@@ -336,6 +338,44 @@ on tour_narrow
    tourWait 2000
 end tour_narrow
 
+-- A cascade of the File menu (New Stack's) on a page as narrow as a phone
+-- in portrait: with no room on either side of the menu, it opened off the
+-- page's left edge (forum report, 2026-10-22); it must be on the page
+on tour_phone_menu
+   local tMenu, tRects, tFirst, tRect
+   tourAct "size 390 844"
+   tourWait 3000
+   put tourMenuButton("File") into tMenu
+   if tMenu is empty then
+      throw "no File menu in revMenuBar"
+   end if
+   tourAct "click" && item 1 of the globalLoc of the loc of tMenu && item 2 of the globalLoc of the loc of tMenu
+   tourWait 1500
+   put tourMenuRects() into tFirst
+   if tFirst is empty then
+      throw "the File menu did not open"
+   end if
+   -- the pointer on the menu's first item, New Stack, opens its cascade
+   tourAct "move" && (item 1 of line 1 of tFirst + 40) && (item 2 of line 1 of tFirst + 12)
+   tourAct "move" && (item 1 of line 1 of tFirst + 50) && (item 2 of line 1 of tFirst + 13)
+   tourWait 1500
+   put tourMenuRects() into tRects
+   tourRecord "INFO menus on a phone-sized page" && tourJoin(tRects)
+   tourShot "13-phone-menu"
+   tourAct "key Escape"
+   tourWait 800
+   tourAct "size 1400 900"
+   tourWait 2000
+   if the number of lines of tRects < 2 then
+      throw "New Stack's cascade did not open:" && tourJoin(tRects)
+   end if
+   repeat for each line tRect in tRects
+      if item 1 of tRect < 0 or item 3 of tRect > 390 then
+         throw "a menu is off the page:" && tourJoin(tRects)
+      end if
+   end repeat
+end tour_phone_menu
+
 ----------------------------------------------------------------
 -- Helpers
 
@@ -438,6 +478,15 @@ function tourNewStack pBefore
 end tourNewStack
 
 -- The button of the menu pName in the IDE's menu bar
+-- The page's rects (left,top,right,bottom) of the windows of the menus
+-- that are open, one per line, in the order they opened
+function tourMenuRects
+   return tourJS("Array.from(document.querySelectorAll('.oxt-window'))" & \
+         ".filter(function(e) { var r = e.getBoundingClientRect(); return e.oxtLayer === 3 && r.width > 0 && r.height > 0; })" & \
+         ".map(function(e) { var r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom].map(Math.round).join(','); })" & \
+         ".join('\n')")
+end tourMenuRects
+
 function tourMenuButton pName
    local tGroup
    if there is not a stack "revMenuBar" then

@@ -248,12 +248,20 @@ mergeInto(LibraryManager.library, {
 		{{{ makeSetValue('r_length', '0', 'host.length', 'i32') }}};
 	},
 
-	// The home folder (/livecode, which holds the documents, desktop,
+	// The home folder (/openxtalk, which holds the documents, desktop,
 	// preferences and support folders) is kept in the browser's storage
 	// for the page's site (IndexedDB), so that what a stack writes there
 	// is still there on its next visit, as on the desktop. The rest of
 	// the engine's file system (/tmp, /downloads, /uploads, the
 	// standalone's own folder) starts afresh with each visit.
+	//
+	// OXT-Beyond: the home folder was /livecode until 0.2.7-rc.6.2.
+	// /livecode is still there, as a link to /openxtalk, so a script or
+	// a saved path that names it finds the same files, and a standalone
+	// that brings files in livecode/ puts them in the home folder as
+	// before. On the first visit with this engine, what the browser kept
+	// for /livecode (its own IndexedDB database, named after the folder)
+	// is copied into /openxtalk's; the old database is left as it was.
 	//
 	// A page that does not want it sets Module.livecodePersistent to
 	// false. Without the browser's storage (a private window may refuse
@@ -261,7 +269,8 @@ mergeInto(LibraryManager.library, {
 	$LiveCodeStorage__deps: ['$FS'],
 	$LiveCodeStorage__postset: 'LiveCodeStorage.install();',
 	$LiveCodeStorage: {
-		_folder: '/livecode',
+		_folder: '/openxtalk',
+		_legacyFolder: '/livecode',
 
 		// True once the folder's files are loaded from the browser's
 		// storage: only then are its files written back, as writing an
@@ -284,16 +293,133 @@ mergeInto(LibraryManager.library, {
 			Module['preRun'] = preRun;
 		},
 
+		// /livecode, the home folder's old name, made a link to it
+		_alias: function() {
+			try {
+				FS.symlink(LiveCodeStorage._folder, LiveCodeStorage._legacyFolder);
+			} catch (e) {
+				// it is there already
+			}
+		},
+
+		// The names in <path>, without . and ..
+		_names: function(path) {
+			return FS.readdir(path).filter(function(name) {
+				return name != '.' && name != '..';
+			});
+		},
+
+		// Copies the files and folders in <from> to <to>, with their modes
+		// and dates
+		_copy: function(from, to) {
+			LiveCodeStorage._names(from).forEach(function(name) {
+				var source = from + '/' + name;
+				var target = to + '/' + name;
+				var stat = FS.lstat(source);
+				if (FS.isDir(stat.mode)) {
+					try {
+						FS.mkdir(target, stat.mode);
+					} catch (e) {
+						// it is there already
+					}
+					LiveCodeStorage._copy(source, target);
+				} else if (FS.isFile(stat.mode)) {
+					FS.writeFile(target, FS.readFile(source));
+					FS.chmod(target, stat.mode);
+				} else {
+					return;
+				}
+				FS.utime(target, stat.mtime.getTime(), stat.mtime.getTime());
+			});
+		},
+
+		// What the browser kept for /livecode, copied to the home folder
+		// when it has nothing yet: <done>(error) is called after, and
+		// /livecode is then the link
+		_migrate: function(idbfs, done) {
+			var legacy = LiveCodeStorage._legacyFolder;
+			var mounted = false;
+			var end = function(error) {
+				if (mounted) {
+					try {
+						FS.unmount(legacy);
+					} catch (e) {
+						// it was not mounted
+					}
+				}
+				try {
+					FS.rmdir(legacy);
+				} catch (e) {
+					// it was not made
+				}
+				LiveCodeStorage._alias();
+				done(error);
+			};
+			var copy = function() {
+				try {
+					FS.mkdir(legacy);
+					FS.mount(idbfs, {}, legacy);
+					mounted = true;
+				} catch (e) {
+					end(null);
+					return;
+				}
+				FS.syncfs(true, function(error) {
+					if (error) {
+						// the copy is not made, and the old database is
+						// left as it was
+						console.warn('The old home folder (/livecode) could not be read: ' + error);
+						end(null);
+						return;
+					}
+					try {
+						var copied = LiveCodeStorage._names(legacy).length > 0;
+						LiveCodeStorage._copy(legacy, LiveCodeStorage._folder);
+						LiveCodeStorage._copied = copied;
+					} catch (e) {
+						console.warn('The old home folder (/livecode) could not be copied: ' + e);
+					}
+					end(null);
+				});
+			};
+			if (LiveCodeStorage._names(LiveCodeStorage._folder).length > 0) {
+				end(null);
+				return;
+			}
+			// Only a browser that kept /livecode has its database: one
+			// that can list its databases makes none for the others
+			if (typeof indexedDB.databases == 'function') {
+				indexedDB.databases().then(function(databases) {
+					if (databases.some(function(database) {
+						return database.name == legacy;
+					})) {
+						copy();
+					} else {
+						end(null);
+					}
+				}, copy);
+			} else {
+				copy();
+			}
+		},
+
 		_load: function() {
+			var folder = LiveCodeStorage._folder;
+			try {
+				FS.mkdir(folder);
+			} catch (e) {
+				// the page made it
+			}
 			var idbfs = FS.filesystems && FS.filesystems['IDBFS'];
 			if (Module['livecodePersistent'] === false || !idbfs ||
 				typeof indexedDB == 'undefined') {
+				LiveCodeStorage._alias();
 				return;
 			}
 			try {
-				FS.mkdir(LiveCodeStorage._folder);
-				FS.mount(idbfs, {}, LiveCodeStorage._folder);
+				FS.mount(idbfs, {}, folder);
 			} catch (e) {
+				LiveCodeStorage._alias();
 				return;
 			}
 
@@ -306,6 +432,7 @@ mergeInto(LibraryManager.library, {
 				}
 				finished = true;
 				clearTimeout(timer);
+				LiveCodeStorage._alias();
 				if (error) {
 					console.warn('The home folder will not be kept: ' + error);
 				} else {
@@ -317,6 +444,11 @@ mergeInto(LibraryManager.library, {
 							LiveCodeStorage.flush();
 						}
 					});
+					// What was copied from /livecode is kept in /openxtalk's
+					// own database
+					if (LiveCodeStorage._copied) {
+						LiveCodeStorage.changed();
+					}
 				}
 				Module['removeRunDependency']('livecodeStorage');
 			};
@@ -326,12 +458,26 @@ mergeInto(LibraryManager.library, {
 			}, 10000);
 			try {
 				FS.syncfs(true, function(error) {
-					finish(error);
+					if (error || finished) {
+						finish(error);
+						return;
+					}
+					try {
+						LiveCodeStorage._migrate(idbfs, function() {
+							finish(null);
+						});
+					} catch (e) {
+						console.warn('The old home folder (/livecode) could not be copied: ' + e);
+						finish(null);
+					}
 				});
 			} catch (e) {
 				finish(e);
 			}
 		},
+
+		// True when files were copied from /livecode on this visit
+		_copied: false,
 
 		// A file or folder of the engine's changed: the home folder is
 		// written back soon, with whatever else changes meanwhile

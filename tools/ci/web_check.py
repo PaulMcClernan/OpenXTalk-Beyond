@@ -95,7 +95,10 @@ Then:
    error for a missing table must reach the script as revDB's error (SQLite
    throws a C++ exception for it), and another in the probe's documents
    folder, whose row the browser's storage (IndexedDB) must have soon after
-   the probe is ready. The builder includes them because the
+   the probe is ready (in /openxtalk's database: the home folder's name
+   since 0.2.7-rc.6.2; then the page opens in a new browser profile whose
+   database for /livecode, the old name, has a file, which must be copied
+   to /openxtalk's). The builder includes them because the
    probe's scripts use them, and web-deploy.livecodescript names them when
    it builds without the IDE. Then encrypt and decrypt, with the OpenSSL
    that the web engine links: AES with a key and an IV, and Blowfish (of
@@ -205,6 +208,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import urllib.parse
 import urllib.request
 import zipfile
 import zlib
@@ -230,7 +234,7 @@ browser_waiting = ['']
 PROBE_CHECKS = (
     'platform', 'wait-openstack', 'wait-handler', 'wait-nested', 'wait-until', 'send-in-time',
     'javascript', 'file-roundtrip', 'standalone-folder', 'font-file', 'font-bold', 'url-get', 'url-post', 'url-put',
-    'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'download-written',
+    'url-missing', 'url-load', 'answer', 'answer-confirm', 'ask', 'folders', 'home-alias', 'download-written',
     'address', 'random-bytes', 'modifiers', 'cursor', 'sound', 'player', 'browser', 'objects',
     'xml', 'xslt', 'zip', 'database', 'database-error', 'database-home',
     'encrypt', 'encrypt-legacy', 'cipher-names', 'speech', 'print',
@@ -274,9 +278,9 @@ PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
 # under its path in the object store FILE_DATA of an IndexedDB database
 # named after the folder; this reads one file's bytes from there as text,
 # or null.
-PROBE_HOME_DATABASE = ('/livecode/Documents/probe.db', 'kept between visits')
-STORED_FILE_JS = '''path => new Promise(resolve => {
-    var request = indexedDB.open('/livecode');
+PROBE_HOME_DATABASE = ('/openxtalk/Documents/probe.db', 'kept between visits')
+STORED_FILE_JS = '''([database, path]) => new Promise(resolve => {
+    var request = indexedDB.open(database);
     request.onerror = () => resolve(null);
     request.onsuccess = () => {
         var db = request.result;
@@ -296,6 +300,38 @@ STORED_FILE_JS = '''path => new Promise(resolve => {
             db.close();
             resolve(contents ? text : null);
         };
+    };
+})'''
+
+# The home folder was /livecode until 0.2.7-rc.6.2 (engine/src/em-system.js):
+# what a browser kept there is copied to /openxtalk on its first visit with
+# a newer engine. This writes a file into the database that an older engine
+# made (IDBFS's, version 21: the object store FILE_DATA, with the index
+# timestamp; a folder's entry has its mode, a file's its mode and contents)
+# before the page opens, and the copy must reach /openxtalk's database.
+LEGACY_HOME_FILE = ('/livecode/Documents/legacy.txt', '/openxtalk/Documents/legacy.txt',
+                    'kept by an older engine')
+SEED_LEGACY_HOME_JS = '''([path, text]) => new Promise((resolve, reject) => {
+    var request = indexedDB.open('/livecode', 21);
+    request.onupgradeneeded = () => {
+        var store = request.result.objectStoreNames.contains('FILE_DATA') ?
+            request.transaction.objectStore('FILE_DATA') :
+            request.result.createObjectStore('FILE_DATA');
+        if (!store.indexNames.contains('timestamp')) {
+            store.createIndex('timestamp', 'timestamp', {unique: false});
+        }
+    };
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+        var db = request.result;
+        var transaction = db.transaction('FILE_DATA', 'readwrite');
+        var store = transaction.objectStore('FILE_DATA');
+        var now = new Date();
+        store.put({timestamp: now, mode: 16895}, path.substring(0, path.lastIndexOf('/')));
+        store.put({timestamp: now, mode: 33206,
+                   contents: new Uint8Array(Array.from(text, c => c.charCodeAt(0)))}, path);
+        transaction.oncomplete = () => { db.close(); resolve(true); };
+        transaction.onerror = () => reject(transaction.error);
     };
 })'''
 
@@ -1266,7 +1302,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
                 stored = [None]
 
                 def database_stored():
-                    stored[0] = page.evaluate(STORED_FILE_JS, PROBE_HOME_DATABASE[0])
+                    stored[0] = page.evaluate(STORED_FILE_JS, ['/openxtalk', PROBE_HOME_DATABASE[0]])
                     return bool(stored[0]) and stored[0].startswith('SQLite format 3\x00') \
                         and PROBE_HOME_DATABASE[1] in stored[0]
                 if wait_for(database_stored, 'the probe\'s database reaching the browser\'s storage', 5):
@@ -1757,6 +1793,30 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
                     canvas['width'], canvas['height'], canvas['x'], canvas['y'], shot))
             except (CheckError, PlaywrightError, KeyError, ValueError) as e:
                 problems.append('the interactive checks failed: %s' % e)
+        if 'ready' in probes:
+            # what an older engine kept in /livecode, in a new browser
+            # profile: written before the page opens, copied to /openxtalk
+            try:
+                browser_waiting[0] = 'the old home folder\'s copy'
+                fresh = browser.new_page()
+                fresh.goto(urllib.parse.urljoin(url, '/no-such-page'))  # the site, without the engine
+                fresh.evaluate(SEED_LEGACY_HOME_JS, [LEGACY_HOME_FILE[0], LEGACY_HOME_FILE[2]])
+                fresh.goto(url)
+                copied = [None]
+
+                def legacy_copied():
+                    copied[0] = fresh.evaluate(STORED_FILE_JS, ['/openxtalk', LEGACY_HOME_FILE[1]])
+                    return copied[0] == LEGACY_HOME_FILE[2]
+                if wait_for(legacy_copied, 'the old home folder (/livecode) reaching /openxtalk\'s storage',
+                            timeout):
+                    lines.append('a file an older engine kept in /livecode was copied to /openxtalk')
+                kept = fresh.evaluate(STORED_FILE_JS, ['/livecode', LEGACY_HOME_FILE[0]])
+                if kept != LEGACY_HOME_FILE[2]:
+                    problems.append('the old home folder\'s database has %r for %s after the copy, expected '
+                                    'it left as it was' % (kept, LEGACY_HOME_FILE[0]))
+                fresh.close()
+            except PlaywrightError as e:
+                problems.append('the check of the old home folder\'s copy failed: %s' % e)
         browser_waiting[0] = 'the browser to close'
         browser.close()
 

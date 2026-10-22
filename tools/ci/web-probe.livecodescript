@@ -320,7 +320,7 @@ command probeDialogs
 end probeDialogs
 
 command probeSystem
-   local tFolder, tMissing, tHost, tCursor
+   local tFolder, tMissing, tHost, tCursor, tAlias
    -- The standard folders, which the engine makes in its file system
    repeat for each item tFolder in "home,documents,desktop,preferences,support"
       if there is not a folder specialFolderPath(tFolder) then
@@ -329,6 +329,17 @@ command probeSystem
    end repeat
    probeCheck "folders", tMissing is empty and specialFolderPath("downloads") is "/downloads", \
          "missing=" & tMissing && "downloads=" & specialFolderPath("downloads")
+
+   -- The home folder is /openxtalk; /livecode, its name until 0.2.7-rc.6.2,
+   -- is a link to it, so what a script writes by the old name is in it
+   put "by the old name" into url "file:/livecode/Documents/probe-alias.txt"
+   put url ("file:" & specialFolderPath("documents") & "/probe-alias.txt") into tAlias
+   put "|" & url "file:~livecode/Documents/probe-alias.txt" after tAlias
+   delete file "/livecode/Documents/probe-alias.txt"
+   probeCheck "home-alias", specialFolderPath("home") is "/openxtalk" \
+         and tAlias is "by the old name|by the old name" \
+         and there is not a file (specialFolderPath("documents") & "/probe-alias.txt"), \
+         "home=" & specialFolderPath("home") && "read=" & tAlias
 
    -- A file written to /downloads goes to the user as a download, which
    -- web_check.py checks

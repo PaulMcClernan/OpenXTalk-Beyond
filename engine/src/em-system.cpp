@@ -67,11 +67,13 @@ extern "C" void MCEmscriptenSystemGetHostName(unichar_t **r_chars, uint32_t *r_l
 #define kMCEmscriptenStandardFolderResources "/boot/standalone"
 #define kMCEmscriptenStandardFolderFonts "/boot/fonts"
 #define kMCEmscriptenStandardFolderTemporary "/tmp"
-#define kMCEmscriptenStandardFolderHome "/livecode"
-#define kMCEmscriptenStandardFolderDocuments "/livecode/Documents"
-#define kMCEmscriptenStandardFolderDesktop "/livecode/Desktop"
-#define kMCEmscriptenStandardFolderPreferences "/livecode/Preferences"
-#define kMCEmscriptenStandardFolderSupport "/livecode/Support"
+/* OXT-Beyond: the home folder was /livecode until 0.2.7-rc.6.2, and
+ * /livecode is still a link to it (em-system.js, LiveCodeStorage) */
+#define kMCEmscriptenStandardFolderHome "/openxtalk"
+#define kMCEmscriptenStandardFolderDocuments "/openxtalk/Documents"
+#define kMCEmscriptenStandardFolderDesktop "/openxtalk/Desktop"
+#define kMCEmscriptenStandardFolderPreferences "/openxtalk/Preferences"
+#define kMCEmscriptenStandardFolderSupport "/openxtalk/Support"
 
 /* ----------------------------------------------------------------
  * Utility functions
@@ -1010,10 +1012,13 @@ MCEmscriptenSystem::ResolvePath(MCStringRef p_path,
 		}
 
 		/* At the moment, no user exists other than the current user,
-		 * whose home directory is "/livecode" */
+		 * whose home directory is "/openxtalk" (OXT-Beyond: named
+		 * ~openxtalk too, and still ~livecode) */
 		if (MCStringIsEqualToCString(*t_user_part, "~",
 		                             kMCStringOptionCompareExact) ||
 		    MCStringIsEqualToCString(*t_user_part, "~livecode",
+		                             kMCStringOptionCompareExact) ||
+		    MCStringIsEqualToCString(*t_user_part, "~openxtalk",
 		                             kMCStringOptionCompareExact))
 		{
 			if (t_have_rel_part)
