@@ -231,3 +231,10 @@ jobs:
       - name: Deploy
         id: deploy
         uses: actions/deploy-pages@v4
+        env:
+          # The deployment's build version, which GitHub Pages takes to be
+          # unique: the action sends GITHUB_SHA, and a second deployment of
+          # one commit (a test build and then its release, both run from
+          # main's same commit) gets the first one's back and leaves the
+          # site as it was. So the run and its attempt go after the commit.
+          GITHUB_SHA: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
