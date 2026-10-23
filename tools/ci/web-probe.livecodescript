@@ -77,6 +77,13 @@ on openStack
    wait 200 milliseconds
    put the milliseconds - tStart into tElapsed
    probeCheck "wait-openstack", tElapsed >= 190, tElapsed & " ms"
+   -- The page opened in two tabs (with ?tab=first and ?tab=second) runs
+   -- no checks: web_check.py only calls its probeReport, to check that
+   -- the two tabs keep each other's files in the home folder
+   do "window.location.search" as "JavaScript"
+   if the result contains "tab=" then
+      exit openStack
+   end if
    send "probeRun" to me in 10 milliseconds
 end openStack
 
@@ -1001,8 +1008,23 @@ end probeUnfocus
 -- cannot. With "window" it opens the palette (probeWindow), and with
 -- "window-ignore" and "window-heed" sets the palette's ignoreMouseEvents.
 -- With "menu" it makes the option menu (probeMenu), and with "menu-done"
--- deletes it.
+-- deletes it. With "home-write <name>" it writes the file <name>.txt in
+-- its documents folder, and with "home-has <name>" says whether that
+-- file is there: web_check.py opens the page in two tabs and checks that
+-- what one writes there is kept when the other writes too.
 function probeReport pWhat
+   local tFile
+   if word 1 of pWhat is "home-write" or word 1 of pWhat is "home-has" then
+      put specialFolderPath("documents") & "/" & word 2 of pWhat & ".txt" into tFile
+      if word 1 of pWhat is "home-has" then
+         if there is a file tFile then
+            return URL ("file:" & tFile)
+         end if
+         return "none"
+      end if
+      put "written by" && word 2 of pWhat into URL ("binfile:" & tFile)
+      return "written"
+   end if
    if pWhat is "snapshot" then
       return probeSnapshots()
    end if

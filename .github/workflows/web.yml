@@ -379,18 +379,37 @@ jobs:
 
       # The fonts of every HTML5 standalone are what tools/oxt/build_web_fonts.py
       # makes from the Ubuntu 24.04 packages it names (each file pinned by its
-      # SHA-256 there; the versions here are the ones it was built from)
+      # SHA-256 there; the versions here are the ones it was built from).
+      # The packages are kept in the cache, keyed by those versions: from
+      # Ubuntu's mirror, fonts-noto-cjk (61 MB) alone has taken longer than
+      # the job's 30 minutes (2026-10-23). The check of each file's SHA-256
+      # is build_web_fonts.py's, so a cached package is checked as a
+      # downloaded one is.
+      - name: Restore the web fonts' source packages
+        if: matrix.browser == 'chromium'
+        id: font-debs
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/font-debs
+          key: web-font-debs-noble-mythtv-34.0+fixes.20240210.e3e165a1-0ubuntu6-droid-6.0.1r16-1.1build1-noto-cjk-20230817+repack1-3-dejavu-2.37-8
+
       - name: Check the web fonts against their sources
         if: matrix.browser == 'chromium'
+        env:
+          CACHED: ${{ steps.font-debs.outputs.cache-hit }}
         run: |
-          sudo apt-get -o Acquire::Retries=3 update
+          mkdir -p "$RUNNER_TEMP/font-debs" && cd "$RUNNER_TEMP/font-debs"
+          if [ "$CACHED" != 'true' ]; then
+            sudo apt-get -o Acquire::Retries=3 update
+            apt-get -o Acquire::Retries=3 download \
+              'mythtv-common=2:34.0+fixes.20240210.e3e165a1-0ubuntu6' \
+              'fonts-droid-fallback=1:6.0.1r16-1.1build1' \
+              'fonts-noto-cjk=1:20230817+repack1-3' \
+              'fonts-dejavu-core=2.37-8'
+          fi
+          ls -l *.deb
           mkdir -p "$RUNNER_TEMP/font-sources" && cd "$RUNNER_TEMP/font-sources"
-          apt-get -o Acquire::Retries=3 download \
-            'mythtv-common=2:34.0+fixes.20240210.e3e165a1-0ubuntu6' \
-            'fonts-droid-fallback=1:6.0.1r16-1.1build1' \
-            'fonts-noto-cjk=1:20230817+repack1-3' \
-            'fonts-dejavu-core=2.37-8'
-          for d in *.deb; do dpkg-deb -x "$d" x; done
+          for d in "$RUNNER_TEMP"/font-debs/*.deb; do dpkg-deb -x "$d" x; done
           cd "$GITHUB_WORKSPACE"
           python3 -m venv "$RUNNER_TEMP/fonttools"
           "$RUNNER_TEMP/fonttools/bin/python" -m pip install --quiet fonttools==4.67.0

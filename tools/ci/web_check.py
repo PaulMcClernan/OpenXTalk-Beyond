@@ -335,6 +335,11 @@ SEED_LEGACY_HOME_JS = '''([path, text]) => new Promise((resolve, reject) => {
     };
 })'''
 
+# The files that the page writes in its documents folder from two tabs
+# (probeReport("home-write <name>")), and what each holds
+TWO_TABS_FILES = ('/openxtalk/Documents/first-tab.txt', '/openxtalk/Documents/second-tab.txt')
+TWO_TABS_TEXTS = ('written by first-tab', 'written by second-tab')
+
 # What the drag from the field "Drag Source" onto the field "Drag Target"
 # sends, and then the target's text (probeReport("dnd"))
 PROBE_DND = 'start|enter|drop:dropped text|end:copy|dropped text'
@@ -1793,6 +1798,64 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
                     canvas['width'], canvas['height'], canvas['x'], canvas['y'], shot))
             except (CheckError, PlaywrightError, KeyError, ValueError) as e:
                 problems.append('the interactive checks failed: %s' % e)
+        if 'ready' in probes and not page_errors:
+            # the page in two tabs of a new browser profile, which keep the
+            # same home folder in the same storage: a file that the first
+            # tab writes after the second has loaded the folder must still
+            # be there after the second writes one (until 0.2.7-rc.6.3, the
+            # second tab's write deleted it, and a stack saved in the web
+            # IDE in one tab was lost when the IDE in another wrote
+            # anything), and the second tab must have it. With ?tab=, the
+            # probe runs no checks.
+            try:
+                browser_waiting[0] = 'the page in two tabs'
+                tabs = browser.new_context()
+                report_js = "document.liveCode.findStackWithName('%s').probeReport('%%s')" % STACK_NAME
+                opened = []
+                for name in ('first', 'second'):
+                    tab = tabs.new_page()
+                    tab.on('dialog', on_dialog)
+                    tab.goto(url + ('&' if '?' in url else '?') + 'tab=' + name)
+                    tab.wait_for_function("() => document.liveCode && document.liveCode.findStackWithName "
+                                          "&& document.liveCode.findStackWithName('%s')" % STACK_NAME,
+                                          timeout=timeout * 1000)
+                    tab.wait_for_timeout(1000)
+                    opened.append(tab)
+                first, second = opened
+                first_wrote = first.evaluate(report_js % 'home-write first-tab')
+                stored = [None]
+
+                def first_stored():
+                    stored[0] = first.evaluate(STORED_FILE_JS, ['/openxtalk', TWO_TABS_FILES[0]])
+                    return stored[0] == TWO_TABS_TEXTS[0]
+                wait_for(first_stored, 'the first tab\'s file reaching the browser\'s storage', 10)
+                second_wrote = second.evaluate(report_js % 'home-write second-tab')
+
+                def both_stored():
+                    stored[0] = [first.evaluate(STORED_FILE_JS, ['/openxtalk', path]) for path in TWO_TABS_FILES]
+                    return stored[0] == list(TWO_TABS_TEXTS)
+                if first_wrote != 'written' or second_wrote != 'written':
+                    problems.append('the two tabs\' probeReport("home-write") returned %r and %r, expected '
+                                    '"written"' % (first_wrote, second_wrote))
+                elif not wait_for(both_stored, 'both tabs\' files in the browser\'s storage', 10):
+                    problems.append('with the page in two tabs, the browser\'s storage has %r for %s, '
+                                    'expected %r' % (stored[0], ' and '.join(TWO_TABS_FILES),
+                                                     list(TWO_TABS_TEXTS)))
+                else:
+                    seen = [None]
+
+                    def second_has():
+                        seen[0] = second.evaluate(report_js % 'home-has first-tab')
+                        return seen[0] == TWO_TABS_TEXTS[0]
+                    if wait_for(second_has, 'the second tab reading in the first tab\'s file', 10):
+                        lines.append('with the page in two tabs, each kept the file the other wrote '
+                                     'in the home folder')
+                    else:
+                        problems.append('the second tab has %r for the first tab\'s file, expected %r'
+                                        % (seen[0], TWO_TABS_TEXTS[0]))
+                tabs.close()
+            except (PlaywrightError, PlaywrightTimeoutError) as e:
+                problems.append('the check of the page in two tabs failed: %s' % e)
         if 'ready' in probes:
             # what an older engine kept in /livecode, in a new browser
             # profile: written before the page opens, copied to /openxtalk
