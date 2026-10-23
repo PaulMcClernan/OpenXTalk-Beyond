@@ -1399,13 +1399,34 @@ Boolean MCButton::mup(uint2 which, bool p_release)
                 // outside of the menu tree.
                 bool t_outside = true;
                 MCObject* t_menu = menu;
+
+                // The point the button went up at, in the coordinates of
+                // the menus' rects (the screen's)
+                int2 t_up_x = mx;
+                int2 t_up_y = my;
+#ifdef __EMSCRIPTEN__
+                // OXT-Beyond: in the web engine the menu grabs no pointer,
+                // so the mouse is over the window it is in, and mx and my
+                // are in a menu's own coordinates (mdown()): compared with
+                // the screen's rects, a tap on an item near the top of a
+                // menu was outside every menu and closed them all (an item
+                // with a submenu could not be tapped open). The mouse's
+                // place on the screen is where its window is plus where it
+                // is in it.
+                if (MCmousestackptr.IsValid())
+                {
+                    MCRectangle t_mouse_rect = MCmousestackptr->getrect();
+                    t_up_x = MCmousex + t_mouse_rect.x;
+                    t_up_y = MCmousey + t_mouse_rect.y;
+                }
+#endif
                 while (t_outside && t_menu != NULL)
                 {
                     // Check whether the click was inside the menu (the rect
                     // that we need to check is the rect of the stack containing
                     // the menu).
                     MCRectangle t_rect = t_menu->getstack()->getrect();
-                    t_outside = !MCU_point_in_rect(t_rect, mx, my);
+                    t_outside = !MCU_point_in_rect(t_rect, t_up_x, t_up_y);
                     
                     // Move to the parent menu, if it exists
                     if (t_menu->getstack()->getparent()    // Stack's parent

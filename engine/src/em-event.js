@@ -292,6 +292,14 @@ mergeInto(LibraryManager.library, {
 										   ['number'], [stack]) != 0;
 		},
 
+		// OXT-Beyond: whether <stack> is open as a menu, which a press
+		// neither gives the keyboard nor brings to the front, as on the
+		// desktop (MCEmscriptenStackIsMenu(), em-dc.cpp)
+		_stackIsMenu: function(stack) {
+			return !!stack && Module.ccall('MCEmscriptenStackIsMenu', 'number',
+										   ['number'], [stack]) != 0;
+		},
+
 		// OXT-Beyond: the keyboard goes to the stack of the window <to>
 		// (to none if 0) when the stacks have it (<from> 0) or the window
 		// <from> has it: the engine opened the window that the system
@@ -1276,8 +1284,10 @@ mergeInto(LibraryManager.library, {
 					// to the front of its layer too, as a click brings a
 					// window to the front on the desktop (em-dc.js); not
 					// for a stack under a modal dialog, whose press goes
-					// nowhere.
-					if (LiveCodeEvents._stackEnabled(stack))
+					// nowhere, and not for a menu, which the desktop leaves
+					// where it is and gives no keyboard (_stackIsMenu()).
+					if (LiveCodeEvents._stackEnabled(stack) &&
+						!LiveCodeEvents._stackIsMenu(stack))
 					{
 						LiveCodeDC.raiseWindow(LiveCodeDC.getWindowIDForCanvas(target));
 						LiveCodeEvents._setInputFocus(target);

@@ -203,6 +203,33 @@ MCEmscriptenStackIsEnabled(MCStack *p_stack)
 	return MCEmscriptenStackTakesEvents(p_stack);
 }
 
+/* OXT-Beyond: whether a stack is open as a menu (a pulldown, popup, option
+ * or combo box list, or a cascade). On the desktop a menu takes the mouse
+ * while it is open but never the keyboard, and stays where it is in the
+ * stack of windows: em-event.js neither gives it the keyboard nor brings
+ * it to the front when it is pressed. Given the keyboard, the menu that
+ * was pressed lost it again as the press went on (its button's mdown()
+ * unfocuses its menu), and that closed the cascade of the item under the
+ * pointer: an item with a submenu could not be tapped open. */
+MC_DLLEXPORT_DEF bool
+MCEmscriptenStackIsMenu(MCStack *p_stack)
+{
+	if (MCnoui || p_stack == nil)
+		return false;
+
+	switch (p_stack->getmode())
+	{
+	case WM_PULLDOWN:
+	case WM_POPUP:
+	case WM_OPTION:
+	case WM_CASCADE:
+	case WM_COMBO:
+		return true;
+	default:
+		return false;
+	}
+}
+
 /* OXT-Beyond: whether the system would make a stack's window the active
  * one, which has the keyboard, when it opens: a toplevel stack's, a
  * dialog's or a sheet's, not a palette's, a menu's or a tooltip's */

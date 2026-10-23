@@ -17,8 +17,9 @@ script "oxtwebidetour"
 -- the Script Editor, the Message Box, the Project Browser, a click in
 -- browse mode that opens an answer dialog, the Dictionary, Preferences,
 -- the File menu, one of each control Object > New Control makes, the
--- page made narrow, and a cascade of the File menu on a page as narrow as
--- a phone in portrait. For each it asks for a
+-- page made narrow, a cascade of the File menu on a page as narrow as a
+-- phone in portrait, and File's items with a submenu tapped on a touch
+-- screen. For each it asks for a
 -- screenshot of the page. A step still running after 30 seconds (a
 -- dialog it waits on) has its modal dialogs closed. Script errors in the
 -- IDE's windows are recorded instead of shown.
@@ -30,6 +31,7 @@ script "oxtwebidetour"
 --    ACT <id> shot <file>          a screenshot of the page
 --    ACT <id> click <x> <y>        a click at a point of the page
 --    ACT <id> move <x> <y>         the pointer moved to a point of the page
+--    ACT <id> tap <x> <y>          a finger's tap at a point of the page
 --    ACT <id> key <key>            a key (Playwright's name, "Escape")
 --    ACT <id> size <width> <height>  the page's size
 --    ACT <id> dialog               a click on the default button of the
@@ -47,7 +49,7 @@ Screenshots of the web IDE for its CI job (tools/ci/web_ide_tour.py).
 Only CI's copy of the site has it.
 */
 
-constant kSteps = "start,sample,inspector,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow,phone-menu"
+constant kSteps = "start,sample,inspector,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow,phone-menu,touch-menu"
 constant kSample = "Web Tour Sample"
 -- The classic controls of Object > New Control (revMenubar), by the last
 -- part of their kind
@@ -375,6 +377,62 @@ on tour_phone_menu
       end if
    end repeat
 end tour_phone_menu
+
+-- File's items with a submenu, tapped on a touch screen (a finger, not the
+-- mouse): the menu that was tapped took the keyboard and lost it again,
+-- and that closed the submenu as it opened, so only the first level of a
+-- menu could be reached (forum report, 2026-10-23). A tap on New Stack (at
+-- the top of the menu) and on Import Stack must each leave its submenu
+-- open, on a page as narrow as a phone and on a wide one.
+on tour_touch_menu
+   local tSize, tItem, tTop, tRects, tFirst, tProblems
+   repeat for each item tSize in "390 844,1400 900"
+      tourAct "size" && tSize
+      tourWait 2500
+      repeat for each item tItem in "New Stack,Import Stack"
+         tourTapFileMenu
+         put the result into tFirst
+         if tFirst is empty then
+            throw "the File menu did not open with a tap"
+         end if
+         -- New Stack is the menu's first item, Import Stack its fifth
+         if tItem is "New Stack" then
+            put 12 into tTop
+         else
+            put 100 into tTop
+         end if
+         tourAct "tap" && (item 1 of line 1 of tFirst + 40) && (item 2 of line 1 of tFirst + tTop)
+         tourWait 1500
+         put tourMenuRects() into tRects
+         tourRecord "INFO menus after a tap on" && tItem && "at" && tSize & ":" && tourJoin(tRects)
+         if tItem is "New Stack" and word 1 of tSize is 390 then
+            tourShot "14-touch-menu"
+         end if
+         tourAct "key Escape"
+         tourWait 500
+         tourAct "key Escape"
+         tourWait 800
+         if the number of lines of tRects < 2 then
+            put tItem && "at" && tSize & ":" && tourJoin(tRects) & "; " after tProblems
+         end if
+      end repeat
+   end repeat
+   if tProblems is not empty then
+      throw "a tap on a menu item with a submenu closed the menu:" && tProblems
+   end if
+end tour_touch_menu
+
+-- Opens the File menu with a tap; the result is the open menus' rects
+command tourTapFileMenu
+   local tMenu
+   put tourMenuButton("File") into tMenu
+   if tMenu is empty then
+      throw "no File menu in revMenuBar"
+   end if
+   tourAct "tap" && item 1 of the globalLoc of the loc of tMenu && item 2 of the globalLoc of the loc of tMenu
+   tourWait 1500
+   return tourMenuRects()
+end tourTapFileMenu
 
 ----------------------------------------------------------------
 -- Helpers
