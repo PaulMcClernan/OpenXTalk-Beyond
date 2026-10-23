@@ -347,6 +347,21 @@ def main():
     return 1 if problems else 0
 
 
+def tap(page, x, y):
+    """A finger's tap at x, y: touchstart, a moment, touchend, as a person's
+    finger gives them (Chromium's DevTools protocol, with the page's touch
+    screen on only for the tap, so the rest of the tour has a mouse)."""
+    session = page.context.new_cdp_session(page)
+    try:
+        session.send('Emulation.setTouchEmulationEnabled', {'enabled': True, 'maxTouchPoints': 1})
+        session.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': x, 'y': y}]})
+        time.sleep(0.15)
+        session.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+        session.send('Emulation.setTouchEmulationEnabled', {'enabled': False})
+    finally:
+        session.detach()
+
+
 def act(page, words, shots_dir, shots, problems):
     """Does what an ACT line asks (web-ide-tour.livecodescript, "Lines")."""
     verb, rest = words[2], words[3:]
@@ -358,6 +373,8 @@ def act(page, words, shots_dir, shots, problems):
             page.mouse.click(float(rest[0]), float(rest[1]))
         elif verb == 'move' and len(rest) == 2:
             page.mouse.move(float(rest[0]), float(rest[1]))
+        elif verb == 'tap' and len(rest) == 2:
+            tap(page, float(rest[0]), float(rest[1]))
         elif verb == 'key' and len(rest) == 1:
             page.keyboard.press(rest[0])
         elif verb == 'dialog' and not rest:

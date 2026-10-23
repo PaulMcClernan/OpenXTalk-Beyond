@@ -45,6 +45,9 @@ extern "C" void MCEmscriptenSetTextInput(bool p_active);
 /* OXT-Beyond: whether a stack takes the user's mouse and keys (not while a
  * modal dialog is above it) */
 extern "C" bool MCEmscriptenStackIsEnabled(MCStack *p_stack);
+/* OXT-Beyond: whether a stack is open as a menu, which a press neither
+ * gives the keyboard nor brings to the front (em-event.js) */
+extern "C" bool MCEmscriptenStackIsMenu(MCStack *p_stack);
 /* OXT-Beyond: the keyboard goes to the stack of the window p_to (to none
  * if 0) when the stacks have it (p_from 0) or the window p_from has it
  * (em-event.js) */
