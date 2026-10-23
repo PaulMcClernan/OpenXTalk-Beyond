@@ -77,11 +77,11 @@ on openStack
    wait 200 milliseconds
    put the milliseconds - tStart into tElapsed
    probeCheck "wait-openstack", tElapsed >= 190, tElapsed & " ms"
-   -- The page opened again in a second tab (with ?tab=second) runs no
-   -- checks: web_check.py only calls its probeReport, to check that the
-   -- two tabs keep each other's files in the home folder
+   -- The page opened in two tabs (with ?tab=first and ?tab=second) runs
+   -- no checks: web_check.py only calls its probeReport, to check that
+   -- the two tabs keep each other's files in the home folder
    do "window.location.search" as "JavaScript"
-   if the result contains "tab=second" then
+   if the result contains "tab=" then
       exit openStack
    end if
    send "probeRun" to me in 10 milliseconds

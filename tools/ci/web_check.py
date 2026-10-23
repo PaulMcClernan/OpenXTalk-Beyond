@@ -1799,34 +1799,40 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
             except (CheckError, PlaywrightError, KeyError, ValueError) as e:
                 problems.append('the interactive checks failed: %s' % e)
         if 'ready' in probes and not page_errors:
-            # the page in a second tab of the same browser profile, which
-            # keeps the same home folder in the same storage: a file that
-            # the first tab writes after the second has loaded the folder
-            # must still be there after the second writes one (until
-            # 0.2.7-rc.6.3, the second tab's write deleted it, and a stack
-            # saved in the web IDE in one tab was lost when the IDE in
-            # another wrote anything), and the second tab must have it
+            # the page in two tabs of a new browser profile, which keep the
+            # same home folder in the same storage: a file that the first
+            # tab writes after the second has loaded the folder must still
+            # be there after the second writes one (until 0.2.7-rc.6.3, the
+            # second tab's write deleted it, and a stack saved in the web
+            # IDE in one tab was lost when the IDE in another wrote
+            # anything), and the second tab must have it. With ?tab=, the
+            # probe runs no checks.
             try:
-                browser_waiting[0] = 'the page in a second tab'
-                second = page.context.new_page()
-                second.on('dialog', on_dialog)
-                second.goto(url + ('&' if '?' in url else '?') + 'tab=second')
+                browser_waiting[0] = 'the page in two tabs'
+                tabs = browser.new_context()
                 report_js = "document.liveCode.findStackWithName('%s').probeReport('%%s')" % STACK_NAME
-                second.wait_for_function("() => document.liveCode && document.liveCode.findStackWithName "
-                                         "&& document.liveCode.findStackWithName('%s')" % STACK_NAME,
-                                         timeout=timeout * 1000)
-                second.wait_for_timeout(1000)
-                first_wrote = page.evaluate(report_js % 'home-write first-tab')
+                opened = []
+                for name in ('first', 'second'):
+                    tab = tabs.new_page()
+                    tab.on('dialog', on_dialog)
+                    tab.goto(url + ('&' if '?' in url else '?') + 'tab=' + name)
+                    tab.wait_for_function("() => document.liveCode && document.liveCode.findStackWithName "
+                                          "&& document.liveCode.findStackWithName('%s')" % STACK_NAME,
+                                          timeout=timeout * 1000)
+                    tab.wait_for_timeout(1000)
+                    opened.append(tab)
+                first, second = opened
+                first_wrote = first.evaluate(report_js % 'home-write first-tab')
                 stored = [None]
 
                 def first_stored():
-                    stored[0] = page.evaluate(STORED_FILE_JS, ['/openxtalk', TWO_TABS_FILES[0]])
+                    stored[0] = first.evaluate(STORED_FILE_JS, ['/openxtalk', TWO_TABS_FILES[0]])
                     return stored[0] == TWO_TABS_TEXTS[0]
                 wait_for(first_stored, 'the first tab\'s file reaching the browser\'s storage', 10)
                 second_wrote = second.evaluate(report_js % 'home-write second-tab')
 
                 def both_stored():
-                    stored[0] = [page.evaluate(STORED_FILE_JS, ['/openxtalk', path]) for path in TWO_TABS_FILES]
+                    stored[0] = [first.evaluate(STORED_FILE_JS, ['/openxtalk', path]) for path in TWO_TABS_FILES]
                     return stored[0] == list(TWO_TABS_TEXTS)
                 if first_wrote != 'written' or second_wrote != 'written':
                     problems.append('the two tabs\' probeReport("home-write") returned %r and %r, expected '
@@ -1847,7 +1853,7 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
                     else:
                         problems.append('the second tab has %r for the first tab\'s file, expected %r'
                                         % (seen[0], TWO_TABS_TEXTS[0]))
-                second.close()
+                tabs.close()
             except (PlaywrightError, PlaywrightTimeoutError) as e:
                 problems.append('the check of the page in two tabs failed: %s' % e)
         if 'ready' in probes:
