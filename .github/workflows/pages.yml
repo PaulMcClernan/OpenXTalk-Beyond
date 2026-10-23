@@ -43,22 +43,20 @@
 # with both never loses one. The next release's run puts the released
 # files back.
 #
-# It runs when the Release workflow finishes well on a tag v<version> (a
-# release it published: that release goes on the site), and by hand
-# (Actions > Web pages > Run workflow). Releases are published with the
-# workflow's own token, which starts no "release" event, so it follows the
-# workflow instead. A dry run, which runs on a branch and publishes
-# nothing, starts nothing here, so a test build put on the site by hand
-# stays until the release. It needs GitHub Pages turned on with "GitHub Actions" as
+# It runs by hand (Actions > Web pages > Run workflow), and the Release
+# workflow starts it on main with the tag once it has published a release
+# (its job "Web pages"). Releases are made with a workflow's own token,
+# and what such a token does starts no other workflow, "release" and
+# "workflow_run" events included; starting one by hand is the exception,
+# so the release starts it that way. A dry run publishes nothing and starts
+# nothing here, so a test build put on the site by hand stays until the
+# release. It needs GitHub Pages turned on with "GitHub Actions" as
 # its source (Settings > Pages); until then the deploy job fails and
 # nothing else is touched. It changes no release, package or build.
 
 name: Web pages
 
 on:
-  workflow_run:
-    workflows: [ Release ]
-    types: [ completed ]
   workflow_dispatch:
     inputs:
       tag:
@@ -96,9 +94,6 @@ defaults:
 jobs:
   site:
     name: Build the site
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -115,8 +110,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          # By hand, the input; after a release, its tag
-          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+          # Given by hand, or by the release that started this run
+          TAG: ${{ inputs.tag }}
           BUILD_RUN: ${{ inputs.build-run }}
           IDE_RUN: ${{ inputs.ide-run }}
         run: |
@@ -231,10 +226,3 @@ jobs:
       - name: Deploy
         id: deploy
         uses: actions/deploy-pages@v4
-        env:
-          # The deployment's build version, which GitHub Pages takes to be
-          # unique: the action sends GITHUB_SHA, and a second deployment of
-          # one commit (a test build and then its release, both run from
-          # main's same commit) gets the first one's back and leaves the
-          # site as it was. So the run and its attempt go after the commit.
-          GITHUB_SHA: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}

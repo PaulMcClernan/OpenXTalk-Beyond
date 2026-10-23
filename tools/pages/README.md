@@ -14,7 +14,8 @@ The workflow [pages.yml](../../.github/workflows/pages.yml) builds nothing:
 it takes the two sites as a release ships them
 (`OXT-Beyond-<version>-web-ide.zip` and `OXT-Beyond-<version>-web-player.zip`),
 puts them in their folders with [build_pages.py](build_pages.py) and
-deploys the result. It runs when the Release workflow finishes well, and by
+deploys the result. The Release workflow starts it once a release is
+published (its last job, "Web pages"), and it runs by
 hand (Actions > Web pages > Run workflow, with a release's tag or none for
 the newest). A release that has no web IDE zip takes the web IDE from a Web IDE
 run's artifact instead (the input `ide-run`, or main's newest run); the

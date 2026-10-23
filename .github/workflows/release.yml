@@ -642,3 +642,32 @@ jobs:
             echo ""
             echo "[OXT-Beyond $VERSION]($url) ($TAG), pre-release: $PRERELEASE, ${#files[@]} files."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The published release's web IDE and Stack Player on the GitHub Pages
+  # site (pages.yml). This run's token starts no workflow by its events, so
+  # the release does not reach pages.yml as a "release" or "workflow_run"
+  # event; a run started by hand does, and this starts one, on main (the
+  # only branch the site's environment takes). A dry run publishes nothing
+  # and starts nothing. The release is out whatever this job does, so a
+  # failure to start the site is a warning: Actions > Web pages > Run
+  # workflow with the tag does the same.
+  pages:
+    name: Web pages
+    needs: [prepare, publish]
+    if: needs.publish.result == 'success' && needs.prepare.outputs.dry-run != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Start the Web pages workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          if gh workflow run pages.yml --ref main -f tag="$TAG"; then
+            echo "Started Web pages for $TAG" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Web pages did not start; run it by hand with the tag $TAG"
+          fi
