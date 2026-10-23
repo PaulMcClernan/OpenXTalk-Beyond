@@ -266,7 +266,7 @@ mergeInto(LibraryManager.library, {
 	// A page that does not want it sets Module.livecodePersistent to
 	// false. Without the browser's storage (a private window may refuse
 	// it), the home folder is not kept, and nothing else changes.
-	$LiveCodeStorage__deps: ['$FS'],
+	$LiveCodeStorage__deps: ['$FS', '$PATH'],
 	$LiveCodeStorage__postset: 'LiveCodeStorage.install();',
 	$LiveCodeStorage: {
 		_folder: '/openxtalk',
@@ -282,6 +282,18 @@ mergeInto(LibraryManager.library, {
 		_timer: null,
 		_writing: false,
 		_again: false,
+
+		// The date (in milliseconds) of each file and folder of the home
+		// folder as the browser's storage had it when this page last read
+		// or wrote it. Another page of the site (the web IDE in a second
+		// tab, a standalone) keeps the same folder in the same storage:
+		// what it wrote since is what this page has neither written nor
+		// known, and is read in instead of deleted (_write)
+		_known: {},
+
+		// The other pages of the site that keep the home folder, told when
+		// this page has written to it, so that they read it in
+		_channel: null,
 
 		// The folder is loaded before the engine starts
 		install: function() {
@@ -437,6 +449,8 @@ mergeInto(LibraryManager.library, {
 					console.warn('The home folder will not be kept: ' + error);
 				} else {
 					LiveCodeStorage._loaded = true;
+					LiveCodeStorage._remember();
+					LiveCodeStorage._listen();
 					// What is not yet written goes when the page goes
 					window.addEventListener('pagehide', LiveCodeStorage.flush);
 					document.addEventListener('visibilitychange', function() {
@@ -501,15 +515,215 @@ mergeInto(LibraryManager.library, {
 				return;
 			}
 			LiveCodeStorage._writing = true;
-			FS.syncfs(false, function(error) {
+			LiveCodeStorage._write(function(error, wrote) {
 				LiveCodeStorage._writing = false;
 				if (error) {
 					console.warn('The home folder could not be kept: ' + error);
+				} else if (wrote && LiveCodeStorage._channel) {
+					try {
+						LiveCodeStorage._channel.postMessage('changed');
+					} catch (e) {
+						// the other pages read it on their next write
+					}
 				}
 				if (LiveCodeStorage._again) {
 					LiveCodeStorage._again = false;
 					LiveCodeStorage.flush();
 				}
+			});
+		},
+
+		// The home folder's mount, and IDBFS, which keeps it
+		_mount: function() {
+			var idbfs = FS.filesystems && FS.filesystems['IDBFS'];
+			try {
+				var mount = FS.lookupPath(LiveCodeStorage._folder).node.mount;
+				if (idbfs && mount && mount.type === idbfs) {
+					return mount;
+				}
+			} catch (e) {
+				// it is not mounted
+			}
+			return null;
+		},
+
+		// The dates of the home folder's files and folders as they are
+		// now, just after it was loaded from the browser's storage
+		_remember: function() {
+			var mount = LiveCodeStorage._mount();
+			if (!mount) {
+				return;
+			}
+			mount.type.getLocalSet(mount, function(error, local) {
+				if (error) {
+					return;
+				}
+				var known = {};
+				Object.keys(local.entries).forEach(function(path) {
+					known[path] = local.entries[path].timestamp.getTime();
+				});
+				LiveCodeStorage._known = known;
+			});
+		},
+
+		// When another page of the site has written to the home folder,
+		// this page reads in what it wrote soon
+		_listen: function() {
+			if (typeof BroadcastChannel != 'function') {
+				return;
+			}
+			try {
+				var channel = new BroadcastChannel('oxt-home:' + LiveCodeStorage._folder);
+				channel.onmessage = function() {
+					LiveCodeStorage.changed();
+				};
+				LiveCodeStorage._channel = channel;
+			} catch (e) {
+				// the other pages' files are read in on this page's next
+				// write
+			}
+		},
+
+		// Writes the home folder back to the browser's storage, calling
+		// <done>(error, wrote), where <wrote> is true when the storage
+		// changed. IDBFS's own write (FS.syncfs(false)) makes the storage
+		// the same as this page's folder: it deleted what another page of
+		// the site saved there after this one loaded it, and put this
+		// page's older copy over another page's newer one, so a stack
+		// saved in the web IDE in one tab was lost when the IDE in another
+		// tab wrote anything. This writes what this page changed and
+		// deleted, as that did, and reads in what another page wrote that
+		// this page did not change, instead of deleting it. With one page,
+		// the storage holds only what this page wrote, and it writes what
+		// FS.syncfs(false) wrote.
+		_write: function(done) {
+			var mount = LiveCodeStorage._mount();
+			if (!mount) {
+				FS.syncfs(false, function(error) {
+					done(error, !error);
+				});
+				return;
+			}
+			var idbfs = mount.type;
+			idbfs.getLocalSet(mount, function(error, local) {
+				if (error) {
+					done(error, false);
+					return;
+				}
+				idbfs.getRemoteSet(mount, function(error, remote) {
+					if (error) {
+						done(error, false);
+						return;
+					}
+					var known = LiveCodeStorage._known;
+					var kept = {};
+					var push = [];
+					var pull = [];
+					var drop = [];
+					Object.keys(local.entries).forEach(function(path) {
+						var mine = local.entries[path].timestamp.getTime();
+						var theirs = remote.entries[path];
+						if (!theirs) {
+							push.push(path);
+						} else if (theirs.timestamp.getTime() == mine) {
+							kept[path] = mine;
+						} else if (known[path] === mine) {
+							// unchanged here, written by another page: kept
+							// as it is here until it is read in
+							kept[path] = mine;
+							pull.push(path);
+						} else {
+							push.push(path);
+						}
+					});
+					Object.keys(remote.entries).forEach(function(path) {
+						if (local.entries[path]) {
+							return;
+						}
+						if (known[path] === remote.entries[path].timestamp.getTime()) {
+							// deleted here
+							drop.push(path);
+						} else {
+							// written by another page: a folder comes in
+							// before what is in it
+							pull.push(path);
+						}
+					});
+					if (push.length == 0 && pull.length == 0 && drop.length == 0) {
+						LiveCodeStorage._known = kept;
+						done(null, false);
+						return;
+					}
+					pull.sort();
+
+					var failed = null;
+					var finished = false;
+					var finish = function(error, wrote) {
+						if (!finished) {
+							finished = true;
+							done(error, wrote);
+						}
+					};
+					var transaction;
+					try {
+						transaction = remote.db.transaction([idbfs.DB_STORE_NAME], 'readwrite');
+					} catch (e) {
+						done(e, false);
+						return;
+					}
+					var store = transaction.objectStore(idbfs.DB_STORE_NAME);
+					var fail = function(error) {
+						if (error && !failed) {
+							failed = error;
+						}
+					};
+					transaction.oncomplete = function() {
+						if (!failed) {
+							LiveCodeStorage._known = kept;
+						}
+						finish(failed, push.length + drop.length > 0);
+					};
+					transaction.onerror = transaction.onabort = function(event) {
+						if (event && event.preventDefault) {
+							event.preventDefault();
+						}
+						finish(failed || transaction.error || 'the browser\'s storage refused the write', false);
+					};
+					push.forEach(function(path) {
+						idbfs.loadLocalEntry(path, function(error, entry) {
+							if (error) {
+								fail(error);
+								return;
+							}
+							kept[path] = entry.timestamp.getTime();
+							idbfs.storeRemoteEntry(store, path, entry, fail);
+						});
+					});
+					drop.forEach(function(path) {
+						idbfs.removeRemoteEntry(store, path, fail);
+					});
+					pull.forEach(function(path) {
+						idbfs.loadRemoteEntry(store, path, function(error, entry) {
+							if (error || !entry) {
+								fail(error);
+								return;
+							}
+							try {
+								FS.mkdirTree(PATH.dirname(path));
+							} catch (e) {
+								// it is there
+							}
+							idbfs.storeLocalEntry(path, entry, function(error) {
+								if (error) {
+									// a file this page has open, or a folder
+									// where it keeps a file: left as it is
+									return;
+								}
+								kept[path] = entry.timestamp.getTime();
+							});
+						});
+					});
+				});
 			});
 		},
 	},
