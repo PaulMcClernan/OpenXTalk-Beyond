@@ -812,8 +812,9 @@ on TestSettingsLocalServer
    revIDESetPreference "cXTalkAssistant,model,openai", empty
    dispatch "xtaSettingsPrepare" to stack kMain with empty
    TestAssert "the dialog offers the local servers", the text of button "Local" of stack kSettings is \
-         ("LM Studio (localhost:1234)" & return & "Ollama (localhost:11434)")
-   TestAssert "and says what Local is for", field "Base URL Note" of stack kSettings contains "LM Studio or Ollama"
+         ("LM Studio (localhost:1234)" & return & "Ollama (localhost:11434)" & return & "llama.cpp (localhost:8080)" & return & \
+         "Jan (localhost:1337)" & return & "vLLM (localhost:8000)" & return & "KoboldCpp (localhost:5001)")
+   TestAssert "and says what Local is for", field "Base URL Note" of stack kSettings contains "Local switches to a model on this computer"
    put "sk-ant-typed-local" into field "Key" of stack kSettings
    -- Nothing listens on LM Studio's port here (if something does, it lists
    -- its models): Get Models says what to try
@@ -837,6 +838,54 @@ on TestSettingsLocalServer
    TestAssert "Cancel keeps no base URL", tPrefs["cXTalkAssistant,baseUrl,openai"] is empty \
          and tPrefs["cXTalkAssistant,provider"] is "anthropic"
 end TestSettingsLocalServer
+
+-- Services, in the dialog: an online service on OpenAI's API, at its
+-- address; a key typed for OpenAI is not sent to it, and is forgotten at
+-- Save unless another is pasted; with no key, it is not asked for its
+-- models and the dialog says where to make one
+on TestSettingsOnlineService
+   local tPrefs, tResult
+   revIDESetPreference "cXTalkAssistant,enabled", true
+   revIDESetPreference "cXTalkAssistant,provider", "openai"
+   revIDESetPreference "cXTalkAssistant,baseUrl,openai", empty
+   revIDESetPreference "cXTalkAssistant,model,openai", "gpt-6.1-sol"
+   dispatch "xtaSettingsPrepare" to stack kMain with empty
+   TestAssert "the dialog offers the services", line 1 of the text of button "Services" of stack kSettings is "OpenRouter" \
+         and "Groq" is among the lines of the text of button "Services" of stack kSettings \
+         and "Google Gemini" is among the lines of the text of button "Services" of stack kSettings
+   TestAssert "and says what Services is for", field "Base URL Note" of stack kSettings contains "from Services"
+   put "sk-openai-typed-9999" into field "Key" of stack kSettings
+   send "mouseUp 1" to button "Save" of stack kSettings
+   dispatch function "xtaSettingsDone" to stack kMain
+   dispatch "xtaSettingsPrepare" to stack kMain with empty
+   TestAssert "OpenAI's key is set", field "Key Note" of stack kSettings begins with "A key is set"
+   dispatch "menuPick" to button "Services" of stack kSettings with "Groq"
+   TestAssert "OpenAI's API", the label of button "Provider" of stack kSettings is "OpenAI (or compatible)"
+   TestAssert "at Groq's address", field "Base URL" of stack kSettings is "https://api.groq.com/openai/v1"
+   TestAssert "without OpenAI's key", field "Key" of stack kSettings is empty \
+         and field "Key Note" of stack kSettings begins with "Paste your Groq API key here."
+   TestAssert "nor its model", the label of button "Model" of stack kSettings is empty
+   put field "Result" of stack kSettings into tResult
+   TestDiagnostic tResult
+   TestAssert "says where to make a key", tResult contains "console.groq.com/keys" and tResult contains "Get Models"
+   send "mouseUp 1" to button "Save" of stack kSettings
+   dispatch function "xtaSettingsDone" to stack kMain
+   TestAssert "saved", the result is true
+   put xtaTestPrefs() into tPrefs
+   TestAssert "the base URL is kept", tPrefs["cXTalkAssistant,baseUrl,openai"] is "https://api.groq.com/openai/v1"
+   dispatch "xtaSettingsPrepare" to stack kMain with empty
+   TestAssert "and OpenAI's key is forgotten", field "Key Note" of stack kSettings begins with "Paste your"
+   -- A key typed for one service does not go to another
+   put "gsk-typed-1234" into field "Key" of stack kSettings
+   dispatch "menuPick" to button "Services" of stack kSettings with "Mistral"
+   TestAssert "another service's key goes too", field "Key" of stack kSettings is empty \
+         and field "Base URL" of stack kSettings is "https://api.mistral.ai/v1"
+   send "mouseUp 1" to button "Cancel" of stack kSettings
+   dispatch function "xtaSettingsDone" to stack kMain
+   TestAssert "Cancel saves nothing", the result is false
+   put xtaTestPrefs() into tPrefs
+   TestAssert "the saved base URL stays", tPrefs["cXTalkAssistant,baseUrl,openai"] is "https://api.groq.com/openai/v1"
+end TestSettingsOnlineService
 
 --------------------------------------------------------------------------------
 -- Tools

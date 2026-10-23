@@ -72,7 +72,8 @@ script "org.openxtalk.plugin.xtalkassistant"
 --    xtaMoreMenuPick, xtaNoteClicked, xtaConversationLink, xtaAnswerAsk,
 --    xtaWindowClosed,
 --    xtaSettingsSave, xtaSettingsGetModels, xtaSettingsForgetKey,
---    xtaSettingsProvider, xtaSettingsLocal   (the Settings dialog)
+--    xtaSettingsProvider, xtaSettingsLocal, xtaSettingsService
+--                                 (the Settings dialog)
 --    xtaSettingsPrepare, xtaSettingsDone()   (before and after it)
 --    xtaIsEnabled()
 
@@ -2445,6 +2446,15 @@ private command xtaBuildSettings
    set the menuMode of button "Provider" to "option"
    set the text of button "Provider" to xtaProviderNames()
    set the rect of button "Provider" to tLeft, tTop, tLeft + 180, tTop + 24
+   -- The online services that speak OpenAI's API, each with a key of its
+   -- own: the way to them, for a user who would not know the URL
+   create button "Services"
+   set the style of button "Services" to "menu"
+   set the menuMode of button "Services" to "pulldown"
+   set the label of button "Services" to "Services"
+   set the text of button "Services" to xtaOnlineServiceItems()
+   set the rect of button "Services" to tRight - 100, tTop, tRight, tTop + 24
+   set the tooltip of button "Services" to "Use an online service with OpenAI's API (OpenRouter, Groq, Gemini, DeepSeek, Mistral and more), with its own key"
 
    add 30 to tTop
    xtaSettingsLabel "API key", tTop
@@ -2467,7 +2477,7 @@ private command xtaBuildSettings
    set the label of button "Local" to "Local"
    set the text of button "Local" to xtaLocalServerItems()
    set the rect of button "Local" to tRight - 100, tTop, tRight, tTop + 24
-   set the tooltip of button "Local" to "Use a model running on this computer, in LM Studio or Ollama (no key needed)"
+   set the tooltip of button "Local" to "Use a model running on this computer, in LM Studio, Ollama, llama.cpp, Jan, vLLM or KoboldCpp (no key needed)"
    add 25 to tTop
    xtaSettingsNote "Base URL Note", tLeft, tTop, tRight, 31
 
@@ -2605,9 +2615,9 @@ private command xtaFillSettings pProvider, pAll
    put xtaKeyNote(pProvider) into field "Key Note" of stack kSettingsWindow
    put "Empty means" && xtaDefaultBaseUrl(pProvider) & "." into tNote
    if pProvider is "openai" then
-      put " For a model on this computer, choose LM Studio or Ollama from Local (no key needed), or type its server's URL." after tNote
+      put " For a model on this computer, choose its server from Local (no key needed); for another service, from Services; or type its URL." after tNote
    else
-      put " Local switches to a model on this computer, in LM Studio or Ollama." after tNote
+      put " Local switches to a model on this computer, and Services to another online service." after tNote
    end if
    put tNote into field "Base URL Note" of stack kSettingsWindow
    xtaSettingsResult empty
@@ -2717,6 +2727,18 @@ private function xtaLocalServerItems
    return tItems
 end xtaLocalServerItems
 
+-- The Services menu of the dialog: one item per service
+-- (xtaOnlineServices), by name
+private function xtaOnlineServiceItems
+   local tItems, tLine
+   set the itemDelimiter to tab
+   repeat for each line tLine in xtaOnlineServices()
+      put item 1 of tLine & return after tItems
+   end repeat
+   delete the last char of tItems
+   return tItems
+end xtaOnlineServiceItems
+
 -- The host and port of a URL ("localhost:1234")
 private function xtaHostOf pUrl
    if pUrl contains "://" then
@@ -2775,6 +2797,60 @@ on xtaSettingsLocal pItem
    end if
 end xtaSettingsLocal
 
+-- An online service chosen from Services: OpenAI's API at its address, as
+-- Local does for a server on this computer. A key typed for another
+-- service is not sent to this one: when the host changes, the key goes
+-- from the dialog, and Save forgets it (sDrafts' "forgetKey") unless
+-- another is pasted. With no key, the dialog says where to make one;
+-- with one, Get Models asks the service for its models. Nothing is kept
+-- until Save.
+on xtaSettingsService pItem
+   local tLine, tUrl, tPage, tOld, tModel
+   if there is not a stack kSettingsWindow then
+      exit xtaSettingsService
+   end if
+   set the itemDelimiter to tab
+   repeat for each line tLine in xtaOnlineServices()
+      if pItem is item 1 of tLine then
+         put item 2 of tLine into tUrl
+         put item 3 of tLine into tPage
+         exit repeat
+      end if
+   end repeat
+   if tUrl is empty then
+      exit xtaSettingsService
+   end if
+   if sSettingsProvider is not "openai" then
+      xtaKeepDraft sSettingsProvider
+      put "openai" into sSettingsProvider
+      xtaFillSettings "openai", false
+   end if
+   lock messages
+   put word 1 to -1 of field "Base URL" of stack kSettingsWindow into tOld
+   if tOld is empty then
+      put xtaDefaultBaseUrl("openai") into tOld
+   end if
+   if xtaHostOf(tOld) is not xtaHostOf(tUrl) then
+      put empty into field "Key" of stack kSettingsWindow
+      put true into sDrafts["openai"]["forgetKey"]
+      put "Paste your" && pItem && "API key here. It is kept in memory until you quit " & xtaHostName() & ", and never saved." into field "Key Note" of stack kSettingsWindow
+   end if
+   put tUrl into field "Base URL" of stack kSettingsWindow
+   put the label of button "Model" of stack kSettingsWindow into tModel
+   if tOld is not tUrl or tModel is empty or tModel is among the lines of xtaSuggestedModels("openai") then
+      set the label of button "Model" of stack kSettingsWindow to empty
+      set the text of button "Model" of stack kSettingsWindow to empty
+      put empty into sDrafts["openai"]["menu"]
+   end if
+   unlock messages
+   if word 1 to -1 of field "Key" of stack kSettingsWindow is empty then
+      xtaKeepDraft "openai"
+      xtaSettingsResult pItem & ": paste your API key (make one at" && tPage & "), then press Get Models.", "warn"
+      exit xtaSettingsService
+   end if
+   xtaSettingsGetModels
+end xtaSettingsService
+
 private command xtaKeepDraft pProvider
    put field "Key" of stack kSettingsWindow into sDrafts[pProvider]["key"]
    put field "Base URL" of stack kSettingsWindow into sDrafts[pProvider]["baseUrl"]
@@ -2808,7 +2884,8 @@ on xtaSettingsGetModels
    put tProvider into tSettings["provider"]
    put tSettings["drafts"][tProvider]["baseUrl"] into tSettings["baseUrl"]
    put tSettings["drafts"][tProvider]["key"] into tSettings["key"]
-   if tSettings["key"] is empty then
+   -- (not the key of the service before one chosen from Services)
+   if tSettings["key"] is empty and sDrafts[tProvider]["forgetKey"] is not true then
       put xtaKey(tProvider) into tSettings["key"]
    end if
    if tSettings["key"] is empty and tSettings["baseUrl"] is empty then
@@ -2921,6 +2998,10 @@ on xtaSettingsSave
          if tOther is tProvider then
             put true into sSettingsFetch
          end if
+      else if tKey is empty and sDrafts[tOther]["forgetKey"] is true then
+         -- Another service was chosen from Services: its key is not this one's
+         put empty into sKeys[tOther]
+         put empty into sModelMenus[tOther]
       end if
       put tChecked["drafts"][tOther]["baseUrl"] into tUrl
       if tUrl is not xtaBaseUrl(tOther) then
