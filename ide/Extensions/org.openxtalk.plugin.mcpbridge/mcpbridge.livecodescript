@@ -399,6 +399,7 @@ private command mcbSetupDialog
          "Claude desktop app: press Save Desktop Extension..., then in Claude choose Settings > Extensions > Advanced settings > Install Extension... and choose the file it saved (opening the file works only where Windows or macOS knows it is Claude's). Claude's app runs it with its own Node.js; you install nothing else." & return & return & \
          "Or press Add to Claude Desktop, which adds " & mcbHostName() & " to the Claude desktop app's settings file for you. That way needs Node.js (nodejs.org)." & return & return & \
          "Claude Code: press Copy Claude Code Command and paste it into a terminal. It needs Node.js 16 or later." & return & return & \
+         "Another app that runs MCP servers (Codex, Gemini CLI, Cursor, VS Code, Windsurf, LM Studio and others): press Other MCP Apps..." & return & return & \
          "Then sign in to Claude with your own account, as usual, and ask it to work on your stack. This IDE must be open with the bridge on." into tText
    put "Add " & mcbHostName() & " to Claude" into tSpec["heading"]
    put "Once, in the app you use" into tSpec["subheading"]
@@ -408,15 +409,20 @@ private command mcbSetupDialog
          "Add to Claude Desktop|Claude desktop app: add it to Claude's settings|settings|" & \
          "Adds " & mcbHostName() & " to the Claude desktop app's settings file for you. This way needs Node.js (nodejs.org)." & return & \
          "Copy Claude Code Command|Claude Code: copy the command|square-terminal|" & \
-         "Paste it into a terminal. It needs Node.js 16 or later." into tSpec["choices"]
+         "Paste it into a terminal. It needs Node.js 16 or later." & return & \
+         "Other MCP Apps...|Another app that runs MCP servers|puzzle|" & \
+         "Codex, Gemini CLI, Cursor, VS Code, Windsurf, LM Studio and others. They need Node.js." into tSpec["choices"]
    put "Then sign in to Claude with your own account, as usual, and ask it to work on your stack. This IDE must be open with the bridge on." into tSpec["text"]
    put "Close" into tSpec["buttons"]
    put "Close" into tSpec["cancel"]
    if not mcbKit(tSpec, tChoice) then
-      answer information tText with "Save Desktop Extension..." or "Add to Claude Desktop" or "Copy Claude Code Command" or "Close" titled kTitle
+      answer information tText with "Save Desktop Extension..." or "Add to Claude Desktop" or "Copy Claude Code Command" or "Other MCP Apps..." or "Close" titled kTitle
       put it into tChoice
    end if
    switch tChoice
+      case "Other MCP Apps..."
+         mcbOtherAppsDialog
+         break
       case "Save Desktop Extension..."
          mcbSaveDesktopExtension
          break
@@ -440,6 +446,68 @@ private command mcbSetupDialog
          break
    end switch
 end mcbSetupDialog
+
+-- Setting up another app that runs MCP servers: the bridge's server is an
+-- ordinary one on stdio (mcp/server.js, run with Node.js), so any such app
+-- can start it. Codex and Gemini CLI add it with a command of their own;
+-- the others read the same JSON entry Claude's settings file holds, in a
+-- file of their own.
+private command mcbOtherAppsDialog
+   local tText, tSpec, tChoice, tCopied, tHow
+   put "Add " & mcbHostName() & " to another app that runs MCP servers. Each needs Node.js (nodejs.org), and this IDE open with the bridge on:" & return & return & \
+         "Codex (OpenAI's coding agent): press Copy Codex Command and paste it into a terminal." & return & return & \
+         "Gemini CLI: press Copy Gemini CLI Command and paste it into a terminal." & return & return & \
+         "Cursor, Windsurf, Cline, Roo Code, LM Studio, Continue and other apps: press Copy MCP JSON and paste it into the app's MCP settings file (in Cursor, ~/.cursor/mcp.json; in LM Studio, Program > Install > Edit mcp.json). VS Code names the list " & quote & "servers" & quote & " instead of " & quote & "mcpServers" & quote & ", in .vscode/mcp.json." into tText
+   put "Add " & mcbHostName() & " to another app" into tSpec["heading"]
+   put "Any app that runs MCP servers" into tSpec["subheading"]
+   put "puzzle" into tSpec["icon"]
+   put "Copy Codex Command|Codex: copy the command|square-terminal|" & \
+         "Paste it into a terminal, then start Codex and ask it to work on your stack." & return & \
+         "Copy Gemini CLI Command|Gemini CLI: copy the command|square-terminal|" & \
+         "Paste it into a terminal, then start Gemini CLI and ask it to work on your stack." & return & \
+         "Copy MCP JSON|Cursor, Windsurf, LM Studio and others: copy the JSON|braces|" & \
+         "Paste it into the app's MCP settings file. VS Code names the list " & quote & "servers" & quote & "." into tSpec["choices"]
+   put "Each needs Node.js (nodejs.org), and this IDE open with the bridge on." into tSpec["text"]
+   put "Close" into tSpec["buttons"]
+   put "Close" into tSpec["cancel"]
+   if not mcbKit(tSpec, tChoice) then
+      answer information tText with "Copy Codex Command" or "Copy Gemini CLI Command" or "Copy MCP JSON" or "Close" titled kTitle
+      put it into tChoice
+   end if
+   switch tChoice
+      case "Copy Codex Command"
+         put mcbCodexCommand() into tCopied
+         put "Paste it into a terminal (Ctrl+V, or Command-V on a Mac), then start Codex (codex) and ask it to work on your stack. It reads:" into tHow
+         break
+      case "Copy Gemini CLI Command"
+         put mcbGeminiCommand() into tCopied
+         put "Paste it into a terminal (Ctrl+V, or Command-V on a Mac), then start Gemini CLI (gemini) and ask it to work on your stack. It reads:" into tHow
+         break
+      case "Copy MCP JSON"
+         put mcbMcpJson() into tCopied
+         put "Paste it into the app's MCP settings file (or, if the file has an " & quote & "mcpServers" & quote & " list already, just the " & mcbServerName() & " entry inside it), save it, and restart the app. It reads:" into tHow
+         break
+      default
+         exit mcbOtherAppsDialog
+   end switch
+   set the clipboardData["text"] to tCopied
+   put "It is on the clipboard" into tSpec["heading"]
+   put empty into tSpec["subheading"]
+   put "clipboard-copy" into tSpec["icon"]
+   put tHow into tSpec["text"]
+   put tCopied into tSpec["detail"]
+   if tChoice is "Copy MCP JSON" then
+      put "JSON" into tSpec["detailKind"]
+   else
+      put "Terminal" into tSpec["detailKind"]
+   end if
+   put empty into tSpec["choices"]
+   put "OK" into tSpec["buttons"]
+   put "OK" into tSpec["cancel"]
+   if not mcbKit(tSpec, tChoice) then
+      answer information "It is on the clipboard. " & tHow & return & return & tCopied titled kTitle
+   end if
+end mcbOtherAppsDialog
 
 -- Where the Claude desktop app keeps its settings file
 private function mcbClaudeConfigPath
@@ -614,6 +682,35 @@ private function mcbClaudeCodeCommand
    end if
    return "claude mcp add --scope user" && mcbServerName() & tEnv && "-- node" && quote & mcbServerPath() & quote
 end mcbClaudeCodeCommand
+
+-- The command that adds the bridge's server to Codex (codex mcp add)
+private function mcbCodexCommand
+   local tEnv
+   if mcbBridgeFile() is not empty then
+      put " --env" && quote & "OXT_MCP_BRIDGE_FILE=" & mcbBridgeFile() & quote into tEnv
+   end if
+   return "codex mcp add" && mcbServerName() & tEnv && "-- node" && quote & mcbServerPath() & quote
+end mcbCodexCommand
+
+-- The command that adds it to Gemini CLI, for every folder (--scope user)
+private function mcbGeminiCommand
+   local tEnv
+   if mcbBridgeFile() is not empty then
+      put " -e" && quote & "OXT_MCP_BRIDGE_FILE=" & mcbBridgeFile() & quote into tEnv
+   end if
+   return "gemini mcp add --scope user" & tEnv && mcbServerName() && "node" && quote & mcbServerPath() & quote
+end mcbGeminiCommand
+
+-- A whole MCP settings file with the server's entry (mcbDesktopConfig) in
+-- its "mcpServers" list, as Cursor, Windsurf, LM Studio and others read it
+private function mcbMcpJson
+   local tEntry, tLine, tJson
+   put mcbDesktopConfig() into tEntry
+   repeat for each line tLine in tEntry
+      put "    " & tLine & return after tJson
+   end repeat
+   return "{" & return & "  " & quote & "mcpServers" & quote & ": {" & return & tJson & "  }" & return & "}"
+end mcbMcpJson
 
 private function mcbDesktopConfig
    local tPath, tFile, tEnv

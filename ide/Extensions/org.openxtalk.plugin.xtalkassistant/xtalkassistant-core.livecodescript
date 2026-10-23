@@ -18,7 +18,9 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --                 work with their own base URL; they may need no key. On
 --                 this computer, LM Studio's server is at
 --                 http://localhost:1234/v1 and Ollama's at
---                 http://localhost:11434/v1 (xtaLocalServers).
+--                 http://localhost:11434/v1 (xtaLocalServers, with
+--                 llama.cpp, Jan, vLLM and KoboldCpp); online services
+--                 that speak it are in xtaOnlineServices.
 --
 -- Model names change faster than this IDE does, so the window asks the
 -- provider for its list (xtaModelsUrl, xtaParseModels), which also names
@@ -52,6 +54,8 @@ script "org.openxtalk.plugin.xtalkassistant-core"
 --                                          local model put before it
 --    xtaLocalServers()                     the local servers the Settings
 --                                          offer, and their base URLs
+--    xtaOnlineServices()                   the online services they offer,
+--                                          their base URLs and key pages
 --    xtaLocalServerHint(pBaseUrl, pStatus, pError)
 --                                          what to try when a server of the
 --                                          user's own did not answer
@@ -93,6 +97,10 @@ constant kOpenAIBaseUrl = "https://api.openai.com/v1"
 -- addresses they listen on unless told otherwise
 constant kLMStudioBaseUrl = "http://localhost:1234/v1"
 constant kOllamaBaseUrl = "http://localhost:11434/v1"
+constant kLlamaCppBaseUrl = "http://localhost:8080/v1"
+constant kJanBaseUrl = "http://localhost:1337/v1"
+constant kVllmBaseUrl = "http://localhost:8000/v1"
+constant kKoboldCppBaseUrl = "http://localhost:5001/v1"
 -- Anthropic requires max_tokens; this is used when the settings give none.
 -- Its models think before they answer (Claude Opus 5.5 always does), and
 -- the thinking counts toward max_tokens: with the 4096 of 0.2.5-rc.4 a
@@ -1067,8 +1075,27 @@ end xtaWithoutThinking
 -- The local servers the Settings offer: one per line, a name, a tab and
 -- the base URL their server listens on
 function xtaLocalServers
-   return "LM Studio" & tab & kLMStudioBaseUrl & return & "Ollama" & tab & kOllamaBaseUrl
+   return "LM Studio" & tab & kLMStudioBaseUrl & return & "Ollama" & tab & kOllamaBaseUrl & return & \
+         "llama.cpp" & tab & kLlamaCppBaseUrl & return & "Jan" & tab & kJanBaseUrl & return & \
+         "vLLM" & tab & kVllmBaseUrl & return & "KoboldCpp" & tab & kKoboldCppBaseUrl
 end xtaLocalServers
+
+-- The online services the Settings offer that speak OpenAI's API, each
+-- with a key of its own: one per line, a name, a tab, the base URL, a tab
+-- and the page where the user makes a key. Several have a free tier, and
+-- several run open models (Llama, Qwen, DeepSeek, Mistral, Gemma).
+function xtaOnlineServices
+   return "OpenRouter" & tab & "https://openrouter.ai/api/v1" & tab & "https://openrouter.ai/keys" & return & \
+         "Groq" & tab & "https://api.groq.com/openai/v1" & tab & "https://console.groq.com/keys" & return & \
+         "Google Gemini" & tab & "https://generativelanguage.googleapis.com/v1beta/openai" & tab & "https://aistudio.google.com/apikey" & return & \
+         "DeepSeek" & tab & "https://api.deepseek.com/v1" & tab & "https://platform.deepseek.com/api_keys" & return & \
+         "Mistral" & tab & "https://api.mistral.ai/v1" & tab & "https://console.mistral.ai/api-keys" & return & \
+         "Cerebras" & tab & "https://api.cerebras.ai/v1" & tab & "https://cloud.cerebras.ai" & return & \
+         "Together AI" & tab & "https://api.together.xyz/v1" & tab & "https://api.together.ai/settings/api-keys" & return & \
+         "Fireworks AI" & tab & "https://api.fireworks.ai/inference/v1" & tab & "https://fireworks.ai/account/api-keys" & return & \
+         "Hugging Face" & tab & "https://router.huggingface.co/v1" & tab & "https://huggingface.co/settings/tokens" & return & \
+         "xAI" & tab & "https://api.x.ai/v1" & tab & "https://console.x.ai"
+end xtaOnlineServices
 
 -- What to try when a server of the user's own (pBaseUrl, not empty) did
 -- not answer, or answered with pError: empty when there is nothing to

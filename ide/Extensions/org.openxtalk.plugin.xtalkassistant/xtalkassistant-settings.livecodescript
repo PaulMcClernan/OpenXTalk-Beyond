@@ -55,6 +55,8 @@ on menuPick pItem
       dispatch "xtaSettingsProvider" to stack kMain with pItem
    else if the short name of the target is "Local" then
       dispatch "xtaSettingsLocal" to stack kMain with pItem
+   else if the short name of the target is "Services" then
+      dispatch "xtaSettingsService" to stack kMain with pItem
    else
       pass menuPick
    end if

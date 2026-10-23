@@ -557,7 +557,9 @@ end TestWithoutThinking
 -- What a server of the user's own is told to try
 on TestLocalServerHint
    local tHint
-   TestAssert "the local servers", xtaLocalServers() is ("LM Studio" & tab & "http://localhost:1234/v1" & return & "Ollama" & tab & "http://localhost:11434/v1")
+   TestAssert "the local servers", line 1 to 2 of xtaLocalServers() is ("LM Studio" & tab & "http://localhost:1234/v1" & return & "Ollama" & tab & "http://localhost:11434/v1")
+   TestAssert "and the others", ("llama.cpp" & tab & "http://localhost:8080/v1") is among the lines of xtaLocalServers() \
+         and ("Jan" & tab & "http://localhost:1337/v1") is among the lines of xtaLocalServers()
    TestAssert "nothing for the providers' own", xtaLocalServerHint(empty, empty, "The server could not be reached: error") is empty
    put xtaLocalServerHint("http://localhost:1234/v1", empty, "The server could not be reached: error Connection refused") into tHint
    TestDiagnostic tHint
@@ -568,6 +570,25 @@ on TestLocalServerHint
    TestAssert "never says tool (xtaToolsRefused)", not (tHint contains "tool")
    TestAssert "nothing for another error", xtaLocalServerHint("http://localhost:1234/v1", 404, "The provider has no such address or model (404).") is empty
 end TestLocalServerHint
+
+-- The online services: a name, a base URL on https and a page for a key
+-- each, and no name the start of another's (Services matches by name)
+on TestOnlineServices
+   local tLine, tNames, tOk
+   put true into tOk
+   set the itemDelimiter to tab
+   repeat for each line tLine in xtaOnlineServices()
+      if the number of items of tLine is not 3 or not (item 2 of tLine begins with "https://") \
+            or not (item 3 of tLine begins with "https://") or item 1 of tLine is among the lines of tNames then
+         TestDiagnostic tLine
+         put false into tOk
+      end if
+      put item 1 of tLine & return after tNames
+   end repeat
+   TestAssert "each has a name, a base URL and a key page", tOk
+   TestAssert "OpenRouter's", line 1 of xtaOnlineServices() is ("OpenRouter" & tab & "https://openrouter.ai/api/v1" & tab & "https://openrouter.ai/keys")
+   TestAssert "ten of them", the number of lines of xtaOnlineServices() is 10
+end TestOnlineServices
 
 on TestParseReplyToolCalls
    local tInput, tBody, tReply

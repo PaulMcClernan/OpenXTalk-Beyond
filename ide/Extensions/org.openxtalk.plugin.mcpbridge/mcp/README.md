@@ -41,6 +41,12 @@ off.
      Node.js. Quit Claude completely and open it again afterwards.
    - For **Claude Code**, press **Copy Claude Code Command** and paste
      the command into a terminal. This needs Node.js 16 or later.
+   - For **another app that runs MCP servers**, press **Other MCP
+     Apps...**: **Copy Codex Command** and **Copy Gemini CLI Command**
+     give a command for a terminal, and **Copy MCP JSON** gives the
+     `mcpServers` entry that Cursor, Windsurf, Cline, Roo Code, LM Studio,
+     Continue and others read from their MCP settings file (VS Code's
+     `.vscode/mcp.json` names the list `servers`). Each needs Node.js.
 3. Ask Claude to work on your stack. OXT-Beyond must be open with the
    bridge on.
 
