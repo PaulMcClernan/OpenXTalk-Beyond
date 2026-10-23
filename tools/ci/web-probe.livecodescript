@@ -1018,7 +1018,7 @@ function probeReport pWhat
       put specialFolderPath("documents") & "/" & word 2 of pWhat & ".txt" into tFile
       if word 1 of pWhat is "home-has" then
          if there is a file tFile then
-            return URL ("binfile:" & tFile)
+            return URL ("file:" & tFile)
          end if
          return "none"
       end if
