@@ -219,6 +219,17 @@ on SetVolume pLevel
    set the playLoudness to max(0, min(100, round(pLevel * 100 / 7)))
 end SetVolume
 
+-- whether the system has the font (FontExists in 19 stacks of the CD);
+-- any size of a font it has is drawn here
+function FontExists pFont, pSize
+   return pFont is among the lines of the fontNames
+end FontExists
+
+-- the name of the window in front (FrontWindow, 12 stacks)
+function FrontWindow
+   return the short name of the topStack
+end FrontWindow
+
 -- the text without the spaces and tabs at its start and end
 function Trim pText
    repeat while pText is not empty and (char 1 of pText is space or char 1 of pText is tab)
