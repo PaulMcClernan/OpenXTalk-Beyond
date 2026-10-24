@@ -2316,6 +2316,22 @@ private function _HyperCardRules pLine, pCompiled, pElse
          case "closestack"
          case "resumestack"
          case "suspendstack"
+         case "idle"
+         case "openfield"
+         case "closefield"
+         case "exitfield"
+         case "mouseup"
+         case "mousedown"
+         case "mousestilldown"
+         case "mouseenter"
+         case "mouseleave"
+         case "mousewithin"
+         case "startup"
+         case "resume"
+         case "suspend"
+         case "newcard"
+         case "newbackground"
+         case "newstack"
             -- T35: a message HyperCard sent ("openCard"), called alone as a
             -- command: what no handler took, HyperCard took; here it is
             -- passed off the end of the message path, where this engine
@@ -2324,6 +2340,18 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tEnd = i then
                _Fire "T35 more forms HyperCard took"
                put "send" && quote & tTokens[tIdx[i]]["t"] & quote && "to me" into tNew
+            end if
+            break
+         case "debug"
+            -- T35: HyperCard 2's debug command: "debug checkpoint" is this
+            -- engine's breakpoint, and its other options ("debug sound
+            -- off", "debug pureQuickDraw true") have nothing to set here
+            if tEnd = i + 1 and _T(tTokens, tIdx[i + 1]) is "checkpoint" then
+               _Fire "T35 more forms HyperCard took"
+               put "breakpoint" into tNew
+            else if tEnd > i and tTokens[tIdx[i + 1]]["k"] is "w" and quote is not in _Span(tTokens, tIdx, i + 1, tEnd) then
+               _Fire "T35 more forms HyperCard took"
+               put "hcDebug" && quote & _Span(tTokens, tIdx, i + 1, tEnd) & quote into tNew
             end if
             break
          default

@@ -361,6 +361,14 @@ on TestHyperCardScriptsT35
    TestAssert "T35: pass left alone", line 4 of tScript is "  pass resumeStack"
    TestAssert "T27: Quit HyperCard to the library", line 7 of tScript is "  hcDoMenu " & q & "Quit HyperCard" & q
 
+   -- idle and the other messages alone, and HyperCard 2's debug command
+   put _Rewrite("on mouseUp", "  idle", "  closeField", "  debug checkpoint", "  debug sound off", "end mouseUp") into tScript
+   TestAssert "T35: idle sent", line 2 of tScript is "  send " & q & "idle" & q & " to me"
+   TestAssert "T35: closeField sent", line 3 of tScript is "  send " & q & "closeField" & q & " to me"
+   TestAssert "T35: debug checkpoint", line 4 of tScript is "  breakpoint"
+   TestAssert "T35: debug's other options", line 5 of tScript is "  hcDebug " & q & "sound off" & q
+   TestAssert "T35: the debug lines compile", _Compiles(tScript)
+
    -- unchanged: a count put into the message box, a variable after
    -- play's voice, a variable named on, doMenu with a variable, quoted
    -- notes
@@ -554,6 +562,31 @@ on TestHyperCardScriptsHomeHandlers
    TestAssert "Home handlers: a stack's own getHomeInfo first", gHCScriptsTest is "own"
    _Close tStack
 end TestHyperCardScriptsHomeHandlers
+
+on TestHyperCardScriptsCommonExternals
+   -- the externals stacks called most that the library stands in for
+   local tStack, q, tLoudness
+   global gHCScriptsTest
+   put quote into q
+   put "HCExternals" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put Trim(" & q & "  a b " & q & " & tab) into gHCScriptsTest", \
+         "  SetVolume 7", "  put comma & GetVolume() & comma & the playLoudness after gHCScriptsTest", \
+         "  SetVolume 0", "  put comma & GetVolume() after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put the playLoudness into tLoudness
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of stack tStack
+   set the playLoudness to tLoudness
+   TestAssert "Trim, SetVolume and GetVolume", gHCScriptsTest is "a b,7,100,0"
+   _Close tStack
+end TestHyperCardScriptsCommonExternals
 
 on TestHyperCardScriptsLibraryMessages
    -- HyperCard's messages sent to an object with no handler for them end
@@ -842,10 +875,10 @@ on TestHyperCardScriptsImported
    local tStack, tReport, tLine, tObject, tFailed
    put _ImportFile("TestV1.stack", "TestV1.stack") into tStack
    put revHyperCardFixScripts(tStack) into tReport
-   -- (4 scripts that did not compile; 33 that did, for "go home",
-   -- "arrowKey", the cursor and "go" to another stack, by "stack" or by
-   -- its name alone)
-   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 37 rewritten" is in tReport
+   -- (4 scripts that did not compile; 34 that did, for "go home",
+   -- "arrowKey", the cursor, "go" to another stack, by "stack" or by
+   -- its name alone, and doMenu "Quit HyperCard")
+   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 38 rewritten" is in tReport
    set the itemDelimiter to tab
    repeat for each line tLine in tReport
       if item 2 of tLine is empty then next repeat

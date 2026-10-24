@@ -198,6 +198,38 @@ on checkForMissingFonts
    return empty
 end checkForMissingFonts
 
+-- debug sound off, debug pureQuickDraw true...: HyperCard 2's debug
+-- options (rule T35), which have nothing to set here
+on hcDebug pOptions
+   return empty
+end hcDebug
+
+-- Externals stacks called most that this script can do (a CD's stacks:
+-- SetVolume in 26, GetVolume in 18, Trim in 12): a stack's own XCMD or
+-- XFCN of the name is not run here, so these stand in for it
+
+-- the sound volume, 0 to 7 as the Macintosh's, from this engine's
+-- playLoudness (0 to 100)
+function GetVolume
+   return round(the playLoudness * 7 / 100)
+end GetVolume
+
+on SetVolume pLevel
+   if pLevel is not a number then return empty
+   set the playLoudness to max(0, min(100, round(pLevel * 100 / 7)))
+end SetVolume
+
+-- the text without the spaces and tabs at its start and end
+function Trim pText
+   repeat while pText is not empty and (char 1 of pText is space or char 1 of pText is tab)
+      delete char 1 of pText
+   end repeat
+   repeat while pText is not empty and (char -1 of pText is space or char -1 of pText is tab)
+      delete char -1 of pText
+   end repeat
+   return pText
+end Trim
+
 ----------------------------------------------------------------------
 -- go to a stack that is not open
 --
