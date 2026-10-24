@@ -293,6 +293,8 @@ function revHyperCardFixScripts pStack
 
    put _AddLibrary(sStack, tStandIns) into tLine
    if tLine is not empty then put tLine & return after tReport
+   put _QuietPalettes(sStack) into tLine
+   if tLine is not empty then put tLine & return after tReport
    if tLine begins with "Added" and sStandInNames is not empty then
       put "Stand-ins: the stack's external commands, which this engine cannot run, do nothing when called:" && sStandInNames & return after tReport
    end if
@@ -669,6 +671,35 @@ private function _StandIns pStack, pDefines
    return tOut
 end _StandIns
 
+-- The messages a palette window gets as it opens and closes, which a
+-- palette made from a PLTE resource (a substack, its script made by the
+-- engine's importer) would pass on to the stack's own script: in
+-- HyperCard a palette was a window, not a stack, and the stack's
+-- openStack did not run again as its palette opened (CoinMaster's
+-- openStack, run from the palette it opens, found none of its fields)
+constant kPaletteMessages = "preOpenStack openStack closeStack preOpenCard openCard closeCard openBackground closeBackground resumeStack suspendStack"
+constant kPaletteFirstLine = "-- HyperCard palette (PLTE resource), made by the HyperCard importer"
+
+private function _QuietPalettes pStack
+   local tSub, tScript, tMessage, tAdd, tCount
+   put 0 into tCount
+   repeat for each line tSub in the substacks of pStack
+      put the script of stack tSub of pStack into tScript
+      if line 1 of tScript is not kPaletteFirstLine then next repeat
+      put empty into tAdd
+      repeat for each word tMessage in kPaletteMessages
+         if ("on" && tMessage) is among the lines of tScript then next repeat
+         put return & "on" && tMessage & return & "end" && tMessage after tAdd
+      end repeat
+      if tAdd is empty then next repeat
+      set the script of stack tSub of pStack to tScript & return & \
+            "-- (a palette's own opening and closing do not reach the stack)" & tAdd
+      add 1 to tCount
+   end repeat
+   if tCount is 0 then return empty
+   return "Palettes:" && tCount && "made to keep their opening and closing messages from the stack's script"
+end _QuietPalettes
+
 -- Add the library as a substack of the stack and make it the stack's
 -- behavior. Returns a line for the report, or empty if it was there.
 private function _AddLibrary pStack, pStandIns
@@ -692,9 +723,18 @@ private function _AddLibrary pStack, pStandIns
    if tName is not among the lines of the substacks of pStack then
       -- made under a name no other stack has, as the library of a stack
       -- imported before would otherwise be the one "it" names
-      local tTemp
+      local tTemp, tMain, tPlain
       put "revHyperCardLibrary" & the milliseconds into tTemp
       create invisible stack tTemp
+      -- the mainStack is set by name, and a name that is a number ("007")
+      -- is not found as one: the stack has another name while its
+      -- library is made
+      put the short name of pStack into tMain
+      if tMain is a number then
+         put "revHyperCardStack" & the milliseconds into tPlain
+         set the name of pStack to tPlain
+         put the long id of stack tPlain into pStack
+      end if
       set the mainStack of stack tTemp to the short name of pStack
       set the name of stack tTemp of pStack to tName
       set the script of stack tName of pStack to revHyperCardLibraryScript() & pStandIns
@@ -704,6 +744,7 @@ private function _AddLibrary pStack, pStandIns
       close stack tName of pStack
    end if
    set the behavior of pStack to the long id of stack tName of pStack
+   if tPlain is not empty then set the name of pStack to tMain
    return "Added: the substack" && quote & tName & quote && "as the stack's behavior"
 end _AddLibrary
 

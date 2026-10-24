@@ -138,6 +138,66 @@ on hcGoHome
    return "Can't find the Home stack"
 end hcGoHome
 
+-- HyperCard 2's Home stack had handlers other stacks called, as they
+-- were in every user's message path (a CD's stacks call getHomeInfo in
+-- 47 stacks, lastHCItem in 11, setUserLevelFive in 9). With no Home
+-- stack here, these stand in for them; a stack's own comes first.
+
+-- getHomeInfo: the Home stack read the user's name and search paths into
+-- these globals (Stacks and Documents are hc_Stacks and hc_Documents in
+-- the rewritten scripts, rule T2). The name is the system's user; the
+-- paths stay as they are
+on getHomeInfo
+   global hc_Stacks, Applications, hc_Documents, UserName
+   if UserName is empty then
+      put $USER into UserName
+      if UserName is empty then put $USERNAME into UserName
+   end if
+   return empty
+end getHomeInfo
+
+on setUserLevelFive
+   global SvLvl
+   put the userLevel into SvLvl
+   set the userLevel to 5
+end setUserLevelFive
+
+on restoreUserLevel
+   global SvLvl
+   if SvLvl is a number then set the userLevel to SvLvl
+end restoreUserLevel
+
+on allowInterruption
+   set the cantAbort of this stack to false
+end allowInterruption
+
+on disallowInterruption
+   set the cantAbort of this stack to true
+end disallowInterruption
+
+-- the part of pText after the last pDelim, all of it with none
+function lastHCItem pDelim, pText
+   local tAt
+   if pDelim is empty then return pText
+   repeat
+      put offset(pDelim, pText) into tAt
+      if tAt is 0 then exit repeat
+      delete char 1 to tAt + the number of chars of pDelim - 1 of pText
+   end repeat
+   return pText
+end lastHCItem
+
+-- the fonts the Home stack checked for and warned of: shown here in
+-- another face when the system lacks them, which the import summary says
+function checkHCFont pFont, pSizes
+   if pFont is among the lines of the fontNames then return empty
+   return pFont && pSizes & return
+end checkHCFont
+
+on checkForMissingFonts
+   return empty
+end checkForMissingFonts
+
 ----------------------------------------------------------------------
 -- go to a stack that is not open
 --
@@ -308,6 +368,11 @@ private function _HCImport pFile
       put empty into tStack
    end try
    if tStack is not empty then
+      -- this engine's stack names have no commas: the name it gives
+      if the short name of tStack contains comma then
+         set the name of tStack to the short name of tStack
+         put the long id of stack (the short name of tStack) into tStack
+      end if
       if line 2 of pFile is empty then
          set the uHyperCard["file"] of tStack to tPath
       else
@@ -319,6 +384,7 @@ private function _HCImport pFile
             set the itemDelimiter to colon
             put the last item of line 3 of pFile into tEach
             replace slash with "-" in tEach
+            replace comma with "_" in tEach
             if the short name of tStack is not tEach then
                set the name of tStack to tEach
                put the long id of stack tEach into tStack

@@ -7573,6 +7573,7 @@ on revIDEImportHyperCardFromDiskImage pImage, pStackPath
       set the itemDelimiter to colon
       put the last item of pStackPath into tName
       replace slash with "-" in tName
+      replace comma with "_" in tName
       if the short name of sHyperCardImported is not tName then
          local tWasLocked
          put the lockMessages into tWasLocked
@@ -7671,6 +7672,14 @@ on revIDEImportHyperCardStack pFilePath, pImage, pImagePath
    go stack pFilePath
    put the result into tError
    if tError is empty then put the long id of the defaultStack into tStack
+   -- OXT-Beyond: this engine's stack names have no commas (a name set by
+   -- script has each made "_"), and a stack named with one ("Yes/No,T/F
+   -- Scorer") is not found by it: the stack takes the name this engine
+   -- gives it
+   if tError is empty and the short name of tStack contains comma then
+      set the name of tStack to the short name of tStack
+      put the long id of the defaultStack into tStack
+   end if
    -- OXT-Beyond: where it came from, so that a "go" to a stack beside it
    -- finds that stack (the HyperCard Library's hcStackName)
    if tError is empty then

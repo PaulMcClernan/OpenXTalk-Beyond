@@ -523,6 +523,38 @@ on TestHyperCardScriptsLibrary
    _Close tStack
 end TestHyperCardScriptsLibrary
 
+on TestHyperCardScriptsHomeHandlers
+   -- the HyperCard 2 Home stack's handlers stacks called, which the
+   -- library stands in for, and a stack's own coming first
+   local tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCHome" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest, Stacks, UserName", \
+         "  getHomeInfo", "  setUserLevelFive", "  put the userLevel into gHCScriptsTest", "  restoreUserLevel", \
+         "  put comma & lastHCItem(" & q & ":" & q & ", " & q & "HD:Stacks:Home" & q & ") after gHCScriptsTest", \
+         "  put comma & (UserName is UserName) after gHCScriptsTest", \
+         "  disallowInterruption", "  put comma & the cantAbort of this stack after gHCScriptsTest", "  allowInterruption", \
+         "  put comma & checkHCFont(" & q & "No Such Font" & q & ", " & q & "12" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Own"
+   set the script of button "Own" to _Lines("on mouseUp", "  global gHCScriptsTest", "  getHomeInfo", "end mouseUp", \
+         "on getHomeInfo", "  global gHCScriptsTest", "  put " & q & "own" & q & " into gHCScriptsTest", "end getHomeInfo")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "Home handlers: user level, lastHCItem, getHomeInfo, cantAbort, checkHCFont", gHCScriptsTest is "5,Home,true,true,No Such Font 12" & return
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Own" of stack tStack
+   TestAssert "Home handlers: a stack's own getHomeInfo first", gHCScriptsTest is "own"
+   _Close tStack
+end TestHyperCardScriptsHomeHandlers
+
 on TestHyperCardScriptsLibraryMessages
    -- HyperCard's messages sent to an object with no handler for them end
    -- in the library; the XFCNs with a plain equivalent answer
@@ -675,6 +707,37 @@ on TestHyperCardScriptsTwoImports
    _Close tFirst
    _Close tSecond
 end TestHyperCardScriptsTwoImports
+
+on TestHyperCardScriptsNumberName
+   -- a stack whose name is a number (a CD's "007"): its library is made
+   -- although the mainStack is set by name, and the stack keeps its name
+   local tName, tStack, tError
+   global gHCScriptsTest
+   put "0" & (the milliseconds mod 100000) into tName
+   lock messages
+   create invisible stack tName
+   put it into tStack
+   set the defaultStack to tStack
+   create button "B" in card 1 of tStack
+   set the script of button "B" of card 1 of tStack to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the version into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   try
+      get revHyperCardFixScripts(tStack)
+   catch tError
+   end try
+   TestAssert "a number as a name: no error", tError is empty
+   TestAssert "a number as a name: the stack keeps it", the short name of tStack is tName
+   TestAssert "a number as a name: its library", _Library(tName) is among the lines of the substacks of tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "B" of card 1 of tStack
+   catch tError
+   end try
+   TestAssert "a number as a name: the library answers", gHCScriptsTest is "2.4.1"
+   lock messages
+   delete tStack
+   unlock messages
+end TestHyperCardScriptsNumberName
 
 on TestHyperCardScriptsStandIns
    -- calls to the externals stacks call most reach the library's
