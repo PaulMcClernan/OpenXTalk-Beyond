@@ -30,6 +30,13 @@ on hcDoMenu pItem, pMenu
       create button "New Button"
       return empty
    end if
+   -- Quit HyperCard: in the IDE, the stack is closed rather than the IDE
+   -- quit (a stack that quit as it opened closed the IDE, with no word
+   -- about unsaved work); a standalone quits, as HyperCard did
+   if pItem is among the items of "Quit HyperCard,Quit" and the environment is "development" then
+      close this stack
+      return empty
+   end if
    doMenu pItem
    return the result
 end hcDoMenu
@@ -39,6 +46,13 @@ end hcDoMenu
 function hcVersion
    return "2.4.1"
 end hcVersion
+
+-- the heapSpace: the memory HyperCard had free, which stacks checked
+-- before they ran (Gems of Hubble quits under 1321000). This engine's
+-- heapSpace is 1000000 always; 16 MB passes those checks
+function hcHeapSpace
+   return 16777216
+end hcHeapSpace
 
 -- HyperCard's long version, as HyperCard 2.4.1 gave it
 function hcLongVersion

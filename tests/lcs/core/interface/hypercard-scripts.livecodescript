@@ -135,6 +135,11 @@ on TestHyperCardScriptsRules
    TestAssert "T10: the version of a scripting language", line 2 of tScript is "  put hcVersion() into x"
    TestAssert "T10: version of a scripting language, without the", line 3 of tScript is "  get hcVersion()"
 
+   -- the heapSpace, which Gems of Hubble checks before it quits
+   put _Rewrite("on mouseUp", "  if the HeapSpace < 1321000 then beep", "  put heapSpace() into x", "end mouseUp") into tScript
+   TestAssert "T10: the heapSpace", line 2 of tScript is "  if hcHeapSpace() < 1321000 then beep"
+   TestAssert "T10: heapSpace()", line 3 of tScript is "  put hcHeapSpace() into x"
+
    put _Rewrite("junk before", "on mouseUp", "  put 1 into x", "end mouseUp", "junk after") into tScript
    TestAssert "T0: text outside handlers", tScript is _Lines("-- junk before", "on mouseUp", "  put 1 into x", "end mouseUp", "-- junk after")
 
@@ -181,7 +186,7 @@ on TestHyperCardScriptsRules
    TestAssert "T11: in card for of card", line 5 of tScript is "  put the number of items in fld " & quote & "F" & quote & " of card " & quote & "K" & quote & " into x"
    TestAssert "T7: number of without the", line 6 of tScript is "  put the number of cards into n"
    TestAssert "T7: version without the", line 7 of tScript is "  if hcVersion() < 2 then beep"
-   TestAssert "T31: a string closed at the end of the line", line 8 of tScript is "  domenu " & quote & "Quit HyperCard" & quote
+   TestAssert "T31: a string closed at the end of the line (and Quit HyperCard to the library, T27)", line 8 of tScript is "  hcDoMenu " & quote & "Quit HyperCard" & quote
    TestAssert "T22: delete menuItem from menu", line 9 of tScript is "  hcDeleteMenuItem " & quote & "Edit" & quote & ", " & quote & "New Card" & quote
    TestAssert "T5: notes after a tempo in a variable", line 10 of tScript is "  play harpsichord tempo t " & quote & "c5e d e" & quote
    TestAssert "T3: a field named cards", line 11 of tScript is "  put card field " & quote & "cards" & quote & " into x"
@@ -347,6 +352,14 @@ on TestHyperCardScriptsT35
    TestAssert "T35: send to card after then", line 8 of tScript is "  if x then send " & q & "go" & q & " to this card"
    TestAssert "T35: is not off", line 9 of tScript is "  if y is not " & q & "off" & q & " then beep"
    TestAssert "T35: the script compiles", _Compiles(tScript)
+
+   -- a message called alone as a command (Gems of Hubble's resumeStack
+   -- calls openCard), and quit as a menu item
+   put _Rewrite("on resumeStack", "  openCard", "  if x then closeCard", "  pass resumeStack", "end resumeStack", "on mouseUp", "  doMenu " & q & "Quit HyperCard" & q, "end mouseUp") into tScript
+   TestAssert "T35: openCard sent", line 2 of tScript is "  send " & q & "openCard" & q & " to me"
+   TestAssert "T35: closeCard after then sent", line 3 of tScript is "  if x then send " & q & "closeCard" & q & " to me"
+   TestAssert "T35: pass left alone", line 4 of tScript is "  pass resumeStack"
+   TestAssert "T27: Quit HyperCard to the library", line 7 of tScript is "  hcDoMenu " & q & "Quit HyperCard" & q
 
    -- unchanged: a count put into the message box, a variable after
    -- play's voice, a variable named on, doMenu with a variable, quoted

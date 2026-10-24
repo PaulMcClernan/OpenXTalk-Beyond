@@ -1986,6 +1986,7 @@ end _ExternalArguments
 -- HyperCard's, not this engine's (scripts test "the version < 2")
 private function _VersionRule pLine
    local tTokens, tCode, tIdx, n, tItem, i, tWord
+   if "heapspace" is in pLine then put _HeapSpaceRule(pLine) into pLine
    if "version" is not in pLine then return pLine
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -2006,6 +2007,32 @@ private function _VersionRule pLine
    end repeat
    return _Join(tTokens)
 end _VersionRule
+
+-- T10: the heapSpace (or heapSpace()), the memory HyperCard had free,
+-- which stacks checked before they ran ("if the heapSpace < 1321000 then
+-- doMenu Quit HyperCard"); this engine gives 1000000 always, so it goes
+-- to the library's hcHeapSpace()
+private function _HeapSpaceRule pLine
+   local tTokens, tCode, tIdx, n, tItem, i
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = 1 to n
+      if _T(tTokens, tIdx[i]) is not "heapspace" then next repeat
+      if i > 1 and _T(tTokens, tIdx[i - 1]) is "the" then
+         _Replace tTokens, tIdx, i - 1, i, "hcHeapSpace()"
+         _Fire "T10 HyperCard's version"
+      else if _T(tTokens, tIdx[i + 1]) is "(" and _T(tTokens, tIdx[i + 2]) is ")" then
+         _Replace tTokens, tIdx, i, i + 2, "hcHeapSpace()"
+         _Fire "T10 HyperCard's version"
+      end if
+   end repeat
+   return _Join(tTokens)
+end _HeapSpaceRule
 
 -- Replace the code tokens pFrom to pTo with pText
 private command _Replace @pTokens, pIdx, pFrom, pTo, pText
@@ -2225,6 +2252,37 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tWord is "domenu" and tEnd = i + 1 and _T(tTokens, tIdx[i + 1]) is quote & "new button" & quote then
                _Fire "T27 doMenu with the item not in quotes"
                put "hcDoMenu" && tTokens[tIdx[i + 1]]["t"] into tNew
+            end if
+            -- doMenu "Quit HyperCard": the library's hcDoMenu, which
+            -- closes the stack in the IDE rather than quit it (a stack
+            -- that found too little memory quit, with messages locked, so
+            -- the IDE closed without asking to save), and quits a
+            -- standalone as HyperCard quit
+            if tWord is "domenu" then
+               if tEnd = i + 1 and _T(tTokens, tIdx[i + 1]) is among the items of (quote & "quit hypercard" & quote & comma & quote & "quit" & quote) then
+                  _Fire "T27 doMenu with the item not in quotes"
+                  put "hcDoMenu" && tTokens[tIdx[i + 1]]["t"] into tNew
+               else if tEnd > i + 1 and tPlain and _Span(tTokens, tIdx, i + 1, tEnd) is among the items of "quit hypercard,quit" then
+                  put "hcDoMenu" && quote & _Span(tTokens, tIdx, i + 1, tEnd) & quote into tNew
+               end if
+            end if
+            break
+         case "opencard"
+         case "closecard"
+         case "openbackground"
+         case "closebackground"
+         case "openstack"
+         case "closestack"
+         case "resumestack"
+         case "suspendstack"
+            -- T35: a message HyperCard sent ("openCard"), called alone as a
+            -- command: what no handler took, HyperCard took; here it is
+            -- passed off the end of the message path, where this engine
+            -- has no such command and stops with an error. Sent instead,
+            -- it goes the same way and ends quietly
+            if tEnd = i then
+               _Fire "T35 more forms HyperCard took"
+               put "send" && quote & tTokens[tIdx[i]]["t"] & quote && "to me" into tNew
             end if
             break
          default
