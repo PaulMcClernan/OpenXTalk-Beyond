@@ -427,6 +427,8 @@ on hcPutIntoMenu pItems, pPreposition, pMenu, pMessages, pItem
       put _HCMenuItemNumber(tKey, pItem) into tAt
       if tAt is 0 then return "Can't find menu item" && pItem
       put item 1 of pItems into sHCMenus[tKey][tAt]["name"]
+      -- (with menuMsg X: the item's message too)
+      if pMessages is not empty then put word 1 to -1 of pMessages into sHCMenus[tKey][tAt]["menumessage"]
       return empty
    end if
    put sHCMenus[tKey]["count"] into tOld
@@ -573,6 +575,18 @@ private function _HCMenuItemNumber pKey, pItem
       put sHCMenus[pKey][i]["name"] into tName
       if tName is pItem or (tName ends with "..." and char 1 to -4 of tName is pItem) then return i
    end repeat
+   -- by its place, when no item has that name: "last", "first" ...
+   -- "tenth", "middle" (a script's "last menuItem of menu M")
+   if pItem is among the words of "first second third fourth fifth sixth seventh eighth ninth tenth" then
+      put wordOffset(pItem, "first second third fourth fifth sixth seventh eighth ninth tenth") into i
+   else if pItem is "last" then
+      put sHCMenus[pKey]["count"] into i
+   else if pItem is "middle" then
+      put (sHCMenus[pKey]["count"] + 1) div 2 into i
+   else
+      return 0
+   end if
+   if i >= 1 and i <= sHCMenus[pKey]["count"] then return i
    return 0
 end _HCMenuItemNumber
 

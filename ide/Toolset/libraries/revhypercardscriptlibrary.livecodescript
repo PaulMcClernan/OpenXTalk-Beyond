@@ -127,6 +127,9 @@ constant kLibraryName = "HyperCard Library"
 
 -- The properties of a menu and a menu item in HyperCard 2.2's menus
 constant kMenuProperties = "checkmark commandchar cmdchar enabled markchar name textstyle menumessage menumsg"
+-- The words that name a menu item by its place ("last menuItem of menu 3"),
+-- which the library's menus read (_HCMenuItemNumber)
+constant kMenuOrdinals = "first second third fourth fifth sixth seventh eighth ninth tenth last middle"
 
 -- The properties of HyperCard's picture and palette windows that this
 -- engine's windows do not have (T26)
@@ -2403,8 +2406,20 @@ private function _MenuItemProperties pLine
       if _T(tTokens, tIdx[i]) is "the" and _T(tTokens, tIdx[i - 1]) is not "set" \
             and _T(tTokens, tIdx[i + 1]) is among the words of kMenuProperties \
             and _T(tTokens, tIdx[i + 2]) is "of" and _T(tTokens, tIdx[i + 3]) is "menuitem" \
-            and _T(tTokens, tIdx[i + 5]) is "of" and _T(tTokens, tIdx[i + 6]) is "menu" then
+            and _T(tTokens, tIdx[i + 5]) is among the words of "of in" and _T(tTokens, tIdx[i + 6]) is "menu" then
          _Replace tTokens, tIdx, i, i + 7, "hcMenuItem(" & quote & _T(tTokens, tIdx[i + 1]) & quote & comma && tTokens[tIdx[i + 7]]["t"] & comma && tTokens[tIdx[i + 4]]["t"] & ")"
+         _Fire "T22 HyperCard menus"
+         put true into tChanged
+      end if
+   end repeat
+   -- ... without the ("if checkMark of menuItem 1 of menu M"), or with
+   -- "in menu", which HyperCard took too
+   repeat with i = 1 to n - 6
+      if _T(tTokens, tIdx[i]) is among the words of kMenuProperties and _T(tTokens, tIdx[i - 1]) is not among the words of "the set" \
+            and tTokens[tIdx[i]]["k"] is "w" \
+            and _T(tTokens, tIdx[i + 1]) is "of" and _T(tTokens, tIdx[i + 2]) is "menuitem" \
+            and _T(tTokens, tIdx[i + 4]) is among the words of "of in" and _T(tTokens, tIdx[i + 5]) is "menu" then
+         _Replace tTokens, tIdx, i, i + 6, "hcMenuItem(" & quote & _T(tTokens, tIdx[i]) & quote & comma && tTokens[tIdx[i + 6]]["t"] & comma && tTokens[tIdx[i + 3]]["t"] & ")"
          _Fire "T22 HyperCard menus"
          put true into tChanged
       end if
@@ -2662,9 +2677,15 @@ private function _SetMenuItem pTokens, pIdx, pAt, pEnd
    put _FindWord(pTokens, pIdx, j + 2, pEnd, "to", empty) into tTo
    if tTo is empty or tTo = pEnd then return empty
    if _T(pTokens, pIdx[j + 2]) is "menuitem" then
-      put _FindWord(pTokens, pIdx, j + 3, tTo, "of", "menu") into tMenu
+      put _FindWord(pTokens, pIdx, j + 3, tTo, "of in", "menu") into tMenu
       if tMenu is empty or tMenu = j + 3 or tMenu + 2 > tTo - 1 then return empty
       put _Span(pTokens, pIdx, j + 3, tMenu - 1) into tItem
+      add 2 to tMenu
+   else if _T(pTokens, pIdx[j + 2]) is among the words of kMenuOrdinals and _T(pTokens, pIdx[j + 3]) is "menuitem" then
+      -- set the checkMark of last menuItem of menu M
+      put _FindWord(pTokens, pIdx, j + 4, tTo, "of in", "menu") into tMenu
+      if tMenu is not j + 4 or tMenu + 2 > tTo - 1 then return empty
+      put quote & _T(pTokens, pIdx[j + 2]) & quote into tItem
       add 2 to tMenu
    else if _T(pTokens, pIdx[j + 2]) is "menu" and j + 3 < tTo then
       put "empty" into tItem
@@ -2681,6 +2702,11 @@ end _SetMenuItem
 private function _PutIntoMenu pTokens, pIdx, pAt, pEnd
    local tPrep, tWith, tMenu, tItem, tMessages
    put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "into after before", "menu menuitem") into tPrep
+   if tPrep is empty then
+      -- put E into last menuItem of menu M
+      put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "into after before", kMenuOrdinals) into tPrep
+      if tPrep is not empty and _T(pTokens, pIdx[tPrep + 2]) is not "menuitem" then put empty into tPrep
+   end if
    if tPrep is empty or tPrep + 2 > pEnd then return empty
    put "empty" into tMessages
    put "empty" into tItem
@@ -2692,9 +2718,14 @@ private function _PutIntoMenu pTokens, pIdx, pAt, pEnd
       put tWith - 1 into pEnd
    end if
    if _T(pTokens, pIdx[tPrep + 1]) is "menuitem" then
-      put _FindWord(pTokens, pIdx, tPrep + 2, pEnd, "of", "menu") into tMenu
+      put _FindWord(pTokens, pIdx, tPrep + 2, pEnd, "of in", "menu") into tMenu
       if tMenu is empty or tMenu = tPrep + 2 or tMenu + 2 > pEnd then return empty
       put _Span(pTokens, pIdx, tPrep + 2, tMenu - 1) into tItem
+      put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
+   else if _T(pTokens, pIdx[tPrep + 2]) is "menuitem" then
+      put _FindWord(pTokens, pIdx, tPrep + 3, pEnd, "of in", "menu") into tMenu
+      if tMenu is not tPrep + 3 or tMenu + 2 > pEnd then return empty
+      put quote & _T(pTokens, pIdx[tPrep + 1]) & quote into tItem
       put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else
       put _Span(pTokens, pIdx, tPrep + 2, pEnd) into tMenu
@@ -2713,10 +2744,17 @@ private function _MenuCommand pTokens, pIdx, pAt, pEnd
       put _Span(pTokens, pIdx, pAt + 2, pEnd) into tMenu
       put "empty" into tItem
    else if _T(pTokens, pIdx[pAt + 1]) is "menuitem" and tVerb is not "create" then
-      put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "of", "menu") into tMenu
+      put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "of in", "menu") into tMenu
       if tMenu is empty and tVerb is "delete" then put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "from", "menu") into tMenu
       if tMenu is empty or tMenu = pAt + 2 or tMenu + 2 > pEnd then return empty
       put _Span(pTokens, pIdx, pAt + 2, tMenu - 1) into tItem
+      put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
+   else if _T(pTokens, pIdx[pAt + 1]) is among the words of kMenuOrdinals and _T(pTokens, pIdx[pAt + 2]) is "menuitem" \
+         and tVerb is not "create" then
+      -- disable last menuItem of menu M
+      put _FindWord(pTokens, pIdx, pAt + 3, pEnd, "of in from", "menu") into tMenu
+      if tMenu is not pAt + 3 or tMenu + 2 > pEnd then return empty
+      put quote & _T(pTokens, pIdx[pAt + 1]) & quote into tItem
       put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else
       return empty

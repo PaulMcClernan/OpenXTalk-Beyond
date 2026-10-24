@@ -233,6 +233,15 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T22: the checkMark of menuItem", line 5 of tScript is "  if hcMenuItem(" & q & "checkmark" & q & ", " & q & "Tools" & q & ", 1) then beep"
    TestAssert "T22: delete menuItem", line 6 of tScript is "  hcDeleteMenuItem " & q & "Tools" & q & ", 1"
 
+   -- "in menu", a menu item by its place, and a property without the
+   -- (Audio Help's and HyperJack's)
+   put _Rewrite("on mouseUp", "  set the checkmark of menuItem tItem in menu 3 to true", "  put tName into last menuItem of menu 3 with menuMsg APHideNotes", "  disable last menuItem of menu 3", "  if checkMark of menuItem " & q & "Sound" & q & " of menu " & q & "Option" & q & " is true then beep", "  if the enabled of menuItem 2 in menu 3 then beep", "end mouseUp") into tScript
+   TestAssert "T22: set ... of menuItem in menu", line 2 of tScript is "  hcSetMenuItem " & q & "checkmark" & q & ", 3, tItem, true"
+   TestAssert "T22: put into last menuItem with menuMsg", line 3 of tScript is "  hcPutIntoMenu tName, " & q & "into" & q & ", 3, APHideNotes, " & q & "last" & q
+   TestAssert "T22: disable last menuItem", line 4 of tScript is "  hcEnableMenu false, 3, " & q & "last" & q
+   TestAssert "T22: a menu item's property without the", line 5 of tScript is "  if hcMenuItem(" & q & "checkmark" & q & ", " & q & "Option" & q & ", " & q & "Sound" & q & ") is true then beep"
+   TestAssert "T22: the property of menuItem in menu", line 6 of tScript is "  if hcMenuItem(" & q & "enabled" & q & ", 3, 2) then beep"
+
    put _Rewrite("on mouseUp", "  start using stack " & q & "Lib" & q, "  stop using stack tName", "  print card field " & q & "Notes" & q, "  print card 3", "end mouseUp") into tScript
    TestAssert "T23: start using a stack", line 2 of tScript is "  hcStartUsing " & q & "Lib" & q
    TestAssert "T23: stop using a stack", line 3 of tScript is "  hcStopUsing tName"
