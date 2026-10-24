@@ -565,7 +565,7 @@ end TestHyperCardScriptsHomeHandlers
 
 on TestHyperCardScriptsCommonExternals
    -- the externals stacks called most that the library stands in for
-   local tStack, q, tLoudness
+   local tStack, q, tLoudness, tSettable
    global gHCScriptsTest
    put quote into q
    put "HCExternals" & the milliseconds into tStack
@@ -581,10 +581,20 @@ on TestHyperCardScriptsCommonExternals
    unlock messages
    get revHyperCardFixScripts(tStack)
    put the playLoudness into tLoudness
+   -- a machine with no sound output keeps the playLoudness at 0 whatever
+   -- it is set to (the Linux and Windows CI runners), so the volume is
+   -- only checked where it can be set
+   set the playLoudness to 50
+   put the playLoudness is 50 into tSettable
    put empty into gHCScriptsTest
    send "mouseUp" to button "B" of stack tStack
    set the playLoudness to tLoudness
-   TestAssert "Trim, SetVolume and GetVolume", gHCScriptsTest is "a b,7,100,0"
+   if tSettable then
+      TestAssert "Trim, SetVolume and GetVolume", gHCScriptsTest is "a b,7,100,0"
+   else
+      TestAssert "Trim", item 1 of gHCScriptsTest is "a b"
+      TestSkip "SetVolume and GetVolume", "the playLoudness cannot be set on this machine"
+   end if
    _Close tStack
 end TestHyperCardScriptsCommonExternals
 

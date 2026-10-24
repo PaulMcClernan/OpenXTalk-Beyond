@@ -293,11 +293,11 @@ function revHyperCardFixScripts pStack
 
    put _AddLibrary(sStack, tStandIns) into tLine
    if tLine is not empty then put tLine & return after tReport
-   put _QuietPalettes(sStack) into tLine
-   if tLine is not empty then put tLine & return after tReport
    if tLine begins with "Added" and sStandInNames is not empty then
       put "Stand-ins: the stack's external commands, which this engine cannot run, do nothing when called:" && sStandInNames & return after tReport
    end if
+   put _QuietPalettes(sStack) into tLine
+   if tLine is not empty then put tLine & return after tReport
 
    put "HyperCard scripts:" && tChanged && "rewritten," && tSalvaged && "salvaged by handler (" & tStubs && "handlers left out)," && tStill && "still do not compile" into tSummary
    put tSummary after tReport
