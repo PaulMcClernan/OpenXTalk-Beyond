@@ -7564,6 +7564,25 @@ on revIDEImportHyperCardFromDiskImage pImage, pStackPath
    revIDEImportHyperCardStack tPath, pImage, pStackPath
    put the result into tResult
    __revIDEDeleteHyperCardCopy tFolder
+   -- OXT-Beyond: a name Windows refuses for a file ("WhatIsIt?") was
+   -- copied out under another (revHyperCardImageExtract), and the
+   -- importer names the stack after its file: give it back its name
+   if tResult is empty and the platform is "Win32" and sHyperCardImported is not empty \
+         and there is a sHyperCardImported then
+      local tName
+      set the itemDelimiter to colon
+      put the last item of pStackPath into tName
+      replace slash with "-" in tName
+      replace comma with "_" in tName
+      if the short name of sHyperCardImported is not tName then
+         local tWasLocked
+         put the lockMessages into tWasLocked
+         lock messages
+         set the name of sHyperCardImported to tName
+         put the long id of stack tName into sHyperCardImported
+         set the lockMessages to tWasLocked
+      end if
+   end if
    return tResult
 end revIDEImportHyperCardFromDiskImage
 
@@ -7653,6 +7672,14 @@ on revIDEImportHyperCardStack pFilePath, pImage, pImagePath
    go stack pFilePath
    put the result into tError
    if tError is empty then put the long id of the defaultStack into tStack
+   -- OXT-Beyond: this engine's stack names have no commas (a name set by
+   -- script has each made "_"), and a stack named with one ("Yes/No,T/F
+   -- Scorer") is not found by it: the stack takes the name this engine
+   -- gives it
+   if tError is empty and the short name of tStack contains comma then
+      set the name of tStack to the short name of tStack
+      put the long id of the defaultStack into tStack
+   end if
    -- OXT-Beyond: where it came from, so that a "go" to a stack beside it
    -- finds that stack (the HyperCard Library's hcStackName)
    if tError is empty then
