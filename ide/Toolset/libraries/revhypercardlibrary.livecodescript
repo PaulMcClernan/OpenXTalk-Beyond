@@ -299,6 +299,17 @@ private function _HCImport pFile
       else
          set the uHyperCard["image"] of tStack to line 2 of pFile
          set the uHyperCard["imagepath"] of tStack to line 3 of pFile
+         -- a name Windows refuses for a file was copied out under
+         -- another (revHyperCardImageExtract): the stack gets its own
+         if the platform is "Win32" then
+            set the itemDelimiter to colon
+            put the last item of line 3 of pFile into tEach
+            replace slash with "-" in tEach
+            if the short name of tStack is not tEach then
+               set the name of tStack to tEach
+               put the long id of stack tEach into tStack
+            end if
+         end if
       end if
       try
          -- (the IDE's, and the Stack Player's)

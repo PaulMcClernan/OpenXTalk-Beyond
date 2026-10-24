@@ -1179,6 +1179,28 @@ private function _NextCode pCode, pIndex
    return empty
 end _NextCode
 
+-- Whether the statement that starts with the token at pIndex goes on to
+-- the end of the statement (the line, or else) with values only: numbers,
+-- strings, the handler's variables, commas and signs; nothing that a
+-- command of this engine would read as its own words ("sort lines of x")
+private function _PlainCall pTokens, pCode, pIndex, pVars
+   local tItem, tFound, tKind, tWord
+   repeat for each item tItem in pCode
+      if not tFound then
+         if tItem = pIndex then put true into tFound
+         next repeat
+      end if
+      put pTokens[tItem]["k"] into tKind
+      put _Lower(pTokens[tItem]["t"]) into tWord
+      if tKind is "w" and tWord is "else" then return true
+      if tKind is among the words of "n s" then next repeat
+      if tKind is "p" and (tWord is comma or tWord is "-" or tWord is "+") then next repeat
+      if tKind is "w" and pVars[tWord] then next repeat
+      return false
+   end repeat
+   return true
+end _PlainCall
+
 -- A token's text in lower case, or empty for no token
 private function _T pTokens, pIndex
    if pIndex is empty then return empty
@@ -1306,6 +1328,13 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
                _Fire "T1 handler named like a keyword"
                next repeat
             end if
+         else if _StatementStart(tTokens, tCode, tIndex) and _PlainCall(tTokens, tCode, tIndex, pVars) then
+            -- ... and a call to one named like a command of this engine
+            -- ("sort", "rename i", "remove") made as a handler is called,
+            -- with nothing but values: HyperCard sent it to the handler
+            put pRenameHandlers[tWord] into tTokens[tIndex]["t"]
+            _Fire "T1 handler named like a keyword"
+            next repeat
          end if
       end if
 

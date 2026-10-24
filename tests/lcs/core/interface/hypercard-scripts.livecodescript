@@ -96,6 +96,16 @@ on TestHyperCardScriptsRules
    put _Rewrite("on doMenu which", "  if which is " & quote & "Quit" & quote & " then exit doMenu", "  pass doMenu", "end doMenu") into tScript
    TestAssert "T1: on doMenu renamed with its exit and pass", tScript is _Lines("on hcDoMenu which", "  if which is " & quote & "Quit" & quote & " then exit hcDoMenu", "  pass hcDoMenu", "end hcDoMenu")
 
+   -- a handler named like a command, called with values only (Video
+   -- Poker's "sort" and "rename i"), and the command itself left alone
+   put _Rewrite("on openCard", "  sort", "  put 2 into i", "  rename i", "  if i > 1 then rename 0", "  sort lines of x by word 2 of each", "end openCard", "on sort", "  beep", "end sort", "on rename n", "  put n into x", "end rename") into tScript
+   TestAssert "T1: a bare call to a handler named like a command", line 2 of tScript is "  hc_sort"
+   TestAssert "T1: a call with a variable", line 4 of tScript is "  hc_rename i"
+   TestAssert "T1: a call after then, with a number", line 5 of tScript is "  if i > 1 then hc_rename 0"
+   TestAssert "T1: the command with its own words is not the handler", line 6 of tScript is "  sort lines of x by word 2 of each"
+   TestAssert "T1: the handlers renamed", line 8 of tScript is "on hc_sort" and line 11 of tScript is "on hc_rename n"
+   TestAssert "T1: the calls compile", _Compiles(tScript)
+
    put _Rewrite("on mouseUp", "  put the message box into x", "  put the msg into y", "end mouseUp") into tScript
    TestAssert "T4: the message box", tScript is _Lines("on mouseUp", "  put msg into x", "  put msg into y", "end mouseUp")
 

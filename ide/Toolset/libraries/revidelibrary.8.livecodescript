@@ -7564,6 +7564,24 @@ on revIDEImportHyperCardFromDiskImage pImage, pStackPath
    revIDEImportHyperCardStack tPath, pImage, pStackPath
    put the result into tResult
    __revIDEDeleteHyperCardCopy tFolder
+   -- OXT-Beyond: a name Windows refuses for a file ("WhatIsIt?") was
+   -- copied out under another (revHyperCardImageExtract), and the
+   -- importer names the stack after its file: give it back its name
+   if tResult is empty and the platform is "Win32" and sHyperCardImported is not empty \
+         and there is a sHyperCardImported then
+      local tName
+      set the itemDelimiter to colon
+      put the last item of pStackPath into tName
+      replace slash with "-" in tName
+      if the short name of sHyperCardImported is not tName then
+         local tWasLocked
+         put the lockMessages into tWasLocked
+         lock messages
+         set the name of sHyperCardImported to tName
+         put the long id of stack tName into sHyperCardImported
+         set the lockMessages to tWasLocked
+      end if
+   end if
    return tResult
 end revIDEImportHyperCardFromDiskImage
 
