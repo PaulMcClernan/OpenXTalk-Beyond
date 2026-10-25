@@ -2111,10 +2111,84 @@ void MCField::ffocus(Field_translations function, MCStringRef p_string, KeySym k
 	}
 }
 
+// OXT-Beyond: the cursor rects that freturn decides autoTab by. They are
+//   cursorrectp and cursorrects, which every field shares, as
+//   positioncursor last set them, but in the Mac looks positioncursor sets
+//   none while the field has a selection (OK-2008-07-22), and a field that
+//   autoTab gives the focus to selects its text: so in the next field they
+//   still held the caret of the field before, and Return there tabbed or
+//   not by where that field's caret had been. From a field above it, the
+//   return replaced the selected text, which looked as if Return had erased
+//   the field (tperry2x, forum p=25398). In that case alone they are found
+//   here as positioncursor would set them in the other looks (without
+//   scrolling, and not drawn); elsewhere they are what it set.
+void MCField::autotabcursorrects(MCRectangle &x_primary, MCRectangle &x_secondary)
+{
+	if (!opened || focusedparagraph == NULL || !focusedparagraph->isselection())
+		return;
+	if (!(IsMacLF() || IsMacLFAM()) || state & CS_DRAG_TEXT || (composing && composelength))
+		return;
+	if (!(state & CS_KFOCUSED) || (!(flags & F_LIST_BEHAVIOR) && flags & F_LOCK_TEXT))
+		return;
+
+	MCRectangle mrect = getfrect();
+	for (int t_pass = 0; t_pass < 2; t_pass++)
+	{
+		bool t_primary = t_pass == 0;
+		MCRectangle drect;
+		if (flags & F_LIST_BEHAVIOR)
+		{
+			// replacecursor: a list field's cursor is the primary rect alone
+			if (!t_primary)
+				break;
+			drect = focusedparagraph->getcursorrect(-1, fixedheight, true);
+		}
+		else
+			drect = focusedparagraph->getcursorrect(-1, fixedheight, false, t_primary ? kMCParagraphCursorTypePrimary : kMCParagraphCursorTypeSecondary);
+
+		// positioncursor's rect, in card coords
+		if (flags & F_LIST_BEHAVIOR && MClook != LF_WIN95)
+		{
+			drect.y -= 2;
+			drect.height += 4;
+		}
+		else
+		{
+			drect.y--;
+			drect.height += 2;
+		}
+		drect.x += getcontentx();
+		drect.y += focusedy + getcontenty();
+		drect = MCU_intersect_rect(drect, mrect);
+		if (!drect.width || !drect.height)
+			continue;
+		if (flags & F_LIST_BEHAVIOR)
+		{
+			drect.x = mrect.x + 2;
+			drect.width = mrect.width - 4;
+			if (MClook != LF_WIN95)
+			{
+				drect.x--;
+				drect.width += 2;
+			}
+		}
+		if (t_primary)
+			x_primary = drect;
+		else
+			x_secondary = drect;
+	}
+}
+
 void MCField::freturn(Field_translations function, MCStringRef p_string, KeySym key)
 {
+	MCRectangle t_cursor_p, t_cursor_s;
+	t_cursor_p = cursorrectp;
+	t_cursor_s = cursorrects;
+	if (flags & F_AUTO_TAB)
+		autotabcursorrects(t_cursor_p, t_cursor_s);
+
     // FG-2014-09-30: [[ Bugfix 13548 ]] Use total height of cursor in calculation
-    if (flags & F_AUTO_TAB && cursorrectp.y + ((cursorrects.height + cursorrectp.height) << 1) > rect.y + getfheight())
+    if (flags & F_AUTO_TAB && t_cursor_p.y + ((t_cursor_s.height + t_cursor_p.height) << 1) > rect.y + getfheight())
 		getcard()->kfocusnext(False);
 	else
 	{
