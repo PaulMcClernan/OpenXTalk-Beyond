@@ -1781,6 +1781,9 @@ enum Properties {
     // that no other value moves
     P_SQL,
     
+    // OXT-Beyond: the global useSystemWindowColor
+    P_USE_SYSTEM_WINDOW_COLOR,
+    
     __P_LAST,
 };
 
