@@ -11,6 +11,10 @@ constant kScrollbarFudge = 18
 constant kBackColor = "Gray75"
 
 local sTab, sEntry
+-- OXT-Beyond: true in the dark appearance (dictReadAppearance); the
+-- pending look again at macOS's appearance after a switch, and how many
+-- looks are left
+local sDark, sAppearanceMsg, sAppearanceTries
 on setAsBehavior pTarget
    dispatch "setAsBehavior" to stack revIDEFrameBehavior() with the long id of this me
    set the behavior of pTarget to the long id of this me
@@ -29,6 +33,11 @@ on openStack
    -- set the backColor of me to kBackColor
    if sTab is empty then
       put "api" into sTab
+   end if
+   -- OXT-Beyond: the pages follow the desktop between light and dark
+   get dictReadAppearance()
+   if there is a stack "revIDELibrary" then
+      revIDESubscribe "ideSystemAppearanceChanged"
    end if
    revIDEGenerateDictionaryHTML sTab, sEntry["library"], sEntry["entry"], sEntry["type"]
    put empty into sEntry
@@ -58,10 +67,15 @@ on showTab pTab
    local tUrl
    put "file://" & revIDEGetDictionaryUrl(pTab) into tUrl
    replace " " with "%20" in tUrl
+   -- (the page puts itself in the dark before it is first drawn)
+   if sDark is true then
+      put "?appearance=dark" after tUrl
+   end if
    set the url of widget "Dictionary" of me to tUrl
 end showTab
 
 on browserNavigateComplete
+   dictApplyAppearance
    if sEntry is not empty then
       do "goEntryName('" & sEntry["library"] & "','" & sEntry["entry"] & "','" & sEntry["type"] & "')" in widget "Dictionary" of me
       put empty into sEntry
@@ -108,3 +122,85 @@ on commandKeyDown pWhich
          pass commandKeyDown
    end switch
 end commandKeyDown
+
+################################################################################
+#
+# OXT-Beyond: light and dark
+#
+
+-- Reads the desktop's appearance, as the Tools palette reads it (revTools'
+-- tmGenerate): macOS's and Windows' systemAppearance, and on Linux, where
+-- the systemAppearance is always light, how dark the GTK theme's window
+-- colour is. True when it changed. The stack's own colour is put back.
+private function dictReadAppearance
+   local tDark, tSaved, tSum, tError
+   put false into tDark
+   try
+      if the platform contains "linux" then
+         put the backgroundColor of me into tSaved
+         lock screen
+         set the backgroundColor of me to empty
+         put the effective backgroundColor of me into tSum
+         set the backgroundColor of me to tSaved
+         unlock screen
+         if item 1 of tSum is a number and item 3 of tSum is a number then
+            put item 1 of tSum + item 2 of tSum + item 3 of tSum < 234 into tDark
+         end if
+      else
+         put the systemAppearance is "dark" into tDark
+      end if
+   catch tError
+      -- (an engine without the property: light, as before)
+   end try
+   if tDark is (sDark is true) then
+      return false
+   end if
+   put tDark into sDark
+   return true
+end dictReadAppearance
+
+-- The page in the browser in the appearance read: its html element has
+-- the class oxt-dark in the dark (html_viewer/css/oxt-dark.css), so a
+-- switch needs no new page and loses no place
+private command dictApplyAppearance
+   local tError
+   if there is not a widget "Dictionary" of me then
+      exit dictApplyAppearance
+   end if
+   try
+      do "document.documentElement.classList.toggle('oxt-dark', " & (sDark is true) & ")" in widget "Dictionary" of me
+   catch tError
+   end try
+end dictApplyAppearance
+
+-- On macOS the systemAppearance comes from the user defaults, which can
+-- still hold the old appearance when the switch is announced: it is read
+-- again every 300 milliseconds, ten times, until it has changed (as the
+-- Tools palette does, tmRecheckAppearance)
+on ideSystemAppearanceChanged
+   if the mode of me is 0 then
+      exit ideSystemAppearanceChanged
+   end if
+   if sAppearanceMsg is not empty then
+      cancel sAppearanceMsg
+      put empty into sAppearanceMsg
+   end if
+   put 10 into sAppearanceTries
+   dictRecheckAppearance
+end ideSystemAppearanceChanged
+
+on dictRecheckAppearance
+   put empty into sAppearanceMsg
+   if the mode of me is 0 then
+      exit dictRecheckAppearance
+   end if
+   if dictReadAppearance() then
+      dictApplyAppearance
+      exit dictRecheckAppearance
+   end if
+   subtract 1 from sAppearanceTries
+   if sAppearanceTries > 0 then
+      send "dictRecheckAppearance" to me in 300 milliseconds
+      put the result into sAppearanceMsg
+   end if
+end dictRecheckAppearance
