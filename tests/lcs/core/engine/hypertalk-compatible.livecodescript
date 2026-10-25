@@ -4,7 +4,8 @@ OXT-Beyond: the hyperTalkCompatible of a stack, which File > Import Stack
 sets for a stack imported from HyperCard. Off, every message goes where
 it always went; on, a background part's message reaches the card before
 the background, a handler can be called doMenu, and doMenu is a message
-before it runs. Each test checks the stack with the property off too.
+before it runs, even while messages are locked, as in HyperCard. Each
+test checks the stack with the property off too.
 */
 
 local sStack
@@ -94,6 +95,13 @@ on TestHyperTalkCompatibleDoMenuOff
    put empty into gHCOrder
    send "mouseUp" to button "C" of stack sStack
    TestAssert "off: doMenu runs the menu item", gHCOrder contains "not implemented"
+
+   set the script of button "C" of stack sStack to "on mouseUp" & return & "global gHCOrder" & return \
+         & "lock messages" & return & "doMenu " & quote & "Not An Item" & quote & return \
+         & "put the result into gHCOrder" & return & "unlock messages" & return & "end mouseUp"
+   put empty into gHCOrder
+   send "mouseUp" to button "C" of stack sStack
+   TestAssert "off: and the same with messages locked", gHCOrder contains "not implemented"
    _DeleteStack
 end TestHyperTalkCompatibleDoMenuOff
 
@@ -119,6 +127,37 @@ on TestHyperTalkCompatibleDoMenu
    TestAssert "on: and the menu item runs after it", gHCResult contains "not implemented"
    _DeleteStack
 end TestHyperTalkCompatibleDoMenu
+
+-- HyperCard's lockMessages kept back only its own messages (openCard,
+-- closeCard...), so a doMenu handler saw the items a script chose with
+-- them locked, and ran with them still locked
+on TestHyperTalkCompatibleDoMenuLocked
+   global gHCOrder, gHCResult, gHCLocked
+   _MakeStack true
+   set the script of card 1 of stack sStack to "on doMenu pItem" & return & "global gHCOrder" & return \
+         & "put pItem & comma & the lockMessages after gHCOrder" & return \
+         & "if pItem is " & quote & "Pass Me" & quote & " then pass doMenu" & return \
+         & "end doMenu"
+   set the script of button "C" of stack sStack to "on mouseUp pItem" & return \
+         & "global gHCResult, gHCLocked" & return & "lock messages" & return & "doMenu pItem" & return \
+         & "put the result into gHCResult" & return & "put the lockMessages into gHCLocked" & return \
+         & "unlock messages" & return & "end mouseUp"
+   put empty into gHCOrder
+   put empty into gHCResult
+   put empty into gHCLocked
+   send "mouseUp" && quote & "Not An Item" & quote to button "C" of stack sStack
+   TestAssert "on: with messages locked, doMenu still reaches the card's doMenu handler", \
+         item 1 of gHCOrder is "Not An Item"
+   TestAssert "on: which runs with messages still locked", item 2 of gHCOrder is true
+   TestAssert "on: and takes it, so no menu item runs", gHCResult is empty
+   TestAssert "on: messages are still locked after it", gHCLocked is true
+
+   put empty into gHCOrder
+   send "mouseUp" && quote & "Pass Me" & quote to button "C" of stack sStack
+   TestAssert "on: with messages locked, a handler that passes doMenu sees it", gHCOrder is "Pass Me,true"
+   TestAssert "on: and the menu item runs after it", gHCResult contains "not implemented"
+   _DeleteStack
+end TestHyperTalkCompatibleDoMenuLocked
 
 on TestHyperTalkCompatibleSubstack
    _MakeStack true
