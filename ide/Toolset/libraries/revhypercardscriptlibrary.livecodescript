@@ -17,10 +17,13 @@ script "revHyperCardScriptLibrary"
 --    comments, one token at a time (the rules are named T0 to T14 and
 --    T31 in the log; T15 to T30 and T32 are below);
 -- 2. if it still does not compile, compiles its handlers one at a time
---    and keeps those that compile, putting in place of each one that does
---    not a handler of the same name that passes its message on, with the
---    HyperTalk commented out inside it ("salvage": in effect what
---    HyperCard did, which ran a handler until it reached a bad line).
+--    and keeps those that compile ("salvage"). Of a handler that does
+--    not, it keeps every line that compiles, the lines that do not left
+--    out as comments (T39: HyperCard ran a handler until it reached a
+--    line it could not do, and many lines this engine cannot compile are
+--    ones HyperCard did); a handler that still does not compile is put
+--    in place of by one of the same name that passes its message on,
+--    with the HyperTalk commented out inside it.
 --
 -- Scripts that compile are rewritten only where they do something else
 -- here than in HyperCard. In a stack imported without HyperCard's
@@ -67,7 +70,12 @@ script "revHyperCardScriptLibrary"
 -- fields", "line number of lines of t - 1 of t"), a card "in this bg",
 -- "go cd" and "mark card" alone, palette after then, and "if ... then
 -- ... else" at the end of a line, or "if ... then ..." with else alone
--- on the next line, which began an else of several lines.
+-- on the next line, which began an else of several lines. T38 takes
+-- "exit" and "pass" with the name of another handler than their own
+-- ("exit saveToDisk" in a handler called createText): the handler's own
+-- name; and "global" with names in quotes or nothing between two commas
+-- ("global "Mapper"", "global a, , b,"). T39 is the salvage of the lines
+-- of a handler, in step 2.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -193,12 +201,14 @@ local sCallees
 local sFired
 local sFiredTotal
 
--- How many handlers the last _Salvage left out
-local sLeftOut
+-- How many handlers, and how many of their lines, the last _Salvage left
+-- out
+local sLeftOut, sLinesLeftOut
 
 -- The handlers the last revHyperCardFixScripts left out, for
--- revHyperCardLeftOutHandlers, and the object whose script it is fixing
-local sLeftOutLog, sObject, sLeftOutStack
+-- revHyperCardLeftOutHandlers, the lines it left out of handlers, for
+-- revHyperCardLeftOutLines, and the object whose script it is fixing
+local sLeftOutLog, sLinesLeftOutLog, sObject, sLeftOutStack
 
 -- The pieces of the last _Match
 local sMatch
@@ -253,7 +263,7 @@ Messages are locked while it runs, so that no handler of the stack runs.
 */
 function revHyperCardFixScripts pStack
    local tObjects, tObject, tLines, tDefines, tExternals, tReport
-   local tChanged, tSalvaged, tStubs, tStill, tWasLocked, tLine, tSummary, tStandIns
+   local tChanged, tSalvaged, tStubs, tLinesOut, tStill, tWasLocked, tLine, tSummary, tStandIns
 
    if word 1 of pStack is "stack" and exists(pStack) then
       put the long id of pStack into sStack
@@ -278,6 +288,7 @@ function revHyperCardFixScripts pStack
    end repeat
    put _Externals(sStack) into tExternals
    put empty into sLeftOutLog
+   put empty into sLinesLeftOutLog
    put sStack into sLeftOutStack
 
    _MakeProbe
@@ -285,6 +296,7 @@ function revHyperCardFixScripts pStack
    put 0 into tChanged
    put 0 into tSalvaged
    put 0 into tStubs
+   put 0 into tLinesOut
    put 0 into tStill
    repeat for each line tObject in tObjects
       local tOriginal, tNew, tNote, tCompiled
@@ -307,7 +319,9 @@ function revHyperCardFixScripts pStack
          put sLeftOut into tStubCount
          add 1 to tSalvaged
          add tStubCount to tStubs
+         add sLinesLeftOut to tLinesOut
          put "salvaged handler by handler," && tStubCount && "left out" into tNote
+         if sLinesLeftOut > 0 then put "," && sLinesLeftOut && _Plural(sLinesLeftOut, "line") && "left out of handlers" after tNote
          if not _Compiles(tNew) then
             -- (should not happen: each piece compiled on its own)
             add 1 to tStill
@@ -336,7 +350,7 @@ function revHyperCardFixScripts pStack
    put _QuietPalettes(sStack) into tLine
    if tLine is not empty then put tLine & return after tReport
 
-   put "HyperCard scripts:" && tChanged && "rewritten," && tSalvaged && "salvaged by handler (" & tStubs && "handlers left out)," && tStill && "still do not compile" into tSummary
+   put "HyperCard scripts:" && tChanged && "rewritten," && tSalvaged && "salvaged by handler (" & tStubs && "handlers left out," && tLinesOut && "lines left out of handlers)," && tStill && "still do not compile" into tSummary
    put tSummary after tReport
    set the uHyperCard["scripts"] of sStack to tReport
    if the hcImportStat is empty then
@@ -466,6 +480,16 @@ function revHyperCardImportSummary pStack, pImportLog
       end repeat
       if the number of elements of tLeft > 12 then put "   and" && the number of elements of tLeft - 12 && "more" & return after tOut
    end if
+   put revHyperCardLeftOutLines() into tLeft
+   if the number of elements of tLeft > 0 and sLeftOutStack is pStack then
+      put return & "Lines left out:" && the number of elements of tLeft && _Plural(the number of elements of tLeft, "line") && "of handlers" \
+            && _Plural(the number of elements of tLeft, "does", "do") && "not compile here, each kept as a comment: its handler goes on past it," \
+            && "or stops there with an error at a return, exit or pass, or inside a loop that might not end without it:" & return after tOut
+      repeat with i = 1 to min(8, the number of elements of tLeft)
+         put "   " & tLeft[i]["name"] && "in" && _ShortObject(tLeft[i]["object"]) & ":" && tLeft[i]["text"] & return after tOut
+      end repeat
+      if the number of elements of tLeft > 8 then put "   and" && the number of elements of tLeft - 8 && "more" & return after tOut
+   end if
 
    -- the externals: the XCMDs got stand-ins; the XFCNs the library
    -- does not have stop a script that calls them
@@ -586,6 +610,25 @@ column,token") and "text" (the handler as rewritten).
 function revHyperCardLeftOutHandlers
    return sLeftOutLog
 end revHyperCardLeftOutHandlers
+
+/*
+The lines the last <revHyperCardFixScripts> left out of handlers that
+did not compile: each a statement that still did not compile after its
+rewrites, in a handler that compiled without it and was kept so (rule
+T39). The line is a comment in the handler, which goes on past it; in a
+repeat that only a condition or an exit ends, and for return, exit and
+pass, it is a throw, which stops the handler with an error naming it.
+
+Returns (Array): One element per line, numbered from 1, each with the
+keys "object" (the long id of the object whose script it is in), "name"
+(the handler's), "line" (its number in the handler, from 1 for the on
+line), "text" (its HyperTalk, on one line), "error" (the first line of
+the engine's compile error, as for <revHyperCardLeftOutHandlers>) and
+"how" ("skipped" or "stops").
+*/
+function revHyperCardLeftOutLines
+   return sLinesLeftOutLog
+end revHyperCardLeftOutLines
 
 /*
 The script of the substack "HyperCard Library (<stack name>)" that
@@ -890,14 +933,32 @@ private command _LogLeftOut pName, pText
    set the script of sProbe to empty
 end _LogLeftOut
 
+-- The lines _LeaveOutLines left out of the handler pName (T39), for
+-- revHyperCardLeftOutLines
+private command _LogLinesLeftOut pName, pLines
+   local tCount, i
+   repeat with i = 1 to the number of elements of pLines
+      put the number of elements of sLinesLeftOutLog + 1 into tCount
+      put pLines[i] into sLinesLeftOutLog[tCount]
+      put sObject into sLinesLeftOutLog[tCount]["object"]
+      put pName into sLinesLeftOutLog[tCount]["name"]
+   end repeat
+end _LogLinesLeftOut
+
 private function _Compiles pScript
+   return _CompileError(pScript) is empty
+end _Compiles
+
+-- The engine's compile error for pScript, its first line "number,line,
+-- column,token", or empty if it compiles
+private function _CompileError pScript
    local tResult
    if sProbe is empty or there is not a stack sProbe then _MakeProbe
    set the script of sProbe to pScript
    put the result into tResult
    set the script of sProbe to empty
-   return tResult is empty
-end _Compiles
+   return tResult
+end _CompileError
 
 -- Whether this engine refuses pName as a variable (a parameter, a global
 -- and the target of "put into"), for a name in kRefused
@@ -1196,9 +1257,98 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       end repeat
       _ContinuedCommands tLines, tSpans[i]["start"], tSpans[i]["end"], tVars
       _HyperCardRulesLines tLines, tSpans[i]["start"], tSpans[i]["end"], false
+      _ExitPassNames tLines, tSpans[i]["start"], tSpans[i]["end"]
    end repeat
    return _JoinLines(tLines, tCount)
 end _Rewrite
+
+-- T38: "exit" and "pass" with the name of another handler than the one
+-- they are in ("exit saveToDisk" in a handler called createText, copied
+-- from the other; "pass whatKey" in keyDown, its parameter's name),
+-- which this engine refuses: the handler's own name, so that the
+-- statement leaves the handler, or passes its message, as it meant to.
+-- A name in quotes is a name too ("pass "doMenu"" in a doMenu handler
+-- renamed hcDoMenu). "exit repeat" and "exit to ..." are not names. And
+-- global with names in quotes or none between two commas (_GlobalNames)
+private command _ExitPassNames @pLines, pStart, pEnd
+   local tName, tTokens, tCode, i, k, n, tAt, tWord, tChanged, tContinued, tLine
+   put _Tokens(pLines[pStart]) into tTokens
+   put _Code(tTokens) into tCode
+   put tTokens[item 2 of tCode]["t"] into tName
+   if not _IsName(tName) then exit _ExitPassNames
+   put false into tContinued
+   repeat with i = pStart + 1 to pEnd - 1
+      if not tContinued then
+         put _GlobalNames(pLines[i]) into tLine
+         if tLine is not pLines[i] then
+            put tLine into pLines[i]
+            _Fire "T38 global with names in quotes or none"
+         end if
+      end if
+      put _Tokens(pLines[i]) into tTokens
+      put _Code(tTokens) into tCode
+      put the number of items of tCode into n
+      put false into tChanged
+      repeat with k = 1 to n - 1
+         put _T(tTokens, item k of tCode) into tWord
+         if tWord is not among the words of "exit pass" then next repeat
+         -- (a statement's first word: the line's, or the word after then
+         -- or else; and the name, the statement's last word)
+         if k = 1 and tContinued then next repeat
+         if k > 1 and _T(tTokens, item k - 1 of tCode) is not among the words of "then else" then next repeat
+         if k + 1 < n and _T(tTokens, item k + 2 of tCode) is not "else" then next repeat
+         put item k + 1 of tCode into tAt
+         put _Lower(tTokens[tAt]["t"]) into tWord
+         if tTokens[tAt]["k"] is not among the words of "w s" then next repeat
+         if tTokens[tAt]["k"] is "w" and (tWord is _Lower(tName) or tWord is among the words of "repeat to") then next repeat
+         put tName into tTokens[tAt]["t"]
+         put true into tChanged
+         _Fire "T38 exit or pass with another handler's name"
+      end repeat
+      if tChanged then put _Join(tTokens) into pLines[i]
+      put _T(tTokens, item -1 of tCode) is "\" into tContinued
+   end repeat
+end _ExitPassNames
+
+-- T38: a global statement with names in quotes ("global "Mapper"") or
+-- none between two commas ("global a, , b,"), which HyperCard took and
+-- this engine refuses: the names alone. Anything else in it (an
+-- expression, "global the short name of the target") leaves it as it is
+private function _GlobalNames pLine
+   local tTokens, tCode, i, tItem, tName, tNames, tChanged, tOut
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   if _T(tTokens, item 1 of tCode) is not "global" then return pLine
+   put empty into tName
+   put false into tChanged
+   repeat with i = 2 to the number of items of tCode + 1
+      put item i of tCode into tItem
+      if tItem is empty or tTokens[tItem]["t"] is comma then
+         -- (the end of a name, or of none)
+         if tName is empty then
+            put true into tChanged
+         else
+            if tNames is not empty then put ", " after tNames
+            put tName after tNames
+         end if
+         put empty into tName
+      else if tName is not empty then
+         return pLine
+      else if tTokens[tItem]["k"] is "w" then
+         put tTokens[tItem]["t"] into tName
+      else if tTokens[tItem]["k"] is "s" and _IsName(char 2 to -2 of tTokens[tItem]["t"]) then
+         put char 2 to -2 of tTokens[tItem]["t"] into tName
+         put true into tChanged
+      else
+         return pLine
+      end if
+   end repeat
+   if not tChanged or tNames is empty then return pLine
+   if tTokens[1]["k"] is "sp" then put tTokens[1]["t"] into tOut
+   put tTokens[item 1 of tCode]["t"] && tNames after tOut
+   if tTokens[tTokens["count"]]["k"] is "c" then put space & tTokens[tTokens["count"]]["t"] after tOut
+   return tOut
+end _GlobalNames
 
 -- The commands of _LineCommands on a statement continued over lines (a
 -- \ at the end of a line, HyperCard's option-return): the statement is
@@ -3518,14 +3668,16 @@ end _Visual
 ----------------------------------------------------------------------
 -- Salvage
 
--- Keep the handlers of pScript that compile on their own; put in place of
--- each one that does not a handler that passes its message, holding the
--- HyperTalk of pOriginal's handler of the same name commented out. A
--- second handler of a name already defined is commented out (HyperCard
--- ran the first). Returns the script; sLeftOut is the number of handlers
--- left out.
+-- Keep the handlers of pScript that compile on their own, and of each one
+-- that does not, the lines that compile (T39, _LeaveOutLines); put in
+-- place of each one that still does not a handler that passes its
+-- message, holding the HyperTalk of pOriginal's handler of the same name
+-- commented out. A second handler of a name already defined is commented
+-- out (HyperCard ran the first). Returns the script; sLeftOut is the
+-- number of handlers left out, sLinesLeftOut the number of lines.
 private function _Salvage pScript, pOriginal
    local tPieces, tCount, i, tOut, tName, tKind, tSeen, tLeftOut, tOriginalHandlers, tStub, tText
+   local tHyperTalk, tKept, tLines, tLinesOut
    put _Handlers(pScript) into tPieces
    put _Handlers(pOriginal) into tOriginalHandlers
    put 0 into tLeftOut
@@ -3560,20 +3712,207 @@ private function _Salvage pScript, pOriginal
          put tText & return after tOut
          next repeat
       end if
+      -- T39: the handler without the lines that do not compile (with
+      -- the else blocks above first, then without them)
+      put _OriginalHandler(tOriginalHandlers, tName, tPieces[i]["text"]) into tHyperTalk
+      put empty into tKept
+      if tText is not tPieces[i]["text"] then put _LeaveOutLines(tText, tHyperTalk, tLines) into tKept
+      if tKept is empty then put _LeaveOutLines(tPieces[i]["text"], tHyperTalk, tLines) into tKept
+      if tKept is not empty then
+         _Fire "T39 lines that do not compile here, left out"
+         _LogLinesLeftOut tName, tLines
+         add the number of elements of tLines to tLinesOut
+         put tKept & return after tOut
+         next repeat
+      end if
       add 1 to tLeftOut
       _LogLeftOut tName, tPieces[i]["text"]
-      put _Stub(tKind, tName, _OriginalHandler(tOriginalHandlers, tName, tPieces[i]["text"])) into tStub
+      put _Stub(tKind, tName, tHyperTalk) into tStub
       if not _Compiles(tStub) then
          -- a name no handler can have here ("v" in quotes, time&Date):
          -- nothing can call it, so it is commented out whole
-         put _Commented(_OriginalHandler(tOriginalHandlers, tName, tPieces[i]["text"]), "a handler whose name cannot be a handler's here") into tStub
+         put _Commented(tHyperTalk, "a handler whose name cannot be a handler's here") into tStub
       end if
       put tStub & return after tOut
    end repeat
    delete the last char of tOut
    put tLeftOut into sLeftOut
+   put tLinesOut + 0 into sLinesLeftOut
    return tOut
 end _Salvage
+
+-- T39: the handler pText, which does not compile here, with each of its
+-- statements that do not compile left out, one at a time, until it does:
+-- HyperCard ran a handler until it reached a line it could not do, and
+-- many of the lines this engine cannot compile are ones HyperCard did (a
+-- property of an external's window, "send ... to stack Home", an
+-- external's arguments), so the handler here goes on past the line,
+-- which is kept as a comment. (A line HyperCard could not do either,
+-- "hide field" and nothing after it, did nothing there but stop the
+-- handler with an error.) Two kinds of line are a throw instead, which
+-- stops the handler with an error naming the line: one in a repeat that
+-- only a condition or an exit ends ("repeat until", "while", "forever"),
+-- where going on past it could leave the loop running for ever, and
+-- return, exit and pass, which end a handler. Only a statement can be
+-- left out: an error on a line of the handler's structure (on, end,
+-- repeat; an if's condition) leaves the handler as it was. A statement
+-- after the then or the else of an if on its line is left out with the
+-- if kept: hcLeftOut, a handler of the HyperCard Library that does
+-- nothing, takes its place (or the throw). pHyperTalk: the handler as
+-- it was imported, line for line (the rules keep a handler's lines), for
+-- the comments. Returns the handler, or empty if it still does not
+-- compile so; pLeftOut gets the lines left out, for
+-- revHyperCardLeftOutLines
+private function _LeaveOutLines pText, pHyperTalk, @pLeftOut
+   local tLines, tCount, tHyperTalk, tLine, n, tError, tTries, k, s, e, m, tTokens, tCode, tFirst, tIndent, tStatement, tPart
+   put empty into pLeftOut
+   put 0 into tCount
+   repeat for each line tLine in pText
+      add 1 to tCount
+      put tLine into tLines[tCount]
+   end repeat
+   put 0 into m
+   repeat for each line tLine in pHyperTalk
+      add 1 to m
+      put tLine into tHyperTalk[m]
+   end repeat
+   if m is not tCount then put tLines into tHyperTalk
+   put 0 into n
+   -- (one line at a time: each try compiles the whole handler, and a
+   -- handler with more lines than this that do not compile is more
+   -- HyperTalk than this engine can run)
+   repeat with tTries = 1 to 12
+      put line 1 of _CompileError(_JoinLines(tLines, tCount)) into tError
+      if tError is empty then
+         if n = 0 then return empty
+         return _JoinLines(tLines, tCount)
+      end if
+      put item 2 of tError into k
+      if k is not an integer or k < 2 or k >= tCount then return empty
+      -- the statement: from the line it starts on to the line it ends on
+      -- (\ at the end of a line goes on to the next)
+      put k into s
+      repeat while s > 2 and _GoesOn(tLines[s - 1])
+         subtract 1 from s
+      end repeat
+      put k into e
+      repeat while _GoesOn(tLines[e])
+         add 1 to e
+         if e >= tCount then return empty
+      end repeat
+      put _Tokens(tLines[s]) into tTokens
+      put _Code(tTokens) into tCode
+      put _T(tTokens, item 1 of tCode) into tFirst
+      put empty into tPart
+      if tFirst is among the words of "if else then" and s = e then
+         -- (the statement after a then or an else, if the error is in it)
+         put _StatementPart(tTokens, item 3 of tError) into tPart
+      end if
+      if tPart is empty and (tFirst is empty or tFirst is among the words of "on function end repeat if else then") then return empty
+      add 1 to n
+      put s into pLeftOut[n]["line"]
+      put tError into pLeftOut[n]["error"]
+      if tPart is not empty then
+         put _Raw(tTokens, item 1 of tPart, item 2 of tPart) into tStatement
+         put word 1 to -1 of tHyperTalk[s] into pLeftOut[n]["text"]
+         if _T(tTokens, item 1 of tPart) is among the words of "return exit pass" or _InOpenLoop(tLines, s) then
+            put "throw" && _Literal("HyperCard import: a line that does not compile here:" && tStatement) into tTokens[item 1 of tPart]["t"]
+            put "stops" into pLeftOut[n]["how"]
+         else
+            put "hcLeftOut" && _Literal(tStatement) into tTokens[item 1 of tPart]["t"]
+            put "skipped" into pLeftOut[n]["how"]
+         end if
+         repeat with m = item 1 of tPart + 1 to item 2 of tPart
+            put empty into tTokens[m]["t"]
+         end repeat
+         put _Join(tTokens) into tLines[s]
+         next repeat
+      end if
+      put empty into tIndent
+      if tTokens[1]["k"] is "sp" then put tTokens[1]["t"] into tIndent
+      put empty into tStatement
+      repeat with m = s to e
+         put word 1 to -1 of _WithoutContinuation(tHyperTalk[m]) & space after tStatement
+      end repeat
+      put word 1 to -1 of tStatement into tStatement
+      put tStatement into pLeftOut[n]["text"]
+      if tFirst is among the words of "return exit pass" or _InOpenLoop(tLines, s) then
+         put tIndent & "throw" && _Literal("HyperCard import: a line that does not compile here:" && tStatement) into tLines[s]
+         put "stops" into pLeftOut[n]["how"]
+      else
+         put tIndent & "-- HyperCard import: left out, it does not compile here:" && word 1 to -1 of tHyperTalk[s] into tLines[s]
+         put "skipped" into pLeftOut[n]["how"]
+      end if
+      repeat with m = s + 1 to e
+         put tIndent & "-- " & word 1 to -1 of tHyperTalk[m] into tLines[m]
+      end repeat
+   end repeat
+   return empty
+end _LeaveOutLines
+
+-- T39: the statement after a then or an else on the line of pTokens that
+-- the column pColumn of a compile error is in: "from,to", the indices of
+-- its first and last code tokens. Empty if no then or else comes before
+-- the column (the error is in the if's condition), or the statement is
+-- an if ("else if ...") or has a ; in it (the blocks of _ElseBlocks)
+private function _StatementPart pTokens, pColumn
+   local tCode, tColumn, tStart, i, tItem, tAfter, tFrom, tTo
+   if pColumn is not an integer then return empty
+   put _Code(pTokens) into tCode
+   put 1 into tColumn
+   repeat with i = 1 to pTokens["count"]
+      put tColumn into tStart[i]
+      add the number of chars of pTokens[i]["t"] to tColumn
+   end repeat
+   -- the last then or else before the column
+   put empty into tAfter
+   repeat for each item tItem in tCode
+      if tStart[tItem] >= pColumn then exit repeat
+      if _T(pTokens, tItem) is among the words of "then else" then put tItem into tAfter
+   end repeat
+   if tAfter is empty then return empty
+   -- the statement after it, to the next else or the end of the line
+   put empty into tFrom
+   repeat for each item tItem in tCode
+      if tItem <= tAfter then next repeat
+      if _T(pTokens, tItem) is "else" then exit repeat
+      if _T(pTokens, tItem) is ";" then return empty
+      if tFrom is empty then put tItem into tFrom
+      put tItem into tTo
+   end repeat
+   if tFrom is empty or _T(pTokens, tFrom) is "if" then return empty
+   return tFrom & comma & tTo
+end _StatementPart
+
+-- Whether a line ends with the \ that goes on to the next
+private function _GoesOn pLine
+   return char -1 of word 1 to -1 of _CodeText(pLine) is "\"
+end _GoesOn
+
+-- Whether line pAt of the handler pLines is inside a repeat that only a
+-- condition or an exit ends: "repeat", "repeat forever", "repeat until
+-- ...", "repeat while ..." (not "repeat with", "repeat for each" or
+-- "repeat 5 times", which end by themselves)
+private function _InOpenLoop pLines, pAt
+   local tDepth, tOpen, i, tTokens, tCode, tWord
+   put 0 into tDepth
+   repeat with i = 2 to pAt - 1
+      put _Tokens(pLines[i]) into tTokens
+      put _Code(tTokens) into tCode
+      put _T(tTokens, item 1 of tCode) into tWord
+      if tWord is "repeat" then
+         add 1 to tDepth
+         put _T(tTokens, item 2 of tCode) into tWord
+         put tWord is empty or tWord is among the words of "forever until while" into tOpen[tDepth]
+      else if tWord is "end" and _T(tTokens, item 2 of tCode) is "repeat" and tDepth > 0 then
+         subtract 1 from tDepth
+      end if
+   end repeat
+   repeat with i = 1 to tDepth
+      if tOpen[i] then return true
+   end repeat
+   return false
+end _InOpenLoop
 
 -- T37: each statement of pText that is "if c then s else" (or "else if c
 -- then s else", or "then s else" after an if on the line before), with a

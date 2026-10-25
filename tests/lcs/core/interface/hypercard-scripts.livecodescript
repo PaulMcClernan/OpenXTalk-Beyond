@@ -580,7 +580,8 @@ on TestHyperCardScriptsT37Probed
 
    put the script of button "Else" of stack tStack into tScript
    TestAssert "T37: an else at the end of a line, the else of a block", line 3 of tScript is "  if pChoice = 1 then; put " & q & "one" & q & " into gHCScriptsTest ; else"
-   TestAssert "T37: the handler that cannot be saved, left out", "pass mouseDown" is in tScript
+   TestAssert "T37: the handler that cannot be saved, its line left out (T39)", \
+         "  -- HyperCard import: left out, it does not compile here: put 1 +* into" is among the lines of tScript
    put empty into gHCScriptsTest
    send "mouseUp 1" to button "Else" of stack tStack
    TestAssert "T37: the then", gHCScriptsTest is "one"
@@ -603,6 +604,115 @@ on TestHyperCardScriptsT37Probed
    TestAssert "T37: else alone, every line of its block", gHCScriptsTest is "other!"
    _Close tStack
 end TestHyperCardScriptsT37Probed
+
+on TestHyperCardScriptsT38
+   -- exit and pass with another handler's name: the handler's own
+   local tScript, q
+   put quote into q
+   put _Rewrite("on createText", "  if it is empty then exit saveToDisk", "  exit saveToDisk", "  exit repeat", "  exit to top", "  exit createText", \
+         "end createText", "on keyDown whatKey", "  if whatKey is " & q & "a" & q & " then pass whatKey else beep", "  pass " & q & "doMenu" & q, \
+         "end keyDown") into tScript
+   TestAssert "T38: exit with another handler's name, after then", line 2 of tScript is "  if it is empty then exit createText"
+   TestAssert "T38: exit with another handler's name", line 3 of tScript is "  exit createText"
+   TestAssert "T38: exit repeat, exit to top and the handler's own: unchanged", line 4 to 6 of tScript is _Lines("  exit repeat", "  exit to top", "  exit createText")
+   TestAssert "T38: pass a parameter's name, before else", line 9 of tScript is "  if whatKey is " & q & "a" & q & " then pass keyDown else beep"
+   TestAssert "T38: pass a name in quotes", line 10 of tScript is "  pass keyDown"
+   TestAssert "T38: those compile", _Compiles(tScript)
+
+   -- global with names in quotes, or none between commas
+   put _Rewrite("on mouseUp", "  Global " & q & "Mapper" & q & " -- the map", "  global a, , b,", "  global c, d", "  put 1 into Mapper", "end mouseUp") into tScript
+   TestAssert "T38: a global's name in quotes", line 2 of tScript is "  Global Mapper -- the map"
+   TestAssert "T38: no name between commas", line 3 of tScript is "  global a, b"
+   TestAssert "T38: names alone: unchanged", line 4 of tScript is "  global c, d"
+   TestAssert "T38: the globals compile", _Compiles(tScript)
+   put _Rewrite("on mouseUp", "  global the short name of the target", "end mouseUp") into tScript
+   TestAssert "T38: an expression after global: unchanged", line 2 of tScript is "  global the short name of the target"
+end TestHyperCardScriptsT38
+
+on TestHyperCardScriptsT39
+   -- a handler that still does not compile keeps every line that does:
+   -- the others are left out as comments and the handler goes on past
+   -- them, or, in a repeat that only a condition ends and for return,
+   -- stops there with an error that names the line
+   local tStack, tScript, tError, tLeft, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT39" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put " & q & "a" & q & " into gHCScriptsTest", \
+         "  set selectedChunk of window " & q & "W" & q & " to " & q & "1,2" & q, "  put " & q & "b" & q & " after gHCScriptsTest", "end mouseUp", \
+         "on mouseDown", "  global gHCScriptsTest", "  put " & q & "c" & q & " into gHCScriptsTest", "  repeat until gHCScriptsTest is " & q & "cdd" & q, \
+         "    put " & q & "d" & q & " after gHCScriptsTest", "    put 1 +* into x", "  end repeat", "end mouseDown", \
+         "on mouseEnter", "  global gHCScriptsTest", "  put empty into gHCScriptsTest", "  repeat with i = 1 to 3", "    put i after gHCScriptsTest", \
+         "    put 1 +* into x", "  end repeat", "end mouseEnter", \
+         "on mouseLeave", "  global gHCScriptsTest", "  put " & q & "two" & q & " into gHCScriptsTest", "  put 1 + \", "     +* 2 into x", \
+         "  put " & q & " lines" & q & " after gHCScriptsTest", "end mouseLeave", \
+         "function twice x", "  put x * 2 into y", "  return y +* 1", "end twice", \
+         "on ifParts p", "  global gHCScriptsTest", "  put " & q & "i" & q & " into gHCScriptsTest", "  if p is 1 then put 1 +* into x", \
+         "  if p is 2 then put " & q & "2" & q & " after gHCScriptsTest else put 1 +* into x", "  put " & q & "!" & q & " after gHCScriptsTest", "end ifParts", \
+         "on loopPart p", "  global gHCScriptsTest", "  put empty into gHCScriptsTest", "  repeat until gHCScriptsTest is " & q & "xx" & q, \
+         "    put " & q & "x" & q & " after gHCScriptsTest", "    if p is 4 then put 2 +* into x", "  end repeat", "end loopPart", \
+         "on badCondition", "  if 1 +* 2 then beep", "end badCondition")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put the script of button "B" of stack tStack into tScript
+   TestAssert "T39: the script compiles", _Compiles(tScript)
+   TestAssert "T39: the line left out, a comment", line 4 of tScript is "  -- HyperCard import: left out, it does not compile here: set selectedChunk of window " & q & "W" & q & " to " & q & "1,2" & q
+   TestAssert "T39: in a repeat that a condition ends, a throw", line 12 of tScript is "    throw " & q & "HyperCard import: a line that does not compile here: put 1 +* into x" & q
+   TestAssert "T39: in a repeat with, left out", line 20 of tScript is "    -- HyperCard import: left out, it does not compile here: put 1 +* into x"
+   TestAssert "T39: a statement over two lines, both", line 26 to 27 of tScript is _Lines("  -- HyperCard import: left out, it does not compile here: put 1 + \", "  -- +* 2 into x")
+   TestAssert "T39: return, a throw", line 32 of tScript is "  throw " & q & "HyperCard import: a line that does not compile here: return y +* 1" & q
+   TestAssert "T39: a statement after then, hcLeftOut in its place", line 37 of tScript is "  if p is 1 then hcLeftOut " & q & "put 1 +* into x" & q
+   TestAssert "T39: a statement after else", line 38 of tScript is "  if p is 2 then put " & q & "2" & q & " after gHCScriptsTest else hcLeftOut " & q & "put 1 +* into x" & q
+   TestAssert "T39: after then in a repeat that a condition ends, a throw", line 46 of tScript is "    if p is 4 then throw " & q & "HyperCard import: a line that does not compile here: put 2 +* into x" & q
+   TestAssert "T39: an if whose condition does not compile: the handler left out", "   pass badCondition" is among the lines of tScript
+   TestAssert "T39: the handlers' lines keep their numbers", line 33 of tScript is "end twice" and line 48 of tScript is "end loopPart"
+
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "T39: the handler goes on past the line left out", gHCScriptsTest is "ab"
+   send "mouseEnter" to button "B" of stack tStack
+   TestAssert "T39: and so does a repeat with", gHCScriptsTest is "123"
+   send "mouseLeave" to button "B" of stack tStack
+   TestAssert "T39: and past a statement over two lines", gHCScriptsTest is "two lines"
+   put empty into tError
+   try
+      send "mouseDown" to button "B" of stack tStack
+   catch tError
+   end try
+   TestAssert "T39: the throw stops the handler, naming the line", gHCScriptsTest is "cd" and "a line that does not compile here: put 1 +* into x" is in tError
+   put empty into tError
+   try
+      dispatch function "twice" to button "B" of stack tStack with 2
+   catch tError
+   end try
+   TestAssert "T39: a return that does not compile stops the function", "return y +* 1" is in tError
+   send "ifParts 1" to button "B" of stack tStack
+   TestAssert "T39: the handler goes on past a then left out", gHCScriptsTest is "i!"
+   send "ifParts 2" to button "B" of stack tStack
+   TestAssert "T39: the then that compiles runs, the else left out", gHCScriptsTest is "i2!"
+   send "loopPart 3" to button "B" of stack tStack
+   TestAssert "T39: the throw only where the then is taken", gHCScriptsTest is "xx"
+   put empty into tError
+   try
+      send "loopPart 4" to button "B" of stack tStack
+   catch tError
+   end try
+   TestAssert "T39: and there it stops the handler", gHCScriptsTest is "x" and "put 2 +* into x" is in tError
+
+   put revHyperCardLeftOutLines() into tLeft
+   TestAssert "T39: the lines left out, listed", the number of elements of tLeft is 8
+   TestAssert "T39: each with its handler, line, text and how", tLeft[1]["name"] is "mouseUp" and tLeft[1]["line"] is 4 and tLeft[1]["how"] is "skipped" \
+         and tLeft[2]["name"] is "mouseDown" and tLeft[2]["line"] is 6 and tLeft[2]["how"] is "stops" and tLeft[2]["text"] is "put 1 +* into x" \
+         and tLeft[4]["text"] is "put 1 + +* 2 into x" \
+         and tLeft[6]["name"] is "ifParts" and tLeft[6]["line"] is 4 and tLeft[6]["text"] is "if p is 1 then put 1 +* into x" and tLeft[6]["how"] is "skipped" \
+         and tLeft[8]["name"] is "loopPart" and tLeft[8]["how"] is "stops"
+   put revHyperCardLeftOutHandlers() into tLeft
+   TestAssert "T39: only the handler whose if does not compile left out whole", the number of elements of tLeft is 1 and tLeft[1]["name"] is "badCondition"
+   _Close tStack
+end TestHyperCardScriptsT39
 
 on TestHyperCardScriptsMoreFormsProbed
    -- T33: a window's name this engine does not take as a value, which
@@ -639,7 +749,10 @@ on TestHyperCardScriptsFix
    put the script of button "Good" into tGood
    put the script of stack tStack into tOriginal
    create button "Mixed"
-   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown", "function f", "  put ( into z", "end f")
+   -- (mouseDown and f compile without their bad line, T39; mouseEnter
+   -- and g, with an if that has no end, do not)
+   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown", "function f", "  put ( into z", "end f", \
+         "on mouseEnter", "  if x then", "    put 1 +* into", "end mouseEnter", "function g", "  if x then", "  return 1", "end g")
    create button "Named"
    set the script of button "Named" to _Lines("on mouseUp", "  put 3 into w", "end mouseUp", "on " & quote & "v" & quote, "  beep", "end " & quote & "v" & quote)
    unlock messages
@@ -653,8 +766,11 @@ on TestHyperCardScriptsFix
    TestAssert "a script that compiles: nothing kept", _Kept(the long id of button "Good" of stack tStack) is empty
    TestAssert "salvaged: compiles", _Compiles(the script of button "Mixed" of stack tStack)
    TestAssert "salvaged: the handler that compiled kept as it was", line 1 to 3 of the script of button "Mixed" of stack tStack is _Lines("on mouseUp", "  put 2 into y", "end mouseUp")
-   TestAssert "salvaged: the bad handler passes its message", "   pass mouseDown" is among the lines of the script of button "Mixed" of stack tStack
-   TestAssert "salvaged: its HyperTalk inside, commented out", "   --   put 1 +* into" is among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: a bad line left out, its handler kept", "  -- HyperCard import: left out, it does not compile here: put 1 +* into" is among the lines of the script of button "Mixed" of stack tStack \
+         and "   pass mouseDown" is not among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: the same in a function", "  -- HyperCard import: left out, it does not compile here: put ( into z" is among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: the bad handler passes its message", "   pass mouseEnter" is among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: its HyperTalk inside, commented out", "   --     put 1 +* into" is among the lines of the script of button "Mixed" of stack tStack
    TestAssert "salvaged: a bad function returns empty", "   return empty" is among the lines of the script of button "Mixed" of stack tStack
    TestAssert "salvaged: a handler no name can call, commented out whole", _Compiles(the script of button "Named" of stack tStack) and "-- on " & quote & "v" & quote is among the lines of the script of button "Named" of stack tStack
    TestAssert "logged in the hcImportStat", "HyperCard scripts: 3 rewritten" is in the hcImportStat
@@ -979,14 +1095,19 @@ on TestHyperCardScriptsSummary
    create invisible stack tStack
    set the defaultStack to tStack
    create button "Mixed"
-   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown")
+   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  if x then", "  put 1 into y", "end mouseDown", \
+         "on mouseEnter", "  put 1 into y", "  put 1 +* into", "end mouseEnter")
    unlock messages
    get revHyperCardFixScripts(tStack)
    put revHyperCardLeftOutHandlers() into tLeft
    TestAssert "the handler left out is listed", tLeft[1]["name"] is "mouseDown" and tLeft[1]["error"] is not empty
+   put revHyperCardLeftOutLines() into tLeft
+   TestAssert "the line left out is listed", tLeft[1]["name"] is "mouseEnter" and tLeft[1]["line"] is 3 \
+         and tLeft[1]["text"] is "put 1 +* into" and tLeft[1]["how"] is "skipped" and tLeft[1]["error"] is not empty
    put revHyperCardImportSummary(tStack, "Not converting snd  id  9 " & quote & "Boo" & quote & ": MACE 3:1 compression" & return & "Not converting XCMD id 3 " & quote & "Ink" & quote) into tSummary
    TestAssert "the summary names the stack", line 1 of tSummary begins with tStack & ":"
    TestAssert "the summary names the handler left out", "mouseDown in button" is in tSummary
+   TestAssert "the summary names the line left out", "mouseEnter in button" is in tSummary and ": put 1 +* into" is in tSummary
    TestAssert "the summary counts the MACE sound", "Sounds: 1 not converted (1 in MACE" is in tSummary
    TestAssert "the summary lists the other resources", "Resources not converted: XCMD x1" is in tSummary
    -- a sound the MACE decoder converted is no longer counted

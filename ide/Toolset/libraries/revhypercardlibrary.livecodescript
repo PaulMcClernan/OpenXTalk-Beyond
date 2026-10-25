@@ -752,6 +752,14 @@ on disallowInterruption
    set the cantAbort of this stack to true
 end disallowInterruption
 
+-- A statement that the import left out of a handler because it does not
+-- compile here (rule T39), after the then or the else of an if, where a
+-- statement has to be: it does nothing, and the handler goes on, as it
+-- does past a line left out whole (a comment). pStatement is the
+-- statement as it was
+on hcLeftOut pStatement
+end hcLeftOut
+
 -- the part of pText after the last pDelim, all of it with none
 function lastHCItem pDelim, pText
    local tAt

@@ -72,12 +72,24 @@ A single report lists:
 
 - the handlers left out, grouped by parse error, with a few lines of
   HyperTalk for each;
+- the lines left out of handlers that were kept (rule T39), grouped the
+  same way;
 - for a `run` sweep, the errors while running and the handlers no object
   had (the XCMDs and XFCNs that scripts actually reach).
 
-`--compare` goes stack by stack and handler by handler. A rule that only
-adds forms must show **newly left out: 0**. Any handler it does list is a
-regression to fix before merging.
+`--compare` goes stack by stack and handler by handler. A handler that is
+no longer left out either compiles whole ("newly compiling") or was kept
+with lines left out of it ("newly kept with lines left out"). A rule that
+only adds forms must show **newly left out: 0**. Any handler it does list
+is a regression to fix before merging. A doMenu handler counts as one
+handler in both runs, whether the import kept its name (HyperCard's
+message order) or named it hcDoMenu.
+
+For two `run` sweeps, `--compare` also counts the errors while running in
+each, the stacks with no error at all, and the kinds of error that came
+more or less often in the second. A handler that compiles now runs, so it
+can reach an XCMD or XFCN the stack does not have: count those, but
+they are not regressions.
 
 ## The logs
 
@@ -90,10 +102,13 @@ following lines are written:
 | `NOIMPORT` | error |
 | `FIX` | the import report's summary |
 | `LEFT` | handler, compile error, its rewritten text |
+| `LINE` | handler, line in it, `skipped` or `stops`, compile error, the line's HyperTalk |
 | `OPENED` | none |
 | `ERR` or `THROW` | phase, error, the script line and its object |
 | `DONE` | none |
 | `EXIT` | the engine's exit code, or `timeout` |
 
 Text that can contain returns is base64. The `LEFT` lines come from
-`revHyperCardLeftOutHandlers()` in the script library.
+`revHyperCardLeftOutHandlers()` in the script library, and the `LINE`
+lines from `revHyperCardLeftOutLines()`: the lines rule T39 left out of a
+handler that it kept (a library from before T39 writes none).

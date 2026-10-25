@@ -13,9 +13,11 @@ script "HyperCardSweep"
 --            20 buttons on each of the first 20, the way a person would
 --
 -- The log's lines: IMPORTED name cards; NOIMPORT error; FIX summary;
--- LEFT name error text (a handler left out, its text in base64); ERR and
--- THROW phase error source (an error while running, base64); OPENED;
--- DONE. Text that may hold returns is base64 so a line stays a line.
+-- LEFT name error text (a handler left out, its text in base64); LINE
+-- name line how error text (a line left out of a handler that was kept,
+-- rule T39); ERR and THROW phase error source (an error while running,
+-- base64); OPENED; DONE. Text that may hold returns is base64 so a line
+-- stays a line.
 
 local sDone, sOut
 
@@ -70,6 +72,15 @@ command sweepRun
    put revHyperCardLeftOutHandlers() into tLeft
    repeat with i = 1 to the number of elements of tLeft
       sweepLog "LEFT" & tab & tLeft[i]["name"] & tab & tLeft[i]["error"] & tab & sweepBase64(tLeft[i]["text"])
+   end repeat
+   -- (a library from before rule T39 has no revHyperCardLeftOutLines)
+   try
+      put revHyperCardLeftOutLines() into tLeft
+   catch tError
+      put empty into tLeft
+   end try
+   repeat with i = 1 to the number of elements of tLeft
+      sweepLog "LINE" & tab & tLeft[i]["name"] & tab & tLeft[i]["line"] & tab & tLeft[i]["how"] & tab & tLeft[i]["error"] & tab & sweepBase64(tLeft[i]["text"])
    end repeat
    if there is a file ($HC_LIB & "/revhypercardmacelibrary.livecodescript") then
       start using stack ($HC_LIB & "/revhypercardmacelibrary.livecodescript")
