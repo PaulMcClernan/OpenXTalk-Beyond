@@ -130,6 +130,45 @@ on TestPDFPrinterFieldLinks
    TestAssert "the pdf has an action for each of the field's urls", _TestCountOf("/S /URI", tData) is 2
 end TestPDFPrinterFieldLinks
 
+-- OXT-Beyond: cancel printing a PDF with links must leave no file, and
+-- reset printing too. The PDF printer freed its links' URLs and anchor
+-- names before the PDF it was writing, which writes the page being
+-- printed, with its links, as it is destroyed: so they were read from
+-- freed memory (valgrind on 0.2.7-rc.6.5's engine: invalid reads in
+-- strcmp and in writing the page's links). The page has one link to a
+-- URL and one to an anchor
+on TestPDFPrinterCancelWithLinks
+   TestSkipIfNot "external", "revpdfprinter"
+
+   local tFile, tStack
+   put TestGetTestBuildFolder() & slash & "test-cancel.pdf" into tFile
+   create stack
+   put it into tStack
+   set the defaultStack to the short name of tStack
+   create field "Words"
+   set the rect of field "Words" to 20, 20, 300, 80
+   set the text of field "Words" to "A page that is never finished"
+
+   open printing to pdf tFile
+   print anchor "top" at 10, 10
+   print link to url "https://openxtalk.org/" with rect 10, 10, 200, 40
+   print link to anchor "top" with rect 10, 50, 200, 80
+   print card 1 of tStack
+   TestAssert "a pdf with links that is cancelled is being written", there is a file tFile
+   cancel printing
+   close printing
+   TestAssert "a cancelled pdf with links leaves no file", there is not a file tFile
+
+   open printing to pdf tFile
+   print anchor "top" at 10, 10
+   print link to url "https://openxtalk.org/" with rect 10, 10, 200, 40
+   print link to anchor "top" with rect 10, 50, 200, 80
+   print card 1 of tStack
+   TestAssert "a pdf with links that is reset is being written", there is a file tFile
+   reset printing
+   TestAssert "a reset pdf with links leaves no file", there is not a file tFile
+end TestPDFPrinterCancelWithLinks
+
 private function _TestCountOf pNeedle, pData
    local tCount, tSkip, tFound
    put 0 into tCount

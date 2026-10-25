@@ -140,14 +140,6 @@ void MCPDFPrintingDevice::Destroy(void)
 		cairo_font_face_destroy(t_font -> cairo_font);
 		MCMemoryDelete(t_font);
 	}
-	
-	while (m_destinations != nil)
-	{
-		DestCache *t_dest;
-		t_dest = MCListPopFront(m_destinations);
-		MCCStringFree(t_dest->name);
-		MCMemoryDelete(t_dest);
-	}
 
 	if (m_context != nil)
 	{
@@ -165,6 +157,20 @@ void MCPDFPrintingDevice::Destroy(void)
 			remove(m_filename);
 	}
 	m_file_created = false;
+
+	// OXT-Beyond: the destinations go after the surface, which keeps their
+	// names (each link's URL or anchor, and each anchor's) without copying
+	// them. Destroying a surface whose document didn't end writes the page
+	// being printed, with its links, and the document's anchors, so after
+	// cancel printing or reset printing they were read from freed memory
+	// (valgrind on 0.2.7-rc.6.5)
+	while (m_destinations != nil)
+	{
+		DestCache *t_dest;
+		t_dest = MCListPopFront(m_destinations);
+		MCCStringFree(t_dest->name);
+		MCMemoryDelete(t_dest);
+	}
 
 	if (m_filename != nil)
 	{
