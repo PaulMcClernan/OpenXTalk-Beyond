@@ -262,7 +262,7 @@ jobs:
             echo "- Web IDE: $(describe "$ide")${ide:+${IDE_FROM:+, from $IDE_FROM}}"
             echo "- Stack Player: $(describe "$player")"
             if [ -n "${MAP_HTML:-}" ]; then
-              echo "- Codebase map: $MAP_VERSION${MAP_ENGINE:+, binary stacks read with $MAP_ENGINE's engine}"
+              echo "- Codebase map: $MAP_VERSION${MAP_ENGINE:+, binary stacks read with the engine of $MAP_ENGINE}"
             else
               echo "- Codebase map: not on the site (its step failed; see the log)"
             fi
