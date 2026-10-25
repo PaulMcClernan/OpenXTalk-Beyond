@@ -75,7 +75,6 @@ on showTab pTab
 end showTab
 
 on browserNavigateComplete
-   dictApplyAppearance
    if sEntry is not empty then
       do "goEntryName('" & sEntry["library"] & "','" & sEntry["entry"] & "','" & sEntry["type"] & "')" in widget "Dictionary" of me
       put empty into sEntry
@@ -159,9 +158,12 @@ private function dictReadAppearance
    return true
 end dictReadAppearance
 
--- The page in the browser in the appearance read: its html element has
--- the class oxt-dark in the dark (html_viewer/css/oxt-dark.css), so a
--- switch needs no new page and loses no place
+-- The page in the browser in the appearance read, after a switch: its
+-- html element has the class oxt-dark in the dark (html_viewer/css/
+-- oxt-dark.css), so a switch needs no new page and loses no place. (A page
+-- as it opens takes it from its URL, ?appearance=dark: showTab. Asked as
+-- the page has just loaded, the browser widget on Windows answered
+-- nothing, which it refuses as a script error.)
 private command dictApplyAppearance
    local tError
    if there is not a widget "Dictionary" of me then
@@ -170,7 +172,7 @@ private command dictApplyAppearance
    try
       -- (the script answers a string: the browser widget refuses any
       -- other answer, as a script error)
-      do "document.documentElement.classList.toggle('oxt-dark', " & (sDark is true) & "); ''" in widget "Dictionary" of me
+      do "document.documentElement.classList.toggle('oxt-dark', " & (sDark is true) & "); 'ok'" in widget "Dictionary" of me
    catch tError
    end try
 end dictApplyAppearance
