@@ -4,8 +4,9 @@ OXT-Beyond: the hyperTalkCompatible of a stack, which File > Import Stack
 sets for a stack imported from HyperCard. Off, every message goes where
 it always went; on, a background part's message reaches the card before
 the background, a handler can be called doMenu, and doMenu is a message
-before it runs, even while messages are locked, as in HyperCard. Each
-test checks the stack with the property off too.
+before it runs, even while messages are locked, as in HyperCard; and
+lockRecent keeps no card of the stack out of the recent cards that go
+back goes through. Each test checks the stack with the property off too.
 */
 
 local sStack
@@ -158,6 +159,53 @@ on TestHyperTalkCompatibleDoMenuLocked
    TestAssert "on: and the menu item runs after it", gHCResult contains "not implemented"
    _DeleteStack
 end TestHyperTalkCompatibleDoMenuLocked
+
+-- Three cards, "one", "two" and "three"; then card "three" and card
+-- "one" visited, then card "two" with the lockRecent true, and go back:
+-- the short name of the card it goes to, and the lockRecent after it
+private function _GoBackAfterLockRecent
+   local tCard, tLocked
+   set the defaultStack to sStack
+   create card
+   create card
+   set the name of card 1 of stack sStack to "one"
+   set the name of card 2 of stack sStack to "two"
+   set the name of card 3 of stack sStack to "three"
+   go to card "three" of stack sStack
+   go to card "one" of stack sStack
+   set the lockRecent to true
+   go to card "two" of stack sStack
+   go back
+   put the short name of this card of stack sStack into tCard
+   put the lockRecent into tLocked
+   set the lockRecent to false
+   return tCard & comma & tLocked
+end _GoBackAfterLockRecent
+
+on TestHyperTalkCompatibleGoBackOff
+   _MakeStack false
+   -- (the recent cards are those of stacks open as a window of their own)
+   if the mode of stack sStack is not 1 then
+      TestSkip "off: go back after the lockRecent", "the stack is not open as a window of its own"
+   else
+      TestAssert "off: a card visited with the lockRecent true is not in the recent cards, so go back passes over it", \
+            _GoBackAfterLockRecent() is "three,true"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleGoBackOff
+
+-- HyperCard's lockRecent kept cards out of the Recent dialog's pictures
+-- only: go back still went back through every card visited
+on TestHyperTalkCompatibleGoBack
+   _MakeStack true
+   if the mode of stack sStack is not 1 then
+      TestSkip "on: go back after the lockRecent", "the stack is not open as a window of its own"
+   else
+      TestAssert "on: go back goes to the card before, though it was visited with the lockRecent true", \
+            _GoBackAfterLockRecent() is "one,true"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleGoBack
 
 on TestHyperTalkCompatibleSubstack
    _MakeStack true

@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, three things are as they were in <HyperCard>, for the
+When it is true, four things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -51,6 +51,12 @@ When it is true, three things are as they were in <HyperCard>, for the
   true, as in <HyperCard>, whose lockMessages kept back only its own
   messages (<openCard>, <closeCard>...), and the <handler|handlers>
   run with it still true.
+- The <lockRecent> keeps none of the <stack|stack's> <card|cards> out
+  of the <recent cards|recent cards list>, so go back goes back through
+  every <card> visited, as in <HyperCard>, whose lockRecent only kept
+  <card|cards> out of the pictures of its Recent dialog. A <script>
+  that sets the <lockRecent> to true, goes to a <card> and then goes
+  back returns to the <card> it came from.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -72,7 +78,9 @@ are first compiled: a <script> already compiled keeps the <handler>
 names it was compiled with until it is set again.
 
 References: HCStack (property), HCAddressing (property),
-HCImportStat (property), lockMessages (property), openCard (message),
+HCImportStat (property), lockMessages (property),
+lockRecent (property), openCard (message),
 closeCard (message), doMenu (command), import (command),
-stack (object), background (glossary), message path (glossary),
+stack (object), card (object), background (glossary),
+message path (glossary), recent cards (glossary),
 HyperCard (glossary), custom property (glossary)
