@@ -2561,6 +2561,7 @@ on tour_about
    put tourNewStack(tBefore) into tNew
    if tNew is empty then throw "no About window opened"
    tourShotStack tNew, "24-about"
+   tourRedrawCheck tNew, "lkAppearanceChanged", "24-about-redrawn"
    close stack tNew
 end tour_about
 
@@ -2590,8 +2591,37 @@ on tour_home
    set the rect of stack tNew to item 1 of tRect, item 2 of tRect, item 1 of tRect + 1200, item 2 of tRect + 760
    tourWait 1500
    tourShotStack tNew, "24a-home-resized"
+   tourRedrawCheck tNew, "hmAppearanceChanged", "24a-home-redrawn"
+   if the rect of stack tNew is not item 1 of tRect, item 2 of tRect, item 1 of tRect + 1200, item 2 of tRect + 760 then
+      throw "Home drawn again is not the size it was (" & the rect of stack tNew & ")"
+   end if
    close stack tNew
 end tour_home
+
+-- A window that follows light and dark (#221) hears the IDE's
+-- ideSystemAppearanceChanged, and drawn again as a switch draws it (the
+-- message pMessage, sent with it the defaultStack, as its recheck sends
+-- it) is whole: the same number of controls, the defaultStack as it was,
+-- and it is snapshot again as pShot. The tour cannot turn the desktop
+-- dark between two shots, so it is drawn again in the same appearance.
+command tourRedrawCheck pStack, pMessage, pShot
+   local tBefore, tSaved, tAfter
+   if not tourHears(pStack, "ideSystemAppearanceChanged") then
+      throw pStack && "does not hear ideSystemAppearanceChanged"
+   end if
+   put the number of controls of this card of stack pStack into tBefore
+   put the defaultStack into tSaved
+   set the defaultStack to the short name of stack pStack
+   dispatch pMessage to stack pStack
+   set the defaultStack to tSaved
+   tourWait 800
+   put the number of controls of this card of stack pStack into tAfter
+   tourRecord "INFO" && pShot & ":" && tAfter && "controls, were" && tBefore
+   if tAfter is not tBefore then
+      throw pStack && "drawn again has" && tAfter && "controls, not" && tBefore
+   end if
+   tourShotStack pStack, pShot
+end tourRedrawCheck
 
 -- The IDE's own dialog in the look of Learn (palettes/kitdialog), as the
 -- update check and the warning before a stack opens show it: modal, so it
@@ -2664,6 +2694,10 @@ on tour_learn
       if item 3 of tRect > the width of stack kLearn or item 4 of tRect > the height of stack kLearn then
          throw "Learn's Academy button (" & tRect & ") is cut off by the window (" & the width of stack kLearn & "x" & the height of stack kLearn & ")"
       end if
+      tourRedrawCheck kLearn, "lkAppearanceChanged", "24d-learn-redrawn"
+      if there is not a group "p_heroB3" of this card of stack kLearn or not the visible of group "p_heroB3" of this card of stack kLearn then
+         throw "Learn drawn again does not show its first page of the lessons"
+      end if
    catch tError
    end try
    if there is a stack kLearn and the mode of stack kLearn is not 0 then close stack kLearn
@@ -2734,6 +2768,14 @@ on tour_academy
       end if
       if line 1 of tOut is not "Hello, world!" then
          throw "the example put" && quote & tourJoin(tOut) & quote & ", not Hello, world!"
+      end if
+      -- drawn again, the lesson, the playground and its output stay
+      tourRedrawCheck kAcademy, "lkAppearanceChanged", "24e-academy-redrawn"
+      if not (field "playWhat" of stack kAcademy begins with "An example from the lesson") \
+            or line 1 of the text of field "out" of stack kAcademy is not "Hello, world!" \
+            or field "outStatus" of stack kAcademy is not tStatus then
+         throw "the Academy drawn again lost its playground (" & field "playWhat" of stack kAcademy & "|" & \
+               tourJoin(the text of field "out" of stack kAcademy) & "|" & field "outStatus" of stack kAcademy & ")"
       end if
       close stack kAcademy
    catch tError
@@ -2902,9 +2944,12 @@ end tourShotXtaMemory
 -- Learn's look (#167): the card on Learn's slate, the dark header with
 -- the violet mark, and the buttons pButtons
 command tourXtaLook pStack, pButtons
-   local tName
-   if the backgroundColor of this card of stack pStack is not "241,245,249" then
-      tourXtaProblem pStack && "is not on Learn's slate (" & the backgroundColor of this card of stack pStack & ")"
+   local tName, tSlate
+   -- (Learn's slate in the dark is the dark one, #221)
+   put "241,245,249" into tSlate
+   if $OXT_TOUR_APPEARANCE is "dark" then put "16,22,36" into tSlate
+   if the backgroundColor of this card of stack pStack is not tSlate then
+      tourXtaProblem pStack && "is not on Learn's slate, " & tSlate && "(" & the backgroundColor of this card of stack pStack & ")"
    end if
    repeat for each item tName in "uiBand,uiMark"
       if there is not a graphic tName of this card of stack pStack then tourXtaProblem pStack && "has no" && tName
@@ -2957,6 +3002,7 @@ on tour_xtalk_chat
       put the result into tRelays
       tourRecord "INFO xTalk Chat: online" && tOnline & "; relays" && quote & tourJoin(tRelays) & quote
       tourShotStack kChatWindow, "24g-xtalk-chat"
+      tourRedrawCheck kChatWindow, "lkAppearanceChanged", "24g-xtalk-chat-redrawn"
       if tOnline is not false then throw "xTalk Chat is online (" & tOnline & ")"
       if tRelays is not empty then throw "xTalk Chat has relays:" && tourJoin(tRelays)
       if the openSockets is not tSockets then throw "xTalk Chat opened a socket:" && tourJoin(the openSockets)

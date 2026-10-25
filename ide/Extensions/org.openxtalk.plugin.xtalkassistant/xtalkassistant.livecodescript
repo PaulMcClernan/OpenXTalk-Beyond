@@ -233,6 +233,10 @@ local sUndone
 -- ("requests", "in", "out", "cached"), the spinner's angle ("angle") and
 -- the pending redraw ("timer", a message id)
 local sWork
+-- True while the windows wear the dark appearance's colours (xtaUi), and
+-- the pending look again at macOS's appearance after a switch, and how
+-- many looks are left (xtaRecheckAppearance)
+local sUiDark, sAppearanceMsg, sAppearanceTries
 
 on extensionInitialize
    if the target is not me then
@@ -483,11 +487,21 @@ end xtaStopErrorHook
 -- The window
 
 private command xtaOpenWindow
-   local tBuilt
+   local tBuilt, tError
    xtaLoadParts
    if there is not a stack kWindow then
       xtaBuildWindow
       put true into tBuilt
+   else
+      -- (the desktop may have switched while the window was closed)
+      get xtaFollowAppearance()
+   end if
+   -- Light or dark as the desktop switches (ideSystemAppearanceChanged)
+   if there is a stack "revIDELibrary" then
+      try
+         dispatch "revIDESubscribe" to me with "ideSystemAppearanceChanged"
+      catch tError
+      end try
    end if
    xtaRefreshWindow
    -- The window is built invisible, and palette keeps a stack's visible as
@@ -537,6 +551,7 @@ private command xtaBuildWindow
    put the defaultStack into tOldDefault
    lock screen
    lock messages
+   get xtaReadAppearance()
    create invisible stack kWindow
    set the defaultStack to kWindow
    set the resizable of stack kWindow to true
@@ -544,9 +559,6 @@ private command xtaBuildWindow
    xtaUiChrome kTitle, kWindowWidth, kWindowHeight
    set the minWidth of stack kWindow to 460
    set the minHeight of stack kWindow to 520
-   set the linkColor of stack kWindow to kUiAccent
-   set the linkHiliteColor of stack kWindow to kUiAccent
-   set the linkVisitedColor of stack kWindow to kUiAccent
    xtaUiPill "Pill", (kWindowWidth - 108) & comma & (kUiBand - 18) div 2 & comma & (kWindowWidth - 16) & comma & (kUiBand + 18) div 2
 
    create button "Provider"
@@ -582,7 +594,7 @@ private command xtaBuildWindow
    set the opaque of field "Conversation" to false
    set the margins of field "Conversation" to "8,8,8,8"
    set the textSize of field "Conversation" to 12
-   set the foregroundColor of field "Conversation" to kUiInk
+   set the foregroundColor of field "Conversation" to xtaUi("Ink")
    -- Its scrollbar shows while it has more than it shows (xtaFitScrollbar)
    set the vScrollbar of field "Conversation" to false
 
@@ -592,7 +604,7 @@ private command xtaBuildWindow
    xtaUiGfx "ActivityLine", "16,380," & (kWindowWidth - 16) & ",381"
    set the style of graphic "ActivityLine" to "rectangle"
    set the filled of graphic "ActivityLine" to true
-   set the backgroundColor of graphic "ActivityLine" to kUiCardLine
+   set the backgroundColor of graphic "ActivityLine" to xtaUi("CardLine")
    set the lineSize of graphic "ActivityLine" to 0
    xtaUiGfx "ActivitySpin", "28,386,42,400"
    set the style of graphic "ActivitySpin" to "oval"
@@ -603,12 +615,12 @@ private command xtaBuildWindow
    set the arcAngle of graphic "ActivitySpin" to 270
    xtaUiLabel "Activity", empty, "48,382," & (kWindowWidth - 100) & ",402", 11
    set the dontWrap of field "Activity" to true
-   set the foregroundColor of field "Activity" to kUiInkSoft
+   set the foregroundColor of field "Activity" to xtaUi("InkSoft")
    xtaUiLabel "ActivityTime", empty, (kWindowWidth - 100) & ",382," & (kWindowWidth - 28) & ",402", 11
    set the dontWrap of field "ActivityTime" to true
    set the textAlign of field "ActivityTime" to "right"
    set the textFont of field "ActivityTime" to xtaUiMonoFont()
-   set the foregroundColor of field "ActivityTime" to kUiMuted
+   set the foregroundColor of field "ActivityTime" to xtaUi("Muted")
    set the visible of graphic "ActivityLine" to false
    set the visible of graphic "ActivitySpin" to false
    set the visible of field "Activity" to false
@@ -658,19 +670,19 @@ private command xtaBuildWindow
    xtaUiGfx "PromptBg", "16,500," & (kWindowWidth - 104) & ",572"
    set the roundRadius of graphic "PromptBg" to 10
    set the filled of graphic "PromptBg" to true
-   set the backgroundColor of graphic "PromptBg" to kUiCard
+   set the backgroundColor of graphic "PromptBg" to xtaUi("Card")
    set the lineSize of graphic "PromptBg" to 1
-   set the foregroundColor of graphic "PromptBg" to kUiFieldLine
+   set the foregroundColor of graphic "PromptBg" to xtaUi("FieldLine")
    xtaUiLabel "PromptHint", xtaPromptHint(), "16,500," & (kWindowWidth - 104) & ",572", 12
    set the margins of field "PromptHint" to "10,7,10,7"
-   set the foregroundColor of field "PromptHint" to kUiMuted
+   set the foregroundColor of field "PromptHint" to xtaUi("Muted")
    xtaUiInput "Prompt", "16,500," & (kWindowWidth - 104) & ",572"
    set the opaque of field "Prompt" to false
    set the borderWidth of field "Prompt" to 0
    set the margins of field "Prompt" to "10,7,10,7"
    set the textFont of field "Prompt" to empty
    set the textSize of field "Prompt" to 12
-   set the foregroundColor of field "Prompt" to kUiInk
+   set the foregroundColor of field "Prompt" to xtaUi("Ink")
    set the dontWrap of field "Prompt" to false
    set the vScrollbar of field "Prompt" to false
    set the autoTab of field "Prompt" to false
@@ -686,6 +698,7 @@ private command xtaBuildWindow
 
    set the behavior of stack kWindow to the long id of stack kWindowBehavior
    unlock messages
+   xtaPaintWindow
    set the defaultStack to tOldDefault
    unlock screen
 end xtaBuildWindow
@@ -753,13 +766,244 @@ private function xtaUiMonoFont
    return "DejaVu Sans Mono"
 end xtaUiMonoFont
 
+-- A colour of the windows, by its name (the kUi... constants without
+-- "kUi"): Learn's light ones, or in the dark appearance Learn's dark ones
+-- (revLearnKit's lkColor), with white text, not grey. The header, the
+-- mark and the buttons filled with the accent are the same in both.
+-- "AccentInk" is the accent as the colour of text: lighter in the dark.
+private function xtaUi pName
+   if sUiDark is true then
+      switch pName
+         case "Bg"
+            return "16,22,36"
+         case "Card"
+            return "30,41,59"
+         case "CardLine"
+            return "51,65,85"
+         case "FieldLine"
+            return "71,85,105"
+         case "Ink"
+            return "255,255,255"
+         case "InkSoft"
+            return "226,232,240"
+         case "Muted"
+            return "176,190,206"
+         case "Ok"
+            return "74,222,128"
+         case "Warn"
+            return "251,191,36"
+         case "Bad"
+            return "248,113,113"
+         case "AccentInk"
+            return "196,181,253"
+         case "CodeBg"
+            return "2,6,23"
+         case "CodeHead"
+            return "30,41,59"
+         case "OutputBg"
+            return "15,23,42"
+         case "Tint"
+            return "46,38,84"
+         case "InlineBg"
+            return "59,47,107"
+         case "InlineInk"
+            return "221,214,254"
+      end switch
+   end if
+   switch pName
+      case "Bg"
+         return kUiBg
+      case "Card"
+         return kUiCard
+      case "CardLine"
+         return kUiCardLine
+      case "FieldLine"
+         return kUiFieldLine
+      case "Ink"
+         return kUiInk
+      case "InkSoft"
+         return kUiInkSoft
+      case "Muted"
+         return kUiMuted
+      case "Ok"
+         return kUiOk
+      case "Warn"
+         return kUiWarn
+      case "Bad"
+         return kUiBad
+      case "AccentInk"
+         return kUiAccent
+      case "CodeBg"
+         return kUiCodeBg
+      case "CodeHead"
+         return kUiCodeHead
+      case "CodeInk"
+         return kUiCodeInk
+      case "OutputBg"
+         return kUiOutputBg
+      case "Tint"
+         return kUiTint
+      case "InlineBg"
+         return kUiInlineBg
+      case "InlineInk"
+         return kUiInlineInk
+   end switch
+   return kUiInk
+end xtaUi
+
+-- Reads the desktop's appearance into sUiDark, as the IDE's Tools palette
+-- reads it: macOS's and Windows' systemAppearance, and on Linux, where
+-- the systemAppearance is always light, how dark the GTK theme's window
+-- colour is (this stack's, which has no colour of its own). True when it
+-- changed. Light where neither can be read (another xTalk's engine).
+private function xtaReadAppearance
+   local tDark, tSaved, tSum, tError
+   put false into tDark
+   try
+      if the platform contains "linux" then
+         put the backgroundColor of me into tSaved
+         lock screen
+         set the backgroundColor of me to empty
+         put the effective backgroundColor of me into tSum
+         set the backgroundColor of me to tSaved
+         unlock screen
+         if item 1 of tSum is a number and item 3 of tSum is a number then
+            put item 1 of tSum + item 2 of tSum + item 3 of tSum < 234 into tDark
+         end if
+      else
+         put the systemAppearance is "dark" into tDark
+      end if
+   catch tError
+   end try
+   if tDark is (sUiDark is true) then
+      return false
+   end if
+   put tDark into sUiDark
+   return true
+end xtaReadAppearance
+
+-- The desktop switched between light and dark (the IDE's
+-- ideSystemAppearanceChanged, which xtaOpenWindow subscribes this stack
+-- to): the window is painted again in the other colours, in place, with
+-- the conversation drawn again; the Settings and Memory windows take them
+-- when they are next made. On macOS the appearance can still read as it
+-- was when the switch is announced: it is read again every 300
+-- milliseconds, ten times, until it has changed (as the Tools palette does).
+on ideSystemAppearanceChanged
+   if sAppearanceMsg is not empty then
+      cancel sAppearanceMsg
+      put empty into sAppearanceMsg
+   end if
+   put 10 into sAppearanceTries
+   xtaRecheckAppearance
+end ideSystemAppearanceChanged
+
+on xtaRecheckAppearance
+   put empty into sAppearanceMsg
+   if there is not a stack kWindow then
+      exit xtaRecheckAppearance
+   end if
+   if xtaFollowAppearance() then
+      exit xtaRecheckAppearance
+   end if
+   subtract 1 from sAppearanceTries
+   if sAppearanceTries > 0 then
+      send "xtaRecheckAppearance" to me in 300 milliseconds
+      put the result into sAppearanceMsg
+   end if
+end xtaRecheckAppearance
+
+-- Reads the appearance, and when it changed paints the window again in
+-- its colours, with the conversation drawn again; true when it changed
+private function xtaFollowAppearance
+   if not xtaReadAppearance() then
+      return false
+   end if
+   if there is a stack kWindow then
+      lock screen
+      xtaPaintWindow
+      xtaShowConversation
+      xtaPaintPill
+      unlock screen
+   end if
+   return true
+end xtaFollowAppearance
+
+-- The colours of the window's controls that change with the appearance:
+-- when it is made, and again when the appearance changes. The status
+-- line keeps what it says, in the new colour of its kind.
+private command xtaPaintWindow
+   local tOld, tKind, tName, tButton, tIndex
+   if there is not a stack kWindow then
+      exit xtaPaintWindow
+   end if
+   lock screen
+   lock messages
+   set the linkColor of stack kWindow to xtaUi("AccentInk")
+   set the linkHiliteColor of stack kWindow to xtaUi("AccentInk")
+   set the linkVisitedColor of stack kWindow to xtaUi("AccentInk")
+   set the cFieldLine of stack kWindow to xtaUi("FieldLine")
+   set the backgroundColor of card 1 of stack kWindow to xtaUi("Bg")
+   -- the status line, in its kind's colour (the kind found by the colour,
+   -- in either appearance's)
+   put the foregroundColor of field "Status" of stack kWindow into tOld
+   put "InkSoft" into tKind
+   repeat for each item tName in "Ok,Warn,Bad"
+      if tOld is xtaUiOf(tName, true) or tOld is xtaUiOf(tName, false) then
+         put tName into tKind
+      end if
+   end repeat
+   set the foregroundColor of field "Status" of stack kWindow to xtaUi(tKind)
+   repeat for each item tName in "ConversationPanel,AskPanel"
+      set the backgroundColor of graphic tName of stack kWindow to xtaUi("Card")
+      set the foregroundColor of graphic tName of stack kWindow to xtaUi("CardLine")
+      set the borderColor of graphic tName of stack kWindow to xtaUi("CardLine")
+   end repeat
+   set the foregroundColor of field "Conversation" of stack kWindow to xtaUi("Ink")
+   set the backgroundColor of graphic "ActivityLine" of stack kWindow to xtaUi("CardLine")
+   set the foregroundColor of field "Activity" of stack kWindow to xtaUi("InkSoft")
+   set the foregroundColor of field "ActivityTime" of stack kWindow to xtaUi("Muted")
+   set the foregroundColor of field "AskTitle" of stack kWindow to xtaUi("Ink")
+   set the foregroundColor of field "AskDetail" of stack kWindow to xtaUi("Ink")
+   set the backgroundColor of field "AskDetail" of stack kWindow to xtaUi("Card")
+   set the borderColor of field "AskDetail" of stack kWindow to xtaUi("CardLine")
+   set the foregroundColor of button "Include" of stack kWindow to xtaUi("Ink")
+   set the backgroundColor of graphic "PromptBg" of stack kWindow to xtaUi("Card")
+   -- (the accent while the prompt has the focus: the window's behavior)
+   if the foregroundColor of graphic "PromptBg" of stack kWindow is not kUiAccent then
+      set the foregroundColor of graphic "PromptBg" of stack kWindow to xtaUi("FieldLine")
+   end if
+   set the foregroundColor of field "PromptHint" of stack kWindow to xtaUi("Muted")
+   set the foregroundColor of field "Prompt" of stack kWindow to xtaUi("Ink")
+   set the foregroundColor of field "uiFooter" of stack kWindow to xtaUi("Muted")
+   -- the flat buttons that are not filled with the accent
+   repeat with tIndex = 1 to the number of buttons of card 1 of stack kWindow
+      put the long id of button tIndex of card 1 of stack kWindow into tButton
+      if the style of tButton is "roundrect" and the backgroundColor of tButton is not kUiAccent then
+         xtaUiButtonColors tButton, xtaUi("CardLine"), xtaUi("Ink"), xtaUi("FieldLine")
+      end if
+   end repeat
+   unlock messages
+   unlock screen
+end xtaPaintWindow
+
+-- A colour as it is in the dark appearance (pDark) or the light one
+private function xtaUiOf pName, pDark
+   local tSaved, tColor
+   put sUiDark into tSaved
+   put pDark into sUiDark
+   put xtaUi(pName) into tColor
+   put tSaved into sUiDark
+   return tColor
+end xtaUiOf
+
 -- The page, the header with the mark and the title, and the status line
 -- under it (field "Status", which xtaStatus and the dialogs write)
 private command xtaUiChrome pTitle, pWidth, pHeight
    local tHeight
    set the width of this stack to pWidth
    set the height of this stack to pHeight
-   set the backgroundColor of this card to kUiBg
+   set the backgroundColor of this card to xtaUi("Bg")
    set the title of this stack to pTitle
    -- The header, dark, its gradient Learn's (xtaUiBandWidth keeps it to
    -- the window's width)
@@ -797,7 +1041,7 @@ private command xtaUiChrome pTitle, pWidth, pHeight
    end if
    xtaUiLabel "Status", empty, "16," & (kUiBand + 4) & comma & (pWidth - 16) & comma & (kUiBand + 22), 11
    set the dontWrap of field "Status" to true
-   set the foregroundColor of field "Status" to kUiInkSoft
+   set the foregroundColor of field "Status" to xtaUi("InkSoft")
 end xtaUiChrome
 
 -- The header's gradient across a window pWidth wide (and the window's
@@ -846,7 +1090,7 @@ private command xtaUiButtons pStack, pPrimary
       if the short name of tButton is among the items of pPrimary then
          xtaUiButtonColors tButton, kUiAccent, kUiAccentText, "109,40,217"
       else
-         xtaUiButtonColors tButton, kUiCardLine, kUiInk, kUiFieldLine
+         xtaUiButtonColors tButton, xtaUi("CardLine"), xtaUi("Ink"), xtaUi("FieldLine")
       end if
    end repeat
 end xtaUiButtons
@@ -871,7 +1115,7 @@ private command xtaUiLabel pName, pText, pRect, pSize
    set the opaque of field pName to false
    set the threeD of field pName to false
    set the textSize of field pName to pSize
-   set the foregroundColor of field pName to kUiInk
+   set the foregroundColor of field pName to xtaUi("Ink")
    put pText into field pName
 end xtaUiLabel
 
@@ -891,7 +1135,7 @@ end xtaUiWrap
 -- A small, muted caption
 private command xtaUiCap pName, pText, pRect
    xtaUiWrap pName, pText, pRect, 10
-   set the foregroundColor of field pName to kUiMuted
+   set the foregroundColor of field pName to xtaUi("Muted")
 end xtaUiCap
 
 -- A numbered section's header, with a hairline under it
@@ -903,7 +1147,7 @@ private command xtaUiSection pName, pText, pRect
    xtaUiGfx pName & "Line", (item 1 of pRect) & comma & (tBottom + 1) & comma & (item 3 of pRect) & comma & (tBottom + 2)
    set the style of graphic (pName & "Line") to "rectangle"
    set the filled of graphic (pName & "Line") to true
-   set the backgroundColor of graphic (pName & "Line") to kUiCardLine
+   set the backgroundColor of graphic (pName & "Line") to xtaUi("CardLine")
    set the lineSize of graphic (pName & "Line") to 0
 end xtaUiSection
 
@@ -917,9 +1161,9 @@ private command xtaUiInput pName, pRect
    set the traversalOn of field pName to true
    set the threeD of field pName to false
    set the borderWidth of field pName to 1
-   set the borderColor of field pName to kUiFieldLine
+   set the borderColor of field pName to xtaUi("FieldLine")
    set the opaque of field pName to true
-   set the backgroundColor of field pName to kUiCard
+   set the backgroundColor of field pName to xtaUi("Card")
    set the margins of field pName to "6,6,6,6"
    set the textSize of field pName to 11
    set the textFont of field pName to xtaUiMonoFont()
@@ -935,9 +1179,10 @@ private command xtaUiArea pName, pRect
    set the traversalOn of field pName to false
    set the threeD of field pName to false
    set the borderWidth of field pName to 1
-   set the borderColor of field pName to kUiCardLine
+   set the borderColor of field pName to xtaUi("CardLine")
    set the opaque of field pName to true
-   set the backgroundColor of field pName to kUiCard
+   set the backgroundColor of field pName to xtaUi("Card")
+   set the foregroundColor of field pName to xtaUi("Ink")
    set the margins of field pName to "6,6,6,6"
    set the vScrollbar of field pName to true
    set the textSize of field pName to 10
@@ -960,10 +1205,10 @@ private command xtaUiPanel pName, pRect
    xtaUiGfx pName, pRect
    set the roundRadius of graphic pName to 14
    set the filled of graphic pName to true
-   set the backgroundColor of graphic pName to kUiCard
+   set the backgroundColor of graphic pName to xtaUi("Card")
    set the lineSize of graphic pName to 1
-   set the foregroundColor of graphic pName to kUiCardLine
-   set the borderColor of graphic pName to kUiCardLine
+   set the foregroundColor of graphic pName to xtaUi("CardLine")
+   set the borderColor of graphic pName to xtaUi("CardLine")
    try
       put "15,23,42" into tShadow["color"]
       put 18 into tShadow["opacity"]
@@ -1001,7 +1246,7 @@ end xtaUiPill
 private command xtaUiFooter pText, pRect
    xtaUiLabel "uiFooter", pText, pRect, 11
    set the textStyle of field "uiFooter" to "italic"
-   set the foregroundColor of field "uiFooter" to kUiMuted
+   set the foregroundColor of field "uiFooter" to xtaUi("Muted")
 end xtaUiFooter
 
 private function xtaProviderNames
@@ -1155,16 +1400,16 @@ private command xtaStatus pText, pKind
    end if
    switch pKind
       case "ok"
-         put kUiOk into tColor
+         put xtaUi("Ok") into tColor
          break
       case "warn"
-         put kUiWarn into tColor
+         put xtaUi("Warn") into tColor
          break
       case "bad"
-         put kUiBad into tColor
+         put xtaUi("Bad") into tColor
          break
       default
-         put kUiInkSoft into tColor
+         put xtaUi("InkSoft") into tColor
    end switch
    lock messages
    set the text of field "Status" of stack kWindow to pText
@@ -1267,7 +1512,7 @@ private command xtaPaintActivity
    lock messages
    set the startAngle of graphic "ActivitySpin" of stack kWindow to sWork["angle"]
    if sWork["kind"] is "ask" then
-      set the foregroundColor of graphic "ActivitySpin" of stack kWindow to kUiWarn
+      set the foregroundColor of graphic "ActivitySpin" of stack kWindow to xtaUi("Warn")
    else
       set the foregroundColor of graphic "ActivitySpin" of stack kWindow to kUiAccent
    end if
@@ -1407,7 +1652,7 @@ private command xtaShowConversation
             end if
             xtaDocSpeaker tDoc, tSpeaker, "xTalk Assistant"
             put the result into tNew
-            xtaDocAnswer tDoc, tText, tIndex, kUiInk, tNew
+            xtaDocAnswer tDoc, tText, tIndex, xtaUi("Ink"), tNew
             xtaDocCheck tDoc, tTurn["check"]
             xtaDocCut tDoc, tTurn["cut"]
             xtaDocNotes tDoc, tIndex
@@ -1419,7 +1664,7 @@ private command xtaShowConversation
             if tText begins with "Compile check: " then
                delete char 1 to the number of chars of "Compile check: " of tText
             end if
-            xtaDocAnswer tDoc, tText, tIndex, kUiInkSoft, true
+            xtaDocAnswer tDoc, tText, tIndex, xtaUi("InkSoft"), true
             next repeat
          end if
          -- A question: first what the one before took, then who asks
@@ -1465,9 +1710,9 @@ private command xtaDocSpeaker @xDoc, @xSpeaker, pName
    end if
    put "bold" into tRun["textStyle"]
    if pName is "Compile check" then
-      put kUiWarn into tRun["textColor"]
+      put xtaUi("Warn") into tRun["textColor"]
    else
-      put kUiAccent into tRun["textColor"]
+      put xtaUi("AccentInk") into tRun["textColor"]
    end if
    put 2 into tPara["spaceBelow"]
    xtaDocLine xDoc, pName, tRun, tPara
@@ -1480,10 +1725,10 @@ end xtaDocSpeaker
 -- tab, which the engine lays out as one), so that the tint is one box
 private command xtaDocQuestion @xDoc, pTurn
    local tRun, tSoft, tPara, tRuns, tText
-   put kUiInk into tRun["textColor"]
-   put kUiInkSoft into tSoft["textColor"]
+   put xtaUi("Ink") into tRun["textColor"]
+   put xtaUi("InkSoft") into tSoft["textColor"]
    put "italic" into tSoft["textStyle"]
-   put kUiTint into tPara["backgroundColor"]
+   put xtaUi("Tint") into tPara["backgroundColor"]
    put 6 into tPara["padding"]
    put pTurn["text"] into tText
    replace return with numToChar(11) in tText
@@ -1501,7 +1746,7 @@ end xtaDocQuestion
 -- false when the line goes on the block of an answer.
 private command xtaDocTools @xDoc, pResults, pStates, pNew
    local tCall, tResult, tSummary, tRuns, tStyle, tLink, tEntry, tPara, tSmall, tSub, tShown, tLine, tMore
-   put kUiInkSoft into tSmall["textColor"]
+   put xtaUi("InkSoft") into tSmall["textColor"]
    put 11 into tSmall["textSize"]
    put "disc" into tSub["listStyle"]
    put 2 into tSub["listDepth"]
@@ -1514,9 +1759,9 @@ private command xtaDocTools @xDoc, pResults, pStates, pNew
       put empty into tStyle
       put "italic" into tStyle["textStyle"]
       if tResult["error"] is true then
-         put kUiWarn into tStyle["textColor"]
+         put xtaUi("Warn") into tStyle["textColor"]
       else
-         put kUiInkSoft into tStyle["textColor"]
+         put xtaUi("InkSoft") into tStyle["textColor"]
       end if
       xtaRunAdd tRuns, tSummary, tStyle
       put tResult["entry"] into tEntry
@@ -1561,8 +1806,8 @@ private command xtaDocRunOutput @xDoc, pResult
    end if
    put xtaCodeFont() into tMono["textFont"]
    put 10 into tMono["textSize"]
-   put kUiInk into tMono["textColor"]
-   put kUiOutputBg into tPara["backgroundColor"]
+   put xtaUi("Ink") into tMono["textColor"]
+   put xtaUi("OutputBg") into tPara["backgroundColor"]
    put 16 into tPara["leftIndent"]
    put 8 into tPara["firstIndent"]
    put 0 into tCount
@@ -1571,9 +1816,9 @@ private command xtaDocRunOutput @xDoc, pResult
       repeat for each line tLine in pResult["output"]
          add 1 to tCount
          if tCount > kShownOutput then
-            put kUiMuted into tMono["textColor"]
+            put xtaUi("Muted") into tMono["textColor"]
             xtaDocLine xDoc, "... and" && tLines - kShownOutput && "more lines", tMono, tPara
-            put kUiInk into tMono["textColor"]
+            put xtaUi("Ink") into tMono["textColor"]
             exit repeat
          end if
          xtaDocLine xDoc, tLine, tMono, tPara
@@ -1586,7 +1831,7 @@ private command xtaDocRunOutput @xDoc, pResult
       else if the number of lines of pResult["value"] > 1 then
          put "..." after tValue
       end if
-      put kUiInkSoft into tMono["textColor"]
+      put xtaUi("InkSoft") into tMono["textColor"]
       xtaDocLine xDoc, "returned" && tValue, tMono, tPara
    end if
 end xtaDocRunOutput
@@ -1600,9 +1845,9 @@ private command xtaDocCheck @xDoc, pCheck
    end if
    put "italic" into tRun["textStyle"]
    if pCheck contains "not compile" then
-      put kUiWarn into tRun["textColor"]
+      put xtaUi("Warn") into tRun["textColor"]
    else
-      put kUiOk into tRun["textColor"]
+      put xtaUi("Ok") into tRun["textColor"]
    end if
    put 4 into tPara["spaceAbove"]
    xtaDocLine xDoc, pCheck, tRun, tPara
@@ -1616,7 +1861,7 @@ private command xtaDocCut @xDoc, pCut
       exit xtaDocCut
    end if
    put "italic" into tRun["textStyle"]
-   put kUiWarn into tRun["textColor"]
+   put xtaUi("Warn") into tRun["textColor"]
    put 4 into tPara["spaceAbove"]
    xtaDocLine xDoc, pCut, tRun, tPara
 end xtaDocCut
@@ -1626,7 +1871,7 @@ end xtaDocCut
 private command xtaDocNotes @xDoc, pTurn
    local tNote, tRun, tLink, tRuns, tText
    put "italic" into tRun["textStyle"]
-   put kUiInkSoft into tRun["textColor"]
+   put xtaUi("InkSoft") into tRun["textColor"]
    put "link" into tLink["textStyle"]
    repeat with tNote = 1 to the number of elements of sTurns[pTurn]["notes"]
       put sTurns[pTurn]["notes"][tNote]["note"] into tText
@@ -1662,7 +1907,7 @@ private command xtaDocMeta @xDoc, pQuestion
    if tStats is not an array then
       exit xtaDocMeta
    end if
-   put kUiMuted into tRun["textColor"]
+   put xtaUi("Muted") into tRun["textColor"]
    put 10 into tRun["textSize"]
    put 4 into tPara["spaceAbove"]
    xtaDocLine xDoc, xtaStatsLine(tStats), tRun, tPara
@@ -1715,12 +1960,12 @@ private command xtaDocWelcome @xDoc
    local tRun, tPara, tLink, tRuns, tIndex, tText, tProvider
    put "bold" into tRun["textStyle"]
    put 16 into tRun["textSize"]
-   put kUiInk into tRun["textColor"]
+   put xtaUi("Ink") into tRun["textColor"]
    put 10 into tPara["spaceAbove"]
    put 4 into tPara["spaceBelow"]
    xtaDocLine xDoc, "What shall we make?", tRun, tPara
    put empty into tRun
-   put kUiInkSoft into tRun["textColor"]
+   put xtaUi("InkSoft") into tRun["textColor"]
    put empty into tPara
    if xtaBuildOn() then
       put "Ask about xTalk Script, or ask the assistant to build it with you: it can read your stack, make cards, controls " & \
@@ -1735,7 +1980,7 @@ private command xtaDocWelcome @xDoc
    if xtaKey(tProvider) is empty and xtaBaseUrl(tProvider) is empty then
       put empty into tRuns
       put 8 into tPara["spaceAbove"]
-      put kUiBad into tRun["textColor"]
+      put xtaUi("Bad") into tRun["textColor"]
       xtaRunAdd tRuns, "It needs your" && xtaProviderName(tProvider) && "API key first:", tRun
       xtaRunAdd tRuns, " ", tRun
       put "link" into tLink["textStyle"]
@@ -1743,12 +1988,12 @@ private command xtaDocWelcome @xDoc
       xtaRunAdd tRuns, "add it in the Settings", tLink
       xtaRunAdd tRuns, ".", tRun
       xtaDocAdd xDoc, tRuns, tPara
-      put kUiInkSoft into tRun["textColor"]
+      put xtaUi("InkSoft") into tRun["textColor"]
    end if
    put empty into tPara
    put 12 into tPara["spaceAbove"]
    put 2 into tPara["spaceBelow"]
-   put kUiMuted into tRun["textColor"]
+   put xtaUi("Muted") into tRun["textColor"]
    put 11 into tRun["textSize"]
    xtaDocLine xDoc, "Try one of these:", tRun, tPara
    put empty into tPara
@@ -1854,8 +2099,8 @@ private function xtaInlineRuns pText, pBase
                put empty into tPlain
                put pBase into tStyle
                put xtaCodeFont() into tStyle["textFont"]
-               put kUiInlineBg into tStyle["backgroundColor"]
-               put kUiInlineInk into tStyle["textColor"]
+               put xtaUi("InlineBg") into tStyle["backgroundColor"]
+               put xtaUi("InlineInk") into tStyle["textColor"]
                xtaRunAdd tRuns, char tPos + 1 to tEnd - 1 of pText, tStyle
                put tEnd + 1 into tPos
                next repeat
@@ -2000,8 +2245,8 @@ private command xtaDocAnswer @xDoc, pText, pTurn, pInk, pNew
    put pInk into tBody["textColor"]
    put tCodeFont into tCode["textFont"]
    put 11 into tCode["textSize"]
-   put kUiCodeInk into tCode["textColor"]
-   put kUiCodeBg into tCodePara["backgroundColor"]
+   put xtaUi("CodeInk") into tCode["textColor"]
+   put xtaUi("CodeBg") into tCodePara["backgroundColor"]
    put 10 into tCodePara["firstIndent"]
    put (pNew is false) into tFirst
    put 0 into tSpace
@@ -2042,7 +2287,7 @@ private command xtaDocAnswer @xDoc, pText, pTurn, pInk, pNew
             xtaRunAdd tRuns, "Insert", tLink
          end if
          put empty into tHeader
-         put kUiCodeHead into tHeader["backgroundColor"]
+         put xtaUi("CodeHead") into tHeader["backgroundColor"]
          put 4 into tHeader["padding"]
          put 6 into tHeader["firstIndent"]
          put max(tSpace, 6) into tHeader["spaceAbove"]
@@ -2119,7 +2364,7 @@ private command xtaDocAnswer @xDoc, pText, pTurn, pInk, pNew
       if tTrim begins with ">" then
          put tBody into tRun
          put "italic" into tRun["textStyle"]
-         put kUiInkSoft into tRun["textColor"]
+         put xtaUi("InkSoft") into tRun["textColor"]
          put 12 into tPara["leftIndent"]
          put char 2 to -1 of tTrim into tTrim
          xtaDocInline xDoc, word 1 to -1 of tTrim, tRun, tPara
@@ -2212,7 +2457,7 @@ private function xtaWordColor pWord
    if pWord is among the items of "true,false,empty,quote,space,tab,comma,cr,return,lf,slash,colon,pi,zero,one,two,three" then
       return "249,168,212"
    end if
-   return kUiCodeInk
+   return xtaUi("CodeInk")
 end xtaWordColor
 
 -- Whom a proposed note is about, as the window says it
@@ -2426,6 +2671,7 @@ private command xtaBuildSettings
    put kSettingsWidth into tWidth
    put 168 into tLeft
    put tWidth - 16 into tRight
+   get xtaFollowAppearance()
    lock screen
    lock messages
    create invisible stack kSettingsWindow
@@ -2574,7 +2820,7 @@ end xtaSettingsField
 -- the suite's kit found OXT keeps.
 private command xtaSettingsNote pName, pLeft, pTop, pRight, pHeight
    xtaUiLabel pName, empty, pLeft & comma & pTop & comma & pRight & comma & (pTop + pHeight), 10
-   set the foregroundColor of field pName to kUiMuted
+   set the foregroundColor of field pName to xtaUi("Muted")
    set the dontWrap of field pName to (pHeight < 24)
    set the margins of field pName to "1,4,1,1"
 end xtaSettingsNote
@@ -2584,7 +2830,7 @@ private command xtaSettingsCheckbox pName, pLabel, pLeft, pTop, pRight
    set the style of button pName to "checkbox"
    set the hiliteBorder of button pName to false
    set the label of button pName to pLabel
-   set the foregroundColor of button pName to kUiInk
+   set the foregroundColor of button pName to xtaUi("Ink")
    set the rect of button pName to pLeft, pTop, pRight, pTop + 20
 end xtaSettingsCheckbox
 
@@ -2656,16 +2902,16 @@ private command xtaSettingsResult pText, pKind
    local tColor
    switch pKind
       case "ok"
-         put kUiOk into tColor
+         put xtaUi("Ok") into tColor
          break
       case "warn"
-         put kUiWarn into tColor
+         put xtaUi("Warn") into tColor
          break
       case "bad"
-         put kUiBad into tColor
+         put xtaUi("Bad") into tColor
          break
       default
-         put kUiInkSoft into tColor
+         put xtaUi("InkSoft") into tColor
    end switch
    lock messages
    set the text of field "Result" of stack kSettingsWindow to pText
@@ -3386,6 +3632,7 @@ private function xtaMemoryDialog pWork, pYou, pStackNotes
    end if
    put kMemoryWidth - 16 into tRight
    put the defaultStack into tOldDefault
+   get xtaFollowAppearance()
    lock screen
    lock messages
    create invisible stack kMemoryWindow

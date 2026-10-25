@@ -33,8 +33,9 @@ constant kMeasure = 760
 -- Room at the panel's right for its scroll thumb
 constant kThumbRoom = 14
 
--- What the panel shows: "about", "licences" or "licence"
-local sView
+-- What the panel shows: "about", "licences" or "licence", and which
+-- licence
+local sView, sViewIndex
 -- The licences, by number: their names, and each one's text
 local sLicNames, sLicTexts
 -- The version line Copy puts on the clipboard
@@ -57,6 +58,8 @@ end revAboutShow
 
 on preOpenStack
    abUseKit
+   -- (light or dark, as the desktop is: lkAppearanceChanged)
+   get lkReadAppearance()
    abBuild
    abPlace
    abShowView sView
@@ -67,7 +70,23 @@ end preOpenStack
 on openStack
    lkStartTicking
    lkEnter "side"
+   lkFollowAppearance
 end openStack
+
+-- The desktop switched between light and dark (revLearnKit): the window
+-- is built again in the other colours, at its size, showing what it showed
+on lkAppearanceChanged
+   local tRect
+   put the rect of me into tRect
+   lock screen
+   lkClear
+   abBuild
+   set the rect of me to tRect
+   abLayout
+   abShowView sView, sViewIndex
+   lkEnter "side"
+   unlock screen
+end lkAppearanceChanged
 
 on closeStack
    lkStopTicking
@@ -282,9 +301,9 @@ private command abBuild
    set the destroyStack of me to true
    set the rect of me to 0, 0, kWidth, kHeight
    set the backgroundColor of me to lkColor("bg")
-   set the linkColor of me to lkColor("violet")
-   set the linkHiliteColor of me to lkColor("pink")
-   set the linkVisitedColor of me to lkColor("violet")
+   set the linkColor of me to lkAccentInk(lkColor("violet"))
+   set the linkHiliteColor of me to lkAccentInk(lkColor("pink"))
+   set the linkVisitedColor of me to lkAccentInk(lkColor("violet"))
    set the underlineLinks of me to false
 
    put abFileLine(".version") into tVersion
@@ -316,7 +335,7 @@ private command abBuild
       put "Build" && tBuild & "  " & numToCodepoint(0x00B7) & "  " after tLine
    end if
    put "Engine" && version() & "  " & numToCodepoint(0x00B7) & "  " & abPlatform() after tLine
-   put lkLabel("heroBuild", lkR(tX, 84, kWidth - kPad, 100), tLine, 12, lkColor("muted"), empty) into tObj
+   put lkLabel("heroBuild", lkR(tX, 84, kWidth - kPad, 100), tLine, 12, lkColor("sideMuted"), empty) into tObj
    set the dontWrap of tObj to true
    put abName() && tVersion into sVersionText
    if tCodename is not empty then
@@ -337,7 +356,11 @@ private command abBuild
          empty, 13, lkColor("soft"), empty) into tObj
    set the textHeight of tObj to 19
    set the vScrollbar of tObj to true
-   lkScroller "panelThumb", tObj, "100,116,139", 45, empty
+   if lkDark() then
+      lkScroller "panelThumb", tObj, "148,163,184", 45, empty
+   else
+      lkScroller "panelThumb", tObj, "100,116,139", 45, empty
+   end if
 
    -- The foot
    get lkButton("notes", kPad - 8, kHeight - kFootHeight + 18, 34, "Release notes", "file-text", "ghost", lkColor("violet"), empty, "notes", 0)
@@ -430,6 +453,7 @@ private command abShowView pView, pIndex
       put "about" into pView
    end if
    put pView into sView
+   put pIndex into sViewIndex
    lock screen
    switch pView
       case "licences"

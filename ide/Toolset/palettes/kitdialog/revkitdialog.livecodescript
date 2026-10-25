@@ -127,6 +127,8 @@ command revKitDialogAsk pSpec
 end revKitDialogAsk
 
 on preOpenStack
+   -- (light or dark, as the desktop is: lkAppearanceChanged)
+   get lkReadAppearance()
    kdBuild true
    kdPlace
    -- (a script-only stack is made invisible when it is loaded)
@@ -136,6 +138,7 @@ end preOpenStack
 on openStack
    lkStartTicking
    lkEnter "side"
+   lkFollowAppearance
 end openStack
 
 on closeStack
@@ -145,10 +148,24 @@ end closeStack
 -- Laid out again for its new size (see sWidth), in place: what the panel
 -- showed, the text or the peeked file, and where it was scrolled to stay
 on resizeStack pWidth, pHeight
-   local tPeeking, tScroll, tField
    if sBuilding or sSpec is empty then
       pass resizeStack
    end if
+   kdRebuild max(kWidth, pWidth), max(0, pHeight - sNatural)
+   pass resizeStack
+end resizeStack
+
+-- The desktop switched between light and dark (revLearnKit): laid out
+-- again in the other colours, at its size, as for a new size
+on lkAppearanceChanged
+   if sBuilding or sSpec is empty then
+      exit lkAppearanceChanged
+   end if
+   kdRebuild sWidth, sExtra
+end lkAppearanceChanged
+
+private command kdRebuild pWidth, pExtra
+   local tPeeking, tScroll, tField
    put sPeeking into tPeeking
    if tPeeking then
       put "peekFile_code" into tField
@@ -158,8 +175,8 @@ on resizeStack pWidth, pHeight
    if there is a field tField of me then
       put the vScroll of field tField of me into tScroll
    end if
-   put max(kWidth, pWidth) into sWidth
-   put max(0, pHeight - sNatural) into sExtra
+   put pWidth into sWidth
+   put pExtra into sExtra
    put false into sPeeking
    kdBuild false
    if tPeeking then
@@ -173,8 +190,7 @@ on resizeStack pWidth, pHeight
          lkScrollSync "panelThumb"
       end if
    end if
-   pass resizeStack
-end resizeStack
+end kdRebuild
 
 on returnKey
    kdPress the number of lines of sButtons
@@ -267,16 +283,16 @@ private command kdBuild pSize
       set the rect of me to 0, 0, sWidth, 400
    end if
    set the backgroundColor of me to lkColor("bg")
-   set the linkColor of me to lkColor("violet")
-   set the linkHiliteColor of me to lkColor("pink")
-   set the linkVisitedColor of me to lkColor("violet")
+   set the linkColor of me to lkAccentInk(lkColor("violet"))
+   set the linkHiliteColor of me to lkAccentInk(lkColor("pink"))
+   set the linkVisitedColor of me to lkAccentInk(lkColor("violet"))
    set the underlineLinks of me to false
 
    -- The header
    put lkBox("heroBg", lkR(0, 0, sWidth, kHeroHeight), lkColor("side"), 0, empty) into tObj
    lkGradient tObj, "15,23,42|20,24,54|36,27,82", "0,0", sWidth & "," & kHeroHeight
    put lkBox("heroMark", lkR(kPad, 26, kPad + 52, 78), lkColor(tTone), 26, empty) into tObj
-   lkGradient tObj, lkMix(lkColor(tTone), "255,255,255", 0.2) & "|" & lkMix(lkColor(tTone), lkColor("ink"), 0.15), \
+   lkGradient tObj, lkMix(lkColor(tTone), "255,255,255", 0.2) & "|" & lkMix(lkColor(tTone), "15,23,42", 0.15), \
          kPad & ",26", (kPad + 52) & ",78"
    lkGlow tObj, lkColor(tTone), 16, 80
    if sSpec["icon"] is not empty then
@@ -316,7 +332,11 @@ private command kdBuild pSize
       set the rect of tObj to item 1 of the rect of tObj, tTop + 8, item 3 of the rect of tObj, tTop + 8 + tHeight
       set the rect of graphic "panelBg" to kPad - 6, tTop, sWidth - kPad + 6, tTop + tHeight + 20
       set the vScrollbar of tObj to true
-      lkScroller "panelThumb", tObj, "100,116,139", 45, empty
+      if lkDark() then
+         lkScroller "panelThumb", tObj, "148,163,184", 45, empty
+      else
+         lkScroller "panelThumb", tObj, "100,116,139", 45, empty
+      end if
       put tTop + tHeight + 20 + 14 into tTop
    end if
 
@@ -399,14 +419,14 @@ private function kdCallout pTop
          put "triangle-alert" into tIcon
          put "Caution" into tWord
    end switch
-   put lkBox("callBg", lkR(kPad - 6, pTop, sWidth - kPad + 6, pTop + 60), lkMix("255,255,255", tAccent, 0.07), 12, empty) into tBox
-   lkBorder tBox, lkMix("255,255,255", tAccent, 0.3)
+   put lkBox("callBg", lkR(kPad - 6, pTop, sWidth - kPad + 6, pTop + 60), lkTint(tAccent, 0.07), 12, empty) into tBox
+   lkBorder tBox, lkTint(tAccent, 0.3)
    put lkBox("callBar", lkR(kPad - 6, pTop, kPad - 2, pTop + 60), tAccent, 0, empty) into tBar
-   get lkIcon("callIcon", tIcon, tAccent, lkR(kPad + 10, pTop + 13, kPad + 28, pTop + 31), empty)
-   put lkLabel("callWord", lkR(kPad + 38, pTop + 13, sWidth - kPad, pTop + 31), tWord, 13, lkMix(tAccent, lkColor("ink"), 0.3), empty) into tObj
+   get lkIcon("callIcon", tIcon, lkAccentInk(tAccent), lkR(kPad + 10, pTop + 13, kPad + 28, pTop + 31), empty)
+   put lkLabel("callWord", lkR(kPad + 38, pTop + 13, sWidth - kPad, pTop + 31), tWord, 13, lkAccentText(tAccent, 0.3), empty) into tObj
    set the textStyle of tObj to "bold"
    put lkLabel("callText", lkR(kPad + 38, pTop + 36, sWidth - kPad - 6, pTop + 56), sSpec["callout"], 13, \
-         lkMix(tAccent, lkColor("ink"), 0.55), empty) into tObj
+         lkAccentText(tAccent, 0.55), empty) into tObj
    set the textHeight of tObj to 19
    set the height of tObj to the formattedHeight of tObj + 5
    set the top of tObj to pTop + 36 - 4
@@ -430,7 +450,7 @@ private function kdCodeBlock pName, pTop, pKind, pHtml, pText, pMax, pGrow
    get lkOval(pName & "_d1", lkR(tLeft + 16, pTop + 14, tLeft + 26, pTop + 24), "248,113,113", pName)
    get lkOval(pName & "_d2", lkR(tLeft + 32, pTop + 14, tLeft + 42, pTop + 24), "251,191,36", pName)
    get lkOval(pName & "_d3", lkR(tLeft + 48, pTop + 14, tLeft + 58, pTop + 24), "52,211,153", pName)
-   put lkLabel(pName & "_kind", lkR(tLeft + 70, pTop + 11, tLeft + 260, pTop + 27), pKind, 11, "100,116,139", pName) into tObj
+   put lkLabel(pName & "_kind", lkR(tLeft + 70, pTop + 11, tLeft + 260, pTop + 27), pKind, 11, "148,163,184", pName) into tObj
    -- (the word on the line of the dots)
    set the height of tObj to the formattedHeight of tObj
    set the top of tObj to pTop + 19 - the formattedHeight of tObj div 2
@@ -523,9 +543,9 @@ private function kdChoice pIndex, pLine, pTop, pTone
    get lkGroup(tName, lkR(kPad - 6, pTop, sWidth - kPad + 6, pTop + 60), empty)
    put lkBox(tName & "_bg", lkR(kPad - 6, pTop, sWidth - kPad + 6, pTop + 60), lkColor("panel"), 14, tName) into tObj
    lkBorder tObj, lkColor("line")
-   put lkBox(tName & "_iconBg", lkR(kPad + 8, pTop + 12, kPad + 44, pTop + 48), lkMix("255,255,255", tAccent, 0.12), 18, tName) into tObj
+   put lkBox(tName & "_iconBg", lkR(kPad + 8, pTop + 12, kPad + 44, pTop + 48), lkTint(tAccent, 0.12), 18, tName) into tObj
    if tIcon is not empty then
-      get lkIcon(tName & "_icon", tIcon, tAccent, lkR(kPad + 16, pTop + 20, kPad + 36, pTop + 40), tName)
+      get lkIcon(tName & "_icon", tIcon, lkAccentInk(tAccent), lkR(kPad + 16, pTop + 20, kPad + 36, pTop + 40), tName)
    end if
    put lkLabel(tName & "_label", lkR(kPad + 58, pTop + 10, sWidth - kPad - 8, pTop + 30), tTitle, 14, lkColor("ink"), tName) into tObj
    set the textStyle of tObj to "bold"
@@ -541,12 +561,12 @@ private function kdChoice pIndex, pLine, pTop, pTone
    set the rect of group tName to kPad - 6, pTop, sWidth - kPad + 6, tBottom
    put tName & "_bg" into tLook["bg"]
    put lkColor("panel") into tLook["bg0"]
-   put lkMix("255,255,255", tAccent, 0.06) into tLook["bg1"]
+   put lkTint(tAccent, 0.06) into tLook["bg1"]
    put lkColor("line") into tLook["line0"]
    put tAccent into tLook["line1"]
    put tName & "_label" into tLook["label"]
    put lkColor("ink") into tLook["ink0"]
-   put lkMix(tAccent, lkColor("ink"), 0.25) into tLook["ink1"]
+   put lkAccentText(tAccent, 0.25) into tLook["ink1"]
    put pIndex into tLook["enter"]
    lkLive tName, "side", "c:" & pIndex, tLook
    return tBottom

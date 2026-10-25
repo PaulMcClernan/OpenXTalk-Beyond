@@ -54,6 +54,9 @@ local sFont
 -- blend, where the wheel is taking the target and the scroll last set;
 -- and the thumb being dragged
 local sScroll, sDrag
+-- True in the dark appearance (lkReadAppearance); the pending look again
+-- at macOS's appearance after a switch, and how many looks are left
+local sDark, sAppearanceMsg, sAppearanceTries
 
 ################################################################################
 #
@@ -141,8 +144,30 @@ end resumeStack
 #
 
 -- The palette: the web tour's, and a few colours of the sidebar and the
--- code panels. Nothing else names a colour.
+-- code panels. Nothing else names a colour. In the dark appearance
+-- (lkDark) the page's colours are dark slate and its text is white, not
+-- grey: the sidebar and the code panels are dark in both.
 function lkColor pName
+   if sDark is true then
+      switch pName
+         case "bg"
+            return "16,22,36"
+         case "panel"
+            return "30,41,59"
+         case "line"
+            return "51,65,85"
+         case "ink"
+            return "255,255,255"
+         case "text"
+            return "241,245,249"
+         case "soft"
+            return "226,232,240"
+         case "muted"
+            return "176,190,206"
+         case "code"
+            return "2,6,23"
+      end switch
+   end if
    switch pName
       case "bg"
          return "241,245,249"
@@ -152,6 +177,8 @@ function lkColor pName
          return "226,232,240"
       case "ink"
          return "15,23,42"
+      case "text"
+         return "51,65,85"
       case "soft"
          return "71,85,105"
       case "muted"
@@ -163,7 +190,9 @@ function lkColor pName
       case "sideLine"
          return "51,65,85"
       case "sideInk"
-         return "203,213,225"
+         return "226,232,240"
+      case "sideMuted"
+         return "148,163,184"
       case "code"
          return "15,23,42"
       case "codeInk"
@@ -195,8 +224,162 @@ function lkColor pName
       case "bad"
          return "220,38,38"
    end switch
-   return "15,23,42"
+   return lkColor("ink")
 end lkColor
+
+-- A panel tinted with an accent: pAmount of pAccent over the panel's
+-- colour (a little more in the dark, where a faint tint does not show)
+function lkTint pAccent, pAmount
+   if sDark is true then
+      return lkMix(lkColor("panel"), pAccent, min(1, pAmount * 1.8))
+   end if
+   return lkMix(lkColor("panel"), pAccent, pAmount)
+end lkTint
+
+-- An accent as the colour of text on a panel: as it is on white, and
+-- lighter in the dark, where the deep accents are hard to read
+function lkAccentInk pAccent
+   if sDark is true then
+      return lkMix(pAccent, "255,255,255", 0.4)
+   end if
+   return pAccent
+end lkAccentInk
+
+-- An accent darkened toward the ink by pAmount, for text and marks on a
+-- panel tinted with it; in the dark, where the ink is white, lightened by
+-- enough to read
+function lkAccentText pAccent, pAmount
+   if sDark is true then
+      return lkMix(pAccent, "255,255,255", max(0.45, pAmount))
+   end if
+   return lkMix(pAccent, lkColor("ink"), pAmount)
+end lkAccentText
+
+################################################################################
+#
+# Light and dark
+#
+
+-- True when the kit's colours are the dark appearance's (lkReadAppearance)
+function lkDark
+   return sDark is true
+end lkDark
+
+-- Reads the desktop's appearance into the kit, as the Tools palette reads
+-- it (revTools' tmGenerate): macOS's and Windows' systemAppearance, and on
+-- Linux, where the systemAppearance is always light, how dark the GTK
+-- theme's window colour is. True when it changed. The stack's own colour
+-- is put back as it was.
+function lkReadAppearance
+   local tDark, tSaved, tSum, tError
+   put false into tDark
+   try
+      if the platform contains "linux" then
+         put the backgroundColor of me into tSaved
+         lock screen
+         set the backgroundColor of me to empty
+         put the effective backgroundColor of me into tSum
+         set the backgroundColor of me to tSaved
+         unlock screen
+         if item 1 of tSum is a number and item 3 of tSum is a number then
+            put item 1 of tSum + item 2 of tSum + item 3 of tSum < 234 into tDark
+         end if
+      else
+         put the systemAppearance is "dark" into tDark
+      end if
+   catch tError
+      -- (an engine without the property: light, as before)
+   end try
+   if tDark is (sDark is true) then
+      return false
+   end if
+   put tDark into sDark
+   return true
+end lkReadAppearance
+
+-- The stack follows the desktop between light and dark: the IDE's
+-- ideSystemAppearanceChanged (from the engine's systemAppearanceChanged)
+-- arrives here, and when the appearance has changed the kit sends
+-- lkAppearanceChanged to the stack, which draws itself again in the
+-- other colours. A stack calls this when it opens; the IDE forgets a
+-- stack that is no longer in memory.
+command lkFollowAppearance
+   local tError
+   if there is no stack "revIDELibrary" then
+      exit lkFollowAppearance
+   end if
+   try
+      revIDESubscribe "ideSystemAppearanceChanged"
+   catch tError
+   end try
+end lkFollowAppearance
+
+-- On macOS the systemAppearance comes from the user defaults, which can
+-- still hold the old appearance when the switch is announced: it is read
+-- again every 300 milliseconds, ten times, until it has changed (as the
+-- Tools palette does, tmRecheckAppearance)
+on ideSystemAppearanceChanged
+   if the mode of me is 0 then
+      exit ideSystemAppearanceChanged
+   end if
+   if sAppearanceMsg is not empty then
+      cancel sAppearanceMsg
+      put empty into sAppearanceMsg
+   end if
+   put 10 into sAppearanceTries
+   lkRecheckAppearance
+end ideSystemAppearanceChanged
+
+on lkRecheckAppearance
+   local tSaved
+   put empty into sAppearanceMsg
+   if the mode of me is 0 then
+      exit lkRecheckAppearance
+   end if
+   if lkReadAppearance() then
+      -- (this arrives with another stack perhaps the defaultStack, and the
+      -- stacks name their controls plainly)
+      put the defaultStack into tSaved
+      set the defaultStack to the short name of me
+      dispatch "lkAppearanceChanged" to me
+      if tSaved is not empty and there is a stack tSaved then
+         set the defaultStack to tSaved
+      end if
+      exit lkRecheckAppearance
+   end if
+   subtract 1 from sAppearanceTries
+   if sAppearanceTries > 0 then
+      send "lkRecheckAppearance" to me in 300 milliseconds
+      put the result into sAppearanceMsg
+   end if
+end lkRecheckAppearance
+
+-- Deletes every control of the stack's card and forgets the lit things
+-- and thumbs that were made of them, so that the stack can be built again
+-- (in the other appearance's colours, say). The scope in front stays, as
+-- the things built again have the same names.
+command lkClear
+   local tSaved
+   put the defaultStack into tSaved
+   set the defaultStack to the short name of me
+   lock screen
+   lock messages
+   lkHoverOn empty
+   repeat while the number of controls of this card of me > 0
+      delete control 1 of this card of me
+   end repeat
+   unlock messages
+   unlock screen
+   delete variable sCfg
+   delete variable sLiveList
+   delete variable sHoverAmt
+   delete variable sEnterAmt
+   delete variable sScroll
+   put empty into sDrag
+   if tSaved is not empty and there is a stack tSaved then
+      set the defaultStack to tSaved
+   end if
+end lkClear
 
 -- pFrom mixed with pTo: 0 is pFrom, 1 is pTo
 function lkMix pFrom, pTo, pAmount
@@ -1095,14 +1278,14 @@ function lkButton pName, pLeft, pTop, pHeight, pLabel, pIcon, pStyle, pAccent, p
          put tInk into tIconInk
          break
       case "ghost"
-         put "255,255,255" into tLook["bg0"]
-         put lkMix("255,255,255", pAccent, 0.08) into tLook["bg1"]
+         put lkColor("panel") into tLook["bg0"]
+         put lkTint(pAccent, 0.08) into tLook["bg1"]
          put lkColor("line") into tLook["line0"]
          put pAccent into tLook["line1"]
          put lkColor("ink") into tLook["ink0"]
-         put lkMix(pAccent, lkColor("ink"), 0.25) into tLook["ink1"]
+         put lkAccentText(pAccent, 0.25) into tLook["ink1"]
          put tLook["ink0"] into tInk
-         put pAccent into tIconInk
+         put lkAccentInk(pAccent) into tIconInk
          break
       case "dark"
          put lkColor("side2") into tLook["bg0"]
@@ -1115,15 +1298,16 @@ function lkButton pName, pLeft, pTop, pHeight, pLabel, pIcon, pStyle, pAccent, p
          put tInk into tIconInk
          break
       case "chip"
-         put lkMix("255,255,255", pAccent, 0.09) into tLook["bg0"]
-         put lkMix("255,255,255", pAccent, 0.2) into tLook["bg1"]
-         put lkMix(pAccent, lkColor("ink"), 0.3) into tInk
+         put lkTint(pAccent, 0.09) into tLook["bg0"]
+         put lkTint(pAccent, 0.2) into tLook["bg1"]
+         put lkAccentText(pAccent, 0.3) into tInk
          put tInk into tIconInk
          break
       case "light"
          put "255,255,255" into tLook["bg0"]
          put lkMix("255,255,255", pAccent, 0.14) into tLook["bg1"]
-         put lkMix(pAccent, lkColor("ink"), 0.2) into tInk
+         -- (on white in either appearance, so the light one's ink)
+         put lkMix(pAccent, "15,23,42", 0.2) into tInk
          put pAccent into tIconInk
          break
    end switch
