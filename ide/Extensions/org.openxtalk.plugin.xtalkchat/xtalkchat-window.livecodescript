@@ -121,7 +121,7 @@ end resizeStack
 -- showed, with what the user was writing there (or, on the welcome, the
 -- name typed and the box ticked)
 on lkAppearanceChanged
-   local tRect, tName, tClient, tWelcome
+   local tRect, tName, tClient, tWelcome, tScroll
    if sView is empty then
       put "welcome" into sView
    end if
@@ -132,6 +132,10 @@ on lkAppearanceChanged
       put the hilite of button "w_client" of me into tClient
    end if
    xtcwSaveDraft
+   -- (where the user was reading, which xtcwShow would take to the end)
+   if there is a field "msgs" of me then
+      put the vScroll of field "msgs" of me into tScroll
+   end if
    lock screen
    lkClear
    xtcwBuild
@@ -150,6 +154,10 @@ on lkAppearanceChanged
    if sView is not "welcome" then
       xtcwSyncPeople
       xtcwSyncPrivate
+      if tScroll is a number and there is a field "msgs" of me then
+         set the vScroll of field "msgs" of me to tScroll
+         lkScrollSync "msgsThumb"
+      end if
    end if
    unlock screen
 end lkAppearanceChanged
