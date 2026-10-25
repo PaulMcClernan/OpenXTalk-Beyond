@@ -75,6 +75,8 @@ local sTitleCount
 #
 
 on preOpenStack
+   -- (light or dark, as the desktop is: lkAppearanceChanged)
+   get lkReadAppearance()
    xtcwBuild
    xtcwPlace
    pass preOpenStack
@@ -82,6 +84,7 @@ end preOpenStack
 
 on openStack
    lkStartTicking
+   lkFollowAppearance
    xtcSetObserver the long id of me
    xtcwShowStart
    pass openStack
@@ -112,6 +115,52 @@ on resizeStack
    end if
    pass resizeStack
 end resizeStack
+
+-- The desktop switched between light and dark (revLearnKit): the window
+-- is built again in the other colours, at its size, on the conversation it
+-- showed, with what the user was writing there (or, on the welcome, the
+-- name typed and the box ticked)
+on lkAppearanceChanged
+   local tRect, tName, tClient, tWelcome, tScroll
+   if sView is empty then
+      put "welcome" into sView
+   end if
+   put the rect of me into tRect
+   put sView is "welcome" and there is a field "w_name" of me into tWelcome
+   if tWelcome then
+      put field "w_name" of me into tName
+      put the hilite of button "w_client" of me into tClient
+   end if
+   xtcwSaveDraft
+   -- (where the user was reading, which xtcwShow would take to the end)
+   if there is a field "msgs" of me then
+      put the vScroll of field "msgs" of me into tScroll
+   end if
+   lock screen
+   lkClear
+   xtcwBuild
+   set the rect of me to tRect
+   xtcwLayout
+   -- (xtcwShow keeps the box's text as the draft before it shows one)
+   if sView is not "welcome" then
+      put sDrafts[sView] into field "compose" of me
+   end if
+   xtcwShow sView
+   if tWelcome then
+      put tName into field "w_name" of me
+      set the hilite of button "w_client" of me to tClient
+   end if
+   xtcwSyncMe
+   if sView is not "welcome" then
+      xtcwSyncPeople
+      xtcwSyncPrivate
+      if tScroll is a number and there is a field "msgs" of me then
+         set the vScroll of field "msgs" of me to tScroll
+         lkScrollSync "msgsThumb"
+      end if
+   end if
+   unlock screen
+end lkAppearanceChanged
 
 -- The welcome laid out again for the window's new width, keeping what the
 -- user typed and ticked
@@ -186,9 +235,9 @@ private command xtcwBuild
    set the minHeight of me to kMinHeight
    set the rect of me to 0, 0, kWidth, kHeight
    set the backgroundColor of me to lkColor("bg")
-   set the linkColor of me to lkColor("teal")
-   set the linkHiliteColor of me to lkMix(lkColor("teal"), lkColor("ink"), 0.3)
-   set the linkVisitedColor of me to lkColor("teal")
+   set the linkColor of me to lkAccentInk(lkColor("teal"))
+   set the linkHiliteColor of me to lkAccentText(lkColor("teal"), 0.3)
+   set the linkVisitedColor of me to lkAccentInk(lkColor("teal"))
    put kComposeMin into sComposeHeight
    xtcwBuildSide
    xtcwBuildHeader
@@ -215,7 +264,7 @@ private command xtcwBuildSide
    lkGlow tObj, "45,212,191", 16, 110
    get lkIcon("sideMarkIcon", "message-circle", "255,255,255", "28,30,48,50", "side")
    get lkLabel("sideTitle", lkR(66, 21, kSide - 8, 45), "xTalk Chat", 19, "255,255,255", "side")
-   get lkLabel("sideSub", lkR(66, 45, kSide - 8, 61), "Talk with xTalk developers", 11, lkColor("muted"), "side")
+   get lkLabel("sideSub", lkR(66, 45, kSide - 8, 61), "Talk with xTalk developers", 11, lkColor("sideMuted"), "side")
 
    -- The highlight under the conversation in front
    put lkBox("navHi", lkR(10, 108, kSide - 10, 140), lkColor("side2"), 16, "side") into tObj
@@ -242,7 +291,7 @@ private command xtcwBuildSide
    -- The private conversations (xtcwSyncPrivate fills them in)
    add 14 to tY
    xtcwCaption "privCap", "PRIVATE MESSAGES", tY
-   get lkLabel("privNone", lkR(24, tY + 22, kSide - 16, tY + 58), "Click a name to write to someone privately.", 12, "100,116,139", "side")
+   get lkLabel("privNone", lkR(24, tY + 22, kSide - 16, tY + 58), "Click a name to write to someone privately.", 12, lkColor("sideMuted"), "side")
    -- Made once, hidden, and filled in by xtcwSyncPrivate: the kit keeps
    -- what lights up by name until its scope is forgotten, so the items are
    -- kept rather than made anew, and made before the foot's card so that
@@ -265,8 +314,8 @@ private command xtcwBuildSide
    set the textStyle of tObj to "bold"
    put lkLabel("me_name", lkR(68, kHeight - 60, kSide - 92, kHeight - 42), empty, 14, "255,255,255", "me") into tObj
    set the dontWrap of tObj to true
-   put lkOval("me_dot", lkR(68, kHeight - 35, 76, kHeight - 27), lkColor("muted"), "me") into tObj
-   put lkLabel("me_status", lkR(81, kHeight - 40, kSide - 92, kHeight - 24), "Offline", 11, lkColor("muted"), "me") into tObj
+   put lkOval("me_dot", lkR(68, kHeight - 35, 76, kHeight - 27), lkColor("sideMuted"), "me") into tObj
+   put lkLabel("me_status", lkR(81, kHeight - 40, kSide - 92, kHeight - 24), "Offline", 11, lkColor("sideMuted"), "me") into tObj
    set the dontWrap of tObj to true
    xtcwIconButton "me_gear", "settings", "gear", "me"
    xtcwIconButton "me_power", "power", "power", "me"
@@ -310,7 +359,7 @@ end xtcwCenterV
 -- A small caption over a part of the sidebar
 private command xtcwCaption pName, pText, pTop
    local tObj
-   put lkLabel(pName, lkR(24, pTop, kSide - 16, pTop + 16), pText, 10, "100,116,139", "side") into tObj
+   put lkLabel(pName, lkR(24, pTop, kSide - 16, pTop + 16), pText, 10, lkColor("sideMuted"), "side") into tObj
    set the textStyle of tObj to "bold"
 end xtcwCaption
 
@@ -336,7 +385,7 @@ end xtcwRoomName
 private command xtcwBuildHeader
    local tObj
    get lkGroup("hdr", lkR(kSide, 0, kWidth, kHeaderHeight), empty)
-   put lkIcon("hdrIcon", "hash", lkColor("teal"), lkR(kSide + 40, 22, kSide + 64, 46), "hdr") into tObj
+   put lkIcon("hdrIcon", "hash", lkAccentInk(lkColor("teal")), lkR(kSide + 40, 22, kSide + 64, 46), "hdr") into tObj
    put lkLabel("hdrTitle", lkR(kSide + 74, 16, kWidth - 260, 52), empty, 26, lkColor("ink"), "hdr") into tObj
    set the dontWrap of tObj to true
    put lkLabel("hdrTag", lkR(kSide + 40, 54, kWidth - 260, 72), empty, 13, lkColor("soft"), "hdr") into tObj
@@ -344,9 +393,9 @@ private command xtcwBuildHeader
    put lkBox("hdrLine", lkR(kSide + 40, 78, kSide + 96, 81), lkColor("teal"), 3, "hdr") into tObj
    -- A private conversation says it is private
    get lkGroup("hdrLock", lkR(kWidth - 260, 26, kWidth - 40, 52), "hdr")
-   put lkBox("hdrLock_bg", lkR(kWidth - 260, 26, kWidth - 40, 52), lkMix("255,255,255", lkColor("emerald"), 0.12), 13, "hdrLock") into tObj
+   put lkBox("hdrLock_bg", lkR(kWidth - 260, 26, kWidth - 40, 52), lkTint(lkColor("emerald"), 0.12), 13, "hdrLock") into tObj
    get lkIcon("hdrLock_icon", "lock", lkColor("emerald"), lkR(kWidth - 250, 31, kWidth - 234, 47), "hdrLock")
-   put lkLabel("hdrLock_label", lkR(kWidth - 228, 30, kWidth - 44, 48), "End-to-end encrypted", 12, lkMix(lkColor("emerald"), lkColor("ink"), 0.35), "hdrLock") into tObj
+   put lkLabel("hdrLock_label", lkR(kWidth - 228, 30, kWidth - 44, 48), "End-to-end encrypted", 12, lkAccentText(lkColor("emerald"), 0.35), "hdrLock") into tObj
    set the dontWrap of tObj to true
    hide group "hdrLock"
 end xtcwBuildHeader
@@ -358,7 +407,11 @@ private command xtcwBuildBody
    set the vScrollbar of tObj to true
    set the dontWrap of tObj to false
    set the traversalOn of tObj to false
-   lkScroller "msgsThumb", the long id of field "msgs", "100,116,139", 45, empty
+   if lkDark() then
+      lkScroller "msgsThumb", the long id of field "msgs", "148,163,184", 45, empty
+   else
+      lkScroller "msgsThumb", the long id of field "msgs", "100,116,139", 45, empty
+   end if
    put lkLabel("msgsEmpty", lkR(kSide + 24, 300, kWidth - kPeopleWidth - 32, 360), empty, 14, lkColor("muted"), empty, "center") into tObj
    hide tObj
    -- Where the Script Editor colours code for the messages, never seen
@@ -372,12 +425,12 @@ private command xtcwBuildPeople
    put lkBox("ppl_bg", lkR(kWidth - kPeopleWidth - 16, kHeaderHeight + 4, kWidth - 16, kHeight - 16), lkColor("panel"), 18, "ppl") into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 18, 4, 18
-   get lkIcon("ppl_icon", "users", lkColor("teal"), lkR(0, 0, 18, 18), "ppl")
+   get lkIcon("ppl_icon", "users", lkAccentInk(lkColor("teal")), lkR(0, 0, 18, 18), "ppl")
    put lkLabel("ppl_title", lkR(0, 0, 160, 20), "Online now", 15, lkColor("ink"), "ppl") into tObj
    set the textStyle of tObj to "bold"
    set the dontWrap of tObj to true
-   put lkBox("ppl_countBg", lkR(0, 0, 30, 20), lkMix("255,255,255", lkColor("teal"), 0.14), 10, "ppl") into tObj
-   put lkLabel("ppl_count", lkR(0, 0, 30, 18), "0", 11, lkMix(lkColor("teal"), lkColor("ink"), 0.3), "ppl", "center") into tObj
+   put lkBox("ppl_countBg", lkR(0, 0, 30, 20), lkTint(lkColor("teal"), 0.14), 10, "ppl") into tObj
+   put lkLabel("ppl_count", lkR(0, 0, 30, 18), "0", 11, lkAccentText(lkColor("teal"), 0.3), "ppl", "center") into tObj
    set the textStyle of tObj to "bold"
    put lkLabel("ppl_list", lkR(0, 0, 200, 300), empty, 13, lkColor("ink"), "ppl") into tObj
    set the dontWrap of tObj to true
@@ -398,9 +451,13 @@ private command xtcwBuildComposer
    put lkInput("compose", lkR(0, 0, 100, 20), empty, 14, "cmp") into tObj
    set the dontWrap of tObj to false
    set the vScrollbar of tObj to false
-   set the hiliteColor of tObj to lkMix("255,255,255", lkColor("teal"), 0.25)
+   set the hiliteColor of tObj to lkTint(lkColor("teal"), 0.25)
    -- A long message scrolls under the kit's slim thumb, as the messages do
-   lkScroller "cmpThumb", the long id of tObj, "100,116,139", 50, "cmp"
+   if lkDark() then
+      lkScroller "cmpThumb", the long id of tObj, "148,163,184", 50, "cmp"
+   else
+      lkScroller "cmpThumb", the long id of tObj, "100,116,139", 50, "cmp"
+   end if
    get lkButton("cmp_send", 0, 0, 34, "Send", "send", "primary", lkColor("teal"), "cmp", "send", 92)
    -- Under the box, the marks a message can carry, a button each
    repeat for each line tLine in xtcwFormats()
@@ -663,7 +720,7 @@ private command xtcwSyncMe
    put the number of lines of xtcRelayStatus() into tCount
    if not tOnline then
       put "Offline" into tStatus
-      put lkColor("muted") into tColor
+      put lkColor("sideMuted") into tColor
    else if tOpen is 0 then
       put "Connecting..." into tStatus
       put lkColor("amber") into tColor
@@ -762,7 +819,7 @@ end xtcwSyncPeople
 -- IDE's and the user's, not this window's).
 private function xtcwPersonLine pPk, pName, pClient
    local tOut
-   put "<p spaceabove=" & quote & "6" & quote & "><font color=" & quote & lkHex(xtcwPersonColor(pPk)) & quote & ">" & numToCodepoint(9679) & "</font> " into tOut
+   put "<p spaceabove=" & quote & "6" & quote & "><font color=" & quote & lkHex(lkAccentInk(xtcwPersonColor(pPk))) & quote & ">" & numToCodepoint(9679) & "</font> " into tOut
    if pPk is xtcMyKey() then
       put "<font color=" & quote & lkHex(lkColor("ink")) & quote & ">" & lkEscape(pName) & "</font>" & \
             "<font color=" & quote & lkHex(lkColor("muted")) & quote & "> (you)</font></p>" after tOut
@@ -1037,7 +1094,7 @@ command xtcwShow pKey
             end if
          end repeat
          set the itemDelimiter to comma
-         lkIconInk the long id of image "hdrIcon", "hash", lkColor("teal")
+         lkIconInk the long id of image "hdrIcon", "hash", lkAccentInk(lkColor("teal"))
          hide group "hdrLock"
          put "Message the" && tTitle && "room" into field "cmp_hint"
       else
@@ -1049,7 +1106,7 @@ command xtcwShow pKey
             put "Not online now: they will see your message when they come." into tTag
          end if
          put space & "Only the two of you can read this conversation." after tTag
-         lkIconInk the long id of image "hdrIcon", "user", lkColor("teal")
+         lkIconInk the long id of image "hdrIcon", "user", lkAccentInk(lkColor("teal"))
          show group "hdrLock"
          put "Message" && tTitle && "privately" into field "cmp_hint"
          xtcwSyncPrivate
@@ -1193,7 +1250,7 @@ private function xtcwNameLine pMsg
    local tOut, tName
    put xtcName(pMsg["pk"]) into tName
    put "<p spaceabove=" & quote & "12" & quote & ">" into tOut
-   put "<font color=" & quote & lkHex(xtcwPersonColor(pMsg["pk"])) & quote & "><b>" & lkEscape(tName) & "</b></font>" after tOut
+   put "<font color=" & quote & lkHex(lkAccentInk(xtcwPersonColor(pMsg["pk"]))) & quote & "><b>" & lkEscape(tName) & "</b></font>" after tOut
    if pMsg["pk"] is not xtcMyKey() and xtcwNameIsShared(pMsg["pk"], tName) then
       put "<font size=" & quote & "11" & quote & " color=" & quote & lkHex(lkColor("muted")) & quote & ">  " & lkEscape(xtcShortKey(pMsg["pk"])) & "</font>" after tOut
    end if
@@ -1306,10 +1363,11 @@ private function xtcwCodeHtml pCode, pLang
    if tLines is not empty then
       -- The Script Editor's colours, on its background
       put xtcwEditorBackground() into tBg
+      -- (the light appearance's ink on a light background, in either)
       if xtcwIsDark(tBg) then
          put lkColor("codeInk") into tInk
       else
-         put lkColor("ink") into tInk
+         put "15,23,42" into tInk
       end if
    else
       put lkColor("code") into tBg
@@ -1481,9 +1539,9 @@ private function xtcwInlineHtml pLine
          put lkEscape(tPlain) after tOut
          put empty into tPlain
          if tMine > 0 then
-            put "<font color=" & quote & lkHex(lkColor("amber")) & quote & " bgcolor=" & quote & lkHex(lkMix("255,255,255", lkColor("amber"), 0.16)) & quote & "><b>" & lkEscape(char tPos to tEnd of pLine) & "</b></font>" after tOut
+            put "<font color=" & quote & lkHex(lkAccentInk(lkColor("amber"))) & quote & " bgcolor=" & quote & lkHex(lkTint(lkColor("amber"), 0.16)) & quote & "><b>" & lkEscape(char tPos to tEnd of pLine) & "</b></font>" after tOut
          else
-            put "<font color=" & quote & lkHex(lkColor("teal")) & quote & "><b>" & lkEscape(char tPos to tEnd of pLine) & "</b></font>" after tOut
+            put "<font color=" & quote & lkHex(lkAccentInk(lkColor("teal"))) & quote & "><b>" & lkEscape(char tPos to tEnd of pLine) & "</b></font>" after tOut
          end if
          put tEnd + 1 into tPos
          next repeat
@@ -1543,7 +1601,7 @@ end xtcwMentionsMe
 private function xtcwCodeSpan pText
    local tOut, tFont
    put lkCodeFont() into tFont
-   put "<font color=" & quote & lkHex(lkColor("violet")) & quote & " bgcolor=" & quote & lkHex(lkMix("255,255,255", lkColor("violet"), 0.08)) & quote into tOut
+   put "<font color=" & quote & lkHex(lkAccentInk(lkColor("violet"))) & quote & " bgcolor=" & quote & lkHex(lkTint(lkColor("violet"), 0.08)) & quote into tOut
    if tFont is not empty then
       put " face=" & quote & tFont & quote after tOut
    end if
@@ -1622,8 +1680,8 @@ private command xtcwRenderWelcome
       put tX + (tIndex - 1) * (tCardW + 14) into tCol
       put lkBox("w_card" & tIndex, lkR(tCol, tTop, tCol + tCardW, tBottom), lkColor("panel"), 16, "welcome") into tObj
       lkBorder tObj, lkColor("line")
-      put lkBox("w_cardIconBg" & tIndex, lkR(tCol + 18, tTop + 18, tCol + 50, tTop + 50), lkMix("255,255,255", lkColor("teal"), 0.12), 10, "welcome") into tObj
-      get lkIcon("w_cardIcon" & tIndex, tIcon, lkColor("teal"), lkR(tCol + 26, tTop + 26, tCol + 42, tTop + 42), "welcome")
+      put lkBox("w_cardIconBg" & tIndex, lkR(tCol + 18, tTop + 18, tCol + 50, tTop + 50), lkTint(lkColor("teal"), 0.12), 10, "welcome") into tObj
+      get lkIcon("w_cardIcon" & tIndex, tIcon, lkAccentInk(lkColor("teal")), lkR(tCol + 26, tTop + 26, tCol + 42, tTop + 42), "welcome")
       put lkLabel("w_cardTitle" & tIndex, lkR(tCol + 18, tTop + 62, tCol + tCardW - 16, tTop + 82), tTitle, 14, lkColor("ink"), "welcome") into tObj
       set the textStyle of tObj to "bold"
       xtcwFit tObj

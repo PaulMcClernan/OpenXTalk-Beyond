@@ -1,0 +1,268 @@
+@charset "UTF-8";
+/* OXT-Beyond: the Dictionary's pages (api.html, guide.html) in the dark
+   appearance. Every rule is under html.oxt-dark, the class the Dictionary
+   palette sets when the desktop is dark (revDictionaryBehavior), so the
+   light pages are as they were. The colours are those of the IDE's dark
+   windows (Learn, the Academy, Home): a dark slate page, panels a little
+   lighter, white text rather than grey, and lighter accents. */
+
+html.oxt-dark,
+html.oxt-dark body {
+	background-color: #101624;
+	color: #f1f5f9;
+	color-scheme: dark;
+}
+
+html.oxt-dark h1, html.oxt-dark h2, html.oxt-dark h3,
+html.oxt-dark h4, html.oxt-dark h5, html.oxt-dark h6,
+html.oxt-dark strong, html.oxt-dark b,
+html.oxt-dark .lcdoc_entry_name,
+html.oxt-dark .lcdoc_section_title {
+	color: #ffffff;
+}
+
+html.oxt-dark a,
+html.oxt-dark .btn-link {
+	color: #93c5fd;
+}
+html.oxt-dark a:hover,
+html.oxt-dark a:focus,
+html.oxt-dark .lcdoc_description a.load_entry:hover {
+	color: #bfdbfe;
+}
+html.oxt-dark .lcdoc_description a.load_entry {
+	color: inherit;
+}
+
+html.oxt-dark hr {
+	border-top-color: #334155;
+}
+
+/* The bar at the top: the API chooser, history and search */
+html.oxt-dark .navbar-default {
+	background-color: #1e293b;
+	border-color: #334155;
+}
+html.oxt-dark .navbar-default .navbar-text,
+html.oxt-dark .navbar-default .navbar-nav > li > a {
+	color: #e2e8f0;
+}
+html.oxt-dark .navbar-default .navbar-nav > li > a:hover,
+html.oxt-dark .navbar-default .navbar-nav > li > a:focus,
+html.oxt-dark .navbar-default .navbar-nav > .open > a,
+html.oxt-dark .navbar-default .navbar-nav > .open > a:hover,
+html.oxt-dark .navbar-default .navbar-nav > .open > a:focus {
+	color: #ffffff;
+	background-color: #334155;
+}
+html.oxt-dark .navbar-default .navbar-nav > .disabled > a,
+html.oxt-dark .navbar-default .navbar-nav > .disabled > a:hover {
+	color: #64748b;
+}
+
+/* Buttons, menus and the search box */
+html.oxt-dark .btn-default {
+	color: #f1f5f9;
+	background-color: #273449;
+	border-color: #475569;
+}
+html.oxt-dark .btn-default:hover,
+html.oxt-dark .btn-default:focus,
+html.oxt-dark .btn-default:active,
+html.oxt-dark .open > .dropdown-toggle.btn-default {
+	color: #ffffff;
+	background-color: #334155;
+	border-color: #64748b;
+}
+html.oxt-dark .dropdown-menu {
+	background-color: #1e293b;
+	border-color: #334155;
+}
+html.oxt-dark .dropdown-menu > li > a {
+	color: #f1f5f9;
+}
+html.oxt-dark .dropdown-menu > li > a:hover,
+html.oxt-dark .dropdown-menu > li > a:focus,
+html.oxt-dark .dropdown-menu > .active > a {
+	color: #ffffff;
+	background-color: #4338ca;
+}
+html.oxt-dark .dropdown-menu .divider {
+	background-color: #334155;
+}
+html.oxt-dark .form-control {
+	color: #f1f5f9;
+	background-color: #0f172a;
+	border-color: #475569;
+}
+html.oxt-dark .form-control::placeholder {
+	color: #94a3b8;
+}
+html.oxt-dark .badge {
+	color: #0f172a;
+	background-color: #cbd5e1;
+}
+
+/* Panels: the filters, the list of entries, the entry */
+html.oxt-dark .panel,
+html.oxt-dark .panel-default {
+	background-color: #1e293b;
+	border-color: #334155;
+}
+html.oxt-dark .panel-default > .panel-heading {
+	color: #ffffff;
+	background-color: #273449;
+	border-color: #334155;
+}
+html.oxt-dark #header_panel_holder {
+	background-color: #101624;
+}
+/* (the strip below the bar, white in the page itself) */
+html.oxt-dark .bs-docs-container > div[style*="background-color"] {
+	background-color: #101624 !important;
+}
+
+/* Tables */
+html.oxt-dark .table,
+html.oxt-dark .table > thead > tr > th,
+html.oxt-dark .table > tbody > tr > td,
+html.oxt-dark .table > tbody > tr > th {
+	color: #f1f5f9;
+	border-color: #334155;
+}
+html.oxt-dark .table-hover > tbody > tr:hover,
+html.oxt-dark .table > tbody > tr.active > td,
+html.oxt-dark .table > tbody > tr.active > th {
+	background-color: #334155;
+}
+html.oxt-dark .table-striped > tbody > tr:nth-of-type(odd) {
+	background-color: #172033;
+}
+html.oxt-dark .table-bordered,
+html.oxt-dark .table-bordered > thead > tr > th,
+html.oxt-dark .table-bordered > tbody > tr > td {
+	border-color: #334155;
+}
+html.oxt-dark #lcdoc_body table,
+html.oxt-dark #lcdoc_body table thead,
+html.oxt-dark #lcdoc_body table td {
+	border-color: #334155;
+}
+
+/* Code */
+html.oxt-dark pre,
+html.oxt-dark .highlight {
+	color: #e2e8f0;
+	background-color: #020617;
+	border-color: #334155;
+}
+html.oxt-dark code,
+html.oxt-dark kbd {
+	color: #fbcfe8;
+	background-color: #1e1b2e;
+}
+html.oxt-dark pre code,
+html.oxt-dark .highlight pre code {
+	color: inherit;
+	background-color: transparent;
+}
+html.oxt-dark .hljs {
+	color: #e2e8f0;
+}
+html.oxt-dark .hljs-comment {
+	color: #4ade80;
+}
+html.oxt-dark .hljs-attribute,
+html.oxt-dark .hljs-tag,
+html.oxt-dark .hljs-regexp {
+	color: #fca5a5;
+}
+html.oxt-dark .hljs-preprocessor,
+html.oxt-dark .hljs-pragma,
+html.oxt-dark .hljs-params,
+html.oxt-dark .hljs-constant,
+html.oxt-dark .hljs-function,
+html.oxt-dark .hljs-operator,
+html.oxt-dark .hljs-keyword {
+	color: #f0abfc;
+}
+html.oxt-dark .hljs-literal,
+html.oxt-dark .hljs-string,
+html.oxt-dark .hljs-number,
+html.oxt-dark .hljs-value,
+html.oxt-dark .hljs-inheritance,
+html.oxt-dark .hljs-header {
+	color: #93c5fd;
+}
+html.oxt-dark .hljs-command {
+	color: #fde047;
+}
+html.oxt-dark .hljs-control_st,
+html.oxt-dark .hljs-variable {
+	color: #ffffff;
+}
+html.oxt-dark .hljs-property {
+	color: #5eead4;
+}
+
+/* Quotes, wells and notes */
+html.oxt-dark blockquote {
+	border-left-color: #475569;
+}
+html.oxt-dark .well {
+	background-color: #1e293b;
+	border-color: #334155;
+}
+html.oxt-dark .text-muted,
+html.oxt-dark .help-block {
+	color: #b0bece;
+}
+/* (the search's matches, marked yellow: dark text on them) */
+html.oxt-dark span[style*="yellow"] {
+	color: #0f172a;
+}
+
+/* The guides' side list */
+html.oxt-dark .bs-docs-sidebar .nav > li > a {
+	color: #cbd5e1;
+}
+html.oxt-dark .bs-docs-sidebar .nav > li > a:hover,
+html.oxt-dark .bs-docs-sidebar .nav > li > a:focus {
+	color: #c4b5fd;
+	border-left-color: #a78bfa;
+}
+html.oxt-dark .bs-docs-sidebar .nav > .active > a,
+html.oxt-dark .bs-docs-sidebar .nav > .active:hover > a,
+html.oxt-dark .bs-docs-sidebar .nav > .active:focus > a {
+	color: #c4b5fd;
+	border-left-color: #a78bfa;
+}
+html.oxt-dark .back-to-top,
+html.oxt-dark .bs-docs-theme-toggle {
+	color: #b0bece;
+}
+
+/* The grip between the list and the entry (a white picture): its white
+   left out, its lines light */
+html.oxt-dark #resizer {
+	filter: invert(1);
+	mix-blend-mode: screen;
+}
+
+/* Scroll bars */
+html.oxt-dark ::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+	background-color: #101624;
+}
+html.oxt-dark ::-webkit-scrollbar-thumb {
+	background-color: #475569;
+	border: 3px solid #101624;
+	border-radius: 6px;
+}
+html.oxt-dark ::-webkit-scrollbar-thumb:hover {
+	background-color: #64748b;
+}
+html.oxt-dark ::-webkit-scrollbar-corner {
+	background-color: #101624;
+}

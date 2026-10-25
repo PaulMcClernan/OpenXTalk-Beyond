@@ -25,7 +25,8 @@ constant kSendWidth = 80
 constant kAskHeight = 172
 constant kPillWidth = 92
 constant kActivityHeight = 26
--- The prompt's line, as an entry field's is drawn, and the accent (Learn's
+-- The prompt's line, as an entry field's is drawn (the window's
+-- cFieldLine, the dark appearance's or this), and the accent (Learn's
 -- violet) it takes while the prompt has the focus; where the title begins,
 -- after the mark
 constant kFieldLine = "203,213,225"
@@ -253,7 +254,11 @@ end closeField
 
 private command xtawPromptLeft
    if the short name of the target is "Prompt" then
-      set the foregroundColor of graphic "PromptBg" of me to kFieldLine
+      if the cFieldLine of me is not empty then
+         set the foregroundColor of graphic "PromptBg" of me to the cFieldLine of me
+      else
+         set the foregroundColor of graphic "PromptBg" of me to kFieldLine
+      end if
    end if
 end xtawPromptLeft
 

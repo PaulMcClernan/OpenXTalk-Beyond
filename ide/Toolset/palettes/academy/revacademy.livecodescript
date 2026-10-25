@@ -139,6 +139,8 @@ on preOpenStack
    set the defaultStack to the short name of me
    try
       acUseKit
+      -- (light or dark, as the desktop is: lkAppearanceChanged)
+      get lkReadAppearance()
       acLoadCourses
       acLoadProgress
       put sCourse into tWant
@@ -184,6 +186,7 @@ on openStack
    end if
    lkStartTicking
    lkEnter "side"
+   lkFollowAppearance
    -- (on Linux a resizable window can open at its minimum size, whatever
    -- its rect was: once it is up, it goes where acPlace put it)
    send "acKeepPlace" to me in 250 milliseconds
@@ -231,6 +234,44 @@ on resizeStack
    put the result into sRelayout
    pass resizeStack
 end resizeStack
+
+-- The desktop switched between light and dark (revLearnKit): the window
+-- is built again in the other colours, at its size, on the page it shows
+-- and scrolled where it was, and the playground keeps what is in it: the
+-- code, the output and what it is for
+on lkAppearanceChanged
+   local tRect, tScroll, tCode, tEdScroll, tOut, tStatus, tStatusColor, tWhat, tCheck
+   put the rect of me into tRect
+   put the vScroll of group "body" of me into tScroll
+   put the text of field "ed" of me into tCode
+   put the vScroll of field "ed" of me into tEdScroll
+   put the htmlText of field "out" of me into tOut
+   put field "outStatus" of me into tStatus
+   put the textColor of field "outStatus" of me into tStatusColor
+   put field "playWhat" of me into tWhat
+   put the visible of group "check" of me into tCheck
+   lock screen
+   lkClear
+   acBuild
+   set the rect of me to tRect
+   put tWhat into field "playWhat" of me
+   set the visible of group "check" of me to tCheck
+   acLayout
+   acSyncSide
+   acRender true
+   set the vScroll of group "body" of me to tScroll
+   acSetEditor tCode
+   set the vScroll of field "ed" of me to tEdScroll
+   set the htmlText of field "out" of me to tOut
+   put tStatus into field "outStatus" of me
+   -- (a run's colours are the same in both; the rest is the muted grey)
+   if tStatusColor is not "52,211,153" and tStatusColor is not "251,113,133" and tStatusColor is not "251,191,36" then
+      put lkColor("muted") into tStatusColor
+   end if
+   set the textColor of field "outStatus" of me to tStatusColor
+   set the vScroll of field "out" of me to max(0, the formattedHeight of field "out" of me - the height of field "out" of me)
+   unlock screen
+end lkAppearanceChanged
 
 on acRelayout
    put empty into sRelayout
@@ -823,7 +864,11 @@ private command acBuild
    get lkGroup("body", lkR(kSide, kHeaderHeight, kWidth - kPlay, kHeight), empty)
    acBuildPlayground
    -- (the kit's slim thumbs, in place of the scrollbars)
-   lkScroller "bodyThumb", the long id of group "body", "100,116,139", 45, empty
+   if lkDark() then
+      lkScroller "bodyThumb", the long id of group "body", "148,163,184", 45, empty
+   else
+      lkScroller "bodyThumb", the long id of group "body", "100,116,139", 45, empty
+   end if
    lkScroller "idxThumb", the long id of field "idx", "255,255,255", 70, empty
    lkScroller "outThumb", the long id of field "out", "255,255,255", 70, empty
    acBuildToast
@@ -843,7 +888,7 @@ private command acBuildSide
    lkGlow tObj, "45,212,191", 16, 110
    get lkIcon("sideMarkIcon", "code", "255,255,255", "28,30,48,50", empty)
    get lkLabel("sideTitle", lkR(66, 21, kSide - 8, 45), "xTalk Academy", 19, "255,255,255", empty)
-   get lkLabel("sideSub", lkR(66, 45, kSide - 8, 61), "Learn to code, one step at a time", 11, lkColor("muted"), empty)
+   get lkLabel("sideSub", lkR(66, 45, kSide - 8, 61), "Learn to code, one step at a time", 11, lkColor("sideMuted"), empty)
 
    -- The courses
    put lkBox("navHi", lkR(10, 84, kSide - 10, 116), lkColor("side2"), 16, empty) into tObj
@@ -860,7 +905,7 @@ private command acBuildSide
    add 8 to tY
    put lkBox("progBg", lkR(14, tY, kSide - 14, tY + 58), lkColor("side2"), 14, empty) into tObj
    lkBorder tObj, lkColor("sideLine")
-   get lkLabel("progWord", lkR(28, tY + 10, kSide - 28, tY + 26), "YOUR PROGRESS", 10, lkColor("muted"), empty)
+   get lkLabel("progWord", lkR(28, tY + 10, kSide - 28, tY + 26), "YOUR PROGRESS", 10, lkColor("sideMuted"), empty)
    set the textStyle of field "progWord" to "bold"
    put lkLabel("progText", lkR(28, tY + 9, kSide - 28, tY + 26), empty, 12, lkColor("sideInk"), empty, "right") into tObj
    get lkBox("progTrack", lkR(28, tY + 36, kSide - 28, tY + 44), lkColor("sideLine"), 4, empty)
@@ -882,8 +927,8 @@ private command acBuildSide
    -- Back, Next, and where you are
    get lkButton("back", 14, kHeight - 104, 32, "Back", "chevron-left", "dark", empty, empty, "go prev", 106)
    get lkButton("next", kSide - 120, kHeight - 104, 32, "Next", "chevron-right", "dark", empty, empty, "go next", 106)
-   get lkLabel("navCount", lkR(0, kHeight - 60, kSide, kHeight - 44), empty, 12, lkColor("muted"), empty, "center")
-   get lkLabel("navKeys", lkR(0, kHeight - 43, kSide, kHeight - 27), "or use the arrow keys", 11, "100,116,139", empty, "center")
+   get lkLabel("navCount", lkR(0, kHeight - 60, kSide, kHeight - 44), empty, 12, lkColor("sideMuted"), empty, "center")
+   get lkLabel("navKeys", lkR(0, kHeight - 43, kSide, kHeight - 27), "or use the arrow keys", 11, lkColor("sideMuted"), empty, "center")
 end acBuildSide
 
 private command acBuildHeader
@@ -938,7 +983,7 @@ private command acBuildPlayground
    get lkButton("run", tX + 18, 412, 34, "Run", "play", "primary", lkColor("emerald"), "play", "run", 90)
    get lkButton("check", tX + 118, 412, 34, "Check", "check", "primary", lkColor("violet"), "play", "check", 100)
    get lkButton("reset", kWidth - 18 - 96, 412, 34, "Reset", "rotate-cw", "dark", empty, "play", "reset", 96)
-   get lkLabel("runKeys", lkR(tX + 228, 421, kWidth - 120, 437), "Ctrl+Enter runs", 11, "100,116,139", "play")
+   get lkLabel("runKeys", lkR(tX + 228, 421, kWidth - 120, 437), "Ctrl+Enter runs", 11, lkColor("sideMuted"), "play")
    set the dontWrap of field "runKeys" to true
 
    -- The output
@@ -1104,9 +1149,9 @@ private command acSyncSide
    lkGlow the long id of graphic "navBar", tAccent, 10, 160
    set the hiliteColor of field "idx" to lkMix(lkColor("side2"), tAccent, 0.45)
    set the backgroundColor of graphic "hdrLine" to tAccent
-   set the linkColor of me to tAccent
-   set the linkHiliteColor of me to lkMix(tAccent, lkColor("ink"), 0.3)
-   set the linkVisitedColor of me to tAccent
+   set the linkColor of me to lkAccentInk(tAccent)
+   set the linkHiliteColor of me to lkAccentText(tAccent, 0.3)
+   set the linkVisitedColor of me to lkAccentInk(tAccent)
    acSyncProgress
    acFillIndex
 end acSyncSide
@@ -1148,7 +1193,7 @@ private command acFillIndex
    repeat with tUnit = 1 to sCourses[sCourse]["units"]
       add 1 to tCount
       put sCourses[sCourse]["unit"][tUnit]["first"] into sIndexMap[tCount]
-      put "<p><font size=" & quote & "10" & quote & " color=" & quote & "#64748b" & quote & "><b>" & \
+      put "<p><font size=" & quote & "10" & quote & " color=" & quote & "#94a3b8" & quote & "><b>" & \
             lkEscape(toUpper(sCourses[sCourse]["unit"][tUnit]["title"])) & "</b></font></p>" after tHtml
       repeat with tIndex = sCourses[sCourse]["unit"][tUnit]["first"] to sCourses[sCourse]["unit"][tUnit]["last"]
          add 1 to tCount
@@ -1156,7 +1201,7 @@ private command acFillIndex
          if acIsDone(sCourse, tIndex) then
             put "<font color=" & quote & "#34d399" & quote & ">&#10003;</font>" into tMark
          else
-            put "<font color=" & quote & "#64748b" & quote & ">" & format("%02d", tIndex) & "</font>" into tMark
+            put "<font color=" & quote & "#94a3b8" & quote & ">" & format("%02d", tIndex) & "</font>" into tMark
          end if
          put "<p>" & tMark & tab & lkEscape(sCourses[sCourse]["lesson"][tIndex]["title"]) & "</p>" after tHtml
       end repeat
@@ -1864,12 +1909,12 @@ private command acUnitCard pCourse, pUnit
    put sCourses[pCourse]["unit"][pUnit]["last"] into tLast
    put "p_unit" & pUnit into tName
    put sY into tTop
-   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 100), "255,255,255", 16, "page") into tObj
+   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 100), lkColor("panel"), 16, "page") into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 10, 2, 22
-   get lkBox(tName & "_tint", lkR(sX + 22, tTop + 22, sX + 66, tTop + 66), lkMix("255,255,255", tAccent, 0.12), 12, "page")
-   get lkIcon(tName & "_icon", sCourses[pCourse]["unit"][pUnit]["icon"], tAccent, lkR(sX + 33, tTop + 33, sX + 55, tTop + 55), "page")
-   put lkLabel(tName & "_eyebrow", lkR(sX + 82, tTop + 22, sX + sColW - 120, tTop + 38), "UNIT" && pUnit, 11, tAccent, "page") into tObj
+   get lkBox(tName & "_tint", lkR(sX + 22, tTop + 22, sX + 66, tTop + 66), lkTint(tAccent, 0.12), 12, "page")
+   get lkIcon(tName & "_icon", sCourses[pCourse]["unit"][pUnit]["icon"], lkAccentInk(tAccent), lkR(sX + 33, tTop + 33, sX + 55, tTop + 55), "page")
+   put lkLabel(tName & "_eyebrow", lkR(sX + 82, tTop + 22, sX + sColW - 120, tTop + 38), "UNIT" && pUnit, 11, lkAccentInk(tAccent), "page") into tObj
    set the textStyle of tObj to "bold"
    put lkLabel(tName & "_title", lkR(sX + 82, tTop + 40, sX + sColW - 22, tTop + 64), sCourses[pCourse]["unit"][pUnit]["title"], 18, lkColor("ink"), "page") into tObj
    set the textStyle of tObj to "bold"
@@ -1897,9 +1942,9 @@ private command acUnitCard pCourse, pUnit
       put "p_row" & tIndex into tRow
       put sY into tY
       get lkGroup(tRow, lkR(sX + 14, tY, sX + sColW - 14, tY + 38), "page")
-      put lkBox(tRow & "_bg", lkR(sX + 14, tY, sX + sColW - 14, tY + 38), "255,255,255", 10, tRow) into tObj
+      put lkBox(tRow & "_bg", lkR(sX + 14, tY, sX + sColW - 14, tY + 38), lkColor("panel"), 10, tRow) into tObj
       if acIsDone(pCourse, tIndex) then
-         get lkOval(tRow & "_dot", lkR(sX + 70, tY + 9, sX + 90, tY + 29), lkMix("255,255,255", lkColor("ok"), 0.16), tRow)
+         get lkOval(tRow & "_dot", lkR(sX + 70, tY + 9, sX + 90, tY + 29), lkTint(lkColor("ok"), 0.16), tRow)
          get lkIcon(tRow & "_tick", "check", lkColor("ok"), lkR(sX + 73, tY + 12, sX + 87, tY + 26), tRow)
       else
          get lkOval(tRow & "_dot", lkR(sX + 70, tY + 9, sX + 90, tY + 29), lkColor("bg"), tRow)
@@ -1914,11 +1959,11 @@ private command acUnitCard pCourse, pUnit
       put lkLabel(tRow & "_min", lkR(sX + sColW - 110, tY + 10, sX + sColW - 30, tY + 30), tMinutes && "min", 12, lkColor("muted"), tRow, "right") into tObj
       acCenterIn tObj, tY, tY + 38
       put tRow & "_bg" into tLook["bg"]
-      put "255,255,255" into tLook["bg0"]
-      put lkMix("255,255,255", tAccent, 0.07) into tLook["bg1"]
+      put lkColor("panel") into tLook["bg0"]
+      put lkTint(tAccent, 0.07) into tLook["bg1"]
       put tRow & "_label" into tLook["label"]
       put lkColor("ink") into tLook["ink0"]
-      put lkMix(tAccent, lkColor("ink"), 0.35) into tLook["ink1"]
+      put lkAccentText(tAccent, 0.35) into tLook["ink1"]
       lkLive tRow, "page", "go" && tIndex, tLook
       add 40 to sY
    end repeat
@@ -2081,7 +2126,7 @@ private command acTextBlock pName, pLeft, pWidth, pLines, pGroup
    if tCount is 0 then
       exit acTextBlock
    end if
-   put acHtmlField(pName, pLeft, pWidth, tHtml, 15, "51,65,85", pGroup) into tObj
+   put acHtmlField(pName, pLeft, pWidth, tHtml, 15, lkColor("text"), pGroup) into tObj
    repeat with tN = 1 to tCount
       switch tKinds[tN]
          case "heading"
@@ -2174,14 +2219,14 @@ private function acTextHtml pLines, @rKinds
                   acInline(tText) & "</b></font></p>" after tHtml
             break
          case "sub"
-            put "<p><font size=" & quote & "16" & quote & " color=" & quote & lkHex(lkMix(tAccent, lkColor("ink"), 0.25)) & \
+            put "<p><font size=" & quote & "16" & quote & " color=" & quote & lkHex(lkAccentText(tAccent, 0.25)) & \
                   quote & "><b>" & acInline(tText) & "</b></font></p>" after tHtml
             break
          case "bullet"
-            put "<p><font color=" & quote & lkHex(tAccent) & quote & ">&#8226;</font>" & tab & acInline(tText) & "</p>" after tHtml
+            put "<p><font color=" & quote & lkHex(lkAccentInk(tAccent)) & quote & ">&#8226;</font>" & tab & acInline(tText) & "</p>" after tHtml
             break
          case "number"
-            put "<p><font color=" & quote & lkHex(tAccent) & quote & "><b>" & lkEscape(word 1 of tText) & "</b></font>" & tab & \
+            put "<p><font color=" & quote & lkHex(lkAccentInk(tAccent)) & quote & "><b>" & lkEscape(word 1 of tText) & "</b></font>" & tab & \
                   acInline(word 2 to -1 of tText) & "</p>" after tHtml
             break
          default
@@ -2238,8 +2283,8 @@ private function acCodeSpan pCode
    if lkCodeFont() is not empty then
       put " face=" & quote & lkCodeFont() & quote into tFace
    end if
-   return "<font" & tFace & " color=" & quote & lkHex(lkMix(acAccent(), lkColor("ink"), 0.45)) & quote & \
-         " bgcolor=" & quote & lkHex(lkMix("255,255,255", acAccent(), 0.1)) & quote & ">" & lkEscape(pCode) & "</font>"
+   return "<font" & tFace & " color=" & quote & lkHex(lkAccentText(acAccent(), 0.45)) & quote & \
+         " bgcolor=" & quote & lkHex(lkTint(acAccent(), 0.1)) & quote & ">" & lkEscape(pCode) & "</font>"
 end acCodeSpan
 
 -- Code, on a dark panel, in colour, with Try it (which puts it in the
@@ -2267,7 +2312,7 @@ private command acCodeBlock pIndex, pBlock
    else
       put "xTalk" into tNote
    end if
-   put lkLabel(tName & "_kind", lkR(sX + 70, tTop + 11, sX + sColW - 180, tTop + 27), tNote, 11, "100,116,139", "page") into tObj
+   put lkLabel(tName & "_kind", lkR(sX + 70, tTop + 11, sX + sColW - 180, tTop + 27), tNote, 11, "148,163,184", "page") into tObj
    set the dontWrap of tObj to true
    acCenterIn tObj, tTop + 10, tTop + 30
    put lkButton(tName & "_copy", sX, tTop + 7, 26, "Copy", "copy", "dark", empty, "page", "copy" && pIndex, 0, "page") into tWidth
@@ -2318,14 +2363,14 @@ private command acCallout pIndex, pKind, pLines
    end if
    put "p_n" & pIndex into tName
    put sY + 2 into tTop
-   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), lkMix("255,255,255", tAccent, 0.07), 12, "page") into tBox
-   lkBorder tBox, lkMix("255,255,255", tAccent, 0.3)
+   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), lkTint(tAccent, 0.07), 12, "page") into tBox
+   lkBorder tBox, lkTint(tAccent, 0.3)
    put lkBox(tName & "_bar", lkR(sX, tTop, sX + 4, tTop + 60), tAccent, 0, "page") into tBar
-   get lkIcon(tName & "_icon", tIcon, tAccent, lkR(sX + 18, tTop + 15, sX + 36, tTop + 33), "page")
-   get lkLabel(tName & "_word", lkR(sX + 46, tTop + 15, sX + 200, tTop + 33), tWord, 13, lkMix(tAccent, lkColor("ink"), 0.3), "page")
+   get lkIcon(tName & "_icon", tIcon, lkAccentInk(tAccent), lkR(sX + 18, tTop + 15, sX + 36, tTop + 33), "page")
+   get lkLabel(tName & "_word", lkR(sX + 46, tTop + 15, sX + 200, tTop + 33), tWord, 13, lkAccentText(tAccent, 0.3), "page")
    set the textStyle of field (tName & "_word") to "bold"
    put tTop + 38 into sY
-   put acHtmlField(tName & "_text", sX + 46, sColW - 66, tHtml, 14, lkMix(tAccent, lkColor("ink"), 0.55)) into tObj
+   put acHtmlField(tName & "_text", sX + 46, sColW - 66, tHtml, 14, lkAccentText(tAccent, 0.55)) into tObj
    set the rect of tBox to sX, tTop, sX + sColW, the bottom of tObj + 14
    -- (the bar runs down the panel's left, inside its rounded corners)
    set the rect of tBar to sX + 1, tTop + 10, sX + 4, the bottom of tObj + 4
@@ -2344,11 +2389,11 @@ private command acQuizCard pIndex, pBlock, pQuiz
    put acAccent() into tAccent
    put "p_q" & pIndex into tName
    put sY + 4 into tTop
-   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), "255,255,255", 16, "page") into tObj
+   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), lkColor("panel"), 16, "page") into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 10, 2, 22
-   get lkIcon(tName & "_icon", "message-circle", tAccent, lkR(sX + 22, tTop + 20, sX + 38, tTop + 36), "page")
-   put lkLabel(tName & "_word", lkR(sX + 46, tTop + 20, sX + 300, tTop + 36), "QUICK CHECK", 11, tAccent, "page") into tObj
+   get lkIcon(tName & "_icon", "message-circle", lkAccentInk(tAccent), lkR(sX + 22, tTop + 20, sX + 38, tTop + 36), "page")
+   put lkLabel(tName & "_word", lkR(sX + 46, tTop + 20, sX + 300, tTop + 36), "QUICK CHECK", 11, lkAccentInk(tAccent), "page") into tObj
    set the textStyle of tObj to "bold"
    put tTop + 46 into sY
    put acHtmlField(tName & "_question", sX + 22, sColW - 44, "<p><b>" & acInline(pBlock["question"]) & "</b></p>", 15, lkColor("ink")) into tObj
@@ -2357,16 +2402,16 @@ private command acQuizCard pIndex, pBlock, pQuiz
       put tName & "_o" & tOpt into tRow
       put sY into tY
       put lkColor("line") into tColor
-      put "255,255,255" into tFill
+      put lkColor("panel") into tFill
       put lkColor("ink") into tInk
       put empty into tIcon
       if tRight and tOpt is pBlock["right"] then
          put lkColor("ok") into tColor
-         put lkMix("255,255,255", lkColor("ok"), 0.1) into tFill
+         put lkTint(lkColor("ok"), 0.1) into tFill
          put "check" into tIcon
       else if not tRight and tOpt is tPicked then
          put lkColor("bad") into tColor
-         put lkMix("255,255,255", lkColor("bad"), 0.08) into tFill
+         put lkTint(lkColor("bad"), 0.08) into tFill
          put "x" into tIcon
       else if tRight then
          put lkColor("muted") into tInk
@@ -2406,10 +2451,10 @@ private command acQuizCard pIndex, pBlock, pQuiz
    -- what the answer means
    if tRight then
       put "<p><b>Right.</b>" && acInline(pBlock["explain"]) & "</p>" into tText
-      put lkMix(lkColor("ok"), lkColor("ink"), 0.35) into tColor
+      put lkAccentText(lkColor("ok"), 0.35) into tColor
    else if tPicked is not empty then
       put "<p><b>Not quite.</b> Have another look, and pick again.</p>" into tText
-      put lkMix(lkColor("bad"), lkColor("ink"), 0.3) into tColor
+      put lkAccentText(lkColor("bad"), 0.3) into tColor
    else
       put empty into tText
    end if
@@ -2478,13 +2523,13 @@ private command acChallengeCard pIndex, pBlock
    put acAccent() into tAccent
    put "p_ch" & pIndex into tName
    put sY + 6 into tTop
-   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), lkMix("255,255,255", tAccent, 0.04), 18, "page") into tObj
-   lkBorder tObj, lkMix("255,255,255", tAccent, 0.45)
+   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), lkTint(tAccent, 0.04), 18, "page") into tObj
+   lkBorder tObj, lkTint(tAccent, 0.45)
    lkShadow tObj, 14, 3, 26
    put lkBox(tName & "_tile", lkR(sX + 22, tTop + 22, sX + 62, tTop + 62), tAccent, 12, "page") into tObj
-   lkGradient tObj, lkMix(tAccent, "255,255,255", 0.15) & "|" & lkMix(tAccent, lkColor("ink"), 0.2), (sX + 22) & "," & (tTop + 22), (sX + 62) & "," & (tTop + 62)
+   lkGradient tObj, lkMix(tAccent, "255,255,255", 0.15) & "|" & lkMix(tAccent, "15,23,42", 0.2), (sX + 22) & "," & (tTop + 22), (sX + 62) & "," & (tTop + 62)
    get lkIcon(tName & "_icon", "trophy", "255,255,255", lkR(sX + 32, tTop + 32, sX + 52, tTop + 52), "page")
-   put lkLabel(tName & "_word", lkR(sX + 76, tTop + 22, sX + sColW - 140, tTop + 38), "CHALLENGE", 11, tAccent, "page") into tObj
+   put lkLabel(tName & "_word", lkR(sX + 76, tTop + 22, sX + sColW - 140, tTop + 38), "CHALLENGE", 11, lkAccentInk(tAccent), "page") into tObj
    set the textStyle of tObj to "bold"
    if tDone then
       put "Done" && numToCodepoint(10003) into tWord
@@ -2501,7 +2546,7 @@ private command acChallengeCard pIndex, pBlock
    -- what Check looks for: each test's words
    repeat for each line tLine in pBlock["checks"]
       if tLine contains "|" then
-         put "<p><font color=" & quote & lkHex(tAccent) & quote & ">" & numToCodepoint(10003) & "</font>" & tab & \
+         put "<p><font color=" & quote & lkHex(lkAccentInk(tAccent)) & quote & ">" & numToCodepoint(10003) & "</font>" & tab & \
                acInline(word 1 to -1 of acSpan(tLine, offset("|", tLine) + 1, -1)) & "</p>" after tHtml
       end if
    end repeat
@@ -2540,7 +2585,7 @@ private command acChallengeCard pIndex, pBlock
    end if
    add 36 + 16 to sY
    if sChallenge["hint"] is true and pBlock["hint"] is not empty then
-      put lkBox(tName & "_hintBg", lkR(sX + 76, sY, sX + sColW - 22, sY + 40), lkMix("255,255,255", lkColor("amber"), 0.1), 12, "page") into tObj
+      put lkBox(tName & "_hintBg", lkR(sX + 76, sY, sX + sColW - 22, sY + 40), lkTint(lkColor("amber"), 0.1), 12, "page") into tObj
       put sY + 12 into sY
       acTextBlock tName & "_hintText", sX + 92, sColW - 130, pBlock["hint"], "page"
       set the rect of graphic (tName & "_hintBg") to sX + 76, the top of graphic (tName & "_hintBg"), sX + sColW - 22, sY - 2
@@ -2549,7 +2594,7 @@ private command acChallengeCard pIndex, pBlock
    if sChallenge["solution"] is true and pBlock["solution"] is not empty then
       put sY into tTop
       put lkBox(tName & "_solBg", lkR(sX + 76, tTop, sX + sColW - 22, tTop + 60), lkColor("code"), 14, "page") into tObj
-      put lkLabel(tName & "_solWord", lkR(sX + 94, tTop + 12, sX + 300, tTop + 28), "ONE WAY TO DO IT", 10, "100,116,139", "page") into tObj
+      put lkLabel(tName & "_solWord", lkR(sX + 94, tTop + 12, sX + 300, tTop + 28), "ONE WAY TO DO IT", 10, "148,163,184", "page") into tObj
       set the textStyle of tObj to "bold"
       put lkButton(tName & "_use", sX, tTop + 7, 26, "Use this", "square-code", "dark", empty, "page", "use", 0, "page") into tWidth
       set the left of group (tName & "_use") to sX + sColW - 22 - tWidth - 10
@@ -2609,23 +2654,23 @@ private command acFootCard pName, pLeft, pWidth, pWord, pTitle, pAction, pIcon
    put acAccent() into tAccent
    put pLeft + pWidth into tRight
    get lkGroup(pName, lkR(pLeft - 12, sY - 12, tRight + 12, sY + 88), "page")
-   put lkBox(pName & "_bg", lkR(pLeft, sY, tRight, sY + 68), "255,255,255", 14, pName) into tObj
+   put lkBox(pName & "_bg", lkR(pLeft, sY, tRight, sY + 68), lkColor("panel"), 14, pName) into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 10, 2, 26
    if pIcon is "arrow-left" then
-      get lkIcon(pName & "_icon", pIcon, tAccent, lkR(pLeft + 18, sY + 25, pLeft + 36, sY + 43), pName)
+      get lkIcon(pName & "_icon", pIcon, lkAccentInk(tAccent), lkR(pLeft + 18, sY + 25, pLeft + 36, sY + 43), pName)
       put lkLabel(pName & "_word", lkR(pLeft + 48, sY + 14, tRight - 16, sY + 30), pWord, 12, lkColor("muted"), pName) into tObj
       put lkLabel(pName & "_label", lkR(pLeft + 48, sY + 33, tRight - 16, sY + 54), pTitle, 15, lkColor("ink"), pName) into tObj
    else
-      get lkIcon(pName & "_icon", pIcon, tAccent, lkR(tRight - 36, sY + 25, tRight - 18, sY + 43), pName)
+      get lkIcon(pName & "_icon", pIcon, lkAccentInk(tAccent), lkR(tRight - 36, sY + 25, tRight - 18, sY + 43), pName)
       put lkLabel(pName & "_word", lkR(pLeft + 16, sY + 14, tRight - 48, sY + 30), pWord, 12, lkColor("muted"), pName, "right") into tObj
       put lkLabel(pName & "_label", lkR(pLeft + 16, sY + 33, tRight - 48, sY + 54), pTitle, 15, lkColor("ink"), pName, "right") into tObj
    end if
    set the textStyle of tObj to "bold"
    lkEllipsize tObj
    put pName & "_bg" into tLook["bg"]
-   put "255,255,255" into tLook["bg0"]
-   put lkMix("255,255,255", tAccent, 0.06) into tLook["bg1"]
+   put lkColor("panel") into tLook["bg0"]
+   put lkTint(tAccent, 0.06) into tLook["bg1"]
    put lkColor("line") into tLook["line0"]
    put tAccent into tLook["line1"]
    put true into tLook["shadow"]
@@ -3059,7 +3104,7 @@ private command acShowRun pRun, pExtra
       end if
       put "ok" into tKind
       if pRun["output"] is empty and pExtra is empty then
-         put "<p><font color=" & quote & "#64748b" & quote & ">It ran, and put nothing. Use put to see a value here.</font></p>" into tHtml
+         put "<p><font color=" & quote & "#94a3b8" & quote & ">It ran, and put nothing. Use put to see a value here.</font></p>" into tHtml
       end if
    else
       put "Stopped" into tStatus
@@ -3108,7 +3153,7 @@ command acShowOutput pStatus, pKind, pExtra
    end repeat
    put pExtra after tHtml
    if tHtml is empty then
-      put "<p><font color=" & quote & "#64748b" & quote & ">What your code puts shows here. Press Run, or Ctrl+Enter.</font></p>" into tHtml
+      put "<p><font color=" & quote & "#94a3b8" & quote & ">What your code puts shows here. Press Run, or Ctrl+Enter.</font></p>" into tHtml
    end if
    lock screen
    set the htmlText of field "out" to tHtml

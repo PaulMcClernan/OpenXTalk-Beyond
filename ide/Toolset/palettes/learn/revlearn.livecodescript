@@ -92,6 +92,8 @@ end revLearnShow
 
 on preOpenStack
    leUseKit
+   -- (light or dark, as the desktop is: lkAppearanceChanged)
+   get lkReadAppearance()
    leBuild
    lePlace
    -- (a script-only stack is made invisible when it is loaded)
@@ -100,6 +102,7 @@ end preOpenStack
 
 on openStack
    lkStartTicking
+   lkFollowAppearance
    if sSection is empty then
       put "lessons" into sSection
    end if
@@ -162,6 +165,23 @@ on resizeStack
    put the result into sRelayout
    pass resizeStack
 end resizeStack
+
+-- The desktop switched between light and dark (revLearnKit): the window
+-- is built again in the other colours, at its size, on the page it shows,
+-- scrolled where it was (leSyncSide puts back what the search box held)
+on lkAppearanceChanged
+   local tRect, tScroll
+   put the rect of me into tRect
+   put the vScroll of group "body" of me into tScroll
+   lock screen
+   lkClear
+   leBuild
+   set the rect of me to tRect
+   leLayout
+   leShowSection sSection, sPage[sSection]
+   set the vScroll of group "body" of me to tScroll
+   unlock screen
+end lkAppearanceChanged
 
 on leRelayout
    put empty into sRelayout
@@ -422,7 +442,11 @@ private command leBuild
    leBuildHeader
    get lkGroup("body", lkR(kSide, kHeaderHeight, kWidth, kHeight), empty)
    -- (the kit's slim thumbs, in place of the scrollbars)
-   lkScroller "bodyThumb", the long id of group "body", "100,116,139", 45, empty
+   if lkDark() then
+      lkScroller "bodyThumb", the long id of group "body", "148,163,184", 45, empty
+   else
+      lkScroller "bodyThumb", the long id of group "body", "100,116,139", 45, empty
+   end if
    lkScroller "idxThumb", the long id of field "idx", "255,255,255", 70, empty
    leBuildToast
    unlock messages
@@ -442,7 +466,7 @@ private command leBuildSide
    lkGlow tObj, "168,85,247", 16, 110
    get lkIcon("sideMarkIcon", "graduation-cap", "255,255,255", "28,30,48,50", empty)
    get lkLabel("sideTitle", lkR(66, 21, kSide - 8, 45), "Learn", 19, "255,255,255", empty)
-   get lkLabel("sideSub", lkR(66, 45, kSide - 8, 61), "Lessons, guides and examples", 11, lkColor("muted"), empty)
+   get lkLabel("sideSub", lkR(66, 45, kSide - 8, 61), "Lessons, guides and examples", 11, lkColor("sideMuted"), empty)
 
    -- The three places
    put lkBox("navHi", lkR(10, 84, kSide - 10, 116), lkColor("side2"), 16, empty) into tObj
@@ -459,8 +483,8 @@ private command leBuildSide
    -- Search
    put lkBox("searchBg", lkR(14, 204, kSide - 14, 238), lkColor("side2"), 17, empty) into tObj
    lkBorder tObj, lkColor("sideLine")
-   get lkIcon("searchIcon", "search", lkColor("muted"), "27,213,43,229", empty)
-   get lkLabel("searchHint", lkR(52, 212, kSide - 44, 230), "Search", 13, "100,116,139", empty)
+   get lkIcon("searchIcon", "search", lkColor("sideMuted"), "27,213,43,229", empty)
+   get lkLabel("searchHint", lkR(52, 212, kSide - 44, 230), "Search", 13, lkColor("sideMuted"), empty)
    set the dontWrap of field "searchHint" to true
    put lkInput("search", lkR(52, 212, kSide - 44, 230), empty, 13, empty) into tObj
    set the textColor of tObj to "255,255,255"
@@ -485,8 +509,8 @@ private command leBuildSide
    -- Back, Next, and where you are
    get lkButton("back", 14, kHeight - 104, 32, "Back", "chevron-left", "dark", empty, empty, "go prev", 106)
    get lkButton("next", kSide - 120, kHeight - 104, 32, "Next", "chevron-right", "dark", empty, empty, "go next", 106)
-   get lkLabel("navCount", lkR(0, kHeight - 60, kSide, kHeight - 44), empty, 12, lkColor("muted"), empty, "center")
-   get lkLabel("navKeys", lkR(0, kHeight - 43, kSide, kHeight - 27), "or use the arrow keys", 11, "100,116,139", empty, "center")
+   get lkLabel("navCount", lkR(0, kHeight - 60, kSide, kHeight - 44), empty, 12, lkColor("sideMuted"), empty, "center")
+   get lkLabel("navKeys", lkR(0, kHeight - 43, kSide, kHeight - 27), "or use the arrow keys", 11, lkColor("sideMuted"), empty, "center")
 end leBuildSide
 
 -- A small thing that lights up by showing its box more
@@ -600,9 +624,9 @@ private command leSyncSide
    lkGlow the long id of graphic "navBar", tAccent, 10, 160
    set the hiliteColor of field "idx" to lkMix(lkColor("side2"), tAccent, 0.45)
    set the backgroundColor of graphic "hdrLine" to tAccent
-   set the linkColor of me to tAccent
-   set the linkHiliteColor of me to lkMix(tAccent, lkColor("ink"), 0.3)
-   set the linkVisitedColor of me to tAccent
+   set the linkColor of me to lkAccentInk(tAccent)
+   set the linkHiliteColor of me to lkAccentText(tAccent, 0.3)
+   set the linkVisitedColor of me to lkAccentInk(tAccent)
    put "Search the" && toLower(leSectionInfo(sSection, "label")) into field "searchHint"
    put sSearch[sSection] into field "search"
    leSyncSearch
@@ -648,7 +672,7 @@ private command leFillIndex
             put "<p><font color=" & quote & "#94a3b8" & quote & ">&#8226;</font>" & tab & lkEscape(leTitle(sSection, tIndex)) & "</p>" after tHtml
          else
             put format("%02d", tIndex - 2) into tNumber
-            put "<p><font color=" & quote & "#64748b" & quote & ">" & tNumber & "</font>" & tab & lkEscape(leTitle(sSection, tIndex)) & "</p>" after tHtml
+            put "<p><font color=" & quote & "#94a3b8" & quote & ">" & tNumber & "</font>" & tab & lkEscape(leTitle(sSection, tIndex)) & "</p>" after tHtml
          end if
       else
          put leLevel(sSection, tIndex) into tLevel
@@ -660,7 +684,7 @@ private command leFillIndex
          else if tLevel is 1 then
             put "<p>" & lkEscape(leTitle(sSection, tIndex)) & "</p>" after tHtml
          else
-            put "<p><font color=" & quote & "#94a3b8" & quote & ">" & lkEscape(leTitle(sSection, tIndex)) & "</font></p>" after tHtml
+            put "<p><font color=" & quote & "#cbd5e1" & quote & ">" & lkEscape(leTitle(sSection, tIndex)) & "</font></p>" after tHtml
          end if
       end if
    end repeat
@@ -1190,11 +1214,11 @@ private command leRenderMissing
    leHeader leSectionInfo(sSection, "label"), "Not in this copy of the IDE"
    leBeginPage false
    put sY into tTop
-   put lkBox("p_missBg", lkR(sX, tTop, sX + sColW, tTop + 200), "255,255,255", 16, "page") into tObj
+   put lkBox("p_missBg", lkR(sX, tTop, sX + sColW, tTop + 200), lkColor("panel"), 16, "page") into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 10, 2, 26
-   get lkBox("p_missTile", lkR(sX + 28, tTop + 28, sX + 76, tTop + 76), lkMix("255,255,255", tAccent, 0.12), 14, "page")
-   get lkIcon("p_missIcon", leSectionInfo(sSection, "icon"), tAccent, lkR(sX + 40, tTop + 40, sX + 64, tTop + 64), "page")
+   get lkBox("p_missTile", lkR(sX + 28, tTop + 28, sX + 76, tTop + 76), lkTint(tAccent, 0.12), 14, "page")
+   get lkIcon("p_missIcon", leSectionInfo(sSection, "icon"), lkAccentInk(tAccent), lkR(sX + 40, tTop + 40, sX + 64, tTop + 64), "page")
    put lkLabel("p_missTitle", lkR(sX + 96, tTop + 30, sX + sColW - 28, tTop + 56), "The" && tLabel && "are not here", 20, lkColor("ink"), "page") into tObj
    set the textStyle of tObj to "bold"
    -- (in plain words on the web, where leaving it out is the design and
@@ -1399,7 +1423,7 @@ private command leTextBlock pIndex, pLines
    if tCount is 0 then
       exit leTextBlock
    end if
-   put leHtmlField("p_t" & pIndex, sX, sColW, tHtml, 15, "51,65,85") into tObj
+   put leHtmlField("p_t" & pIndex, sX, sColW, tHtml, 15, lkColor("text")) into tObj
    repeat with tN = 1 to tCount
       switch tKinds[tN]
          case "heading"
@@ -1495,7 +1519,7 @@ private function leLineHtml pLine, @rKind
    put word 1 to -1 of tText into tText
    if tBold and tUnder then
       put "sub" into rKind
-      return "<p><font size=" & quote & "16" & quote & " color=" & quote & lkHex(lkMix(tAccent, lkColor("ink"), 0.25)) & \
+      return "<p><font size=" & quote & "16" & quote & " color=" & quote & lkHex(lkAccentText(tAccent, 0.25)) & \
             quote & "><b>" & lkEscape(tText) & "</b></font></p>"
    end if
    if tBold then
@@ -1515,7 +1539,7 @@ private function leLineHtml pLine, @rKind
    end if
    put "para" into rKind
    if tItalic then
-      return "<p><i><font color=" & quote & "#4338ca" & quote & ">" & lkEscape(tText) & "</font></i></p>"
+      return "<p><i><font color=" & quote & lkHex(lkAccentInk("67,56,202")) & quote & ">" & lkEscape(tText) & "</font></i></p>"
    end if
    if tUnder then
       return "<p><u>" & lkEscape(tText) & "</u></p>"
@@ -1559,7 +1583,7 @@ private command leCodeBlock pIndex, pLines
    get lkOval(tName & "_d1", lkR(sX + 16, tTop + 14, sX + 26, tTop + 24), "248,113,113", "page")
    get lkOval(tName & "_d2", lkR(sX + 32, tTop + 14, sX + 42, tTop + 24), "251,191,36", "page")
    get lkOval(tName & "_d3", lkR(sX + 48, tTop + 14, sX + 58, tTop + 24), "52,211,153", "page")
-   put lkLabel(tName & "_kind", lkR(sX + 70, tTop + 11, sX + 200, tTop + 27), "xTalk", 11, "100,116,139", "page") into tObj
+   put lkLabel(tName & "_kind", lkR(sX + 70, tTop + 11, sX + 200, tTop + 27), "xTalk", 11, "148,163,184", "page") into tObj
    leCenterIn tObj, tTop + 9, tTop + 29
    put lkButton(tName & "_copy", sX, tTop + 7, 26, "Copy", "copy", "dark", empty, "page", "copy" && pIndex, 0, "page") into tWidth
    set the left of group (tName & "_copy") to sX + sColW - tWidth - 10
@@ -1617,14 +1641,14 @@ private command leCallout pIndex, pKind, pLines
    end if
    put "p_n" & pIndex into tName
    put sY + 2 into tTop
-   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), lkMix("255,255,255", tAccent, 0.07), 12, "page") into tBox
-   lkBorder tBox, lkMix("255,255,255", tAccent, 0.3)
+   put lkBox(tName & "_bg", lkR(sX, tTop, sX + sColW, tTop + 60), lkTint(tAccent, 0.07), 12, "page") into tBox
+   lkBorder tBox, lkTint(tAccent, 0.3)
    put lkBox(tName & "_bar", lkR(sX, tTop, sX + 4, tTop + 60), tAccent, 0, "page") into tBar
-   get lkIcon(tName & "_icon", tIcon, tAccent, lkR(sX + 18, tTop + 15, sX + 36, tTop + 33), "page")
-   get lkLabel(tName & "_word", lkR(sX + 46, tTop + 15, sX + 200, tTop + 33), tWord, 13, lkMix(tAccent, lkColor("ink"), 0.3), "page")
+   get lkIcon(tName & "_icon", tIcon, lkAccentInk(tAccent), lkR(sX + 18, tTop + 15, sX + 36, tTop + 33), "page")
+   get lkLabel(tName & "_word", lkR(sX + 46, tTop + 15, sX + 200, tTop + 33), tWord, 13, lkAccentText(tAccent, 0.3), "page")
    set the textStyle of field (tName & "_word") to "bold"
    put tTop + 38 into sY
-   put leHtmlField(tName & "_text", sX + 46, sColW - 66, tHtml, 14, lkMix(tAccent, lkColor("ink"), 0.55)) into tObj
+   put leHtmlField(tName & "_text", sX + 46, sColW - 66, tHtml, 14, lkAccentText(tAccent, 0.55)) into tObj
    set the rect of tBox to sX, tTop, sX + sColW, the bottom of tObj + 14
    -- (the bar runs down the panel's left, inside its rounded corners)
    set the rect of tBar to sX + 1, tTop + 10, sX + 4, the bottom of tObj + 4
@@ -1663,7 +1687,7 @@ private command leImageBlock pIndex, pLine, pPage
    if tSrc is empty then
       exit leImageBlock
    end if
-   put lkBox("p_i" & pIndex & "_bg", lkR(sX, sY, sX + 20, sY + 20), "255,255,255", 12, "page") into tBox
+   put lkBox("p_i" & pIndex & "_bg", lkR(sX, sY, sX + 20, sY + 20), lkColor("panel"), 12, "page") into tBox
    lkBorder tBox, lkColor("line")
    create image ("p_i" & pIndex) in group "page"
    put it into tObj
@@ -1727,23 +1751,23 @@ private command leFootCard pName, pLeft, pWidth, pWord, pTitle, pAction, pIcon
    put leSectionInfo(sSection, "accent") into tAccent
    put pLeft + pWidth into tRight
    get lkGroup(pName, lkR(pLeft - 12, sY - 12, tRight + 12, sY + 88), "page")
-   put lkBox(pName & "_bg", lkR(pLeft, sY, tRight, sY + 68), "255,255,255", 14, pName) into tObj
+   put lkBox(pName & "_bg", lkR(pLeft, sY, tRight, sY + 68), lkColor("panel"), 14, pName) into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 10, 2, 26
    if pIcon is "arrow-left" then
-      get lkIcon(pName & "_icon", pIcon, tAccent, lkR(pLeft + 18, sY + 25, pLeft + 36, sY + 43), pName)
+      get lkIcon(pName & "_icon", pIcon, lkAccentInk(tAccent), lkR(pLeft + 18, sY + 25, pLeft + 36, sY + 43), pName)
       put lkLabel(pName & "_word", lkR(pLeft + 48, sY + 14, tRight - 16, sY + 30), pWord, 12, lkColor("muted"), pName) into tObj
       put lkLabel(pName & "_label", lkR(pLeft + 48, sY + 33, tRight - 16, sY + 54), pTitle, 15, lkColor("ink"), pName) into tObj
    else
-      get lkIcon(pName & "_icon", pIcon, tAccent, lkR(tRight - 36, sY + 25, tRight - 18, sY + 43), pName)
+      get lkIcon(pName & "_icon", pIcon, lkAccentInk(tAccent), lkR(tRight - 36, sY + 25, tRight - 18, sY + 43), pName)
       put lkLabel(pName & "_word", lkR(pLeft + 16, sY + 14, tRight - 48, sY + 30), pWord, 12, lkColor("muted"), pName, "right") into tObj
       put lkLabel(pName & "_label", lkR(pLeft + 16, sY + 33, tRight - 48, sY + 54), pTitle, 15, lkColor("ink"), pName, "right") into tObj
    end if
    set the textStyle of tObj to "bold"
    lkEllipsize tObj
    put pName & "_bg" into tLook["bg"]
-   put "255,255,255" into tLook["bg0"]
-   put lkMix("255,255,255", tAccent, 0.06) into tLook["bg1"]
+   put lkColor("panel") into tLook["bg0"]
+   put lkTint(tAccent, 0.06) into tLook["bg1"]
    put lkColor("line") into tLook["line0"]
    put tAccent into tLook["line1"]
    put true into tLook["shadow"]
@@ -1910,23 +1934,23 @@ private command leLessonTiles
       put sX + tCol * (tWidth + tGap) into tX
       put "p_tile" & tIndex into tName
       get lkGroup(tName, lkR(tX - 2, sY - 2, tX + tWidth + 2, sY + tHeight + 2), "page")
-      put lkBox(tName & "_bg", lkR(tX, sY, tX + tWidth, sY + tHeight), "255,255,255", 12, tName) into tObj
+      put lkBox(tName & "_bg", lkR(tX, sY, tX + tWidth, sY + tHeight), lkColor("panel"), 12, tName) into tObj
       lkBorder tObj, lkColor("line")
-      put lkOval(tName & "_badge", lkR(tX + 14, sY + 15, tX + 46, sY + 47), lkMix("255,255,255", tAccent, 0.12), tName) into tObj
+      put lkOval(tName & "_badge", lkR(tX + 14, sY + 15, tX + 46, sY + 47), lkTint(tAccent, 0.12), tName) into tObj
       put tIndex - 2 into tNumber
-      put lkLabel(tName & "_num", lkR(tX + 14, sY + 22, tX + 46, sY + 40), tNumber, 13, lkMix(tAccent, lkColor("ink"), 0.2), tName, "center") into tObj
+      put lkLabel(tName & "_num", lkR(tX + 14, sY + 22, tX + 46, sY + 40), tNumber, 13, lkAccentText(tAccent, 0.2), tName, "center") into tObj
       set the textStyle of tObj to "bold"
       leCenterIn tObj, sY + 15, sY + 47
       put lkLabel(tName & "_label", lkR(tX + 58, sY + 12, tX + tWidth - 12, sY + tHeight - 6), leTitle(sSection, tIndex), 14, lkColor("ink"), tName) into tObj
       leCenterIn tObj, sY, sY + tHeight
       put tName & "_bg" into tLook["bg"]
-      put "255,255,255" into tLook["bg0"]
-      put lkMix("255,255,255", tAccent, 0.07) into tLook["bg1"]
+      put lkColor("panel") into tLook["bg0"]
+      put lkTint(tAccent, 0.07) into tLook["bg1"]
       put lkColor("line") into tLook["line0"]
       put tAccent into tLook["line1"]
       put tName & "_label" into tLook["label"]
       put lkColor("ink") into tLook["ink0"]
-      put lkMix(tAccent, lkColor("ink"), 0.35) into tLook["ink1"]
+      put lkAccentText(tAccent, 0.35) into tLook["ink1"]
       lkLive tName, "page", "go" && tIndex, tLook
       add 1 to tCol
       if tCol is tCols then
@@ -1978,10 +2002,10 @@ private command leChapterTiles
       put sX + tCol * (tWidth + tGap) into tX
       put "p_tile" & tChapter into tName
       get lkGroup(tName, lkR(tX - 2, sY - 2, tX + tWidth + 2, sY + tHeight + 2), "page")
-      put lkBox(tName & "_bg", lkR(tX, sY, tX + tWidth, sY + tHeight), "255,255,255", 14, tName) into tObj
+      put lkBox(tName & "_bg", lkR(tX, sY, tX + tWidth, sY + tHeight), lkColor("panel"), 14, tName) into tObj
       lkBorder tObj, lkColor("line")
-      put lkBox(tName & "_tint", lkR(tX + 16, sY + 16, tX + 52, sY + 52), lkMix("255,255,255", tAccent, 0.12), 10, tName) into tObj
-      get lkIcon(tName & "_icon", leChapterIcon(leTitle(sSection, tChapter)), tAccent, lkR(tX + 25, sY + 25, tX + 43, sY + 43), tName)
+      put lkBox(tName & "_tint", lkR(tX + 16, sY + 16, tX + 52, sY + 52), lkTint(tAccent, 0.12), 10, tName) into tObj
+      get lkIcon(tName & "_icon", leChapterIcon(leTitle(sSection, tChapter)), lkAccentInk(tAccent), lkR(tX + 25, sY + 25, tX + 43, sY + 43), tName)
       put lkLabel(tName & "_label", lkR(tX + 64, sY + 16, tX + tWidth - 14, sY + 36), leTitle(sSection, tChapter), 15, lkColor("ink"), tName) into tObj
       set the textStyle of tObj to "bold"
       lkEllipsize tObj
@@ -1990,7 +2014,7 @@ private command leChapterTiles
       else
          put tPages[tChapter] + 1 && "pages" into tFirst
       end if
-      put lkLabel(tName & "_count", lkR(tX + 64, sY + 37, tX + tWidth - 14, sY + 53), tFirst, 12, tAccent, tName) into tObj
+      put lkLabel(tName & "_count", lkR(tX + 64, sY + 37, tX + tWidth - 14, sY + 53), tFirst, 12, lkAccentInk(tAccent), tName) into tObj
       put lkLabel(tName & "_sub", lkR(tX + 16, sY + 62, tX + tWidth - 14, sY + tHeight - 10), empty, 12, lkColor("soft"), tName) into tObj
       -- (its first pages, as many as two lines hold)
       put empty into tFirst
@@ -2007,8 +2031,8 @@ private command leChapterTiles
          put field (tName & "_sub") into tFirst
       end repeat
       put tName & "_bg" into tLook["bg"]
-      put "255,255,255" into tLook["bg0"]
-      put lkMix("255,255,255", tAccent, 0.06) into tLook["bg1"]
+      put lkColor("panel") into tLook["bg0"]
+      put lkTint(tAccent, 0.06) into tLook["bg1"]
       put lkColor("line") into tLook["line0"]
       put tAccent into tLook["line1"]
       put true into tLook["shadow"]
@@ -2529,11 +2553,11 @@ private command leClassicCard pKey, pLeft, pTop, pWidth, pHeight
    put pLeft + pWidth into tRight
    put pTop + pHeight into tBottom
    get lkGroup(tName, lkR(pLeft - 12, pTop - 12, tRight + 12, tBottom + 18), "page")
-   put lkBox(tName & "_bg", lkR(pLeft, pTop, tRight, tBottom), "255,255,255", 14, tName) into tObj
+   put lkBox(tName & "_bg", lkR(pLeft, pTop, tRight, tBottom), lkColor("panel"), 14, tName) into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 6, 2, 18
-   put lkBox(tName & "_tile", lkR(pLeft + 16, pTop + 16, pLeft + 56, pTop + 56), lkMix("255,255,255", tAccent, 0.14), 12, tName) into tObj
-   get lkIcon(tName & "_icon", leExample(pKey, "icon"), tAccent, lkR(pLeft + 26, pTop + 26, pLeft + 46, pTop + 46), tName)
+   put lkBox(tName & "_tile", lkR(pLeft + 16, pTop + 16, pLeft + 56, pTop + 56), lkTint(tAccent, 0.14), 12, tName) into tObj
+   get lkIcon(tName & "_icon", leExample(pKey, "icon"), lkAccentInk(tAccent), lkR(pLeft + 26, pTop + 26, pLeft + 46, pTop + 46), tName)
    put lkLabel(tName & "_title", lkR(pLeft + 68, pTop + 16, tRight - 16, pTop + 36), leExample(pKey, "classicTitle"), 15, lkColor("ink"), tName) into tObj
    set the textStyle of tObj to "bold"
    lkEllipsize tObj
@@ -2556,14 +2580,14 @@ private command leExampleCard pKey, pLeft, pTop, pWidth, pHeight
    put pLeft + pWidth into tRight
    put pTop + pHeight into tBottom
    get lkGroup(tName, lkR(pLeft - 14, pTop - 14, tRight + 14, tBottom + 22), "page")
-   put lkBox(tName & "_bg", lkR(pLeft, pTop, tRight, tBottom), "255,255,255", 16, tName) into tObj
+   put lkBox(tName & "_bg", lkR(pLeft, pTop, tRight, tBottom), lkColor("panel"), 16, tName) into tObj
    lkBorder tObj, lkColor("line")
    lkShadow tObj, 10, 2, 26
    -- the banner: inside the card's border, rounded at the top, and square
    -- where it meets the card (the white below covers its lower corners)
    put lkBox(tName & "_banner", lkR(pLeft + 1, pTop + 1, tRight - 1, pTop + 120), tAccent, 15, tName) into tObj
    lkGradient tObj, tAccent & "|" & lkMix(tAccent, "255,255,255", 0.35), pLeft & "," & pTop, tRight & "," & (pTop + 96)
-   get lkBox(tName & "_seam", lkR(pLeft + 1, pTop + 96, tRight - 1, pTop + 122), "255,255,255", 0, tName)
+   get lkBox(tName & "_seam", lkR(pLeft + 1, pTop + 96, tRight - 1, pTop + 122), lkColor("panel"), 0, tName)
    put lkOval(tName & "_glow", lkR(tRight - 150, pTop - 50, tRight + 10, pTop + 110), "255,255,255", tName) into tObj
    lkGlowFill tObj, "255,255,255", 70
    put lkBox(tName & "_tile", lkR(pLeft + 20, pTop + 20, pLeft + 76, pTop + 76), "255,255,255", 16, tName) into tObj
@@ -2572,7 +2596,7 @@ private command leExampleCard pKey, pLeft, pTop, pWidth, pHeight
    put lkLabel(tName & "_title", lkR(pLeft + 20, pTop + 108, tRight - 20, pTop + 132), leExample(pKey, "title"), 17, lkColor("ink"), tName) into tObj
    set the textStyle of tObj to "bold"
    lkEllipsize tObj
-   put lkLabel(tName & "_credit", lkR(pLeft + 20, pTop + 134, tRight - 20, pTop + 150), leExample(pKey, "credit"), 12, lkMix(tAccent, lkColor("ink"), 0.35), tName) into tObj
+   put lkLabel(tName & "_credit", lkR(pLeft + 20, pTop + 134, tRight - 20, pTop + 150), leExample(pKey, "credit"), 12, lkAccentText(tAccent, 0.35), tName) into tObj
    leFit tObj
    put lkLabel(tName & "_text", lkR(pLeft + 20, the bottom of tObj + 6, tRight - 20, tBottom - 52), leExample(pKey, "text"), 13, lkColor("soft"), tName) into tObj
    -- its first two tags, as chips (a remaster's first says so)
@@ -2582,8 +2606,8 @@ private command leExampleCard pKey, pLeft, pTop, pWidth, pHeight
       put "remastered" & space before tTags
    end if
    repeat with tTag = 1 to min(2, the number of words of tTags)
-      put lkBox(tName & "_chip" & tTag, lkR(tX, tBottom - 38, tX + 10, tBottom - 16), lkMix("255,255,255", tAccent, 0.1), 11, tName) into tObj
-      put lkLabel(tName & "_chipText" & tTag, lkR(tX + 10, tBottom - 36, tX + 200, tBottom - 18), word tTag of tTags, 11, lkMix(tAccent, lkColor("ink"), 0.3), tName) into tObj
+      put lkBox(tName & "_chip" & tTag, lkR(tX, tBottom - 38, tX + 10, tBottom - 16), lkTint(tAccent, 0.1), 11, tName) into tObj
+      put lkLabel(tName & "_chipText" & tTag, lkR(tX + 10, tBottom - 36, tX + 200, tBottom - 18), word tTag of tTags, 11, lkAccentText(tAccent, 0.3), tName) into tObj
       set the dontWrap of tObj to true
       put the formattedWidth of tObj + 4 into tWidth
       set the width of tObj to tWidth

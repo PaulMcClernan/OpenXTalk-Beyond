@@ -71,6 +71,9 @@ local sTipAt, sTipIndex
 -- How far the pages are from where a 1024 by 640 window has them, and the
 -- window's size they were laid out for
 local sOX, sOY, sLaidW, sLaidH
+-- True in the dark appearance (hmReadAppearance); the pending look again
+-- at macOS's appearance after a switch, and how many looks are left
+local sDark, sAppearanceMsg, sAppearanceTries
 
 ################################################################################
 #
@@ -78,6 +81,7 @@ local sOX, sOY, sLaidW, sLaidH
 #
 
 on preOpenStack
+   get hmReadAppearance()
    hmBuild
    hmPlace
    -- (a script-only stack is made invisible when it is loaded)
@@ -88,6 +92,7 @@ on openStack
    put empty into sPage
    hmGoPage "home"
    hmStartTicking
+   hmFollowAppearance
 end openStack
 
 on suspendStack
@@ -304,12 +309,164 @@ end hmCheckPage
 
 ################################################################################
 #
+# Light and dark
+#
+
+-- Reads the desktop's appearance, as the Tools palette reads it (revTools'
+-- tmGenerate): macOS's and Windows' systemAppearance, and on Linux, where
+-- the systemAppearance is always light, how dark the GTK theme's window
+-- colour is. True when it changed. The stack's own colour is put back.
+private function hmReadAppearance
+   local tDark, tSaved, tSum, tError
+   put false into tDark
+   try
+      if the platform contains "linux" then
+         put the backgroundColor of me into tSaved
+         lock screen
+         set the backgroundColor of me to empty
+         put the effective backgroundColor of me into tSum
+         set the backgroundColor of me to tSaved
+         unlock screen
+         if item 1 of tSum is a number and item 3 of tSum is a number then
+            put item 1 of tSum + item 2 of tSum + item 3 of tSum < 234 into tDark
+         end if
+      else if the platform is not "HTML5" then
+         put the systemAppearance is "dark" into tDark
+      end if
+   catch tError
+      -- (an engine without the property: light, as before)
+   end try
+   if tDark is (sDark is true) then
+      return false
+   end if
+   put tDark into sDark
+   return true
+end hmReadAppearance
+
+-- Home follows the desktop between light and dark: the IDE's
+-- ideSystemAppearanceChanged (from the engine's systemAppearanceChanged)
+-- arrives here, and Home draws itself again in the other colours. The IDE
+-- forgets a stack that is no longer in memory.
+private command hmFollowAppearance
+   local tError
+   if there is no stack "revIDELibrary" then
+      exit hmFollowAppearance
+   end if
+   try
+      revIDESubscribe "ideSystemAppearanceChanged"
+   catch tError
+   end try
+end hmFollowAppearance
+
+-- On macOS the systemAppearance comes from the user defaults, which can
+-- still hold the old appearance when the switch is announced: it is read
+-- again every 300 milliseconds, ten times, until it has changed (as the
+-- Tools palette does, tmRecheckAppearance)
+on ideSystemAppearanceChanged
+   if the mode of me is 0 then
+      exit ideSystemAppearanceChanged
+   end if
+   if sAppearanceMsg is not empty then
+      cancel sAppearanceMsg
+      put empty into sAppearanceMsg
+   end if
+   put 10 into sAppearanceTries
+   hmRecheckAppearance
+end ideSystemAppearanceChanged
+
+on hmRecheckAppearance
+   local tSaved
+   put empty into sAppearanceMsg
+   if the mode of me is 0 then
+      exit hmRecheckAppearance
+   end if
+   if hmReadAppearance() then
+      put the defaultStack into tSaved
+      set the defaultStack to the short name of me
+      hmAppearanceChanged
+      if tSaved is not empty and there is a stack tSaved then
+         set the defaultStack to tSaved
+      end if
+      exit hmRecheckAppearance
+   end if
+   subtract 1 from sAppearanceTries
+   if sAppearanceTries > 0 then
+      send "hmRecheckAppearance" to me in 300 milliseconds
+      put the result into sAppearanceMsg
+   end if
+end hmRecheckAppearance
+
+-- Builds Home again in the colours just read, at the window's size, on
+-- the page that was in front. A page's own state starts again, as when
+-- the page is opened. (Sent with Home the defaultStack.)
+on hmAppearanceChanged
+   local tRect, tPage
+   put the rect of me into tRect
+   put sPage into tPage
+   lock screen
+   if tPage is not empty then
+      hmPageStop tPage
+   end if
+   hmHoverOn empty
+   lock messages
+   repeat while the number of controls of this card of me > 0
+      delete control 1 of this card of me
+   end repeat
+   unlock messages
+   delete variable sCfg
+   delete variable sLiveList
+   delete variable sHoverAmt
+   delete variable sEnterAmt
+   put empty into sNavY
+   put empty into sNavTarget
+   hmBuild
+   set the rect of me to tRect
+   hmLayout the width of me, the height of me
+   put empty into sPage
+   if tPage is empty then
+      put "home" into tPage
+   end if
+   hmGoPage tPage
+   -- (the sidebar's highlight is where it was, not sliding there)
+   if sNavTarget is not empty then
+      put sNavTarget into sNavY
+      set the top of graphic "navHi" to sNavY
+      set the top of graphic "navBar" to sNavY + 8
+   end if
+   unlock screen
+end hmAppearanceChanged
+
+################################################################################
+#
 # The look
 #
 
 -- The palette: the web tour's, and a few colours of the sidebar and the
--- code panels. Nothing else names a colour.
+-- code panels. Nothing else names a colour. In the dark appearance
+-- (hmReadAppearance) the page's colours are dark slate and its text is
+-- white, not grey: the sidebar and the code panels are dark in both.
+-- (The colours are the Learn kit's, revLearnKit's lkColor.)
 private function hmColor pName
+   if sDark is true then
+      switch pName
+         case "bg"
+            return "16,22,36"
+         case "panel"
+            return "30,41,59"
+         case "line"
+            return "51,65,85"
+         case "ink"
+            return "255,255,255"
+         case "soft"
+            return "226,232,240"
+         case "muted"
+            return "176,190,206"
+         case "code"
+            return "2,6,23"
+         case "field"
+            return "22,30,46"
+      end switch
+   end if
    switch pName
       case "bg"
          return "241,245,249"
@@ -330,7 +487,11 @@ private function hmColor pName
       case "sideLine"
          return "51,65,85"
       case "sideInk"
-         return "203,213,225"
+         return "226,232,240"
+      case "sideMuted"
+         return "148,163,184"
+      case "field"
+         return "248,250,252"
       case "code"
          return "15,23,42"
       case "codeInk"
@@ -362,7 +523,7 @@ private function hmColor pName
       case "bad"
          return "220,38,38"
    end switch
-   return "15,23,42"
+   return hmColor("ink")
 end hmColor
 
 -- Each page's title, tagline, accent and icon
@@ -448,6 +609,34 @@ private function hmMix pFrom, pTo, pAmount
    end repeat
    return tOut
 end hmMix
+
+-- A panel tinted with an accent: pAmount of pAccent over the panel's
+-- colour (a little more in the dark, where a faint tint does not show)
+private function hmTint pAccent, pAmount
+   if sDark is true then
+      return hmMix(hmColor("panel"), pAccent, min(1, pAmount * 1.8))
+   end if
+   return hmMix(hmColor("panel"), pAccent, pAmount)
+end hmTint
+
+-- An accent as the colour of text on a panel: as it is on white, and
+-- lighter in the dark, where the deep accents are hard to read
+private function hmAccentInk pAccent
+   if sDark is true then
+      return hmMix(pAccent, "255,255,255", 0.4)
+   end if
+   return pAccent
+end hmAccentInk
+
+-- An accent darkened toward the ink by pAmount, for text and marks on a
+-- panel tinted with it; in the dark, where the ink is white, lightened by
+-- enough to read
+private function hmAccentText pAccent, pAmount
+   if sDark is true then
+      return hmMix(pAccent, "255,255,255", max(0.45, pAmount))
+   end if
+   return hmMix(pAccent, hmColor("ink"), pAmount)
+end hmAccentText
 
 private function hmHex pColor
    return "#" & format("%02x%02x%02x", item 1 of pColor, item 2 of pColor, item 3 of pColor)
@@ -704,7 +893,11 @@ private command hmGlowCentre pObj
 end hmGlowCentre
 
 private command hmShadow pObj, pSize, pDistance, pOpacity
-   set the dropShadow["color"] of pObj to "15,23,42"
+   if sDark is true then
+      set the dropShadow["color"] of pObj to "0,0,0"
+   else
+      set the dropShadow["color"] of pObj to "15,23,42"
+   end if
    set the dropShadow["blendMode"] of pObj to "normal"
    set the dropShadow["angle"] of pObj to 90
    set the dropShadow["size"] of pObj to pSize
@@ -1093,7 +1286,7 @@ private command hmStatus pText, pKind
       case "ok"
       case "warn"
       case "bad"
-         put hmColor(pKind) into tColor
+         put hmAccentInk(hmColor(pKind)) into tColor
          break
       default
          put hmColor("soft") into tColor
@@ -1205,9 +1398,9 @@ private command hmBuild
    put empty into sLaidW
    set the backgroundColor of me to hmColor("bg")
    -- (the desktop's recent stacks are links: hmRecentStacks)
-   set the linkColor of me to hmColor("emerald")
-   set the linkHiliteColor of me to hmColor("teal")
-   set the linkVisitedColor of me to hmColor("emerald")
+   set the linkColor of me to hmAccentInk(hmColor("emerald"))
+   set the linkHiliteColor of me to hmAccentInk(hmColor("teal"))
+   set the linkVisitedColor of me to hmAccentInk(hmColor("emerald"))
    set the underlineLinks of me to false
    put empty into sCfg
    put empty into sLiveList
@@ -1272,14 +1465,14 @@ private function hmButton pName, pLeft, pTop, pHeight, pLabel, pIcon, pStyle, pA
          put tInk into tIconInk
          break
       case "ghost"
-         put "255,255,255" into tLook["bg0"]
-         put hmMix("255,255,255", pAccent, 0.08) into tLook["bg1"]
+         put hmColor("panel") into tLook["bg0"]
+         put hmTint(pAccent, 0.08) into tLook["bg1"]
          put hmColor("line") into tLook["line0"]
          put pAccent into tLook["line1"]
          put hmColor("ink") into tLook["ink0"]
-         put hmMix(pAccent, hmColor("ink"), 0.25) into tLook["ink1"]
+         put hmAccentText(pAccent, 0.25) into tLook["ink1"]
          put tLook["ink0"] into tInk
-         put pAccent into tIconInk
+         put hmAccentInk(pAccent) into tIconInk
          break
       case "dark"
          put hmColor("side2") into tLook["bg0"]
@@ -1292,15 +1485,16 @@ private function hmButton pName, pLeft, pTop, pHeight, pLabel, pIcon, pStyle, pA
          put tInk into tIconInk
          break
       case "chip"
-         put hmMix("255,255,255", pAccent, 0.09) into tLook["bg0"]
-         put hmMix("255,255,255", pAccent, 0.2) into tLook["bg1"]
-         put hmMix(pAccent, hmColor("ink"), 0.3) into tInk
+         put hmTint(pAccent, 0.09) into tLook["bg0"]
+         put hmTint(pAccent, 0.2) into tLook["bg1"]
+         put hmAccentText(pAccent, 0.3) into tInk
          put tInk into tIconInk
          break
       case "light"
          put "255,255,255" into tLook["bg0"]
          put hmMix("255,255,255", pAccent, 0.14) into tLook["bg1"]
-         put hmMix(pAccent, hmColor("ink"), 0.2) into tInk
+         -- (on white in either appearance, so the light one's ink)
+         put hmMix(pAccent, "15,23,42", 0.2) into tInk
          put pAccent into tIconInk
          break
    end switch
@@ -1366,9 +1560,9 @@ private command hmBuildSide
    get hmIcon("sideMarkIcon", "layers", "255,255,255", "28,30,48,50", empty)
    get hmLabel("sideTitle", "66,21,200,45", "OXT-Beyond", 19, "255,255,255", empty)
    if hmOnWeb() then
-      get hmLabel("sideSub", "66,45,200,61", "Home, in your browser", 11, hmColor("muted"), empty)
+      get hmLabel("sideSub", "66,45,200,61", "Home, in your browser", 11, hmColor("sideMuted"), empty)
    else
-      get hmLabel("sideSub", "66,45,200,61", "Home", 11, hmColor("muted"), empty)
+      get hmLabel("sideSub", "66,45,200,61", "Home", 11, hmColor("sideMuted"), empty)
    end if
 
    put hmBox("navHi", "10,84,190,118", hmColor("side2"), 18, empty) into tObj
@@ -1381,7 +1575,7 @@ private command hmBuildSide
       add 38 to tY
    end repeat
 
-   get hmLabel("sideExplore", "22,330,190,344", "EXPLORE", 10, "100,116,139", empty)
+   get hmLabel("sideExplore", "22,330,190,344", "EXPLORE", 10, hmColor("sideMuted"), empty)
    hmNavItem "nav_lessons", 348, 30, "Lessons", "graduation-cap", "ide lessons", 13
    hmNavItem "nav_examples", 380, 30, "Examples", "layers", "ide examples", 13
    hmNavItem "nav_dictionary", 412, 30, "Dictionary", "book-open-text", "ide dictionary", 13
@@ -1403,8 +1597,8 @@ private command hmBuildSide
 
    get hmButton("back", 14, 510, 32, "Back", "chevron-left", "dark", empty, empty, "page prev", 82)
    get hmButton("next", 104, 510, 32, "Next", "chevron-right", "dark", empty, empty, "page next", 82)
-   get hmLabel("navCount", "0,556,200,572", "Page 1 of 6", 12, hmColor("muted"), empty, "center")
-   get hmLabel("navKeys", "0,573,200,589", "or use the arrow keys", 11, "100,116,139", empty, "center")
+   get hmLabel("navCount", "0,556,200,572", "Page 1 of 6", 12, hmColor("sideMuted"), empty, "center")
+   get hmLabel("navKeys", "0,573,200,589", "or use the arrow keys", 11, hmColor("sideMuted"), empty, "center")
 end hmBuildSide
 
 private command hmNavItem pName, pTop, pHeight, pLabel, pIcon, pAction, pSize
@@ -1770,7 +1964,7 @@ private command hmBuildHome
    get hmOval("heroDot1", "262,208,270,216", "248,113,113", "hero")
    get hmOval("heroDot2", "275,208,283,216", "251,191,36", "hero")
    get hmOval("heroDot3", "288,208,296,216", "52,211,153", "hero")
-   get hmLabel("heroTermTitle", "304,205,700,219", "Message Box", 11, hmColor("muted"), "hero")
+   get hmLabel("heroTermTitle", "304,205,700,219", "Message Box", 11, hmColor("sideMuted"), "hero")
    put hmCodeField("heroCode", "262,228,712,252", 15, 22, "hero") into tObj
    set the dontWrap of tObj to true
    get hmBox("heroCaret", "262,230,264,250", hmColor("flame"), 0, "hero")
@@ -1873,11 +2067,11 @@ private command hmTile pPage, pX, pY, pIndex
          break
    end switch
    get hmGroup(tName, hmR(pX, pY, pX + 248, pY + 84), "pg_home")
-   put hmBox(tName & "_bg", hmR(pX, pY, pX + 248, pY + 84), "255,255,255", 18, tName) into tObj
+   put hmBox(tName & "_bg", hmR(pX, pY, pX + 248, pY + 84), hmColor("panel"), 18, tName) into tObj
    hmBorder tObj, hmColor("line")
    hmShadow tObj, 10, 2, 26
-   put hmBox(tName & "_chip", hmR(pX + 16, pY + 20, pX + 60, pY + 64), hmMix("255,255,255", tAccent, 0.12), 14, tName) into tObj
-   get hmIcon(tName & "_icon", tIcon, tAccent, hmR(pX + 27, pY + 31, pX + 49, pY + 53), tName)
+   put hmBox(tName & "_chip", hmR(pX + 16, pY + 20, pX + 60, pY + 64), hmTint(tAccent, 0.12), 14, tName) into tObj
+   get hmIcon(tName & "_icon", tIcon, hmAccentInk(tAccent), hmR(pX + 27, pY + 31, pX + 49, pY + 53), tName)
    get hmLabel(tName & "_title", hmR(pX + 74, pY + 17, pX + 240, pY + 37), tTitle, 15, hmColor("ink"), tName)
    get hmLabel(tName & "_text", hmR(pX + 74, pY + 39, pX + 236, pY + 75), tText, 12, hmColor("soft"), tName)
    put tName & "_bg" into tLook["bg"]
@@ -2022,7 +2216,7 @@ private command hmBuildSpeak
    get hmBox("spkCaret", "240,131,242,147", hmColor("flame"), 0, "pg_speak")
 
    -- The card the lines change
-   put hmBox("spkStageBg", "620,92,1000,392", "255,255,255", 22, "pg_speak") into tObj
+   put hmBox("spkStageBg", "620,92,1000,392", hmColor("panel"), 22, "pg_speak") into tObj
    hmBorder tObj, hmColor("line")
    hmShadow tObj, 12, 3, 30
    get hmLabel("spkStageTitle", "636,104,900,120", "What the lines do, live", 11, hmColor("muted"), "pg_speak")
@@ -2035,16 +2229,16 @@ private command hmBuildSpeak
    set the polySides of tObj to 6
 
    -- What the line in front does
-   put hmBox("spkWhyBg", "224,404,1000,452", "255,255,255", 18, "pg_speak") into tObj
+   put hmBox("spkWhyBg", "224,404,1000,452", hmColor("panel"), 18, "pg_speak") into tObj
    hmBorder tObj, hmColor("line")
-   get hmIcon("spkWhyIcon", "sparkles", hmColor("violet"), "240,418,260,438", "pg_speak")
+   get hmIcon("spkWhyIcon", "sparkles", hmAccentInk(hmColor("violet")), "240,418,260,438", "pg_speak")
    get hmLabel("spkWhy", "272,420,988,440", empty, 13, hmColor("soft"), "pg_speak")
 
    -- Your turn
-   put hmBox("spkTryBg", "224,464,1000,596", "255,255,255", 22, "pg_speak") into tObj
+   put hmBox("spkTryBg", "224,464,1000,596", hmColor("panel"), 22, "pg_speak") into tObj
    hmBorder tObj, hmColor("line")
    get hmLabel("spkTryTitle", "240,476,800,496", "Your turn: type a line, then press Run or Return", 15, hmColor("ink"), "pg_speak")
-   put hmBox("spkInputBg", "240,504,870,540", "248,250,252", 14, "pg_speak") into tObj
+   put hmBox("spkInputBg", "240,504,870,540", hmColor("field"), 14, "pg_speak") into tObj
    hmBorder tObj, hmColor("line")
    put hmInput("spkInput", "254,512,860,534", hmSpeakFirstTry(), 14, "pg_speak") into tObj
    if hmCodeFont() is not empty then
@@ -2269,7 +2463,7 @@ private command hmBuildMove
    get hmLabel("mvCodeTitle", "240,474,690,490", empty, 11, hmColor("muted"), "pg_move")
    get hmCodeField("mvCode", "240,494,692,590", 12, 16, "pg_move")
    -- How it works, and a stack of your own
-   put hmBox("mvInfoBg", "716,464,1000,596", "255,255,255", 22, "pg_move") into tObj
+   put hmBox("mvInfoBg", "716,464,1000,596", hmColor("panel"), 22, "pg_move") into tObj
    hmBorder tObj, hmColor("line")
    get hmLabel("mvInfo", "732,476,988,544", \
          "One handler moves every ball, then asks to be run again in 16 milliseconds: about 60 frames a second, and the IDE never waits for it.", \
@@ -2776,7 +2970,7 @@ private command hmBuildDraw
    hmCorners "drCorner", "224,92,604,372", 22, hmColor("bg"), "drArt"
 
    -- Effects
-   put hmBox("drFxBg", "620,92,1000,372", "255,255,255", 22, "pg_draw") into tObj
+   put hmBox("drFxBg", "620,92,1000,372", hmColor("panel"), 22, "pg_draw") into tObj
    hmBorder tObj, hmColor("line")
    hmShadow tObj, 12, 3, 30
    repeat with tIndex = 1 to 24
@@ -2784,7 +2978,7 @@ private command hmBuildDraw
       set the arcAngle of tObj to 16
       set the startAngle of tObj to (tIndex - 1) * 15
    end repeat
-   get hmOval("drWHole", "684,166,740,222", "255,255,255", "pg_draw")
+   get hmOval("drWHole", "684,166,740,222", hmColor("panel"), "pg_draw")
    get hmLabel("drWheelCap", "640,264,784,280", "24 arcs, turning", 11, hmColor("muted"), "pg_draw", "center")
    put hmBox("drStar", "826,134,950,258", hmColor("teal"), 0, "pg_draw") into tObj
    set the style of tObj to "polygon"
@@ -2802,7 +2996,7 @@ private command hmBuildDraw
    -- Widgets
    repeat with tIndex = 1 to 4
       put 224 + (tIndex - 1) * 198 into tX
-      put hmBox("drP" & tIndex, hmR(tX, 388, tX + 182, 596), "255,255,255", 22, "pg_draw") into tObj
+      put hmBox("drP" & tIndex, hmR(tX, 388, tX + 182, 596), hmColor("panel"), 22, "pg_draw") into tObj
       hmBorder tObj, hmColor("line")
    end repeat
    try
@@ -2827,7 +3021,7 @@ private command hmBuildDraw
       set the arcAngle of tObj to 72
       set the startAngle of tObj to (tIndex - 1) * 72
    end repeat
-   get hmOval("drDHole", "877,428,941,492", "255,255,255", "pg_draw")
+   get hmOval("drDHole", "877,428,941,492", hmColor("panel"), "pg_draw")
    get hmLabel("drDNum", "877,450,941,470", empty, 15, hmColor("ink"), "pg_draw", "center")
    hmWidgetCaption 224, "Clock", "com.livecode.widget.clock"
    hmWidgetCaption 422, "Line graph", "com.livecode.widget.linegraph"
@@ -2941,12 +3135,12 @@ private command hmDrawFxShow pFx
       put "255,255,255" into sCfg[tName]["ink0"]
       put "255,255,255" into sCfg[tName]["ink1"]
    else
-      put "255,255,255" into sCfg[tName]["bg0"]
-      put hmMix("255,255,255", hmColor("teal"), 0.08) into sCfg[tName]["bg1"]
+      put hmColor("panel") into sCfg[tName]["bg0"]
+      put hmTint(hmColor("teal"), 0.08) into sCfg[tName]["bg1"]
       put hmColor("line") into sCfg[tName]["line0"]
       put hmColor("teal") into sCfg[tName]["line1"]
       put hmColor("ink") into sCfg[tName]["ink0"]
-      put hmMix(hmColor("teal"), hmColor("ink"), 0.25) into sCfg[tName]["ink1"]
+      put hmAccentText(hmColor("teal"), 0.25) into sCfg[tName]["ink1"]
    end if
    hmApply tName
 end hmDrawFxShow
@@ -3034,7 +3228,7 @@ private command hmBuildWeb
    put 92 into tY
    hmWebCard "webCard1", tX, tY, "violet", "volume-2", "Speak", "revSpeak", \
          hmPick("Your stack reads text aloud, in the voices this browser has.", "Your stack reads text aloud, in this computer's voices.")
-   put hmBox("webSayBg", hmR(tX + 16, tY + 108, tX + 232, tY + 140), "248,250,252", 12, "pg_web") into tObj
+   put hmBox("webSayBg", hmR(tX + 16, tY + 108, tX + 232, tY + 140), hmColor("field"), 12, "pg_web") into tObj
    hmBorder tObj, hmColor("line")
    get hmInput("webSay", hmR(tX + 26, tY + 114, tX + 224, tY + 136), hmPick("Hello! I am a stack, in a web page.", "Hello! I am a stack, on your computer."), 13, "pg_web")
    repeat with tIndex = 1 to 9
@@ -3050,7 +3244,7 @@ private command hmBuildWeb
    hmBorder tObj, hmColor("line")
    create image "webQR" in group "pg_web"
    set the rect of image "webQR" to tX + 84, tY + 104, tX + 164, tY + 184
-   put hmBox("webQRTextBg", hmR(tX + 16, tY + 196, tX + 232, tY + 230), "248,250,252", 12, "pg_web") into tObj
+   put hmBox("webQRTextBg", hmR(tX + 16, tY + 196, tX + 232, tY + 230), hmColor("field"), 12, "pg_web") into tObj
    hmBorder tObj, hmColor("line")
    get hmInput("webQRText", hmR(tX + 26, tY + 203, tX + 224, tY + 223), empty, 12, "pg_web")
 
@@ -3080,14 +3274,14 @@ private command hmBuildWeb
    put 352 into tY
    hmWebCard "webCard4", tX, tY, "indigo", "external-link", "Open the web", "launch url", \
          hmPick("launch url opens any address in a new tab of this browser.", "launch url opens any address in your web browser.")
-   put hmBox("webTabBg", hmR(tX + 16, tY + 112, tX + 232, tY + 178), "248,250,252", 12, "pg_web") into tObj
+   put hmBox("webTabBg", hmR(tX + 16, tY + 112, tX + 232, tY + 178), hmColor("field"), 12, "pg_web") into tObj
    hmBorder tObj, hmColor("line")
    get hmOval("webTabDot1", hmR(tX + 28, tY + 124, tX + 36, tY + 132), "248,113,113", "pg_web")
    get hmOval("webTabDot2", hmR(tX + 40, tY + 124, tX + 48, tY + 132), "251,191,36", "pg_web")
    get hmOval("webTabDot3", hmR(tX + 52, tY + 124, tX + 60, tY + 132), "52,211,153", "pg_web")
-   put hmBox("webTabUrl", hmR(tX + 28, tY + 140, tX + 220, tY + 166), "255,255,255", 10, "pg_web") into tObj
+   put hmBox("webTabUrl", hmR(tX + 28, tY + 140, tX + 220, tY + 166), hmColor("panel"), 10, "pg_web") into tObj
    hmBorder tObj, hmColor("line")
-   get hmIcon("webTabIcon", "globe", hmColor("indigo"), hmR(tX + 36, tY + 146, tX + 50, tY + 160), "pg_web")
+   get hmIcon("webTabIcon", "globe", hmAccentInk(hmColor("indigo")), hmR(tX + 36, tY + 146, tX + 50, tY + 160), "pg_web")
    put hmLabel("webTabText", hmR(tX + 56, tY + 145, tX + 216, tY + 161), "OXT-Beyond on GitHub", 12, hmColor("soft"), "pg_web") into tObj
    set the dontWrap of tObj to true
    get hmButton("webLinkBtn", tX + 16, tY + 196, 34, "Visit OXT-Beyond", "external-link", "primary", hmColor("indigo"), "pg_web", "web link", 216, "web")
@@ -3110,7 +3304,7 @@ private command hmBuildWeb
       hmWebCard "webCard6", tX, tY, "emerald", "hard-drive", "Your stacks", "File > Open Recent File", \
             "The stacks you opened last, ready to open again."
    end if
-   get hmLabel("webCount", hmR(tX + 16, tY + 102, tX + 76, tY + 146), "0", 36, hmColor("emerald"), "pg_web")
+   get hmLabel("webCount", hmR(tX + 16, tY + 102, tX + 76, tY + 146), "0", 36, hmAccentInk(hmColor("emerald")), "pg_web")
    get hmLabel("webCountLabel", hmR(tX + 76, tY + 124, tX + 236, tY + 142), "stacks saved here", 13, hmColor("soft"), "pg_web")
    put hmLabel("webStackNames", hmR(tX + 16, tY + 150, tX + 236, tY + 190), empty, 11, hmColor("muted"), "pg_web") into tObj
    get hmButton("webOpenBtn", tX + 16, tY + 196, 34, "Open a stack", "folder-open", "primary", hmColor("emerald"), "pg_web", "web open", 216, "web")
@@ -3124,13 +3318,13 @@ end hmWebClipLine
 private command hmWebCard pName, pX, pY, pAccent, pIcon, pTitle, pTag, pText
    local tObj, tAccent
    put hmColor(pAccent) into tAccent
-   put hmBox(pName, hmR(pX, pY, pX + 248, pY + 244), "255,255,255", 22, "pg_web") into tObj
+   put hmBox(pName, hmR(pX, pY, pX + 248, pY + 244), hmColor("panel"), 22, "pg_web") into tObj
    hmBorder tObj, hmColor("line")
    hmShadow tObj, 12, 3, 28
-   get hmBox(pName & "_chip", hmR(pX + 16, pY + 16, pX + 54, pY + 54), hmMix("255,255,255", tAccent, 0.12), 14, "pg_web")
-   get hmIcon(pName & "_icon", pIcon, tAccent, hmR(pX + 25, pY + 25, pX + 45, pY + 45), "pg_web")
+   get hmBox(pName & "_chip", hmR(pX + 16, pY + 16, pX + 54, pY + 54), hmTint(tAccent, 0.12), 14, "pg_web")
+   get hmIcon(pName & "_icon", pIcon, hmAccentInk(tAccent), hmR(pX + 25, pY + 25, pX + 45, pY + 45), "pg_web")
    get hmLabel(pName & "_title", hmR(pX + 64, pY + 15, pX + 240, pY + 35), pTitle, 16, hmColor("ink"), "pg_web")
-   put hmLabel(pName & "_tag", hmR(pX + 64, pY + 37, pX + 240, pY + 53), pTag, 11, tAccent, "pg_web") into tObj
+   put hmLabel(pName & "_tag", hmR(pX + 64, pY + 37, pX + 240, pY + 53), pTag, 11, hmAccentInk(tAccent), "pg_web") into tObj
    if hmCodeFont() is not empty then
       set the textFont of tObj to hmCodeFont()
    end if
@@ -3368,7 +3562,7 @@ end hmWebFrame
 
 private command hmBuildApp
    local tObj, tIndex, tCx, tSteps, tStep
-   put hmBox("apStepsBg", "224,92,1000,300", "255,255,255", 22, "pg_app") into tObj
+   put hmBox("apStepsBg", "224,92,1000,300", hmColor("panel"), 22, "pg_app") into tObj
    hmBorder tObj, hmColor("line")
    hmShadow tObj, 12, 3, 30
    get hmBox("apTrack", "321,150,903,154", hmColor("line"), 4, "pg_app")
@@ -3385,15 +3579,15 @@ private command hmBuildApp
       put hmOval("apNode" & tIndex, hmR(tCx - 30, 122, tCx + 30, 182), hmColor("emerald"), "pg_app") into tObj
       hmGradient tObj, "16,185,129|13,148,136", (tCx - 30) & ",122", (tCx + 30) & ",182"
       get hmIcon("apIcon" & tIndex, item 2 of tStep, "255,255,255", hmR(tCx - 13, 139, tCx + 13, 165), "pg_app")
-      put hmOval("apBadge" & tIndex, hmR(tCx + 16, 118, tCx + 38, 140), "255,255,255", "pg_app") into tObj
+      put hmOval("apBadge" & tIndex, hmR(tCx + 16, 118, tCx + 38, 140), hmColor("panel"), "pg_app") into tObj
       hmBorder tObj, hmColor("emerald")
-      put hmLabel("apBadgeNum" & tIndex, hmR(tCx + 16, 124, tCx + 38, 140), tIndex, 11, hmColor("emerald"), "pg_app", "center") into tObj
+      put hmLabel("apBadgeNum" & tIndex, hmR(tCx + 16, 124, tCx + 38, 140), tIndex, 11, hmAccentInk(hmColor("emerald")), "pg_app", "center") into tObj
       set the textStyle of tObj to "bold"
       get hmLabel("apTitle" & tIndex, hmR(tCx - 92, 194, tCx + 92, 214), item 1 of tStep, 15, hmColor("ink"), "pg_app", "center")
       get hmLabel("apText" & tIndex, hmR(tCx - 88, 218, tCx + 88, 262), item 3 of tStep, 12, hmColor("soft"), "pg_app", "center")
    end repeat
    set the itemDelimiter to comma
-   put hmOval("apDot", "315,146,327,158", "255,255,255", "pg_app") into tObj
+   put hmOval("apDot", "315,146,327,158", hmColor("panel"), "pg_app") into tObj
    hmBorder tObj, hmColor("emerald")
    hmGlow tObj, "16,185,129", 14, 220
 
