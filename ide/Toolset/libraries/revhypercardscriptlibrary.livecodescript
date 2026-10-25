@@ -3805,8 +3805,11 @@ private function _LeaveOutLines pText, pHyperTalk, @pLeftOut
       put _T(tTokens, item 1 of tCode) into tFirst
       put empty into tPart
       if tFirst is among the words of "if else then" and s = e then
-         -- (the statement after a then or an else, if the error is in it)
+         -- (the statement after a then or an else, if the error is in it;
+         -- one already left out means that it was not: the error is in
+         -- the if)
          put _StatementPart(tTokens, item 3 of tError) into tPart
+         if tPart is not empty and _T(tTokens, item 1 of tPart) is among the words of "hcLeftOut throw" then return empty
       end if
       if tPart is empty and (tFirst is empty or tFirst is among the words of "on function end repeat if else then") then return empty
       add 1 to n
@@ -3854,7 +3857,10 @@ end _LeaveOutLines
 -- the column pColumn of a compile error is in: "from,to", the indices of
 -- its first and last code tokens. Empty if no then or else comes before
 -- the column (the error is in the if's condition), or the statement is
--- an if ("else if ...") or has a ; in it (the blocks of _ElseBlocks)
+-- an if ("else if ...") or has a ; in it (the blocks of _ElseBlocks). A
+-- then or an else at the column counts: an error at the end of a
+-- statement ("if x then put", nothing where put needs a value) is
+-- given at the then or the else before it
 private function _StatementPart pTokens, pColumn
    local tCode, tColumn, tStart, i, tItem, tAfter, tFrom, tTo
    if pColumn is not an integer then return empty
@@ -3864,10 +3870,10 @@ private function _StatementPart pTokens, pColumn
       put tColumn into tStart[i]
       add the number of chars of pTokens[i]["t"] to tColumn
    end repeat
-   -- the last then or else before the column
+   -- the last then or else before the column, or at it
    put empty into tAfter
    repeat for each item tItem in tCode
-      if tStart[tItem] >= pColumn then exit repeat
+      if tStart[tItem] > pColumn then exit repeat
       if _T(pTokens, tItem) is among the words of "then else" then put tItem into tAfter
    end repeat
    if tAfter is empty then return empty

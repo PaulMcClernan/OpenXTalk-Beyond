@@ -655,7 +655,9 @@ on TestHyperCardScriptsT39
          "  if p is 2 then put " & q & "2" & q & " after gHCScriptsTest else put 1 +* into x", "  put " & q & "!" & q & " after gHCScriptsTest", "end ifParts", \
          "on loopPart p", "  global gHCScriptsTest", "  put empty into gHCScriptsTest", "  repeat until gHCScriptsTest is " & q & "xx" & q, \
          "    put " & q & "x" & q & " after gHCScriptsTest", "    if p is 4 then put 2 +* into x", "  end repeat", "end loopPart", \
-         "on badCondition", "  if 1 +* 2 then beep", "end badCondition")
+         "on badCondition", "  if 1 +* 2 then beep", "end badCondition", \
+         "on elseParts p", "  global gHCScriptsTest", "  put " & q & "e" & q & " into gHCScriptsTest", "  if p is 1 then put", "  else put", \
+         "  put " & q & "!" & q & " after gHCScriptsTest", "end elseParts")
    unlock messages
    get revHyperCardFixScripts(tStack)
    put the script of button "B" of stack tStack into tScript
@@ -669,6 +671,8 @@ on TestHyperCardScriptsT39
    TestAssert "T39: a statement after else", line 38 of tScript is "  if p is 2 then put " & q & "2" & q & " after gHCScriptsTest else hcLeftOut " & q & "put 1 +* into x" & q
    TestAssert "T39: after then in a repeat that a condition ends, a throw", line 46 of tScript is "    if p is 4 then throw " & q & "HyperCard import: a line that does not compile here: put 2 +* into x" & q
    TestAssert "T39: an if whose condition does not compile: the handler left out", "   pass badCondition" is among the lines of tScript
+   TestAssert "T39: a statement whose error is given at its then or else", "  if p is 1 then hcLeftOut " & q & "put" & q is among the lines of tScript \
+         and "  else hcLeftOut " & q & "put" & q is among the lines of tScript
    TestAssert "T39: the handlers' lines keep their numbers", line 33 of tScript is "end twice" and line 48 of tScript is "end loopPart"
 
    send "mouseUp" to button "B" of stack tStack
@@ -701,14 +705,19 @@ on TestHyperCardScriptsT39
    catch tError
    end try
    TestAssert "T39: and there it stops the handler", gHCScriptsTest is "x" and "put 2 +* into x" is in tError
+   send "elseParts 1" to button "B" of stack tStack
+   TestAssert "T39: past the then left out", gHCScriptsTest is "e!"
+   send "elseParts 2" to button "B" of stack tStack
+   TestAssert "T39: and past the else", gHCScriptsTest is "e!"
 
    put revHyperCardLeftOutLines() into tLeft
-   TestAssert "T39: the lines left out, listed", the number of elements of tLeft is 8
+   TestAssert "T39: the lines left out, listed", the number of elements of tLeft is 10
    TestAssert "T39: each with its handler, line, text and how", tLeft[1]["name"] is "mouseUp" and tLeft[1]["line"] is 4 and tLeft[1]["how"] is "skipped" \
          and tLeft[2]["name"] is "mouseDown" and tLeft[2]["line"] is 6 and tLeft[2]["how"] is "stops" and tLeft[2]["text"] is "put 1 +* into x" \
          and tLeft[4]["text"] is "put 1 + +* 2 into x" \
          and tLeft[6]["name"] is "ifParts" and tLeft[6]["line"] is 4 and tLeft[6]["text"] is "if p is 1 then put 1 +* into x" and tLeft[6]["how"] is "skipped" \
-         and tLeft[8]["name"] is "loopPart" and tLeft[8]["how"] is "stops"
+         and tLeft[8]["name"] is "loopPart" and tLeft[8]["how"] is "stops" \
+         and tLeft[9]["name"] is "elseParts" and tLeft[9]["text"] is "if p is 1 then put" and tLeft[10]["text"] is "else put" and tLeft[10]["how"] is "skipped"
    put revHyperCardLeftOutHandlers() into tLeft
    TestAssert "T39: only the handler whose if does not compile left out whole", the number of elements of tLeft is 1 and tLeft[1]["name"] is "badCondition"
    _Close tStack
