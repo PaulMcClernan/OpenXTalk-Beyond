@@ -8,7 +8,8 @@ script "oxt_ui_tour"
 -- appearance, which the IDE follows, then opens the IDE's
 -- windows one by one: the Tools palette (also in its modern look, at its
 -- first size, wide, with its names and with Large Icons, and checks of how that look
--- behaves: tools-modern-check, -sizes, -use, -drawn and -switch), on macOS the
+-- behaves: tools-modern-check, -sizes, -use, -drawn and -switch), the menu bar's
+-- toolbar in its modern and classic looks (menubar-modern), on macOS the
 -- menu bar stack told it was moved, and made a window (menubar-mac), on
 -- Linux a pop-up menu whose ticks, dots and submenu arrows must stand out
 -- from the menu (menu-marks), a stack of
@@ -18,8 +19,9 @@ script "oxt_ui_tour"
 -- of empty fields, the tabs, a scrollbar with nothing to scroll, sliders,
 -- and on the Mac the useSystemWindowColor) (and stacks opened with their title
 -- bars above the screen, which the IDE moves where they can be dragged:
--- title-bar), the Property Inspector (each section for a button, its
--- section icons clicked with the system's mouse: inspector-tabs, the
+-- title-bar, and a card that must show at once each change a script makes
+-- to its border: card-border), the Property Inspector (each section for a
+-- button, its section icons clicked with the system's mouse: inspector-tabs, the
 -- Text section of a field, the Colors section of a graphic and of several
 -- objects, and the graphic's Fill gradient popup, which must open beside
 -- the Inspector and off the graphic, and a player made with the IDE and
@@ -69,7 +71,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,inspector,inspector-tabs,inspector-text,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,inspector,inspector-tabs,inspector-text,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -1160,6 +1162,145 @@ on tour_menubar
    end if
 end tour_menubar
 
+-- The toolbar's modern look (revMenubar's mbRefreshLook, View > Modern
+-- Toolbar) and its classic one: the same buttons, labels, places, states
+-- and menus in both, every picture drawn in the modern look and given back
+-- in the classic one, and the toggles on in both (Messages, Errors and
+-- Select Grouped). The look the IDE started with is put back
+on tour_menubar_modern
+   local tMb, tStart, tModern, tClassic, tFails, tChecks, tImg, tName, tToggle
+   put "revMenuBar" into tMb
+   if there is not a stack tMb or not the visible of stack tMb then
+      tourRecord "INFO menubar-modern: no visible revMenuBar stack"
+      exit tour_menubar_modern
+   end if
+   dispatch function "revMenubarIsModern" to stack tMb
+   if it is not "handled" then
+      tourRecord "INFO menubar-modern: this toolbar has no modern look"
+      exit tour_menubar_modern
+   end if
+   put revIDEGetPreference("revMenubar_look") into tStart
+   try
+      revIDESetPreference "revMenubar_look", "modern"
+      tourWait 200
+      put tourMbPrint() into tModern
+      repeat for each line tImg in tourMbImages()
+         add 1 to tChecks
+         put the short name of tImg into tName
+         if the filename of tImg is not empty or the text of tImg is empty then
+            put "modern: the picture" && tName && "is not drawn" & return after tFails
+         end if
+      end repeat
+      add 1 to tChecks
+      if there is not a graphic "mbBackground" of card 1 of stack tMb or the backgroundColor of stack tMb is not empty then
+         put "modern: the toolbar has no background of its own, or the window has a colour (the menus would take it)" & return after tFails
+      end if
+      tourShotStack tMb, "03-menubar-modern"
+      -- (as the toggles' states read; Suppress Messages asks first)
+      tourMbToggles true
+      repeat for each item tToggle in "Messages,Errors,Select Grouped"
+         add 1 to tChecks
+         if not the hilite of button tToggle of group "toolbar" of stack tMb then
+            put "modern: the toggle" && tToggle && "is not on" & return after tFails
+         end if
+      end repeat
+      tourShotStack tMb, "03-menubar-modern-on"
+      tourMbToggles false
+      -- the View menu's item turns the classic look on
+      dispatch "revMenubarViewMenuPick" to stack tMb with "Modern Toolbar"
+      tourWait 300
+      add 1 to tChecks
+      if revIDEGetPreference("revMenubar_look") is not "classic" then put "View > Modern Toolbar did not turn it off" & return after tFails
+      put tourMbPrint() into tClassic
+      add 1 to tChecks
+      if tClassic is not tModern then
+         put "classic: the buttons or menus differ from the modern look's:" && tourJoin(tourMbDiff(tModern, tClassic)) & return after tFails
+      end if
+      repeat for each line tImg in tourMbImages()
+         add 1 to tChecks
+         if the filename of tImg is empty then put "classic: the picture" && the short name of tImg && "has no file" & return after tFails
+      end repeat
+      add 1 to tChecks
+      if the textColor of group "toolbar" of stack tMb is not empty or there is a graphic "mbBackground" of card 1 of stack tMb then
+         put "classic: the labels have a colour, or the modern look's background is still there" & return after tFails
+      end if
+      tourShotStack tMb, "03-menubar-classic"
+      dispatch "revMenubarViewMenuPick" to stack tMb with "Modern Toolbar"
+      tourWait 300
+      add 1 to tChecks
+      if tourMbPrint() is not tModern then put "modern again: not as it was" & return after tFails
+   catch tError
+      put "error:" && tourJoin(tError) & return after tFails
+   end try
+   revIDESetPreference "revMenubar_look", tStart
+   tourWait 200
+   tourRecord "INFO menubar-modern:" && tChecks && "checks," && the number of lines of tFails && "failed"
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_menubar_modern
+
+-- What a script sees of the toolbar and the menus, one line each: every
+-- control of the toolbar (name, label, rect, shown, enabled, lit, its
+-- icon's ID), every picture's name and ID, the window's rect, and every
+-- menu's text but the View menu's Modern Toolbar and Grid lines
+function tourMbPrint
+   local tMb, tOut, tCtl, tMenu, tText
+   put "revMenuBar" into tMb
+   dispatch "revMenubarBuildMenus" to stack tMb
+   put "window" && the rect of stack tMb & return after tOut
+   repeat with tCtl = 1 to the number of controls of group "toolbar" of stack tMb
+      put the name of control tCtl of group "toolbar" of stack tMb && "|" && the rect of control tCtl of group "toolbar" of stack tMb \
+            && "|" && the visible of control tCtl of group "toolbar" of stack tMb && "|" && the enabled of control tCtl of group "toolbar" of stack tMb after tOut
+      if word 1 of the name of control tCtl of group "toolbar" of stack tMb is "button" then
+         put "|" && the label of control tCtl of group "toolbar" of stack tMb && "|" && the hilite of control tCtl of group "toolbar" of stack tMb \
+               && "|" && the icon of control tCtl of group "toolbar" of stack tMb && "|" && the textStyle of control tCtl of group "toolbar" of stack tMb after tOut
+      end if
+      put return after tOut
+   end repeat
+   repeat for each line tCtl in tourMbImages()
+      put "picture" && the short name of tCtl && the short id of tCtl & return after tOut
+   end repeat
+   repeat with tMenu = 1 to the number of buttons of group "revMenuBar" of stack tMb
+      put the text of button tMenu of group "revMenuBar" of stack tMb into tText
+      -- (and the Grid line: the View menu sets the grid as a preference
+      -- holds it when it is built, which an earlier step can leave apart)
+      filter lines of tText without "*Modern Toolbar*"
+      filter lines of tText without "*Grid*"
+      put "menu" && the short name of button tMenu of group "revMenuBar" of stack tMb & return & tText & return after tOut
+   end repeat
+   return tOut
+end tourMbPrint
+
+-- Messages, Errors and Select Grouped on (pOn) or off, as the toolbar
+-- reads them (updateButtonState)
+command tourMbToggles pOn
+   global gRevSuppressErrors, gRevSuppressMessages
+   put pOn into gRevSuppressErrors
+   put pOn into gRevSuppressMessages
+   set the selectGroupedControls to pOn
+   dispatch "updateButtonState" to stack "revMenuBar"
+   tourWait 200
+end tourMbToggles
+
+function tourMbImages
+   local tOut, tN
+   repeat with tN = 1 to the number of images of group "icons" of stack "revMenuBar"
+      put the long id of image tN of group "icons" of stack "revMenuBar" & return after tOut
+   end repeat
+   return line 1 to -1 of tOut
+end tourMbImages
+
+-- The first lines that differ, for the log
+function tourMbDiff pA, pB
+   local tN, tOut
+   repeat with tN = 1 to max(the number of lines of pA, the number of lines of pB)
+      if line tN of pA is not line tN of pB then
+         put "<" && line tN of pA && "> <" && line tN of pB & ">" & return after tOut
+         if the number of lines of tOut >= 3 then exit repeat
+      end if
+   end repeat
+   return line 1 to -1 of tOut
+end tourMbDiff
+
 -- macOS, where the IDE keeps a stack moved under its menu bar stack from
 -- staying there (revidemessagehandlerlibrary's moveStack sets it below).
 -- The menu bar itself, told it was moved where it is, as a drag of its
@@ -1782,6 +1923,131 @@ command tourTbMake pName, pLeft, pTop, pScript
    set the defaultStack to tDefault
    unlock messages
 end tourTbMake
+
+-- A card shows each change a script makes to its border at once. The
+-- engine redrew a card for its colours but not for its showBorder,
+-- borderWidth or threeD, so a border a script turned on stayed hidden
+-- until something else redrew the card, and a 3D border stayed after
+-- threeD was turned off (tperry2x, rc.6.4). After each change the screen
+-- is read 2 and 10 points in from the left of the card, at its middle:
+-- blue (the borderColor) where a flat border is, green (the topColor)
+-- where a 3D one is, white (the backColor) where none is. A wrong colour
+-- is logged with the colours the card has once it is redrawn, so that
+-- each change starts from a card that shows the one before it
+on tour_card_border
+   local tArea, tName, tCard, tFails
+   put "oxt_card_border" into tName
+   put line 1 of the working screenRects into tArea
+   tourTbMake tName, item 1 of tArea + 360, item 2 of tArea + 160, empty
+   put the long id of card 1 of stack tName into tCard
+   lock messages
+   set the backColor of tCard to "255,255,255"
+   set the borderColor of tCard to "0,0,255"
+   set the topColor of tCard to "0,255,0"
+   set the bottomColor of tCard to "255,0,0"
+   set the borderWidth of tCard to 20
+   set the threeD of tCard to false
+   set the showBorder of tCard to false
+   unlock messages
+   go stack tName
+   tourOnScreen tName
+   put tourCbCheck(tName, "opened", "white,white", empty) after tFails
+   set the showBorder of tCard to true
+   put tourCbCheck(tName, "showBorder true", "blue,blue", empty) after tFails
+   set the threeD of tCard to true
+   put tourCbCheck(tName, "threeD true", "green,green", empty) after tFails
+   set the threeD of tCard to false
+   put tourCbCheck(tName, "threeD false", "blue,blue", "04c-card-border") after tFails
+   set the borderWidth of tCard to 4
+   put tourCbCheck(tName, "borderWidth 4", "blue,white", empty) after tFails
+   set the showBorder of tCard to false
+   put tourCbCheck(tName, "showBorder false", "white,white", empty) after tFails
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_card_border
+
+-- After a change (pWhat) to the card of the stack pStack: empty if the
+-- screen shows pWant 2 and 10 points in from the left of the card, else a
+-- line with what it shows, and what it shows once the card is redrawn
+-- (which a card's colour setters do). pShot, if not empty, is a snapshot
+-- of the window, taken before that redraw
+function tourCbCheck pStack, pWhat, pWant, pShot
+   local tGot, tCard
+   tourWait 600
+   if pShot is not empty then tourShotStack pStack, pShot
+   put tourCbColours(pStack) into tGot
+   tourRecord "INFO card-border" && pWhat & ":" && tGot
+   if tourCbNames(tGot) is pWant then return empty
+   put the long id of card 1 of stack pStack into tCard
+   set the backColor of tCard to the backColor of tCard
+   tourWait 600
+   return pWhat && "shows" && tGot & ", not" && pWant & "; redrawn," && tourCbColours(pStack) & return
+end tourCbCheck
+
+-- The colours of the screen 2 and 10 points in from the left of the card
+-- of the stack pStack, at its middle, each as its name and its red, green
+-- and blue ("blue 0 0 255,white 255 255 255")
+function tourCbColours pStack
+   local tColours, tX, tRGB
+   repeat for each item tX in "2,10"
+      put tourCbPixel(pStack, tX) into tRGB
+      put tourCbName(tRGB) && item 1 of tRGB && item 2 of tRGB && item 3 of tRGB & comma after tColours
+   end repeat
+   return item 1 to -1 of tColours
+end tourCbColours
+
+-- The names alone of tourCbColours ("blue,white")
+function tourCbNames pColours
+   local tColour, tNames
+   repeat for each item tColour in pColours
+      put word 1 of tColour & comma after tNames
+   end repeat
+   return item 1 to -1 of tNames
+end tourCbNames
+
+-- The red, green and blue of the screen pX points in from the left of the
+-- card of the stack pStack, at its middle: the middle point of a snapshot
+-- 5 points square, so a point of the screen on a Retina display too
+function tourCbPixel pStack, pX
+   local tRect, tX, tY, tData, tW, tH, tAt
+   tourUnlockScreen "card-border"
+   put the rect of stack pStack into tRect
+   put item 1 of tRect + pX into tX
+   put (item 2 of tRect + item 4 of tRect) div 2 into tY
+   export snapshot from rect (tX - 2, tY - 2, tX + 3, tY + 3) to tData as PNG
+   lock messages
+   create invisible image "oxt_tour_probe" in card 1 of stack "oxt_ui_tour"
+   set the text of image "oxt_tour_probe" of stack "oxt_ui_tour" to tData
+   put the width of image "oxt_tour_probe" of stack "oxt_ui_tour" into tW
+   put the height of image "oxt_tour_probe" of stack "oxt_ui_tour" into tH
+   put the imageData of image "oxt_tour_probe" of stack "oxt_ui_tour" into tData
+   delete image "oxt_tour_probe" of stack "oxt_ui_tour"
+   unlock messages
+   put ((tH div 2) * tW + tW div 2) * 4 into tAt
+   return byteToNum(byte tAt + 2 of tData) & comma & byteToNum(byte tAt + 3 of tData) & comma & byteToNum(byte tAt + 4 of tData)
+end tourCbPixel
+
+-- The nearest to the colour pRGB of the four the card is given
+function tourCbName pRGB
+   local tRef, tName, tDist, tBest, tBestName, i
+   put "255,255,255" into tRef["white"]
+   put "0,0,255" into tRef["blue"]
+   put "0,255,0" into tRef["green"]
+   put "255,0,0" into tRef["red"]
+   repeat for each item tName in "white,blue,green,red"
+      put 0 into tDist
+      repeat with i = 1 to 3
+         add (item i of pRGB - item i of tRef[tName]) ^ 2 to tDist
+      end repeat
+      if tBest is empty or tDist < tBest then
+         put tDist into tBest
+         put tName into tBestName
+      end if
+   end repeat
+   return tBestName
+end tourCbName
 
 on tour_inspector
    local tPI, tSection, tShown, tIndex, tError
