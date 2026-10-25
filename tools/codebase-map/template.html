@@ -150,6 +150,16 @@ pre.cmd{white-space:pre-wrap;background:var(--soft);padding:10px;border-radius:5
 .lin .ver{cursor:pointer}
 .lin .ver circle{stroke:var(--panel);stroke-width:1.5}
 .lin .ver:hover circle,.lin .ver.sel circle{stroke:var(--ink);stroke-width:2}
+.roots{list-style:none;margin:14px 0 4px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:18px 14px;position:relative}
+.roots li{position:relative;padding-top:26px;min-width:0}
+.roots li::before{content:"";position:absolute;left:0;right:-14px;top:9px;height:3px;background:var(--rc);opacity:.45;border-radius:2px}
+.roots li:last-child::before{right:0}
+.roots li::after{content:"";position:absolute;left:0;top:3px;width:15px;height:15px;border-radius:50%;background:var(--panel);border:3px solid var(--rc);box-sizing:border-box}
+.roots .yr{font:800 1.35rem/1 var(--f-display);color:var(--rc);letter-spacing:-.01em}
+.roots .nm{font-weight:700;margin:4px 0 2px}
+.roots .tx{font-size:.8rem;color:var(--muted);line-height:1.4}
+.roots .src{font-size:.72rem;margin-top:4px}
+.roots .src a{color:var(--muted)}
 .verinfo{min-height:4.5em;border-left:3px solid var(--accent);padding:6px 12px;background:var(--soft);border-radius:0 5px 5px 0;font-size:.85rem}
 .act rect.abar{cursor:default}
 .act text{font-family:var(--f-body);font-size:10px;fill:var(--muted)}
@@ -294,6 +304,26 @@ function constellation(host){
 const HGROUP={engine:'engine','engine-lcb':'engine',libfoundation:'engine',libgraphics:'engine',libscript:'engine',libcore:'engine',libbrowser:'engine',externals:'engine',thirdparty:'engine',toolchain:'engine',
   'ide-boot':'ide','ide-lib':'ide','ide-palette':'ide','ide-ext':'ide','ide-resources':'ide','lcb-ext':'ext','lcs-ext':'ext',suite:'ext',ci:'build',packaging:'build',web:'web',docs:'docs',tests:'docs',other:'other'};
 const HG=[['engine','Engine & libraries'],['ide','IDE'],['ext','Extensions'],['build','Build & CI'],['web','Web IDE'],['docs','Docs & tests'],['other','Other']];
+// The family before this repository's own history. Each line names its
+// source; MetaCard's first release is not dated in any of them, so it has
+// no year here.
+const ROOTS=[
+  ['1987','HyperCard','Apple releases Bill Atkinson\'s HyperCard on 11 August 1987. Its HyperTalk language is where the xTalk family starts. Apple withdrew it from sale in March 2004.','--g-docs',[['Wikipedia: HyperCard','https://en.wikipedia.org/wiki/HyperCard']]],
+  ['','MetaCard','A HyperCard-style development environment and GUI toolkit, first for UNIX. Its engine is the one LiveCode, and so OXT-Beyond, grew from.','--g-docs',[['Wikipedia: LiveCode (company)','https://en.wikipedia.org/wiki/LiveCode_(company)']]],
+  ['2001','Revolution','Cross Worlds Computing, later Runtime Revolution, introduces Revolution, an IDE for the MetaCard engine. Runtime Revolution acquires MetaCard in July 2003.','--g-engine',[['Wikipedia: LiveCode','https://en.wikipedia.org/wiki/LiveCode'],['LiveCode (company)','https://en.wikipedia.org/wiki/LiveCode_(company)']]],
+  ['2010','LiveCode','Revolution is renamed LiveCode in November 2010.','--g-engine',[['Wikipedia: LiveCode (company)','https://en.wikipedia.org/wiki/LiveCode_(company)']]],
+  ['2013','LiveCode Community','In April 2013 LiveCode Community Edition 6.0 is published as free and open source software under the GPL.','--g-web',[['Wikipedia: LiveCode','https://en.wikipedia.org/wiki/LiveCode']]],
+  ['2021','Community 9.6.3','The last GPL release. The upstream repositories have had no changes since July 2021, and on 31 August 2021 the Community edition was discontinued.','--g-web',[['Wikipedia: LiveCode','https://en.wikipedia.org/wiki/LiveCode'],['HISTORY.md','https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/blob/main/HISTORY.md']]],
+  ['2023','OpenXTalk Lite','Terry Little releases OpenXTalk Lite ".9" on 1 September 2023, on Community 9.6.3. Tom Perry makes the releases from that month to 1.15 in June 2026.','--g-ext',[['HISTORY.md','https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/blob/main/HISTORY.md']]],
+  ['2026','OXT-Beyond','Starts in September 2026 and carries on from OpenXTalk Lite 1.15 on the 9.x engine: this repository.','--g-ide',[['HISTORY.md','https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/blob/main/HISTORY.md']]],
+];
+function rootsPanel(host){
+  const ol=h('ol',{class:'roots'},ROOTS.map(([y,n,t,c,src])=>h('li',{style:`--rc:var(${c})`},
+    h('div',{class:'yr'},y||'—'),h('div',{class:'nm'},n),h('div',{class:'tx'},t),
+    h('div',{class:'src'},src.map(([l,u],i)=>[i?' · ':'',h('a',{href:u,rel:'noopener',target:'_blank'},l)])))));
+  host.append(h('div',{class:'panel'},h('h2',null,'Roots: from HyperCard to OXT-Beyond'),
+    h('p',{class:'lede',style:'margin:4px 0 0'},'OXT-Beyond is the newest link in an xTalk line that begins with HyperCard in 1987. The chart below takes it up from Community 9.6.3, where this repository\'s own records begin.'),ol));
+}
 function lineageChart(host){
   const t0=Date.parse('2021-01-01'),t1=Date.parse('2026-11-15');const W=1100,H=230,X=d=>40+(Date.parse(d)-t0)/(t1-t0)*(W-60);
   const svg=S('svg',{viewBox:`0 0 ${W} ${H}`,style:'width:100%;min-width:720px;height:auto;display:block',role:'img','aria-label':'Timeline from LiveCode Community to OXT-Beyond'});
@@ -558,7 +588,7 @@ BUILD.ext=el=>{const M=D.lcb.modules;
 
 /* History */
 BUILD.history=el=>{const Hh=D.history;const mx=Math.max(...Hh.top.map(x=>x.n));
-  lineageChart(el);activityChart(el);
+  rootsPanel(el);lineageChart(el);activityChart(el);
   el.append(h('div',{class:'panel'},h('h2',null,'Where change happens'),h('p',{class:'lede',style:'margin-top:4px'},`${fmt(Hh.commits)} non-merge commits on main, ${Hh.since} to ${D.head.split(' ')[1]}. Files that change often are where the next regression is most likely. The window starts at ${Hh.since} because that is the earliest commit date on main: the imported history was re-committed then.`)));
   el.append(h('div',{class:'grid2'},
     h('div',{class:'panel'},h('h3',null,'Most-changed files'),table([{t:'File',k:x=>x.f,v:x=>plink(x.f)},{t:'Commits',n:1,k:x=>x.n,v:x=>h('div',{style:'display:flex;gap:8px;align-items:center;justify-content:flex-end'},h('div',{class:'bar'},h('i',{style:`width:${100*x.n/mx}%`})),String(x.n))}],Hh.top,{sort:1,limit:60})),
