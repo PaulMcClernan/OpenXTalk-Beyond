@@ -232,6 +232,15 @@ def scan_lcs(path, rel):
 
 
 OBJ_RE = re.compile(r'^== (.*)$')
+ESC_RE = re.compile(r'\\(.)')
+ESCAPES = {'\\': '\\', 'r': '\r', 'n': '\n', 't': '\t'}
+
+
+def unescape(value):
+    """Undo ide-stack-dump.livecodescript's escapeValue, which writes a
+    backslash, CR, LF and tab as \\\\, \\r, \\n and \\t: a tab-indented line
+    must reach the scanner with its tabs, or its first word is not seen."""
+    return ESC_RE.sub(lambda m: ESCAPES.get(m.group(1), m.group(0)), value)
 
 
 def scan_dump(dump_path, rel):
@@ -241,7 +250,7 @@ def scan_dump(dump_path, rel):
         for line in f:
             line = line.rstrip('\n')
             if line.startswith('| '):
-                cur_script.append(line[2:])
+                cur_script.append(unescape(line[2:]))
                 continue
             if line == '|':
                 cur_script.append('')
@@ -254,7 +263,8 @@ def scan_dump(dump_path, rel):
             if m:
                 u.objects += 1
                 p = m.group(1)
-                sm = re.match(r'^stack "([^"]*)"(?: > stack "([^"]*)")?$', p)
+                # the dump labels a substack 'stack "Main" > substack "Sub"'
+                sm = re.match(r'^stack "([^"]*)"(?: > (?:sub)?stack "([^"]*)")?$', p)
                 if sm:
                     name = sm.group(2) or sm.group(1)
                     if name not in u.stack_names:
