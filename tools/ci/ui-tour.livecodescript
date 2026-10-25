@@ -2591,9 +2591,11 @@ on tour_home
    set the rect of stack tNew to item 1 of tRect, item 2 of tRect, item 1 of tRect + 1200, item 2 of tRect + 760
    tourWait 1500
    tourShotStack tNew, "24a-home-resized"
+   -- (as the screen allowed it: a small screen keeps it smaller)
+   put the rect of stack tNew into tRect
    tourRedrawCheck tNew, "hmAppearanceChanged", "24a-home-redrawn"
-   if the rect of stack tNew is not item 1 of tRect, item 2 of tRect, item 1 of tRect + 1200, item 2 of tRect + 760 then
-      throw "Home drawn again is not the size it was (" & the rect of stack tNew & ")"
+   if the rect of stack tNew is not tRect then
+      throw "Home drawn again is not the size it was (" & the rect of stack tNew & ", was" && tRect & ")"
    end if
    close stack tNew
 end tour_home

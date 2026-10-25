@@ -168,7 +168,9 @@ private command dictApplyAppearance
       exit dictApplyAppearance
    end if
    try
-      do "document.documentElement.classList.toggle('oxt-dark', " & (sDark is true) & ")" in widget "Dictionary" of me
+      -- (the script answers a string: the browser widget refuses any
+      -- other answer, as a script error)
+      do "document.documentElement.classList.toggle('oxt-dark', " & (sDark is true) & "); ''" in widget "Dictionary" of me
    catch tError
    end try
 end dictApplyAppearance
