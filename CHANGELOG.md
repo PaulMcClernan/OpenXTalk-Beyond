@@ -132,6 +132,8 @@ words, is in the [README](README.md#the-ide) and on the
 - HyperCard disk images: an image the library knows but does not read is named, where File > Import Stack called it "not a HyperCard stack": an HFS+ volume (Mac OS 8.1 and later), on its own, behind a partition map or inside an HFS wrapper (whose empty volume was listed as "no HyperCard stacks"), and a compressed .dmg, with how to make a copy it reads. The new `revHyperCardImageProblem` says why, and the MCP bridge's import_hypercard says so too. A read/write .dmg of an HFS volume reads as before (OpenXTalkPaul) (#261)
 - HyperCard disk images: an image kept in a MacBinary file ("Old Disk.image.bin", as images were sent and downloaded) is read in place; a MacBinary stack is imported as before (#261)
 - Tests: the list of a disk image's stacks answered with Import and with Cancel, and HFS+, .dmg and MacBinary images (#261)
+- HyperCard import: in the session a stack is imported in, which in the web Stack Player is every session that runs it, "go back" and "pop card" go back through the stack's own cards, where the first went to the import's hidden "HyperCard Menus" substack or one of the HyperCard Library's own windows, and a "push recent card" as the stack opened pushed it: Carrie's Coins' Previous Stack and Datebook+ stopped there with "no such object" (#261)
+- Tests: after File > Import Stack's script fixes, neither of the stack's substacks is a recent card, "push recent card" pushes the card gone to before, and a button that asks for the library's stand-in for Home and goes back goes to the card before (#261)
 
 ## 0.2.7-rc.6.5 (2026-10-25, pre-release)
 

@@ -1767,6 +1767,12 @@ change since rc.6.5, each listed as the bug it squashes:
 - **An import summary that never showed.** The window that says what a
   HyperCard import brought in and what it did not stayed hidden. It
   shows in the middle of the screen (#261).
+- **Go back after an import.** In the session a stack is imported in,
+  which in the web Stack Player is every session, a stack's first `go
+  back`, or a `pop card` after its own `push recent card`, went to the
+  import's hidden menus substack or to one of the HyperCard Library's own
+  windows, and Carrie's Coins and Datebook+ stopped there. They go back
+  through the stack's own cards now (#261).
 - **Imported HyperCard stacks in the IDE.** In a stack imported from
   HyperCard, the engine names a control as HyperCard did (`card button
   "OK"`), and the IDE took every button, field and image for a card: the
