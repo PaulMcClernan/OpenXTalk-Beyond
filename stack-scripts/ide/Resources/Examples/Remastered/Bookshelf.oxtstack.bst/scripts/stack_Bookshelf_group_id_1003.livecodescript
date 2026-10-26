@@ -26,10 +26,10 @@ script "stack_Bookshelf_group_id_1003"
 --
 -- A group made here that lights up when the pointer is over it, and does
 -- something when clicked, has the custom properties cRest and cLit (its
--- colour at rest and lit) and cAction (what a click does: "prev", "next",
--- "go <card>", "chip <n>", "scripts", "edit" or "copy"). The colours are
--- the group's own: nothing else here names one, but the custom property
--- cAccent of this group, the example's colour.
+-- colour at rest and lit) and cAction (what a click does: "back", "prev",
+-- "next", "go <card>", "chip <n>", "scripts", "edit" or "copy"). The
+-- colours are the group's own: nothing else here names one, but the
+-- custom property cAccent of this group, the example's colour.
 
 -- The objects whose scripts the panel offers, by chip number, and the one
 -- it shows
@@ -41,8 +41,26 @@ local sCodeField, sCodeThumb, sCodeGoal, sCodeFont
 local sCopyLabel
 -- The group lit, and whether this script has the cursor locked as a hand
 local sLit, sHand
+-- The ids of the cards gone from, a line each, the last last, and of the
+-- card the window is on: Back goes back to the card this one was come to
+-- from, whichever way it was come to (Back and Next, the list, the front
+-- page, a key, or a program going on by itself, as the balloon flies on
+-- in the Balloon Game). It went to the card before this one in the stack,
+-- so a program chosen on the front page, then Back, was the program
+-- before it, not the front page (tperry2x, openxtalk.org p=25439)
+local sCameFrom, sOnCard
+-- True while Back goes to the card before, with no card to go back to
+local sBackOne
+
+-- A stack opened again starts with no cards gone from
+on preOpenStack
+   put empty into sCameFrom
+   put empty into sOnCard
+   pass preOpenStack
+end preOpenStack
 
 on preOpenCard
+   frameCame
    frameRest
    frameSync
    pass preOpenCard
@@ -79,7 +97,8 @@ command frameSync
             item 3 of the rect of graphic "frameHi", tMid + 14
       set the loc of graphic "frameBar" to item 1 of the loc of graphic "frameBar", tMid
    end if
-   frameDim "frameBack", tNumber is 1
+   -- (Back on the first card goes back to a card it was come to from)
+   frameDim "frameBack", tNumber is 1 and frameCameFrom() is empty
    frameDim "frameNext", tNumber is the number of cards
    frameLayout
    if there is a group "Scripts" then
@@ -212,12 +231,21 @@ private function frameHasTarget
    return false
 end frameHasTarget
 
--- Goes to the previous or next card, or a card by number or name; the
--- page slides, and the sidebar stays where it is
+-- Goes back, to the previous or next card, or to a card by number or
+-- name; the page slides, and the sidebar stays where it is. Back is to the
+-- card this one was come to from, or with none, to the card before it
 command frameGo pWhere
    local tFrom, tTo, tEffect
    put the number of this card into tFrom
+   put false into sBackOne
    switch pWhere
+      case "back"
+         put frameCameFrom() into tTo
+         if tTo is empty then
+            put tFrom - 1 into tTo
+            put true into sBackOne
+         end if
+         break
       case "prev"
          put tFrom - 1 into tTo
          break
@@ -232,6 +260,7 @@ command frameGo pWhere
          end if
    end switch
    if tTo is not an integer or tTo < 1 or tTo > the number of cards or tTo = tFrom then
+      put false into sBackOne
       exit frameGo
    end if
    if tTo > tFrom then
@@ -239,10 +268,68 @@ command frameGo pWhere
    else
       put "push right" into tEffect
    end if
+   -- (the card gone from is this one, wherever a program went with
+   -- messages locked, which the window did not see)
+   put the short id of this card into sOnCard
    lock screen for visual effect in rect the cContent of me
    go card tTo
+   put false into sBackOne
    unlock screen with visual effect tEffect very fast
 end frameGo
+
+-- When a card opens, notes the card the window was on as gone from. A
+-- card come to that is the last gone from is gone back to, whichever way
+-- (Back, or the left key after Next), and is taken off them, so that Back
+-- after it goes on back; Back with no card to go back to, to the card
+-- before, notes nothing
+private command frameCame
+   local tId, tLast
+   put the short id of this card into tId
+   if sOnCard is not empty and sOnCard is not tId then
+      -- (cards gone from that have since been deleted are passed over)
+      repeat while sCameFrom is not empty
+         put the last line of sCameFrom into tLast
+         if there is a card id tLast then
+            exit repeat
+         end if
+         delete the last line of sCameFrom
+      end repeat
+      if the last line of sCameFrom is tId then
+         delete the last line of sCameFrom
+      else if sBackOne is not true and there is a card id sOnCard then
+         frameNoteFrom sOnCard
+      end if
+   end if
+   put tId into sOnCard
+end frameCame
+
+-- The number of the card this one was come to from, the last of the cards
+-- gone from, or empty when there is none. (A card gone from that has since
+-- been deleted is passed over and taken off, and so is this card, the last
+-- when a program went back to it with messages locked)
+private function frameCameFrom
+   local tId
+   repeat while sCameFrom is not empty
+      put the last line of sCameFrom into tId
+      if there is a card id tId and tId is not the short id of this card then
+         return the number of card id tId
+      end if
+      delete the last line of sCameFrom
+   end repeat
+   return empty
+end frameCameFrom
+
+-- Notes the card pId as gone from (the last hundred cards)
+private command frameNoteFrom pId
+   if sCameFrom is empty then
+      put pId into sCameFrom
+   else
+      put return & pId after sCameFrom
+   end if
+   if the number of lines of sCameFrom > 100 then
+      delete line 1 of sCameFrom
+   end if
+end frameNoteFrom
 
 ################################################################################
 #
@@ -288,6 +375,7 @@ on mouseUp pButton
       put the cAction of tGroup into tAction
    end if
    switch word 1 of tAction
+      case "back"
       case "prev"
       case "next"
          frameGo tAction
