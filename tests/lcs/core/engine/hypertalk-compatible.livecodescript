@@ -16,9 +16,10 @@ gives the one it uses, where it would give empty, HyperCard's own style
 names (condense, outline...) set a textStyle, and grouped text reads as
 group, not link, and is drawn as plain text, underlined only after show
 groups; round takes a number halfway between two integers to the even
-one; and the seconds, and dates converted to and from seconds, count
-from 1904 in local time. Each test checks the stack with the property
-off too.
+one; the seconds, and dates converted to and from seconds, count from
+1904 in local time; and numToChar and charToNum number the characters
+as HyperCard did, by the Mac's character set with the return as 13.
+Each test checks the stack with the property off too.
 */
 
 local sStack
@@ -926,3 +927,88 @@ on TestHyperTalkCompatibleSeconds
    put tZone into $TZ
    _DeleteStack
 end TestHyperTalkCompatibleSeconds
+
+-- numToChar of 165, 195 and 202 (a bullet, a check mark and a
+-- non-breaking space in HyperCard) as code points; charToNum of a bullet,
+-- a non-breaking space, an e with an acute accent and a Cyrillic letter
+-- that neither set of characters has; charToNum(return); whether
+-- numToChar(13) is the return; numToChar(10) as a code point; charToNum
+-- of a carriage return; how many of the numbers 0 to 255 do not come back
+-- from charToNum(numToChar(n)); the lines of text with numToChar(13) in
+-- it, and of a script made so, as some stacks make their buttons'
+-- scripts; charToNum of a byte; numToChar(65 + 256) and charToNum("A");
+-- whether numToChar(165) and charToNum of a bullet are the platform's
+-- (numToNativeChar and nativeCharToNum); and charToNum(numToChar(8226))
+-- with the useUnicode true
+private function _CharValues
+   return _Values("put codepointToNum(numToChar(165)) into tValue" & return \
+         & "put codepointToNum(numToChar(195)) into tValue" & return \
+         & "put codepointToNum(numToChar(202)) into tValue" & return \
+         & "put charToNum(numToCodepoint(8226)) into tValue" & return \
+         & "put charToNum(numToCodepoint(160)) into tValue" & return \
+         & "put charToNum(numToCodepoint(233)) into tValue" & return \
+         & "put charToNum(numToCodepoint(1234)) into tValue" & return \
+         & "put charToNum(return) into tValue" & return \
+         & "put numToChar(13) is return into tValue" & return \
+         & "put codepointToNum(numToChar(10)) into tValue" & return \
+         & "put charToNum(numToCodepoint(13)) into tValue" & return \
+         & "put 0 into tValue;repeat with tError = 0 to 255;" \
+         & "if charToNum(numToChar(tError)) is not tError then add 1 to tValue;end repeat" & return \
+         & "put the number of lines of (" & quote & "a" & quote & " & numToChar(13) & " & quote & "b" & quote & ") into tValue" & return \
+         & "set the script of the owner of me to " & quote & "on hcCharsTest" & quote & " & numToChar(13) & " \
+         & quote & "end hcCharsTest" & quote & ";put the number of lines of the script of the owner of me into tValue" & return \
+         & "put charToNum(numToByte(165)) into tValue" & return \
+         & "put numToChar(65 + 256) & charToNum(" & quote & "A" & quote & ") into tValue" & return \
+         & "put codepointToNum(numToChar(165)) is codepointToNum(numToNativeChar(165)) into tValue" & return \
+         & "put charToNum(numToCodepoint(8226)) is nativeCharToNum(numToCodepoint(8226)) into tValue" & return \
+         & "set the useUnicode to true;put charToNum(numToChar(8226)) into tValue;set the useUnicode to false")
+end _CharValues
+
+-- The platform's characters: MacRoman on the Mac, Windows-1252 on
+-- Windows, ISO 8859-1 on Linux, in which 10, a linefeed, is the return
+on TestHyperTalkCompatibleCharsOff
+   local tValues
+   _MakeStack false
+   put _CharValues() into tValues
+   TestAssert "off: a Cyrillic letter is 63, a question mark", line 7 of tValues is 63
+   TestAssert "off: charToNum(return) is 10", line 8 of tValues is 10
+   TestAssert "off: numToChar(13) is not the return", line 9 of tValues is false
+   TestAssert "off: numToChar(10) is code point 10, the return", line 10 of tValues is 10
+   TestAssert "off: charToNum of a carriage return is 13", line 11 of tValues is 13
+   TestAssert "off: charToNum(numToChar(n)) is n for 0 to 255", line 12 of tValues is 0
+   TestAssert "off: numToChar(13) does not end a line", line 13 of tValues is 1
+   TestAssert "off: nor a line of a script", line 14 of tValues is 1
+   TestAssert "off: charToNum of byte 165 is 165", line 15 of tValues is 165
+   TestAssert "off: numToChar(65 + 256) is A, and charToNum(A) 65", line 16 of tValues is "A65"
+   TestAssert "off: numToChar(165) is the platform's character 165", line 17 of tValues is true
+   TestAssert "off: charToNum of a bullet is the platform's number for it", line 18 of tValues is true
+   TestAssert "off: with the useUnicode, charToNum(numToChar(8226)) is 8226", line 19 of tValues is 8226
+   _DeleteStack
+end TestHyperTalkCompatibleCharsOff
+
+-- HyperCard's characters were the Mac's (MacRoman) on every Mac, and a
+-- carriage return (13) ended a line of text or of a script, where a
+-- linefeed (10) did not
+on TestHyperTalkCompatibleChars
+   local tValues
+   _MakeStack true
+   put _CharValues() into tValues
+   TestAssert "on: numToChar(165) is a bullet, U+2022", line 1 of tValues is 8226
+   TestAssert "on: numToChar(195) is a check mark, U+221A", line 2 of tValues is 8730
+   TestAssert "on: numToChar(202) is a non-breaking space, U+00A0", line 3 of tValues is 160
+   TestAssert "on: charToNum of a bullet is 165", line 4 of tValues is 165
+   TestAssert "on: charToNum of a non-breaking space is 202", line 5 of tValues is 202
+   TestAssert "on: charToNum of an e with an acute accent is 142", line 6 of tValues is 142
+   TestAssert "on: a Cyrillic letter is still 63, a question mark", line 7 of tValues is 63
+   TestAssert "on: charToNum(return) is 13", line 8 of tValues is 13
+   TestAssert "on: numToChar(13) is the return", line 9 of tValues is true
+   TestAssert "on: numToChar(10) is a carriage return, code point 13", line 10 of tValues is 13
+   TestAssert "on: charToNum of a carriage return is 10", line 11 of tValues is 10
+   TestAssert "on: charToNum(numToChar(n)) is n for 0 to 255", line 12 of tValues is 0
+   TestAssert "on: numToChar(13) ends a line", line 13 of tValues is 2
+   TestAssert "on: and a line of a script", line 14 of tValues is 2
+   TestAssert "on: charToNum of byte 165 is still 165", line 15 of tValues is 165
+   TestAssert "on: numToChar(65 + 256) is still A, and charToNum(A) 65", line 16 of tValues is "A65"
+   TestAssert "on: with the useUnicode, charToNum(numToChar(8226)) is still 8226", line 19 of tValues is 8226
+   _DeleteStack
+end TestHyperTalkCompatibleChars

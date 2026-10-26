@@ -56,6 +56,15 @@ usually the <Mac OS|Macintosh> <character set>; on <Unix> systems, this
 is usually <ISO 8859>; on <Windows|Windows systems>, this is usually
 Code Page 1252, a variant of <ISO 8859>.
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import Stack
+sets it for a <stack> imported from <HyperCard>, the <character set> is
+the <Mac OS|Macintosh> <character set> on every platform, as it was in
+<HyperCard>, so numToChar(165) is a bullet (•) on Windows and Linux too.
+And numToChar(13) is the <return> <character>, which ends a line, as it
+did in <HyperCard>, where in any other <stack> it is a carriage return,
+which does not; numToChar(10), the <return> <character> of any other
+<stack>, is a carriage return there.
+
 If the <useUnicode> <property> is set to true, the <numToChar>
 <function> <return|returns> a double-byte character. If the <useUnicode>
 is false and you specify an <ASCIIValue> greater than 255, the
@@ -75,9 +84,11 @@ numToNativeChar (function), toUpper (function), base64Encode (function),
 ISOToMac (function), toLower (function), codepointToNum (function),
 property (glossary), ASCII (glossary), return (glossary),
 Windows (glossary), character set (glossary), ISO 8859 (glossary),
-Unix (glossary), Mac OS (glossary), Unicode (glossary), inverse (keyword),
+Unix (glossary), Mac OS (glossary), Unicode (glossary),
+HyperCard (glossary), stack (object), inverse (keyword),
 character (keyword), mod (operator), extendKey (property),
-charSet (property), HTMLText (property), useUnicode (property)
+charSet (property), HTMLText (property), useUnicode (property),
+hyperTalkCompatible (property)
 
 Tags: text processing
 
