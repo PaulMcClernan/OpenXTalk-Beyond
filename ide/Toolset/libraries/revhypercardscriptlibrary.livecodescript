@@ -113,7 +113,12 @@ script "revHyperCardScriptLibrary"
 -- of menu 3 is "-"", "there is a menu "Art Bits"", "the menus"), which
 -- here read the IDE's menu bar, or stop with "can't find background"
 -- where there is none: the library's menus, which T22's statements
--- change, in a script that compiles too.
+-- change, in a script that compiles too. T49 takes "play" with a sound
+-- named in a field or a button of the card or the background ("play card
+-- field "sound"", "play cd fld x tempo 200 tNotes"), which this engine
+-- reads as a player's "card" ("play card player "Movie"") and a field
+-- found without it, one of the background in a stack from HyperCard:
+-- the field in parentheses, its text, in a script that compiles too.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -2298,9 +2303,26 @@ private function _ParserForms pLine, pVars
             -- notes not in quotes, which HyperCard read as the text they
             -- were; one word that is a variable of the handler stays, and
             -- so does an expression ("play x line n of tNotes": a note is
-            -- never "of" or "the"), and a line that goes on after "\"
-            put i + 2 into j
-            if _T(tTokens, tIdx[j]) is "tempo" then add 2 to j
+            -- never "of" or "the"), and a line that goes on after "\".
+            -- The sound, and the tempo, can be in a field of the card or
+            -- the background ("play cd fld 1 tempo card field speed c d
+            -- e": T49 puts the sound's in parentheses). Another tempo is
+            -- one word or number: one in another field or an expression
+            -- ("tempo field 2", "tempo the speed of me") leaves the line
+            -- as it is
+            put _PlayObject(tTokens, tIdx, i + 1, tEnd) into j
+            if j is 0 then put i + 1 into j
+            add 1 to j
+            if _T(tTokens, tIdx[j]) is "tempo" then
+               put _PlayObject(tTokens, tIdx, j + 1, tEnd) into k
+               if k > 0 then
+                  put k + 1 into j
+               else if _T(tTokens, tIdx[j + 1]) is among the words of kObjectWords or _T(tTokens, tIdx[j + 1]) is among the words of "the (" then
+                  put tEnd + 1 into j
+               else
+                  add 2 to j
+               end if
+            end if
             if tTokens[tIdx[i + 1]]["k"] is "w" and _T(tTokens, tIdx[i + 1]) is not among the words of "stop tempo" and j <= tEnd \
                   and not (j = tEnd and pVars[_T(tTokens, tIdx[j])]) then
                put true into tAt
@@ -2407,13 +2429,14 @@ private function _ParserForms pLine, pVars
       -- T37: the number of marked card i, which HyperCard took as the
       -- number of the i-th marked card, and this engine as the number of
       -- marked cards (then "card i" is left over): the number of the card
-      -- with that card's id
+      -- with that card's id (its short id: in a stack with HyperCard's
+      -- rules, the id of a card is "card id 1234", as in HyperCard)
       repeat with j = i to tEnd - 5
          if _T(tTokens, tIdx[j]) is "the" and _T(tTokens, tIdx[j + 1]) is "number" and _T(tTokens, tIdx[j + 2]) is "of" \
                and _T(tTokens, tIdx[j + 3]) is "marked" and _T(tTokens, tIdx[j + 4]) is among the words of "card cd" \
                and tTokens[tIdx[j + 5]]["k"] is among the items of "w,n" \
                and (j + 5 = tEnd or _T(tTokens, tIdx[j + 6]) is among the words of kAfterValue) then
-            _Replace tTokens, tIdx, j, j + 5, "the number of card id (the id of marked card" && tTokens[tIdx[j + 5]]["t"] & ")"
+            _Replace tTokens, tIdx, j, j + 5, "the number of card id (the short id of marked card" && tTokens[tIdx[j + 5]]["t"] & ")"
             _Fire "T37 more forms HyperCard took"
          end if
       end repeat
@@ -2771,6 +2794,46 @@ private function _PlayNotes pLine
    return pLine
 end _PlayNotes
 
+-- T49: the field or button of the card or the background that names
+-- play's sound ("play card field "sound"", "play cd fld id 12 tempo
+-- 200"), from the code token pAt: the index of its last token, its name
+-- (a word, a string, a number or an expression in parentheses), or 0.
+-- One of another card ("card field 1 of card 2") or called as a
+-- function ("cd fld f(1)") is not taken
+private function _PlayObject pTokens, pIdx, pAt, pEnd
+   local j, tDepth
+   if _T(pTokens, pIdx[pAt]) is not among the words of "card cd background bkgnd bg" \
+         or _T(pTokens, pIdx[pAt + 1]) is not among the words of "field fld button btn" then
+      return 0
+   end if
+   put pAt + 2 into j
+   if _T(pTokens, pIdx[j]) is "id" then add 1 to j
+   if j > pEnd then return 0
+   if _T(pTokens, pIdx[j]) is "(" then
+      put 0 into tDepth
+      repeat while j <= pEnd
+         if _T(pTokens, pIdx[j]) is "(" then
+            add 1 to tDepth
+         else if _T(pTokens, pIdx[j]) is ")" then
+            subtract 1 from tDepth
+            if tDepth = 0 then exit repeat
+         end if
+         add 1 to j
+      end repeat
+      if j > pEnd then
+         return 0
+      end if
+   else if pTokens[pIdx[j]]["k"] is "w" then
+      if _T(pTokens, pIdx[j]) is among the words of kNotPlain or _T(pTokens, pIdx[j]) is among the words of "then else tempo" then
+         return 0
+      end if
+   else if pTokens[pIdx[j]]["k"] is not among the words of "s n" then
+      return 0
+   end if
+   if j < pEnd and _T(pTokens, pIdx[j + 1]) is among the words of "of ( in" then return 0
+   return j
+end _PlayObject
+
 -- T9, T16 to T30 and T32: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
@@ -2947,6 +3010,29 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if _T(tTokens, tIdx[j]) is among the words of "field fld" and j < tEnd then
                _Fire "T24 print a field"
                put "PrintField the long id of" && _Span(tTokens, tIdx, i + 1, tEnd) into tNew
+            end if
+            break
+         case "play"
+            -- T49: a sound named in a field or button of the card or the
+            -- background ("play card field "sound"", "play cd fld x tempo
+            -- 200 tNotes"), whose text HyperCard played. This engine takes
+            -- the "card" or "background" for its own, a player's ("play
+            -- card player "Movie""), and looks for the field without it:
+            -- in a stack from HyperCard, one of the background where the
+            -- card's was meant (no such object). In parentheses, the
+            -- field is a value, its text, as in HyperCard. Its name gets
+            -- T44 here, which the rules for single words reach only in a
+            -- statement no rule rewrites ("play cd fld help")
+            put _PlayObject(tTokens, tIdx, i + 1, tEnd) into j
+            if j > 0 then
+               if tTokens[tIdx[j]]["k"] is "w" and _T(tTokens, tIdx[j]) is among the words of kEngineConstants and _T(tTokens, tIdx[j - 1]) is not "id" then
+                  put quote & tTokens[tIdx[j]]["t"] & quote into tTokens[tIdx[j]]["t"]
+                  put "s" into tTokens[tIdx[j]]["k"]
+                  _Fire "T44 object name that is a constant here"
+               end if
+               _Fire "T49 play a sound named in a field"
+               put tTokens[tIdx[i]]["t"] && "(" & _Span(tTokens, tIdx, i + 1, j) & ")" into tNew
+               if j < tEnd then put space & _Span(tTokens, tIdx, j + 1, tEnd) after tNew
             end if
             break
          case "show"

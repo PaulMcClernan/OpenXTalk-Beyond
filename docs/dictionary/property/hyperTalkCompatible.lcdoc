@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, ten things are as they were in <HyperCard>, for the
+When it is true, thirteen things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -132,6 +132,35 @@ When it is true, ten things are as they were in <HyperCard>, for the
   seconds > 2643134400, the evening of October 3, 1987), are the dates
   they were. The long seconds, which <HyperCard> did not have, are the
   same in every <stack>.
+- The <numToChar> and <charToNum> <function|functions> number the
+  <character|characters> by the Macintosh's <character set> on every
+  platform, as <HyperCard> did, where otherwise they use the platform's,
+  which is the Macintosh's only on a Mac: numToChar(165) is a bullet
+  (•), and charToNum of a non-breaking space is 202. A <character> that
+  set does not have is 63, a question mark, as one the platform's set
+  does not have is otherwise. And 13 is the <return> <character> that
+  ends a line, as in <HyperCard>, where otherwise it is 10: text or a
+  <script> that a <script> puts together with numToChar(13) between its
+  lines has those lines, and numToChar(10) is a carriage return, which
+  ends no line here, as a linefeed ended none in <HyperCard>. Bytes,
+  such as <numToByte> gives, keep their numbers.
+- A <script> can set the <script> of an <object> whose <handler> is
+  running, as in <HyperCard>, where a <button> could change its own
+  <script> as it was clicked, so that the next click did something
+  else, and a <stack> could add a <handler> to its own <script> and go
+  on to call it. The <object> has the new <script> at once, for every
+  message after, while the <handler|handlers> that are running go on to
+  their end as they were. Otherwise setting such a <script> is an
+  error, as setting the <script> of a <behavior> whose <handler> is
+  running is in any <stack>.
+- The <ID> of a <card> is its abbreviated ID, "card id" and its number,
+  as in <HyperCard>, where otherwise it is the number: a <script> that
+  puts the id of this card into a variable, goes to other
+  <card|cards> and then goes to that variable comes back to the
+  <card>, and the id of this card is "card id 3058" is true on the
+  <card> whose short ID is 3058. The short ID of a <card>, and the
+  <ID> of a <background>, a <button> or a <field>, are numbers either
+  way, as they were in <HyperCard>.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -160,10 +189,14 @@ linkColor (property), linkHiliteColor (property),
 linkVisitedColor (property), underlineLinks (property),
 show groups (command), hide groups (command),
 round (function), statRound (function), seconds (function),
-convert (command), go (command), div (operator), mod (operator),
+convert (command), numToChar (function), charToNum (function),
+numToByte (function), script (property), behavior (property),
+ID (property),
+go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),
 field (object), background (glossary),
 message path (glossary), recent cards (glossary), HyperCard (glossary),
+character set (glossary), return (glossary),
 development environment (glossary), standalone application (glossary),
 custom property (glossary)

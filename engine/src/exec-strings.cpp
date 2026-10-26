@@ -126,6 +126,41 @@ void MCStringsEvalToUpper(MCExecContext& ctxt, MCStringRef p_string, MCStringRef
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// OXT-Beyond: HyperCard's characters. In a stack whose hyperTalkCompatible
+//   is true (MCExecContext::IsHyperTalkCompatible), numToChar and charToNum
+//   number the characters as HyperCard did, by the Mac's character set
+//   (MacRoman) on every platform, where otherwise they use the platform's,
+//   which is MacRoman only on the Mac: numToChar(165) is a bullet there, as
+//   in HyperCard, where on Windows and Linux it is a yen sign. And 13 is
+//   the return that ends a line, as in HyperCard, which ended a line with
+//   a carriage return (13) where this engine ends one with a linefeed
+//   (10): the two change places, so numToChar(13) is the return and
+//   numToChar(10) a carriage return, which this engine does not read as
+//   the end of a line, as HyperCard did not read a linefeed so
+static unichar_t MCStringsHyperTalkCharOfNum(uinteger_t p_number)
+{
+    if (p_number == 13)
+        return '\n';
+    if (p_number == 10)
+        return '\r';
+    return (unichar_t)MCUnicodeMapFromNative_MacRoman((char_t)p_number);
+}
+
+// The number of p_char in HyperCard's characters (above); one MacRoman
+//   does not have is a question mark, as one the platform's characters
+//   do not have is in other stacks
+static uinteger_t MCStringsHyperTalkNumOfChar(unichar_t p_char)
+{
+    if (p_char == '\n')
+        return 13;
+    if (p_char == '\r')
+        return 10;
+    char_t t_number;
+    if (MCUnicodeMapToNative_MacRoman(&p_char, 1, t_number))
+        return t_number;
+    return '?';
+}
+
 void MCStringsEvalNumToChar(MCExecContext &ctxt, uinteger_t p_codepoint, MCValueRef& r_character)
 {
     // Choose the correct type based on the Unicode setting of the context
@@ -139,6 +174,14 @@ void MCStringsEvalNumToChar(MCExecContext &ctxt, uinteger_t p_codepoint, MCValue
         MCAutoDataRef t_data;
         /* UNCHECKED */ MCDataCreateWithBytes((byte_t*)&t_val, 2, &t_data);
         r_character = MCValueRetain(*t_data);
+    }
+    // OXT-Beyond: HyperCard's characters in a HyperCard stack (above)
+    else if (ctxt.IsHyperTalkCompatible())
+    {
+        unichar_t t_char;
+        t_char = MCStringsHyperTalkCharOfNum(p_codepoint % 256);
+        if (!MCStringCreateWithChars(&t_char, 1, (MCStringRef&)r_character))
+            ctxt . Throw();
     }
     else
         // AL-2014-03-26: [[ Bug 11996 ]] For backwards compatibility, we must
@@ -208,6 +251,24 @@ void MCStringsEvalNumToUnicodeChar(MCExecContext &ctxt, uinteger_t p_codepoint, 
 
 void MCStringsEvalCharToNum(MCExecContext& ctxt, MCValueRef p_character, MCValueRef& r_codepoint)
 {
+    // OXT-Beyond: HyperCard's characters in a HyperCard stack (above): the
+    //   number of the first character. Bytes (data) keep their numbers
+    if (!ctxt.GetUseUnicode() && ctxt.IsHyperTalkCompatible()
+        && MCValueGetTypeCode(p_character) != kMCValueTypeCodeData)
+    {
+        MCAutoStringRef t_string;
+        if (!ctxt.ConvertToString(p_character, &t_string))
+        {
+            ctxt . Throw();
+            return;
+        }
+        if (MCStringIsEmpty(*t_string))
+            r_codepoint = MCValueRetain(kMCEmptyString);
+        else
+            /* UNCHECKED */ MCNumberCreateWithUnsignedInteger(MCStringsHyperTalkNumOfChar(MCStringGetCharAtIndex(*t_string, 0)), (MCNumberRef&)r_codepoint);
+        return;
+    }
+
 	// This function has to be backwards compatible and do the broken stuff...
     MCAutoDataRef t_data;
     ctxt.ConvertToData(p_character, &t_data);

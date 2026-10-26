@@ -63,6 +63,16 @@ normally the <Mac OS|Macintosh> <character set>; on <Unix|Unix systems>,
 this is normally <ISO 8859>; on <Windows|Windows systems>, this is
 usually Code Page 1252, a variant of <ISO 8859>.
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import Stack
+sets it for a <stack> imported from <HyperCard>, the <character set> is
+the <Mac OS|Macintosh> <character set> on every platform, as it was in
+<HyperCard>: charToNum("•") is 165 on Windows and Linux too, and a
+<character> the <Mac OS|Macintosh> <character set> does not have is 63,
+a question mark. The <return> <character> is 13 there, as in
+<HyperCard>, where in any other <stack> it is 10, and a carriage return
+is 10. Binary data, such as <numToByte> <return|returns>, keeps its
+numbers.
+
 If the useUnicode <property> is set to true, you can specify a
 double-byte <character>. If the <useUnicode> is false and you specify a
 double-byte character, the <charToNum> <function> <return|returns> the
@@ -81,9 +91,11 @@ format (function), URLDecode (function), codepointToNum (function),
 property (glossary), numeric (glossary), ASCII (glossary),
 return (glossary), Windows (glossary), character set (glossary),
 Mac OS (glossary), ISO 8859 (glossary), Unix (glossary),
+HyperCard (glossary), stack (object),
 inverse (keyword), character (keyword), integer (keyword), div (operator),
 extendKey (property), RTFText (property), HTMLText (property),
-unicodeText (property), useUnicode (property)
+unicodeText (property), useUnicode (property),
+hyperTalkCompatible (property)
 
 Tags: text processing
 

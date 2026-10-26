@@ -2399,9 +2399,23 @@ bool MCChunk::getsetprop(MCExecContext &ctxt, Properties which, MCNameRef index,
     
     if (t_obj_chunk . chunk == CT_UNDEFINED)
     {
+        // OXT-Beyond: in a HyperCard stack (hyperTalkCompatible), the id of
+        //   a card is its abbreviated id, "card id 1234", as HyperCard gave
+        //   it, so that a script that keeps it and goes back to it ("put
+        //   the id of this card into tCard" ... "go tCard") or compares it
+        //   ("if the id of this card is "card id 3058"") finds the card. The
+        //   id of a background, button or field was a number in HyperCard,
+        //   as it is here, and so is the short id of a card
+        Properties t_which = which;
+        if (p_is_get_operation && which == P_ID && !effective
+            && (index == nil || MCNameIsEmpty(index))
+            && t_obj_chunk . object -> gettype() == CT_CARD
+            && ctxt . IsHyperTalkCompatible())
+            t_which = P_ABBREV_ID;
+
         bool t_success;
         if (p_is_get_operation)
-            t_success = t_obj_chunk . object -> getprop(ctxt, t_obj_chunk . part_id, which, index, effective, r_value);
+            t_success = t_obj_chunk . object -> getprop(ctxt, t_obj_chunk . part_id, t_which, index, effective, r_value);
         else
             t_success = t_obj_chunk . object -> setprop(ctxt, t_obj_chunk . part_id, which, index, effective, r_value);
         

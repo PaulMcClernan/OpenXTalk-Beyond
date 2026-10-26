@@ -4122,11 +4122,13 @@ private function _HCSpeak pText
    return the result
 end _HCSpeak
 
--- pText as a JavaScript string literal
+-- pText as a JavaScript string literal. (Its carriage returns are
+-- numToCodepoint(13): this library runs in the imported stack, where
+-- numToChar(13) is the return, as in HyperCard)
 private function _HCJavaScriptString pText
    replace "\" with "\\" in pText
    replace quote with "\" & quote in pText
    replace return with "\n" in pText
-   replace numToChar(13) with "\r" in pText
+   replace numToCodepoint(13) with "\r" in pText
    return quote & pText & quote
 end _HCJavaScriptString

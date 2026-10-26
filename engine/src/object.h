@@ -31,6 +31,9 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 
 #include <utility>
 
+// OXT-Beyond: a handler list kept while it runs (MCObject::retirehandlers)
+struct MCRetiredHandlers;
+
 enum {
     MAC_SHADOW,
     MAC_THUMB_TOP,
@@ -629,6 +632,11 @@ protected:
 	//   requires parentScript resolution.
 	static bool s_loaded_parent_script_reference;
 
+	// OXT-Beyond: the handler lists of scripts that a HyperCard stack set
+	//   while they ran, each kept until no handler of its object runs
+	//   (retirehandlers)
+	static MCRetiredHandlers *s_retired_handlers;
+
 	static MCPropertyInfo kProperties[];
 	static MCObjectPropertyTable kPropertyTable;
     static MCPropertyInfo kModeProperties[];
@@ -919,7 +927,19 @@ public:
 	void unlockforexecution(void)
 	{
 		scriptdepth -= 1;
+		// OXT-Beyond: once no handler of this object runs, the handlers of
+		//   a script set while they ran can go (retirehandlers)
+		if (scriptdepth == 0 && s_retired_handlers != nullptr)
+			freeretiredhandlers();
 	}
+
+	// OXT-Beyond: keeps this object's handlers, which run, apart from it
+	//   until none of them runs, so that a new script can be compiled into
+	//   new ones (SetScript, in a HyperCard stack). Returns false when they
+	//   cannot be kept
+	bool retirehandlers(void);
+	// The handlers retirehandlers kept for this object, deleted
+	void freeretiredhandlers(void);
 	
 	void setparent(MCObject *newparent)
 	{
