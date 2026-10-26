@@ -22,7 +22,10 @@ script "oxt_ui_tour"
 -- title-bar, and a card that must show at once each change a script makes
 -- to its border: card-border), the Property Inspector (each section for a
 -- button, its section icons clicked with the system's mouse: inspector-tabs, the
--- Text section of a field, the Colors section of a graphic and of several
+-- Text section of a field, a field's Scrollbar width, which offers 12 and
+-- Standard and sets the width the field has when its stack is opened again
+-- (inspector-scrollbar), an image's ID, a number without the icon chooser
+-- (inspector-image-id), the Colors section of a graphic and of several
 -- objects, and the graphic's Fill gradient popup, which must open beside
 -- the Inspector and off the graphic, and a player made with the IDE and
 -- inspected, with the Player tool turned off and on again: player), the
@@ -71,7 +74,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,inspector,inspector-tabs,inspector-text,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -2214,6 +2217,112 @@ on tour_inspector_text
    get tourInspectorSection(tPI, "Text")
    tourShotStack tPI, "06-inspector-field-text"
 end tour_inspector_text
+
+-- A field's Scrollbar width in the inspector offers 12 and Standard. The
+-- engine takes 16 and 20 as one width, the look's standard, which a field
+-- opened with either gets: offered both, on macOS (tperry2x on rc.6.4)
+-- and on Windows 20 went back to 16, and on Linux both gave the GTK
+-- theme's width or stuck until the stack was opened again. 12 must set
+-- 12, and Standard the width the sample's list field opened with (16 on
+-- macOS and Windows, the theme's on Linux), from 12 and from 16 and 20 set
+-- by a script, and on a field with no scrollbar the look's 16 (20 in the
+-- Motif and Macintosh looks), which a field takes as the standard width
+-- when it shows one
+on tour_inspector_scrollbar
+   local tField, tStandard, tMarker, tPI, tEditor, tMenu, tFails, tFrom
+   put tourSample("List") into tField
+   put the scrollbarWidth of tField into tStandard
+   if the lookAndFeel is "Motif" or the lookAndFeel is "Macintosh" then
+      put 20 into tMarker
+   else
+      put 16 into tMarker
+   end if
+   tourRecord "INFO inspector-scrollbar the list field opened with" && tStandard && "in the look" && the lookAndFeel
+   put tourInspect(tField) into tPI
+   get tourInspectorSection(tPI, "Basic")
+   put tourInspectorEditor(tPI, "scrollbarWidth") into tEditor
+   if tEditor is empty then throw "the field's inspector has no Scrollbar width"
+   put the text of button "pulldown" of tEditor into tMenu
+   tourRecord "INFO inspector-scrollbar menu" && tourJoin(tMenu)
+   if tMenu is not ("12" & return & "Standard") then
+      put "the menu is" && tourJoin(tMenu) & return after tFails
+   end if
+   put tourSbPick(tEditor, tField, 1, 12, "12") after tFails
+   put tourSbPick(tEditor, tField, 2, tStandard, "Standard from 12") after tFails
+   repeat for each item tFrom in "16,20"
+      set the scrollbarWidth of tField to 12
+      set the scrollbarWidth of tField to tFrom
+      put tourSbPick(tEditor, tField, 2, tStandard, "Standard from" && the scrollbarWidth of tField) after tFails
+   end repeat
+   tourShotStack tPI, "06b-inspector-field-scrollbar"
+   put tourSample("Text") into tField
+   put tourInspect(tField) into tPI
+   get tourInspectorSection(tPI, "Basic")
+   put tourInspectorEditor(tPI, "scrollbarWidth") into tEditor
+   if tEditor is empty then throw "the inspector of a field with no scrollbar has no Scrollbar width"
+   put tourSbPick(tEditor, tField, 1, 12, "12, no scrollbar") after tFails
+   put tourSbPick(tEditor, tField, 2, tMarker, "Standard, no scrollbar") after tFails
+   tourCloseInspectors
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_inspector_scrollbar
+
+-- Chooses the item pItem of the Scrollbar width menu of the inspector's
+-- editor pEditor as a click on it does: the menu's label becomes the item,
+-- then the menu gets menuPick (MCButton::mup; setting its menuHistory sends
+-- menuPick before it changes the label, which the editor reads); empty if
+-- the field pField then has the width pWant, else a line naming pWhat with
+-- what it has. It first waits, as a person would, until the inspector
+-- shows the field's width: an editor ignores a pick of the value it holds
+-- (revInspectorEditorBehavior's editorValue), and it learns of a width a
+-- script set only when the inspector refreshes, so on CI's Linux ARM
+-- runner Standard picked straight after a script set 20 was ignored
+function tourSbPick pEditor, pField, pItem, pWant, pWhat
+   local tMenu, tGot
+   repeat 30 times
+      if the editorValue of pEditor is the scrollbarWidth of pField then exit repeat
+      tourWait 100
+   end repeat
+   put the long id of button "pulldown" of pEditor into tMenu
+   set the label of tMenu to line pItem of the text of tMenu
+   dispatch "menuPick" to tMenu with line pItem of the text of tMenu
+   tourWait 300
+   put the scrollbarWidth of pField into tGot
+   tourRecord "INFO inspector-scrollbar" && pWhat & ":" && tGot && "(shown" && the label of button "pulldown" of pEditor & ")"
+   if tGot is pWant then return empty
+   return pWhat && "gave" && tGot & ", not" && pWant & return
+end tourSbPick
+
+-- An image's ID in the inspector is a number, without the icon chooser:
+-- a picture chosen there became the image's ID, so the image was given a
+-- new ID and showed nothing (tperry2x on rc.6.4)
+on tour_inspector_image_id
+   local tDefault, tImage, tPI, tEditor, tFails
+   get tourSampleStack()
+   put the defaultStack into tDefault
+   set the defaultStack to kSample
+   lock messages
+   create image "Picture"
+   set the rect of it to "460,20,500,60"
+   put the long id of it into tImage
+   unlock messages
+   set the defaultStack to tDefault
+   put tourInspect(tImage) into tPI
+   get tourInspectorSection(tPI, "Basic")
+   put tourInspectorEditor(tPI, "id") into tEditor
+   if tEditor is empty then throw "the image's inspector has no ID"
+   tourRecord "INFO inspector-image-id the row shows" && quote & field 1 of tEditor & quote && \
+         "for the image's ID" && the short id of tImage & "; an icon chooser:" && (there is a button "icon" of tEditor)
+   if there is a button "icon" of tEditor then put "the ID has the icon chooser" & return after tFails
+   if field 1 of tEditor is not the short id of tImage then
+      put "the ID shows" && field 1 of tEditor & ", not" && the short id of tImage & return after tFails
+   end if
+   tourShotStack tPI, "06c-inspector-image-id"
+   tourCloseInspectors
+   lock messages
+   delete image "Picture" of card 1 of stack kSample
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_inspector_image_id
 
 on tour_inspector_graphic
    local tPI
