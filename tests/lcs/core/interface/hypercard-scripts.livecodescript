@@ -1893,15 +1893,13 @@ on TestHyperCardScriptsStartupExternals
          "hcIdleCursorWatch" is in the pendingMessages and there is a stack "revHyperCardIdleCursor" \
          and "revHyperCardIdleCursor" is not among the lines of the openStacks
    send "mouseUp" && q & "Hand" & q to button "Cursor" of stack tStack
-   wait 300 milliseconds with messages
-   TestAssert "IdleCursor: Hand, the watch stops", "hcIdleCursorWatch" is not in the pendingMessages
+   TestAssert "IdleCursor: Hand, the watch stops", _IdleCursorWatchStopped()
    send "mouseUp" && q & "cross" & q to button "Cursor" of stack tStack
    try
       close stack tStack
    catch tError
    end try
-   wait 300 milliseconds with messages
-   TestAssert "IdleCursor: the stack closed, the watch stops", tError is empty and "hcIdleCursorWatch" is not in the pendingMessages
+   TestAssert "IdleCursor: the stack closed, the watch stops", tError is empty and _IdleCursorWatchStopped()
    -- (deleted with messages locked, as a stack that goes when it closes is,
    -- which no handler of the library sees; a stack of its own, open as it
    -- is made, as a stack closed here may not open again in a headless
@@ -1917,12 +1915,23 @@ on TestHyperCardScriptsStartupExternals
    send "mouseUp" && q & "cross" & q to button "Cursor" of stack tGone
    put "hcIdleCursorWatch" is in the pendingMessages into tExpected
    _Close tGone
-   wait 300 milliseconds with messages
-   TestAssert "IdleCursor: the stack deleted, the watch stops", tExpected and "hcIdleCursorWatch" is not in the pendingMessages
+   TestAssert "IdleCursor: the stack deleted, the watch stops", tExpected and _IdleCursorWatchStopped()
    _Close tStack
    _Close "revHyperCardIdleCursor"
    _Close "Answer Dialog"
 end TestHyperCardScriptsStartupExternals
+
+-- Whether IdleCursor's watch stops, waiting with messages for it to run
+-- (five times a second) for up to three seconds: a busy machine can run
+-- a timer late, and macOS's CI did, more than 300 milliseconds late
+private function _IdleCursorWatchStopped
+   local i
+   repeat with i = 1 to 30
+      if "hcIdleCursorWatch" is not in the pendingMessages then return true
+      wait 100 milliseconds with messages
+   end repeat
+   return "hcIdleCursorWatch" is not in the pendingMessages
+end _IdleCursorWatchStopped
 
 on TestHyperCardScriptsLibraryMessages
    -- HyperCard's messages sent to an object with no handler for them end
