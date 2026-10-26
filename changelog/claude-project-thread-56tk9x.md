@@ -1,0 +1,1 @@
+- History, README and the codebase map: OpenXTalk DPE, Paul McClernan's "DON'T PANIC!" Edition, the free continuation of LiveCode Community from September 2021 until OpenXTalk Lite, with its dates and what OpenXTalk Lite and OXT-Beyond owe it

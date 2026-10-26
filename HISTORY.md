@@ -29,10 +29,26 @@ have had no changes since July 2021 and are archived. The `develop`
 branch of the engine had moved on to 9.7.0-dp-1.
 
 The [OpenXTalk community](https://www.openxtalk.org) formed to keep a
-free and open xTalk available; Paul McClernan's OpenXTalk DPE ("Don't
-Panic Edition") is its larger edition. Some OpenXTalk Lite files (the
-debranded guides and the dictionary database, dated 2022) appear to
-come from that earlier OpenXTalk debranding work.
+free and open xTalk available. Its first edition, and its larger one, is
+**Paul McClernan**'s (OpenXTalkPaul) OpenXTalk DPE, the "DON'T PANIC!
+Edition"
+([OpenXTalk-org/OpenXtalk-IDE-DontPanicEdition](https://github.com/OpenXTalk-org/OpenXtalk-IDE-DontPanicEdition),
+a fork of livecode/livecode-ide, with the engine in a repository of its
+own). Paul began it a week after the Community edition ended: its first
+OpenXTalk commits, which put the "DontPanic" splash screen in and took
+out the commercial editions' skins, are dated 7 September 2021. It was
+the free, GPL continuation of LiveCode Community 9.6.3 for the two years
+before OpenXTalk Lite. Its releases are tagged 1.963.1-OXT-RC3 (tagged 4
+November 2022) and 1.963.1-OXT-RC4 (tagged 7 August 2023, released on 1
+September 2023, the project's second anniversary, by its release notes),
+with a General Music library for MIDI, a macOS AppleImage library, SVG
+icon libraries with a Glyph Browser, and community widgets; Paul went on
+committing to it into 2026. OpenXTalk Lite (below) and OXT-Beyond owe
+it a great deal: the `.oxtstack` format, the Extension Manager, the
+macOS Native Tools library and much of Paul's other work that they carry
+came from or through DPE, and some OpenXTalk Lite files (the debranded
+guides and the dictionary database, dated 2022) appear to come from the
+same debranding work.
 
 ## OpenXTalk Lite
 
