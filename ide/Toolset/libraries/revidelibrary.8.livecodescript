@@ -7684,6 +7684,12 @@ command __revIDEShowHyperCardSummary pStack, pImportLog
    end if
    set the title of stack tName to revIDELocalise("HyperCard Import:") && the short name of pStack
    set the text of field "Summary" of stack tName to tText
+   -- OXT-Beyond: made open and invisible, the window stayed invisible, as
+   -- modeless does not show an invisible stack: it is closed (still in
+   -- memory) and made visible, and opens in the middle of the screen
+   if the mode of stack tName is not 0 then close stack tName
+   set the visible of stack tName to true
+   set the loc of stack tName to the screenLoc
    set the defaultStack to tDefault
    unlock messages
    modeless stack tName
