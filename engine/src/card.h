@@ -96,6 +96,12 @@ public:
 	virtual void paste(void);
 
 	virtual Exec_stat handle(Handler_type, MCNameRef, MCParameter *, MCObject *pass_from);
+	// OXT-Beyond: HyperCard's dynamic path within a stack whose
+	//   hyperTalkCompatible is true (MCStack::handle): this card, the card a
+	//   handler went to, and those of its backgrounds that the message has
+	//   not been through on p_static_card, the card it came up from (nil for
+	//   a message sent to the stack itself)
+	Exec_stat handledynamic(Handler_type, MCNameRef, MCParameter *, MCCard *p_static_card);
 	virtual void recompute();
 	
     virtual void toolchanged(Tool p_new_tool);

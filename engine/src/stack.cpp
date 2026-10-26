@@ -1633,10 +1633,26 @@ Exec_stat MCStack::handle(Handler_type htype, MCNameRef message, MCParameter *pa
 	// object.
 	Exec_stat stat;
 	stat = ES_NOT_HANDLED;
-	bool t_dynamic_after;
+	bool t_dynamic_after, t_dynamic_card;
 	t_dynamic_after = false;
+	t_dynamic_card = false;
+	MCCardHandle t_static_card;
 	if (!MCdynamicpath || MCdynamiccard->getparent() == this)
+	{
+		// OXT-Beyond: a message on its way up from a card of this stack, or
+		//   sent to the stack itself, goes on to the card of this stack that
+		//   a handler went to (below). The card it came up from, if it came
+		//   from one, is the card the message has already been through.
+		if (MCdynamicpath && ishypertalkcompatible() &&
+			(passing_object == this ||
+			 (passing_object != nil && passing_object -> gettype() == CT_CARD)))
+		{
+			t_dynamic_card = true;
+			if (passing_object != this)
+				t_static_card = static_cast<MCCard *>(passing_object);
+		}
 		stat = handleself(htype, message, params);
+	}
 	else if (passing_object != nil && ishypertalkcompatible() && !MCStackIsOnDynamicPath(this))
 	{
 		// OXT-Beyond: in HyperCard the dynamic path came after the stack of
@@ -1695,6 +1711,29 @@ Exec_stat MCStack::handle(Handler_type htype, MCNameRef message, MCParameter *pa
 			if (stat == ES_ERROR && !MCerrorptr)
 				MCerrorptr = this;
 			return stat;
+		}
+	}
+
+	// OXT-Beyond: HyperCard's dynamic path also took in a card of the
+	//   handler's own stack that it had gone to: a message that reached the
+	//   stack unhandled went on to the card the handler had gone to and
+	//   those of that card's backgrounds it had not been through
+	//   (MCCard::handledynamic), and then to Home, no object getting it
+	//   twice. So in a stack whose hyperTalkCompatible is true, it goes on so
+	//   here, and the dynamic path is done. Otherwise, with a home stack (in
+	//   the IDE), Home sends it on to the card gone to, which sends it
+	//   through that card's backgrounds and this stack a second time, and
+	//   without one (in a standalone), it never reaches that card at all.
+	if (t_dynamic_card && (stat == ES_PASS || stat == ES_NOT_HANDLED))
+	{
+		MCdynamicpath = False;
+		if (MCdynamiccard.IsValid())
+		{
+			Exec_stat oldstat = stat;
+			stat = MCdynamiccard->handledynamic(htype, message, params,
+			                                    t_static_card.IsValid() ? t_static_card.Get() : nil);
+			if (oldstat == ES_PASS && stat == ES_NOT_HANDLED)
+				stat = ES_PASS;
 		}
 	}
 

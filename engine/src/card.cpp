@@ -1307,6 +1307,59 @@ Exec_stat MCCard::handle(Handler_type htype, MCNameRef mess, MCParameter *params
 	return stat;
 }
 
+Exec_stat MCCard::handledynamic(Handler_type htype, MCNameRef mess, MCParameter *params, MCCard *p_static_card)
+{
+	if (!opened)
+		clean();
+
+	// In HyperCard the dynamic path was the card a handler had gone to, its
+	//   background and its stack, after the static path's stack, and no
+	//   object got the message twice: this card if the message did not come
+	//   up from it, and then, as MCCard::handle passes it, each background
+	//   of this card that the card it came up from does not have.
+	Exec_stat stat;
+	stat = ES_NOT_HANDLED;
+	if (p_static_card != this)
+		stat = handleself(htype, mess, params);
+
+	bool t_card_passed;
+	t_card_passed = stat == ES_PASS;
+	if (objptrs != NULL && (stat == ES_NOT_HANDLED || stat == ES_PASS))
+	{
+		bool t_has_passed;
+		t_has_passed = false;
+
+		MCObjptr *tptr = objptrs->prev();
+		do
+		{
+			MCGroup *optr = tptr->getrefasgroup();
+			if (optr != nil && optr -> isbackground() &&
+				(p_static_card == nil || p_static_card -> getobjptrforcontrol(optr) == nil))
+			{
+				stat = optr->handle(htype, mess, params, nil);
+				if (stat == ES_PASS)
+					t_has_passed = true;
+			}
+			tptr = tptr->prev();
+		}
+		while (tptr != objptrs->prev() && (stat == ES_PASS || stat == ES_NOT_HANDLED));
+
+		if (!opened)
+			clear();
+
+		if (t_has_passed)
+			stat = ES_PASS;
+	}
+
+	if (t_card_passed && stat == ES_NOT_HANDLED)
+		stat = ES_PASS;
+
+	if (stat == ES_ERROR && !MCerrorptr)
+		MCerrorptr = this;
+
+	return stat;
+}
+
 void MCCard::recompute()
 {
 	if (objptrs != NULL)

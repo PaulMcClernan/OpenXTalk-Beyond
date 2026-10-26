@@ -7,9 +7,11 @@ the background, a handler can be called doMenu, and doMenu is a message
 before it runs, even while messages are locked, as in HyperCard;
 lockRecent keeps no card of the stack out of the recent cards that go
 back goes through; a handler that went to another stack still reaches
-its own stack's script before the dynamic path; and arithmetic that
-gives no number goes on with HyperCard's INF or NAN instead of stopping
-the script. Each test checks the stack with the property off too.
+its own stack's script before the dynamic path, and one that went to
+another card of its own stack reaches that card after it; and arithmetic
+that gives no number goes on with HyperCard's INF or NAN instead of
+stopping the script. Each test checks the stack with the property off
+too.
 */
 
 local sStack
@@ -275,6 +277,92 @@ on TestHyperTalkCompatibleDynamicPath
    end if
    _DeleteStack
 end TestHyperTalkCompatibleDynamicPath
+
+-- The test's stack with a second card named "two": the background "BG" on
+-- both cards, a background "BG2" on card "two" alone, and a script on
+-- each of them that logs what it is and passes "hcBoth" on. Button "C" on
+-- card 1 goes to card "two" and then sends "hcCard", which only card
+-- "two"'s script has, "hcBoth", which every script has, and "hcKick",
+-- which the stack's script has and which calls "hcCard" from the stack:
+-- what the scripts logged, "no" and the message for one that found no
+-- handler, or empty if the button did not get to card "two"
+private function _AfterGoToCard
+   global gHCOrder
+   local tLog, tScript, tMessage
+   set the defaultStack to sStack
+   set the dynamicPaths of stack sStack to true
+   create card
+   set the name of card 2 of stack sStack to "two"
+   go card "two" of stack sStack
+   -- (the backgroundBehavior puts "BG" on a new card by itself)
+   if there is not a group "BG" of card "two" of stack sStack then \
+         place group "BG" onto card "two" of stack sStack
+   create group "BG2"
+   set the backgroundBehavior of group "BG2" of card "two" of stack sStack to true
+   put "on hcLog pWhat" & return & "global gHCOrder" & return \
+         & "put pWhat & comma after gHCOrder" & return & "end hcLog" into tLog
+   set the script of stack sStack to "on hcBoth" & return & "hcLog " & quote & "stack" & quote & return \
+         & "pass hcBoth" & return & "end hcBoth" & return & "on hcKick" & return \
+         & "hcLog " & quote & "kick" & quote & return & "hcCard" & return & "end hcKick" & return & tLog
+   set the script of card 1 of stack sStack to "on hcBoth" & return \
+         & "hcLog " & quote & "card1" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   set the script of group "BG" of stack sStack to "on hcBoth" & return \
+         & "hcLog " & quote & "bg" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   set the script of group "BG2" of card "two" of stack sStack to "on hcBoth" & return \
+         & "hcLog " & quote & "bg2" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   set the script of card "two" of stack sStack to "on hcCard" & return \
+         & "hcLog " & quote & "card2" & quote & return & "end hcCard" & return & "on hcBoth" & return \
+         & "hcLog " & quote & "card2" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   go card 1 of stack sStack
+   put "on mouseUp" & return & "global gHCOrder" & return & "local tError" & return & "go card 2" & return \
+         & "if the short name of this card is not " & quote & "two" & quote & " then exit mouseUp" & return into tScript
+   repeat for each item tMessage in "hcCard,hcBoth,hcKick"
+      put "try" & return & tMessage & return & "catch tError" & return \
+            & "put " & quote & "no" && tMessage & comma & quote & " after gHCOrder" & return \
+            & "end try" & return after tScript
+   end repeat
+   put "end mouseUp" after tScript
+   set the script of button "C" of card 1 of stack sStack to tScript
+   put empty into gHCOrder
+   send "mouseUp" to button "C" of card 1 of stack sStack
+   return gHCOrder
+end _AfterGoToCard
+
+on TestHyperTalkCompatibleDynamicCardOff
+   local tOrder
+   _MakeStack false
+   put _AfterGoToCard() into tOrder
+   if tOrder is empty then
+      TestSkip "off: the dynamic path after a go to another card", "the go to the other card did not get there"
+   else if the environment begins with "development" then
+      -- the home stack sends the message on to the card gone to, which
+      -- sends it through that card's backgrounds and the stack a second time
+      TestAssert "off: after a go to another card, a message still takes the static path first", \
+            tOrder contains "card1,bg,stack,"
+   else
+      TestAssert "off: with no home stack, after a go to another card a message never reaches the card gone to", \
+            tOrder is "no hcCard,card1,bg,stack,no hcBoth,kick,no hcKick,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicCardOff
+
+-- HyperCard's dynamic path also took in a card of the handler's own stack
+-- that it had gone to: a message that reached the stack unhandled went on
+-- to the card gone to and the backgrounds of that card it had not been
+-- through, and then to Home, no object getting it twice
+on TestHyperTalkCompatibleDynamicCard
+   local tOrder
+   _MakeStack true
+   put _AfterGoToCard() into tOrder
+   if tOrder is empty then
+      TestSkip "on: the dynamic path after a go to another card", "the go to the other card did not get there"
+   else
+      TestAssert "the background is on both cards", there is a group "BG" of card "two" of stack sStack
+      TestAssert "on: after a go to another card, a message reaches that card and its own backgrounds after the stack, once each", \
+            tOrder is "card2,card1,bg,stack,card2,bg2,no hcBoth,kick,card2,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicCard
 
 on TestHyperTalkCompatibleSubstack
    _MakeStack true
