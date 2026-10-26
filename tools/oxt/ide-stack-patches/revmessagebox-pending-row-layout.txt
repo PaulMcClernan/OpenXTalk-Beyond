@@ -1,0 +1,25 @@
+# Message Box, Pending Messages (openxtalk.org p=25450, tperry2x; LC 11
+# has it too, bwmilby): every row after the first showed its message cut
+# off at the template's 100 pixels until the Message Box was resized. The
+# row behavior's LayoutControl named button "remove selected", fields
+# "scriptLines", "behaviorScriptLines" and "message" and graphic
+# "background" without "of me", so the engine looked them up by name
+# outside the row, through the defaultStack (the user's stack when the
+# Message Box is opened from the menu), and the row's own message field was
+# not the one sized; a resize, with the Message Box the defaultStack, laid
+# the rows out again correctly.
+# Every name is now the row's own, as in the stacksRow and frontScriptsRow
+# behaviors (revmessagebox-pending-row-mouseup.txt does the same for the
+# row's mouseUp).
+file: Toolset/palettes/message box/revmessagebox.8.rev
+object: button "pendingMessagesRow Behavior" of card "templates"
+replace:
+|   put (2*(tMargin + tPadding) + the width of button "remove selected" + the width of field "scriptLines") into tWidth|
+|   if the text of field "behaviorScriptLines" is "-"|
+|   then set the width of field "message" to (the width of graphic "background" - tWidth)|
+|   else set the width of field "message" to (the width of graphic "background" - the width of field "behaviorScriptLines" - tPadding - tWidth)|
+with:
+|   put (2*(tMargin + tPadding) + the width of button "remove selected" of me + the width of field "scriptLines" of me) into tWidth|
+|   if the text of field "behaviorScriptLines" of me is "-"|
+|   then set the width of field "message" of me to (the width of graphic "background" of me - tWidth)|
+|   else set the width of field "message" of me to (the width of graphic "background" of me - the width of field "behaviorScriptLines" of me - tPadding - tWidth)|

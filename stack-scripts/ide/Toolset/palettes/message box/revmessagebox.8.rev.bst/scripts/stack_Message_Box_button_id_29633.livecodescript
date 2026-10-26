@@ -40,10 +40,10 @@ on LayoutControl pControlRect
    set the width of field "behaviorScriptLines" of me to the formattedWidth of field "behaviorScriptLines" of me
    set the width of button "remove selected" of me to the formattedWidth of button "remove selected" of me
    
-   put (2*(tMargin + tPadding) + the width of button "remove selected" + the width of field "scriptLines") into tWidth
-   if the text of field "behaviorScriptLines" is "-"
-   then set the width of field "message" to (the width of graphic "background" - tWidth)
-   else set the width of field "message" to (the width of graphic "background" - the width of field "behaviorScriptLines" - tPadding - tWidth)
+   put (2*(tMargin + tPadding) + the width of button "remove selected" of me + the width of field "scriptLines" of me) into tWidth
+   if the text of field "behaviorScriptLines" of me is "-"
+   then set the width of field "message" of me to (the width of graphic "background" of me - tWidth)
+   else set the width of field "message" of me to (the width of graphic "background" of me - the width of field "behaviorScriptLines" of me - tPadding - tWidth)
    
    put the loc of me into tLoc
    put item 1 of pControlRect into item 1 of tLoc
@@ -85,14 +85,14 @@ on mouseUp
    switch the short name of the target
       case "scriptLines"
          local tMessage
-         put the text of field "message" into tMessage
+         put the text of field "message" of me into tMessage
          edit the script of (item 4 of tMessage)
          break
       case "behaviorScriptLines"
-         edit the script of the behavior of (item 4 of the text of field "message")
+         edit the script of the behavior of (item 4 of the text of field "message" of me)
          break
       case "remove selected"
-         cancel item 1 of the text of field "message"
+         cancel item 1 of the text of field "message" of me
          revIDEPendingMessagesRefresh
          break
       default

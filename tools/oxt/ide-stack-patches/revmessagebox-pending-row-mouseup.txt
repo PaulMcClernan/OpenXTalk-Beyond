@@ -1,0 +1,25 @@
+# Message Box, Pending Messages: the row behavior's mouseUp read field
+# "message" without "of me", so the message a row's buttons cancel or
+# whose script they edit was looked up on the defaultStack's card, not
+# taken from the row clicked (see revmessagebox-pending-row-layout.txt,
+# openxtalk.org p=25450). It is now the row's own.
+file: Toolset/palettes/message box/revmessagebox.8.rev
+object: button "pendingMessagesRow Behavior" of card "templates"
+replace:
+|         put the text of field "message" into tMessage|
+|         edit the script of (item 4 of tMessage)|
+|         break|
+|      case "behaviorScriptLines"|
+|         edit the script of the behavior of (item 4 of the text of field "message")|
+|         break|
+|      case "remove selected"|
+|         cancel item 1 of the text of field "message"|
+with:
+|         put the text of field "message" of me into tMessage|
+|         edit the script of (item 4 of tMessage)|
+|         break|
+|      case "behaviorScriptLines"|
+|         edit the script of the behavior of (item 4 of the text of field "message" of me)|
+|         break|
+|      case "remove selected"|
+|         cancel item 1 of the text of field "message" of me|
