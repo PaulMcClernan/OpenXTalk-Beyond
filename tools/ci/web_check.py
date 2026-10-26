@@ -277,10 +277,16 @@ PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
 # Emscripten's IDBFS (engine/src/em-system.js), which stores each file
 # under its path in the object store FILE_DATA of an IndexedDB database
 # named after the folder; this reads one file's bytes from there as text,
-# or null.
+# or null. It never makes the database: opened without a version, a
+# database that is not there yet is made at version 1, and the engine's
+# IDBFS, opening it at version 21 a moment later, then upgrades it while
+# this poll may still hold it open (the race #191 suspected of WebKit's lost
+# pages). Aborting the upgrade leaves no database behind, and the poll
+# answers null as it does for a database without the file.
 PROBE_HOME_DATABASE = ('/openxtalk/Documents/probe.db', 'kept between visits')
 STORED_FILE_JS = '''([database, path]) => new Promise(resolve => {
     var request = indexedDB.open(database);
+    request.onupgradeneeded = () => request.transaction.abort();
     request.onerror = () => resolve(null);
     request.onsuccess = () => {
         var db = request.result;

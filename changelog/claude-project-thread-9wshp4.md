@@ -1,0 +1,1 @@
+- Web runtime check: reading the browser's storage no longer makes /openxtalk's database before the engine does, a race with the engine's upgrade of it that WebKit sometimes lost its page under (#191)
