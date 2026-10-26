@@ -92,7 +92,17 @@ script "revHyperCardScriptLibrary"
 -- ("show cd fld help", field 15 here), in a script that compiles too.
 -- T45 takes HyperCard's Home stack named but not gone to ("set the script
 -- of stack "Home" to tScript"), which here is the IDE's stack "home", to
--- the library's hcHome(), in a script that compiles too.
+-- the library's hcHome(), in a script that compiles too. T46 takes
+-- HyperCard's windows, in a script that compiles too: where a window is,
+-- which HyperCard gave by its top left, on the screen for a card window
+-- ("set the loc of card window to 0,20") and from the card window's top
+-- left for every other (the message box, a palette, a picture: "the loc
+-- of window "Tools Palette"", "show msg at 15,300"), and this engine by
+-- a stack's centre on the screen; "show" and "hide card window", which
+-- this engine does nothing for; HyperCard's own windows named in quotes
+-- ("the visible of window "Scroll"") and the watchers shown and hidden
+-- ("show variable watcher"); and the message box's properties without
+-- "the" ("if visible of msg").
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -188,6 +198,16 @@ constant kWindowProperties = "scale scroll hilitedbutton zoom dithering globallo
 
 -- The properties of the message box that scripts read and set (T28)
 constant kMessageBoxProperties = "visible loc location rect rectangle top left bottom right width height topleft bottomright textfont textsize textstyle textalign"
+
+-- HyperCard's own windows by the names scripts gave them in quotes
+-- ("the visible of window "Scroll""), which are no stacks here (T46);
+-- the library's kHCOwnWindows
+constant kHCOwnWindows = "tool,tools,pattern,patterns,scroll,fatbits,navigator,variable watcher,message watcher"
+
+-- A window's place, which HyperCard gave from the card window's top left
+-- for every window but a card window (T46; the library's kHCPlaces, and
+-- the globalLoc and globalRect, its place on the screen)
+constant kWindowPlaces = "loc location rect rectangle topleft bottomright top left bottom right globalloc globalrect"
 
 -- the words a "go" names its destination with, as against an expression
 -- whose value is the destination (T25)
@@ -1830,7 +1850,7 @@ end _RewriteLine
 -- T4, T6, T7, T9, T10, T11: phrases, matched on tokens
 private function _PhraseRules pLine
    local tTokens, tCode, tCount, i, tIdx, tWords, tItem, n, tWord, tNext, tNext2, tPrev
-   local tFirstWord
+   local tFirstWord, tAt
 
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -1952,11 +1972,19 @@ private function _PhraseRules pLine
       end if
       -- the card window
       if tWord is among the words of "card cd" and tNext is "window" then
-         if tPrev is "the" then
-            _Replace tTokens, tIdx, i - 1, i + 1, "this stack"
-         else
-            _Replace tTokens, tIdx, i, i + 1, "this stack"
+         put i into tAt
+         if tPrev is "the" then subtract 1 from tAt
+         -- (show and hide card window go to the library's hcWindow, which
+         -- _ShowHide makes: T46)
+         if tAt > 1 and _T(tTokens, tIdx[tAt - 1]) is among the words of "show hide" \
+               and _StatementWord(tTokens, tIdx, tAt - 1) is _T(tTokens, tIdx[tAt - 1]) then next repeat
+         -- T46: HyperCard read and set a card window's location by its
+         -- top left on the screen, and this engine a stack's by its centre
+         if tAt > 2 and _T(tTokens, tIdx[tAt - 1]) is "of" and _T(tTokens, tIdx[tAt - 2]) is among the words of "loc location" then
+            put "topLeft" into tTokens[tIdx[tAt - 2]]["t"]
+            _Fire "T46 HyperCard's windows"
          end if
+         _Replace tTokens, tIdx, tAt, i + 1, "this stack"
          _Fire "T11 HyperCard object words"
          next repeat
       end if
@@ -3370,7 +3398,7 @@ private function _MessageBoxProperties pLine
       add 1 to n
       put tItem into tIdx[n]
    end repeat
-   repeat with i = n - 3 down to 1
+   repeat with i = n - 2 down to 1
       if _T(tTokens, tIdx[i]) is "the" and _T(tTokens, tIdx[i - 1]) is not "set" \
             and _T(tTokens, tIdx[i + 1]) is among the words of kMessageBoxProperties \
             and _T(tTokens, tIdx[i + 2]) is "of" then
@@ -3378,6 +3406,16 @@ private function _MessageBoxProperties pLine
          if tRef > 0 then
             _Replace tTokens, tIdx, i, i + 2 + tRef, "hcMessageBox(" & quote & _T(tTokens, tIdx[i + 1]) & quote & ")"
             _Fire "T28 message box properties"
+            put true into tChanged
+         end if
+      else if _T(tTokens, tIdx[i]) is among the words of kMessageBoxProperties and _T(tTokens, tIdx[i + 1]) is "of" \
+            and _T(tTokens, tIdx[i - 1]) is not among the words of "the set" then
+         -- T46: and without "the" ("if visible of msg", "item 2 of loc
+         -- of msg")
+         put _MessageBoxRef(tTokens, tIdx, i + 2) into tRef
+         if tRef > 0 then
+            _Replace tTokens, tIdx, i, i + 1 + tRef, "hcMessageBox(" & quote & _T(tTokens, tIdx[i]) & quote & ")"
+            _Fire "T46 HyperCard's windows"
             put true into tChanged
          end if
       end if
@@ -3402,9 +3440,10 @@ end _SetMessageBox
 -- T28: the properties of HyperCard's own windows ("the visible of tool
 -- window", "set the visible of the variable watcher to true"), which
 -- this engine does not have: what a script sets reads back
--- (hcWindowProperty and hcSetWindow in the library)
+-- (hcWindowProperty and hcSetWindow in the library). T46: and any
+-- window's place, which the library gives as HyperCard did
 private function _HyperCardWindows pLine
-   local tTokens, tCode, tIdx, n, tItem, i, j, k, tStart, tProperty, tName, tEnd
+   local tTokens, tCode, tIdx, n, tItem, i, j, k, tStart, tProperty, tName, tEnd, tSet
    if "window" is not in pLine and "watcher" is not in pLine then return pLine
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -3417,33 +3456,85 @@ private function _HyperCardWindows pLine
       if _T(tTokens, tIdx[i]) is not "of" or tTokens[tIdx[i - 1]]["k"] is not "w" then next repeat
       put i + 1 into j
       if _T(tTokens, tIdx[j]) is "the" then add 1 to j
-      put empty into tName
-      if _T(tTokens, tIdx[j]) is among the words of "tool tools pattern patterns scroll fatbits navigator" and _T(tTokens, tIdx[j + 1]) is "window" then
-         put _T(tTokens, tIdx[j]) into tName
-      else if _T(tTokens, tIdx[j]) is among the words of "variable message" and _T(tTokens, tIdx[j + 1]) is "watcher" then
-         put _T(tTokens, tIdx[j]) && "watcher" into tName
-      end if
-      if tName is empty then next repeat
-      put j + 1 into k
       put _T(tTokens, tIdx[i - 1]) into tProperty
       put i - 1 into tStart
       if _T(tTokens, tIdx[tStart - 1]) is "the" then subtract 1 from tStart
-      _Fire "T28 message box properties"
-      if _T(tTokens, tIdx[tStart - 1]) is "set" and (tStart = 2 or _T(tTokens, tIdx[tStart - 2]) is among the words of "then else") \
-            and _T(tTokens, tIdx[k + 1]) is "to" and k + 1 < n then
+      put _T(tTokens, tIdx[tStart - 1]) is "set" and (tStart = 2 or _T(tTokens, tIdx[tStart - 2]) is among the words of "then else") into tSet
+      -- (tName: the window's name in quotes, or T46's window; k: its
+      -- last token)
+      put empty into tName
+      put j + 1 into k
+      if _T(tTokens, tIdx[j]) is among the words of "tool tools pattern patterns scroll fatbits navigator" and _T(tTokens, tIdx[j + 1]) is "window" then
+         put quote & _T(tTokens, tIdx[j]) & quote into tName
+         _Fire "T28 message box properties"
+      else if _T(tTokens, tIdx[j]) is among the words of "variable message" and _T(tTokens, tIdx[j + 1]) is "watcher" then
+         put quote & _T(tTokens, tIdx[j]) && "watcher" & quote into tName
+         _Fire "T28 message box properties"
+      else if _T(tTokens, tIdx[j]) is "window" and tTokens[tIdx[j + 1]]["k"] is "s" \
+            and _Lower(char 2 to -2 of tTokens[tIdx[j + 1]]["t"]) is among the items of kHCOwnWindows then
+         -- T46: one of them named in quotes ("the visible of window
+         -- "Scroll""), which here would be a stack
+         put tTokens[tIdx[j + 1]]["t"] into tName
+         _Fire "T46 HyperCard's windows"
+      else if _T(tTokens, tIdx[j]) is "window" and j < n and _MessageBoxRef(tTokens, tIdx, j) = 0 \
+            and tProperty is among the words of kWindowPlaces and not (tSet and tProperty is among the words of "globalloc globalrect") then
+         -- T46: a window's place, which HyperCard gave from the card
+         -- window's top left for every window but a card window, and
+         -- this engine gives a stack's on the screen, its loc its centre:
+         -- the library's, which finds which window it is. (T26 sets a
+         -- window's globalLoc and globalRect)
+         put _WindowRef(tTokens, tIdx, j + 1, n) into k
+         if k is empty then next repeat
+         if k = j + 1 then
+            put _PlainName(tTokens, tIdx, k, k, false) into tName
+         else
+            put _Span(tTokens, tIdx, j + 1, k) into tName
+         end if
+         _Fire "T46 HyperCard's windows"
+      end if
+      if tName is empty then next repeat
+      if tSet and _T(tTokens, tIdx[k + 1]) is "to" and k + 1 < n then
          put _FindWord(tTokens, tIdx, k + 2, n, "else", empty) into tEnd
          if tEnd is empty then
             put n into tEnd
          else
             subtract 1 from tEnd
          end if
-         _Replace tTokens, tIdx, tStart - 1, tEnd, "hcSetWindow" && quote & tProperty & quote & comma && quote & tName & quote & comma && _HyperCardWindows(_Span(tTokens, tIdx, k + 2, tEnd))
-         return _Join(tTokens)
+         _Replace tTokens, tIdx, tStart - 1, tEnd, "hcSetWindow" && quote & tProperty & quote & comma && tName & comma && _HyperCardWindows(_Span(tTokens, tIdx, k + 2, tEnd))
+         -- (and what follows an else)
+         return _HyperCardWindows(_Join(tTokens))
       end if
-      _Replace tTokens, tIdx, tStart, k, "hcWindowProperty(" & quote & tProperty & quote & comma && quote & tName & quote & ")"
+      _Replace tTokens, tIdx, tStart, k, "hcWindowProperty(" & quote & tProperty & quote & comma && tName & ")"
    end repeat
    return _Join(tTokens)
 end _HyperCardWindows
+
+-- T46: the last code token of the window named from pFrom, in a line's
+-- code tokens to pTo: one word (a variable, or a name not in quotes) that
+-- is no part of a longer expression, a name in quotes, or an expression
+-- in parentheses; empty for another (window id 3, window 2, which this
+-- engine finds no window by)
+private function _WindowRef pTokens, pIdx, pFrom, pTo
+   local tDepth, j
+   if pFrom > pTo then return empty
+   if pTokens[pIdx[pFrom]]["k"] is "s" then return pFrom
+   if pTokens[pIdx[pFrom]]["k"] is "w" then
+      if _T(pTokens, pIdx[pFrom]) is among the words of kNotPlain or _T(pTokens, pIdx[pFrom]) is among the words of "id to into then else" \
+            or _T(pTokens, pIdx[pFrom]) is among the words of "item line word char character" then return empty
+      if pFrom < pTo and (_T(pTokens, pIdx[pFrom + 1]) is among the words of "of (" or pTokens[pIdx[pFrom + 1]]["k"] is "n") then return empty
+      return pFrom
+   end if
+   if pTokens[pIdx[pFrom]]["t"] is not "(" then return empty
+   put 0 into tDepth
+   repeat with j = pFrom to pTo
+      if pTokens[pIdx[j]]["t"] is "(" then add 1 to tDepth
+      if pTokens[pIdx[j]]["t"] is ")" then
+         subtract 1 from tDepth
+         if tDepth = 0 then return j
+      end if
+   end repeat
+   return empty
+end _WindowRef
 
 -- T29: HyperCard, the application, as an object: "the long name of
 -- HyperCard" (its path, which scripts take apart for the folder of their
@@ -3778,9 +3869,13 @@ end _SetCursor
 -- T19: show and hide card picture, background picture (which this engine
 -- reads as a card named "picture"); T21: show, hide and close window,
 -- and HyperCard's own windows (the scroll window, the tool window...),
--- which are not stacks here
+-- which are not stacks here; T46: show and hide card window, which this
+-- engine does nothing for ("show card window at 0,0" stops with an
+-- error), and the message box and HyperCard's own windows shown at a
+-- place, which this engine shows where they were (the library puts a
+-- window shown at a place where HyperCard did)
 private function _ShowHide pTokens, pIdx, pAt, pEnd
-   local j, tVerb, tWhich, tShow, tLast
+   local j, tVerb, tWhich, tShow, tLast, tRef
    put _T(pTokens, pIdx[pAt]) into tVerb
    put pAt + 1 into j
    if _T(pTokens, pIdx[j]) is "the" then add 1 to j
@@ -3794,7 +3889,35 @@ private function _ShowHide pTokens, pIdx, pAt, pEnd
       if _T(pTokens, pIdx[j + 2]) is not "of" or j + 2 = pEnd then return empty
       return "hcShowPicture" && quote & tWhich & quote & comma && tShow & comma && "the long id of" && _Span(pTokens, pIdx, j + 3, pEnd)
    end if
+   if tVerb is not "close" and _T(pTokens, pIdx[j]) is among the words of "card cd" and _T(pTokens, pIdx[j + 1]) is "window" then
+      if j + 1 = pEnd then
+         _Fire "T46 HyperCard's windows"
+         return "hcWindow" && quote & tVerb & quote & comma && quote & "card window" & quote
+      end if
+      if tVerb is not "show" or _T(pTokens, pIdx[j + 2]) is not "at" or j + 2 = pEnd then return empty
+      _Fire "T46 HyperCard's windows"
+      return "hcWindow" && quote & "show" & quote & comma && quote & "card window" & quote & comma && _Span(pTokens, pIdx, j + 3, pEnd)
+   end if
+   -- (T46: the variable and message watchers, which are not here either)
+   if _T(pTokens, pIdx[j]) is among the words of "variable message" and _T(pTokens, pIdx[j + 1]) is "watcher" then
+      if j + 1 = pEnd then
+         _Fire "T46 HyperCard's windows"
+         return "hcWindow" && quote & tVerb & quote & comma && quote & _T(pTokens, pIdx[j]) && "watcher" & quote
+      end if
+      if tVerb is "show" and _T(pTokens, pIdx[j + 2]) is "at" and j + 2 < pEnd then
+         _Fire "T46 HyperCard's windows"
+         return "hcWindow" && quote & "show" & quote & comma && quote & _T(pTokens, pIdx[j]) && "watcher" & quote & comma && _Span(pTokens, pIdx, j + 3, pEnd)
+      end if
+      return empty
+   end if
    put pAt + 1 into j
+   if tVerb is "show" and _T(pTokens, pIdx[j]) is not "window" then
+      put _MessageBoxRef(pTokens, pIdx, j) into tRef
+      if tRef > 0 and _T(pTokens, pIdx[j + tRef]) is "at" and j + tRef < pEnd then
+         _Fire "T46 HyperCard's windows"
+         return "hcWindow" && quote & "show" & quote & comma && quote & "message" & quote & comma && _Span(pTokens, pIdx, j + tRef + 1, pEnd)
+      end if
+   end if
    if _T(pTokens, pIdx[j]) is "window" and j < pEnd then
       put _ExpressionEnd(pTokens, pIdx, j + 1, pEnd, "at") into tLast
       _Fire "T21 windows"
@@ -3803,9 +3926,15 @@ private function _ShowHide pTokens, pIdx, pAt, pEnd
       return "hcWindow" && quote & tVerb & quote & comma && _PlainName(pTokens, pIdx, j + 1, tLast, false) & comma && _Span(pTokens, pIdx, tLast + 2, pEnd)
    end if
    if _T(pTokens, pIdx[j]) is among the words of "tool tools pattern patterns scroll fatbits navigator" \
-         and _T(pTokens, pIdx[j + 1]) is "window" and j + 1 = pEnd then
-      _Fire "T21 windows"
-      return "hcWindow" && quote & tVerb & quote & comma && quote & _T(pTokens, pIdx[j]) & quote
+         and _T(pTokens, pIdx[j + 1]) is "window" then
+      if j + 1 = pEnd then
+         _Fire "T21 windows"
+         return "hcWindow" && quote & tVerb & quote & comma && quote & _T(pTokens, pIdx[j]) & quote
+      end if
+      if tVerb is "show" and _T(pTokens, pIdx[j + 2]) is "at" and j + 2 < pEnd then
+         _Fire "T46 HyperCard's windows"
+         return "hcWindow" && quote & "show" & quote & comma && quote & _T(pTokens, pIdx[j]) & quote & comma && _Span(pTokens, pIdx, j + 3, pEnd)
+      end if
    end if
    return empty
 end _ShowHide

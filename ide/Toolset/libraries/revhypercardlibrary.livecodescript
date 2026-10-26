@@ -1078,11 +1078,12 @@ private function _HCImport pFile
 end _HCImport
 
 -- palette "Name", "h,v": open the palette (the importer makes each PLTE
--- resource a substack of that name) with its top left at h,v
+-- resource a substack of that name) with its top left at h,v from the
+-- card window's, where HyperCard put it (rule T46)
 on hcPalette pName, pLocation
    if there is not a stack pName then return "Can't find palette" && pName
    palette stack pName
-   if pLocation is not empty then set the topLeft of stack pName to pLocation
+   if pLocation is not empty then set the topLeft of stack pName to _HCPlace("loc", pLocation, false)
    return empty
 end hcPalette
 
@@ -1725,34 +1726,132 @@ end hcShowPicture
 constant kHCOwnWindows = "tool,tools,pattern,patterns,scroll,fatbits,navigator,variable watcher,message watcher"
 local sHCWindows
 
+-- One of HyperCard's own windows by one name whatever a script called
+-- it ("Tools", "tool"), or empty for another window
+private function _HCOwnWindow pName
+   put toLower(pName) into pName
+   if pName is not among the items of kHCOwnWindows then return empty
+   if pName is among the words of "tools patterns" then delete the last char of pName
+   return pName
+end _HCOwnWindow
+
+/*
+Where HyperCard put its windows (rule T46). A card window's location was
+its top left on the screen; every other window's (the message box, a
+palette, a picture, an external's window) was its top left from the card
+window's top left, as were its rect, top, left, bottom and right, and its
+globalLoc and globalRect were its place on the screen. Here a stack is
+placed on the screen, and its loc is its centre. The stacks that stand
+for such windows here: the palettes the import makes from PLTE resources
+(each script begins with this line), the picture command's windows and
+the Promptoid's
+*/
+constant kHCPaletteFirstLine = "-- HyperCard palette (PLTE resource), made by the HyperCard importer"
+constant kHCPlaces = "loc,rect,topleft,bottomright,top,left,bottom,right"
+
+private function _HCCardRelative pStack
+   if the uHyperCard["picture"] of pStack is true or the uHyperCard["promptoid"] of pStack is true then return true
+   try
+      return line 1 of the script of pStack is kHCPaletteFirstLine
+   catch tError
+      -- (a stack whose script is not to be read is none of them)
+      return false
+   end try
+end _HCCardRelative
+
+-- A window's place (pProp: a point, a rectangle or one side) from
+-- HyperCard's, from the card window's top left, to the screen, or back
+-- (pBack). The card window is this stack's, or the window of the stack
+-- whose library this is when this stack is a palette or a picture
+private function _HCPlace pProp, pValue, pBack
+   local tOrigin, tH, tV, i
+   if _HCCardRelative(the long id of this stack) then
+      put the topLeft of me into tOrigin
+   else
+      put the topLeft of this stack into tOrigin
+   end if
+   put item 1 of tOrigin into tH
+   put item 2 of tOrigin into tV
+   if pBack then
+      put -tH into tH
+      put -tV into tV
+   end if
+   switch pProp
+      case "loc"
+      case "topleft"
+      case "bottomright"
+         if the number of items of pValue is not 2 or item 1 of pValue is not a number or item 2 of pValue is not a number then return pValue
+         return (item 1 of pValue + tH) & comma & (item 2 of pValue + tV)
+      case "rect"
+         if the number of items of pValue is not 4 then return pValue
+         repeat with i = 1 to 4
+            if item i of pValue is not a number then return pValue
+         end repeat
+         return (item 1 of pValue + tH) & comma & (item 2 of pValue + tV) & comma & (item 3 of pValue + tH) & comma & (item 4 of pValue + tV)
+      case "left"
+      case "right"
+         if pValue is not a number then return pValue
+         return pValue + tH
+      case "top"
+      case "bottom"
+         if pValue is not a number then return pValue
+         return pValue + tV
+   end switch
+   return pValue
+end _HCPlace
+
 -- show, hide and close window (rule T21): a window that is a stack here
 -- (a palette the import made, a picture the picture command opened, or
 -- any stack), the message box, and HyperCard's own windows, which are
--- not here (the tool, pattern, scroll, FatBits and navigator windows):
--- left alone, as an error here would stop the script, but shown or
--- hidden as far as hcWindowProperty("visible", ...) reads
+-- not here (the tool, pattern, scroll, FatBits and navigator windows,
+-- the watchers): left alone, as an error here would stop the script,
+-- but shown or hidden as far as hcWindowProperty("visible", ...) reads.
+-- The card window (rule T46) is the window of this stack. At a place,
+-- the window's top left goes there, where HyperCard put it (see
+-- _HCPlace)
 on hcWindow pVerb, pName, pLocation
-   local i
+   local i, tWindow
    -- (a location written h,v comes as two parameters)
    repeat with i = 4 to paramCount()
       put comma & param(i) after pLocation
    end repeat
    if pName is among the items of "message,msg,message box,message window" then
-      if pVerb is "show" then
-         show message box
-      else
+      if pVerb is not "show" then
          hide message box
+         return empty
       end if
+      show message box
+      if pLocation is not empty then hcSetMessageBox "loc", pLocation
       return empty
    end if
-   if pName is among the words of "tool tools pattern patterns scroll fatbits navigator" then
-      put (pVerb is "show") into sHCWindows[pName]["visible"]
+   put _HCOwnWindow(pName) into tWindow
+   if tWindow is not empty then
+      put (pVerb is "show") into sHCWindows[tWindow]["visible"]
+      if pVerb is "show" and pLocation is not empty then put pLocation into sHCWindows[tWindow]["loc"]
+      return empty
+   end if
+   if pName is "card window" then
+      switch pVerb
+         case "show"
+            if pLocation is not empty then set the topLeft of this stack to pLocation
+            show this stack
+            break
+         case "hide"
+            hide this stack
+            break
+         case "close"
+            close this stack
+            break
+      end switch
       return empty
    end if
    if there is not a stack pName then return "Can't find window" && pName
    switch pVerb
       case "show"
-         if pLocation is not empty then set the loc of stack pName to pLocation
+         if pLocation is not empty then
+            if _HCCardRelative(the long id of stack pName) then put _HCPlace("loc", pLocation, false) into pLocation
+            set the topLeft of stack pName to pLocation
+         end if
          if the mode of stack pName is 0 then
             if the uHyperCard["picture"] of stack pName is true then
                topLevel stack pName
@@ -1857,25 +1956,100 @@ is, as are zoom and dithering. A window that is not open leaves "No
 such window" in the result, as HyperCard said, rather than an error
 */
 -- the visible (or another property) of one of HyperCard's own windows:
--- what a script set, or false for the visible of one never shown
+-- what a script set, or false for the visible of one never shown. The
+-- place of a window that is a stack here (rule T46): where HyperCard had
+-- it (see _HCPlace); its globalLoc and globalRect, its place on the
+-- screen. A window that is not open has no place
 function hcWindowProperty pProp, pWindow
-   if sHCWindows[pWindow][pProp] is empty and pProp is "visible" then return false
-   return sHCWindows[pWindow][pProp]
+   local tWindow, tStack
+   if pProp is "location" then put "loc" into pProp
+   if pProp is "rectangle" then put "rect" into pProp
+   put _HCOwnWindow(pWindow) into tWindow
+   if tWindow is empty and there is a stack pWindow then
+      put the long id of stack pWindow into tStack
+      if pProp is "globalloc" then return the topLeft of tStack
+      if pProp is "globalrect" then return the rect of tStack
+      if pProp is among the items of kHCPlaces then
+         if _HCCardRelative(tStack) then return _HCPlace(pProp, _HCStackPlace(pProp, tStack), true)
+         return _HCStackPlace(pProp, tStack)
+      end if
+   end if
+   if tWindow is empty then put pWindow into tWindow
+   if sHCWindows[tWindow][pProp] is empty and pProp is "visible" then return false
+   return sHCWindows[tWindow][pProp]
 end hcWindowProperty
 
+-- The place pProp (one of kHCPlaces) of a stack, its top left for loc
+private function _HCStackPlace pProp, pStack
+   switch pProp
+      case "loc"
+      case "topleft"
+         return the topLeft of pStack
+      case "rect"
+         return the rect of pStack
+      case "bottomright"
+         return the bottomRight of pStack
+      case "top"
+         return the top of pStack
+      case "left"
+         return the left of pStack
+      case "bottom"
+         return the bottom of pStack
+      case "right"
+         return the right of pStack
+   end switch
+   return empty
+end _HCStackPlace
+
+private command _HCSetStackPlace pProp, pStack, pValue
+   switch pProp
+      case "loc"
+      case "topleft"
+         set the topLeft of pStack to pValue
+         break
+      case "rect"
+         set the rect of pStack to pValue
+         break
+      case "bottomright"
+         set the bottomRight of pStack to pValue
+         break
+      case "top"
+         set the top of pStack to pValue
+         break
+      case "left"
+         set the left of pStack to pValue
+         break
+      case "bottom"
+         set the bottom of pStack to pValue
+         break
+      case "right"
+         set the right of pStack to pValue
+         break
+   end switch
+end _HCSetStackPlace
+
 on hcSetWindow pProp, pWindow, pValue
-   local tStack, tImage, i
+   local tStack, tImage, i, tWindow
    -- (a point or a rect not in quotes comes as more than one parameter)
    repeat with i = 4 to paramCount()
       put comma & param(i) after pValue
    end repeat
+   if pProp is "location" then put "loc" into pProp
+   if pProp is "rectangle" then put "rect" into pProp
    if pWindow is "card window" then return empty
-   if pWindow is among the items of kHCOwnWindows then
-      put pValue into sHCWindows[pWindow][pProp]
+   put _HCOwnWindow(pWindow) into tWindow
+   if tWindow is not empty then
+      put pValue into sHCWindows[tWindow][pProp]
       return empty
    end if
    if there is not a stack pWindow then return "No such window"
    put the long id of stack pWindow into tStack
+   -- (T46: a window's place, where HyperCard put it)
+   if pProp is among the items of kHCPlaces then
+      if _HCCardRelative(tStack) then put _HCPlace(pProp, pValue, false) into pValue
+      _HCSetStackPlace pProp, tStack, pValue
+      return empty
+   end if
    if there is an image "Picture" of card 1 of tStack then
       put the long id of image "Picture" of card 1 of tStack into tImage
    end if
@@ -1913,14 +2087,21 @@ The properties of the message box (rule T28): "the visible of msg" and
 "set the loc of the message box to ..." name the message box's text
 here, and stop with an error. In the IDE they are those of its Message
 Box; where there is none (the Stack Player), the values a script set
-read back, and the message box is not visible
+read back, and the message box is not visible. Its place is where
+HyperCard had it, its location its top left from the card window's
+(rule T46: see _HCPlace)
 */
 local sHCMessageBox
 
 function hcMessageBox pProp
    local tValue
+   if pProp is "location" then put "loc" into pProp
+   if pProp is "rectangle" then put "rect" into pProp
    if there is a stack "Message Box" then
       try
+         if pProp is among the items of kHCPlaces then
+            return _HCPlace(pProp, _HCStackPlace(pProp, the long id of stack "Message Box"), true)
+         end if
          do "put the" && pProp && "of stack" && quote & "Message Box" & quote && "into tValue"
          return tValue
       catch tError
@@ -1936,6 +2117,8 @@ on hcSetMessageBox pProp, pValue
    repeat with i = 3 to paramCount()
       put comma & param(i) after pValue
    end repeat
+   if pProp is "location" then put "loc" into pProp
+   if pProp is "rectangle" then put "rect" into pProp
    put pValue into sHCMessageBox[pProp]
    if there is not a stack "Message Box" then return empty
    try
@@ -1945,6 +2128,8 @@ on hcSetMessageBox pProp, pValue
          else
             hide message box
          end if
+      else if pProp is among the items of kHCPlaces then
+         _HCSetStackPlace pProp, the long id of stack "Message Box", _HCPlace(pProp, pValue, false)
       else
          do "set the" && pProp && "of stack" && quote & "Message Box" & quote && "to pValue"
       end if

@@ -282,7 +282,7 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T26: the scroll of a window", line 3 of tScript is "  hcSetWindow " & q & "scroll" & q & ", " & q & "Map" & q & ", " & q & "10,10" & q
    TestAssert "T26: the hilitedButton of a palette", line 4 of tScript is "  hcSetWindow " & q & "hilitedbutton" & q & ", " & q & "Tools" & q & ", 0"
    TestAssert "T26: the scroll of the card window", line 5 of tScript is "  hcSetWindow " & q & "scroll" & q & ", " & q & "card window" & q & ", 0,0"
-   TestAssert "T26: the loc of a window: unchanged", line 6 of tScript is "  set the loc of window " & q & "Map" & q & " to 10,10"
+   TestAssert "T26: the loc of a window: not T26's (T46's, the library's)", line 6 of tScript is "  hcSetWindow " & q & "loc" & q & ", " & q & "Map" & q & ", 10,10"
 
    put _RewriteHyperTalk("on mouseUp", "  doMenu new card", "  if x then doMenu Compact Stack", "  doMenu tItem", "  doMenu the short name of me", "end mouseUp") into tScript
    TestAssert "T27: doMenu with the item not in quotes", line 2 of tScript is "  doMenu " & q & "new card" & q
@@ -316,7 +316,7 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T28: set the loc of the message box", line 4 of tScript is "  hcSetMessageBox " & q & "loc" & q & ", 18,30"
    TestAssert "T28: set loc of msg", line 5 of tScript is "  hcSetMessageBox " & q & "loc" & q & ", x"
    TestAssert "T28: the length of msg: unchanged", line 6 of tScript is "  put the length of msg into n"
-   TestAssert "T28: another window: unchanged", line 7 of tScript is "  put the rect of window " & q & "Map" & q & " into r"
+   TestAssert "T28: another window: not the message box (T46 places it)", line 7 of tScript is "  put hcWindowProperty(" & q & "rect" & q & ", " & q & "Map" & q & ") into r"
 
    put _Rewrite("on mouseUp", "  put " & q & "Again" & q & " after menuItem " & q & "Find" & q & " of menu " & q & "Go" & q & " \", "    with menuMessages " & q & "StartSearch" & q, "  beep", "end mouseUp") into tScript
    TestAssert "T22: a statement continued over lines, taken whole", line 2 of tScript is "  hcPutIntoMenu " & q & "Again" & q & ", " & q & "after" & q & ", " & q & "Go" & q & ", " & q & "StartSearch" & q & ", " & q & "Find" & q
@@ -1045,6 +1045,155 @@ on TestHyperCardScriptsT45
    if there is a stack "HyperCard Home" then delete stack "HyperCard Home"
    if tHome is not empty then delete stack tHome
 end TestHyperCardScriptsT45
+
+on TestHyperCardScriptsT46
+   -- HyperCard's windows by their top left, on the screen for a card
+   -- window and from the card window's top left for every other, where
+   -- this engine's loc is a stack's centre on the screen: the location of
+   -- the card window, of a window, of the message box, and show ... at;
+   -- show and hide card window; HyperCard's own windows named in quotes;
+   -- the message box's properties without "the"
+   local tStack, tScript, q, tPalette, tMessage, tOldMessage, tPlte, tPicture, tOrigin
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", "  set the loc of card window to 0,20", "  put item 1 of loc of cd window + 153 into x", "  put the location of the card window into p", \
+         "  show card window at 20,50", "  hide the card window", "  if x then show cd window", \
+         "  get the loc of window " & q & "Map" & q, "  set the location of window w to 10,10", \
+         "  put the visible of window " & q & "Scroll" & q & " into v", "  set the loc of window " & q & "Variable Watcher" & q & " to " & q & "0,18" & q, \
+         "  show msg at 15,300", "  show tool window at 72,189", "  if visible of msg then put loc of msg into p", "end mouseUp") into tScript
+   TestAssert "T46: the card window's location is its top left", line 2 to 4 of tScript \
+         is _Lines("  set the topLeft of this stack to 0,20", "  put item 1 of topLeft of this stack + 153 into x", "  put the topLeft of this stack into p")
+   TestAssert "T46: show and hide card window", line 5 to 7 of tScript is _Lines("  hcWindow " & q & "show" & q & ", " & q & "card window" & q & ", 20,50", \
+         "  hcWindow " & q & "hide" & q & ", " & q & "card window" & q, "  if x then hcWindow " & q & "show" & q & ", " & q & "card window" & q)
+   TestAssert "T46: a window's location, the library's", line 8 to 9 of tScript is _Lines("  get hcWindowProperty(" & q & "loc" & q & ", " & q & "Map" & q & ")", \
+         "  hcSetWindow " & q & "location" & q & ", w, 10,10")
+   TestAssert "T46: HyperCard's own windows by name", line 10 to 11 of tScript is _Lines("  put hcWindowProperty(" & q & "visible" & q & ", " & q & "Scroll" & q & ") into v", \
+         "  hcSetWindow " & q & "loc" & q & ", " & q & "Variable Watcher" & q & ", " & q & "0,18" & q)
+   TestAssert "T46: the message box and a window of HyperCard's shown at a place", line 12 to 13 of tScript \
+         is _Lines("  hcWindow " & q & "show" & q & ", " & q & "message" & q & ", 15,300", "  hcWindow " & q & "show" & q & ", " & q & "tool" & q & ", 72,189")
+   TestAssert "T46: the message box's properties without the", line 14 of tScript is "  if hcMessageBox(" & q & "visible" & q & ") then put hcMessageBox(" & q & "loc" & q & ") into p"
+   TestAssert "T46: those compile", _Compiles(tScript)
+
+   -- a window's other places, the window in parentheses, a set after an
+   -- else; T26's globalLoc; window id, which this engine finds no window
+   -- by, and a word that goes on into an expression: unchanged; the
+   -- watchers shown and hidden
+   put _Rewrite("on mouseUp", "  set the rect of window " & q & "Map" & q & " to 0,0,100,100", "  put the top of window (the short name of me) into t", \
+         "  if c then set the loc of window a to p else set the loc of window b to p", "  get the globalRect of window " & q & "Map" & q, \
+         "  set the globalLoc of window " & q & "Map" & q & " to 1,1", "  get the loc of window id 3", "  get the loc of window item 1 of x", \
+         "  show variable watcher", "  hide the message watcher", "end mouseUp") into tScript
+   TestAssert "T46: a window's rect, its top", line 2 to 3 of tScript is _Lines("  hcSetWindow " & q & "rect" & q & ", " & q & "Map" & q & ", 0,0,100,100", \
+         "  put hcWindowProperty(" & q & "top" & q & ", (the short name of me)) into t")
+   TestAssert "T46: a set after else", line 4 of tScript is "  if c then hcSetWindow " & q & "loc" & q & ", a, p else hcSetWindow " & q & "loc" & q & ", b, p"
+   TestAssert "T46: the globalRect read, the globalLoc set (T26)", line 5 to 6 of tScript is _Lines("  get hcWindowProperty(" & q & "globalrect" & q & ", " & q & "Map" & q & ")", \
+         "  hcSetWindow " & q & "globalloc" & q & ", " & q & "Map" & q & ", 1,1")
+   TestAssert "T46: window id, and a word that goes on: unchanged", line 7 to 8 of tScript is _Lines("  get the loc of window id 3", "  get the loc of window item 1 of x")
+   TestAssert "T46: the watchers shown and hidden", line 9 to 10 of tScript is _Lines("  hcWindow " & q & "show" & q & ", " & q & "variable watcher" & q, \
+         "  hcWindow " & q & "hide" & q & ", " & q & "message watcher" & q)
+
+   -- and run: show card window at, and the loc of a window, compile here
+   -- as they are; the loc of card window does not. tPalette is another
+   -- stack's card window; tPlte a palette the import made from a PLTE
+   -- resource, tPicture a picture window, which HyperCard placed from the
+   -- card window's top left
+   put "HCScriptsT46" & the milliseconds into tStack
+   put "HCScriptsT46Other" & the milliseconds into tPalette
+   put "HCScriptsT46Plte" & the milliseconds into tPlte
+   put "HCScriptsT46Picture" & the milliseconds into tPicture
+   lock messages
+   create invisible stack tPalette
+   set the rect of stack tPalette to 300,300,400,400
+   create invisible stack tPlte
+   set the rect of stack tPlte to 300,300,400,400
+   set the script of stack tPlte to _Lines("-- HyperCard palette (PLTE resource), made by the HyperCard importer", "on mouseUp", "end mouseUp")
+   create invisible stack tPicture
+   set the rect of stack tPicture to 300,300,400,400
+   set the uHyperCard["picture"] of stack tPicture to true
+   create invisible stack tStack
+   set the rect of stack tStack to 100,100,612,442
+   set the defaultStack to tStack
+   create button "Show"
+   set the script of button "Show" to _Lines("on mouseUp", "  show card window at 20,50", "end mouseUp")
+   create button "Hide"
+   set the script of button "Hide" to _Lines("on mouseUp", "  hide card window", "end mouseUp")
+   create button "Other"
+   set the script of button "Other" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set the loc of window " & q & tPalette & q & " to 10,10", \
+         "  put the loc of window " & q & tPalette & q & " into gHCScriptsTest", "end mouseUp")
+   create button "Plte"
+   set the script of button "Plte" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set the loc of window " & q & tPlte & q & " to 10,10", \
+         "  put the loc of window " & q & tPlte & q & " into gHCScriptsTest", "  show window " & q & tPlte & q & " at 20,30", \
+         "  put comma & the loc of window " & q & tPlte & q & " after gHCScriptsTest", "  palette " & q & tPlte & q & ", " & q & "5,6" & q, \
+         "  put comma & the loc of window " & q & tPlte & q & " after gHCScriptsTest", "end mouseUp")
+   create button "Picture"
+   set the script of button "Picture" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set the rect of window " & q & tPicture & q & " to 0,0,50,40", \
+         "  put the rect of window " & q & tPicture & q & " into gHCScriptsTest", "  put comma & the globalLoc of window " & q & tPicture & q & " after gHCScriptsTest", "end mouseUp")
+   create button "Card"
+   set the script of button "Card" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set the loc of card window to 30,40", "  put the loc of card window into gHCScriptsTest", "end mouseUp")
+   create button "Own"
+   set the script of button "Own" to _Lines("on mouseUp", "  global gHCScriptsTest", "  show window " & q & "Scroll" & q, "  show tool window", \
+         "  set the loc of window " & q & "Variable Watcher" & q & " to " & q & "0,18" & q, \
+         "  put the visible of window " & q & "Scroll" & q & " & comma & the visible of window " & q & "Tools" & q & " into gHCScriptsTest", \
+         "  put comma & the loc of window " & q & "Variable Watcher" & q & " after gHCScriptsTest", "  show variable watcher", \
+         "  put comma & the visible of the variable watcher after gHCScriptsTest", "  hide variable watcher", \
+         "  put comma & the visible of the variable watcher after gHCScriptsTest", "end mouseUp")
+   create button "Message"
+   set the script of button "Message" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set the loc of msg to 18,30", "  put the loc of msg into gHCScriptsTest", \
+         "  show msg at 40,50", "  put comma & the loc of msg after gHCScriptsTest", "end mouseUp")
+   unlock messages
+   TestAssert "T46: show card window at, and the loc of a window, compile here as they are", \
+         _Compiles(the script of button "Show" of card 1 of stack tStack) and _Compiles(the script of button "Other" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   set the defaultStack to tStack
+   send "mouseUp" to button "Show" of card 1 of stack tStack
+   TestAssert "T46: show card window at: shown, its top left there", the visible of stack tStack is true and the topLeft of stack tStack is "20,50"
+   send "mouseUp" to button "Hide" of card 1 of stack tStack
+   TestAssert "T46: hide card window hides it", the visible of stack tStack is false
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Other" of card 1 of stack tStack
+   TestAssert "T46: another stack's card window, set and read: its top left on the screen", the topLeft of stack tPalette is "10,10" and gHCScriptsTest is "10,10"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Card" of card 1 of stack tStack
+   TestAssert "T46: the card window's location, set and read, is its top left", the topLeft of stack tStack is "30,40" and gHCScriptsTest is "30,40"
+   put the topLeft of stack tStack into tOrigin
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Plte" of card 1 of stack tStack
+   TestAssert "T46: a palette's location, set, read, shown at and opened at: from the card window's top left", gHCScriptsTest is "10,10,20,30,5,6" \
+         and the topLeft of stack tPlte is (item 1 of tOrigin + 5) & comma & (item 2 of tOrigin + 6)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Picture" of card 1 of stack tStack
+   TestAssert "T46: a picture window's rect, set and read, from the card window's top left; its globalLoc on the screen", \
+         gHCScriptsTest is "0,0,50,40," & tOrigin and the rect of stack tPicture is tOrigin & comma & (item 1 of tOrigin + 50) & comma & (item 2 of tOrigin + 40)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Own" of card 1 of stack tStack
+   TestAssert "T46: HyperCard's own windows by name read back what was shown and set", gHCScriptsTest is "true,true,0,18,true,false"
+
+   -- the message box: a stack "Message Box" stands for the IDE's where
+   -- there is none
+   lock messages
+   if there is a stack "Message Box" then
+      put the topLeft of stack "Message Box" into tOldMessage
+   else
+      create invisible stack "Message Box"
+      put "Message Box" into tMessage
+   end if
+   unlock messages
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Message" of card 1 of stack tStack
+   TestAssert "T46: the message box's location, set, read and shown at: its top left from the card window's", gHCScriptsTest is "18,30,40,50" \
+         and the topLeft of stack "Message Box" is (item 1 of tOrigin + 40) & comma & (item 2 of tOrigin + 50)
+   lock messages
+   if tMessage is not empty then
+      delete stack tMessage
+   else
+      set the topLeft of stack "Message Box" to tOldMessage
+   end if
+   unlock messages
+   _Close tStack
+   _Close tPalette
+   _Close tPlte
+   _Close tPicture
+end TestHyperCardScriptsT46
 
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
