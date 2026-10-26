@@ -8,10 +8,14 @@ before it runs, even while messages are locked, as in HyperCard;
 lockRecent keeps no card of the stack out of the recent cards that go
 back goes through; a handler that went to another stack still reaches
 its own stack's script before the dynamic path, and one that went to
-another card of its own stack reaches that card after it; and arithmetic
+another card of its own stack reaches that card after it; arithmetic
 that gives no number goes on with HyperCard's INF or NAN instead of
-stopping the script. Each test checks the stack with the property off
-too.
+stopping the script; reading the textFont, textSize, textStyle or
+textHeight of a button, a field or a field's text with none of its own
+gives the one it uses, where it would give empty, HyperCard's own style
+names (condense, outline...) set a textStyle, and grouped text reads as
+group, not link; and round takes a number halfway between two integers
+to the even one. Each test checks the stack with the property off too.
 */
 
 local sStack
@@ -485,3 +489,252 @@ on TestHyperTalkCompatibleArithmetic
    TestAssert "on: a field shows 1/0 and 0/0 as INF and NAN(004)", field "F" of stack sStack is "INF,NAN(004)"
    _DeleteStack
 end TestHyperTalkCompatibleArithmetic
+
+-- round(2.5), round(3.5), round(-2.5), round(0.5), the round of (5.5 + 3)
+-- and the round of 5.5 + 3 (the HyperTalk Reference's two examples),
+-- round(2.6), round with a precision, and statRound(2.5)
+private function _RoundValues
+   return _Values("put round(2.5) into tValue" & return & "put round(3.5) into tValue" & return \
+         & "put round(-2.5) into tValue" & return & "put round(0.5) into tValue" & return \
+         & "put the round of (5.5 + 3) into tValue" & return & "put the round of 5.5 + 3 into tValue" & return \
+         & "put round(2.6) into tValue" & return & "put round(2.5, 0) into tValue" & return \
+         & "put round(0.125, 2) into tValue" & return & "put statRound(2.5) into tValue")
+end _RoundValues
+
+on TestHyperTalkCompatibleRoundOff
+   local tValues
+   _MakeStack false
+   put _RoundValues() into tValues
+   TestAssert "off: round(2.5) is 3", line 1 of tValues is "3"
+   TestAssert "off: round(3.5) is 4", line 2 of tValues is "4"
+   TestAssert "off: round(-2.5) is -3", line 3 of tValues is "-3"
+   TestAssert "off: round(0.5) is 1", line 4 of tValues is "1"
+   TestAssert "off: the round of (5.5 + 3) is 9", line 5 of tValues is "9"
+   TestAssert "off: the round of 5.5 + 3 is 9", line 6 of tValues is "9"
+   TestAssert "off: round(2.6) is 3", line 7 of tValues is "3"
+   TestAssert "off: round(2.5, 0) is 3", line 8 of tValues is "3"
+   TestAssert "off: round(0.125, 2) is 0.13", line 9 of tValues is "0.13"
+   TestAssert "off: statRound(2.5) is 2", line 10 of tValues is "2"
+   _DeleteStack
+end TestHyperTalkCompatibleRoundOff
+
+-- HyperCard's round took a number halfway between two integers to the
+-- even one: "odd integers plus exactly 0.5 round up; even integers (or 0)
+-- plus exactly 0.5 round down", a negative number as its absolute value
+-- (the HyperTalk Reference, whose examples are "the round of 5.5 + 3 --
+-- returns 9" and "the round of (5.5 + 3) -- returns 8"). round with a
+-- precision, which HyperCard did not have, is the same in every stack
+on TestHyperTalkCompatibleRound
+   local tValues
+   _MakeStack true
+   put _RoundValues() into tValues
+   TestAssert "on: round(2.5) is 2", line 1 of tValues is "2"
+   TestAssert "on: round(3.5) is 4", line 2 of tValues is "4"
+   TestAssert "on: round(-2.5) is -2", line 3 of tValues is "-2"
+   TestAssert "on: round(0.5) is 0", line 4 of tValues is "0"
+   TestAssert "on: the round of (5.5 + 3) is 8", line 5 of tValues is "8"
+   TestAssert "on: the round of 5.5 + 3 is 9", line 6 of tValues is "9"
+   TestAssert "on: round(2.6) is 3", line 7 of tValues is "3"
+   TestAssert "on: round(2.5, 0) is still 3", line 8 of tValues is "3"
+   TestAssert "on: round(0.125, 2) is still 0.13", line 9 of tValues is "0.13"
+   TestAssert "on: statRound(2.5) is 2", line 10 of tValues is "2"
+   _DeleteStack
+end TestHyperTalkCompatibleRound
+
+-- On the test's stack, which has the textFont Geneva and the textSize 12:
+-- a button "Plain" with no font, size or style of its own (as the import
+-- leaves many buttons), a button "Bold" with a style of its own and no
+-- size, a button "Sized" whose textSize a script set, which sets its
+-- textHeight to none, and a field "F", italic and 14 point, whose first
+-- word is in Courier and second word bold. Each line of _TextStatements
+-- reads one of their text properties
+private command _MakeTextObjects
+   set the defaultStack to sStack
+   set the textFont of stack sStack to "Geneva"
+   set the textSize of stack sStack to 12
+   create button "Plain"
+   create button "Bold"
+   set the textStyle of button "Bold" to "bold"
+   create button "Sized"
+   set the textSize of button "Sized" to 10
+   create field "F"
+   set the textStyle of field "F" to "italic"
+   set the textSize of field "F" to 14
+   put "one two" & return & "three" into field "F"
+   set the textFont of word 1 of field "F" to "Courier"
+   set the textStyle of word 2 of field "F" to "bold"
+end _MakeTextObjects
+
+private function _TextStatements
+   local q
+   put quote into q
+   return "put the textFont of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textSize of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textStyle of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textHeight of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textStyle of button " & q & "Bold" & q & " into tValue" & return \
+         & "put the effective textStyle of button " & q & "Bold" & q & " into tValue" & return \
+         & "put the textHeight of button " & q & "Sized" & q & " into tValue" & return \
+         & "put the textFont of word 1 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textFont of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textSize of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textStyle of line 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textStyle of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textStyle of line 1 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textFont of line 1 of field " & q & "F" & q & " into tValue"
+end _TextStatements
+
+on TestHyperTalkCompatibleTextPropertiesOff
+   local tValues
+   _MakeStack false
+   _MakeTextObjects
+   put _Values(_TextStatements()) into tValues
+   TestAssert "off: a button with no font of its own has an empty textFont", line 1 of tValues is empty
+   TestAssert "off: and an empty textSize", line 2 of tValues is empty
+   TestAssert "off: and an empty textStyle", line 3 of tValues is empty
+   TestAssert "off: and an empty textHeight", line 4 of tValues is empty
+   TestAssert "off: a button's own style", line 5 of tValues is "bold"
+   TestAssert "off: the effective textStyle of a button with a style but no size of its own is still its owner's", \
+         line 6 of tValues is "plain"
+   TestAssert "off: setting the textSize leaves the textHeight empty", line 7 of tValues is empty
+   TestAssert "off: text with a font of its own", line 8 of tValues is "Courier"
+   TestAssert "off: text with no font of its own has an empty textFont", line 9 of tValues is empty
+   TestAssert "off: and an empty textSize", line 10 of tValues is empty
+   TestAssert "off: text with no style of its own has an empty textStyle", line 11 of tValues is empty
+   TestAssert "off: text with a style of its own", line 12 of tValues is "bold"
+   TestAssert "off: a line with a style in part of it is mixed", line 13 of tValues is "mixed"
+   TestAssert "off: a line with a font in part of it is mixed", line 14 of tValues is "mixed"
+   _DeleteStack
+end TestHyperTalkCompatibleTextPropertiesOff
+
+-- In HyperCard every button and field had its own font, size, style and
+-- height, and the text of a field had the field's unless a style run gave
+-- it others, so reading one always gave the one in use
+on TestHyperTalkCompatibleTextProperties
+   local tValues
+   _MakeStack true
+   _MakeTextObjects
+   put _Values(_TextStatements()) into tValues
+   TestAssert "on: a button with no font of its own gives the stack's", line 1 of tValues is "Geneva"
+   TestAssert "on: and the stack's size", line 2 of tValues is 12
+   TestAssert "on: and plain", line 3 of tValues is "plain"
+   TestAssert "on: and the height of its size", line 4 of tValues is 16
+   TestAssert "on: a button's own style", line 5 of tValues is "bold"
+   TestAssert "on: the effective textStyle of a button with a style but no size of its own is its own", \
+         line 6 of tValues is "bold"
+   TestAssert "on: setting the textSize to 10 gives the height of that size", line 7 of tValues is 13
+   TestAssert "on: text with a font of its own", line 8 of tValues is "Courier"
+   TestAssert "on: text with no font of its own gives the field's, which is the stack's", line 9 of tValues is "Geneva"
+   TestAssert "on: and the field's size", line 10 of tValues is 14
+   TestAssert "on: text with no style of its own gives the field's", line 11 of tValues is "italic"
+   TestAssert "on: text with a style of its own", line 12 of tValues is "bold"
+   TestAssert "on: a line in two styles is mixed", line 13 of tValues is "mixed"
+   TestAssert "on: a line in two fonts is mixed", line 14 of tValues is "mixed"
+   _DeleteStack
+end TestHyperTalkCompatibleTextProperties
+
+-- HyperCard's own style names in a value, where the import's rule T32
+-- cannot rewrite them: "bold,outline" on the button "Plain",
+-- "condense" on the button "Bold", "extend,shadow" on the first word of
+-- the field "F", "shadow" on the button "Sized", and "bold ,italic,",
+-- with a space and an empty style, on the button "Plain", each set and
+-- read
+private function _StyleNameStatements
+   local q
+   put quote into q
+   return "set the textStyle of button " & q & "Plain" & q & " to (" & q & "bold," & q & " & " & q & "outline" & q & ")" & return \
+         & "put the textStyle of button " & q & "Plain" & q & " into tValue" & return \
+         & "set the textStyle of button " & q & "Bold" & q & " to (" & q & "condense" & q & ")" & return \
+         & "put the textStyle of button " & q & "Bold" & q & " into tValue" & return \
+         & "set the textStyle of word 1 of field " & q & "F" & q & " to (" & q & "extend," & q & " & " & q & "shadow" & q & ")" & return \
+         & "put the textStyle of word 1 of field " & q & "F" & q & " into tValue" & return \
+         & "set the textStyle of button " & q & "Sized" & q & " to (" & q & "shadow" & q & ")" & return \
+         & "put the textStyle of button " & q & "Sized" & q & " into tValue" & return \
+         & "set the textStyle of button " & q & "Plain" & q & " to (" & q & "bold ,italic," & q & ")" & return \
+         & "put the textStyle of button " & q & "Plain" & q & " into tValue"
+end _StyleNameStatements
+
+on TestHyperTalkCompatibleTextStyleNamesOff
+   local tValues
+   _MakeStack false
+   _MakeTextObjects
+   put _Values(_StyleNameStatements()) into tValues
+   TestAssert "off: setting the textStyle to bold,outline stops the script", line 1 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 2 of tValues is empty
+   TestAssert "off: condense stops the script", line 3 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 4 of tValues is "bold"
+   TestAssert "off: extend,shadow on text stops the script", line 5 of tValues is "error"
+   TestAssert "off: and leaves its style as it was", line 6 of tValues is empty
+   TestAssert "off: shadow stops the script", line 7 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 8 of tValues is empty
+   TestAssert "off: a space after a style, or an empty style, stops the script", line 9 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 10 of tValues is empty
+   _DeleteStack
+end TestHyperTalkCompatibleTextStyleNamesOff
+
+-- HyperCard's condense and extend are condensed and expanded here, and its
+-- outline and shadow, which this engine does not draw, are left out, with
+-- the spaces after a style and an empty style, as the HyperCard Library's
+-- hcTextStyle leaves them out of a style written in a script
+on TestHyperTalkCompatibleTextStyleNames
+   local tValues
+   _MakeStack true
+   _MakeTextObjects
+   put _Values(_StyleNameStatements()) into tValues
+   TestAssert "on: bold,outline is set", line 1 of tValues is 7
+   TestAssert "on: as bold", line 2 of tValues is "bold"
+   TestAssert "on: condense is set", line 3 of tValues is 7
+   TestAssert "on: as condensed", line 4 of tValues is "condensed"
+   TestAssert "on: extend,shadow on text is set", line 5 of tValues is 7
+   TestAssert "on: as expanded", line 6 of tValues is "expanded"
+   TestAssert "on: shadow is set", line 7 of tValues is 7
+   TestAssert "on: as plain", line 8 of tValues is "plain"
+   TestAssert "on: a space after a style, and an empty style, are left out", line 9 of tValues is 7
+   TestAssert "on: so bold ,italic, is bold and italic", line 10 of tValues is "bold,italic"
+   _DeleteStack
+end TestHyperTalkCompatibleTextStyleNames
+
+-- Grouped text, HyperCard's group style, which this engine calls link:
+-- the second word of the field "F" set to group and the second line to
+-- bold,link, each read, and whether "group" is in the style of the word,
+-- as a HyperCard script tests a clicked link
+private function _GroupStatements
+   local q
+   put quote into q
+   return "set the textStyle of word 2 of field " & q & "F" & q & " to " & q & "group" & q & return \
+         & "put the textStyle of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put " & q & "group" & q & " is in the textStyle of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "set the textStyle of line 2 of field " & q & "F" & q & " to " & q & "bold,link" & q & return \
+         & "put the textStyle of line 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the effective textStyle of word 2 of field " & q & "F" & q & " into tValue"
+end _GroupStatements
+
+on TestHyperTalkCompatibleGroupStyleOff
+   local tValues
+   _MakeStack false
+   _MakeTextObjects
+   put _Values(_GroupStatements()) into tValues
+   TestAssert "off: group is set", line 1 of tValues is 7
+   TestAssert "off: as link", line 2 of tValues is "link"
+   TestAssert "off: so group is not in its style", line 3 of tValues is false
+   TestAssert "off: bold,link is set", line 4 of tValues is 7
+   TestAssert "off: as bold,link", line 5 of tValues is "bold,link"
+   TestAssert "off: the effective textStyle is link", line 6 of tValues is "link"
+   _DeleteStack
+end TestHyperTalkCompatibleGroupStyleOff
+
+-- HyperCard's grouped text reads as group, by HyperCard's name, so that
+-- if the textStyle of the clickChunk contains "group" finds a link
+on TestHyperTalkCompatibleGroupStyle
+   local tValues
+   _MakeStack true
+   _MakeTextObjects
+   put _Values(_GroupStatements()) into tValues
+   TestAssert "on: group is set", line 1 of tValues is 7
+   TestAssert "on: as group", line 2 of tValues is "group"
+   TestAssert "on: so group is in its style", line 3 of tValues is true
+   TestAssert "on: bold,link is set", line 4 of tValues is 7
+   TestAssert "on: as bold,group", line 5 of tValues is "bold,group"
+   TestAssert "on: the effective textStyle is group", line 6 of tValues is "group"
+   _DeleteStack
+end TestHyperTalkCompatibleGroupStyle

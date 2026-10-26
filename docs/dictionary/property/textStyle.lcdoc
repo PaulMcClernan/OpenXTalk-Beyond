@@ -66,6 +66,12 @@ The "link" style can be used only for chunks of a field, not for
 objects. Setting the <textStyle> of a <chunk> to "link" turns it into a
 <grouped text|text group>.
 
+In a <stack> whose <hyperTalkCompatible> is true, such as one
+<import|imported> from <HyperCard>, a <script> reads the link style as
+"group", <HyperCard|HyperCard's> name for it, and can set
+<HyperCard|HyperCard's> own styles condense, extend, outline and
+shadow: see <hyperTalkCompatible>.
+
     the <textStyle> [&lt;style&gt;]
 
 Here, style can be one of bold, condensed, expanded, italic, oblique,
@@ -86,7 +92,8 @@ from the others by specifying the required style as an array key.
 References: fontStyles (function), object (glossary), property (glossary),
 keyword (glossary), grouped text (glossary), chunk (glossary),
 effective (keyword), box (keyword), italic (keyword), owner (property),
-textStyle (property)
+textStyle (property), hyperTalkCompatible (property), import (command),
+stack (object), HyperCard (glossary)
 
 Tags: ui
 

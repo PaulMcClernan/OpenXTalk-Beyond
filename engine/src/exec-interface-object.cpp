@@ -827,6 +827,12 @@ static void MCInterfaceTextStyleParse(MCExecContext& ctxt, MCStringRef p_input, 
 	uindex_t t_new_offset;
 	t_new_offset = 0;
 
+	// OXT-Beyond: in a stack whose hyperTalkCompatible is true, HyperCard's
+	//   style names (below), and the spaces after a style ("bold ,italic")
+	//   and an empty style ("bold,") left out, as hcTextStyle leaves them
+	bool t_hypertalk;
+	t_hypertalk = ctxt . IsHyperTalkCompatible();
+
 	while (t_success && t_old_offset <= t_length)
 	{
 		MCAutoStringRef t_text_style;
@@ -837,7 +843,20 @@ static void MCInterfaceTextStyleParse(MCExecContext& ctxt, MCStringRef p_input, 
 		while (MCStringGetNativeCharAtIndex(p_input, t_old_offset) == ' ')
 			t_old_offset++;
 
-		t_success = MCStringCopySubstring(p_input, MCRangeMakeMinMax(t_old_offset, t_new_offset), &t_text_style);
+		uindex_t t_end_offset;
+		t_end_offset = t_new_offset;
+		if (t_hypertalk)
+		{
+			while (t_end_offset > t_old_offset && MCStringGetNativeCharAtIndex(p_input, t_end_offset - 1) == ' ')
+				t_end_offset--;
+			if (t_end_offset <= t_old_offset)
+			{
+				t_old_offset = t_new_offset + 1;
+				continue;
+			}
+		}
+
+		t_success = MCStringCopySubstring(p_input, MCRangeMakeMinMax(t_old_offset, t_end_offset), &t_text_style);
 
 		if (t_success)
 		{
@@ -889,11 +908,38 @@ static void MCInterfaceTextStyleParse(MCExecContext& ctxt, MCStringRef p_input, 
 				style |= FA_STRIKEOUT;
 				continue;
 			}
-			if (MCStringIsEqualToCString(*t_text_style, MCgroupstring, kMCCompareCaseless) || 
+			if (MCStringIsEqualToCString(*t_text_style, MCgroupstring, kMCCompareCaseless) ||
 				MCStringIsEqualToCString(*t_text_style, MClinkstring, kMCCompareCaseless))
 			{
 				style |= FA_LINK;
 				continue;
+			}
+
+			// OXT-Beyond: in a stack whose hyperTalkCompatible is true,
+			//   HyperCard's own style names: condense and extend are
+			//   condensed and expanded, and outline and shadow, which this
+			//   engine does not draw, are left out, as the HyperCard
+			//   Library's hcTextStyle does with a style written in a script
+			//   (rule T32). A style that comes from a variable or a field
+			//   ("bold,outline") is set without them, where it stopped the
+			//   script.
+			if (t_hypertalk)
+			{
+				if (MCStringIsEqualToCString(*t_text_style, "condense", kMCCompareCaseless))
+				{
+					style &= ~FA_EXPAND;
+					style |= FA_CONDENSED;
+					continue;
+				}
+				if (MCStringIsEqualToCString(*t_text_style, "extend", kMCCompareCaseless))
+				{
+					style &= ~FA_EXPAND;
+					style |= FA_EXPANDED;
+					continue;
+				}
+				if (MCStringIsEqualToCString(*t_text_style, "outline", kMCCompareCaseless) ||
+					MCStringIsEqualToCString(*t_text_style, "shadow", kMCCompareCaseless))
+					continue;
 			}
 
 			ctxt . LegacyThrow(EE_OBJECT_BADSTYLE);
@@ -969,10 +1015,15 @@ static void MCInterfaceTextStyleFormat(MCExecContext& ctxt, const MCInterfaceTex
 						MCListAppend(*t_styles, *t_style));
 	}
 
+	// OXT-Beyond: in a stack whose hyperTalkCompatible is true, the link
+	//   style is HyperCard's group, by HyperCard's name, which its scripts
+	//   look for in a clicked link ("if the textStyle of the clickChunk
+	//   contains "group""). The import makes HyperCard's grouped text link
+	//   text, and a style with group in it sets link in every stack.
 	if (t_success && p_input . style & FA_LINK)
 	{
 		MCAutoStringRef t_style;
-		t_success = (MCStringCreateWithCString(MClinkstring, &t_style) &&
+		t_success = (MCStringCreateWithCString(ctxt . IsHyperTalkCompatible() ? MCgroupstring : MClinkstring, &t_style) &&
 						MCListAppend(*t_styles, *t_style));
 	}
 
@@ -2816,6 +2867,16 @@ void MCObject::TextPropertyUnmapFont(bool p_unmap)
 		unmapfont();
 }
 
+// OXT-Beyond: in a HyperCard stack (MCExecContext::IsHyperTalkCompatible),
+//   reading a text property of an object that has none of its own gives
+//   the one it uses, as HyperCard, where every button and field had its
+//   own, gave it: textFont, textSize, textStyle and textHeight here, and
+//   those of a field's text in exec-interface-field-chunk.cpp. Elsewhere it
+//   is empty, as before. The import leaves out the font, size and style of
+//   a button or field whose font is not in the stack's font table and that
+//   is 12 point and plain (most of the buttons of many stacks), a script
+//   makes objects with none, and setting the textSize sets the textHeight
+//   to none, where in HyperCard it set it to the one for that size.
 void MCObject::GetTextHeight(MCExecContext& ctxt, uinteger_t*& r_height)
 {
 	if (fontheight != 0)
@@ -2824,6 +2885,8 @@ void MCObject::GetTextHeight(MCExecContext& ctxt, uinteger_t*& r_height)
 		height = (uinteger_t)gettextheight();
 		*r_height = height;
 	}
+	else if (ctxt . IsHyperTalkCompatible())
+		*r_height = (uinteger_t)gettextheight();
 	else
 		r_height = nil;
 }
@@ -2871,7 +2934,12 @@ void MCObject::GetEffectiveTextAlign(MCExecContext& ctxt, intenum_t& r_align)
 void MCObject::GetTextFont(MCExecContext& ctxt, MCStringRef& r_font)
 {
 	if ((m_font_flags & FF_HAS_TEXTFONT) == 0)
+	{
+		// OXT-Beyond: the one it uses, in a HyperCard stack (GetTextHeight)
+		if (ctxt . IsHyperTalkCompatible())
+			GetEffectiveTextFont(ctxt, r_font);
 		return;
+	}
 
     uint2 fontsize, fontstyle;
     MCNameRef fontname;
@@ -2948,6 +3016,14 @@ void MCObject::GetTextSize(MCExecContext& ctxt, uinteger_t*& r_size)
 {
 	if ((m_font_flags & FF_HAS_TEXTSIZE) == 0)
     {
+		// OXT-Beyond: the one it uses, in a HyperCard stack (GetTextHeight)
+		if (ctxt . IsHyperTalkCompatible())
+		{
+			uinteger_t t_size;
+			GetEffectiveTextSize(ctxt, t_size);
+			*r_size = t_size;
+			return;
+		}
         r_size = nil;
 		return;
     }
@@ -3007,6 +3083,12 @@ void MCObject::GetTextStyle(MCExecContext& ctxt, MCInterfaceTextStyle& r_style)
 {
 	if ((m_font_flags & FF_HAS_TEXTSTYLE) == 0)
     {
+		// OXT-Beyond: the one it uses, in a HyperCard stack (GetTextHeight)
+		if (ctxt . IsHyperTalkCompatible())
+		{
+			GetEffectiveTextStyle(ctxt, r_style);
+			return;
+		}
         r_style . style = 0;
 		return;
     }
@@ -3052,7 +3134,15 @@ void MCObject::SetTextStyle(MCExecContext& ctxt, const MCInterfaceTextStyle& p_s
 
 void MCObject::GetEffectiveTextStyle(MCExecContext& ctxt, MCInterfaceTextStyle& r_style)
 {
-	if ((m_font_flags & FF_HAS_TEXTSIZE) == 0)
+	// OXT-Beyond: an object with no textSize of its own gives its owner's
+	//   style here, even when it has a style of its own, which is the one it
+	//   is drawn with. In a HyperCard stack, where reading the textStyle of
+	//   an object with none of its own gives this (GetTextStyle), an object
+	//   with a style of its own gives that style. Elsewhere the answer is
+	//   kept as it was.
+	uint32_t t_own_flag;
+	t_own_flag = ctxt . IsHyperTalkCompatible() ? FF_HAS_TEXTSTYLE : FF_HAS_TEXTSIZE;
+	if ((m_font_flags & t_own_flag) == 0)
 	{
 		if (parent)
 			parent -> GetEffectiveTextStyle(ctxt, r_style);

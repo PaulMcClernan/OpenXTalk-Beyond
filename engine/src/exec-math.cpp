@@ -91,6 +91,18 @@ void MCMathEvalRoundToPrecision(MCExecContext& ctxt, real64_t p_number, real64_t
 
 void MCMathEvalRound(MCExecContext& ctxt, real64_t p_number, real64_t& r_result)
 {
+	// OXT-Beyond: in a stack whose hyperTalkCompatible is true, a number
+	//   halfway between two integers rounds to the even one, as statRound
+	//   rounds it and as HyperCard's round did ("odd integers plus exactly
+	//   0.5 round up; even integers (or 0) plus exactly 0.5 round down", and
+	//   a negative number as its absolute value): round(2.5) is 2 there and
+	//   3 elsewhere. round with a precision, which HyperCard did not have,
+	//   is the same in every stack (MCMathEvalRoundToPrecision).
+	if (ctxt . IsHyperTalkCompatible())
+	{
+		MCMathEvalStatRound(ctxt, p_number, r_result);
+		return;
+	}
 	MCMathEvalRoundToPrecision(ctxt, p_number, 0.0, r_result);
 }
 
