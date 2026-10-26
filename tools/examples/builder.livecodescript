@@ -213,7 +213,7 @@ private command exBuildFrame
    set the cFrameCards of group "Frame" to tNames
 
    -- Back and Next, and where you are
-   get exButton("frameBack", 14, kHeight - 104, 32, "Back", "chevron-left", "dark", empty, "Frame", "prev", 98)
+   get exButton("frameBack", 14, kHeight - 104, 32, "Back", "chevron-left", "dark", empty, "Frame", "back", 98)
    get exButton("frameNext", kSide - 112, kHeight - 104, 32, "Next", "chevron-right", "dark", empty, "Frame", "next", 98)
    put lkLabel("frameCount", lkR(0, kHeight - 60, kSide, kHeight - 44), empty, 12, lkColor("muted"), "Frame", "center") into tObj
    set the sharedText of tObj to false

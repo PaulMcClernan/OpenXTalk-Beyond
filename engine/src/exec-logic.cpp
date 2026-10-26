@@ -23,6 +23,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "mcio.h"
 
 #include "globals.h"
+#include "osspec.h"
 
 #include "exec.h"
 
@@ -109,7 +110,17 @@ static bool MCLogicIsEqualTo(MCExecContext& ctxt, MCValueRef p_left, MCValueRef 
     }
     else
         t_right_converted = false;
-    
+
+    // OXT-Beyond: in a stack whose hyperTalkCompatible is true, a NAN is
+    //   compared as text, as HyperCard compared it, so that x is
+    //   "NAN(037)" is true when x is the NAN that (-8)^(1/3) gives there
+    //   (exec-math.cpp, MCMathHyperTalkResult). As a number, a NAN is
+    //   equal to nothing, itself included.
+    if (t_left_converted && t_right_converted &&
+            (MCS_isnan(t_left_num) || MCS_isnan(t_right_num)) &&
+            ctxt . IsHyperTalkCompatible())
+        t_left_converted = t_right_converted = false;
+
     if (t_left_converted && t_right_converted)
     {
         if (t_left_num == t_right_num)

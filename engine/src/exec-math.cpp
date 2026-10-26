@@ -204,6 +204,49 @@ static bool MCMathCheckNaryResult(MCExecContext& ctxt, real64_t* p_values, uinde
     return false;
 }
 
+// OXT-Beyond: HyperCard's arithmetic, in a stack whose hyperTalkCompatible
+//   is true (MCExecContext::IsHyperTalkCompatible). HyperCard's numbers
+//   were SANE's, which had infinities and NANs: where this engine stops a
+//   script because a division by zero, or a number out of a function's
+//   domain or range, gave no number (1/0, ln(0), sqrt(-1), 10^400),
+//   HyperCard went on with IEEE's result, INF, -INF or a NAN. A NAN made
+//   so keeps the code SANE gave it for what made it, which HyperCard
+//   showed after it (sqrt(-1) was -NAN(001), ln(-1) NAN(036)):
+//   MCExecContext::ConvertToString shows it so. div and mod by zero
+//   stopped a script in HyperCard too ("can't div by zero"), so they
+//   still do (kMCMathHyperTalkRefusesZero).
+enum
+{
+	kMCMathHyperTalkNoCode = 0,
+	kMCMathHyperTalkSqrt = 1,
+	kMCMathHyperTalkDivide = 4,
+	kMCMathHyperTalkInverseTrig = 34,
+	kMCMathHyperTalkLog = 36,
+	kMCMathHyperTalkPower = 37,
+	kMCMathHyperTalkFinancial = 38,
+	// not a code: a zero divisor stops the script, as in HyperCard
+	kMCMathHyperTalkRefusesZero = 256,
+};
+
+// Whether p_result, which this engine refuses, is the result in this
+//   stack, as it was in HyperCard; if so r_result is the number, with
+//   p_code in its payload if it is a NAN (negative for a square root, as
+//   SANE's was)
+static bool MCMathHyperTalkResult(MCExecContext& ctxt, real64_t p_result, int p_code, real64_t& r_result)
+{
+	if (!ctxt . IsHyperTalkCompatible())
+		return false;
+	if (MCS_isnan(p_result) && p_code > kMCMathHyperTalkNoCode && p_code < 256)
+	{
+		uint64_t t_bits = 0x7FF8000000000000ULL | (uint64_t)p_code;
+		if (p_code == kMCMathHyperTalkSqrt)
+			t_bits |= 0x8000000000000000ULL;
+		memcpy(&p_result, &t_bits, sizeof(p_result));
+	}
+	r_result = p_result;
+	return true;
+}
+
 static void MCMathThrowFloatingPointException(MCExecContext& ctxt, real64_t p_result)
 {
     if (MCS_isnan(p_result))
@@ -217,11 +260,14 @@ static void MCMathThrowFloatingPointException(MCExecContext& ctxt, real64_t p_re
 }
 
 template <real64_t (*Func)(real64_t)>
-void MCMathEvalCheckedUnaryFunction(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
+void MCMathEvalCheckedUnaryFunction(MCExecContext& ctxt, real64_t p_in, real64_t& r_result, int p_hypertalk_code = kMCMathHyperTalkNoCode)
 {
     real64_t t_result = Func(p_in);
     if (!MCMathCheckUnaryResult(ctxt, p_in, t_result))
     {
+        // OXT-Beyond: HyperCard's result (MCMathHyperTalkResult)
+        if (MCMathHyperTalkResult(ctxt, t_result, p_hypertalk_code, r_result))
+            return;
         MCMathThrowFloatingPointException(ctxt, t_result);
         return;
     }
@@ -229,11 +275,14 @@ void MCMathEvalCheckedUnaryFunction(MCExecContext& ctxt, real64_t p_in, real64_t
 }
 
 template <real64_t (*Func)(real64_t), bool (*CheckDivideByZero)(real64_t)>
-void MCMathEvalCheckedUnaryFunction(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
+void MCMathEvalCheckedUnaryFunction(MCExecContext& ctxt, real64_t p_in, real64_t& r_result, int p_hypertalk_code = kMCMathHyperTalkNoCode)
 {
     real64_t t_result = Func(p_in);
     if (!MCMathCheckUnaryResult(ctxt, p_in, t_result))
     {
+        // OXT-Beyond: HyperCard's result (MCMathHyperTalkResult)
+        if (MCMathHyperTalkResult(ctxt, t_result, p_hypertalk_code, r_result))
+            return;
         if (CheckDivideByZero(p_in))
         {
             ctxt.LegacyThrow(EE_MATH_ZERO);
@@ -247,11 +296,14 @@ void MCMathEvalCheckedUnaryFunction(MCExecContext& ctxt, real64_t p_in, real64_t
 }
 
 template <real64_t (*Func)(real64_t, real64_t)>
-void MCMathEvalCheckedBinaryFunction(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
+void MCMathEvalCheckedBinaryFunction(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result, int p_hypertalk_code = kMCMathHyperTalkNoCode)
 {
     real64_t t_result = Func(p_left, p_right);
     if (!MCMathCheckBinaryResult(ctxt, p_left, p_right, t_result))
     {
+        // OXT-Beyond: HyperCard's result (MCMathHyperTalkResult)
+        if (MCMathHyperTalkResult(ctxt, t_result, p_hypertalk_code, r_result))
+            return;
         MCMathThrowFloatingPointException(ctxt, t_result);
         return;
     }
@@ -259,12 +311,18 @@ void MCMathEvalCheckedBinaryFunction(MCExecContext& ctxt, real64_t p_left, real6
 }
 
 template <real64_t (*Func)(real64_t, real64_t), bool (*CheckDivideByZero)(real64_t, real64_t)>
-void MCMathEvalCheckedBinaryFunction(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
+void MCMathEvalCheckedBinaryFunction(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result, int p_hypertalk_code = kMCMathHyperTalkNoCode)
 {
     real64_t t_result = Func(p_left, p_right);
     if (!MCMathCheckBinaryResult(ctxt, p_left, p_right, t_result))
     {
-        if (CheckDivideByZero(p_left, p_right))
+        // OXT-Beyond: HyperCard's result (MCMathHyperTalkResult), but for
+        //   div and mod by zero
+        bool t_zero = CheckDivideByZero(p_left, p_right);
+        if (!(t_zero && p_hypertalk_code == kMCMathHyperTalkRefusesZero)
+                && MCMathHyperTalkResult(ctxt, t_result, p_hypertalk_code, r_result))
+            return;
+        if (t_zero)
         {
             ctxt.LegacyThrow(EE_MATH_ZERO);
         }
@@ -289,6 +347,9 @@ void MCMathEvalCheckedNaryFunction(MCExecContext& ctxt, real64_t* p_values, uind
     real64_t t_result = Func(p_values, p_count);
     if (!MCMathCheckNaryResult(ctxt, p_values, p_count, t_result))
     {
+        // OXT-Beyond: HyperCard's result (MCMathHyperTalkResult)
+        if (MCMathHyperTalkResult(ctxt, t_result, kMCMathHyperTalkNoCode, r_result))
+            return;
         MCMathThrowFloatingPointException(ctxt, t_result);
         return;
     }
@@ -297,12 +358,12 @@ void MCMathEvalCheckedNaryFunction(MCExecContext& ctxt, real64_t* p_values, uind
 
 void MCMathEvalAcos(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
 {
-    MCMathEvalCheckedUnaryFunction<acos>(ctxt, p_in, r_result);
+    MCMathEvalCheckedUnaryFunction<acos>(ctxt, p_in, r_result, kMCMathHyperTalkInverseTrig);
 }
 
 void MCMathEvalAsin(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
 {
-    MCMathEvalCheckedUnaryFunction<asin>(ctxt, p_in, r_result);
+    MCMathEvalCheckedUnaryFunction<asin>(ctxt, p_in, r_result, kMCMathHyperTalkInverseTrig);
 }
 
 void MCMathEvalAtan(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
@@ -376,29 +437,29 @@ static real64_t mc_log2(real64_t p_in)
 
 void MCMathEvalLn(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
 {
-    MCMathEvalCheckedUnaryFunction<log,mc_log_check_divide_by_zero>(ctxt, p_in, r_result);
+    MCMathEvalCheckedUnaryFunction<log,mc_log_check_divide_by_zero>(ctxt, p_in, r_result, kMCMathHyperTalkLog);
 }
 
 void MCMathEvalLn1(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
 {
-    MCMathEvalCheckedUnaryFunction<log1p,mc_log1_check_divide_by_zero>(ctxt, p_in, r_result);
+    MCMathEvalCheckedUnaryFunction<log1p,mc_log1_check_divide_by_zero>(ctxt, p_in, r_result, kMCMathHyperTalkLog);
 }
 
 void MCMathEvalLog2(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
 {
-    MCMathEvalCheckedUnaryFunction<mc_log2,mc_log_check_divide_by_zero>(ctxt, p_in, r_result);
+    MCMathEvalCheckedUnaryFunction<mc_log2,mc_log_check_divide_by_zero>(ctxt, p_in, r_result, kMCMathHyperTalkLog);
 }
 
 void MCMathEvalLog10(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
 {
-    MCMathEvalCheckedUnaryFunction<log10,mc_log_check_divide_by_zero>(ctxt, p_in, r_result);
+    MCMathEvalCheckedUnaryFunction<log10,mc_log_check_divide_by_zero>(ctxt, p_in, r_result, kMCMathHyperTalkLog);
 }
 
 //////////
 
 void MCMathEvalSqrt(MCExecContext& ctxt, real64_t p_in, real64_t& r_result)
 {
-    MCMathEvalCheckedUnaryFunction<sqrt>(ctxt, p_in, r_result);
+    MCMathEvalCheckedUnaryFunction<sqrt>(ctxt, p_in, r_result, kMCMathHyperTalkSqrt);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -427,12 +488,12 @@ static bool mc_compound_check_divide_by_zero(real64_t p_rate, real64_t p_periods
 
 void MCMathEvalAnnuity(MCExecContext& ctxt, real64_t p_rate, real64_t p_periods, real64_t& r_result)
 {
-	MCMathEvalCheckedBinaryFunction<mc_annuity,mc_annuity_check_divide_by_zero>(ctxt, p_rate, p_periods, r_result);
+	MCMathEvalCheckedBinaryFunction<mc_annuity,mc_annuity_check_divide_by_zero>(ctxt, p_rate, p_periods, r_result, kMCMathHyperTalkFinancial);
 }
 
 void MCMathEvalCompound(MCExecContext& ctxt, real64_t p_rate, real64_t p_periods, real64_t& r_result)
 {
-	MCMathEvalCheckedBinaryFunction<mc_compound,mc_compound_check_divide_by_zero>(ctxt, p_rate, p_periods, r_result);
+	MCMathEvalCheckedBinaryFunction<mc_compound,mc_compound_check_divide_by_zero>(ctxt, p_rate, p_periods, r_result, kMCMathHyperTalkFinancial);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -614,17 +675,17 @@ static bool mc_over_check_divide_by_zero(real64_t p_left, real64_t p_right)
 
 void MCMathEvalDiv(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
 {
-    MCMathEvalCheckedBinaryFunction<mc_div,mc_over_check_divide_by_zero>(ctxt, p_left, p_right, r_result);
+    MCMathEvalCheckedBinaryFunction<mc_div,mc_over_check_divide_by_zero>(ctxt, p_left, p_right, r_result, kMCMathHyperTalkRefusesZero);
 }
 
 void MCMathEvalMod(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
 {
-    MCMathEvalCheckedBinaryFunction<fmod,mc_mod_check_divide_by_zero>(ctxt, p_left, p_right, r_result);
+    MCMathEvalCheckedBinaryFunction<fmod,mc_mod_check_divide_by_zero>(ctxt, p_left, p_right, r_result, kMCMathHyperTalkRefusesZero);
 }
 
 void MCMathEvalWrap(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
 {
-    MCMathEvalCheckedBinaryFunction<MCU_fwrap,mc_mod_check_divide_by_zero>(ctxt, p_left, p_right, r_result);
+    MCMathEvalCheckedBinaryFunction<MCU_fwrap,mc_mod_check_divide_by_zero>(ctxt, p_left, p_right, r_result, kMCMathHyperTalkRefusesZero);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -661,7 +722,7 @@ void MCMathEvalSubtract(MCExecContext& ctxt, real64_t p_left, real64_t p_right, 
 
 void MCMathEvalOver(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
 {
-    MCMathEvalCheckedBinaryFunction<mc_over,mc_over_check_divide_by_zero>(ctxt, p_left, p_right, r_result);
+    MCMathEvalCheckedBinaryFunction<mc_over,mc_over_check_divide_by_zero>(ctxt, p_left, p_right, r_result, kMCMathHyperTalkDivide);
 }
 
 void MCMathEvalAdd(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
@@ -676,7 +737,7 @@ void MCMathEvalMultiply(MCExecContext& ctxt, real64_t p_left, real64_t p_right, 
 
 void MCMathEvalPower(MCExecContext& ctxt, real64_t p_left, real64_t p_right, real64_t& r_result)
 {
-    MCMathEvalCheckedBinaryFunction<pow, mc_pow_check_divide_by_zero>(ctxt, p_left, p_right, r_result);
+    MCMathEvalCheckedBinaryFunction<pow, mc_pow_check_divide_by_zero>(ctxt, p_left, p_right, r_result, kMCMathHyperTalkPower);
 }
 
 //////////
@@ -1045,6 +1106,9 @@ void MCMathEvalCheckedStatsFunction(MCExecContext& ctxt, real64_t* p_values, uin
     real64_t t_result = MCMathEvaluateStatsFunction(Function, p_values, p_count);
     if (!MCMathCheckNaryResult(ctxt, p_values, p_count, t_result))
     {
+        // OXT-Beyond: HyperCard's result (MCMathHyperTalkResult)
+        if (MCMathHyperTalkResult(ctxt, t_result, kMCMathHyperTalkNoCode, r_result))
+            return;
         MCMathThrowFloatingPointException(ctxt, t_result);
         return;
     }

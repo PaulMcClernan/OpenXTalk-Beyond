@@ -1618,6 +1618,10 @@ public:
         return m_object . object;
 	}
 
+	// OXT-Beyond: whether the object whose script runs is in a stack whose
+	//   hyperTalkCompatible is true
+	bool IsHyperTalkCompatible(void) const;
+
     MCObjectPtr GetObjectPtr(void) const
     {
         return m_object;

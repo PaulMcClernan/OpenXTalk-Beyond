@@ -134,8 +134,13 @@ checked for the web.
 Every remaster is one window, 1024 by 640, which a 720p screen holds with
 its title bar. The sidebar (232 wide) has the example's mark, the list of
 its cards, and Back and Next; the header has the card's title and tagline;
-below it is the card's content, from 256,104 to 1000,616. The arrow keys go
-from card to card, and the sidebar stays still while the content slides.
+below it is the card's content, from 256,104 to 1000,616. Next goes to the
+next card, and Back to the card you came from, however you came (Back and
+Next, the list, the front page, a key, or a program going on by itself),
+or to the card before when there is none: so a card chosen in the list or
+on the front page, then Back, is where you were. The arrow keys go to the
+card before and the card after, and the sidebar stays still while the
+content slides.
 
 Each card is one of four kinds, the last item of its line in the cards'
 table (see `exNewStack`):

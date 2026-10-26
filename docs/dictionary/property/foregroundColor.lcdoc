@@ -59,7 +59,10 @@ depending on the <object type>:
 
 * The <foregroundColor> of a <button(keyword)> is used for the text of
   the <button(keyword)>. If the <button(object)|button's> <showName>
-  <property> is false, the <foregroundColor> has no effect.
+  <property> is false, the <foregroundColor> has no effect on its text.
+  A <button(object)> whose <style> is "roundRect" or "oval" also draws
+  its border in its <foregroundColor>, whatever its <showName>, and its
+  <borderColor> has no effect on that border.
 
 
 * The <foregroundColor> of a <field(keyword)> determines the color of
@@ -111,7 +114,7 @@ scrollbar (object), stack (object), field (object), image (object),
 linkColor (property), HTMLText (property), owner (property),
 showBorder (property), showName (property), showValue (property),
 linkHiliteColor (property), foregroundPattern (property),
-RTFText (property)
+RTFText (property), borderColor (property), style (property)
 
 Tags: ui
 
