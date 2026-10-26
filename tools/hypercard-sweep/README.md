@@ -42,7 +42,12 @@ There are two modes:
 - **`--mode run`** goes on to open the stack, visit its first 40 cards and
   click up to 20 buttons on each of the first 20 cards. It logs every
   error while running with the script line that raised it. Allow
-  25 seconds a stack.
+  25 seconds a stack. The stack opens with its own `openStack`,
+  `openBackground` and `openCard`, where many stacks set themselves up
+  and call their externals first. (The import opens a stack with
+  messages locked, so before the sweep closed it and opened it again,
+  those handlers never ran, and runs from before then are not
+  comparable with runs after.)
 
 Without a display, `click at`, paint tools and anything that waits for a
 person are not representative. Count them, but don't fix them because a
