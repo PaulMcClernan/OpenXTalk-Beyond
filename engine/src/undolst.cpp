@@ -102,24 +102,42 @@ void MCUndolist::freestate()
 	}
 }
 
+// OXT-Beyond: free every record of the object, not just the first. An
+//   object can have more than one: an undo that puts deleted text back
+//   while the field's text is selected over more than one line records a
+//   second deletion, as insertparagraph deletes that selection first (an
+//   autoTab field selects all its text as the undo gives it the focus),
+//   and deletetext, for a text drag out of a field, adds its record to the
+//   list as it stands. The record left behind pointed at the freed field
+//   once its stack was deleted, and the next keystroke in any field, which
+//   frees the list, crashed (tperry2x, openxtalk.org, October 2026,
+//   p=25397). Each pass starts again from the top, as the record just freed
+//   can't be stepped past, and freeing it can free others.
 void MCUndolist::freeobject(MCObject *objptr)
 {
-	if (nodes != NULL)
+	bool t_found;
+	do
 	{
-		MCUndonode *uptr = nodes;
-		do
+		t_found = false;
+		if (nodes != NULL)
 		{
-			if (uptr->getobject() == objptr)
+			MCUndonode *uptr = nodes;
+			do
 			{
-				uptr->remove
-				(nodes);
-				delete uptr;
-				return;
+				if (uptr->getobject() == objptr)
+				{
+					uptr->remove
+					(nodes);
+					delete uptr;
+					t_found = true;
+					break;
+				}
+				uptr = uptr->next();
 			}
-			uptr = uptr->next();
+			while (uptr != nodes);
 		}
-		while (uptr != nodes);
 	}
+	while (t_found);
 }
 
 MCObject *MCUndolist::getobject()
