@@ -39,7 +39,8 @@ OpenXTalk commits, which put the "DontPanic" splash screen in and took
 out the commercial editions' skins, are dated 7 September 2021. It was
 the free, GPL continuation of LiveCode Community 9.6.3 for the two years
 before OpenXTalk Lite. Its releases are tagged 1.963.1-OXT-RC3 (tagged 4
-November 2022) and 1.963.1-OXT-RC4 (tagged 7 August 2023, released on 1
+November 2022 and published on 5 December, the first public Linux beta,
+as an AppImage) and 1.963.1-OXT-RC4 (tagged 7 August 2023, released on 1
 September 2023, the project's second anniversary, by its release notes),
 with a General Music library for MIDI, a macOS AppleImage library, SVG
 icon libraries with a Glyph Browser, and community widgets; Paul went on
