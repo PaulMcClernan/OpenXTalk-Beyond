@@ -4,6 +4,11 @@ script "stack_File_Selector_card_id_1002"
 -- Made from the stack by tools/oxt/stack-scripts.sh; the stack holds
 -- the script that runs, so change it there, not here.
 
+-- OXT-Beyond: the OK button (Open, Save or Choose) is button id 1012
+-- and Cancel button id 1008. This script named them by ids 1013 and 1014,
+-- which are the fields Dlabel and Flabel, so the dialog stopped with an
+-- error as it opened (answer folder, file or ask file with the
+-- systemFileSelector false), and Return and Escape did nothing
 on help
   go to card "File Selector" of stack "Dialog Box Help" as modeless
 end help
@@ -59,11 +64,11 @@ on refresh
 end refresh
 
 on returnKey
-  send "mouseUp" to button id 1013
+  send "mouseUp" to button id 1012
 end returnKey
 
 on escapeKey
-  send "mouseUp" to button id 1014
+  send "mouseUp" to button id 1008
 end escapeKey
 
 # command, title, prompt, filter, response
@@ -89,13 +94,13 @@ on preOpenCard
   if word 2 of item 1 of the dialogData is "folder" then
     hide field "Files"
     hide field "Flabel"
-    set the name of button id 1013 to "Choose"
+    set the name of button id 1012 to "Choose"
   else
     show field "Files"
     show field "Flabel"
     if word 1 of item 1 of the dialogData is "answer"
-    then set the name of button id 1013 to "Open"
-    else set the name of button id 1013 to "Save"
+    then set the name of button id 1012 to "Open"
+    else set the name of button id 1012 to "Save"
   end if
   refresh
 end preOpenCard

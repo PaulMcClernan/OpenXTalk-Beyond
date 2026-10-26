@@ -5,5 +5,5 @@ script "stack_File_Selector_field_id_1004"
 -- the script that runs, so change it there, not here.
 
 on returnInField
-  send "mouseUp" to button id 1013
+  send "mouseUp" to button id 1012
 end returnInField
