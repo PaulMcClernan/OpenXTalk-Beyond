@@ -1743,6 +1743,41 @@ on TestHyperCardScriptsHomeHandlers
    _Close tStack
 end TestHyperCardScriptsHomeHandlers
 
+on TestHyperCardScriptsRecentCards
+   -- the stacks revHyperCardFixScripts makes and the library's own windows
+   -- are not recent cards: create opens a stack, and a stack's "go back",
+   -- or its "pop card" after a "push recent card", went to its card
+   local tStack, tPopped
+   global gHCScriptsTest
+   put "HCRecent" & the milliseconds into tStack
+   lock messages
+   if there is a stack "HyperCard Home" then delete stack "HyperCard Home"
+   create invisible stack tStack
+   set the hyperTalkCompatible of stack tStack to true
+   set the defaultStack to tStack
+   create card
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", "  get hcHome()", "  go back", \
+         "  put the number of this card & comma & the short name of this stack into gHCScriptsTest", "end mouseUp")
+   go to card 1 of stack tStack
+   go to card 2 of stack tStack
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "recent cards: not the library's", _Library(tStack) is not in the recentCards
+   TestAssert "recent cards: nor its menus'", _Menus(tStack) is not in the recentCards
+   push recent card
+   pop card into tPopped
+   TestAssert "recent cards: push recent card, the card gone to before", tPopped is the long id of card 1 of stack tStack
+
+   -- the library's stand-in for Home, made as the button asks for it
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of card 2 of stack tStack
+   TestAssert "recent cards: go back after the library made a stack, the card gone to before", gHCScriptsTest is "1," & tStack
+   TestAssert "recent cards: not the library's Home", "HyperCard Home" is not in the recentCards
+   _Close tStack
+   if there is a stack "HyperCard Home" then delete stack "HyperCard Home"
+end TestHyperCardScriptsRecentCards
+
 on TestHyperCardScriptsCommonExternals
    -- the externals stacks called most that the library stands in for
    local tStack, q, tLoudness, tSettable

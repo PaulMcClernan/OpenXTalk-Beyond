@@ -906,7 +906,7 @@ private function _AddLibrary pStack, pStandIns
       -- made under a name no other stack has, as the library of a stack
       -- imported before would otherwise be the one "it" names
       put "revHyperCardLibrary" & the milliseconds into tTemp
-      create invisible stack tTemp
+      _CreateHiddenStack tTemp
       set the mainStack of stack tTemp to the short name of pStack
       set the name of stack tTemp of pStack to tName
       set the script of stack tName of pStack to revHyperCardLibraryScript() & pStandIns
@@ -944,7 +944,7 @@ private function _AddMenus pStack, pLibrary, pName
    end repeat
    if tName is not among the lines of the substacks of pStack then
       put "revHyperCardMenus" & the milliseconds into tTemp
-      create invisible stack tTemp
+      _CreateHiddenStack tTemp
       set the mainStack of stack tTemp to the short name of pStack
       set the name of stack tTemp of pStack to tName
       set the script of stack tName of pStack to _MenusScript()
@@ -959,6 +959,22 @@ private function _AddMenus pStack, pLibrary, pName
    set the behavior of stack pLibrary of pStack to the long id of stack tName of pStack
    return "Added: the substack" && quote & tName & quote && "as the library's behavior, for doMenu"
 end _AddMenus
+
+-- Makes the invisible stack pName (_AddLibrary, _AddMenus, _MakeProbe)
+-- with the recent cards locked. Create opens a stack, and the card it
+-- opens on was the most recent card: a stack's "go back" or "pop card"
+-- after its openStack's "push recent card" (Carrie's Coins, Datebook+)
+-- went to the library or its menus in the session the stack was
+-- imported in, and ran the stack's own handlers on that card. HyperCard's
+-- own windows were never recent cards. A new stack is not one with
+-- HyperCard's order, whose cards lockRecent would let through
+private command _CreateHiddenStack pName
+   local tRecent
+   put the lockRecent into tRecent
+   set the lockRecent to true
+   create invisible stack pName
+   set the lockRecent to tRecent
+end _CreateHiddenStack
 
 -- The script of the substack _AddMenus adds
 private function _MenusScript
@@ -979,7 +995,7 @@ end _MenusScript
 private command _MakeProbe
    local tName
    put "revHyperCardProbe" & the milliseconds into tName
-   create invisible stack tName
+   _CreateHiddenStack tName
    put the long id of stack tName into sProbe
    -- (with the message order of the stack being fixed, so that a script
    -- compiles on it as in the stack: "on doMenu")
