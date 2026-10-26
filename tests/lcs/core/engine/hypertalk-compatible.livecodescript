@@ -6,9 +6,10 @@ it always went; on, a background part's message reaches the card before
 the background, a handler can be called doMenu, and doMenu is a message
 before it runs, even while messages are locked, as in HyperCard;
 lockRecent keeps no card of the stack out of the recent cards that go
-back goes through; and a handler that went to another stack still
-reaches its own stack's script before the dynamic path. Each test checks
-the stack with the property off too.
+back goes through; a handler that went to another stack still reaches
+its own stack's script before the dynamic path; and arithmetic that
+gives no number goes on with HyperCard's INF or NAN instead of stopping
+the script. Each test checks the stack with the property off too.
 */
 
 local sStack
@@ -298,3 +299,85 @@ on TestHyperTalkCompatibleSaved
    _DeleteStack
    delete file tPath
 end TestHyperTalkCompatibleSaved
+
+-- Each line of pStatements run by a script of the stack (button "C"'s),
+-- with tValue 7 before it: tValue after it, one a line, or "error" where
+-- the statement stopped the script
+private function _Values pStatements
+   global gHCValues, gHCStatements
+   set the script of button "C" of stack sStack to "on hcValues" & return \
+         & "global gHCValues, gHCStatements" & return & "local tStatement, tValue, tError" & return \
+         & "put empty into gHCValues" & return \
+         & "repeat for each line tStatement in gHCStatements" & return \
+         & "put 7 into tValue" & return & "try" & return & "do tStatement" & return \
+         & "put tValue & return after gHCValues" & return \
+         & "catch tError" & return & "put " & quote & "error" & quote & " & return after gHCValues" & return \
+         & "end try" & return & "end repeat" & return & "end hcValues"
+   put pStatements into gHCStatements
+   put empty into gHCValues
+   send "hcValues" to button "C" of stack sStack
+   return gHCValues
+end _Values
+
+on TestHyperTalkCompatibleArithmeticOff
+   local tValues
+   _MakeStack false
+   put _Values("put 1/0 into tValue" & return & "put 0/0 into tValue" & return \
+         & "divide tValue by 0" & return & "put sqrt(-1) into tValue" & return \
+         & "put ln(0) into tValue" & return & "put 10^400 into tValue" & return \
+         & "put 7 div 0 into tValue" & return & "put 1/4 into tValue") into tValues
+   TestAssert "off: 1/0 stops the script", line 1 of tValues is "error"
+   TestAssert "off: 0/0 stops the script", line 2 of tValues is "error"
+   TestAssert "off: divide by 0 stops the script", line 3 of tValues is "error"
+   TestAssert "off: sqrt(-1) stops the script", line 4 of tValues is "error"
+   TestAssert "off: ln(0) stops the script", line 5 of tValues is "error"
+   TestAssert "off: 10^400 stops the script", line 6 of tValues is "error"
+   TestAssert "off: div by 0 stops the script", line 7 of tValues is "error"
+   TestAssert "off: 1/4 is 0.25", line 8 of tValues is "0.25"
+   _DeleteStack
+end TestHyperTalkCompatibleArithmeticOff
+
+-- HyperCard's numbers (SANE's) had infinities and NANs, and it showed a
+-- NAN with the code of what made it: 1/0 was INF, sqrt(-1) -NAN(001) and
+-- ln(-1) NAN(036) there. div and mod by zero stopped the script, as here
+on TestHyperTalkCompatibleArithmetic
+   local tValues
+   _MakeStack true
+   put _Values("put 1/0 into tValue" & return & "put -1/0 into tValue" & return \
+         & "put 0/0 into tValue" & return & "divide tValue by 0" & return \
+         & "put 1/0 + 1 into tValue" & return & "put 1/0 > 10^300 into tValue" & return \
+         & "put 1/0 is " & quote & "INF" & quote & " into tValue" & return \
+         & "put (0/0) * 100 into tValue" & return & "put sqrt(-1) into tValue" & return \
+         & "put ln(-1) into tValue" & return & "put ln(0) into tValue" & return \
+         & "put asin(2) into tValue" & return & "put (-8)^(1/3) into tValue" & return \
+         & "put 10^400 into tValue" & return & "put 7 div 0 into tValue" & return \
+         & "put 5 mod 0 into tValue" & return & "put 1/4 into tValue") into tValues
+   TestAssert "on: 1/0 is INF", line 1 of tValues is "INF"
+   TestAssert "on: -1/0 is -INF", line 2 of tValues is "-INF"
+   TestAssert "on: 0/0 is NAN(004)", line 3 of tValues is "NAN(004)"
+   TestAssert "on: 7 divided by 0 is INF", line 4 of tValues is "INF"
+   TestAssert "on: INF + 1 is INF", line 5 of tValues is "INF"
+   TestAssert "on: INF is more than any number", line 6 of tValues is "true"
+   TestAssert "on: 1/0 is " & quote & "INF" & quote, line 7 of tValues is "true"
+   TestAssert "on: a NAN times 100 is a NAN", char 1 to 3 of line 8 of tValues is "NAN"
+   TestAssert "on: sqrt(-1) is -NAN(001)", line 9 of tValues is "-NAN(001)"
+   TestAssert "on: ln(-1) is NAN(036)", line 10 of tValues is "NAN(036)"
+   TestAssert "on: ln(0) is -INF", line 11 of tValues is "-INF"
+   TestAssert "on: asin(2) is NAN(034)", line 12 of tValues is "NAN(034)"
+   TestAssert "on: (-8)^(1/3) is NAN(037)", line 13 of tValues is "NAN(037)"
+   TestAssert "on: 10^400 is INF", line 14 of tValues is "INF"
+   TestAssert "on: div by 0 still stops the script", line 15 of tValues is "error"
+   TestAssert "on: mod by 0 still stops the script", line 16 of tValues is "error"
+   TestAssert "on: 1/4 is still 0.25", line 17 of tValues is "0.25"
+
+   -- a field shows them as HyperCard did
+   set the defaultStack to sStack
+   create field "F"
+   set the script of button "C" of stack sStack to "on mouseUp" & return & "local tError" & return \
+         & "try" & return & "put 1/0 & comma & 0/0 into field " & quote & "F" & quote & return \
+         & "catch tError" & return & "put " & quote & "error" & quote & " into field " & quote & "F" & quote & return \
+         & "end try" & return & "end mouseUp"
+   send "mouseUp" to button "C" of stack sStack
+   TestAssert "on: a field shows 1/0 and 0/0 as INF and NAN(004)", field "F" of stack sStack is "INF,NAN(004)"
+   _DeleteStack
+end TestHyperTalkCompatibleArithmetic

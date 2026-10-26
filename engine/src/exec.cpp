@@ -29,6 +29,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "securemode.h"
 #include "exec.h"
 #include "field.h"
+#include "stack.h"
 #include "variable.h"
 #include "handler.h"
 #include "hndlrlst.h"
@@ -63,6 +64,49 @@ bool MCExecContext::ForceToBoolean(MCValueRef p_value, MCBooleanRef& r_boolean)
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// OXT-Beyond: whether the object whose script runs is in a stack whose
+//   hyperTalkCompatible is true (MCStack::ishypertalkcompatible), where
+//   numbers follow HyperCard's arithmetic (MCMathHyperTalkResult) and are
+//   shown as HyperCard showed them (MCExecFormatHyperTalkNumber)
+bool MCExecContext::IsHyperTalkCompatible(void) const
+{
+	MCObject *t_object = GetObject();
+	if (t_object == nil)
+		return false;
+	MCStackHandle t_stack = t_object -> getstack();
+	return t_stack . IsValid() && t_stack -> ishypertalkcompatible();
+}
+
+// OXT-Beyond: an infinite number or a NAN as HyperCard showed it, where
+//   this engine shows "inf" and "nan": INF, -INF, and NAN with the code
+//   HyperCard's numbers (SANE's) gave it for what made it, in three
+//   digits (0/0 is NAN(004), sqrt(-1) -NAN(001)), which exec-math.cpp
+//   keeps in the NAN's payload. A NAN with no such code (one read from
+//   text, or made from an infinity) is NAN. The string keeps the number
+//   itself as its numeric value, so that the NAN read back is the same: a
+//   new string, as MCU_r8tos makes, never MCSTR's shared one.
+static bool MCExecFormatHyperTalkNumber(real64_t p_real, MCStringRef& r_string)
+{
+	MCAutoStringRef t_string;
+	bool t_success;
+	if (!MCS_isnan(p_real))
+		t_success = MCStringCreateWithCString(p_real < 0.0 ? "-INF" : "INF", &t_string);
+	else
+	{
+		uint64_t t_bits;
+		memcpy(&t_bits, &p_real, sizeof(t_bits));
+		// the payload, below the quiet bit
+		uint64_t t_code = t_bits & 0x0007FFFFFFFFFFFFULL;
+		if (t_code == 0 || t_code > 255)
+			t_success = MCStringCreateWithCString("NAN", &t_string);
+		else
+			t_success = MCStringFormat(&t_string, "%sNAN(%03u)", (t_bits >> 63) != 0 ? "-" : "", (unsigned int)t_code);
+	}
+	return t_success &&
+		MCStringSetNumericValue(*t_string, p_real) &&
+		MCStringCopy(*t_string, r_string);
+}
+
 bool MCExecContext::ConvertToString(MCValueRef p_value, MCStringRef& r_string)
 {
     switch(MCValueGetTypeCode(p_value))
@@ -93,8 +137,14 @@ bool MCExecContext::ConvertToString(MCValueRef p_value, MCStringRef& r_string)
 			    MCStringFormat(r_string, "%d", MCNumberFetchAsInteger(t_number)) &&
 			    MCStringSetNumericValue(r_string, MCNumberFetchAsReal(t_number));
 	    else
-		    return MCU_r8tos(MCNumberFetchAsReal(t_number),
+	    {
+		    // OXT-Beyond: HyperCard's INF and NAN (MCExecFormatHyperTalkNumber)
+		    real64_t t_real = MCNumberFetchAsReal(t_number);
+		    if (!MCS_isfinite(t_real) && IsHyperTalkCompatible())
+			    return MCExecFormatHyperTalkNumber(t_real, r_string);
+		    return MCU_r8tos(t_real,
 		                     m_nffw, m_nftrailing, m_nfforce, r_string);
+	    }
     }
     break;
     default:
@@ -468,6 +518,9 @@ bool MCExecContext::ConvertToLegacyRectangle(MCValueRef p_value, MCRectangle& r_
 
 bool MCExecContext::FormatReal(real64_t p_real, MCStringRef& r_value)
 {
+	// OXT-Beyond: HyperCard's INF and NAN (MCExecFormatHyperTalkNumber)
+	if (!MCS_isfinite(p_real) && IsHyperTalkCompatible())
+		return MCExecFormatHyperTalkNumber(p_real, r_value);
 	return MCU_r8tos(p_real, GetNumberFormatWidth(), GetNumberFormatTrailing(), GetNumberFormatForce(), r_value);
 }
 
