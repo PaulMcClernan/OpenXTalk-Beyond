@@ -221,7 +221,12 @@ end docsBuilderParseDictionary
 command docsBuilderGenerateDistributedAPI pEdition
    local tAdditionalFolders
    docsBuilderGetAdditionalFolders pEdition, tAdditionalFolders
-   
+   -- OXT-Beyond: and the folder of mergJSON, the one external of LiveCode's
+   -- Ext folder that OXT-Beyond builds and installs there (mergjson/
+   -- README.md), so that its .lcdoc is in the script dictionary, as those
+   -- of the Ext folders were. Not for the guides: its README.md is not one.
+   addFolderToListIfExists builderRepoFolder() & slash & "mergjson", true, tAdditionalFolders
+
    local tLibrariesA
    
    local tComponents

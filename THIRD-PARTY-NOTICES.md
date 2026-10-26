@@ -419,7 +419,7 @@ licences. A standalone that includes the external gets the library too.
 
 | Component | Version | Used by | Licence | Licence text |
 | --- | --- | --- | --- | --- |
-| mergJSON (Monte Goulding, mergExt) | commit `db85296` of [montegoulding/mergJSON](https://github.com/montegoulding/mergJSON) (18 June 2019) | `JSONToArray`, `ArrayToJSON`, the OAuth2 library | GPL 3 (also offered under a commercial licence, which this copy is not) | [`mergjson/LICENSE.txt`](mergjson/LICENSE.txt), installed as `Ext/mergJSON/LICENSE.txt` |
+| mergJSON (Monte Goulding, mergExt) | commit `db85296` of [montegoulding/mergJSON](https://github.com/montegoulding/mergJSON) (18 June 2019) | `JSONToArray`, `ArrayToJSON`, the OAuth2 library, and the Dictionary's mergJSON entries (from `mergJSON.lcdoc`) | GPL 3 (also offered under a commercial licence, which this copy is not) | [`mergjson/LICENSE.txt`](mergjson/LICENSE.txt), installed as `Ext/mergJSON/LICENSE.txt` |
 | Jansson (Petri Lehtinen), Monte Goulding's fork | commit `17ac0ee` of [montegoulding/jansson](https://github.com/montegoulding/jansson) (`v2.11-31-g17ac0ee`) | mergJSON, compiled into it | MIT | [`mergjson/jansson/LICENSE`](mergjson/jansson/LICENSE), installed as `Ext/mergJSON/LICENSE-jansson.txt` |
 
 ## xTalk Suite extensions

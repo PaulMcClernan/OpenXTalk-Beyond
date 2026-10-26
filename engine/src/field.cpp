@@ -1953,6 +1953,15 @@ Exec_stat MCField::hscroll(int4 offset, Boolean doredraw)
 			drect.height += flags & F_HSCROLLBAR ? DEFAULT_BORDER
 			                : DEFAULT_BORDER * 2;
 		}
+	// OXT-Beyond: what the scroll redraws, as in vscroll: all of drect but
+	//   for a field with no border the point drect takes off its bottom and
+	//   right, which the field draws its text in too.
+	MCRectangle t_redraw = drect;
+	if (!borderwidth)
+	{
+		t_redraw.width++;
+		t_redraw.height++;
+	}
 	uint4 twidth = textwidth + leftmargin + rightmargin - DEFAULT_BORDER * 2;
 	if (textx < 0 || twidth < (uint4)drect.width)
 		textx = 0;
@@ -1970,7 +1979,7 @@ Exec_stat MCField::hscroll(int4 offset, Boolean doredraw)
 	if (opened && doredraw)
 	{
 		// MW-2011-08-18: [[ Layers ]] Redraw the content area.
-		layer_redrawrect(drect);
+		layer_redrawrect(t_redraw);
 	}
 
 	signallisteners(P_HSCROLL);
@@ -2005,6 +2014,26 @@ Exec_stat MCField::vscroll(int4 offset, Boolean doredraw)
 		drect.y++;
 		drect.height--;
 	}
+	// OXT-Beyond: what the scroll redraws. drect, which sets how far the
+	//   field can scroll, leaves out a row of points the field draws its
+	//   text in: the bottom one (and the right column) of a field with no
+	//   border, and the top one in the Mac's own look. A scroll did not
+	//   redraw that row, so it went on showing the piece of a line it was
+	//   last drawn with: pieces of the lines scrolled past along the bottom
+	//   of a field with no border, and on macOS along the top of a field
+	//   (tperry2x, rc.6.5). The whole of the text's rect is redrawn; drect
+	//   still sets how far the field scrolls.
+	MCRectangle t_redraw = drect;
+	if (!borderwidth)
+	{
+		t_redraw.width++;
+		t_redraw.height++;
+	}
+	if (IsMacLFAM() && MCaqua && borderwidth == DEFAULT_BORDER)
+	{
+		t_redraw.y--;
+		t_redraw.height++;
+	}
 	uint4 theight = textheight + topmargin + bottommargin - TEXT_Y_OFFSET * 2;
 	if (texty < 0 || theight < (uint4)drect.height)
 		texty = 0;
@@ -2025,7 +2054,7 @@ Exec_stat MCField::vscroll(int4 offset, Boolean doredraw)
 	if (opened && doredraw)
 	{
 		// MW-2011-08-18: [[ Layers ]] Redraw the content area.
-		layer_redrawrect(drect);
+		layer_redrawrect(t_redraw);
 	}
 	
 	signallisteners(P_VSCROLL);

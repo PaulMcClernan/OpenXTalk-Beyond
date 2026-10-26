@@ -14,7 +14,10 @@ from this source instead. That gives stacks written for LiveCode
 
 - `src/mergJSON.c`, `src/mergJSONLibrary.livecodescript`, `mergJSON.lcdoc`
   and `LICENSE.txt` are as upstream: https://github.com/montegoulding/mergJSON
-  at commit `db85296` (18 June 2019). mergJSON is offered under the GPL 3
+  at commit `db85296` (18 June 2019), but for the OS and Platforms lines
+  of `mergJSON.lcdoc`, which name where OXT-Beyond builds the external
+  (the desktop: macOS, Windows and Linux) instead of upstream's iOS,
+  Android and server as well. mergJSON is offered under the GPL 3
   (`LICENSE.txt`) or under a commercial licence from mergExt, and this
   copy is used under the GPL 3.
 - `jansson/` is Monte Goulding's fork of Jansson, which the mergJSON
@@ -63,6 +66,12 @@ a standalone that uses it gets the external and the library, but only
 for the platforms whose build the package has: a Windows x64 install
 builds x64 Windows standalones with it, not 32-bit ones.
 
+LiveCode's Dictionary and the text dictionary have `mergJSONEncode`,
+`mergJSONDecode` and the mergJSON library entry from `mergJSON.lcdoc`:
+the docs build adds this folder's `.lcdoc` to the script dictionary
+(`builder/docs_builder.livecodescript`), as LiveCode's added those of
+the mergExt externals in its `Ext` folder.
+
 ## Tests
 
 `tests/lcs/ext/mergjson.livecodescript` loads the external and the
@@ -75,4 +84,7 @@ mergJSON's own `tests/broken.json` lists. The IDE tour's `ext-mergjson`
 step (`tools/ci/ui-tour.livecodescript`) checks a package: that the IDE
 loaded the external and the library from `Ext/mergJSON`, that JSON goes
 both ways, and that the standalone builder would include this
-computer's build.
+computer's build. `TestDocsValidateMergJSON`
+(`tests/lcs/docs/validate-dictionary.livecodescript`) reads
+`mergJSON.lcdoc` as the docs build does and checks its entries as the
+Dictionary's own are checked.

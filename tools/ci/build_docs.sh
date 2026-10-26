@@ -24,8 +24,9 @@
 #
 # 1. LiveCode's docs builder (builder/builder_tool.livecodescript --stage
 #    docs) makes LiveCode's Dictionary and the guides from docs/,
-#    ide/Documentation/guides, ide/Documentation/dictionary and the
-#    LiveCode Builder modules of libscript/ and engine/.
+#    ide/Documentation/guides, ide/Documentation/dictionary,
+#    mergjson/mergJSON.lcdoc and the LiveCode Builder modules of
+#    libscript/ and engine/.
 # 2. tools/ci/extension_docs.livecodescript makes the dictionary data of the
 #    extensions that OXT-Beyond installs and of the IDE library, as the IDE
 #    makes it when it loads them (tools/oxt/text_dictionary.py

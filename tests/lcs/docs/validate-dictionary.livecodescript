@@ -84,6 +84,55 @@ on TestDocsValidateExtractedLibraries
    end repeat
 end TestDocsValidateExtractedLibraries
 
+-- OXT-Beyond: mergJSON's docs, which the docs build adds to the script
+-- dictionary from the repository (docsBuilderGenerateDistributedAPI in
+-- builder/docs_builder.livecodescript), read as it reads them
+-- (addToDictionaryFromFolder): the library entry and its two functions,
+-- for the desktop systems that OXT-Beyond builds the external for
+on TestDocsValidateMergJSON
+   local tDocsPath, tText, tParsedA, tDoc, tDocsA, tNames, tCount
+   put TestGetEngineRepositoryPath() & "/mergjson/mergJSON.lcdoc" into tDocsPath
+   put textDecode(url ("binfile:" & tDocsPath), "utf-8") into tText
+   replace numToChar(13) & numToChar(10) with numToChar(10) in tText
+   replace numToChar(13) with numToChar(10) in tText
+   put revDocsParseDocText(tText, tDocsPath, empty) into tParsedA
+
+   put 0 into tCount
+   repeat for each element tDoc in tParsedA["doc"]
+      if tDoc["display name"] is empty then next repeat
+      add 1 to tCount
+      put tDoc into tDocsA[tCount]
+      put tDoc["display name"] && tDoc["type"] & return after tNames
+   end repeat
+   sort lines of tNames
+   TestAssert "mergJSON.lcdoc has the library and its two functions", \
+         tNames is "mergJSON library" & return & "mergJSONDecode function" & \
+         return & "mergJSONEncode function" & return
+
+   repeat for each element tDoc in tDocsA
+      if tDoc["type"] is "library" then next repeat
+      TestAssert tDoc["display name"] && "is in the mergJSON library", \
+            __DocsItems(tDoc["associations"]) is "mergjson"
+      TestAssert tDoc["display name"] && "is for macOS, Windows and Linux", \
+            __DocsItems(tDoc["OS"]) is "linux,mac,windows"
+      TestAssert tDoc["display name"] && "is for the desktop", \
+            __DocsItems(tDoc["Platforms"]) is "desktop"
+   end repeat
+
+   __TestDocsLibraryArray tDocsPath, tDocsA
+end TestDocsValidateMergJSON
+
+-- The elements of a parsed list, sorted, as items
+private function __DocsItems pList
+   local tValue, tItems
+   repeat for each element tValue in pList
+      put tValue & comma after tItems
+   end repeat
+   delete the last char of tItems
+   sort items of tItems
+   return tItems
+end __DocsItems
+
 on TestDocsValidateExtensionDocs
    local tExtensionsFolder
    put TestGetPackagedExtensionsFolder() into tExtensionsFolder

@@ -19,8 +19,10 @@ script "oxt_ui_tour"
 -- of empty fields, the tabs, a scrollbar with nothing to scroll, sliders,
 -- and on the Mac the useSystemWindowColor) (and stacks opened with their title
 -- bars above the screen, which the IDE moves where they can be dragged:
--- title-bar, and a card that must show at once each change a script makes
--- to its border: card-border), the Property Inspector (each section for a
+-- title-bar, a card that must show at once each change a script makes
+-- to its border: card-border, and fields that must show what they showed
+-- once they are scrolled down and back to the top, by a script and with
+-- the system's mouse wheel: field-scroll), the Property Inspector (each section for a
 -- button, its section icons clicked with the system's mouse: inspector-tabs, the
 -- Text section of a field, a field's Scrollbar width, which offers 12 and
 -- Standard and sets the width the field has when its stack is opened again
@@ -74,7 +76,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -2058,6 +2060,313 @@ function tourCbName pRGB
    end repeat
    return tBestName
 end tourCbName
+
+-- A scrolled field shows what it shows drawn whole, and once it is back
+-- at the top what it showed before (tperry2x, rc.6.5: on macOS the top of
+-- a field kept pieces of the lines scrolled past). Each field scrolls as
+-- a mouse wheel scrolls it, 15 percent of its height at a time
+-- (MCField::fscroll), ten times down and then back to the top, waiting
+-- between steps as a wheel does: by a script, which sets its vScroll, and
+-- the first field also with the system's mouse wheel over it. The screen
+-- of the field, but its scrollbar, is compared point for point with what
+-- it shows once it is drawn whole (hidden and shown), and back at the top
+-- with what it showed before. The fields: 2000 lines with the border a
+-- new field has, where a step moves the scrollbar's thumb less than a
+-- point, the same with 100 lines, where each step moves it, and 2000
+-- lines with no border, which is also scrolled across (its hScroll) and
+-- back
+on tour_field_scroll
+   local tName, tArea, tDefault, tFields, tField, tLeft, tFails, tLines, tText, i
+   put "oxt_field_scroll" into tName
+   put line 1 of the working screenRects into tArea
+   put the defaultStack into tDefault
+   lock messages
+   if there is a stack tName then delete stack tName
+   create stack tName
+   set the rect of stack tName to item 1 of tArea + 360, item 2 of tArea + 120, \
+         item 1 of tArea + 880, item 2 of tArea + 420
+   set the defaultStack to tName
+   put 10 into tLeft
+   repeat for each item tLines in "2000,100,2000"
+      create field
+      put it into tField
+      set the rect of tField to tLeft, 10, tLeft + 160, 290
+      add 170 to tLeft
+      set the vScrollbar of tField to true
+      set the dontWrap of tField to true
+      set the lockText of tField to true
+      set the traversalOn of tField to false
+      put empty into tText
+      repeat with i = 1 to tLines
+         put "Line" && i && "of" && tLines && "scrolled down and up" & return after tText
+      end repeat
+      delete the last char of tText
+      set the text of tField to tText
+      put tField & return after tFields
+   end repeat
+   put line 3 of tFields into tField
+   set the borderWidth of tField to 0
+   -- closed, it opens again as a user's does (tourTbMake)
+   close stack tName
+   set the defaultStack to tDefault
+   unlock messages
+   go stack tName
+   tourOnScreen tName
+   tourMouseAway
+   repeat with i = 1 to 3
+      put tourFsCheck(tName, line i of tFields, i, i is 1, i is 3) after tFails
+   end repeat
+   tourShotStack tName, "04d-field-scroll"
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_field_scroll
+
+-- Empty if the field pField (the pIndex'th) of the stack pStack shows on
+-- the screen what it shows drawn whole once it is scrolled down, and what
+-- it showed before once it is back at the top, by its vScroll, if pWheel
+-- with the system's mouse wheel too, and if pAcross across and back by
+-- its hScroll too, else a line for each way it does not
+function tourFsCheck pStack, pField, pIndex, pWheel, pAcross
+   local tWhat, tStep, tBefore, tFails, tDown, tScrolled
+   put the number of lines of the text of pField && "lines, border" && the borderWidth of pField into tWhat
+   tourWait 400
+   put tourFsScreen(pStack, pField) into tBefore
+   -- as much as a notch of a mouse wheel (MCField::fscroll)
+   put (the height of pField - 2 * the borderWidth of pField) * 15 div 100 into tStep
+   repeat 10 times
+      set the vScroll of pField to the vScroll of pField + tStep
+      tourWait 80
+   end repeat
+   tourWait 400
+   put tourFsNote(pStack, tourFsWhole(pStack, pField), tWhat && "down to" && the vScroll of pField && "by its vScroll:", \
+         "the field drawn whole", pIndex & "-vscroll-down") after tFails
+   repeat 12 times
+      set the vScroll of pField to max(0, the vScroll of pField - tStep)
+      tourWait 80
+   end repeat
+   tourWait 400
+   put tourFsNote(pStack, tourFsDiff(tBefore, tourFsScreen(pStack, pField)), tWhat && "back at the top by its vScroll:", \
+         "before", pIndex & "-vscroll-up") after tFails
+   if tFails is not empty then
+      -- drawn whole, for what comes next
+      get tourFsWhole(pStack, pField)
+      put tourFsScreen(pStack, pField) into tBefore
+   end if
+   if pAcross then
+      repeat 5 times
+         set the hScroll of pField to the hScroll of pField + 10
+         tourWait 80
+      end repeat
+      tourWait 400
+      put tourFsNote(pStack, tourFsWhole(pStack, pField), tWhat && "across to" && the hScroll of pField && "by its hScroll:", \
+            "the field drawn whole", pIndex & "-hscroll-across") after tFails
+      repeat 7 times
+         set the hScroll of pField to max(0, the hScroll of pField - 10)
+         tourWait 80
+      end repeat
+      tourWait 400
+      put tourFsNote(pStack, tourFsDiff(tBefore, tourFsScreen(pStack, pField)), tWhat && "back at the left by its hScroll:", \
+            "before", pIndex & "-hscroll-back") after tFails
+   end if
+   if not pWheel then return tFails
+   tourMoveMouse tourScreenLoc(pField, pStack)
+   tourWait 300
+   -- down, or if a notch down scrolls the other way here, up
+   put true into tDown
+   tourWheel tDown, 10
+   tourFsStill pField
+   if the vScroll of pField is 0 then
+      put false into tDown
+      tourWheel tDown, 10
+      tourFsStill pField
+   end if
+   put the vScroll of pField into tScrolled
+   if tScrolled is 0 then
+      tourRecord "INFO field-scroll" && tWhat && "the system's mouse wheel did not scroll it"
+   else
+      put tourFsNote(pStack, tourFsWhole(pStack, pField), tWhat && "down to" && tScrolled && "by the system's mouse wheel:", \
+            "the field drawn whole", pIndex & "-wheel-down") after tFails
+      tourWheel not tDown, 14
+      tourFsStill pField
+      tourMouseAway
+      if the vScroll of pField is not 0 then
+         tourRecord "INFO field-scroll" && tWhat && "the system's mouse wheel scrolled it back up to" && \
+               the vScroll of pField & ", not to the top"
+      else
+         put tourFsNote(pStack, tourFsDiff(tBefore, tourFsScreen(pStack, pField)), \
+               tWhat && "back at the top by the system's mouse wheel:", "before", pIndex & "-wheel-up") after tFails
+      end if
+   end if
+   tourMouseAway
+   return tFails
+end tourFsCheck
+
+-- Waits until the vScroll of the field pField has stayed the same for
+-- 600 milliseconds, at most 4 seconds: the engine can still be taking
+-- the notches of a mouse wheel, and a field that scrolls between the
+-- two snapshots of a comparison differs from itself
+command tourFsStill pField
+   local tLast, tStill
+   put the vScroll of pField into tLast
+   put 0 into tStill
+   repeat 40 times
+      tourWait 100
+      if the vScroll of pField is not tLast then
+         put the vScroll of pField into tLast
+         put 0 into tStill
+      else
+         add 100 to tStill
+         if tStill >= 600 then exit repeat
+      end if
+   end repeat
+end tourFsStill
+
+-- Empty if the field pField of the stack pStack shows on the screen what
+-- it shows once it is drawn whole, else which rows differ; it is drawn
+-- whole then, as when it is hidden and shown again
+function tourFsWhole pStack, pField
+   local tShown
+   put tourFsScreen(pStack, pField) into tShown
+   set the visible of pField to false
+   set the visible of pField to true
+   tourWait 400
+   return tourFsDiff(tourFsScreen(pStack, pField), tShown)
+end tourFsWhole
+
+-- An INFO line for a comparison of the step (pWhat; pDiff, what
+-- tourFsDiff gave; pAgainst, what with), and if pDiff is not empty a
+-- snapshot of the stack pStack and a line for the step's failure
+function tourFsNote pStack, pDiff, pWhat, pAgainst, pShot
+   if pDiff is empty then
+      tourRecord "INFO field-scroll" && pWhat && "the same as" && pAgainst
+      return empty
+   end if
+   tourRecord "INFO field-scroll" && pWhat && pDiff && "from" && pAgainst
+   tourShotStack pStack, "04d-field-scroll-failed-" & pShot
+   return pWhat && pDiff && "from" && pAgainst & return
+end tourFsNote
+
+-- The field pField of the stack pStack on the screen, but its vertical
+-- scrollbar, as PNG
+function tourFsScreen pStack, pField
+   local tWin, tRect, tRight, tData
+   tourUnlockScreen "field-scroll"
+   put the rect of stack pStack into tWin
+   put the rect of pField into tRect
+   put item 3 of tRect into tRight
+   if the vScrollbar of pField then subtract the scrollbarWidth of pField from tRight
+   export snapshot from rect (item 1 of tWin + item 1 of tRect, item 2 of tWin + item 2 of tRect, \
+         item 1 of tWin + tRight, item 2 of tWin + item 4 of tRect) to tData as PNG
+   return tData
+end tourFsScreen
+
+-- Empty if the PNGs pBefore and pAfter have the same points, else which
+-- of their rows differ, counted from the top of the field
+function tourFsDiff pBefore, pAfter
+   local tProbe, tWidth, tHeight, tA, tB, tBytes, tRow, tFirst, tLast, tCount, tFrom, tTo
+   set the caseSensitive to true
+   if pBefore is pAfter then return empty
+   put "oxt_tour_probe" into tProbe
+   lock messages
+   create invisible image tProbe in card 1 of stack "oxt_ui_tour"
+   set the text of image tProbe of stack "oxt_ui_tour" to pBefore
+   put the width of image tProbe of stack "oxt_ui_tour" into tWidth
+   put the height of image tProbe of stack "oxt_ui_tour" into tHeight
+   put the imageData of image tProbe of stack "oxt_ui_tour" into tA
+   set the text of image tProbe of stack "oxt_ui_tour" to pAfter
+   put the imageData of image tProbe of stack "oxt_ui_tour" into tB
+   delete image tProbe of stack "oxt_ui_tour"
+   unlock messages
+   if the number of bytes of tA is not the number of bytes of tB then return "a snapshot of another size"
+   put tWidth * 4 into tBytes
+   put 0 into tCount
+   repeat with tRow = 0 to tHeight - 1
+      put tRow * tBytes + 1 into tFrom
+      put tFrom + tBytes - 1 into tTo
+      if byte tFrom to tTo of tA is not byte tFrom to tTo of tB then
+         if tFirst is empty then put tRow into tFirst
+         put tRow into tLast
+         add 1 to tCount
+      end if
+   end repeat
+   if tCount is 0 then return empty
+   return tCount && "of its" && tHeight && "rows of points (rows" && tFirst && "to" && tLast & ") differ"
+end tourFsDiff
+
+-- pCount notches of the system's mouse wheel, down (toward the end of a
+-- field's text) if pDown, else up, at a user's pace: the command runs
+-- beside the engine, which handles each notch as it comes, and the
+-- handler waits for them. CGEventPost on macOS (osascript, as tourClick),
+-- xdotool on Linux, and mouse_event on Windows (PowerShell, which the
+-- engine waits on: there the notches come together once it is back)
+command tourWheel pDown, pCount
+   local tLog, tCommand, tScript, tHide, tDelta
+   put specialFolderPath("temporary") & "/oxt_tour_wheel.log" into tLog
+   switch the platform
+      case "MacOS"
+         if pDown then put -1 into tDelta
+         else put 1 into tDelta
+         -- CGEventCreateScrollWheelEvent2 where the bridge has it, else
+         -- an event made one (type 22, its two line deltas)
+         put "ObjC.import(" & quote & "CoreGraphics" & quote & "); " & \
+               "function wheel(d) { var e; " & \
+               "if (typeof $.CGEventCreateScrollWheelEvent2 === " & quote & "function" & quote & ") " & \
+               "e = $.CGEventCreateScrollWheelEvent2(null, 1, 1, d, 0, 0); " & \
+               "else { e = $.CGEventCreate(null); $.CGEventSetType(e, 22); " & \
+               "$.CGEventSetIntegerValueField(e, 11, d); $.CGEventSetDoubleValueField(e, 93, d); } " & \
+               "$.CGEventPost(0, e); } " & \
+               "for (var i = 0; i < " & pCount & "; i++) { wheel(" & tDelta & "); delay(0.08); }" into tScript
+         put "(osascript -l JavaScript -e '" & tScript & "'; echo oxt-tour-wheel-done) > " & quote & tLog & quote & " 2>&1 &" into tCommand
+         break
+      case "Win32"
+         if pDown then put -120 into tDelta
+         else put 120 into tDelta
+         put "Add-Type -Namespace OxtTour -Name Wheel -MemberDefinition '" & \
+               "[DllImport(" & quote & "user32.dll" & quote & ")] public static extern void mouse_event(int f, int x, int y, int d, int e);'" & return & \
+               "for ($i = 0; $i -lt " & pCount & "; $i++) { [OxtTour.Wheel]::mouse_event(2048, 0, 0, " & tDelta & ", 0); Start-Sleep -Milliseconds 80 }" into tScript
+         put base64Encode(textEncode(tScript, "UTF-16LE")) into tScript
+         replace return with empty in tScript
+         put "powershell -NoProfile -NonInteractive -EncodedCommand" && tScript into tCommand
+         break
+      default
+         if pDown then put 5 into tDelta
+         else put 4 into tDelta
+         put "(xdotool click --repeat" && pCount && "--delay 80" && tDelta & "; echo oxt-tour-wheel-done) > " & quote & tLog & quote & " 2>&1 &" into tCommand
+         break
+   end switch
+   if there is a file tLog then delete file tLog
+   if the platform is "Win32" then
+      put the hideConsoleWindows into tHide
+      set the hideConsoleWindows to true
+   end if
+   get shell(tCommand)
+   if the platform is "Win32" then set the hideConsoleWindows to tHide
+   if it is not empty then tourRecord "INFO wheel:" && tourJoin(it)
+   if the platform is "Win32" then
+      tourWait 900
+      exit tourWheel
+   end if
+   -- the command runs on while the engine takes the notches, so until it
+   -- has posted all of them (osascript can take seconds to start on a
+   -- busy runner), and then a little longer
+   repeat (pCount * 80 + 8000) div 100 times
+      if there is a file tLog then
+         get url ("file:" & tLog)
+         if it contains "oxt-tour-wheel-done" then exit repeat
+      end if
+      tourWait 100
+   end repeat
+   tourWait 300
+   if there is a file tLog then
+      get url ("file:" & tLog)
+      if "oxt-tour-wheel-done" is not in it then \
+            tourRecord "INFO wheel: the command had not finished after" && (pCount * 80 + 8000) div 1000 && "s"
+      replace "oxt-tour-wheel-done" with empty in it
+      if word 1 to -1 of it is not empty then tourRecord "INFO wheel:" && tourJoin(word 1 to -1 of it)
+   end if
+end tourWheel
 
 on tour_inspector
    local tPI, tSection, tShown, tIndex, tError

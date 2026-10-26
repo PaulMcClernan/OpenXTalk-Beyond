@@ -382,6 +382,7 @@ public:
 	void drawcursor(MCContext *context, const MCRectangle &drect);
 	void positioncursor(Boolean force, Boolean goal, MCRectangle &drect, int4 y, bool primary);
 	void replacecursor(Boolean force, Boolean goal);
+	void autotabcursorrects(MCRectangle &x_primary, MCRectangle &x_secondary);
 	void dragtext();
 	void computedrag();
 	void drawrect(MCDC *dc, const MCRectangle &dirty);
