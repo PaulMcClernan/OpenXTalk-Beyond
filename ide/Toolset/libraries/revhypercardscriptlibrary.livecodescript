@@ -119,6 +119,13 @@ script "revHyperCardScriptLibrary"
 -- reads as a player's "card" ("play card player "Movie"") and a field
 -- found without it, one of the background in a stack from HyperCard:
 -- the field in parentheses, its text, in a script that compiles too.
+-- T50 takes a property of an object named by a chunk of a variable or of
+-- a function's value ("the textHeight of item 1 of fieldList", "scroll of
+-- last item of theFields()", from Power Tools' buttons that scroll
+-- several fields together): HyperCard took the object the chunk's text
+-- names, and this engine the object the whole text names, with the chunk
+-- as text of it, and stops with an error. The chunk goes in
+-- parentheses, in a script that compiles too.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -250,6 +257,17 @@ constant kOpenWords = "directory driver file folder printing process socket stan
 -- is 15, the help cursor's number): an object named by one of them not
 -- in quotes is another object here (T44)
 constant kEngineConstants = "arrow busy clock cross hand help ibeam none plus watch backslash cr crlf end endoffile eof infinity lf null scrollbarfactor slash"
+
+-- HyperCard's properties of its objects, and not of text: one of an object
+-- named by a chunk of a variable ("the textHeight of item 1 of fieldList")
+-- is the object's that text names (T50). Not textFont, textSize and
+-- textStyle, which HyperCard 2 had for a chunk of a field too, nor
+-- number, which counts ("the number of items of x")
+constant kChunkObjectProperties = "autohilite autoselect autotab botright bottom bottomright cantabort cantdelete cantmodify cantpeek dontsearch dontwrap enabled family fixedlineheight freesize height hilite highlight hilight icon id left loc location locktext marked multiplelines name partnumber rect rectangle right script scroll sharedhilite sharedtext showlines showname showpict style textalign textheight titlewidth top topleft visible widemargins width"
+
+-- The chunks of text, and their ordinals ("last item of x"), T50
+constant kChunkWords = "item line word char character"
+constant kChunkOrdinals = "first second third fourth fifth sixth seventh eighth ninth tenth last middle any"
 
 -- What the probes found: a name's verdict, so that each name is compiled
 -- once (keys are the name in lower case)
@@ -2850,6 +2868,56 @@ private function _PlayObject pTokens, pIdx, pAt, pEnd
    return j
 end _PlayObject
 
+-- T50: from the code token pAt, a chunk of a variable or of a function's
+-- value ("item 1 of fieldList", "last item of theFields()", "item i of
+-- line 2 of it"): the index of its last token, or 0. A chunk of an
+-- object ("line 1 of me", "word 2 of card field 1"), a range ("item 1 to
+-- 3 of x"), a chunk numbered by an expression of several words and one
+-- whose container goes on ("of x of y") are not taken
+private function _ChunkObjectEnd pTokens, pIdx, pAt, pEnd
+   local j, tPhrases, tDepth
+   put pAt into j
+   put 0 into tPhrases
+   repeat while j < pEnd
+      if _T(pTokens, pIdx[j]) is among the words of kChunkOrdinals and _T(pTokens, pIdx[j + 1]) is among the words of kChunkWords then
+         add 2 to j
+      else if _T(pTokens, pIdx[j]) is among the words of kChunkWords \
+            and (pTokens[pIdx[j + 1]]["k"] is "n" or (pTokens[pIdx[j + 1]]["k"] is "w" \
+            and _T(pTokens, pIdx[j + 1]) is not among the words of kNotPlain \
+            and _T(pTokens, pIdx[j + 1]) is not among the words of kObjectWords)) then
+         if _T(pTokens, pIdx[j + 2]) is "to" then return 0
+         add 2 to j
+      else
+         exit repeat
+      end if
+      if j > pEnd or _T(pTokens, pIdx[j]) is not among the words of "of in" then return 0
+      add 1 to j
+      add 1 to tPhrases
+   end repeat
+   if tPhrases = 0 or j > pEnd or pTokens[pIdx[j]]["k"] is not "w" then return 0
+   if _T(pTokens, pIdx[j]) is among the words of kObjectWords \
+         or _T(pTokens, pIdx[j]) is among the words of "me this the target msg message selection menu" \
+         or _T(pTokens, pIdx[j]) is among the words of kChunkWords \
+         or _T(pTokens, pIdx[j]) is among the words of kChunkOrdinals then
+      return 0
+   end if
+   if j < pEnd and _T(pTokens, pIdx[j + 1]) is "(" then
+      -- a function's value: to its closing parenthesis
+      put 0 into tDepth
+      repeat with j = j + 1 to pEnd
+         if _T(pTokens, pIdx[j]) is "(" then
+            add 1 to tDepth
+         else if _T(pTokens, pIdx[j]) is ")" then
+            subtract 1 from tDepth
+            if tDepth = 0 then exit repeat
+         end if
+      end repeat
+      if j > pEnd then return 0
+   end if
+   if j < pEnd and _T(pTokens, pIdx[j + 1]) is among the words of "of in" then return 0
+   return j
+end _ChunkObjectEnd
+
 -- T9, T16 to T30 and T32: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
@@ -2936,6 +3004,26 @@ private function _HyperCardRules pLine, pCompiled, pElse
          put "w" into tTokens[tIdx[i + 1]]["k"]
          _Fire "T45 HyperCard's Home stack"
          next repeat
+      end if
+
+      -- T50: a property of an object named by a chunk of a variable or of
+      -- a function's value ("the textHeight of item 1 of fieldList",
+      -- "scroll of last item of theFields()", "top of item i of
+      -- objectList"), where the text names the object ("card field 1,card
+      -- field 2"), which HyperCard took as that object, as it takes a
+      -- variable that holds such a name. This engine takes the variable's
+      -- whole text for the object, with the chunk as text of it, and stops
+      -- with an error: the chunk in parentheses, whose text this engine
+      -- takes for the object (any statement)
+      if tWord is among the words of kChunkObjectProperties and _T(tTokens, tIdx[i + 1]) is "of" \
+            and (i = 1 or _T(tTokens, tIdx[i - 1]) is not among the words of kChunkWords) then
+         put _ChunkObjectEnd(tTokens, tIdx, i + 2, n) into j
+         if j > 0 then
+            put "(" before tTokens[tIdx[i + 2]]["t"]
+            put ")" after tTokens[tIdx[j]]["t"]
+            _Fire "T50 an object named by a chunk of a variable"
+            next repeat
+         end if
       end if
 
       if i > 1 and _T(tTokens, tIdx[i - 1]) is not among the words of "then else" then next repeat

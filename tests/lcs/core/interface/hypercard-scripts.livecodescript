@@ -1466,6 +1466,85 @@ on TestHyperCardScriptsT49
    _Close tStack
 end TestHyperCardScriptsT49
 
+on TestHyperCardScriptsT50
+   -- T50: a property of an object named by a chunk of a variable or of a
+   -- function's value, which HyperCard took as the object the chunk's
+   -- text names ("card field 1,card field 2"). This engine takes the
+   -- object the whole text names, with the chunk as text of it, and stops
+   -- with an error: the chunk in parentheses (Power Tools' buttons that
+   -- scroll several fields together, in 15 stacks)
+   local tScript, tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseDown", \
+         "  put the textHeight of item 1 of fieldList into baseLineSize", \
+         "  get (scroll of last item of theFields()) - baseLineSize", \
+         "  set scroll of item count of fieldList to it", \
+         "  if verticalSort then get top of item i of objectList", \
+         "  edit the script of item 1 of it", \
+         "  put the short name of item 2 of line 1 of tObjects into x", \
+         "end mouseDown") into tScript
+   TestAssert "T50: the textHeight of an item of a variable", line 2 of tScript is "  put the textHeight of (item 1 of fieldList) into baseLineSize"
+   TestAssert "T50: without the, the last item of a function's value", \
+         line 3 of tScript is "  get (scroll of (last item of theFields())) - baseLineSize"
+   TestAssert "T50: set, the item numbered by a variable", line 4 of tScript is "  set scroll of (item count of fieldList) to it"
+   TestAssert "T50: after then", line 5 of tScript is "  if verticalSort then get top of (item i of objectList)"
+   TestAssert "T50: of it", line 6 of tScript is "  edit the script of (item 1 of it)"
+   TestAssert "T50: the short name, a chunk of a chunk", line 7 of tScript is "  put the short name of (item 2 of line 1 of tObjects) into x"
+   TestAssert "T50: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a chunk of an object, a property of text, a count, a
+   -- range, a property's name as a chunk's number, a function
+   put _Rewrite("on mouseDown", \
+         "  put the textHeight of line 1 of me into x", \
+         "  put the textStyle of word 2 of tField into x", \
+         "  put the number of items of fieldList into n", \
+         "  put the scroll of item 1 to 2 of fieldList into x", \
+         "  put item family of line 2 of tList into x", \
+         "  put the length of item 1 of fieldList into n", \
+         "  put the textHeight of item 1 of card field 2 into x", \
+         "end mouseDown") into tScript
+   TestAssert "T50: a chunk of an object: unchanged", line 2 of tScript is "  put the textHeight of line 1 of me into x"
+   TestAssert "T50: a property of text: unchanged", line 3 of tScript is "  put the textStyle of word 2 of tField into x"
+   TestAssert "T50: a count: unchanged", line 4 of tScript is "  put the number of items of fieldList into n"
+   TestAssert "T50: a range: unchanged", line 5 of tScript is "  put the scroll of item 1 to 2 of fieldList into x"
+   TestAssert "T50: a property's name as a chunk's number: unchanged", line 6 of tScript is "  put item family of line 2 of tList into x"
+   TestAssert "T50: a function: unchanged", line 7 of tScript is "  put the length of item 1 of fieldList into n"
+   TestAssert "T50: a chunk of a field: unchanged", line 8 of tScript is "  put the textHeight of item 1 of card field 2 into x"
+
+   -- in a script that compiles: the objects the items name, where this
+   -- engine stopped with "error in object expression"
+   put "HCScriptsT50" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create field "A"
+   set the textHeight of field "A" to 17
+   create field "B"
+   create button "Scroll"
+   set the script of button "Scroll" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put theFields() into fieldList", \
+         "  put the textHeight of item 1 of fieldList into gHCScriptsTest", \
+         "  put comma & the short name of last item of theFields() after gHCScriptsTest", \
+         "end mouseUp", \
+         "function theFields", \
+         "  return " & q & "card field 1,card field 2" & q, \
+         "end theFields")
+   unlock messages
+   TestAssert "T50: the script compiles here as it is", _Compiles(the script of button "Scroll" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T50: in a script that compiles", line 4 to 5 of the script of button "Scroll" of card 1 of stack tStack \
+         is _Lines("  put the textHeight of (item 1 of fieldList) into gHCScriptsTest", \
+         "  put comma & the short name of (last item of theFields()) after gHCScriptsTest")
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Scroll" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T50: the fields the items name, as in HyperCard", gHCScriptsTest is "17,B"
+   _Close tStack
+end TestHyperCardScriptsT50
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
