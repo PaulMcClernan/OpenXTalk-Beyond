@@ -129,7 +129,14 @@ script "revHyperCardScriptLibrary"
 -- a font named in several words not in quotes ("set the textFont to New
 -- York", "set textfont of me to new century schlbk"), which HyperCard
 -- took as the text it was, and this engine as its first word, running
--- the rest as a command it cannot find: the name in quotes.
+-- the rest as a command it cannot find: the name in quotes. T52 takes
+-- the showPict of a card or a background ("if the showPict of this cd
+-- then", "set showpict of card "author" to false"), which this engine
+-- reads as true whatever the card shows and sets to nothing, and the
+-- picture of a card or a background it names ("hide picture of card
+-- "FX"", "show pict of this cd"), which stops with an error here: the
+-- library's hcShowPict and hcShowPicture, which read and set whether
+-- the picture T19 shows and hides is shown.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -2938,6 +2945,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
       put _HyperCardWindows(pLine) into pLine
       put _MessageBoxProperties(pLine) into pLine
       put _HyperCardObject(pLine) into pLine
+      put _PictureProperties(pLine) into pLine
    end if
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -3067,6 +3075,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tNew is empty then put _SetMessageBox(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetCardAndStyle(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetTextFont(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetShowPict(tTokens, tIdx, i, tEnd) into tNew
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
@@ -4425,6 +4434,14 @@ private function _ShowHide pTokens, pIdx, pAt, pEnd
       if _T(pTokens, pIdx[j + 2]) is not "of" or j + 2 = pEnd then return empty
       return "hcShowPicture" && quote & tWhich & quote & comma && tShow & comma && "the long id of" && _Span(pTokens, pIdx, j + 3, pEnd)
    end if
+   -- T52: the picture of a card or a background it names ("hide picture
+   -- of card "FX"", "show pict of this cd", "hide picture of prev card")
+   if tVerb is not "close" and _T(pTokens, pIdx[j]) is among the words of "picture pict" and _T(pTokens, pIdx[j + 1]) is "of" \
+         and _CardRefEnd(pTokens, pIdx, j + 2, pEnd) = pEnd then
+      _Fire "T52 the picture of a card or a background"
+      return "hcShowPicture" && quote & _PictureKind(pTokens, pIdx, j + 2) & quote & comma && (tVerb is "show") & comma \
+            && "the long id of" && _Span(pTokens, pIdx, j + 2, pEnd)
+   end if
    if tVerb is not "close" and _T(pTokens, pIdx[j]) is among the words of "card cd" and _T(pTokens, pIdx[j + 1]) is "window" then
       if j + 1 = pEnd then
          _Fire "T46 HyperCard's windows"
@@ -4474,6 +4491,86 @@ private function _ShowHide pTokens, pIdx, pAt, pEnd
    end if
    return empty
 end _ShowHide
+
+-- T52: the showPict of a card or a background read ("if the showPict of
+-- this cd then", "put the showPict of this bg into PictShown", "not
+-- (showpict of this cd)"), which this engine reads as true whatever the
+-- card shows: hcShowPict("card", the long id of this cd), whether the
+-- picture T19 shows and hides is shown. Set, it is _SetShowPict's
+private function _PictureProperties pLine
+   local tTokens, tCode, tIdx, n, tItem, i, tStart, tEnd, tChanged
+   if "showpict" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = n - 2 down to 1
+      if _T(tTokens, tIdx[i]) is not "showpict" or _T(tTokens, tIdx[i + 1]) is not "of" then next repeat
+      put i into tStart
+      if _T(tTokens, tIdx[i - 1]) is "the" then subtract 1 from tStart
+      if _T(tTokens, tIdx[tStart - 1]) is "set" then next repeat
+      put _CardRefEnd(tTokens, tIdx, i + 2, n) into tEnd
+      if tEnd = 0 then next repeat
+      _Replace tTokens, tIdx, tStart, tEnd, "hcShowPict(" & quote & _PictureKind(tTokens, tIdx, i + 2) & quote & comma \
+            && "the long id of" && _Span(tTokens, tIdx, i + 2, tEnd) & ")"
+      _Fire "T52 the showPict of a card or a background"
+      put true into tChanged
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _PictureProperties
+
+-- T52: set [the] showPict of a card or a background to V, which this
+-- engine ignores: hcShowPicture, as T19 shows and hides the picture
+private function _SetShowPict pTokens, pIdx, pAt, pEnd
+   local j, tEnd
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "the" then add 1 to j
+   if _T(pTokens, pIdx[j]) is not "showpict" or _T(pTokens, pIdx[j + 1]) is not "of" then return empty
+   put _CardRefEnd(pTokens, pIdx, j + 2, pEnd) into tEnd
+   if tEnd = 0 or _T(pTokens, pIdx[tEnd + 1]) is not "to" or tEnd + 2 > pEnd then return empty
+   _Fire "T52 the showPict of a card or a background"
+   return "hcShowPicture" && quote & _PictureKind(pTokens, pIdx, j + 2) & quote & comma && _Span(pTokens, pIdx, tEnd + 2, pEnd) & comma \
+         && "the long id of" && _Span(pTokens, pIdx, j + 2, tEnd)
+end _SetShowPict
+
+-- T52: the last code token of a card or a background named from pFrom
+-- ("this cd", "prev card", "card "Keywords"", "cd 1", "card id 2946",
+-- "bg heros"), or 0. One of another stack or background ("card 1 of
+-- stack x"), or named by an expression ("card (n + 1)"), is not taken
+private function _CardRefEnd pTokens, pIdx, pFrom, pTo
+   local j, tNamed
+   put pFrom into j
+   -- (tNamed: a card word with its name or number after it, not after
+   -- "this", "next" or an ordinal)
+   put not (_T(pTokens, pIdx[j]) is among the words of "this next prev previous" \
+         or _T(pTokens, pIdx[j]) is among the words of kChunkOrdinals) into tNamed
+   if not tNamed then add 1 to j
+   if j > pTo or _T(pTokens, pIdx[j]) is not among the words of "card cd background bkgnd bg" then return 0
+   if tNamed then
+      add 1 to j
+      if _T(pTokens, pIdx[j]) is "id" then add 1 to j
+      if j > pTo then return 0
+      if pTokens[pIdx[j]]["k"] is not among the words of "s n" then
+         if pTokens[pIdx[j]]["k"] is not "w" or _T(pTokens, pIdx[j]) is among the words of kNotPlain \
+               or _T(pTokens, pIdx[j]) is among the words of kObjectWords or _T(pTokens, pIdx[j + 1]) is "(" then
+            return 0
+         end if
+      end if
+   end if
+   if j < pTo and _T(pTokens, pIdx[j + 1]) is "of" then return 0
+   return j
+end _CardRefEnd
+
+-- T52: "card" or "background", what the reference from pFrom names
+private function _PictureKind pTokens, pIdx, pFrom
+   if _T(pTokens, pIdx[pFrom]) is not among the words of "card cd background bkgnd bg" then add 1 to pFrom
+   if _T(pTokens, pIdx[pFrom]) is among the words of "background bkgnd bg" then return "background"
+   return "card"
+end _PictureKind
 
 -- T12 and T8: HyperCard commands this engine does not have, to the
 -- library's handlers; and "group" after a comma in a text style, which

@@ -1618,6 +1618,92 @@ on TestHyperCardScriptsT51
    _Close tStack
 end TestHyperCardScriptsT51
 
+on TestHyperCardScriptsT52
+   -- T52: the showPict of a card or a background, which this engine reads
+   -- as true and sets to nothing, and the picture of a card or a
+   -- background named, which stops with an error here: the library's
+   -- hcShowPict and hcShowPicture (34 stacks read or set the showPict, 7
+   -- show or hide the picture of a card they name)
+   local tScript, tStack, q, tBgImage, tCardImage
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  if the showPict of this cd is true then hide pict of this cd", \
+         "  else show pict of this cd", \
+         "  put the showPict of this bg into PictShown", \
+         "  set the showPict of this card to not boolean", \
+         "  set showpict of card id 2946 to false", \
+         "  set the showPict of card " & q & "Keywords" & q & " to not(the showPict of card " & q & "Keywords" & q & ")", \
+         "  if showpict of this cd then nextOnThisCd", \
+         "  hide picture of prev card", \
+         "  show picture of bg 2", \
+         "end mouseUp") into tScript
+   TestAssert "T52: read, and the picture of this card hidden", line 2 of tScript is "  if hcShowPict(" & q & "card" & q & ", the long id of this cd) is true then hcShowPicture " & q & "card" & q & ", false, the long id of this cd"
+   TestAssert "T52: shown after else", line 3 of tScript is "  else hcShowPicture " & q & "card" & q & ", true, the long id of this cd"
+   TestAssert "T52: of a background", line 4 of tScript is "  put hcShowPict(" & q & "background" & q & ", the long id of this bg) into PictShown"
+   TestAssert "T52: set", line 5 of tScript is "  hcShowPicture " & q & "card" & q & ", not boolean, the long id of this card"
+   TestAssert "T52: set without the, a card by id", line 6 of tScript is "  hcShowPicture " & q & "card" & q & ", false, the long id of card id 2946"
+   TestAssert "T52: set to its own read", line 7 of tScript is "  hcShowPicture " & q & "card" & q & ", not(hcShowPict(" & q & "card" & q & ", the long id of card " & q & "Keywords" & q & ")), the long id of card " & q & "Keywords" & q
+   TestAssert "T52: read without the", line 8 of tScript is "  if hcShowPict(" & q & "card" & q & ", the long id of this cd) then nextOnThisCd"
+   TestAssert "T52: the picture of the previous card", line 9 of tScript is "  hcShowPicture " & q & "card" & q & ", false, the long id of prev card"
+   TestAssert "T52: the picture of a background", line 10 of tScript is "  hcShowPicture " & q & "background" & q & ", true, the long id of bg 2"
+   TestAssert "T52: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a handler of that name, a card of another stack, text
+   put _Rewrite("on mouseUp", \
+         "  showPict", \
+         "  put the showPict of card 1 of stack " & q & "Other" & q & " into x", \
+         "  put " & q & "the showPict of this cd" & q & " into x", \
+         "end mouseUp", \
+         "on showPict", \
+         "  beep", \
+         "end showPict") into tScript
+   TestAssert "T52: a handler's call: unchanged", line 2 of tScript is "  showPict"
+   TestAssert "T52: a card of another stack: unchanged", line 3 of tScript is "  put the showPict of card 1 of stack " & q & "Other" & q & " into x"
+   TestAssert "T52: text: unchanged", line 4 of tScript is "  put " & q & "the showPict of this cd" & q & " into x"
+   TestAssert "T52: a handler: unchanged", line 6 of tScript is "on showPict"
+
+   -- run: a card's picture (an image with no name) and its background's,
+   -- read, hidden and shown as the script says
+   put "HCScriptsT52" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create group "Bg"
+   set the backgroundBehavior of group "Bg" to true
+   create image in group "Bg"
+   put it into tBgImage
+   create image
+   put it into tCardImage
+   create button "Pict"
+   set the script of button "Pict" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put the showPict of this card & comma & the showPict of this bg into gHCScriptsTest", \
+         "  hide pict of this cd", \
+         "  hide bg pict", \
+         "  put comma & the showPict of this card & comma & the showPict of this bg after gHCScriptsTest", \
+         "  set the showPict of this card to true", \
+         "  put comma & showpict of this cd after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Pict" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T52: as it is, the picture is always shown and hiding it stops", gHCScriptsTest is "true,true"
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T52: in a script that compiles", _Compiles(the script of button "Pict" of card 1 of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Pict" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T52: read, hidden, read, shown, as in HyperCard", gHCScriptsTest is "true,true,false,false,true"
+   TestAssert "T52: the card's picture shown at the end, the background's hidden", \
+         the visible of tCardImage and not the visible of tBgImage
+   _Close tStack
+end TestHyperCardScriptsT52
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
