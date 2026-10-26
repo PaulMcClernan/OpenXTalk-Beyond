@@ -150,7 +150,7 @@ pre.cmd{white-space:pre-wrap;background:var(--soft);padding:10px;border-radius:5
 .lin .ver{cursor:pointer}
 .lin .ver circle{stroke:var(--panel);stroke-width:1.5}
 .lin .ver:hover circle,.lin .ver.sel circle{stroke:var(--ink);stroke-width:2}
-.roots{list-style:none;margin:14px 0 4px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:18px 14px;position:relative}
+.roots{list-style:none;margin:14px 0 4px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:18px 12px;position:relative}
 .roots li{position:relative;padding-top:26px;min-width:0}
 .roots li::before{content:"";position:absolute;left:0;right:-14px;top:9px;height:3px;background:var(--rc);opacity:.45;border-radius:2px}
 .roots li:last-child::before{right:0}
@@ -314,6 +314,7 @@ const ROOTS=[
   ['2010','LiveCode','Revolution is renamed LiveCode in November 2010.','--g-engine',[['Wikipedia: LiveCode (company)','https://en.wikipedia.org/wiki/LiveCode_(company)']]],
   ['2013','LiveCode Community','In April 2013 LiveCode Community Edition 6.0 is published as free and open source software under the GPL.','--g-web',[['Wikipedia: LiveCode','https://en.wikipedia.org/wiki/LiveCode']]],
   ['2021','Community 9.6.3','The last GPL release. The upstream repositories have had no changes since July 2021, and on 31 August 2021 the Community edition was discontinued.','--g-web',[['Wikipedia: LiveCode','https://en.wikipedia.org/wiki/LiveCode'],['HISTORY.md','https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/blob/main/HISTORY.md']]],
+  ['2021','OpenXTalk DPE','On 7 September 2021, a week later, Paul McClernan (OpenXTalkPaul) starts the "DON\'T PANIC!" Edition, the free continuation of Community 9.6.3 that kept the project going until OpenXTalk Lite.','--g-build',[['DPE on GitHub','https://github.com/OpenXTalk-org/OpenXtalk-IDE-DontPanicEdition'],['HISTORY.md','https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/blob/main/HISTORY.md']]],
   ['2023','OpenXTalk Lite','Terry Little releases OpenXTalk Lite ".9" on 1 September 2023, on Community 9.6.3. Tom Perry makes the releases from that month to 1.15 in June 2026.','--g-ext',[['HISTORY.md','https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/blob/main/HISTORY.md']]],
   ['2026','OXT-Beyond','Starts in September 2026 and carries on from OpenXTalk Lite 1.15 on the 9.x engine: this repository.','--g-ide',[['HISTORY.md','https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/blob/main/HISTORY.md']]],
 ];
@@ -325,13 +326,21 @@ function rootsPanel(host){
     h('p',{class:'lede',style:'margin:4px 0 0'},'OXT-Beyond is the newest link in an xTalk line that begins with HyperCard in 1987. The chart below takes it up from Community 9.6.3, where this repository\'s own records begin.'),ol));
 }
 function lineageChart(host){
-  const t0=Date.parse('2021-01-01'),t1=Date.parse('2026-11-15');const W=1100,H=230,X=d=>40+(Date.parse(d)-t0)/(t1-t0)*(W-60);
+  const t0=Date.parse('2021-01-01'),t1=Date.parse('2026-11-15');const W=1100,H=258,X=d=>40+(Date.parse(d)-t0)/(t1-t0)*(W-60);
   const svg=S('svg',{viewBox:`0 0 ${W} ${H}`,style:'width:100%;min-width:720px;height:auto;display:block',role:'img','aria-label':'Timeline from LiveCode Community to OXT-Beyond'});
-  const eras=[['2021-01-01','2023-09-01','LiveCode Community 9.6.3 (2021); upstream archived July 2021','--g-docs'],['2023-09-01','2026-06-07','OpenXTalk Lite: Terry Little, then Tom Perry from Sep 2023','--g-ext'],['2026-09-01','2026-11-15','OXT-Beyond','--g-ide']];
+  const dpe=[];
+  const eras=[['2021-01-01','2023-09-01','LiveCode Community 9.6.3 (2021); the edition ended 31 Aug 2021','--g-docs'],['2023-09-01','2026-06-07','OpenXTalk Lite: Terry Little, then Tom Perry from Sep 2023','--g-ext'],['2026-09-01','2026-11-15','OXT-Beyond','--g-ide']];
   eras.forEach(([a,b,l,c],i)=>{svg.append(S('rect',{x:X(a),y:40,width:Math.max(4,X(b)-X(a)),height:120,fill:`var(${c})`,class:'era',rx:4}));const tx=S('text',i===2?{x:X(b)-2,y:32,'text-anchor':'end',class:'lbl','font-weight':'700',style:`fill:var(${c})`}:{x:X(a)+6,y:56,class:'lbl','font-weight':'600',style:`fill:var(${c})`});tx.textContent=i===2?'OXT-Beyond (Sep 2026 on)':l;svg.append(tx)});
-  for(let y=2021;y<=2026;y++){const x=X(y+'-01-01');svg.append(S('line',{x1:x,x2:x,y1:36,y2:170,class:'tick'}));const tx=S('text',{x:x+3,y:186,class:'lbl'});tx.textContent=y;svg.append(tx)}
+  // OpenXTalk DPE runs beside OpenXTalk Lite, so it has a lane of its own
+  // under the bands; its dates are those of its repository's commits and tags
+  const dA='2021-09-07',dB='2026-04-20';svg.append(S('rect',{x:X(dA),y:166,width:X(dB)-X(dA),height:18,fill:'var(--g-build)',class:'era',rx:4}));
+  {const tx=S('text',{x:X(dB)-6,y:179,'text-anchor':'end',class:'lbl','font-weight':'600',style:'fill:var(--g-build)'});tx.textContent='OpenXTalk DPE: Paul McClernan, from 7 Sep 2021';svg.append(tx)}
+  [['2022-11-04','1.963.1-OXT-RC3','Tagged 4 November 2022.'],['2023-09-01','1.963.1-OXT-RC4','Released 1 September 2023 (tagged 7 August), the project\'s second anniversary: a General Music (MIDI) library, macOS AppleImage, SVG icon libraries with a Glyph Browser, community widgets.']].forEach(([d,v,t])=>{const g=S('g',{class:'ver',tabindex:0});g.append(S('circle',{cx:X(d),cy:175,r:5,style:'fill:var(--g-build)'}));const ti=S('title',{});ti.textContent=`OpenXTalk DPE ${v}`;g.append(ti);
+    const f=()=>show1(g,[h('b',null,`OpenXTalk DPE ${v}`),h('span',{class:'muted'},' \u00b7 Paul McClernan'),h('div',null,t)]);g.addEventListener('click',f);g.addEventListener('keydown',e=>{if(e.key==='Enter')f()});dpe.push(g)});
+  for(let y=2021;y<=2026;y++){const x=X(y+'-01-01');svg.append(S('line',{x1:x,x2:x,y1:36,y2:190,class:'tick'}));const tx=S('text',{x:x+3,y:206,class:'lbl'});tx.textContent=y;svg.append(tx)}
   const vinfo=h('div',{class:'verinfo'},'Click a dot for that release.');
   const show1=(g,html)=>{svg.querySelectorAll('.ver').forEach(e=>e.classList.remove('sel'));g.classList.add('sel');vinfo.replaceChildren(...html)};
+  dpe.forEach(g=>svg.append(g));
   D.lineage.forEach((r,i)=>{const g=S('g',{class:'ver',tabindex:0});const x=X(r.iso),y=150-((i%5)*18);
     g.append(S('line',{x1:x,x2:x,y1:y,y2:160,stroke:'var(--g-ext)',opacity:.5}));
     g.append(S('circle',{cx:x,cy:y,r:5,style:r.approx?'fill:var(--panel);stroke:var(--g-ext);stroke-width:2':'fill:var(--g-ext)'}));
@@ -343,8 +352,8 @@ function lineageChart(host){
   const g=S('g',{class:'ver',tabindex:0});const bx=X(D.releases[0].d);g.append(S('circle',{cx:bx+12,cy:88,r:6,fill:'var(--g-ide)',stroke:'var(--g-ide)'}));const tl=S('title',{});tl.textContent='OXT-Beyond releases';g.append(tl);
   const fb=()=>show1(g,[h('b',null,'OXT-Beyond'),h('span',{class:'muted'},` · ${D.releases.length} tagged releases, ${D.releases[0].d} to ${D.releases[D.releases.length-1].d}`),h('div',null,'Started in September 2026 (as winoxt) to build LiveCode Community for 64-bit Windows with Tom Perry\'s engine work, then imported the OpenXTalk Lite IDE history; renamed OpenXTalk-Beyond in October 2026. Stable releases: '+stable.map(r=>r.tag).join(', ')+'. The month is drawn day by day below.')]);
   g.addEventListener('click',fb);g.addEventListener('keydown',e=>{if(e.key==='Enter')fb()});svg.append(g);
-  const lg=S('text',{x:40,y:214,class:'lbl'});lg.textContent='Filled dot: dated release · hollow: month known only · blue ticks: OXT-Beyond tags (tall = stable). Source: HISTORY.md and the repository tags.';svg.append(lg);
-  host.append(h('div',{class:'panel lin'},h('h2',null,'From LiveCode Community to OXT-Beyond'),h('p',{class:'lede',style:'margin:4px 0 10px'},'OpenXTalk Lite carried LiveCode Community 9.6.3 forward from 2023 to 2026; OXT-Beyond continues its last release, 1.15, on the 9.x engine. Every date here comes from HISTORY.md or a git tag.'),h('div',{class:'scroll'},svg),vinfo));
+  const lg=S('text',{x:40,y:240,class:'lbl'});lg.textContent='Filled dot: dated release · hollow: month known only · blue ticks: OXT-Beyond tags (tall = stable) · lower lane: OpenXTalk DPE. Sources: HISTORY.md and the repositories\' tags.';svg.append(lg);
+  host.append(h('div',{class:'panel lin'},h('h2',null,'From LiveCode Community to OXT-Beyond'),h('p',{class:'lede',style:'margin:4px 0 10px'},'OpenXTalk DPE carried LiveCode Community 9.6.3 on from September 2021, and OpenXTalk Lite from 2023 to 2026; OXT-Beyond continues Lite\'s last release, 1.15, on the 9.x engine. Every date here comes from HISTORY.md or a git tag.'),h('div',{class:'scroll'},svg),vinfo));
 }
 function activityChart(host){
   const days=D.history.daily;const W=1100,H=300,top=46,bot=250;const n=days.length;const bw=(W-60)/n;

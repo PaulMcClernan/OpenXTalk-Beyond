@@ -2986,9 +2986,14 @@ contributions are accepted under the same licence as the project. See
   SQLite update; for macOS: AppKit dark mode, `macSetIcon`, faster window
   updates and the arm64 work). The OXT-Beyond icon up to 0.2.1-rc.6 was adapted from
   his OpenXTalk Lite icon.
-- **Paul McClernan** (OpenXTalkPaul) contributed `.oxtstack` support, the
-  dark-mode hook, the alignment guides integration, the macOS Native
-  Tools library and lessons.
+- **Paul McClernan** (OpenXTalkPaul) started OpenXTalk DPE, the "DON'T
+  PANIC! Edition", in September 2021, a week after LiveCode Community
+  ended: the free continuation of Community 9.6.3 that kept the project
+  going for the two years before OpenXTalk Lite
+  ([HISTORY.md](HISTORY.md#livecode-community-and-openxtalk)). He also
+  contributed `.oxtstack` support, the dark-mode hook, the alignment
+  guides integration, the macOS Native Tools library, the Extension
+  Manager this repository takes from DPE, and lessons.
 - Other people credited in OpenXTalk Lite's history and code: Richmond
   (richmond62), Axwald (Message Watcher, App Browser fixes), Neville,
   overclockedmind, micmac, mwieder, MaxV (whose MaxDictionary is the
