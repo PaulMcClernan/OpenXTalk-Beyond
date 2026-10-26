@@ -2676,23 +2676,27 @@ on revDocsUpdateLibrary pConnection, pAPI, pName, pDocDataA
    return empty
 end revDocsUpdateLibrary
 
+# OXT-Beyond: removes every entry of library pName under the API pAPI, and
+# returns empty, or what failed. Until the IDE called it for an extension
+# being uninstalled (ideDocsRemoveLibrary), nothing did, and it could not
+# have worked: it gave revDataFromQuery the API's name where that takes the
+# name of a variable holding the value, and "DELETE * FROM" is not SQLite.
+# It goes by the API's name, as ideDocsMergeAttached does, so an API the
+# database does not have deletes nothing.
 on revDocsRemoveLibrary pConnection, pAPI, pName
-   # Find the library id
-   local tSQL, tAPIID
-   put "SELECT api_id FROM apis WHERE api_name = :1" into tSQL
-   put revDataFromQuery(comma, return, pConnection, tSQL, pAPI) into tAPIID
-   
-   if the result is not a number then
-      return "error finding api id for" && pAPI & return & the result
+   if pConnection is empty then
+      return "no database connection"
    end if
-   
+
    # Delete all entries associated with this library
-   put "DELETE * FROM dictionary_data WHERE api_id = :1 AND library_name = :2" into tSQL
-   revExecuteSQL pConnection, tSQL, "tAPIID", "pName"
+   local tSQL
+   put "DELETE FROM dictionary_data WHERE library_name = :1 AND api_id IN" && \
+         "(SELECT api_id FROM apis WHERE api_name = :2)" into tSQL
+   revExecuteSQL pConnection, tSQL, "pName", "pAPI"
    if the result is not a number then
       return "unable to delete data for" && pName & return & the result
    end if
-   
+
    return empty
 end revDocsRemoveLibrary
 

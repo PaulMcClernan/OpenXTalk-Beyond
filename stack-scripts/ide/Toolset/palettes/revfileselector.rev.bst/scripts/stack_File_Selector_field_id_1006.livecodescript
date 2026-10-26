@@ -9,7 +9,7 @@ on mouseUp
 end mouseUp
 
 on mouseDoubleUp
-  send "mouseUp" to button id 1013
+  send "mouseUp" to button id 1012
 end mouseDoubleUp
 
 on rawKeyUp

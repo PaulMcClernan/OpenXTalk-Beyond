@@ -11862,7 +11862,9 @@ end revIDETutorialSkipToNextSkipPoint
 
 -- OXT-Beyond: the handlers below make LiveCode's Dictionary (the browser
 -- one) and do nothing while Preferences > Dictionary chooses the text
--- dictionary, so a start-up spends no time on them. The browser
+-- dictionary, so a start-up spends no time on them (bar the extensions'
+-- docs, which go into the docs database all the same:
+-- revIDEUpdateExtensionDocsDatabase). The browser
 -- Dictionary still opens with that choice (Help > Dictionary with Shift,
 -- the Script Editor's and the inspector's links to an entry), and it was
 -- blank: its page and data had never been made. revIDEEnsureBrowserDictionary,
@@ -11969,16 +11971,18 @@ private function __webDocsInputsKey pInputs, pSourceAPI, pExtensionData
    return tHex
 end __webDocsInputsKey
 
-private function revIDEGetExtensionDocsData pAPI
+-- (OXT-Beyond: with pDatabaseOnly true, the docs database is brought up to
+-- date while the browser Dictionary is off: revIDEUpdateExtensionDocsDatabase)
+private function revIDEGetExtensionDocsData pAPI, pDatabaseOnly
    -- do not generate if this is turned off
-   if __browserDictionaryOff() then exit revIDEGetExtensionDocsData -- we exit this handler if not using it (tperry 24-7-24)
+   if __browserDictionaryOff() and pDatabaseOnly is not true then exit revIDEGetExtensionDocsData -- we exit this handler if not using it (tperry 24-7-24)
    --
    local tExtensionDocsDataA
    put revIDEExtensionDocsData(pAPI) into tExtensionDocsDataA
-   
+
    local tFolder, tCachedDataFolder
    set the itemdelimiter to slash
-   
+
    local tData
    repeat for each element tExtensionData in tExtensionDocsDataA
       local tExtensionAPI
@@ -12260,11 +12264,41 @@ end revIDERegenerateBuiltAPIs
 
 on revIDERegenerateBuiltDictionaryData
    -- do not generate if this is turned off
-   if __browserDictionaryOff() then exit revIDERegenerateBuiltDictionaryData -- we exit this handler if not using it (tperry 24-7-24)
+   if __browserDictionaryOff() then
+      revIDEUpdateExtensionDocsDatabase
+      exit revIDERegenerateBuiltDictionaryData -- we exit this handler if not using it (tperry 24-7-24)
+   end if
    --
    revIDERegenerateBuiltAPIs
    revIDERegenerateBuiltGuides
 end revIDERegenerateBuiltDictionaryData
+
+-- OXT-Beyond: the Script Editor's documentation, the xTalk Assistant and
+-- the MCP bridge look entries up in the docs database (api.sqlite in the
+-- documentation cache: revIDEDocumentationLibrary). It starts as a copy of
+-- the distributed one, which has the xTalk dictionary alone, and an
+-- extension's docs go into it as the browser Dictionary's data is made,
+-- when they have changed (revIDEGetExtensionDocsData). With the text
+-- dictionary chosen in Preferences that data is never made, so the docs of
+-- an extension the user installed never got there (bwmilby, openxtalk.org
+-- p=25441), nor, in a new docs cache, those of the extensions the IDE
+-- ships. They go there then too, as the IDE starts and whenever the
+-- extensions change, as they would with the browser Dictionary; the
+-- browser Dictionary's own data is still not made. Only the docs that
+-- changed are read again, as there. Nothing that fails here stops the IDE,
+-- which made none of this with that choice before
+private command revIDEUpdateExtensionDocsDatabase
+   set the lineDelimiter to "|"
+   repeat for each line tAPI in kAPIs
+      if item 2 of tAPI is "livecode_ide" and revEnvironmentIsInstalled() then
+         next repeat
+      end if
+      try
+         get revIDEGetExtensionDocsData(item 2 of tAPI, true)
+      catch tError
+      end try
+   end repeat
+end revIDEUpdateExtensionDocsDatabase
 
 on revIDEGenerateDistributedDocs
    -- do not generate if this is turned off

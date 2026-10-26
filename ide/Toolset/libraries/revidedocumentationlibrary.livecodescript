@@ -594,3 +594,98 @@ on ideDocsUpdateDatabase pAPI, pLibraryA, pDistributed
    revExecuteSQL tConnection, "COMMIT"
    return empty
 end ideDocsUpdateDatabase
+
+# OXT-Beyond: an extension's entries stayed in the cache after it was
+# uninstalled, so the Script Editor and the xTalk Assistant still found
+# them (openxtalk.org p=25441). revIDEExtensionUninstall removes them with
+# this: every entry of the library pLibraryName under the API pAPI goes,
+# and where the distributed api.sqlite has a library of that name under
+# that API (it has the xTalk dictionary's: LiveCode Script, LiveCode
+# Builder and Data Grid), as when an extension the user installed was
+# given one of their names, its entries come back from there. Returns
+# empty when it did, else what failed. Whatever fails leaves the cache as
+# it was.
+command ideDocsRemoveLibrary pAPI, pLibraryName
+   local tConnection
+   try
+      ideDocsInitialize
+      put the result into tConnection
+   catch tError
+      return tError
+   end try
+
+   # SQLite attaches no file inside a transaction
+   local tSource, tSourceUTF8, tAttached, tFailed
+   put false into tAttached
+   put revIDESpecialFolderPath("API") & slash & "api.sqlite" into tSource
+   if there is a file tSource then
+      # SQLite reads an attached file's name as UTF-8
+      put textEncode(tSource, "UTF-8") into tSourceUTF8
+      revExecuteSQL tConnection, "ATTACH DATABASE :1 AS oxtdist", "tSourceUTF8"
+      put the result is a number into tAttached
+   end if
+   put ideDocsRemoveAttached(tConnection, pAPI, pLibraryName, tAttached) into tFailed
+   if tAttached then
+      revExecuteSQL tConnection, "DETACH DATABASE oxtdist"
+   end if
+   return tFailed
+end ideDocsRemoveLibrary
+
+private function ideDocsRemoveAttached pConnection, pAPI, pLibraryName, pAttached
+   local tFailed, tCount
+
+   # A cache made before any extension wrote to it has no tables
+   revExecuteSQL pConnection, "CREATE TABLE IF NOT EXISTS apis(api_id integer primary key, api_name text)"
+   if the result is not a number then
+      return "unable to create table 'apis'" & return & the result
+   end if
+   revExecuteSQL pConnection, "CREATE TABLE IF NOT EXISTS dictionary_data(api_id integer," && \
+         "library_name text, entry_name text, entry_type text, entry_data blob)"
+   if the result is not a number then
+      return "unable to create table 'dictionary_data'" & return & the result
+   end if
+
+   revExecuteSQL pConnection, "BEGIN TRANSACTION"
+   if the result is not a number then
+      return "unable to begin" & return & the result
+   end if
+
+   dispatch "revDocsRemoveLibrary" to stack "revDocsParser" with pConnection, pAPI, pLibraryName
+   put the result into tFailed
+
+   # The distributed entries of a library of that name under that API, if
+   # the distributed file has any (a file that is no dictionary has none)
+   if tFailed is empty and pAttached then
+      put revDataFromQuery(tab, return, pConnection, "SELECT count(*) FROM oxtdist.dictionary_data d" && \
+            "JOIN oxtdist.apis s ON s.api_id = d.api_id WHERE d.library_name = :1 AND s.api_name = :2", \
+            "pLibraryName", "pAPI") into tCount
+      if tCount is an integer and tCount > 0 then
+         revExecuteSQL pConnection, "INSERT INTO main.apis(api_name) SELECT :1 WHERE NOT EXISTS" && \
+               "(SELECT 1 FROM main.apis WHERE api_name = :1)", "pAPI"
+         if the result is not a number then
+            put "unable to add the API" && pAPI & return & the result into tFailed
+         end if
+         if tFailed is empty then
+            revExecuteSQL pConnection, "INSERT INTO main.dictionary_data(api_id, library_name," && \
+                  "entry_name, entry_type, entry_data) SELECT (SELECT min(a.api_id) FROM main.apis a" && \
+                  "WHERE a.api_name = s.api_name), d.library_name, d.entry_name, d.entry_type," && \
+                  "d.entry_data FROM oxtdist.dictionary_data d JOIN oxtdist.apis s ON s.api_id = d.api_id" && \
+                  "WHERE d.library_name = :1 AND s.api_name = :2", "pLibraryName", "pAPI"
+            if the result is not a number then
+               put "unable to copy the distributed entries of" && pLibraryName & return & the result into tFailed
+            end if
+         end if
+      end if
+   end if
+
+   if tFailed is empty then
+      revExecuteSQL pConnection, "COMMIT"
+      if the result is not a number then
+         put "unable to commit" & return & the result into tFailed
+      end if
+   end if
+   if tFailed is not empty then
+      revExecuteSQL pConnection, "ROLLBACK"
+   end if
+   return tFailed
+end ideDocsRemoveAttached

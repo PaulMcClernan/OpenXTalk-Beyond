@@ -149,11 +149,16 @@ command revIDEExtensionUninstall pName
    local tExtensionPackageFile, tInstallPath
    put __extensionPropertyGet(tCacheIndex, "download_package_path") into tExtensionPackageFile
    put __extensionPropertyGet(tCacheIndex, "install_path") into tInstallPath
+   -- OXT-Beyond: where its docs are in the docs database, read while the
+   -- extension is still known
+   local tDocsA
+   put __extensionDocsKey(tCacheIndex) into tDocsA
    try
       __extensionUninstallCheckInUse tCacheIndex, 10
       __extensionUninstallDeleteFiles tCacheIndex, tName, tInstallPath, 25
       __extensionUninstallDeletePreferences tCacheIndex, tName, 50
       __extensionUnload tCacheIndex, tName, 80
+      __extensionUninstallDeleteDocs tName, tDocsA
       __extensionUninstallComplete tCacheIndex
    catch tError
       answer error tError
@@ -608,6 +613,54 @@ private command __extensionUninstallComplete pCacheIndex
    __extensionSendProgressUpdate pCacheIndex, "Complete", 100
    delete variable sExtensions[pCacheIndex]
 end __extensionUninstallComplete
+
+-- OXT-Beyond: the API and library name an extension's docs have in the
+-- docs database (revIDEGetExtensionDocsData in revidelibrary files them
+-- under its API and title), and whether the IDE ships it
+private function __extensionDocsKey pCacheIndex
+   local tDocsA
+   if pCacheIndex is not a number then
+      return tDocsA
+   end if
+   put __TypeToAPI(__extensionPropertyGet(pCacheIndex, "type")) into tDocsA["api"]
+   put __extensionPropertyGet(pCacheIndex, "title") into tDocsA["title"]
+   if tDocsA["title"] is empty then
+      -- (the docs' own name, which is most often the extension's)
+      put __extensionPropertyGet(pCacheIndex, "name") into tDocsA["title"]
+   end if
+   put __extensionPropertyGet(pCacheIndex, "ide") is true into tDocsA["ide"]
+   return tDocsA
+end __extensionDocsKey
+
+-- OXT-Beyond: the docs of an extension the user installed go into the
+-- docs database, which the Script Editor, the xTalk Assistant and the MCP
+-- bridge look entries up in, and stayed there after it was uninstalled
+-- (openxtalk.org p=25441). They go now, and so do the docs cached for it,
+-- so that the extension installed again, or its next version (whose
+-- install uninstalls this one first), writes its docs afresh. An extension
+-- the IDE ships keeps its entries: its files stay (the uninstall deletes
+-- only what is in the user's extensions folder), and it loads again at the
+-- next start. Nothing here stops the uninstall
+private command __extensionUninstallDeleteDocs pName, pDocsA
+   if pName is empty or pDocsA["title"] is empty or pDocsA["ide"] is true then
+      exit __extensionUninstallDeleteDocs
+   end if
+   try
+      ideDocsRemoveLibrary pDocsA["api"], pDocsA["title"]
+   catch tError
+   end try
+
+   -- (the docs cache's folder, "IDE", is beside the extensions')
+   local tCacheFolder
+   put revEnvironmentUserDocsPath() into tCacheFolder
+   if tCacheFolder is not empty and pName is not "IDE" and \
+         there is a folder (tCacheFolder & slash & pName) then
+      try
+         revDeleteFolder tCacheFolder & slash & pName
+      catch tError
+      end try
+   end if
+end __extensionUninstallDeleteDocs
 
 ##############################
 # PRIVATE SHARED
