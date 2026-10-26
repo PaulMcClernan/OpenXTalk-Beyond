@@ -941,6 +941,31 @@ function revSBRemoveUnlicensedTargetsFromSettings @xSettingsA
    return the keys of tRemoved
 end revSBRemoveUnlicensedTargetsFromSettings
 
+-- OXT-Beyond: there is no 32-bit Mac engine. The Mac engines have no i386
+-- slice, and the runtime's Mac OS X/x86-32 folder (the Intel target needs
+-- its Standalone.app, for the icons) has no Externals or Support. So a
+-- stack set to build for 32-bit Intel Macs (as LiveCode 6 and 7 stacks
+-- are, and older ones whose Mac or PowerPC setting became that) got an
+-- app with no code in it, and the builder took the externals, database
+-- drivers, revsecurity and revpdfprinter from that folder for any build
+-- with that target in it, so even one with 64-bit Intel or ARM too had
+-- none of them (openxtalk.org p=25421). This turns the target off in
+-- xSettingsA and, when it was the only Mac target, turns 64-bit Intel on
+-- in its place, so such a stack builds what the stack set to its other
+-- Mac target, or to 64-bit Intel, builds. Returns true when 64-bit Intel
+-- took its place, false otherwise.
+function revSBRemove32BitMacFromSettings @xSettingsA
+   if xSettingsA["MacOSX x86-32"] is not true then
+      return false
+   end if
+   put false into xSettingsA["MacOSX x86-32"]
+   if xSettingsA["MacOSX x86-64"] is true or xSettingsA["MacOSX x64-ARM64"] is true then
+      return false
+   end if
+   put true into xSettingsA["MacOSX x86-64"]
+   return true
+end revSBRemove32BitMacFromSettings
+
 command revSBRelativeStackFilesList pStack, @rStackFiles
    local tLine,tChars,tMainStackPath
    

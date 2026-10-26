@@ -316,6 +316,14 @@ command revDoSaveAsStandalone pStack, pFolder, pSettings, @xStandalonePaths
    
    revStandaloneResetWarnings
    
+   -- OXT-Beyond: no 32-bit Mac standalones (revSBRemove32BitMacFromSettings
+   -- in revsblibrary): a stack set to build for 32-bit Intel Macs builds
+   -- for its other Mac target, or for 64-bit Intel Macs with a warning. As
+   -- with iOS above, only this build's copy of the settings changes
+   if revSBRemove32BitMacFromSettings(sStandaloneSettingsA) then
+      revStandaloneAddWarning "MacOSX x86-32: OXT-Beyond has no 32-bit Mac engine, so the Mac standalone is built for 64-bit Intel Macs (MacOSX x86-64) instead"
+   end if
+   
    local tError, tStandaloneFolder
    
    -- shut that noise

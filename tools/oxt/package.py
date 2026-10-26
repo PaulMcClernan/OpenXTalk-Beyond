@@ -806,8 +806,10 @@ def plan_linux_desktop(pl, repo):
 #                      Intel target, and every Mac standalone gets its icons
 #                      from it (Contents/Resources/Standalone*.icns). It
 #                      has no Externals, because its target cannot build:
-#                      the engine has no i386 slice, and the IDE disables
-#                      the target on macOS 12 and later.
+#                      the engine has no i386 slice, so the IDE disables
+#                      the target and builds a stack still set to it for
+#                      its other Mac target or 64-bit Intel instead
+#                      (revsblibrary revSBRemove32BitMacFromSettings).
 MAC_RUNTIMES = collections.OrderedDict([
     ('x86-64', dict(folder='Runtime/Mac OS X/x86-64',
                     standalone=('Standalone-Community.app', 'Standalone.app'),
