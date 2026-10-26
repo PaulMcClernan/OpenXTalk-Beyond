@@ -633,8 +633,8 @@ on TestHyperTalkCompatibleTextProperties
    _DeleteStack
 end TestHyperTalkCompatibleTextProperties
 
--- HyperCard's own style names in a value, where the HyperCard Library's
--- rule T32 cannot rewrite them: "bold,outline" on the button "Plain",
+-- HyperCard's own style names in a value, where the import's rule T32
+-- cannot rewrite them: "bold,outline" on the button "Plain",
 -- "condense" on the button "Bold", "extend,shadow" on the first word of
 -- the field "F", "shadow" on the button "Sized", and "bold ,italic,",
 -- with a space and an empty style, on the button "Plain", each set and
