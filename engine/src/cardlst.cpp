@@ -116,7 +116,15 @@ void MCCardlist::addcard(MCCard *card)
     
     // If the recent list is not to be updated or this card is already at the
     // head of the list, do nothing.
-    if ((cards != NULL && cards->card == card) || MClockrecent)
+    // OXT-Beyond: lockRecent does not keep out a card of a stack whose
+    //   hyperTalkCompatible is true. In HyperCard it kept cards out of the
+    //   Recent dialog's pictures only, and "go back" still went back
+    //   through every card visited ("LockRecent does not affect the trail
+    //   of cards you can go back to", HyperCard's reference): its stacks
+    //   lock recent, go to a card, and go back to the card they came from.
+    if (cards != NULL && cards->card == card)
+		return;
+    if (MClockrecent && (card == NULL || !card->getstack()->ishypertalkcompatible()))
 		return;
 
 	MCCardnode *nptr = new (nothrow) MCCardnode;

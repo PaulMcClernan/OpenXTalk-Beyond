@@ -55,6 +55,17 @@ private function _Rewrite
    return revHyperCardRewriteScript(tScript)
 end _Rewrite
 
+-- _Rewrite for a stack with HyperCard's message order (its
+-- hyperTalkCompatible), where doMenu keeps its name
+private function _RewriteHyperTalk
+   local tScript, i
+   repeat with i = 1 to paramCount()
+      put param(i) & return after tScript
+   end repeat
+   delete the last char of tScript
+   return revHyperCardRewriteScript(tScript, empty, true)
+end _RewriteHyperTalk
+
 private command _Close pStack
    lock messages
    if there is a stack pStack then delete stack pStack
@@ -78,6 +89,12 @@ end _ImportFile
 private function _Library pStack
    return "HyperCard Library (" & the short name of stack pStack & ")"
 end _Library
+
+-- The substack revHyperCardFixScripts adds to a stack with HyperCard's
+-- message order, as its library's behavior, for doMenu
+private function _Menus pStack
+   return "HyperCard Menus (" & the short name of stack pStack & ")"
+end _Menus
 
 -- The original of an object's script, kept by revHyperCardFixScripts
 private function _Kept pObject
@@ -267,11 +284,31 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T26: the scroll of the card window", line 5 of tScript is "  hcSetWindow " & q & "scroll" & q & ", " & q & "card window" & q & ", 0,0"
    TestAssert "T26: the loc of a window: unchanged", line 6 of tScript is "  set the loc of window " & q & "Map" & q & " to 10,10"
 
-   put _Rewrite("on mouseUp", "  doMenu new card", "  if x then doMenu Compact Stack", "  doMenu tItem", "  doMenu the short name of me", "end mouseUp") into tScript
+   put _RewriteHyperTalk("on mouseUp", "  doMenu new card", "  if x then doMenu Compact Stack", "  doMenu tItem", "  doMenu the short name of me", "end mouseUp") into tScript
    TestAssert "T27: doMenu with the item not in quotes", line 2 of tScript is "  doMenu " & q & "new card" & q
    TestAssert "T27: after then, its spelling kept", line 3 of tScript is "  if x then doMenu " & q & "Compact Stack" & q
    TestAssert "T27: a variable: unchanged", line 4 of tScript is "  doMenu tItem"
    TestAssert "T27: an expression: unchanged", line 5 of tScript is "  doMenu the short name of me"
+
+   -- without HyperCard's message order, the same doMenus go to the
+   -- library's hcDoMenu (T15)
+   put _Rewrite("on mouseUp", "  doMenu new card", "  if x then doMenu Compact Stack", "  doMenu tItem", "  doMenu the short name of me", "end mouseUp") into tScript
+   TestAssert "T15 and T27: doMenu with the item not in quotes", line 2 of tScript is "  hcDoMenu " & q & "new card" & q
+   TestAssert "T15 and T27: after then", line 3 of tScript is "  if x then hcDoMenu " & q & "Compact Stack" & q
+   TestAssert "T15: a variable", line 4 of tScript is "  hcDoMenu tItem"
+   TestAssert "T15: an expression", line 5 of tScript is "  hcDoMenu the short name of me"
+
+   -- T36: the menu's name and "without dialog"
+   put _Rewrite("on mouseUp", "  doMenu " & q & "Paste Button" & q & ", " & q & "Edit" & q, "  doMenu " & q & "Delete Stack..." & q & " without dialog", \
+         "  if x then doMenu " & q & "Copy Card" & q & ", " & q & "Edit" & q & " without dialog", "  doMenu Paste Card, Edit", "  doMenu item 1 of x, (item 2 of x)", "end mouseUp") into tScript
+   TestAssert "T36: the menu's name", line 2 of tScript is "  hcDoMenu " & q & "Paste Button" & q & ", " & q & "Edit" & q
+   TestAssert "T36: without dialog", line 3 of tScript is "  hcDoMenu " & q & "Delete Stack..." & q & ", empty, " & q & "without dialog" & q
+   TestAssert "T36: both, after then", line 4 of tScript is "  if x then hcDoMenu " & q & "Copy Card" & q & ", " & q & "Edit" & q & ", " & q & "without dialog" & q
+   TestAssert "T36: names not in quotes (one word is its own value)", line 5 of tScript is "  hcDoMenu " & q & "Paste Card" & q & ", Edit"
+   TestAssert "T36: expressions", line 6 of tScript is "  hcDoMenu item 1 of x, (item 2 of x)"
+   TestAssert "T36: the script compiles", _Compiles(tScript)
+   put _RewriteHyperTalk("on mouseUp", "  doMenu " & q & "Paste Button" & q & ", " & q & "Edit" & q & " without dialog", "end mouseUp") into tScript
+   TestAssert "T36: with HyperCard's message order, the doMenu message with them", line 2 of tScript is "  dispatch " & q & "doMenu" & q & " with " & q & "Paste Button" & q & ", " & q & "Edit" & q & ", " & q & "without dialog" & q
 
    put _Rewrite("on mouseUp", "  put the visible of msg into v", "  if the visible of window " & q & "Message" & q & " then hide msg", "  set the loc of the message box to 18,30", "  set loc of msg to x", "  put the length of msg into n", "  put the rect of window " & q & "Map" & q & " into r", "end mouseUp") into tScript
    TestAssert "T28: the visible of msg", line 2 of tScript is "  put hcMessageBox(" & q & "visible" & q & ") into v"
@@ -326,7 +363,7 @@ on TestHyperCardScriptsMoreForms
    TestAssert "T33: first card of stack Home", line 8 of tScript is "  hcGoHome"
    TestAssert "T33: another card of home: not the Home card", line 9 of tScript is not "  hcGoHome"
    TestAssert "T33: go to a stack's name of two words", line 10 of tScript is "  hcGoTo " & q & "Electronic Parts" & q
-   TestAssert "T33: doMenu with dots in the item's name", line 11 of tScript is "  doMenu " & q & "New Stack..." & q
+   TestAssert "T33: doMenu with dots in the item's name", line 11 of tScript is "  hcDoMenu " & q & "New Stack..." & q
 
    -- the corpus sweep: a modifier key after "with" stays bare, and the
    -- long version of HyperCard is still T10's
@@ -346,7 +383,7 @@ on TestHyperCardScriptsT35
    TestAssert "T35: put x in y", line 2 of tScript is "  put true into x"
    TestAssert "T35: on as a value", line 3 of tScript is "  if x = " & q & "on" & q & " then beep"
    TestAssert "T35: put off into", line 4 of tScript is "  put " & q & "off" & q & " into y"
-   TestAssert "T35: doMenu one word", line 5 of tScript is "  doMenu " & q & "Next" & q
+   TestAssert "T35: doMenu one word", line 5 of tScript is "  hcDoMenu " & q & "Next" & q
    TestAssert "T35: play's notes not in quotes", line 6 of tScript is "  play harpsichord " & q & "c d e f fast" & q
    TestAssert "T35: play's notes after tempo", line 7 of tScript is "  play flute tempo 200 " & q & "c4 d" & q
    TestAssert "T35: send to card after then", line 8 of tScript is "  if x then send " & q & "go" & q & " to this card"
@@ -377,7 +414,7 @@ on TestHyperCardScriptsT35
          "  put x in y into z", "end mouseUp") into tScript
    TestAssert "T35: a count into the message box: unchanged", line 2 of tScript is "  put the number of words in fld 1"
    TestAssert "T35: play with a variable: unchanged", line 3 of tScript is "  play flute tNotes"
-   TestAssert "T35: doMenu with a variable: unchanged", line 5 of tScript is "  doMenu tItem"
+   TestAssert "T35: doMenu with a variable: only T15", line 5 of tScript is "  hcDoMenu tItem"
    TestAssert "T35: quoted notes: unchanged", line 6 of tScript is "  play " & q & "boing" & q & " " & q & "c d" & q
    TestAssert "T35: in before into: unchanged", line 7 of tScript is "  put x in y into z"
 
@@ -432,6 +469,260 @@ on TestHyperCardScriptsT34
    TestAssert "T34: not an external: unchanged", line 5 of tScript is "  put Other(on) into z"
 end TestHyperCardScriptsT34
 
+on TestHyperCardScriptsT37
+   -- T37: the next forms by reach in the sweep of 2026-10-25
+   local tScript, q
+   put quote into q
+   put _Rewrite("on mouseUp", "  ResetBtns on", "  if x then ResetBtns(OFF)", "  ShowHistory " & q & "The Outcome" & q & ", 5,", \
+         "  go cd", "  go to card", "  put the number of marked card i into tn", \
+         "  if there is not a window " & q & "Nav" & q & " then palette " & q & "Nav" & q & "," & q & "254,0" & q, \
+         "end mouseUp", "on ResetBtns pState", "end ResetBtns", "on ShowHistory pTitle, pCount, pMore", "end ShowHistory") into tScript
+   TestAssert "T37: on as a handler of the stack's argument", line 2 of tScript is "  ResetBtns " & q & "on" & q
+   TestAssert "T37: in parentheses, after then", line 3 of tScript is "  if x then ResetBtns(" & q & "OFF" & q & ")"
+   TestAssert "T37: a comma that ends the arguments", line 4 of tScript is "  ShowHistory " & q & "The Outcome" & q & ", 5, empty"
+   TestAssert "T37: go cd", line 5 of tScript is "  go this cd"
+   TestAssert "T37: go to card", line 6 of tScript is "  go to this card"
+   TestAssert "T37: the number of marked card i", line 7 of tScript is "  put the number of card id (the id of marked card i) into tn"
+   TestAssert "T37: palette after then", line 8 of tScript is "  if there is not a window " & q & "Nav" & q & " then hcPalette " & q & "Nav" & q & "," & q & "254,0" & q
+   TestAssert "T37: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a card named, the number of marked cards, a handler
+   -- that is not the stack's (no probe), a variable, a comma in quotes
+   put _Rewrite("on mouseUp", "  go cd 2", "  put the number of marked cards into n", "  Other on", \
+         "  ResetBtns tOn, " & q & "a," & q, "  put 1 into tOn", "end mouseUp", "on ResetBtns pState", "end ResetBtns") into tScript
+   TestAssert "T37: go to a card: unchanged", line 2 of tScript is "  go cd 2"
+   TestAssert "T37: the number of marked cards: unchanged", line 3 of tScript is "  put the number of marked cards into n"
+   TestAssert "T37: no probe, so not known to be a command: unchanged", line 4 of tScript is "  Other on"
+   TestAssert "T37: a variable, and a comma in quotes: unchanged", line 5 of tScript is "  ResetBtns tOn, " & q & "a," & q
+
+   -- variables named like a word answer, ask and put take first; mark
+   -- card; a card in this background; counts without "the"
+   put _Rewrite("on mouseUp", "  answer info", "  ask question with " & q & "x" & q, "  put Header into field 1", \
+         "  mark card", "  unmark cd", "  go cd " & q & "Index" & q & " in this bg", "  if there is a cd id it in this bg then beep", \
+         "  set the name of card field number of card fields to " & q & "x" & q, "  put it into field number of fields", \
+         "  put item number of me of x into y", "  get char 1 to 7 of line number of lines of t - 1 of t", \
+         "  put line number of lines of script of target of script of target into z", "end mouseUp") into tScript
+   TestAssert "T37: answer info", line 2 of tScript is "  answer (info)"
+   TestAssert "T37: ask question with", line 3 of tScript is "  ask (question) with " & q & "x" & q
+   TestAssert "T37: put header into", line 4 of tScript is "  put (Header) into field 1"
+   TestAssert "T37: mark card", line 5 of tScript is "  mark this card"
+   TestAssert "T37: unmark cd", line 6 of tScript is "  unmark this cd"
+   TestAssert "T37: go to a card in this bg", line 7 of tScript is "  go cd " & q & "Index" & q & " of this bg"
+   TestAssert "T37: there is a card in this bg", line 8 of tScript is "  if there is a cd id it of this bg then beep"
+   TestAssert "T37: a field numbered by the count of fields", line 9 of tScript is "  set the name of card field (the number of card fields) to " & q & "x" & q
+   TestAssert "T37: the same without card", line 10 of tScript is "  put it into field (the number of fields)"
+   TestAssert "T37: an item numbered by the number of me", line 11 of tScript is "  put item (the number of me) of x into y"
+   TestAssert "T37: a line numbered by a count of lines, its container again after it", line 12 of tScript is "  get char 1 to 7 of line (the number of lines of t - 1) of t"
+   TestAssert "T37: the same, a container of several words", line 13 of tScript is "  put line (the number of lines of script of target) of script of target into z"
+   TestAssert "T37: those compile", _Compiles(tScript)
+
+   -- as before: "number of" something other than a count's objects is
+   -- a card's name (T3); answer with more after the word
+   put _Rewrite("on mouseUp", "  go card number of this stack", "  answer error & x", "end mouseUp") into tScript
+   TestAssert "T37: number of this stack: a card's name, as before", line 2 of tScript is "  go card " & q & "number" & q & " of this stack"
+   TestAssert "T37: answer error and more: unchanged", line 3 of tScript is "  answer error & x"
+end TestHyperCardScriptsT37
+
+on TestHyperCardScriptsT37Probed
+   -- T37 with revHyperCardFixScripts' probes: a word that is no value
+   -- here, which HyperCard took as its own text, as an argument or a
+   -- value alone; and an else at the end of a line that began a block
+   local tStack, tScript, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT37" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", "  timeStamp scrollBar", \
+         "  gocd next, 1", "  if it = No then put 1 into x", "  if (iName = First) or (iName = Last) then beep", \
+         "  if movie is not in the result then beep", "  put stacks into whichField", "  put in into meas", \
+         "  if there is a field " & q & "x" & q & " then beep", "  if x is a number then beep", \
+         "  put comma & meas & comma & whichField after gHCScriptsTest", "end mouseUp", \
+         "on timeStamp pWhat", "  global gHCScriptsTest", "  put pWhat after gHCScriptsTest", "end timeStamp", \
+         "on gocd pWhere, pBy", "  global gHCScriptsTest", "  put comma & pWhere & pBy after gHCScriptsTest", "end gocd", \
+         "on dragIt p, q", "  drag from p to q \", "  with optionKey", "end dragIt", \
+         "on notNo p", "  if p <> No then put 1 into p", "end notNo", \
+         "on showChart", "  picture " & q & "Chart" & q & ", clipboard, zoom", "end showChart")
+   create button "Else"
+   set the script of button "Else" to _Lines("on mouseUp pChoice", "  global gHCScriptsTest", \
+         "  if pChoice = 1 then put " & q & "one" & q & " into gHCScriptsTest else", \
+         "  if pChoice = 2 then put " & q & "two" & q & " into gHCScriptsTest else", \
+         "  put " & q & "other" & q & " into gHCScriptsTest", "  put " & q & "!" & q & " after gHCScriptsTest", \
+         "  end if", "  end if", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown")
+   create button "Else2"
+   set the script of button "Else2" to _Lines("on mouseUp pChoice", "  global gHCScriptsTest", \
+         "  if pChoice = 1 or \", "  pChoice = 4 then put " & q & "one" & q & " into gHCScriptsTest else", \
+         "  if pChoice = 2 then put " & q & "two" & q & " into gHCScriptsTest", "  else", \
+         "    put " & q & "other" & q & " into gHCScriptsTest", "    put " & q & "!" & q & " after gHCScriptsTest", \
+         "  end if", "  end if", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put the script of button "B" of stack tStack into tScript
+   TestAssert "T37: a handler's argument that is no value here", line 3 of tScript is "  timeStamp " & q & "scrollBar" & q
+   TestAssert "T37: next as an argument", line 4 of tScript is "  gocd " & q & "next" & q & ", 1"
+   TestAssert "T37: a side of a comparison", line 5 of tScript is "  if it = " & q & "No" & q & " then put 1 into x"
+   TestAssert "T37: both sides in parentheses", line 6 of tScript is "  if (iName = " & q & "First" & q & ") or (iName = " & q & "Last" & q & ") then beep"
+   TestAssert "T37: the left side", line 7 of tScript is "  if " & q & "movie" & q & " is not in the result then beep"
+   TestAssert "T37: what put puts", line 8 of tScript is "  put " & q & "stacks" & q & " into whichField"
+   TestAssert "T37: what put puts, a word of the grammar", line 9 of tScript is "  put " & q & "in" & q & " into meas"
+   TestAssert "T37: there is: unchanged", line 10 of tScript is "  if there is a field " & q & "x" & q & " then beep"
+   TestAssert "T37: is a number: unchanged", line 11 of tScript is "  if x is a number then beep"
+   TestAssert "T37: a line that goes on with the statement before starts no command: unchanged", \
+         line 24 of tScript is "  with optionKey"
+   TestAssert "T37: a side of <>", line 27 of tScript is "  if p <> " & q & "No" & q & " then put 1 into p"
+   TestAssert "T37: picture's words that are no value here", line 30 of tScript begins with "  hcPicture " & q & "Chart" & q & ", " & q & "clipboard" & q & ", "
+   TestAssert "T37: the script compiles", _Compiles(tScript)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "T37: the words as their own text", gHCScriptsTest is "scrollBar,next1,in,stacks"
+
+   put the script of button "Else" of stack tStack into tScript
+   TestAssert "T37: an else at the end of a line, the else of a block", line 3 of tScript is "  if pChoice = 1 then; put " & q & "one" & q & " into gHCScriptsTest ; else"
+   TestAssert "T37: the handler that cannot be saved, its line left out (T39)", \
+         "  -- HyperCard import: left out, it does not compile here: put 1 +* into" is among the lines of tScript
+   put empty into gHCScriptsTest
+   send "mouseUp 1" to button "Else" of stack tStack
+   TestAssert "T37: the then", gHCScriptsTest is "one"
+   send "mouseUp 2" to button "Else" of stack tStack
+   TestAssert "T37: the else's then", gHCScriptsTest is "two"
+   send "mouseUp 3" to button "Else" of stack tStack
+   TestAssert "T37: the block of the else's else, every line of it", gHCScriptsTest is "other!"
+
+   put the script of button "Else2" of stack tStack into tScript
+   TestAssert "T37: an else at the end of a statement over two lines", line 4 of tScript is "  pChoice = 4 then; put " & q & "one" & q & " into gHCScriptsTest ; else"
+   TestAssert "T37: else alone on the line after if...then", line 5 of tScript is "  if pChoice = 2 then; put " & q & "two" & q & " into gHCScriptsTest"
+   put empty into gHCScriptsTest
+   send "mouseUp 4" to button "Else2" of stack tStack
+   TestAssert "T37: over two lines, the then", gHCScriptsTest is "one"
+   put empty into gHCScriptsTest
+   send "mouseUp 2" to button "Else2" of stack tStack
+   TestAssert "T37: else alone, the then", gHCScriptsTest is "two"
+   put empty into gHCScriptsTest
+   send "mouseUp 3" to button "Else2" of stack tStack
+   TestAssert "T37: else alone, every line of its block", gHCScriptsTest is "other!"
+   _Close tStack
+end TestHyperCardScriptsT37Probed
+
+on TestHyperCardScriptsT38
+   -- exit and pass with another handler's name: the handler's own
+   local tScript, q
+   put quote into q
+   put _Rewrite("on createText", "  if it is empty then exit saveToDisk", "  exit saveToDisk", "  exit repeat", "  exit to top", "  exit createText", \
+         "end createText", "on keyDown whatKey", "  if whatKey is " & q & "a" & q & " then pass whatKey else beep", "  pass " & q & "doMenu" & q, \
+         "end keyDown") into tScript
+   TestAssert "T38: exit with another handler's name, after then", line 2 of tScript is "  if it is empty then exit createText"
+   TestAssert "T38: exit with another handler's name", line 3 of tScript is "  exit createText"
+   TestAssert "T38: exit repeat, exit to top and the handler's own: unchanged", line 4 to 6 of tScript is _Lines("  exit repeat", "  exit to top", "  exit createText")
+   TestAssert "T38: pass a parameter's name, before else", line 9 of tScript is "  if whatKey is " & q & "a" & q & " then pass keyDown else beep"
+   TestAssert "T38: pass a name in quotes", line 10 of tScript is "  pass keyDown"
+   TestAssert "T38: those compile", _Compiles(tScript)
+
+   -- global with names in quotes, or none between commas
+   put _Rewrite("on mouseUp", "  Global " & q & "Mapper" & q & " -- the map", "  global a, , b,", "  global c, d", "  put 1 into Mapper", "end mouseUp") into tScript
+   TestAssert "T38: a global's name in quotes", line 2 of tScript is "  Global Mapper -- the map"
+   TestAssert "T38: no name between commas", line 3 of tScript is "  global a, b"
+   TestAssert "T38: names alone: unchanged", line 4 of tScript is "  global c, d"
+   TestAssert "T38: the globals compile", _Compiles(tScript)
+   put _Rewrite("on mouseUp", "  global the short name of the target", "end mouseUp") into tScript
+   TestAssert "T38: an expression after global: unchanged", line 2 of tScript is "  global the short name of the target"
+end TestHyperCardScriptsT38
+
+on TestHyperCardScriptsT39
+   -- a handler that still does not compile keeps every line that does:
+   -- the others are left out as comments and the handler goes on past
+   -- them, or, in a repeat that only a condition ends and for return,
+   -- stops there with an error that names the line
+   local tStack, tScript, tError, tLeft, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT39" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put " & q & "a" & q & " into gHCScriptsTest", \
+         "  set selectedChunk of window " & q & "W" & q & " to " & q & "1,2" & q, "  put " & q & "b" & q & " after gHCScriptsTest", "end mouseUp", \
+         "on mouseDown", "  global gHCScriptsTest", "  put " & q & "c" & q & " into gHCScriptsTest", "  repeat until gHCScriptsTest is " & q & "cdd" & q, \
+         "    put " & q & "d" & q & " after gHCScriptsTest", "    put 1 +* into x", "  end repeat", "end mouseDown", \
+         "on mouseEnter", "  global gHCScriptsTest", "  put empty into gHCScriptsTest", "  repeat with i = 1 to 3", "    put i after gHCScriptsTest", \
+         "    put 1 +* into x", "  end repeat", "end mouseEnter", \
+         "on mouseLeave", "  global gHCScriptsTest", "  put " & q & "two" & q & " into gHCScriptsTest", "  put 1 + \", "     +* 2 into x", \
+         "  put " & q & " lines" & q & " after gHCScriptsTest", "end mouseLeave", \
+         "function twice x", "  put x * 2 into y", "  return y +* 1", "end twice", \
+         "on ifParts p", "  global gHCScriptsTest", "  put " & q & "i" & q & " into gHCScriptsTest", "  if p is 1 then put 1 +* into x", \
+         "  if p is 2 then put " & q & "2" & q & " after gHCScriptsTest else put 1 +* into x", "  put " & q & "!" & q & " after gHCScriptsTest", "end ifParts", \
+         "on loopPart p", "  global gHCScriptsTest", "  put empty into gHCScriptsTest", "  repeat until gHCScriptsTest is " & q & "xx" & q, \
+         "    put " & q & "x" & q & " after gHCScriptsTest", "    if p is 4 then put 2 +* into x", "  end repeat", "end loopPart", \
+         "on badCondition", "  if 1 +* 2 then beep", "end badCondition", \
+         "on elseParts p", "  global gHCScriptsTest", "  put " & q & "e" & q & " into gHCScriptsTest", "  if p is 1 then put", "  else put", \
+         "  put " & q & "!" & q & " after gHCScriptsTest", "end elseParts")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put the script of button "B" of stack tStack into tScript
+   TestAssert "T39: the script compiles", _Compiles(tScript)
+   TestAssert "T39: the line left out, a comment", line 4 of tScript is "  -- HyperCard import: left out, it does not compile here: set selectedChunk of window " & q & "W" & q & " to " & q & "1,2" & q
+   TestAssert "T39: in a repeat that a condition ends, a throw", line 12 of tScript is "    throw " & q & "HyperCard import: a line that does not compile here: put 1 +* into x" & q
+   TestAssert "T39: in a repeat with, left out", line 20 of tScript is "    -- HyperCard import: left out, it does not compile here: put 1 +* into x"
+   TestAssert "T39: a statement over two lines, both", line 26 to 27 of tScript is _Lines("  -- HyperCard import: left out, it does not compile here: put 1 + \", "  -- +* 2 into x")
+   TestAssert "T39: return, a throw", line 32 of tScript is "  throw " & q & "HyperCard import: a line that does not compile here: return y +* 1" & q
+   TestAssert "T39: a statement after then, hcLeftOut in its place", line 37 of tScript is "  if p is 1 then hcLeftOut " & q & "put 1 +* into x" & q
+   TestAssert "T39: a statement after else", line 38 of tScript is "  if p is 2 then put " & q & "2" & q & " after gHCScriptsTest else hcLeftOut " & q & "put 1 +* into x" & q
+   TestAssert "T39: after then in a repeat that a condition ends, a throw", line 46 of tScript is "    if p is 4 then throw " & q & "HyperCard import: a line that does not compile here: put 2 +* into x" & q
+   TestAssert "T39: an if whose condition does not compile: the handler left out", "   pass badCondition" is among the lines of tScript
+   TestAssert "T39: a statement whose error is given at its then or else", "  if p is 1 then hcLeftOut " & q & "put" & q is among the lines of tScript \
+         and "  else hcLeftOut " & q & "put" & q is among the lines of tScript
+   TestAssert "T39: the handlers' lines keep their numbers", line 33 of tScript is "end twice" and line 48 of tScript is "end loopPart"
+
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "T39: the handler goes on past the line left out", gHCScriptsTest is "ab"
+   send "mouseEnter" to button "B" of stack tStack
+   TestAssert "T39: and so does a repeat with", gHCScriptsTest is "123"
+   send "mouseLeave" to button "B" of stack tStack
+   TestAssert "T39: and past a statement over two lines", gHCScriptsTest is "two lines"
+   put empty into tError
+   try
+      send "mouseDown" to button "B" of stack tStack
+   catch tError
+   end try
+   TestAssert "T39: the throw stops the handler, naming the line", gHCScriptsTest is "cd" and "a line that does not compile here: put 1 +* into x" is in tError
+   put empty into tError
+   try
+      dispatch function "twice" to button "B" of stack tStack with 2
+   catch tError
+   end try
+   TestAssert "T39: a return that does not compile stops the function", "return y +* 1" is in tError
+   send "ifParts 1" to button "B" of stack tStack
+   TestAssert "T39: the handler goes on past a then left out", gHCScriptsTest is "i!"
+   send "ifParts 2" to button "B" of stack tStack
+   TestAssert "T39: the then that compiles runs, the else left out", gHCScriptsTest is "i2!"
+   send "loopPart 3" to button "B" of stack tStack
+   TestAssert "T39: the throw only where the then is taken", gHCScriptsTest is "xx"
+   put empty into tError
+   try
+      send "loopPart 4" to button "B" of stack tStack
+   catch tError
+   end try
+   TestAssert "T39: and there it stops the handler", gHCScriptsTest is "x" and "put 2 +* into x" is in tError
+   send "elseParts 1" to button "B" of stack tStack
+   TestAssert "T39: past the then left out", gHCScriptsTest is "e!"
+   send "elseParts 2" to button "B" of stack tStack
+   TestAssert "T39: and past the else", gHCScriptsTest is "e!"
+
+   put revHyperCardLeftOutLines() into tLeft
+   TestAssert "T39: the lines left out, listed", the number of elements of tLeft is 10
+   TestAssert "T39: each with its handler, line, text and how", tLeft[1]["name"] is "mouseUp" and tLeft[1]["line"] is 4 and tLeft[1]["how"] is "skipped" \
+         and tLeft[2]["name"] is "mouseDown" and tLeft[2]["line"] is 6 and tLeft[2]["how"] is "stops" and tLeft[2]["text"] is "put 1 +* into x" \
+         and tLeft[4]["text"] is "put 1 + +* 2 into x" \
+         and tLeft[6]["name"] is "ifParts" and tLeft[6]["line"] is 4 and tLeft[6]["text"] is "if p is 1 then put 1 +* into x" and tLeft[6]["how"] is "skipped" \
+         and tLeft[8]["name"] is "loopPart" and tLeft[8]["how"] is "stops" \
+         and tLeft[9]["name"] is "elseParts" and tLeft[9]["text"] is "if p is 1 then put" and tLeft[10]["text"] is "else put" and tLeft[10]["how"] is "skipped"
+   put revHyperCardLeftOutHandlers() into tLeft
+   TestAssert "T39: only the handler whose if does not compile left out whole", the number of elements of tLeft is 1 and tLeft[1]["name"] is "badCondition"
+   _Close tStack
+end TestHyperCardScriptsT39
+
 on TestHyperCardScriptsMoreFormsProbed
    -- T33: a window's name this engine does not take as a value, which
    -- only revHyperCardFixScripts (with its probes) finds
@@ -467,7 +758,10 @@ on TestHyperCardScriptsFix
    put the script of button "Good" into tGood
    put the script of stack tStack into tOriginal
    create button "Mixed"
-   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown", "function f", "  put ( into z", "end f")
+   -- (mouseDown and f compile without their bad line, T39; mouseEnter
+   -- and g, with an if that has no end, do not)
+   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown", "function f", "  put ( into z", "end f", \
+         "on mouseEnter", "  if x then", "    put 1 +* into", "end mouseEnter", "function g", "  if x then", "  return 1", "end g")
    create button "Named"
    set the script of button "Named" to _Lines("on mouseUp", "  put 3 into w", "end mouseUp", "on " & quote & "v" & quote, "  beep", "end " & quote & "v" & quote)
    unlock messages
@@ -481,8 +775,11 @@ on TestHyperCardScriptsFix
    TestAssert "a script that compiles: nothing kept", _Kept(the long id of button "Good" of stack tStack) is empty
    TestAssert "salvaged: compiles", _Compiles(the script of button "Mixed" of stack tStack)
    TestAssert "salvaged: the handler that compiled kept as it was", line 1 to 3 of the script of button "Mixed" of stack tStack is _Lines("on mouseUp", "  put 2 into y", "end mouseUp")
-   TestAssert "salvaged: the bad handler passes its message", "   pass mouseDown" is among the lines of the script of button "Mixed" of stack tStack
-   TestAssert "salvaged: its HyperTalk inside, commented out", "   --   put 1 +* into" is among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: a bad line left out, its handler kept", "  -- HyperCard import: left out, it does not compile here: put 1 +* into" is among the lines of the script of button "Mixed" of stack tStack \
+         and "   pass mouseDown" is not among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: the same in a function", "  -- HyperCard import: left out, it does not compile here: put ( into z" is among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: the bad handler passes its message", "   pass mouseEnter" is among the lines of the script of button "Mixed" of stack tStack
+   TestAssert "salvaged: its HyperTalk inside, commented out", "   --     put 1 +* into" is among the lines of the script of button "Mixed" of stack tStack
    TestAssert "salvaged: a bad function returns empty", "   return empty" is among the lines of the script of button "Mixed" of stack tStack
    TestAssert "salvaged: a handler no name can call, commented out whole", _Compiles(the script of button "Named" of stack tStack) and "-- on " & quote & "v" & quote is among the lines of the script of button "Named" of stack tStack
    TestAssert "logged in the hcImportStat", "HyperCard scripts: 3 rewritten" is in the hcImportStat
@@ -530,6 +827,127 @@ on TestHyperCardScriptsLibrary
    TestAssert "the stack's doMenu handler sees the script's doMenu, and the version is HyperCard's", gHCScriptsTest is "Keep,2.4.1"
    _Close tStack
 end TestHyperCardScriptsLibrary
+
+on TestHyperCardScriptsMenuItems
+   -- HyperCard's menu items, which a stack without HyperCard's message
+   -- order reaches through the library's hcDoMenu: by their names in any
+   -- case, with or without their "..."
+   local tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCMenuItems" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   -- the buttons in a background, so each card has them
+   create group "BG"
+   set the backgroundBehavior of group "BG" to true
+   create button "Go" in group "BG"
+   set the script of button "Go" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  doMenu " & q & "Last" & q, "  put the number of this card into gHCScriptsTest", \
+         "  doMenu " & q & "Prev" & q, "  put comma & the number of this card after gHCScriptsTest", \
+         "  doMenu " & q & "first" & q, "  put comma & the number of this card after gHCScriptsTest", \
+         "  doMenu " & q & "NEXT" & q, "  put comma & the number of this card after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Objects" in group "BG"
+   set the script of button "Objects" to _Lines("on mouseUp", "  global gHCScriptsTest", "  local tCount", \
+         "  put the number of controls of this card into tCount", \
+         "  doMenu " & q & "New Field" & q, \
+         "  put the number of controls of this card - tCount into gHCScriptsTest", \
+         "  doMenu " & q & "new button..." & q, \
+         "  put comma & (there is a button " & q & "New Button" & q & ") after gHCScriptsTest", \
+         "  doMenu " & q & "Compact Stack" & q, "  put comma & (the result is empty) after gHCScriptsTest", \
+         "  doMenu " & q & "Keep" & q, "  put comma & (the result is empty) after gHCScriptsTest", \
+         "  doMenu " & q & "No Such Item" & q & ", " & q & "Edit" & q, "  put comma & the result after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Style" in group "BG"
+   set the script of button "Style" to _Lines("on mouseUp", "  global gHCScriptsTest", "  local tLayer", \
+         "  select field " & q & "F" & q, \
+         "  doMenu " & q & "Bold" & q, "  put the textStyle of field " & q & "F" & q & " into gHCScriptsTest", \
+         "  doMenu " & q & "Italic" & q, "  put comma & the textStyle of field " & q & "F" & q & " after gHCScriptsTest", \
+         "  doMenu " & q & "bold" & q, "  put comma & the textStyle of field " & q & "F" & q & " after gHCScriptsTest", \
+         "  doMenu " & q & "14" & q, "  put comma & the textSize of field " & q & "F" & q & " after gHCScriptsTest", \
+         "  doMenu " & q & "Geneva" & q, "  put comma & the textFont of field " & q & "F" & q & " after gHCScriptsTest", \
+         "  doMenu " & q & "Plain" & q, "  put comma & (the textStyle of field " & q & "F" & q & " is among the words of " & q & "plain normal" & q & " or the textStyle of field " & q & "F" & q & " is empty) after gHCScriptsTest", \
+         "  select button " & q & "Low" & q, "  put the layer of button " & q & "Low" & q & " into tLayer", \
+         "  doMenu " & q & "Bring Closer" & q, "  put comma & the layer of button " & q & "Low" & q & " - tLayer after gHCScriptsTest", \
+         "  doMenu " & q & "Send Farther" & q, "  put comma & the layer of button " & q & "Low" & q & " - tLayer after gHCScriptsTest", \
+         "  select field " & q & "Gone" & q, \
+         "  doMenu " & q & "Clear Field" & q, "  put comma & (there is a field " & q & "Gone" & q & ") after gHCScriptsTest", \
+         "  select empty", "  choose browse tool", \
+         "end mouseUp")
+   create card
+   create card
+   create button "Low"
+   create button "High"
+   create field "F"
+   create field "Gone"
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "no menus substack without HyperCard's message order", _Menus(tStack) is not among the lines of the substacks of stack tStack
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Go" of stack tStack
+   TestAssert "Go menu: Last, Prev, First, Next", gHCScriptsTest is "3,2,1,2"
+
+   go card 3 of stack tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Objects" of stack tStack
+   TestAssert "Objects menu: New Field, New Button (named as HyperCard named it); Compact Stack and Keep do nothing; an item there is not", \
+         gHCScriptsTest is "1,true,true,true,doMenu " & q & "No Such Item" & q && "not implemented"
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Style" of stack tStack
+   set the itemDelimiter to comma
+   -- (the textStyle of bold and italic text is two items)
+   TestAssert "Style menu: Bold, Italic added, Bold taken off again", item 1 to 4 of gHCScriptsTest is "bold,bold,italic,italic"
+   TestAssert "Style menu: a size and a font of HyperCard's Macs", item 5 to 6 of gHCScriptsTest is "14,Geneva"
+   TestAssert "Style menu: Plain", item 7 of gHCScriptsTest is true
+   TestAssert "Objects menu: Bring Closer, Send Farther", item 8 to 9 of gHCScriptsTest is "1,0"
+   TestAssert "Edit menu: Clear Field deletes the selected field", item 10 of gHCScriptsTest is false
+   _Close tStack
+end TestHyperCardScriptsMenuItems
+
+on TestHyperCardScriptsMenusHyperTalk
+   -- with HyperCard's message order, doMenu keeps its name and is a
+   -- message: the stack's doMenu handler sees each item first, and the
+   -- substack "HyperCard Menus (<the stack's name>)", the library's
+   -- behavior, does the items no handler takes
+   local tStack, tReport, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCMenusHyperTalk" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the hyperTalkCompatible of stack tStack to true
+   set the defaultStack to tStack
+   set the script of stack tStack to _Lines("on doMenu which", "  global gHCScriptsTest", "  put which & comma after gHCScriptsTest", \
+         "  if which is " & q & "Keep Me" & q & " then exit doMenu", "  pass doMenu", "end doMenu")
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  doMenu " & q & "Keep Me" & q, \
+         "  doMenu " & q & "New Card" & q, "  put the number of cards of this stack & comma after gHCScriptsTest", \
+         "  doMenu " & q & "No Such Item" & q, "  put the result after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put revHyperCardFixScripts(tStack) into tReport
+   TestAssert "the stack's doMenu handler keeps its name", "on doMenu which" is among the lines of the script of stack tStack
+   TestAssert "doMenu in a script keeps its name", "  doMenu " & q & "Keep Me" & q is among the lines of the script of button "B" of stack tStack
+   TestAssert "the menus substack added", _Menus(tStack) is among the lines of the substacks of stack tStack
+   TestAssert "as the library's behavior", the short name of the behavior of stack _Library(tStack) of stack tStack is _Menus(tStack)
+   TestAssert "with its doMenu handler", "on doMenu pItem, pMenu, pWithout" is among the lines of the script of stack _Menus(tStack) of stack tStack
+   TestAssert "named in the report", "HyperCard Menus" is in tReport
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "the stack's handler sees each item, keeps one, and the menus substack does the others", \
+         gHCScriptsTest is "Keep Me,New Card,2,No Such Item,doMenu " & q & "No Such Item" & q && "not implemented"
+
+   -- a second fix adds no second menus substack
+   get revHyperCardFixScripts(tStack)
+   TestAssert "a second fix: one menus substack", _Menus(tStack) && "2" is not among the lines of the substacks of stack tStack
+   _Close tStack
+end TestHyperCardScriptsMenusHyperTalk
 
 on TestHyperCardScriptsHomeHandlers
    -- the HyperCard 2 Home stack's handlers stacks called, which the
@@ -686,14 +1104,19 @@ on TestHyperCardScriptsSummary
    create invisible stack tStack
    set the defaultStack to tStack
    create button "Mixed"
-   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  put 1 +* into", "end mouseDown")
+   set the script of button "Mixed" to _Lines("on mouseUp", "  put 2 into y", "end mouseUp", "on mouseDown", "  if x then", "  put 1 into y", "end mouseDown", \
+         "on mouseEnter", "  put 1 into y", "  put 1 +* into", "end mouseEnter")
    unlock messages
    get revHyperCardFixScripts(tStack)
    put revHyperCardLeftOutHandlers() into tLeft
    TestAssert "the handler left out is listed", tLeft[1]["name"] is "mouseDown" and tLeft[1]["error"] is not empty
+   put revHyperCardLeftOutLines() into tLeft
+   TestAssert "the line left out is listed", tLeft[1]["name"] is "mouseEnter" and tLeft[1]["line"] is 3 \
+         and tLeft[1]["text"] is "put 1 +* into" and tLeft[1]["how"] is "skipped" and tLeft[1]["error"] is not empty
    put revHyperCardImportSummary(tStack, "Not converting snd  id  9 " & quote & "Boo" & quote & ": MACE 3:1 compression" & return & "Not converting XCMD id 3 " & quote & "Ink" & quote) into tSummary
    TestAssert "the summary names the stack", line 1 of tSummary begins with tStack & ":"
    TestAssert "the summary names the handler left out", "mouseDown in button" is in tSummary
+   TestAssert "the summary names the line left out", "mouseEnter in button" is in tSummary and ": put 1 +* into" is in tSummary
    TestAssert "the summary counts the MACE sound", "Sounds: 1 not converted (1 in MACE" is in tSummary
    TestAssert "the summary lists the other resources", "Resources not converted: XCMD x1" is in tSummary
    -- a sound the MACE decoder converted is no longer counted
@@ -885,10 +1308,11 @@ on TestHyperCardScriptsImported
    local tStack, tReport, tLine, tObject, tFailed
    put _ImportFile("TestV1.stack", "TestV1.stack") into tStack
    put revHyperCardFixScripts(tStack) into tReport
-   -- (4 scripts that did not compile; 34 that did, for "go home",
+   -- (4 scripts that did not compile; 38 that did, for "go home",
    -- "arrowKey", the cursor, "go" to another stack, by "stack" or by
-   -- its name alone, and doMenu "Quit HyperCard")
-   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 38 rewritten" is in tReport
+   -- its name alone, and doMenu, which goes to the library's hcDoMenu
+   -- in a stack without HyperCard's message order)
+   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 42 rewritten" is in tReport
    set the itemDelimiter to tab
    repeat for each line tLine in tReport
       if item 2 of tLine is empty then next repeat

@@ -11,35 +11,584 @@ script "revHyperCardLibrary"
 --
 -- What each does here, rather than in HyperCard, is said beside it.
 
--- A menu choice: HyperCard sent doMenu for each one, and a stack's
--- "on doMenu" handler is called hcDoMenu after the import (no handler here
--- can be called doMenu). A choice that reaches here does what the
--- engine's doMenu command does with it.
-on hcDoMenu pItem, pMenu
-   local tMessage
-   -- an item of a menu the stack made, with a menu message: the message,
-   -- as HyperCard sent it
+-- A menu choice: HyperCard sent doMenu for each one, to the stack's
+-- handlers first. In a stack imported without HyperCard's message order
+-- (its hyperTalkCompatible false) no handler can be called doMenu: a
+-- stack's "on doMenu" handler is called hcDoMenu after the import, and
+-- each doMenu of its scripts is an hcDoMenu (rule T15), so that this one
+-- comes after the stack's own. pMenu is the menu's name, when the script
+-- gave it ("doMenu "Paste Button", "Edit""), and pWithout "without dialog".
+on hcDoMenu pItem, pMenu, pWithout
+   hcMenuChoice pItem, pMenu, pWithout
+   return the result
+end hcDoMenu
+
+-- HyperCard's menu items, by the names HyperCard gave them, with or
+-- without their "...", in any case: what a doMenu that no handler of the
+-- stack takes does. hcDoMenu calls this; in a stack with HyperCard's
+-- message order, where doMenu is a message and keeps its name, the "on
+-- doMenu" of the substack "HyperCard Menus (<the stack's name>)", this
+-- library's behavior, does. Each item does what it did in HyperCard as
+-- nearly as this engine can:
+--
+-- File: New Stack..., Open Stack... (a HyperCard stack is imported as
+-- "go" imports one), Close Stack, Save a Copy..., Delete Stack... (asked
+-- first, "without dialog" too, whenever it would delete a file), Page
+-- Setup..., Print Card, Print Stack..., Print Field... (the selected
+-- field), Quit HyperCard (in the IDE the stack is closed rather than the
+-- IDE quit: a stack that quit as it opened closed the IDE, with no word
+-- about unsaved work; a standalone quits); Compact Stack and Convert
+-- Stack... have nothing to do here.
+-- Edit: Undo; Cut, Copy, Paste and Clear, alone or of Text, Button,
+-- Field, Picture or Card, for what is selected; New Card, Delete Card,
+-- Background (editing the background, or the card again).
+-- Go: Back, Home, Help, Recent, First, Prev, Next, Last, Find... (asks
+-- what to find), Message (shows the message box, or hides it).
+-- Objects: New Button (named "New Button", as HyperCard named it), New
+-- Field, New Background (a card with a background of its own), Bring
+-- Closer, Send Farther, and Button Info... to Stack Info..., which show
+-- the object in the IDE's inspector.
+-- Style and Font: Plain, Bold, Italic, Underline, Condense, Extend,
+-- Group, a font's name and a size, for the selected text, else the
+-- selected buttons and fields; a style the text has already is taken off.
+-- Paint: Select All with a paint tool takes the picture of the card (of
+-- the background, while it is edited), which Cut, Copy and Clear Picture,
+-- Flip Horizontal and Flip Vertical then act on.
+--
+-- An item of a menu the stack made sends its menu message, as HyperCard
+-- did. Any other item leaves "doMenu "<item>" not implemented" in the
+-- result, as this engine's doMenu does; an item that stops with an error
+-- leaves the error in the result, and the script goes on, as it did
+-- after this engine's doMenu.
+on hcMenuChoice pItem, pMenu, pWithout
+   local tMessage, tKey, tError, tStack, tObjects
    put hcMenuMessage(pItem) into tMessage
    if tMessage is not empty then
       send tMessage to this card
       return the result
    end if
-   -- New Button: HyperCard named the button "New Button"; this engine's
-   -- doMenu makes one with no name
-   if pItem is "New Button" then
-      create button "New Button"
+   put _HCMenuKey(pItem) into tKey
+   try
+      switch tKey
+         -- File
+         case "new stack"
+            return _HCNewStack(pWithout)
+         case "open stack"
+         case "open stack in new window"
+            answer file "Open which stack?"
+            if it is empty then return "Cancel"
+            put _HCOpenStack(it) into tStack
+            if tStack is empty then return "No such stack"
+            if tKey is "open stack" then
+               go tStack
+            else
+               go tStack in a new window
+            end if
+            return the result
+         case "close stack"
+            close this stack
+            return empty
+         case "save a copy"
+            return _HCSaveACopy()
+         case "compact stack"
+         case "convert stack"
+            -- (the stack is in this engine's format already, and compact
+            -- has nothing to do here)
+            return empty
+         case "delete stack"
+            return _HCDeleteStack(pWithout)
+         case "page setup"
+            answer page setup
+            return empty
+         case "print card"
+            print this card
+            return empty
+         case "print stack"
+            print this stack
+            return empty
+         case "print field"
+            put _HCSelected("field") into tObjects
+            if tObjects is empty then return "No field is selected"
+            PrintField line 1 of tObjects
+            return the result
+         case "quit hypercard"
+         case "quit"
+            if the environment is "development" then
+               close this stack
+            else
+               quit
+            end if
+            return empty
+         -- Edit
+         case "undo"
+            undo
+            return empty
+         case "cut"
+         case "copy"
+         case "clear"
+            return _HCEdit(tKey, empty)
+         case "cut text"
+         case "copy text"
+         case "clear text"
+         case "cut button"
+         case "copy button"
+         case "clear button"
+         case "cut field"
+         case "copy field"
+         case "clear field"
+         case "cut picture"
+         case "copy picture"
+         case "clear picture"
+            return _HCEdit(word 1 of tKey, word 2 of tKey)
+         case "paste"
+         case "paste text"
+         case "paste button"
+         case "paste field"
+         case "paste card"
+         case "paste picture"
+            paste
+            return the result
+         case "new card"
+            create card
+            return empty
+         case "delete card"
+            delete this card
+            return empty
+         case "cut card"
+            cut this card
+            return the result
+         case "copy card"
+            copy this card
+            return the result
+         case "background"
+            set the editBackground to not the editBackground
+            return empty
+         -- Go
+         case "back"
+            go back
+            return the result
+         case "home"
+            hcGoHome
+            return the result
+         case "help"
+            help
+            return empty
+         case "recent"
+            go recent card
+            return the result
+         case "first"
+         case "prev"
+         case "previous"
+         case "next"
+         case "last"
+            do "go to" && tKey && "card"
+            return the result
+         case "find"
+            ask "Find:"
+            if it is empty then return empty
+            find it
+            return the result
+         case "message"
+            if there is not a stack "Message Box" then return empty
+            if the visible of stack "Message Box" then
+               hide message box
+            else
+               show message box
+            end if
+            return empty
+         -- Objects
+         case "button info"
+         case "field info"
+         case "card info"
+         case "bkgnd info"
+         case "background info"
+         case "stack info"
+            return _HCInfo(word 1 of tKey, pItem)
+         case "bring closer"
+            return _HCLayer(1)
+         case "send farther"
+            return _HCLayer(-1)
+         case "new button"
+            -- (this engine's doMenu makes one with no name)
+            create button "New Button"
+            return empty
+         case "new field"
+            create field
+            return empty
+         case "new background"
+            return _HCNewBackground()
+         -- Style
+         case "plain"
+         case "bold"
+         case "italic"
+         case "underline"
+         case "outline"
+         case "shadow"
+         case "condense"
+         case "extend"
+         case "group"
+            return _HCStyle(tKey)
+         -- Paint
+         case "select all"
+            return _HCSelectAll()
+         case "flip horizontal"
+         case "flip vertical"
+            return _HCFlip(word 2 of tKey)
+         case "keep"
+            -- (what is painted here is kept as it is painted)
+            return empty
+      end switch
+      -- the Style menu's sizes, and the Font menu's fonts
+      if tKey is an integer and tKey >= 1 and tKey <= 127 then
+         return _HCTextProperty("textSize", tKey)
+      end if
+      if _HCFont(pItem) is not empty then
+         return _HCTextProperty("textFont", _HCFont(pItem))
+      end if
+   catch tError
+      return "doMenu" && quote & pItem & quote && "failed:" && line 1 of tError
+   end try
+   return "doMenu" && quote & pItem & quote && "not implemented"
+end hcMenuChoice
+
+-- The name of a menu item as hcMenuChoice knows it: in lower case, its
+-- words one space apart, without the "..." (or the "…") after it
+private function _HCMenuKey pItem
+   local tKey
+   put toLower(pItem) into tKey
+   replace numToCodepoint(160) with space in tKey
+   replace numToCodepoint(8230) with "..." in tKey
+   replace tab with space in tKey
+   repeat while "  " is in tKey
+      replace "  " with space in tKey
+   end repeat
+   put word 1 to -1 of tKey into tKey
+   repeat while char -1 of tKey is "."
+      delete char -1 of tKey
+   end repeat
+   return word 1 to -1 of tKey
+end _HCMenuKey
+
+-- The selected objects, one long id a line; with pType ("button",
+-- "field") those of that type only
+private function _HCSelected pType
+   local tObject, tList
+   repeat for each line tObject in the selectedObjects
+      if pType is empty or word 1 of tObject is pType then put tObject & return after tList
+   end repeat
+   delete the last char of tList
+   return tList
+end _HCSelected
+
+-- Whether the selectedChunk is text, not an insertion point ("char 6 to
+-- 5 of field 1")
+private function _HCHasText pChunk
+   return word 1 of pChunk is "char" and word 2 of pChunk is an integer \
+         and word 4 of pChunk is an integer and word 2 of pChunk <= word 4 of pChunk
+end _HCHasText
+
+-- Cut, Copy and Clear (pVerb) of the picture "Select All" took, of the
+-- selected text, or of the selected buttons and fields (pWhat: "text",
+-- "button", "field", "picture", or empty for what is selected)
+private function _HCEdit pVerb, pWhat
+   local tChunk, tObjects, tObject, tPicture
+   put _HCSelectedPicture() into tPicture
+   if pWhat is "picture" or (pWhat is empty and tPicture is not empty) then
+      if tPicture is empty then
+         -- (a selection made with this engine's paint tools)
+         if pVerb is "copy" then copy
+         if pVerb is "cut" then cut
+         return empty
+      end if
+      if pVerb is among the words of "copy cut" then copy tPicture
+      if pVerb is among the words of "cut clear" then set the text of tPicture to empty
       return empty
    end if
-   -- Quit HyperCard: in the IDE, the stack is closed rather than the IDE
-   -- quit (a stack that quit as it opened closed the IDE, with no word
-   -- about unsaved work); a standalone quits, as HyperCard did
-   if pItem is among the items of "Quit HyperCard,Quit" and the environment is "development" then
-      close this stack
+   put the selectedChunk into tChunk
+   if pWhat is "text" or (pWhat is empty and _HCHasText(tChunk)) then
+      if pVerb is "copy" then copy
+      if pVerb is "cut" then cut
+      if pVerb is "clear" and _HCHasText(tChunk) then do "delete" && tChunk
       return empty
    end if
-   doMenu pItem
+   put _HCSelected(pWhat) into tObjects
+   if tObjects is empty then
+      -- (nothing of that kind selected: what this engine's own command
+      -- does with the selection)
+      if pVerb is "copy" then copy
+      if pVerb is "cut" then cut
+      return empty
+   end if
+   if pVerb is "clear" then
+      repeat for each line tObject in tObjects
+         delete tObject
+      end repeat
+      return empty
+   end if
+   if the number of lines of tObjects > 1 then
+      -- (all of the selection, as the Edit menu takes it)
+      if pVerb is "copy" then
+         copy
+      else
+         cut
+      end if
+   else if pVerb is "copy" then
+      copy tObjects
+   else
+      cut tObjects
+   end if
    return the result
-end hcDoMenu
+end _HCEdit
+
+-- The picture Select All took: its card's long id, then its image's
+local sHCPicture
+
+-- Whether a paint tool is chosen
+private function _HCPaintTool
+   return word 1 of the tool is among the words of \
+         "select lasso pencil brush eraser spray line rectangle rect roundrect round oval curve polygon regular text bucket dropper"
+end _HCPaintTool
+
+-- The picture of this card (of its background, while it is edited): the
+-- image the import made of it, which has no name. Empty if it has none
+private function _HCPictureOfCard
+   local tCard, tOwner, i, tImage
+   put the long id of this card into tCard
+   put tCard into tOwner
+   if the editBackground and the number of backgrounds of tCard > 0 then
+      put the long id of background 1 of tCard into tOwner
+   end if
+   repeat with i = 1 to the number of images of tOwner
+      put the long id of image i of tOwner into tImage
+      if the long id of the owner of tImage is tOwner and the short name of tImage ends with "image id" && the id of tImage then
+         return tImage
+      end if
+   end repeat
+   return empty
+end _HCPictureOfCard
+
+-- Select All: with a paint tool, the picture of the card; with the
+-- browse tool, the text of the field being edited
+private function _HCSelectAll
+   if _HCPaintTool() then
+      put the long id of this card & return & _HCPictureOfCard() into sHCPicture
+      return empty
+   end if
+   if the selectedField is not empty then do "select text of" && the selectedField
+   return empty
+end _HCSelectAll
+
+-- The picture Select All took, while a paint tool is chosen and its card
+-- is this card: its image's long id, or empty
+private function _HCSelectedPicture
+   if not _HCPaintTool() or line 1 of sHCPicture is not the long id of this card then return empty
+   if line 2 of sHCPicture is empty or not exists(line 2 of sHCPicture) then return empty
+   return line 2 of sHCPicture
+end _HCSelectedPicture
+
+-- Flip Horizontal, Flip Vertical of the picture Select All took
+private function _HCFlip pDirection
+   local tPicture
+   put _HCSelectedPicture() into tPicture
+   if tPicture is not empty then do "flip" && tPicture && pDirection
+   return empty
+end _HCFlip
+
+-- Button Info... to Stack Info...: the object in the IDE's inspector
+private function _HCInfo pWhat, pItem
+   local tObject, tCard
+   switch pWhat
+      case "button"
+      case "field"
+         put line 1 of _HCSelected(pWhat) into tObject
+         break
+      case "card"
+         put the long id of this card into tObject
+         break
+      case "bkgnd"
+      case "background"
+         put the long id of this card into tCard
+         if the number of backgrounds of tCard > 0 then put the long id of background 1 of tCard into tObject
+         break
+      case "stack"
+         put the long id of this stack into tObject
+         break
+   end switch
+   if tObject is empty then return empty
+   -- (a standalone has no inspector)
+   if the environment is "development" then
+      dispatch "revIDEInspectObjects" with tObject
+      if it is "handled" then return empty
+   end if
+   return "doMenu" && quote & pItem & quote && "not implemented"
+end _HCInfo
+
+-- Bring Closer (pBy 1) and Send Farther (-1): the selected object a layer
+-- up or down
+private function _HCLayer pBy
+   local tObject
+   put line 1 of the selectedObjects into tObject
+   if tObject is empty or the layer of tObject + pBy < 1 then return empty
+   set the layer of tObject to the layer of tObject + pBy
+   return empty
+end _HCLayer
+
+-- New Background: a card after this one with a background of its own (a
+-- new card here gets the backgrounds of the card it follows)
+private function _HCNewBackground
+   local tGroup, tCard
+   create card
+   put the long id of this card into tCard
+   repeat while the number of backgrounds of tCard > 0
+      remove group id (the id of background 1 of tCard) from this card
+   end repeat
+   create group
+   put it into tGroup
+   set the backgroundBehavior of tGroup to true
+   return empty
+end _HCNewBackground
+
+-- The selected text, else the selected buttons and fields: what the Style
+-- and Font menus changed. A chunk or long ids, one a line
+private function _HCTextTargets
+   local tChunk, tObject, tList
+   put the selectedChunk into tChunk
+   if _HCHasText(tChunk) then return tChunk
+   repeat for each line tObject in the selectedObjects
+      if word 1 of tObject is among the words of "button field" then put tObject & return after tList
+   end repeat
+   delete the last char of tList
+   return tList
+end _HCTextTargets
+
+-- A style of the Style menu (in HyperCard's words), on or off: Plain takes
+-- every style off; a style the text has already is taken off; outline and
+-- shadow, which this engine does not have, do nothing
+private function _HCStyle pStyle
+   local tStyle, tTarget, tStyles
+   put hcTextStyle(pStyle) into tStyle
+   if tStyle is "plain" and pStyle is not "plain" then return empty
+   repeat for each line tTarget in _HCTextTargets()
+      if tStyle is "plain" then
+         put "plain" into tStyles
+      else
+         do "put the textStyle of" && tTarget && "into tStyles"
+         if tStyle is among the items of tStyles then
+            delete item itemOffset(tStyle, tStyles) of tStyles
+         else if tStyles is empty or tStyles is among the words of "plain mixed" then
+            put tStyle into tStyles
+         else
+            put comma & tStyle after tStyles
+         end if
+         if tStyles is empty then put "plain" into tStyles
+      end if
+      do "set the textStyle of" && tTarget && "to tStyles"
+   end repeat
+   return empty
+end _HCStyle
+
+-- A font or a size from the Font and Style menus, for the selected text
+-- or the selected buttons and fields
+private function _HCTextProperty pProperty, pValue
+   local tTarget
+   repeat for each line tTarget in _HCTextTargets()
+      do "set the" && pProperty && "of" && tTarget && "to pValue"
+   end repeat
+   return empty
+end _HCTextProperty
+
+-- The fonts of the Macs HyperCard ran on, which a stack's menu choices
+-- name whether or not this computer has them
+constant kHCFonts = "Chicago,Geneva,Monaco,New York,Times,Helvetica,Courier,Palatino,Symbol,Zapf Dingbats,Zapf Chancery,Avant Garde,Bookman,New Century Schlbk,Helvetica Narrow,Venice,London,Athens,San Francisco,Los Angeles,Cairo,Toronto,Mobile,Charcoal"
+
+-- pItem as a font's name: one this computer has, or one of HyperCard's
+-- Macs; else empty
+private function _HCFont pItem
+   put word 1 to -1 of pItem into pItem
+   if pItem is empty then return empty
+   if pItem is among the lines of the fontNames or pItem is among the items of kHCFonts then return pItem
+   return empty
+end _HCFont
+
+-- New Stack...: a stack of this one's size, saved where the user says,
+-- and gone to; "without dialog", one called "Untitled", not saved
+private function _HCNewStack pWithout
+   local tWidth, tHeight, tPath, tName, tStack
+   put the width of this stack into tWidth
+   put the height of this stack into tHeight
+   put "Untitled" into tName
+   if pWithout is not "without dialog" then
+      ask file "New stack name:" with "Untitled"
+      if it is empty then return "Cancel"
+      put it into tPath
+      set the itemDelimiter to slash
+      put the last item of tPath into tName
+   end if
+   create stack tName
+   put it into tStack
+   set the width of tStack to tWidth
+   set the height of tStack to tHeight
+   if tPath is not empty then save tStack as tPath
+   go tStack
+   return the result
+end _HCNewStack
+
+-- Save a Copy...: the stack (its mainstack, with every substack) saved to
+-- the file the user names; the stack itself is still where it was
+private function _HCSaveACopy
+   local tStack, tFile, tPath, tResult
+   put the long id of stack (the mainStack of this stack) into tStack
+   ask file "Save a copy of the stack as:" with (the short name of tStack && "Copy")
+   if it is empty then return "Cancel"
+   put it into tPath
+   put the fileName of tStack into tFile
+   save tStack as tPath
+   put the result into tResult
+   set the fileName of tStack to tFile
+   return tResult
+end _HCSaveACopy
+
+-- Delete Stack...: the stack is closed and gone from memory, and its file
+-- deleted. It asks first ("without dialog" too, whenever a file would be
+-- deleted: a HyperCard script's say-so is not the user's); a stack
+-- imported and not saved yet has no file of its own
+private function _HCDeleteStack pWithout
+   local tStack, tFile
+   put the long id of stack (the mainStack of this stack) into tStack
+   put the fileName of tStack into tFile
+   if tFile is not empty then
+      answer warning "Delete the stack" && quote & the short name of tStack & quote && "and its file?" & return & tFile with "Cancel" or "Delete"
+      if it is not "Delete" then
+         return "Cancel"
+      end if
+   else if pWithout is not "without dialog" then
+      answer warning "Delete the stack" && quote & the short name of tStack & quote & "?" with "Cancel" or "Delete"
+      if it is not "Delete" then
+         return "Cancel"
+      end if
+   end if
+   if tFile is not empty and there is a file tFile then delete file tFile
+   set the destroyStack of tStack to true
+   close tStack
+   return empty
+end _HCDeleteStack
+
+-- The stack in the file pPath, for Open Stack...: a HyperCard stack is
+-- imported as "go" imports one (_HCImport), with its scripts fixed
+private function _HCOpenStack pPath
+   local tStack, tWasLocked
+   put the lockMessages into tWasLocked
+   lock messages
+   try
+      put the long id of stack pPath into tStack
+   catch tError
+      put empty into tStack
+   end try
+   set the lockMessages to tWasLocked
+   if tStack is empty then return empty
+   if the HCStack of tStack and the behavior of tStack is empty then return _HCImport(pPath)
+   return tStack
+end _HCOpenStack
 
 -- HyperCard's version, which scripts compare with numbers ("the version
 -- < 2"): that of HyperCard 2.4.1, the last
@@ -93,14 +642,42 @@ end hcHyperCardName
 
 -- send message to HyperCard (rule T29): the message's built-in handler,
 -- passing the stack's own; "doMenu Copy Text", the item not in quotes,
--- as HyperCard read it
+-- as HyperCard read it, and the menu's name after a comma and "without
+-- dialog" after them ("doMenu "Paste Card", "Edit" without dialog")
 on hcSendToHyperCard pMessage
-   local tItem
+   local tItem, tMenu, tWithout, tRest, tAt
    if word 1 of pMessage is "doMenu" then
       put word 2 to -1 of pMessage into tItem
-      if char 1 of tItem is quote and char -1 of tItem is quote then delete char 1 of tItem
-      if char -1 of tItem is quote then delete char -1 of tItem
-      doMenu tItem
+      if word -2 to -1 of tItem is "without dialog" then
+         put "without dialog" into tWithout
+         put word 1 to -3 of tItem into tItem
+      end if
+      if char 1 of tItem is quote then
+         put char 2 to -1 of tItem into tRest
+         put offset(quote, tRest) into tAt
+         if tAt is 0 then
+            put tRest into tItem
+         else
+            put char 1 to tAt - 1 of tRest into tItem
+            put char tAt + 1 to -1 of tRest into tMenu
+            put word 1 to -1 of tMenu into tMenu
+         end if
+         if char 1 of tMenu is comma then
+            delete char 1 of tMenu
+         else
+            put empty into tMenu
+         end if
+      else if comma is in tItem then
+         put item 2 to -1 of tItem into tMenu
+         put item 1 of tItem into tItem
+      end if
+      put word 1 to -1 of tItem into tItem
+      put word 1 to -1 of tMenu into tMenu
+      if char 1 of tMenu is quote then delete char 1 of tMenu
+      if char -1 of tMenu is quote then delete char -1 of tMenu
+      -- (HyperCard's own menu items: not doMenu, which in a stack with
+      -- HyperCard's message order would reach the stack's handlers again)
+      hcMenuChoice tItem, tMenu, tWithout
       return the result
    end if
    try
@@ -174,6 +751,14 @@ end allowInterruption
 on disallowInterruption
    set the cantAbort of this stack to true
 end disallowInterruption
+
+-- A statement that the import left out of a handler because it does not
+-- compile here (rule T39), after the then or the else of an if, where a
+-- statement has to be: it does nothing, and the handler goes on, as it
+-- does past a line left out whole (a comment). pStatement is the
+-- statement as it was
+on hcLeftOut pStatement
+end hcLeftOut
 
 -- the part of pText after the last pDelim, all of it with none
 function lastHCItem pDelim, pText
@@ -434,6 +1019,14 @@ private function _HCImport pFile
             end if
          end if
       end if
+      -- HyperCard's message order, as the stack it is gone to from has it
+      -- (before its scripts are fixed, which compile them)
+      try
+         if the hyperTalkCompatible of stack (the mainStack of this stack) is true then
+            set the hyperTalkCompatible of tStack to true
+         end if
+      catch tError
+      end try
       try
          -- (the IDE's, and the Stack Player's)
          get revHyperCardFixScripts(tStack)

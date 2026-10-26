@@ -273,9 +273,17 @@ Variable Watcher, Message Watcher
 void MCLegacyExecDoMenu(MCExecContext& ctxt, MCStringRef p_option)
 {
 	// OXT-Beyond: in a stack whose hyperTalkCompatible is true, doMenu is
-	//   first a message, as in HyperCard: sent, as by send, to the object
-	//   whose handler runs it, with the item as its parameter. The item
-	//   below runs only if no handler takes the message or one passes it.
+	//   first a message, as in HyperCard: sent to the object whose handler
+	//   runs it, with the item as its parameter. The item below runs only
+	//   if no handler takes the message or one passes it.
+	//   It is sent whether or not messages are locked, as a command's
+	//   message was in HyperCard, where lockMessages kept back only
+	//   HyperCard's own messages (openCard, closeCard...): a script that
+	//   locked them to copy and paste cards still had its doMenu handlers
+	//   see the menu items it chose. So it is dispatched (MCObject::dispatch,
+	//   which, unlike message, does not stop at the lock), and the handlers
+	//   run with messages still locked, as HyperCard ran them; the
+	//   dispatch command would unlock them for its handlers.
 	MCObject *t_object = ctxt . GetObject();
 	if (t_object != nil && t_object -> getstack() -> ishypertalkcompatible())
 	{
@@ -288,7 +296,15 @@ void MCLegacyExecDoMenu(MCExecContext& ctxt, MCStringRef p_option)
 			MCexecutioncontexts[MCnexecutioncontexts++] = &ctxt;
 			t_added = True;
 		}
-		Exec_stat t_stat = t_object -> message(MCNAME("doMenu"), &t_item, True, True);
+		// The abort key and exit to top stop it as they stopped the message.
+		Exec_stat t_stat = ES_NOT_HANDLED;
+		if (MCscreen -> abortkey())
+		{
+			MCerrorptr = t_object;
+			t_stat = ES_ERROR;
+		}
+		else if (!MCexitall)
+			t_stat = t_object -> dispatch(HT_MESSAGE, MCNAME("doMenu"), &t_item);
 		if (t_added)
 			MCnexecutioncontexts--;
 

@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, three things are as they were in <HyperCard>, for the
+When it is true, four things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -47,18 +47,40 @@ When it is true, three things are as they were in <HyperCard>, for the
 - The <doMenu> <command> is first sent as a message to the <object>
   whose <handler> runs it, with the menu item as its parameter. The
   menu item is chosen only if no <handler> takes the message, or one
-  passes it.
+  passes it. The message is sent even while the <lockMessages> is
+  true, as in <HyperCard>, whose lockMessages kept back only its own
+  messages (<openCard>, <closeCard>...), and the <handler|handlers>
+  run with it still true.
+- The <lockRecent> keeps none of the <stack|stack's> <card|cards> out
+  of the <recent cards|recent cards list>, so go back goes back through
+  every <card> visited, as in <HyperCard>, whose lockRecent only kept
+  <card|cards> out of the pictures of its Recent dialog. A <script>
+  that sets the <lockRecent> to true, goes to a <card> and then goes
+  back returns to the <card> it came from.
+
+File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
+it imports with the <hyperTalkCompatible> true, and gives the <stack>
+a substack, "HyperCard Menus" and the <stack|stack's> name, whose
+<doMenu> <handler> chooses <HyperCard|HyperCard's> menu items (New
+Card, Paste Card, Bring Closer...) for the menu items no other
+<handler> takes. With HyperCard Message Order turned off, it renames
+them hcDoMenu instead, and <doMenu> in the <stack|stack's>
+<script|scripts> calls hcDoMenu.
 
 The <stack> keeps the <property> as its <custom property> of the same
 name, and is saved with it, so the <stack file> format does not change.
 An engine without the <property> opens the <stack> with its usual
-rules.
+rules, under which no <handler> can be called <doMenu>: a <script>
+with one does not compile there.
 
 Set the <hyperTalkCompatible> before the <stack|stack's> <script|scripts>
 are first compiled: a <script> already compiled keeps the <handler>
 names it was compiled with until it is set again.
 
 References: HCStack (property), HCAddressing (property),
-HCImportStat (property), doMenu (command), import (command),
-stack (object), background (glossary), message path (glossary),
+HCImportStat (property), lockMessages (property),
+lockRecent (property), openCard (message),
+closeCard (message), doMenu (command), import (command),
+stack (object), card (object), background (glossary),
+message path (glossary), recent cards (glossary),
 HyperCard (glossary), custom property (glossary)
