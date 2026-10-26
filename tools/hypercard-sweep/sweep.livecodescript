@@ -108,6 +108,19 @@ command sweepRun
    insert the script of stack "HyperCardSweepErrors" into back
    send "sweepModalWatch" to me in 250 milliseconds
    put "open" into gSweepPhase
+   -- The import opened the stack with messages locked, before its scripts
+   -- were fixed, so its own openStack, openBackground and openCard have
+   -- not run, and "go" to a stack already open sends none. Closed (with
+   -- messages locked, kept in memory) and gone to again, it opens as a
+   -- person opens it once it is saved: with those messages, where many
+   -- stacks set themselves up and call their externals first
+   try
+      set the destroyStack of tStack to false
+      lock messages
+      do "close" && tStack
+   catch tError
+   end try
+   unlock messages
    try
       -- (by "do": "go to card 1 of" a variable is read when the script
       -- loads, before the stack is there)

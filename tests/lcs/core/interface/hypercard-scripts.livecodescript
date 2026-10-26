@@ -1789,6 +1789,150 @@ on TestHyperCardScriptsDialogs
    _Close tStack
 end TestHyperCardScriptsDialogs
 
+on TestHyperCardScriptsStartupExternals
+   -- the externals stacks call as they open, as the library stands in for
+   -- them: About (Hodgdon's menu items, nothing here; the help and credits
+   -- of others, an answer dialog), SetFInfo, FullBalloons as tooltips, and
+   -- IdleCursor, whose cursor shows only while the mouse is over one of
+   -- the stack's windows (a headless engine has none), looked at by a
+   -- hidden stack's timer that stops when the cursor is put back or the
+   -- stack closes or goes
+   local tStack, tGone, tCursorScript, q, tExpected, tError
+   global gHCScriptsTest, gHCScriptsSeen
+   put quote into q
+   if there is a stack "Answer Dialog" then
+      TestSkip "About, SetFInfo, FullBalloons and IdleCursor", "an Answer Dialog stack is already open"
+      exit TestHyperCardScriptsStartupExternals
+   end if
+   put "HCStartup" & the milliseconds into tStack
+   lock messages
+   -- (answer opens the stack of this name: here one that keeps what it
+   -- was asked to show, and closes)
+   create invisible stack "Answer Dialog"
+   set the script of stack "Answer Dialog" to _Lines("on openStack", "  global gHCScriptsSeen", \
+         "  put the dialogData & numToChar(1) after gHCScriptsSeen", \
+         "  set the dialogData to " & q & "OK" & q, "  close this stack", "end openStack")
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create field "Note"
+   put "From a field" into field "Note"
+   create button "About"
+   set the script of button "About" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  About " & q & "About this stack..." & q & ", " & q & "Stack Help..." & q, \
+         "  put the result & " & q & "|" & q & " into gHCScriptsTest", \
+         "  About", \
+         "  put the result & " & q & "|" & q & " after gHCScriptsTest", \
+         "  about " & q & "Help DLOG" & q & ", " & q & "Help" & q & ", " & q & "Takes you to the Help Page." & q, \
+         "  put the result & " & q & "|" & q & " after gHCScriptsTest", \
+         "  About " & q & "A" & q & ", " & q & "B" & q & ", " & q & "C" & q, \
+         "  SetFInfo " & q & "x" & q & ", " & q & "t=TEXT" & q & ", " & q & "c=ttxt" & q, \
+         "  put the result after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Balloon"
+   set the script of button "Balloon" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  FullBalloons " & q & "isOn" & q, \
+         "  put the result into gHCScriptsTest", \
+         "  FullBalloons " & q & "showDirect" & q & ", " & q & "Hello" & q, \
+         "  put " & q & "|" & q & " & the result & " & q & "|" & q & " & the toolTip of me after gHCScriptsTest", \
+         "  FullBalloons " & q & "remove" & q, \
+         "  put " & q & "|" & q & " & the toolTip of me after gHCScriptsTest", \
+         "  FullBalloons " & q & "isShowing" & q, \
+         "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "  FullBalloons " & q & "showField" & q & ", " & q & "cd fld 1" & q, \
+         "  put " & q & "|" & q & " & the toolTip of me after gHCScriptsTest", \
+         "  FullBalloons " & q & "Off" & q, \
+         "  FullBalloons " & q & "isOn" & q, \
+         "  put " & q & "|" & q & " & the toolTip of me & " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "  HCBalloon " & q & "query" & q, \
+         "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "  FullBalloons " & q & "showDirect" & q & ", " & q & "Not shown" & q, \
+         "  put " & q & "|" & q & " & the toolTip of me after gHCScriptsTest", \
+         "  FullBalloons " & q & "on" & q, \
+         "  FullBalloons " & q & "showPICT" & q & ", 128", \
+         "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "  FullBalloons " & q & "showDirect" & q, \
+         "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "  FullBalloons " & q & "bogus" & q, \
+         "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "  FullBalloons empty", \
+         "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "  FullBalloons " & q & "showField" & q & ", " & q & "cd fld 99" & q, \
+         "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Cursor"
+   put _Lines("on mouseUp pCursor", "  global gHCScriptsTest", \
+         "  put the defaultCursor into tBefore", \
+         "  IdleCursor pCursor", \
+         "  put the result & (the defaultCursor is tBefore) into gHCScriptsTest", \
+         "end mouseUp") into tCursorScript
+   set the script of button "Cursor" to tCursorScript
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+
+   put empty into gHCScriptsTest
+   put empty into gHCScriptsSeen
+   send "mouseUp" to button "About" of stack tStack
+   TestAssert "About and SetFInfo: nothing in the result", gHCScriptsTest is "|||"
+   set the itemDelimiter to numToChar(1)
+   TestAssert "About with a menu item or none: no dialog; with more, the texts in one (a DLOG's name left out)", \
+         the number of items of gHCScriptsSeen is 2 \
+         and (numToChar(0) & "Help" & return & "Takes you to the Help Page." & numToChar(0)) is in item 1 of gHCScriptsSeen \
+         and "DLOG" is not in item 1 of gHCScriptsSeen \
+         and (numToChar(0) & "A" & return & "B" & return & "C" & numToChar(0)) is in item 2 of gHCScriptsSeen
+   set the itemDelimiter to comma
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Balloon" of stack tStack
+   put "true||Hello||false|From a field||false|false||Error : Resource not found|Error : Missing balloon content parameter|Error : Bad action parameter|Error : Missing or empty parameter|Error : Bad field descriptor" into tExpected
+   TestAssert "FullBalloons: on, a tooltip from the text or a field, taken away, off for HCBalloon too, errors", gHCScriptsTest is tExpected
+
+   put empty into gHCScriptsTest
+   send "mouseUp" && q & "watch" & q to button "Cursor" of stack tStack
+   TestAssert "IdleCursor: with the mouse over no window of the stack, the defaultCursor stays", gHCScriptsTest is "true"
+   TestAssert "IdleCursor: a cursor of the stack's own, watched by a stack that is not opened", \
+         "hcIdleCursorWatch" is in the pendingMessages and there is a stack "revHyperCardIdleCursor" \
+         and "revHyperCardIdleCursor" is not among the lines of the openStacks
+   send "mouseUp" && q & "Hand" & q to button "Cursor" of stack tStack
+   TestAssert "IdleCursor: Hand, the watch stops", _IdleCursorWatchStopped()
+   send "mouseUp" && q & "cross" & q to button "Cursor" of stack tStack
+   try
+      close stack tStack
+   catch tError
+   end try
+   TestAssert "IdleCursor: the stack closed, the watch stops", tError is empty and _IdleCursorWatchStopped()
+   -- (deleted with messages locked, as a stack that goes when it closes is,
+   -- which no handler of the library sees; a stack of its own, open as it
+   -- is made, as a stack closed here may not open again in a headless
+   -- engine)
+   put tStack & "Gone" into tGone
+   lock messages
+   create invisible stack tGone
+   set the defaultStack to tGone
+   create button "Cursor"
+   set the script of button "Cursor" to tCursorScript
+   unlock messages
+   get revHyperCardFixScripts(tGone)
+   send "mouseUp" && q & "cross" & q to button "Cursor" of stack tGone
+   put "hcIdleCursorWatch" is in the pendingMessages into tExpected
+   _Close tGone
+   TestAssert "IdleCursor: the stack deleted, the watch stops", tExpected and _IdleCursorWatchStopped()
+   _Close tStack
+   _Close "revHyperCardIdleCursor"
+   _Close "Answer Dialog"
+end TestHyperCardScriptsStartupExternals
+
+-- Whether IdleCursor's watch stops, waiting with messages for it to run
+-- (five times a second) for up to three seconds: a busy machine can run
+-- a timer late, and macOS's CI did, more than 300 milliseconds late
+private function _IdleCursorWatchStopped
+   local i
+   repeat with i = 1 to 30
+      if "hcIdleCursorWatch" is not in the pendingMessages then return true
+      wait 100 milliseconds with messages
+   end repeat
+   return "hcIdleCursorWatch" is not in the pendingMessages
+end _IdleCursorWatchStopped
+
 on TestHyperCardScriptsLibraryMessages
    -- HyperCard's messages sent to an object with no handler for them end
    -- in the library; the XFCNs with a plain equivalent answer

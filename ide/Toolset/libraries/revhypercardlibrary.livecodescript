@@ -1501,6 +1501,137 @@ function hcCursor pCursor
    return empty
 end hcCursor
 
+/*
+IdleCursor cursor (22 stacks), the XCMD: the cursor shown while no
+handler runs, which HyperCard set back to its own, the hand, after each
+one, as this engine sets back its own. The cursor is one set cursor
+takes (hcCursor), the stack's own among them ("look", "Clade1");
+"Hand", which the external's documentation gives for putting
+HyperCard's back, puts back the one there was, and so do "none" and a
+cursor that is not here. Here it is the defaultCursor, which every
+window shows, the IDE's too: so the stack's is shown only while the
+mouse is over one of the stack's windows (its own, or a palette's), and
+the one there was (the browse cursor the IDE's preferences chose) comes
+back as the mouse leaves them and when the stack closes or is deleted.
+The library cannot see a stack go (most of these stacks' own closeStack
+keeps the message from coming here, and a stack that goes as it closes
+is deleted with messages locked), so a hidden stack it makes, which
+outlives them, watches every stack with such a cursor five times a
+second and puts back the one there was (kHCIdleCursorKeeper)
+*/
+constant kHCIdleCursorKeeper = "revHyperCardIdleCursor"
+
+on IdleCursor pCursor
+   local tCursor, tStack
+   put word 1 to -1 of pCursor into pCursor
+   if pCursor is not "hand" then put hcCursor(pCursor) into tCursor
+   if tCursor is 0 then put empty into tCursor
+   if tCursor is not empty then _HCIdleCursorKeeper
+   if there is a stack kHCIdleCursorKeeper then
+      put the long id of me into tStack
+      dispatch "hcIdleCursorSet" to stack kHCIdleCursorKeeper with tStack, tCursor
+   end if
+   return empty
+end IdleCursor
+
+-- Sent by the keeper while the mouse is over one of the stack's windows:
+-- the stack's cursor, set here so that its id is looked for among the
+-- stack's images first, not those of another stack with the same id
+on hcIdleCursorShow pCursor
+   local tError
+   try
+      set the defaultCursor to pCursor
+   catch tError
+      -- (the stack's image is gone)
+   end try
+end hcIdleCursorShow
+
+-- The keeper of IdleCursor's cursors, made the first time a stack has
+-- one: a stack that is never opened, which outlives the stacks it
+-- watches, with a name the IDE takes for one of its own (not listed with
+-- the user's stacks, nor asked about as the IDE quits)
+private command _HCIdleCursorKeeper
+   local tDefault
+   if there is a stack kHCIdleCursorKeeper then exit _HCIdleCursorKeeper
+   put the defaultStack into tDefault
+   lock messages
+   create invisible stack kHCIdleCursorKeeper
+   set the script of stack kHCIdleCursorKeeper to _HCIdleCursorKeeperScript()
+   close stack kHCIdleCursorKeeper
+   unlock messages
+   set the defaultStack to tDefault
+end _HCIdleCursorKeeper
+
+-- The keeper's script. It shows the cursor of the stack the mouse is
+-- over (its mainstack's), by asking that stack to (hcIdleCursorShow),
+-- and puts back the one there was once the mouse is over no such stack,
+-- or the stack has closed or gone: only over a cursor it showed, never
+-- over one the IDE has set since. It keeps the one there was from the
+-- first cursor it shows to the last, so that the mouse can go from one
+-- such stack to another
+private function _HCIdleCursorKeeperScript
+   return "-- OXT-Beyond: IdleCursor's keeper (the HyperCard Library). sStacks: the" & return & \
+         "-- stacks (long ids) with a cursor of their own, and the cursor; sWas: the" & return & \
+         "-- defaultCursor before the first one shown; sShown: the one shown" & return & \
+         "local sStacks, sWas, sShown, sWatching" & return & \
+         "on hcIdleCursorSet pStack, pCursor" & return & \
+         "   if pCursor is empty then" & return & \
+         "      delete variable sStacks[pStack]" & return & \
+         "   else" & return & \
+         "      put pCursor into sStacks[pStack]" & return & \
+         "   end if" & return & \
+         "   idleCursorUpdate" & return & \
+         "   if sStacks is not empty and sWatching is not true then" & return & \
+         "      put true into sWatching" & return & \
+         "      send " & quote & "hcIdleCursorWatch" & quote & " to me in 200 milliseconds" & return & \
+         "   end if" & return & \
+         "end hcIdleCursorSet" & return & \
+         "on hcIdleCursorWatch" & return & \
+         "   idleCursorUpdate" & return & \
+         "   if sStacks is empty then" & return & \
+         "      put false into sWatching" & return & \
+         "   else" & return & \
+         "      send " & quote & "hcIdleCursorWatch" & quote & " to me in 200 milliseconds" & return & \
+         "   end if" & return & \
+         "end hcIdleCursorWatch" & return & \
+         "private command idleCursorUpdate" & return & \
+         "   local tMouse, tStack, tOver, tError" & return & \
+         "   try" & return & \
+         "      put the mouseStack into tMouse" & return & \
+         "      if tMouse is not empty then put the mainStack of stack tMouse into tMouse" & return & \
+         "   catch tError" & return & \
+         "      put empty into tMouse" & return & \
+         "   end try" & return & \
+         "   repeat for each key tStack in sStacks" & return & \
+         "      if not exists(tStack) then" & return & \
+         "         delete variable sStacks[tStack]" & return & \
+         "      else if the mode of tStack is 0 then" & return & \
+         "         delete variable sStacks[tStack]" & return & \
+         "      else if tMouse is not empty and tMouse is the short name of tStack then" & return & \
+         "         put tStack into tOver" & return & \
+         "      end if" & return & \
+         "   end repeat" & return & \
+         "   if tOver is not empty then" & return & \
+         "      if the defaultCursor is sStacks[tOver] then exit idleCursorUpdate" & return & \
+         "      if sShown is empty then put the defaultCursor into sWas" & return & \
+         "      dispatch " & quote & "hcIdleCursorShow" & quote & " to tOver with sStacks[tOver]" & return & \
+         "      -- (a block: an else on the next line would be this if's)" & return & \
+         "      if the defaultCursor is sStacks[tOver] then" & return & \
+         "         put sStacks[tOver] into sShown" & return & \
+         "      end if" & return & \
+         "   else if sShown is not empty then" & return & \
+         "      if the defaultCursor is sShown then" & return & \
+         "         try" & return & \
+         "            set the defaultCursor to sWas" & return & \
+         "         catch tError" & return & \
+         "            set the defaultCursor to 0" & return & \
+         "         end try" & return & \
+         "      end if" & return & \
+         "      put empty into sShown" & return & \
+         "   end if" & return & \
+         "end idleCursorUpdate"
+end _HCIdleCursorKeeperScript
+
 -- set the rect of this card (rule T32): HyperCard 2.2 resized the card,
 -- and with it the card window; here the stack's window takes the size
 on hcSetCardRect pRect
@@ -2508,6 +2639,111 @@ on HCBalloon pText
    return empty
 end HCBalloon
 
+/*
+FullBalloons action [, content [, tipLoc] [, hotRect] [, tipPosition]]
+(17 stacks), Frederic Rinaldi's XCMD: Balloon Help, which is on or off
+for HCBalloon and FullBalloons alike, a tooltip here as for HCBalloon.
+"On" and "Off" turn it on and off; "isOn" leaves whether it is on in the
+result, and "isShowing" whether the mouse is in the object of the last
+balloon shown (stacks ask it as the mouse moves, and send mouseEnter to
+the object again when it is not). "showDirect" shows the text given and
+"showField" the text of the field named ("cd fld 1"), as the tooltip of
+the object the message came to; "remove" takes the last one away, and
+"Off" every one shown. A tooltip shows at the mouse and goes when the
+mouse leaves its object, so the tip's place and the hot rectangle are
+not needed. The PICT, STR and TEXT resources of "showPICT", "showSTR",
+"showSTR#" and "showTEXT" are not imported: "Error : Resource not found"
+*/
+local sHCBalloonShown, sHCBalloonLast, sHCBalloonCard
+
+on FullBalloons pAction, pContent
+   local tText, tObject, tError
+   if sHCBalloons is empty then put true into sHCBalloons
+   put word 1 to -1 of pAction into pAction
+   switch pAction
+      case "on"
+         put true into sHCBalloons
+         return empty
+      case "off"
+         put false into sHCBalloons
+         _HCRemoveBalloons
+         return empty
+      case "isOn"
+         return sHCBalloons
+      case "isShowing"
+         return _HCBalloonShowing()
+      case "remove"
+         _HCRemoveBalloon sHCBalloonLast
+         put empty into sHCBalloonLast
+         return empty
+      case "!"
+         return "FullBalloons 1.1 by Frederic Rinaldi"
+      case "?"
+         return "FullBalloons <action>[,<balloon content>[,<tipLoc>][,<hotRect>][,<tipPosition>]]"
+      case "showDirect"
+         if pContent is empty then return "Error : Missing balloon content parameter"
+         put pContent into tText
+         break
+      case "showField"
+         if pContent is empty then return "Error : Missing balloon content parameter"
+         try
+            do "put the text of" && pContent && "into tText"
+         catch tError
+            return "Error : Bad field descriptor"
+         end try
+         break
+      case "showPICT"
+      case "showSTR"
+      case "showSTR#"
+      case "showTEXT"
+         return "Error : Resource not found"
+      default
+         if pAction is empty then return "Error : Missing or empty parameter"
+         return "Error : Bad action parameter"
+   end switch
+   if not sHCBalloons then return empty
+   put the long id of the target into tObject
+   try
+      set the toolTip of tObject to tText
+   catch tError
+      -- (a card or a stack has no tooltip)
+      return empty
+   end try
+   put tObject into sHCBalloonLast
+   put the long id of this card into sHCBalloonCard
+   put true into sHCBalloonShown[tObject]
+   return empty
+end FullBalloons
+
+-- Whether the mouse is in the object of the last balloon shown, on the
+-- card it was shown on
+private function _HCBalloonShowing
+   if sHCBalloons is not true or sHCBalloonLast is empty then return false
+   try
+      if not exists(sHCBalloonLast) or the toolTip of sHCBalloonLast is empty then return false
+      if the long id of this card is not sHCBalloonCard then return false
+      return the mouseLoc is within the rect of sHCBalloonLast
+   catch tError
+      return false
+   end try
+end _HCBalloonShowing
+
+private command _HCRemoveBalloon pObject
+   try
+      if pObject is not empty and exists(pObject) then set the toolTip of pObject to empty
+   catch tError
+   end try
+   delete variable sHCBalloonShown[pObject]
+end _HCRemoveBalloon
+
+private command _HCRemoveBalloons
+   local tObject
+   repeat for each key tObject in sHCBalloonShown
+      _HCRemoveBalloon tObject
+   end repeat
+   put empty into sHCBalloonLast
+end _HCRemoveBalloons
+
 -- ColorizeHC: colour drawn over the card, which this engine does with
 -- its own colours (the importer keeps AddColor's as a colour layer)
 on ColorizeHC
@@ -2619,6 +2855,29 @@ end ShowMenu
 function ShowMenu pMenu
    return empty
 end ShowMenu
+
+/*
+About [first item [, second item]] (21 stacks), Jay Hodgdon's XCMD: the
+first item of the Apple menu ("About HyperCard...") and a second below
+it, which a stack names for itself as it opens and, with no parameters,
+puts back as it closes. This engine's menus do not take them yet (as
+NewMenu), so it does nothing. Two stacks call an external of the same
+name with more parameters, which Hodgdon's refuses, to show the texts in
+a dialog: Logo 2.1.1's help (the name of a DLOG resource, a title and
+the text) and AnimationStack's credits, a line each. The resource is not
+imported, so an answer dialog shows the texts
+*/
+on About
+   local tText, i
+   if the paramCount <= 2 then return empty
+   repeat with i = 1 to the paramCount
+      if i is 1 and param(1) ends with "DLOG" then next repeat
+      if tText is not empty then put return after tText
+      put param(i) after tText
+   end repeat
+   if tText is not empty then answer tText
+   return empty
+end About
 
 -- Externals with nothing like them here: they do nothing, and say so
 on Dialoger
@@ -3268,6 +3527,14 @@ end IsRunning
 function ChangeFileType pFile, pType, pCreator
    return empty
 end ChangeFileType
+
+-- SetFInfo file, "t=type", "c=creator" [, "m=date", "e=date"] (23
+-- stacks), Frederic Rinaldi's XCMD: the same, with the dates the file
+-- was changed and made, which are the system's here; nothing is
+-- changed, and no error
+on SetFInfo pFile
+   return empty
+end SetFInfo
 
 /*
 DialogDisplay(id, button 1, button 2, button 3, text 1, ..., text 4,
