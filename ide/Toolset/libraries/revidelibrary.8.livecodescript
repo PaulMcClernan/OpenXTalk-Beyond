@@ -743,7 +743,7 @@ Description:
 on the values of the object's properties.
    **/
 function ideObjectTypeFromObject pObjectID
-   switch word 1 of the name of pObjectID
+   switch revIDETypeOfObject(the name of pObjectID)
       case "stack"
          if word 4 of pObjectID is "stack" then
             return "com.livecode.interface.classic.Substack"
@@ -869,6 +869,41 @@ function ideObjectTypeFromObject pObjectID
          break
    end switch
 end ideObjectTypeFromObject
+
+-- The types of the controls whose names the engine begins with "card" or
+-- "bkgnd" in a stack whose hcAddressing is true (revIDETypeOfObject)
+constant kHCAddressedTypes = "button,field,image,graphic,scrollbar,player,widget,EPS,colorPalette,magnify"
+
+/**
+The type of an object, from its name or its long id
+
+Parameters:
+pObject: The name, the long name or the long id of an object, as the
+engine gives them
+
+Returns: The type of the object, such as button, field, image, card or
+stack
+
+Example:
+put revIDETypeOfObject(the long id of button 1)  -- outputs button
+
+Description:
+The type of an object is the first word of its name, but in a stack
+whose hcAddressing is true, as every stack imported from HyperCard is,
+the engine names a control as HyperCard did: card button "OK", or bkgnd
+field id 12 of group id 3 of card id 1002 of stack "Address" for a
+control of a background. The type is then the word after card or bkgnd.
+A card's name and long id (card "Index", card id 1002 of ...) never have
+a control's type after the word card, and a group's never begin with
+card or bkgnd.
+**/
+function revIDETypeOfObject pObject
+   if word 1 of pObject is among the items of "card,bkgnd" and \
+         word 2 of pObject is among the items of kHCAddressedTypes then
+      return word 2 of pObject
+   end if
+   return word 1 of pObject
+end revIDETypeOfObject
 
 private function __dumpArrayRecurse pArray, pLevel, @pCounter, @pList
    local tOrderedKeys
@@ -3558,7 +3593,7 @@ end revIDECreateObject
 on revIDECloneObject pLongID
    if not exists(pLongID) then return __revIDEError("Cannot create object. Target does not exist:" && pLongID)
    
-   if word 1 of pLongID is "card" or word 1 of pLongID is "stack" then
+   if revIDETypeOfObject(pLongID) is among the items of "card,stack" then
       clone pLongID
    else
       local tTarget, tLoc, tControlType
@@ -5713,7 +5748,7 @@ end revIDEDefaultExtensionIcon
 function revIDEDefaultScript pObject, pHandler
    local tDefaultScript, tType
    put ideObjectTypeFromObject(pObject) into tType
-   if word 1 of the name of pObject is "widget" then
+   if revIDETypeOfObject(the name of pObject) is "widget" then
       put revIDEWidgetDefaultScript(tType) into tDefaultScript
    else
       put revIDEClassicObjectDefaultScript(tType) into tDefaultScript
@@ -10173,7 +10208,7 @@ end revIDEPasteIntoGroup
 
 on revIDEEditImage pImages
    # Make sure we have an image
-   if word 1 of pImages is not "image" then
+   if revIDETypeOfObject(line 1 of pImages) is not "image" then
       exit revIDEEditImage
    end if
    local tImageEditor
@@ -10204,9 +10239,12 @@ on revIDEEditImage pImages
 
    local tNumber, tImagePath
    repeat for each line tImage in pImages
+      # The image itself, not "image tNumber": in a stack whose
+      # hcAddressing is true, the number of a background's image counts
+      # the background's images, and image tNumber is a card's
       put the number of tImage into tNumber
-      if the fileName of image tNumber is not empty then
-         put the fileName of image tNumber into tImagePath
+      if the fileName of tImage is not empty then
+         put the fileName of tImage into tImagePath
          local tEditFileName
          put true into tEditFileName
       else
@@ -10214,7 +10252,7 @@ on revIDEEditImage pImages
          put the fileType into tReturn
          set the fileType to "PNGf????"
          try
-            export image tNumber to file "temp" & tNumber & ".png" as png
+            export tImage to file "temp" & tNumber & ".png" as png
          catch tError
             answer error line (item 1 of line 1 of tError) of the cErrorsList \
                   of cd 1 of stack "revErrorDisplay"
@@ -10245,9 +10283,9 @@ on revIDEEditImage pImages
             put the number of tImage into tNumber
             
             local tFileName
-            put the fileName of image tNumber into tFileName
-            set the fileName of image tNumber to empty
-            set the fileName of image tNumber to tFileName
+            put the fileName of tImage into tFileName
+            set the fileName of tImage to empty
+            set the fileName of tImage to tFileName
          end repeat
          exit revIDEEditImage
       end if
@@ -10259,7 +10297,7 @@ on revIDEEditImage pImages
       else
          repeat for each line tImage in pImages
             put the number of tImage into tNumber
-            put URL ("binfile:" & ("temp" & tNumber & ".png")) into image tNumber
+            set the text of tImage to URL ("binfile:" & ("temp" & tNumber & ".png"))
             delete file ("temp" & tNumber & ".png")
          end repeat
       end if
@@ -10267,7 +10305,7 @@ end revIDEEditImage
 
 on revIDEToggleMagnifyOfImage pImage
    # Make sure we have an image
-   if word 1 of pImage is not "image" then
+   if revIDETypeOfObject(pImage) is not "image" then
       exit revIDEToggleMagnifyOfImage
    end if
    
@@ -10281,7 +10319,7 @@ end revIDEToggleMagnifyOfImage
 
 on revIDEMakeImageOriginalSize pImage
    # Make sure we have an image
-   if word 1 of pImage is not "image" then
+   if revIDETypeOfObject(pImage) is not "image" then
       exit revIDEMakeImageOriginalSize
    end if
    
@@ -10291,7 +10329,7 @@ end revIDEMakeImageOriginalSize
 
 on revIDEActionPasteTextIntoField pField
    # Make sure we have an field
-   if word 1 of pField is not "field" then
+   if revIDETypeOfObject(pField) is not "field" then
       exit revIDEActionPasteTextIntoField
    end if
    lock screen
@@ -10315,7 +10353,7 @@ end revIDEActionPasteTextIntoField
 
 on revIDEToggleLockTextOfField pField
    # Make sure we have an field
-   if word 1 of pField is not "field" then
+   if revIDETypeOfObject(pField) is not "field" then
       exit revIDEToggleLockTextOfField
    end if
    
@@ -10324,7 +10362,7 @@ end revIDEToggleLockTextOfField
 
 on revIDEToggleTraversalOnOfField pField
    # Make sure we have an field
-   if word 1 of pField is not "field" then
+   if revIDETypeOfObject(pField) is not "field" then
       exit revIDEToggleTraversalOnOfField
    end if
    
@@ -10333,7 +10371,7 @@ end revIDEToggleTraversalOnOfField
 
 on revIDEStartPlayingPlayer pPlayer
    # Make sure we have an player
-   if word 1 of pPlayer is not "player" then
+   if revIDETypeOfObject(pPlayer) is not "player" then
       exit revIDEStartPlayingPlayer
    end if
    
@@ -10342,7 +10380,7 @@ end revIDEStartPlayingPlayer
 
 on revIDEStopPlayingPlayer pPlayer
    # Make sure we have an player
-   if word 1 of pPlayer is not "player" then
+   if revIDETypeOfObject(pPlayer) is not "player" then
       exit revIDEStopPlayingPlayer
    end if
    
@@ -10351,7 +10389,7 @@ end revIDEStopPlayingPlayer
 
 on revIDETogglePausedOfPlayer pPlayer
    # Make sure we have an player
-   if word 1 of pPlayer is not "player" then
+   if revIDETypeOfObject(pPlayer) is not "player" then
       exit revIDETogglePausedOfPlayer
    end if
 

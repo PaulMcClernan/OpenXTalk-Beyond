@@ -31,7 +31,9 @@ script "oxt_ui_tour"
 -- (inspector-scrollbar), an image's ID, a number without the icon chooser
 -- (inspector-image-id), a button's Gravity, which reads Default for the
 -- empty value and sets it, and nothing for two buttons whose gravities
--- differ (inspector-gravity), the Colors section of a graphic and of several
+-- differ (inspector-gravity), the controls of a stack with HyperCard's
+-- names, as an imported one has, with their own types, right-click menus
+-- and Inspector sections (inspector-hypercard), the Colors section of a graphic and of several
 -- objects, and the graphic's Fill gradient popup, which must open beside
 -- the Inspector and off the graphic, and a player made with the IDE and
 -- inspected, with the Player tool turned off and on again: player), the
@@ -80,7 +82,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,example,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,example,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -2873,6 +2875,126 @@ function tourGravityPick pEditor, pButton, pItem, pWant
    end if
    return empty
 end tourGravityPick
+
+-- An imported HyperCard stack's controls (OpenXTalkPaul, openxtalk.org
+-- p=25462). In a stack whose hcAddressing is true, as File > Import Stack
+-- makes it, the engine names a control as HyperCard did: card button id
+-- 1003 of card id 1002 of stack "S", or bkgnd field id 1009 of group id
+-- 1010 of ... for a background's. The IDE took the first word for the
+-- type, so the Inspector of a card button showed a card's properties, its
+-- right-click menu was the card's (no Launch Editor for an image, no Lock
+-- Text for a field), and a background's control had a menu of nothing of
+-- its own. Each control, a card's and a background's, has its own type
+-- now (revIDETypeOfObject, and ideObjectTypeFromObject as in a stack whose
+-- hcAddressing is false), its own right-click menu
+-- (revMenubarSetContextMenu, as revMenubarPopupContextualMenu calls it
+-- with that type), and the card button its Icons section in the
+-- Inspector. A card named like a control ("field") stays a card
+on tour_inspector_hypercard
+   local tDefault, tStack, tObjects, i, tLine, tRef, tLong, tGot, tMenuBar, tMenu, tButton, tPI, tFails
+   get tourSampleStack()
+   put "OXT Tour HyperCard" into tStack
+   put revIDEPaletteToStackName("menubar") into tMenuBar
+   put the defaultStack into tDefault
+   lock screen
+   lock messages
+   if there is a stack tStack then delete stack tStack
+   create stack tStack
+   set the rect of stack tStack to "240,160,640,420"
+   set the defaultStack to tStack
+   set the name of card 1 of stack tStack to "field"
+   create button "B"
+   set the rect of it to "20,20,120,46"
+   create field "F"
+   set the rect of it to "20,60,220,120"
+   create image "Pic"
+   set the rect of it to "240,20,280,60"
+   create image "BgPic"
+   set the rect of it to "240,140,280,180"
+   create field "BgF"
+   set the rect of it to "20,140,220,200"
+   group image "BgPic" and field "BgF"
+   set the backgroundBehavior of group 1 of card 1 of stack tStack to true
+   -- each object's long id, type and type for the Inspector before the
+   -- stack takes HyperCard's names
+   put (the long id of button "B") & tab & "button" & return & \
+         (the long id of field "F") & tab & "field" & return & \
+         (the long id of image "Pic") & tab & "image" & return & \
+         (the long id of image "BgPic") & tab & "image" & return & \
+         (the long id of field "BgF") & tab & "field" & return & \
+         (the long id of group 1 of card 1 of stack tStack) & tab & "group" & return & \
+         (the long id of card 1 of stack tStack) & tab & "card" & return & \
+         (the long id of stack tStack) & tab & "stack" into tObjects
+   set the itemDelimiter to tab
+   repeat with i = 1 to the number of lines of tObjects
+      put item 1 of line i of tObjects into tLong
+      put tab & ideObjectTypeFromObject(tLong) after line i of tObjects
+   end repeat
+   set the hcAddressing of stack tStack to true
+   unlock messages
+   unlock screen
+   set the defaultStack to tDefault
+   go stack tStack
+   tourWait 300
+   set the wholeMatches to true
+   repeat for each line tLine in tObjects
+      -- the object as the engine names it now (a field with no card
+      -- before it is a background's)
+      put item 1 of tLine into tRef
+      if item 2 of tLine is "field" and " of group " is not in tRef then put "card " before tRef
+      put the long id of tRef into tLong
+      if item 2 of tLine is "button" then put tLong into tButton
+      tourRecord "INFO inspector-hypercard" && item 2 of tLine & ":" && tLong
+      if item 2 of tLine is among the words of "button field image" and word 1 of tLong is not among the words of "card bkgnd" then
+         put "the engine names the" && item 2 of tLine && word 1 to 3 of tLong & ", not as HyperCard did" & return after tFails
+      end if
+      put revIDETypeOfObject(tLong) into tGot
+      if tGot is not item 2 of tLine then
+         put "the type of" && word 1 to 4 of tLong && "is" && quote & tGot & quote & return after tFails
+      end if
+      put the name of tLong into tRef
+      put revIDETypeOfObject(tRef) into tGot
+      if tGot is not item 2 of tLine then
+         put "the type of" && tRef && "is" && quote & tGot & quote & return after tFails
+      end if
+      put ideObjectTypeFromObject(tLong) into tGot
+      if tGot is not item 3 of tLine then
+         put "the Inspector takes" && word 1 to 4 of tLong && "for" && tGot & ", not" && item 3 of tLine & return after tFails
+      end if
+      -- its right-click menu: a control's has a Card submenu, where the
+      -- card's own has New Card
+      if item 2 of tLine is among the words of "button field image" then
+         dispatch "revMenubarSetContextMenu" to stack tMenuBar with revIDETypeOfObject(the name of tLong), tLong
+         put the text of button "context" of stack tMenuBar into tMenu
+         tourRecord "INFO inspector-hypercard" && word 1 to 4 of tLong && "menu" && quote & tourJoin(line 1 to 12 of tMenu) & quote
+         if lineOffset("Card", tMenu) is 0 then
+            put "the menu of" && word 1 to 4 of tLong && "is not a control's (no Card submenu)" & return after tFails
+         end if
+         if item 2 of tLine is "image" and "Launch Editor" is not among the lines of tMenu then
+            put "the menu of" && word 1 to 4 of tLong && "has no Launch Editor" & return after tFails
+         end if
+         if item 2 of tLine is "field" and "!nLock Text" is not among the lines of tMenu \
+               and "!cLock Text" is not among the lines of tMenu then
+            put "the menu of" && word 1 to 4 of tLong && "has no Lock Text" & return after tFails
+         end if
+      end if
+   end repeat
+   set the wholeMatches to false
+   set the itemDelimiter to comma
+   -- the card button's Inspector shows a button's sections
+   put tourInspect(tButton) into tPI
+   put tourInspectorSection(tPI, "Icons") into tGot
+   if tGot is not "Icons" then
+      put "the Inspector of the card button shows" && quote & tGot & quote & ", not its Icons section" & return after tFails
+   end if
+   tourShotStack tPI, "06e-inspector-hypercard-button"
+   tourCloseInspectors
+   lock messages
+   delete stack tStack
+   unlock messages
+   set the defaultStack to tDefault
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_inspector_hypercard
 
 on tour_inspector_graphic
    local tPI

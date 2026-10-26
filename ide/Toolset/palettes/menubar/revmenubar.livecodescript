@@ -1262,8 +1262,9 @@ on updateButtonState
    enableToolbar
    local tSelObj, tControlSelected, tUserStack, tGroupHilite, tEditGroupHilite
    put revIDESelectedObjects() into tSelObj
-   --determine if selection is a control:
-   put tSelObj is not empty and word 1 of tSelObj is not among the items of "card,stack" into tControlSelected
+   --determine if selection is a control (revIDETypeOfObject: the type of
+   --card button 1 of an imported HyperCard stack is button, not card):
+   put tSelObj is not empty and revIDETypeOfObject(tSelObj) is not among the items of "card,stack" into tControlSelected
    --determine if user editable stack or not:
    put not revIDEStackIsIDEStack(the topstack) into tUserStack
    --determine if selection is single group:
@@ -1827,7 +1828,7 @@ private function revMenubarFileMenu pContext, tFile
    --
    put "P&age Setup..." & return after tFile
    put enableMenuItem("&Print Card.../P", tIsUserTarget) & return after tFile
-   put enableMenuItem("Print Field...", word 1 of (the selObj) is "field") & return after tFile
+   put enableMenuItem("Print Field...", revIDETypeOfObject(the selObj) is "field") & return after tFile
    put "-" & return after tFile
    if the platform is "Linux" then put "&Quit" & return after tFile
    else put "E&xit" & return after tFile
@@ -1839,7 +1840,7 @@ end revMenubarFileMenu
 private function revMenubarEditMenu pContext
    local tEdit, tObjectsLabel, tSelectionLabel, tClipboardLabel
    if pContext["objectsSelected"] then
-      if word 1 of the selObj is "card" then put "Card" into tObjectsLabel
+      if revIDETypeOfObject(the selObj) is "card" then put "Card" into tObjectsLabel
       else if word 1 of the selobj is not "stack" then put "Objects" into tObjectsLabel
       else put empty into tObjectsLabel
    end if
@@ -2514,12 +2515,15 @@ end revMenuBarStandardContextMenu
 
 function revBuildContextSensitiveMenu pExtraText, pTarget, pType, pSelectable
    local tText, tTargetStack
+   # The type of the target is the word after card or bkgnd in a stack whose
+   # hcAddressing is true: card button id 3 of card id 1002 is a button's
+   # (revIDETypeOfObject)
    if word 1 of pTarget is "stack" then
       put revMenuBarStackContextMenu(pTarget, 0) into tText
       return tText
    end if
    put revIDEStackOfObject(pTarget) into tTargetStack
-   if word 1 of pTarget is "card" then
+   if revIDETypeOfObject(pTarget) is "card" then
       put revMenuBarCardContextMenu(pTarget,0) into tText
       put return & "-" after tText
       put return & "Stack" after tText
@@ -2615,8 +2619,11 @@ on revMenubarPopupContextualMenu pTargets
    if the number of lines in sMenuTarget > 1 then
       revMenubarSetContextMenu "multiple", tTarget
    else
+      # (revIDETypeOfObject: in a stack whose hcAddressing is true, as an
+      # imported HyperCard stack's is, a control's name begins with card or
+      # bkgnd, card button "OK", and the type is the word after it)
       local tType
-      put word 1 of the name of tTarget into tType
+      put revIDETypeOfObject(the name of tTarget) into tType
       switch tType
          case "button"
             if the menuName of tTarget is not empty then revMenubarSetContextMenu "menu", tTarget
