@@ -7612,6 +7612,9 @@ STAK first. The stack is imported by <revIDEImportHyperCardStack>.
 A Mac disk image (a floppy or CD image with an HFS volume) can be chosen
 too: a second dialog lists the stacks on it, and the one chosen is
 imported with its resource fork by <revIDEImportHyperCardFromDiskImage>.
+A disk image whose stacks cannot be read, an HFS+ volume or a compressed
+.dmg, is named as one (revHyperCardImageProblem), not called "not a
+HyperCard stack".
 
 References: revIDEImportHyperCardStack (command), revIDEImportHyperCardFromDiskImage (command), revIDEActionOpenStack (command)
 
@@ -7634,6 +7637,11 @@ on revIDEActionImportHyperCardStack
    put empty into sHyperCardImported
    if revHyperCardIsDiskImage(tFilePath) then
       revIDEImportHyperCardFromDiskImage tFilePath
+   else if not __revIDEIsHyperCardFile(tFilePath) and revHyperCardImageProblem(tFilePath) is not empty then
+      -- OXT-Beyond: a disk image the library knows but does not read (an
+      -- HFS+ volume, a compressed .dmg) is not "not a HyperCard stack"
+      answer error revIDELocalise("This disk image cannot be read:") && tFilePath & cr & \
+            revHyperCardImageProblem(tFilePath)
    else
       revIDEImportHyperCardStack tFilePath
    end if

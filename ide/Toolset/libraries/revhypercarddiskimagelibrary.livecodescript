@@ -9,6 +9,9 @@ script "revHyperCardDiskImageLibrary"
 -- HFS (not HFS+) itself: it lists the stacks on a volume and copies one
 -- out, its data fork as <name> and its resource fork beside it as
 -- <name>.rsrc, which the HyperCard importer reads as the stack's fork.
+-- An image kept in a MacBinary file is read in place. Of the images it
+-- cannot read, it names the ones it knows (revHyperCardImageProblem):
+-- an HFS+ volume, and a compressed .dmg.
 --
 -- Read only: nothing here writes to the image. Every number on an HFS
 -- volume is big-endian; offsets in the comments are from the start of
@@ -27,6 +30,11 @@ local sVolume
 local sDirs, sFiles, sOverflow
 
 constant kSector = 512
+
+-- What __hciFindVolume says of a file with no volume in it that this
+-- library knows, and of an HFS+ volume
+constant kNoVolume = "no HFS volume in the file"
+constant kHFSPlus = "an HFS+ volume, which this library does not read"
 
 -- The Unicode code points of MacRoman's characters 128 to 255
 constant kMacRoman = "196,197,199,201,209,214,220,225,224,226,228,227,229,231,233,232,234,235,237,236,238,239,241,243,242,244,246,245,250,249,251,252,8224,176,162,163,167,8226,182,223,174,169,8482,180,168,8800,198,216,8734,177,8804,8805,165,181,8706,8721,8719,960,8747,170,186,937,230,248,191,161,172,8730,402,8776,8710,171,187,8230,160,192,195,213,338,339,8211,8212,8220,8221,8216,8217,247,9674,255,376,8260,8364,8249,8250,64257,64258,8225,183,8218,8222,8240,194,202,193,203,200,205,206,207,204,211,212,63743,210,218,219,217,305,710,732,175,728,729,730,184,733,731,711"
@@ -87,11 +95,39 @@ Tells whether a file is a disk image with an HFS volume on it.
 pImage (String): The path of the file.
 
 Returns (Boolean): True if the file is a raw HFS volume, a DiskCopy 4.2
-image of one, or an image with an Apple partition map that holds one.
+image of one, or an image with an Apple partition map that holds one,
+or a MacBinary copy of one of those.
+
+Description:
+False for an HFS+ volume, which Mac OS 8.1 and later wrote inside an
+HFS volume of its own (a "wrapper" holding one file, which tells the
+Finder where the others went): <revHyperCardImageProblem> says so.
 */
 function revHyperCardIsDiskImage pImage
    return __hciFindVolume(pImage) is a number
 end revHyperCardIsDiskImage
+
+/*
+Says why the stacks on a disk image cannot be read.
+
+pImage (String): The path of the file.
+
+Returns (String): Empty when the file is a disk image this library reads
+(see <revHyperCardIsDiskImage>), or not a disk image it knows of; else
+why it cannot be read: "an HFS+ volume, which this library does not
+read", or that the file is a compressed .dmg.
+
+Description:
+File > Import Stack > HyperCard Stack... says this for a file that is
+neither a HyperCard stack nor a disk image it reads, so that an HFS+ disk
+or a compressed .dmg is not called "not a HyperCard stack".
+*/
+function revHyperCardImageProblem pImage
+   local tAt
+   put __hciFindVolume(pImage) into tAt
+   if tAt is a number or tAt is "no such file" or tAt is kNoVolume then return empty
+   return tAt
+end revHyperCardImageProblem
 
 /*
 Copies a stack out of a disk image, with its resource fork.
@@ -169,7 +205,7 @@ A modal dialog lists the stacks with their folders; typing in the box
 above the list narrows it to the paths that contain what was typed.
 */
 function revHyperCardImageChoose pImage
-   local tList, tError, tStack, tChosen
+   local tList, tError, tStack, tChosen, tLocked
    put revHyperCardImageStacks(pImage) into tList
    put the result into tError
    if tError is not empty then return tError for error
@@ -178,6 +214,17 @@ function revHyperCardImageChoose pImage
       return empty for value
    end if
    put revHyperCardImageChooser(pImage, tList) into tStack
+   -- The chooser is made open and invisible, and modal neither shows an
+   -- invisible stack nor waits for it (MCStack::openrect), so File > Import
+   -- Stack did nothing with a disk image. Closed (it stays in memory) and
+   -- made visible, it opens as a modal dialog in the middle of the screen,
+   -- and modal waits for it to close.
+   put the lockMessages into tLocked
+   lock messages
+   close stack tStack
+   set the lockMessages to tLocked
+   set the visible of stack tStack to true
+   set the loc of stack tStack to the screenLoc
    modal stack tStack
    put the cChosen of stack tStack into tChosen
    delete stack tStack
@@ -197,7 +244,8 @@ path of the stack chosen, or empty.
 
 Description:
 The dialog is made by script, so that it needs no stack file: a search
-box, the list, Import and Cancel.
+box, the list (its first stack hilited as the dialog opens), Import and
+Cancel.
 */
 function revHyperCardImageChooser pImage, pList
    local tStack, tLines, tLine, tDefault
@@ -219,6 +267,15 @@ function revHyperCardImageChooser pImage, pList
    delete the last char of tLines
    set the cAll of stack tStack to tLines
    set the cChosen of stack tStack to empty
+   -- A field loses its hilite when its stack closes, and modal reopens
+   -- the stack, so the first stack is hilited as the dialog opens
+   set the script of stack tStack to __hciScript( \
+         "on preOpenStack" & return & \
+         "   if the hilitedLine of field `List` is empty and field `List` is not empty then" & return & \
+         "      set the hilitedLine of field `List` to 1" & return & \
+         "   end if" & return & \
+         "   pass preOpenStack" & return & \
+         "end preOpenStack")
 
    create field "Label"
    set the rect of field "Label" to 16,12,544,32
@@ -329,17 +386,51 @@ private function __hciPString pData, pOffset
 end __hciPString
 
 -- The byte offset of the HFS volume in the image (its first sector, two
--- before the master directory block), or an error
+-- before the master directory block), or an error: "no such file",
+-- kNoVolume, or one naming a kind of image this library knows but does
+-- not read (revHyperCardImageProblem)
 private function __hciFindVolume pImage
-   local tHeader, tBlockSize, tEntries, tEntry, tAt
+   local tAt, tHeader, tTail
    if there is not a file pImage then return "no such file"
-   -- a raw volume: the master directory block's signature, "BD", at 1024
-   put __hciRead(pImage, 0, 2048) into tHeader
-   if byte 1025 to 1026 of tHeader is "BD" then return 0
+   put __hciFindVolumeAt(pImage, 0) into tAt
+   if tAt is not kNoVolume then return tAt
+   -- a MacBinary copy of an image (a 128-byte header, then the data fork),
+   -- as Mac archives kept them: the image in its data fork. A MacBinary
+   -- copy of a stack is the HyperCard importer's.
+   put __hciRead(pImage, 0, 128) into tHeader
+   if __hciIsMacBinary(tHeader) and byte 66 to 69 of tHeader is not "STAK" then
+      put __hciFindVolumeAt(pImage, 128) into tAt
+      if tAt is not kNoVolume then return tAt
+   end if
+   -- a UDIF image (a .dmg) ends with its "koly" block. A read/write one
+   -- is a raw image with that block after it, found above, so this one's
+   -- blocks are compressed.
+   open file pImage for binary read
+   if the result is empty then
+      read from file pImage at -512 for 4
+      if the result is empty then put it into tTail
+      close file pImage
+   end if
+   if tTail is "koly" then
+      return "a compressed disk image (a .dmg), which this library does not read:" && \
+            "hdiutil convert -format UDRW makes a copy it reads"
+   end if
+   return kNoVolume
+end __hciFindVolume
+
+-- The same, pBase bytes into the file: a raw volume, a DiskCopy 4.2
+-- image or an Apple partition map there
+private function __hciFindVolumeAt pImage, pBase
+   local tHeader, tBlockSize, tEntries, tEntry, tFound, tPlus
+   -- a raw volume
+   put __hciVolumeAt(pImage, pBase) into tFound
+   if tFound is not empty then return tFound
+   put __hciRead(pImage, pBase, 2048) into tHeader
    -- DiskCopy 4.2: an 84-byte header, then the volume; its last word is
    -- 0x0100
    if byteToNum(byte 83 of tHeader) is 1 and byteToNum(byte 84 of tHeader) is 0 then
-      if byte 84 + 1025 to 84 + 1026 of __hciRead(pImage, 0, 84 + 2048) is "BD" then return 84
+      put __hciVolumeAt(pImage, pBase + 84) into tFound
+      if tFound is not empty then return tFound
    end if
    -- an Apple partition map: the driver descriptor ("ER") in block 0,
    -- then one entry ("PM") per block from block 1, each naming its type,
@@ -348,28 +439,56 @@ private function __hciFindVolume pImage
       put __hciU16(tHeader, 2) into tBlockSize
       if tBlockSize is 0 then put kSector into tBlockSize
       -- the map's entries are 512 bytes apart whatever the block size
-      put kSector into tAt
       put 1 into tEntries
       repeat with tEntry = 1 to 256
          if tEntry > tEntries then exit repeat
-         put __hciRead(pImage, tEntry * kSector, kSector) into tHeader
+         put __hciRead(pImage, pBase + tEntry * kSector, kSector) into tHeader
          if byte 1 to 2 of tHeader is not "PM" then exit repeat
          put __hciU32(tHeader, 4) into tEntries
+         -- Apple_HFS, which an HFS+ volume is too, or Apple_HFSX
          if byte 49 to 57 of tHeader is "Apple_HFS" then
             -- the first block, in 512-byte blocks on the images seen (CDs
             -- included), else in the driver descriptor's
-            put __hciU32(tHeader, 8) * kSector into tAt
-            if byte 1025 to 1026 of __hciRead(pImage, tAt, 2048) is "BD" then return tAt
-            put __hciU32(tHeader, 8) * tBlockSize into tAt
-            if byte 1025 to 1026 of __hciRead(pImage, tAt, 2048) is "BD" then return tAt
+            put __hciVolumeAt(pImage, pBase + __hciU32(tHeader, 8) * kSector) into tFound
+            if tFound is empty then
+               put __hciVolumeAt(pImage, pBase + __hciU32(tHeader, 8) * tBlockSize) into tFound
+            end if
+            if tFound is a number then return tFound
+            -- an HFS+ partition: an HFS one after it is read
+            if tFound is not empty then put tFound into tPlus
          end if
       end repeat
+      if tPlus is not empty then return tPlus
    end if
-   if byte 1025 to 1026 of tHeader is "H+" or byte 1025 to 1026 of tHeader is "HX" then
-      return "an HFS+ volume, which this library does not read"
+   return kNoVolume
+end __hciFindVolumeAt
+
+-- What starts pAt bytes into the image: pAt for an HFS volume, kHFSPlus
+-- for an HFS+ one, else empty. Mac OS 8.1 and later wrote an HFS+ volume
+-- inside an HFS one, whose master directory block names it (drEmbedSigWord
+-- at 124) and whose one file only tells the Finder where the others went.
+private function __hciVolumeAt pImage, pAt
+   local tMdb
+   put __hciRead(pImage, pAt + 1024, 128) into tMdb
+   if byte 1 to 2 of tMdb is "BD" then
+      if byte 125 to 126 of tMdb is "H+" then return kHFSPlus
+      return pAt
    end if
-   return "no HFS volume in the file"
-end __hciFindVolume
+   if byte 1 to 2 of tMdb is "H+" or byte 1 to 2 of tMdb is "HX" then return kHFSPlus
+   return empty
+end __hciVolumeAt
+
+-- A MacBinary header (MacBinary I, II or III): zeros at 0, 74 and 82, a
+-- name of 1 to 63 characters, and a data fork
+private function __hciIsMacBinary pHeader
+   if the number of bytes of pHeader < 128 then return false
+   if byteToNum(byte 1 of pHeader) is not 0 or byteToNum(byte 75 of pHeader) is not 0 \
+         or byteToNum(byte 83 of pHeader) is not 0 then
+      return false
+   end if
+   if byteToNum(byte 2 of pHeader) < 1 or byteToNum(byte 2 of pHeader) > 63 then return false
+   return __hciU32(pHeader, 83) > 0
+end __hciIsMacBinary
 
 -- Read the volume's catalog and extents tree into the script locals,
 -- unless they are of this image as it is now. Returns empty or an error.

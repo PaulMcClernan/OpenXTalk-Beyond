@@ -2881,7 +2881,7 @@ end mcbToolAnswerDialog
 -- runs. The stack is open in the IDE afterwards, not saved. The summary of
 -- the import is the IDE's (revHyperCardImportSummary).
 private function mcbToolImportHyperCard pArguments
-   local tFile, tStackPath, tList, tError, tLine, tFound, tBefore, tName, tStack, tSummary, tText, tIsImage, tDone
+   local tFile, tStackPath, tList, tError, tLine, tFound, tBefore, tName, tStack, tSummary, tText, tIsImage, tDone, tProblem
    put mcbArg(pArguments, "file") into tFile
    if the platform is "Win32" then
       replace backslash with slash in tFile
@@ -2898,6 +2898,14 @@ private function mcbToolImportHyperCard pArguments
    catch tError
       return mcbResult("HyperCard stacks cannot be imported here: the IDE's HyperCard libraries are not loaded.", true)
    end try
+   -- A disk image the library knows but does not read (an HFS+ volume, a
+   -- compressed .dmg), which is not "not a disk image"
+   if tIsImage is not true then
+      try
+         put revHyperCardImageProblem(tFile) into tProblem
+      catch tError
+      end try
+   end if
    if tIsImage is true then
       put revHyperCardImageStacks(tFile) into tList
       put the result into tError
@@ -2929,6 +2937,8 @@ private function mcbToolImportHyperCard pArguments
       if not tFound then
          return mcbResult("The disk image has no stack" && quote & tStackPath & quote & ". list: true lists them.", true)
       end if
+   else if tProblem is not empty and not mcbIsHyperCardFile(tFile) then
+      return mcbResult("The disk image cannot be read:" && tProblem, true)
    else if mcbArg(pArguments, "list") is "true" then
       return mcbResult(tFile && "is not a Mac disk image (an HFS volume): import it as a stack, without list.", true)
    else if not mcbIsHyperCardFile(tFile) then
