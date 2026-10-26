@@ -93,6 +93,17 @@ uint2 MCObject::s_last_font_index = 0;
 
 bool MCObject::s_loaded_parent_script_reference = false;
 
+// OXT-Beyond: an object's handler list that a script replaced while it ran
+//   (MCObject::retirehandlers)
+struct MCRetiredHandlers
+{
+	MCObject *object;
+	MCHandlerlist *handlers;
+	MCRetiredHandlers *next;
+};
+
+MCRetiredHandlers *MCObject::s_retired_handlers = nullptr;
+
 MCColor MCObject::maccolors[MAC_NCOLORS] = {
             { 0x7070, 0x7070, 0x7070 },
             { 0xCCCC, 0xCCCC, 0xFFFF },
@@ -301,6 +312,10 @@ MCObject::~MCObject()
 	IO_freeobject(this);
 	MCundos->freeobject(this);
 	delete hlist;
+	// OXT-Beyond: and any of its handler lists kept while they ran
+	//   (retirehandlers), which no longer do
+	if (s_retired_handlers != nullptr)
+		freeretiredhandlers();
 	delete[] colors; /* Allocated with new[] */
 	if (colornames != nil)
 	{
@@ -914,6 +929,43 @@ MCStackHandle MCObject::getstack()
 	if (!parent)
 		return MCStackHandle(MCdefaultstackptr);
 	return parent->getstack();
+}
+
+// OXT-Beyond: the handler list of this object's script goes from the
+//   object to the list of those kept while they run, which
+//   unlockforexecution empties of the object's once none of its handlers
+//   runs: the handlers that run go on in it, while a new script is compiled
+//   into a new one
+bool MCObject::retirehandlers(void)
+{
+	if (hlist == nullptr)
+		return true;
+	MCRetiredHandlers *t_retired = new (nothrow) MCRetiredHandlers;
+	if (t_retired == nullptr)
+		return false;
+	t_retired -> object = this;
+	t_retired -> handlers = hlist;
+	t_retired -> next = s_retired_handlers;
+	s_retired_handlers = t_retired;
+	hlist = nullptr;
+	return true;
+}
+
+void MCObject::freeretiredhandlers(void)
+{
+	MCRetiredHandlers **t_link = &s_retired_handlers;
+	while (*t_link != nullptr)
+	{
+		MCRetiredHandlers *t_retired = *t_link;
+		if (t_retired -> object == this)
+		{
+			*t_link = t_retired -> next;
+			delete t_retired -> handlers;
+			delete t_retired;
+		}
+		else
+			t_link = &t_retired -> next;
+	}
 }
 
 Exec_stat MCObject::exechandler(MCHandler *hptr, MCParameter *params)

@@ -1646,10 +1646,24 @@ void MCObject::SetScript(MCExecContext& ctxt, MCStringRef new_script)
 		ctxt . LegacyThrow(EE_STACK_NOKEY);
 		return;
 	}
+	// OXT-Beyond: in HyperCard a script could set the script of an object
+	//   whose handler was running: a button changed its own script as it
+	//   was clicked, so that the next click did something else, and a stack
+	//   added a handler to its own script and went on to call it. So in a
+	//   HyperCard stack (MCExecContext::IsHyperTalkCompatible) such an
+	//   object takes the new script at once, for every message after, while
+	//   the handlers that run go on in the old one, which the object keeps
+	//   until none of them runs (retirehandlers). A behavior's script is
+	//   refused as before, since the objects that use it keep their script
+	//   locals by its handlers, and so is every such script that a script
+	//   of any other stack sets
 	if (scriptdepth != 0)
 	{
-		ctxt . LegacyThrow(EE_OBJECT_SCRIPTEXECUTING);
-		return;
+		if (!ctxt . IsHyperTalkCompatible() || m_is_parent_script || !retirehandlers())
+		{
+			ctxt . LegacyThrow(EE_OBJECT_SCRIPTEXECUTING);
+			return;
+		}
 	}
 
 	bool t_success;

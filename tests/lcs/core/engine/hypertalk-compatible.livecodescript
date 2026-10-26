@@ -17,9 +17,11 @@ names (condense, outline...) set a textStyle, and grouped text reads as
 group, not link, and is drawn as plain text, underlined only after show
 groups; round takes a number halfway between two integers to the even
 one; the seconds, and dates converted to and from seconds, count from
-1904 in local time; and numToChar and charToNum number the characters
-as HyperCard did, by the Mac's character set with the return as 13.
-Each test checks the stack with the property off too.
+1904 in local time; numToChar and charToNum number the characters as
+HyperCard did, by the Mac's character set with the return as 13; and a
+script can set the script of an object whose handler runs, which takes
+it at once while that handler goes on. Each test checks the stack with
+the property off too.
 */
 
 local sStack
@@ -1012,3 +1014,83 @@ on TestHyperTalkCompatibleChars
    TestAssert "on: with the useUnicode, charToNum(numToChar(8226)) is still 8226", line 19 of tValues is 8226
    _DeleteStack
 end TestHyperTalkCompatibleChars
+
+-- A button "T" whose hcToggle sets the script of the button itself, as a
+-- button that changes its own script as it is clicked does, to one whose
+-- hcToggle logs "new" and which has a handler the old one does not,
+-- hcAdded, and goes on: it logs the last line of its button's script,
+-- what hcWhich() gives and what hcAdded does. Then hcToggle once more,
+-- and a button "Q" whose behavior's handler sets the behavior's script.
+-- What they logged, one a line: "error" and its number where a set
+-- stopped, "no hcAdded" where there was none
+private function _SetScriptLog
+   global gHCLog, gHCNewScript
+   set the defaultStack to sStack
+   create button "T"
+   set the script of button "T" of stack sStack to "on hcToggle" & return \
+         & "global gHCLog, gHCNewScript" & return & "local tError" & return \
+         & "put " & quote & "old" & quote & " & return after gHCLog" & return \
+         & "try" & return & "set the script of me to gHCNewScript" & return \
+         & "put " & quote & "set" & quote & " & return after gHCLog" & return \
+         & "catch tError" & return \
+         & "put " & quote & "error " & quote & " & item 1 of line 1 of tError & return after gHCLog" & return \
+         & "end try" & return \
+         & "put last line of the script of me & return after gHCLog" & return \
+         & "put hcWhich() & return after gHCLog" & return \
+         & "try" & return & "hcAdded" & return & "catch tError" & return \
+         & "put " & quote & "no hcAdded" & quote & " & return after gHCLog" & return \
+         & "end try" & return & "end hcToggle" & return \
+         & "function hcWhich" & return & "return " & quote & "old" & quote & return & "end hcWhich"
+   put "on hcToggle" & return & "global gHCLog" & return \
+         & "put " & quote & "new" & quote & " & return after gHCLog" & return & "end hcToggle" & return \
+         & "function hcWhich" & return & "return " & quote & "new" & quote & return & "end hcWhich" & return \
+         & "on hcAdded" & return & "global gHCLog" & return \
+         & "put " & quote & "added" & quote & " & return after gHCLog" & return & "end hcAdded" into gHCNewScript
+   create button "P"
+   set the script of button "P" of stack sStack to "on hcBehave" & return \
+         & "global gHCLog" & return & "local tError" & return \
+         & "try" & return & "set the script of button " & quote & "P" & quote & " of stack " \
+         & quote & sStack & quote & " to empty" & return \
+         & "put " & quote & "set" & quote & " & return after gHCLog" & return \
+         & "catch tError" & return \
+         & "put " & quote & "error " & quote & " & item 1 of line 1 of tError & return after gHCLog" & return \
+         & "end try" & return & "end hcBehave"
+   create button "Q"
+   set the behavior of button "Q" of stack sStack to the long id of button "P" of stack sStack
+   put empty into gHCLog
+   send "hcToggle" to button "T" of stack sStack
+   send "hcToggle" to button "T" of stack sStack
+   send "hcBehave" to button "Q" of stack sStack
+   return gHCLog
+end _SetScriptLog
+
+on TestHyperTalkCompatibleSetScriptOff
+   local tLog
+   _MakeStack false
+   put _SetScriptLog() into tLog
+   TestAssert "off: setting the script of an object whose handler runs stops the script", \
+         line 2 of tLog is "error 360"
+   TestAssert "off: so the object keeps its script", line 3 of tLog is "end hcWhich"
+   TestAssert "off: and its messages go to it", line 4 of tLog is "old" and line 5 of tLog is "no hcAdded"
+   TestAssert "off: the next one too", line 6 of tLog is "old" and line 7 of tLog is "error 360"
+   TestAssert "off: a behavior's script, while its handler runs, is not set either", \
+         line 11 of tLog is "error 360"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScriptOff
+
+-- In HyperCard a script could set the script of an object whose handler
+-- ran, and the handler went on: a button changed its own script as it was
+-- clicked, so that the next click did something else
+on TestHyperTalkCompatibleSetScript
+   local tLog
+   _MakeStack true
+   put _SetScriptLog() into tLog
+   TestAssert "on: a handler sets the script of its own object", line 2 of tLog is "set"
+   TestAssert "on: which is the object's script at once", line 3 of tLog is "end hcAdded"
+   TestAssert "on: and takes the messages the handler sends after it", \
+         line 4 of tLog is "new" and line 5 of tLog is "added"
+   TestAssert "on: and the next one", line 6 of tLog is "new" and the number of lines of tLog is 7
+   TestAssert "on: a behavior's script, while its handler runs, is still not set", \
+         line 7 of tLog is "error 360"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScript

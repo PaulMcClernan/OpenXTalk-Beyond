@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, eleven things are as they were in <HyperCard>, for the
+When it is true, twelve things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -144,6 +144,15 @@ When it is true, eleven things are as they were in <HyperCard>, for the
   lines has those lines, and numToChar(10) is a carriage return, which
   ends no line here, as a linefeed ended none in <HyperCard>. Bytes,
   such as <numToByte> gives, keep their numbers.
+- A <script> can set the <script> of an <object> whose <handler> is
+  running, as in <HyperCard>, where a <button> could change its own
+  <script> as it was clicked, so that the next click did something
+  else, and a <stack> could add a <handler> to its own <script> and go
+  on to call it. The <object> has the new <script> at once, for every
+  message after, while the <handler|handlers> that are running go on to
+  their end as they were. Otherwise setting such a <script> is an
+  error, as setting the <script> of a <behavior> whose <handler> is
+  running is in any <stack>.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -173,7 +182,8 @@ linkVisitedColor (property), underlineLinks (property),
 show groups (command), hide groups (command),
 round (function), statRound (function), seconds (function),
 convert (command), numToChar (function), charToNum (function),
-numToByte (function), go (command), div (operator), mod (operator),
+numToByte (function), script (property), behavior (property),
+go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),
 field (object), background (glossary),

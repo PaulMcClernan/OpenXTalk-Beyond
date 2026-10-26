@@ -42,6 +42,16 @@ that it is not possible to write a self-modifying handler, because the
 currently-executing handler would have to be changed and re-compiled
 while it was running.
 
+Setting the <script> of an <object> whose <handler> is running is an
+error, but in a <stack> whose <hyperTalkCompatible> is true, as File >
+Import Stack sets it for a <stack> imported from <HyperCard>. There, as
+in <HyperCard>, a <handler> can set the <script> of its own <object>:
+the <object> has the new <script> at once, for every message after,
+while the <handler|handlers> that are running go on to their end as
+they were. The <script> of a <behavior> whose <handler> is running
+cannot be set in any <stack>.
+
 References: remove script (command), edit (command), object (glossary),
-script (property)
+script (property), hyperTalkCompatible (property), behavior (property),
+handler (glossary), HyperCard (glossary), stack (object)
 
