@@ -319,13 +319,20 @@ private function _Values pStatements
    return gHCValues
 end _Values
 
+-- pValue between brackets: compared so, an INF or a NAN is compared as
+-- text, where as a number a NAN is equal to nothing and "inf" is "INF"
+private function _Shown pValue
+   return "[" & pValue & "]"
+end _Shown
+
 on TestHyperTalkCompatibleArithmeticOff
    local tValues
    _MakeStack false
    put _Values("put 1/0 into tValue" & return & "put 0/0 into tValue" & return \
          & "divide tValue by 0" & return & "put sqrt(-1) into tValue" & return \
          & "put ln(0) into tValue" & return & "put 10^400 into tValue" & return \
-         & "put 7 div 0 into tValue" & return & "put 1/4 into tValue") into tValues
+         & "put 7 div 0 into tValue" & return & "put 1/4 into tValue" & return \
+         & "put (" & quote & "nan" & quote & " + 0) is " & quote & "nan" & quote & " into tValue") into tValues
    TestAssert "off: 1/0 stops the script", line 1 of tValues is "error"
    TestAssert "off: 0/0 stops the script", line 2 of tValues is "error"
    TestAssert "off: divide by 0 stops the script", line 3 of tValues is "error"
@@ -334,6 +341,7 @@ on TestHyperTalkCompatibleArithmeticOff
    TestAssert "off: 10^400 stops the script", line 6 of tValues is "error"
    TestAssert "off: div by 0 stops the script", line 7 of tValues is "error"
    TestAssert "off: 1/4 is 0.25", line 8 of tValues is "0.25"
+   TestAssert "off: a NAN is equal to nothing, its own text included", line 9 of tValues is "false"
    _DeleteStack
 end TestHyperTalkCompatibleArithmeticOff
 
@@ -351,24 +359,32 @@ on TestHyperTalkCompatibleArithmetic
          & "put ln(-1) into tValue" & return & "put ln(0) into tValue" & return \
          & "put asin(2) into tValue" & return & "put (-8)^(1/3) into tValue" & return \
          & "put 10^400 into tValue" & return & "put 7 div 0 into tValue" & return \
-         & "put 5 mod 0 into tValue" & return & "put 1/4 into tValue") into tValues
-   TestAssert "on: 1/0 is INF", line 1 of tValues is "INF"
-   TestAssert "on: -1/0 is -INF", line 2 of tValues is "-INF"
-   TestAssert "on: 0/0 is NAN(004)", line 3 of tValues is "NAN(004)"
-   TestAssert "on: 7 divided by 0 is INF", line 4 of tValues is "INF"
-   TestAssert "on: INF + 1 is INF", line 5 of tValues is "INF"
+         & "put 5 mod 0 into tValue" & return & "put 1/4 into tValue" & return \
+         & "put (-8)^(1/3) is " & quote & "NAN(037)" & quote & " into tValue" & return \
+         & "put " & quote & "NAN(036)" & quote & " + 0 into tValue" & return \
+         & "put (" & quote & "nan" & quote & " + 0) is " & quote & "nan" & quote & " into tValue") into tValues
+   set the caseSensitive to true
+   TestAssert "on: 1/0 is INF", _Shown(line 1 of tValues) is "[INF]"
+   TestAssert "on: -1/0 is -INF", _Shown(line 2 of tValues) is "[-INF]"
+   TestAssert "on: 0/0 is NAN(004)", _Shown(line 3 of tValues) is "[NAN(004)]"
+   TestAssert "on: 7 divided by 0 is INF", _Shown(line 4 of tValues) is "[INF]"
+   TestAssert "on: INF + 1 is INF", _Shown(line 5 of tValues) is "[INF]"
    TestAssert "on: INF is more than any number", line 6 of tValues is "true"
    TestAssert "on: 1/0 is " & quote & "INF" & quote, line 7 of tValues is "true"
-   TestAssert "on: a NAN times 100 is a NAN", char 1 to 3 of line 8 of tValues is "NAN"
-   TestAssert "on: sqrt(-1) is -NAN(001)", line 9 of tValues is "-NAN(001)"
-   TestAssert "on: ln(-1) is NAN(036)", line 10 of tValues is "NAN(036)"
-   TestAssert "on: ln(0) is -INF", line 11 of tValues is "-INF"
-   TestAssert "on: asin(2) is NAN(034)", line 12 of tValues is "NAN(034)"
-   TestAssert "on: (-8)^(1/3) is NAN(037)", line 13 of tValues is "NAN(037)"
-   TestAssert "on: 10^400 is INF", line 14 of tValues is "INF"
+   TestAssert "on: a NAN times 100 is a NAN", char 1 to 4 of _Shown(line 8 of tValues) is "[NAN"
+   TestAssert "on: sqrt(-1) is -NAN(001)", _Shown(line 9 of tValues) is "[-NAN(001)]"
+   TestAssert "on: ln(-1) is NAN(036)", _Shown(line 10 of tValues) is "[NAN(036)]"
+   TestAssert "on: ln(0) is -INF", _Shown(line 11 of tValues) is "[-INF]"
+   TestAssert "on: asin(2) is NAN(034)", _Shown(line 12 of tValues) is "[NAN(034)]"
+   TestAssert "on: (-8)^(1/3) is NAN(037)", _Shown(line 13 of tValues) is "[NAN(037)]"
+   TestAssert "on: 10^400 is INF", _Shown(line 14 of tValues) is "[INF]"
    TestAssert "on: div by 0 still stops the script", line 15 of tValues is "error"
    TestAssert "on: mod by 0 still stops the script", line 16 of tValues is "error"
    TestAssert "on: 1/4 is still 0.25", line 17 of tValues is "0.25"
+   TestAssert "on: a NAN is compared as text, so (-8)^(1/3) is " & quote & "NAN(037)" & quote, \
+         line 18 of tValues is "true"
+   TestAssert "on: NAN(036) read from text keeps its code, in decimal", _Shown(line 19 of tValues) is "[NAN(036)]"
+   TestAssert "on: a NAN read from text is equal to its text", line 20 of tValues is "true"
 
    -- a field shows them as HyperCard did
    set the defaultStack to sStack

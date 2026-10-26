@@ -107,6 +107,47 @@ static bool MCExecFormatHyperTalkNumber(real64_t p_real, MCStringRef& r_string)
 		MCStringCopy(*t_string, r_string);
 }
 
+// OXT-Beyond: a NAN read from text as HyperCard read it, in a stack whose
+//   hyperTalkCompatible is true: [-]NAN(036) has the code 36, in decimal,
+//   where strtod reads the code in octal (30) or in hex (54), or not at
+//   all, as the platform has it. x_number is the NAN strtod read, and is
+//   left so unless the text is a NAN with a code from 1 to 255.
+static void MCExecReadHyperTalkNAN(MCStringRef p_string, real64_t& x_number)
+{
+	MCAutoStringRefAsCString t_cstring;
+	if (!t_cstring . Lock(p_string))
+		return;
+	const char *t_chars = *t_cstring;
+	uindex_t t_length = t_cstring . Size();
+	uindex_t t_index = 0;
+	// with spaces around it, as MCTypeConvertStringToReal allows
+	while (t_index < t_length && isspace((uint8_t)t_chars[t_index]))
+		t_index++;
+	bool t_negative = t_index < t_length && t_chars[t_index] == '-';
+	if (t_index < t_length && (t_chars[t_index] == '-' || t_chars[t_index] == '+'))
+		t_index++;
+	if (t_length - t_index < 5 ||
+		tolower((uint8_t)t_chars[t_index]) != 'n' ||
+		tolower((uint8_t)t_chars[t_index + 1]) != 'a' ||
+		tolower((uint8_t)t_chars[t_index + 2]) != 'n' ||
+		t_chars[t_index + 3] != '(')
+		return;
+	t_index += 4;
+	uint32_t t_code = 0;
+	while (t_index < t_length && isdigit((uint8_t)t_chars[t_index]) && t_code <= 255)
+		t_code = t_code * 10 + (t_chars[t_index++] - '0');
+	if (t_index >= t_length || t_chars[t_index++] != ')' || t_code == 0 || t_code > 255)
+		return;
+	while (t_index < t_length && isspace((uint8_t)t_chars[t_index]))
+		t_index++;
+	if (t_index != t_length)
+		return;
+	uint64_t t_bits = 0x7FF8000000000000ULL | t_code;
+	if (t_negative)
+		t_bits |= 0x8000000000000000ULL;
+	memcpy(&x_number, &t_bits, sizeof(x_number));
+}
+
 bool MCExecContext::ConvertToString(MCValueRef p_value, MCStringRef& r_string)
 {
     switch(MCValueGetTypeCode(p_value))
@@ -177,6 +218,10 @@ bool MCExecContext::ConvertToNumber(MCValueRef p_value, MCNumberRef& r_number)
                 if (!MCTypeConvertStringToReal(MCNameGetString((MCNameRef)p_value), t_number, m_convertoctals))
                     break;
 
+                // OXT-Beyond: HyperCard's NAN(036) (MCExecReadHyperTalkNAN)
+                if (MCS_isnan(t_number) && IsHyperTalkCompatible())
+                    MCExecReadHyperTalkNAN(MCNameGetString((MCNameRef)p_value), t_number);
+
                 // Converting to octals doesn't generate the 10-based number stored in the string
                 if (!m_convertoctals)
                     MCStringSetNumericValue(MCNameGetString((MCNameRef)p_value), t_number);
@@ -194,6 +239,10 @@ bool MCExecContext::ConvertToNumber(MCValueRef p_value, MCNumberRef& r_number)
             {
                 if (!MCTypeConvertStringToReal((MCStringRef)p_value, t_number, m_convertoctals))
                     break;
+
+                // OXT-Beyond: HyperCard's NAN(036) (MCExecReadHyperTalkNAN)
+                if (MCS_isnan(t_number) && IsHyperTalkCompatible())
+                    MCExecReadHyperTalkNAN((MCStringRef)p_value, t_number);
 
                 // Converting to octals doesn't generate the 10-based number stored in the string
                 if (!m_convertoctals)
