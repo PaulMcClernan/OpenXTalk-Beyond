@@ -1187,6 +1187,9 @@ jobs:
   # Dictionary whose data the first start never made. So are fields
   # scrolled down and back to the top (field-scroll): on macOS a forum
   # report showed pieces of the lines scrolled past at the top of a field.
+  # And an animated GIF flipped and rotated with the Object menu, which
+  # must ask first (image-frames): a forum report from macOS showed a
+  # flip leave one of its frames.
   tour-macos-26:
     name: IDE tour on macOS 26 (arm64)
     needs: package
@@ -1249,7 +1252,7 @@ jobs:
         timeout-minutes: 15
         run: |
           python3 tools/ci/ui_tour.py --install "$RUNNER_TEMP/oxt-test" --platform mac-universal \
-            --appearance light --only sample,controls,field-scroll,inspector,inspector-tabs,dictionary,preferences,standalone-settings --out "$RUNNER_TEMP/ui-tour"
+            --appearance light --only sample,controls,field-scroll,image-frames,inspector,inspector-tabs,dictionary,preferences,standalone-settings --out "$RUNNER_TEMP/ui-tour"
 
       # As the test job runs it (see there), on macOS 26
       - name: Menu and backdrop check
