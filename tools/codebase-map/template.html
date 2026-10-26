@@ -10,6 +10,7 @@
   --accent:#1f6aa5; --accent-soft:#dcebf7;
   --ok:#2f7d4f; --warn:#b26b00; --crit:#b3261e; --warn-soft:#fbefd9; --crit-soft:#f8dedb;
   --e-build:#7a5aa8; --e-script:#1f6aa5; --e-lcb:#2f7d4f; --e-boot:#b26b00; --e-other:#7d8894;
+  --t-engine:#c97a10; --t-ext:#c2417f; --t-tool:#1c8f86; --t-lcb:#3f8a2f; --t-pack:#9a7a00; --t-lib:#2f78c4; --t-other:#8a95a3;
   --f-display:"Chivo",ui-sans-serif,system-ui,sans-serif;
   --f-body:"Public Sans",ui-sans-serif,system-ui,sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -19,12 +20,14 @@
   --accent:#6cb3ea; --accent-soft:#1b3348;
   --ok:#6cc08d; --warn:#e9a640; --crit:#f07a70; --warn-soft:#3a2d16; --crit-soft:#3d1f1d;
   --e-build:#b39be0; --e-script:#6cb3ea; --e-lcb:#6cc08d; --e-boot:#e9a640; --e-other:#8b97a3;
+  --t-engine:#f2a93b; --t-ext:#ff6fb5; --t-tool:#3dd6c6; --t-lcb:#8be07a; --t-pack:#ffd166; --t-lib:#5cb8ff; --t-other:#7f8ea8;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#11161c; --panel:#18202a; --ink:#e3e8ee; --muted:#9aa6b2; --line:#2c3743; --soft:#1f2934;
   --accent:#6cb3ea; --accent-soft:#1b3348;
   --ok:#6cc08d; --warn:#e9a640; --crit:#f07a70; --warn-soft:#3a2d16; --crit-soft:#3d1f1d;
   --e-build:#b39be0; --e-script:#6cb3ea; --e-lcb:#6cc08d; --e-boot:#e9a640; --e-other:#8b97a3;
+  --t-engine:#f2a93b; --t-ext:#ff6fb5; --t-tool:#3dd6c6; --t-lcb:#8be07a; --t-pack:#ffd166; --t-lib:#5cb8ff; --t-other:#7f8ea8;
   color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -80,8 +83,9 @@ ul.small{margin:4px 0 8px;padding-left:1.2em}
 input[type=search],select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:7px 10px}
 input[type=search]{min-width:0;flex:1 1 260px}
 label.tog{display:inline-flex;gap:6px;align-items:center;font-size:.84rem;color:var(--muted)}
-.ov-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:16px}
-@media (max-width:900px){.ov-wrap{grid-template-columns:1fr}}
+.ov-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:16px;align-items:start}
+.ov-detail{position:sticky;top:64px;max-height:calc(100vh - 84px);overflow:auto}
+@media (max-width:900px){.ov-wrap{grid-template-columns:1fr}.ov-detail{position:static;max-height:none}}
 .box rect.b{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
 .box{cursor:pointer}
 .box:hover rect.b,.box.sel rect.b{stroke:var(--accent);stroke-width:2.4}
@@ -111,13 +115,22 @@ label.tog{display:inline-flex;gap:6px;align-items:center;font-size:.84rem;color:
 .matrix td{text-align:center;font-variant-numeric:tabular-nums;font-size:.72rem;padding:4px;min-width:34px}
 .matrix th{font-size:.62rem;cursor:default}
 .note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:8px 12px;border-radius:0 5px 5px 0;font-size:.85rem}
+.gyp-box{max-height:72vh;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--soft)}
+.gyp{display:block}
 .gyp .n rect{fill:var(--panel);stroke:var(--line)}
-.gyp .n text{font-size:10px;fill:var(--ink);font-family:var(--f-mono)}
-.gyp .n{cursor:pointer}
-.gyp .n.sel rect{stroke:var(--accent);stroke-width:2}
-.gyp .n.rel rect{stroke:var(--accent)}
-.gyp path{fill:none;stroke:var(--e-other);opacity:.25}
-.gyp path.on{stroke:var(--accent);opacity:.9}
+.gyp .n rect.st{stroke:none}
+.gyp .n text{font-size:10.5px;fill:var(--ink);font-family:var(--f-mono)}
+.gyp .n{cursor:pointer;outline:none}
+.gyp .n:hover rect:first-child,.gyp .n:focus-visible rect:first-child{stroke:var(--accent)}
+.gyp path{fill:none;stroke:var(--e-other);stroke-width:1.1;opacity:.32}
+.gyp.focus .n{opacity:.28}.gyp.focus path{opacity:.06}
+.gyp.focus .n.sel,.gyp.focus .n.rel,.gyp.focus .n.upr{opacity:1}
+.gyp .n.sel rect:first-child{stroke:var(--ink);stroke-width:2}
+.gyp .n.rel rect:first-child{stroke:var(--accent);stroke-width:1.5}
+.gyp .n.upr rect:first-child{stroke:var(--warn);stroke-width:1.5}
+.gyp.focus path.on{stroke:var(--accent);opacity:.85;stroke-width:1.6}
+.gyp.focus path.up{stroke:var(--warn);opacity:.85;stroke-width:1.6}
+@media (prefers-reduced-motion:no-preference){.gyp .n,.gyp path{transition:opacity .15s}}
 pre.cmd{white-space:pre-wrap;background:var(--soft);padding:10px;border-radius:5px;overflow-x:auto;margin:8px 0 0}
 @media (prefers-reduced-motion:no-preference){.edge{transition:opacity .15s}}
 /* Constellation: a deliberately dark "sky" panel in both themes, so the glow reads the same everywhere. */
@@ -249,7 +262,7 @@ function constellation(host){
     .force('charge',d3.forceManyBody().strength(d=>d.kind==='engine'?-260:-14))
     .force('x',d3.forceX(d=>d.kind==='engine'?W*0.2:W*0.64).strength(d=>d.kind==='engine'?0.12:0.05))
     .force('y',d3.forceY(()=>H*0.56).strength(0.07))
-    .force('collide',d3.forceCollide(d=>d.r+1.5))
+    .force('collide',d3.forceCollide(d=>d.kind==='engine'?d.r+16:d.r+1.5))
     .alphaDecay(0.025);
   let sel=null,hover=null,running=true,sparksOn=!reduce;const sparks=[];
   const bLinks=links.filter(l=>l.type==='boundary');
@@ -266,12 +279,21 @@ function constellation(host){
     for(const s of sparks){const a=s.l.source,b=s.l.target;if(!visible(a)||!visible(b))continue;const t=s.t,mx=(a.x+b.x)/2,my=(a.y+b.y)/2-60;
       const x=(1-t)*(1-t)*a.x+2*(1-t)*t*mx+t*t*b.x,y=(1-t)*(1-t)*a.y+2*(1-t)*t*my+t*t*b.y;
       const g=ctx.createRadialGradient(x,y,0,x,y,5);g.addColorStop(0,'rgba(255,230,170,.95)');g.addColorStop(1,'rgba(255,190,80,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.fill()}
+    const want=[];
     for(const n of nodes){if(!visible(n))continue;const dim=focus&&n!==focus&&!fset.has(n.key);const c=colorOf(n);
       ctx.globalAlpha=dim?0.15:1;
       if(n.kind==='engine'||n.r>6){ctx.shadowColor=c;ctx.shadowBlur=n.kind==='engine'?22:12}else ctx.shadowBlur=0;
       ctx.fillStyle=c;ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,7);ctx.fill();ctx.shadowBlur=0;
       if(n===focus){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke()}
-      if((n.kind==='engine'||n.r>9||n===focus||(fset&&fset.has(n.key)&&n.r>4))&&!dim){ctx.fillStyle=n.kind==='engine'?'#ffe4b5':'#dfe9f7';ctx.font=(n.kind==='engine'?'600 11px ':'10px ')+'"JetBrains Mono",monospace';ctx.textAlign='center';ctx.fillText(n.kind==='engine'?n.label:n.label.replace(/\.livecodescript$|\.livecode$|\.rev$/,''),n.x,n.y-n.r-4)}}
+      if((n.kind==='engine'||n.r>9||n===focus||(fset&&fset.has(n.key)&&n.r>4))&&!dim)want.push(n)}
+    // Labels: the focused star first, then the biggest; one that would
+    // overlap a label already drawn is left out (hover shows its name)
+    ctx.globalAlpha=1;ctx.textAlign='center';ctx.lineJoin='round';const placed=[];
+    want.sort((p,q)=>(q===focus)-(p===focus)||(q.kind==='engine')-(p.kind==='engine')||q.r-p.r);
+    for(const n of want){const t=n.kind==='engine'?n.label:n.label.replace(/\.livecodescript$|\.livecode$|\.rev$/,'');
+      ctx.font=(n.kind==='engine'?'600 11px ':'10px ')+'"JetBrains Mono",monospace';const w=ctx.measureText(t).width,y=n.y-n.r-4;
+      const r=[n.x-w/2-2,y-11,n.x+w/2+2,y+2];if(n!==focus&&placed.some(o=>r[0]<o[2]&&r[2]>o[0]&&r[1]<o[3]&&r[3]>o[1]))continue;placed.push(r);
+      ctx.strokeStyle='rgba(8,13,26,.85)';ctx.lineWidth=3;ctx.strokeText(t,n.x,y);ctx.fillStyle=n.kind==='engine'?'#ffe4b5':'#dfe9f7';ctx.fillText(t,n.x,y)}
     ctx.globalAlpha=1}
   function tick(){if(sparksOn){if(sparks.length<140&&bLinks.length){for(let i=0;i<3;i++){const l=bLinks[(Math.random()*bLinks.length)|0];sparks.push({l,t:0,v:0.004+Math.random()*0.008})}}
       for(let i=sparks.length-1;i>=0;i--){sparks[i].t+=sparks[i].v;if(sparks[i].t>=1)sparks.splice(i,1)}}
@@ -329,13 +351,13 @@ function lineageChart(host){
   const t0=Date.parse('2021-01-01'),t1=Date.parse('2026-11-15');const W=1100,H=258,X=d=>40+(Date.parse(d)-t0)/(t1-t0)*(W-60);
   const svg=S('svg',{viewBox:`0 0 ${W} ${H}`,style:'width:100%;min-width:720px;height:auto;display:block',role:'img','aria-label':'Timeline from LiveCode Community to OXT-Beyond'});
   const dpe=[];
-  const eras=[['2021-01-01','2023-09-01','LiveCode Community 9.6.3 (2021); the edition ended 31 Aug 2021','--g-docs'],['2023-09-01','2026-06-07','OpenXTalk Lite: Terry Little, then Tom Perry from Sep 2023','--g-ext'],['2026-09-01','2026-11-15','OXT-Beyond','--g-ide']];
+  const eras=[['2021-01-01','2023-09-01','LiveCode Community 9.6.3 (2021); the edition ended 31 Aug 2021','--g-docs'],['2023-09-01','2026-06-07','OpenXTalk Lite: Terry Little, then Tom Perry from Sep 2023','--t-ext'],['2026-09-01','2026-11-15','OXT-Beyond','--g-ide']];
   eras.forEach(([a,b,l,c],i)=>{svg.append(S('rect',{x:X(a),y:40,width:Math.max(4,X(b)-X(a)),height:120,fill:`var(${c})`,class:'era',rx:4}));const tx=S('text',i===2?{x:X(b)-2,y:32,'text-anchor':'end',class:'lbl','font-weight':'700',style:`fill:var(${c})`}:{x:X(a)+6,y:56,class:'lbl','font-weight':'600',style:`fill:var(${c})`});tx.textContent=i===2?'OXT-Beyond (Sep 2026 on)':l;svg.append(tx)});
   // OpenXTalk DPE runs beside OpenXTalk Lite, so it has a lane of its own
   // under the bands; its dates are those of its repository's commits and tags
   const dA='2021-09-07',dB='2026-04-20';svg.append(S('rect',{x:X(dA),y:166,width:X(dB)-X(dA),height:18,fill:'var(--g-build)',class:'era',rx:4}));
   {const tx=S('text',{x:X(dB)-6,y:179,'text-anchor':'end',class:'lbl','font-weight':'600',style:'fill:var(--g-build)'});tx.textContent='OpenXTalk DPE: Paul McClernan, from 7 Sep 2021';svg.append(tx)}
-  [['2022-11-04','1.963.1-OXT-RC3','Tagged 4 November 2022.'],['2023-09-01','1.963.1-OXT-RC4','Released 1 September 2023 (tagged 7 August), the project\'s second anniversary: a General Music (MIDI) library, macOS AppleImage, SVG icon libraries with a Glyph Browser, community widgets.']].forEach(([d,v,t])=>{const g=S('g',{class:'ver',tabindex:0});g.append(S('circle',{cx:X(d),cy:175,r:5,style:'fill:var(--g-build)'}));const ti=S('title',{});ti.textContent=`OpenXTalk DPE ${v}`;g.append(ti);
+  [['2022-11-04','1.963.1-OXT-RC3','Tagged 4 November 2022 and published on 5 December: the first public Linux beta, as an AppImage.'],['2023-09-01','1.963.1-OXT-RC4','Released 1 September 2023 (tagged 7 August), the project\'s second anniversary: a General Music (MIDI) library, macOS AppleImage, SVG icon libraries with a Glyph Browser, community widgets.']].forEach(([d,v,t])=>{const g=S('g',{class:'ver',tabindex:0});g.append(S('circle',{cx:X(d),cy:175,r:5,style:'fill:var(--g-build)'}));const ti=S('title',{});ti.textContent=`OpenXTalk DPE ${v}`;g.append(ti);
     const f=()=>show1(g,[h('b',null,`OpenXTalk DPE ${v}`),h('span',{class:'muted'},' \u00b7 Paul McClernan'),h('div',null,t)]);g.addEventListener('click',f);g.addEventListener('keydown',e=>{if(e.key==='Enter')f()});dpe.push(g)});
   for(let y=2021;y<=2026;y++){const x=X(y+'-01-01');svg.append(S('line',{x1:x,x2:x,y1:36,y2:190,class:'tick'}));const tx=S('text',{x:x+3,y:206,class:'lbl'});tx.textContent=y;svg.append(tx)}
   const vinfo=h('div',{class:'verinfo'},'Click a dot for that release.');
@@ -405,7 +427,7 @@ BUILD.overview=el=>{
     const s2=S('text',{x:10,y:59,class:'s'});s2.textContent=a.churn?`${fmt(a.churn)} file changes`:'';g.append(s2);
     g.addEventListener('click',()=>pick(a.id));g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();pick(a.id)}});
     svg.append(g);boxes[a.id]=g}
-  const detail=h('div',{class:'panel'});
+  const detail=h('div',{class:'panel ov-detail'});
   const legend=h('div',{class:'legend'},[['build','build target (gyp)'],['script','script calls & stack refs'],['lcb','LCB use'],['boot','start-up / known link'],['other','patch · pin · check']].map(([k,l])=>h('span',null,h('i',{style:`background:var(${EKIND[k]||'--e-other'})`}),l)));
   el.append(h('div',{class:'ov-wrap'},h('div',{class:'panel'},h('div',{class:'scroll'},svg),legend),detail));
   function pick(id){for(const k in boxes)boxes[k].classList.toggle('sel',k===id);for(const e of edgeEls)e.path.classList.toggle('on',e.p.s===id||e.p.d===id);
@@ -563,22 +585,43 @@ BUILD.engine=el=>{const E=D.engine;
 };
 
 /* Build & CI */
+const GAREAS={engine:['Engine','--t-engine'],externals:['Externals','--t-ext'],toolchain:['Toolchain','--t-tool'],'lcb-ext':['LCB extensions','--t-lcb'],packaging:['Packaging','--t-pack'],lib:['Support libraries','--t-lib'],thirdparty:['Third-party & prebuilt','--t-other'],other:['Other','--t-other']};
+const GAREA=a=>GAREAS[a]||(String(a).startsWith('lib')?GAREAS.lib:GAREAS.other);
 BUILD.build=el=>{
   const hide=h('input',{type:'checkbox',id:'gyp-hide',checked:true});
-  const box=h('div',{class:'scroll'});const info=h('p',{class:'small muted',style:'margin:6px 0'},'Click a target to highlight what it needs and what needs it.');
-  el.append(h('div',{class:'panel'},h('h2',null,'Build graph (gyp targets)'),h('p',{class:'lede',style:'margin:4px 0 8px'},'Read left to right: the products on the left need what is to their right. Built from the "dependencies" of every .gyp file.'),h('div',{class:'controls'},h('label',{class:'tog'},hide,'Hide prebuilt and third-party targets')),info,box));
-  function draw(){const T=D.gyp.targets.filter(t=>!(hide.checked&&t.area==='thirdparty'));const ids=new Set(T.map(t=>t.id));const E=D.gyp.edges.filter(e=>ids.has(e[0])&&ids.has(e[1]));
-    const deps={};E.forEach(([a,b])=>(deps[a]=deps[a]||[]).push(b));const L={};const lay=id=>{if(L[id]!=null)return L[id];L[id]=0;let m=0;for(const d of deps[id]||[])m=Math.max(m,lay(d)+1);return L[id]=m};T.forEach(t=>lay(t.id));
-    const maxL=Math.max(...Object.values(L));const cols=[];T.forEach(t=>{const c=maxL-L[t.id];(cols[c]=cols[c]||[]).push(t)});
-    cols.forEach(c=>c.sort((a,b)=>a.file.localeCompare(b.file)||a.name.localeCompare(b.name)));
-    const NW=176,NH=20,GX=56,GY=6;const P={};cols.forEach((c,ci)=>c.forEach((t,ri)=>P[t.id]={x:10+ci*(NW+GX),y:10+ri*(NH+GY)}));
-    const W=10+cols.length*(NW+GX),Hh=20+Math.max(...cols.map(c=>c.length))*(NH+GY);
-    const svg=S('svg',{viewBox:`0 0 ${W} ${Hh}`,width:W,class:'gyp',role:'img','aria-label':'Build target graph'});
-    const pe=E.map(([a,b])=>{const p=P[a],q=P[b];const x1=p.x+NW,y1=p.y+NH/2,x2=q.x,y2=q.y+NH/2;const pth=S('path',{d:`M${x1},${y1} C${x1+GX/2},${y1} ${x2-GX/2},${y2} ${x2},${y2}`});svg.append(pth);return{a,b,el:pth}});
-    const ne={};T.forEach(t=>{const p=P[t.id];const g=S('g',{class:'n',transform:`translate(${p.x},${p.y})`});g.append(S('rect',{width:NW,height:NH,rx:3}));const tx=S('text',{x:6,y:14});tx.textContent=t.name.length>27?t.name.slice(0,26)+'…':t.name;g.append(tx);const ti=S('title',{});ti.textContent=t.id;g.append(ti);g.addEventListener('click',()=>sel(t.id));svg.append(g);ne[t.id]=g});
-    function sel(id){const rel=new Set([id]);pe.forEach(e=>{const on=e.a===id||e.b===id;e.el.classList.toggle('on',on);if(on){rel.add(e.a);rel.add(e.b)}});for(const k in ne){ne[k].classList.toggle('sel',k===id);ne[k].classList.toggle('rel',rel.has(k)&&k!==id)}
-      const t=D.gyp.targets.find(x=>x.id===id);info.replaceChildren(h('span',{class:'mono'},id),` · needs ${E.filter(e=>e[0]===id).length}, needed by ${E.filter(e=>e[1]===id).length} · `,h('button',{class:'lnk',onclick:()=>openImpact('target',D.gyp.targets.indexOf(t))},'open in the impact view'))}
-    box.replaceChildren(svg)}
+  const box=h('div',{class:'scroll gyp-box'}),leg=h('div'),loneBox=h('div');const HINT='Click a target (or tab to it and press Enter) to light up everything it needs and everything that needs it.';const info=h('p',{class:'small muted',style:'margin:6px 0'},HINT);
+  el.append(h('div',{class:'panel'},h('h2',null,'Build graph (gyp targets)'),h('p',{class:'lede',style:'margin:4px 0 8px'},'Read left to right: the products on the left need what is to their right. Built from the "dependencies" of every .gyp file; the stripe on each target is the part of the tree its .gyp file lives in. Scroll sideways for the deeper layers.'),h('div',{class:'controls'},h('label',{class:'tog'},hide,'Hide prebuilt and third-party targets')),leg,info,box,loneBox));
+  function draw(){const T=D.gyp.targets.filter(t=>!(hide.checked&&t.area==='thirdparty'));const ids=new Set(T.map(t=>t.id));const E=D.gyp.edges.filter(e=>ids.has(e[0])&&ids.has(e[1])&&e[0]!==e[1]);
+    // A layered (Sugiyama-style) drawing: a column is the longest path from a product, a product sits one column before
+    // the nearest thing it needs, and a few barycentre sweeps order each column so lines cross as little as they can.
+    const deps={},par={};T.forEach(t=>{deps[t.id]=[];par[t.id]=[]});E.forEach(([a,b])=>{deps[a].push(b);par[b].push(a)});
+    const lone=T.filter(t=>!deps[t.id].length&&!par[t.id].length),G=T.filter(t=>deps[t.id].length||par[t.id].length);
+    const L={},seen=new Set();const lay=id=>{if(L[id]!=null)return L[id];if(seen.has(id))return 0;seen.add(id);let m=0;for(const p of par[id])m=Math.max(m,lay(p)+1);return L[id]=m};G.forEach(t=>lay(t.id));
+    G.forEach(t=>{if(!par[t.id].length&&deps[t.id].length)L[t.id]=Math.max(0,Math.min(...deps[t.id].map(d=>L[d]))-1)});
+    const cols=[];G.forEach(t=>(cols[L[t.id]]=cols[L[t.id]]||[]).push(t));for(let i=0;i<cols.length;i++)cols[i]=cols[i]||[];
+    cols.forEach(c=>c.sort((a,b)=>a.area.localeCompare(b.area)||a.name.localeCompare(b.name)));
+    const ord={};const idx=()=>cols.forEach(c=>c.forEach((t,i)=>ord[t.id]=i/Math.max(1,c.length-1)));idx();
+    const bary=(t,nb)=>{const n=nb[t.id];return n.length?n.reduce((s,x)=>s+ord[x],0)/n.length:ord[t.id]};
+    for(let k=0;k<12;k++){const nb=k%2?deps:par;const seq=k%2?[...cols.keys()].reverse():[...cols.keys()];
+      for(const ci of seq){const c=cols[ci];const b=new Map(c.map(t=>[t,bary(t,nb)]));c.sort((x,y)=>b.get(x)-b.get(y));c.forEach((t,i)=>ord[t.id]=i/Math.max(1,c.length-1))}}
+    const NW=168,NH=22,GX=44,GY=7,PAD=12;const maxN=Math.max(1,...cols.map(c=>c.length));const P={};
+    cols.forEach((c,ci)=>{const off=(maxN-c.length)*(NH+GY)/2;c.forEach((t,ri)=>P[t.id]={x:PAD+ci*(NW+GX),y:PAD+off+ri*(NH+GY)})});
+    const W=PAD*2+cols.length*(NW+GX)-GX,Hh=PAD*2+maxN*(NH+GY)-GY;
+    const svg=S('svg',{viewBox:`0 0 ${W} ${Hh}`,width:W,height:Hh,class:'gyp',role:'img','aria-label':'Build target graph'});
+    const eg=S('g',{}),ng=S('g',{});svg.append(eg,ng);
+    const pe=E.map(([a,b])=>{const p=P[a],q=P[b];const x1=p.x+NW,y1=p.y+NH/2,x2=q.x,y2=q.y+NH/2,dx=Math.max(GX*.6,(x2-x1)*.45);const pth=S('path',{d:`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`});eg.append(pth);return{a,b,el:pth}});
+    const ne={};G.forEach(t=>{const p=P[t.id];const g=S('g',{class:'n',transform:`translate(${p.x},${p.y})`,tabindex:0,role:'button','aria-label':t.id});
+      g.append(S('rect',{width:NW,height:NH,rx:4}),S('rect',{class:'st',width:4,height:NH,rx:2,style:`fill:var(${GAREA(t.area)[1]})`}));
+      const tx=S('text',{x:11,y:15});tx.textContent=t.name.length>24?t.name.slice(0,23)+'…':t.name;g.append(tx);const ti=S('title',{});ti.textContent=`${t.id}\n${GAREA(t.area)[0]} · needs ${deps[t.id].length}, needed by ${par[t.id].length}`;g.append(ti);
+      g.addEventListener('click',()=>sel(t.id));g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();sel(t.id)}});ng.append(g);ne[t.id]=g});
+    const reach=(id,nb)=>{const out=new Set(),st=[id];while(st.length){for(const x of nb[st.pop()])if(!out.has(x)){out.add(x);st.push(x)}}return out};
+    function sel(id){const dn=reach(id,deps),up=reach(id,par);svg.classList.add('focus');
+      pe.forEach(e=>{e.el.classList.toggle('on',(e.a===id||dn.has(e.a))&&(dn.has(e.b)));e.el.classList.toggle('up',(e.b===id||up.has(e.b))&&up.has(e.a))});
+      for(const k in ne){ne[k].classList.toggle('sel',k===id);ne[k].classList.toggle('rel',dn.has(k));ne[k].classList.toggle('upr',up.has(k))}
+      const t=D.gyp.targets.find(x=>x.id===id);info.replaceChildren(h('span',{class:'mono'},id),` · needs ${deps[id].length} directly (${dn.size} in all), needed by ${par[id].length} directly (${up.size} in all) · `,h('button',{class:'lnk',onclick:()=>openImpact('target',D.gyp.targets.indexOf(t))},'open in the impact view'),' · ',h('button',{class:'lnk',onclick:()=>{svg.classList.remove('focus');pe.forEach(e=>e.el.classList.remove('on','up'));for(const k in ne)ne[k].classList.remove('sel','rel','upr');info.replaceChildren(HINT)}},'clear'))}
+    const areas=[...new Set(T.map(t=>GAREA(t.area)[0]))];const legend=h('div',{class:'legend'},areas.map(a=>{const k=Object.values(GAREAS).find(v=>v[0]===a)||GAREA('');return h('span',null,h('i',{style:`background:var(${k[1]})`}),a)}),h('span',null,h('i',{style:'background:var(--accent)'}),'what the selected target needs'),h('span',null,h('i',{style:'background:var(--warn)'}),'what needs it'));
+    box.replaceChildren(svg);leg.replaceChildren(legend);
+    loneBox.replaceChildren(...(lone.length?[h('p',{class:'small muted',style:'margin:10px 0 6px'},`${lone.length} targets have no gyp dependency in either direction:`),h('div',{class:'chips'},lone.map(t=>h('span',{class:'chip',title:t.id},t.name)))]:[]))}
   hide.addEventListener('change',draw);draw();
   el.append(h('div',{class:'panel'},h('h3',null,'CI workflows'),h('p',{class:'small muted'},'What each workflow runs on, its jobs, and the repository files and folders it names. The impact view uses this to tell you which workflows name a path.'),
     table([{t:'Workflow',k:w=>w.file,v:w=>h('div',null,h('b',null,w.name),h('div',{class:'mono muted'},short(w.file)))},{t:'Runs on',k:w=>w.triggers.join(','),v:w=>h('div',{class:'chips'},w.triggers.map(t=>h('span',{class:'pill'},t)))},{t:'Jobs',k:w=>w.jobs.length,v:w=>h('div',{class:'small'},w.jobs.map(j=>j.name).join(' · '))},{t:'Files it names',k:w=>w.scripts.length,v:w=>h('div',{class:'chips'},w.scripts.slice(0,14).map(s=>h('span',{class:'chip'},s)))}],D.ci,{limit:50})));
@@ -632,10 +675,12 @@ BUILD.method=el=>{
         h('li',null,'Tests are left out of "called from" and counted separately.'),
         h('li',null,'A handler "passes" if its body contains pass with its own name anywhere, so a conditional pass counts as passing.'),
         h('li',null,'Nothing was built or run except the stack dumps. Use the map as a list of places to look, then confirm with the IDE compile check, the engine tests and a before-and-after run on the released build.'))))));
-  el.append(h('div',{class:'panel'},h('h3',null,'Regenerate it'),h('p',{class:'small'},'The generator is in the project files under codebase-map/. With both repositories checked out and a released Linux engine unpacked:'),
-    h('pre',{class:'mono cmd'},'bash make_dumps.sh OpenXTalk-Beyond linux-x86_64-bin/LiveCode-Community dumps\npython3 build_map.py --beyond OpenXTalk-Beyond --suite xtalk-suite --dumps dumps --out out\n# out/codebase-map.html is this page; out/map-data.json is its data')));
+  el.append(h('div',{class:'panel'},h('h3',null,'Regenerate it'),h('p',{class:'small'},'The generator is tools/codebase-map in the OXT-Beyond repository, and the Web pages workflow (.github/workflows/pages.yml) runs it every time it builds the site, so this page is as new as the site. To make it yourself, with both repositories checked out (OXT-Beyond with its history), a released Linux engine unpacked and d3 7.9.0 from npm:'),
+    h('pre',{class:'mono cmd'},'bash OpenXTalk-Beyond/tools/codebase-map/make_dumps.sh OpenXTalk-Beyond linux-x86_64-bin/LiveCode-Community dumps\npython3 OpenXTalk-Beyond/tools/codebase-map/build_map.py --beyond OpenXTalk-Beyond \\\n    --suite xtalk-suite --dumps dumps --d3 package/dist/d3.min.js --out out\n# out/index.html is this page; out/map-data.json is its data')));
 };
 
 const start=(location.hash||'').slice(1);
 show(VIEWS.some(v=>v[0]===start)?start:'overview');
+// a link to #history on this page, or the back button, changes the view too
+window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(VIEWS.some(x=>x[0]===v))show(v)});
 </script>
