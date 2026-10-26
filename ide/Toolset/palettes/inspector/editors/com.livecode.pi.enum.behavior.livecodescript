@@ -3,21 +3,38 @@ constant kEffectiveTextColor = "100,100,100"
 constant kEffectiveTextColorDark = "170,170,170"
 global gRevLanguageNames
 
+-- OXT-Beyond: an option of the property's own list (the Options of its
+-- row in a .tsv file, or a widget's metadata) can be a label and a value,
+-- "Label|value", and the value can be empty: iconGravity's empty value
+-- read as a blank line in its menu (tperry2x, openxtalk.org p=25419), so
+-- its list gives it the label Default ("Default|"). The menu shows the
+-- labels, or with the Inspector's language names (gRevLanguageNames) the
+-- values but the label of an empty value, and a pick sets the value. The
+-- labels were meant to work so (theme's "Native|native"), but the menu
+-- showed such an option as it is written, with its "|" (the loop that was
+-- to take out its label or its value changed a copy of the line), and a
+-- pick of one changed nothing. An option with no "|" is shown and set as
+-- it is, as before, and so is every option of a list a script makes
+-- ("execute:", the main stacks), whose "|" can be in a stack's name. Where
+-- the objects inspected have different values, a new editor's menu shows
+-- nothing, as before, not Default.
 on editorInitialize
    set the editorMinWidth of me to 40
    set the editorMaxWidth of me to 0
    
-   local tText, tOptions
+   local tText, tOptions, tLine, tNumber
    put the editorOptions of me into tOptions
-   set the itemdelimiter to "|"
-   repeat for each line tLine in tOptions
-      if gRevLanguageNames then
-         delete item (the number of items of tLine - 1) of tLine
-      else
-         delete item 2 of tLine
-      end if
-   end repeat
-   set the text of button "pulldown" of me to tOptions
+   put tOptions into tText
+   if optionsHaveLabels() then
+      put 0 into tNumber
+      repeat for each line tLine in tOptions
+         add 1 to tNumber
+         if tLine contains "|" then
+            put optionShown(tLine) into line tNumber of tText
+         end if
+      end repeat
+   end if
+   set the text of button "pulldown" of me to tText
 
 end editorInitialize
 
@@ -28,35 +45,36 @@ on editorUpdate
    put the editorEnabled of me into tEnabled
    put the editorEffective of me into tEffective
    
-   local tOptions
+   local tOptions, tLabels, tConflicted
    put the editorOptions of me into tOptions
+   put optionsHaveLabels() into tLabels
+   put the editorConflicted of me into tConflicted
    
    lock messages
-   local tLabel
+   local tLabel, tLine
    
-   if gRevLanguageNames then
-      put tValue into tLabel
-   else
-      set the wholematches to false
-      set the itemdelimiter to "|"
-      
+   -- what the menu shows for the value: its option's label, or with the
+   -- language names the value itself, as the menu's lines do. When the
+   -- objects inspected have different values (editorConflicted) the
+   -- Inspector does not set the editor's value, so it is not theirs (in a
+   -- new editor, empty): an empty one shows nothing, as before, rather
+   -- than the label of an empty value (Default), which none of them may have
+   put tValue into tLabel
+   if tConflicted is not true or tValue is not empty then
       repeat for each line tLine in tOptions
-         if the number of items of tLine is 2 and \
-               tValue is item 2 of tLine then
-            put item 1 of tLine into tLabel
-            exit repeat
+         if tLabels and tLine contains "|" then
+            if tValue is optionValue(tLine) then
+               put optionShown(tLine) into tLabel
+               exit repeat
+            end if
          else if tValue is tLine then
-            put tLine into tLabel
+            if not gRevLanguageNames then put tLine into tLabel
             exit repeat
          end if
       end repeat
    end if
    
-   if tLabel is not empty then
-      set the label of button "pulldown" of me to tLabel
-   else
-      set the label of button "pulldown" of me to tValue
-   end if
+   set the label of button "pulldown" of me to tLabel
    
    set the enabled of me to tEnabled
    if tEffective is true then
@@ -82,18 +100,52 @@ on editorResize
 end editorResize
 
 on valueChanged
-   local tOptions
+   local tOptions, tLabels, tPicked, tLine
    put the editorOptions of me into tOptions
-   set the wholematches to false
-   set the itemdelimiter to "|"
+   put optionsHaveLabels() into tLabels
+   -- a pick makes the menu's label the line picked
+   put the label of button "pulldown" of me into tPicked
    repeat for each line tLine in tOptions
-      if item 1 of tLine is the label of button "pulldown" of me then
-         set the editorValue of me to the last item of tLine
+      if tLabels and tLine contains "|" then
+         if optionShown(tLine) is tPicked then
+            set the editorValue of me to optionValue(tLine)
+            exit repeat
+         end if
+      else if tLine is tPicked then
+         set the editorValue of me to tLine
          exit repeat
       end if
    end repeat
    updateProperty
 end valueChanged
+
+-- OXT-Beyond: true when the options are the property's own list, whose
+-- options can have labels; false when a script makes them ("execute:"),
+-- as revInspectorEditorBehavior's editorOptions does
+private function optionsHaveLabels
+   return not (the editorProperty["options"] of me begins with "execute")
+end optionsHaveLabels
+
+-- The value of the option "Label|value" pOption: what follows its first
+-- "|", which can be empty
+private function optionValue pOption
+   set the itemdelimiter to "|"
+   return item 2 to -1 of pOption
+end optionValue
+
+-- What the menu shows for the option "Label|value" pOption: its label,
+-- or with the language names its value, unless that is empty; its value
+-- when it has no label
+private function optionShown pOption
+   local tLabel, tValue
+   set the itemdelimiter to "|"
+   put item 1 of pOption into tLabel
+   put item 2 to -1 of pOption into tValue
+   if tLabel is empty or (gRevLanguageNames and tValue is not empty) then
+      return tValue
+   end if
+   return tLabel
+end optionShown
 
 -- OXT-Beyond: the grey of an inherited (effective) value, 100,100,100,
 -- cannot be read on the dark appearance's dark controls (richmond62's

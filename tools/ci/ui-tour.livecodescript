@@ -29,7 +29,9 @@ script "oxt_ui_tour"
 -- Text section of a field, a field's Scrollbar width, which offers 12 and
 -- Standard and sets the width the field has when its stack is opened again
 -- (inspector-scrollbar), an image's ID, a number without the icon chooser
--- (inspector-image-id), the Colors section of a graphic and of several
+-- (inspector-image-id), a button's Gravity, which reads Default for the
+-- empty value and sets it, and nothing for two buttons whose gravities
+-- differ (inspector-gravity), the Colors section of a graphic and of several
 -- objects, and the graphic's Fill gradient popup, which must open beside
 -- the Inspector and off the graphic, and a player made with the IDE and
 -- inspected, with the Player tool turned off and on again: player), the
@@ -78,7 +80,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -2781,6 +2783,90 @@ on tour_inspector_image_id
    unlock messages
    if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
 end tour_inspector_image_id
+
+-- A button's Gravity in the Icons section of the inspector (its
+-- iconGravity) reads Default for the empty value, which the menu showed
+-- as a blank line (tperry2x, openxtalk.org p=25419): Default comes first
+-- in the menu, before the values as they are, and the menu shows it for
+-- the empty iconGravity. A pick of topLeft sets topLeft and shows it, and
+-- a pick of Default sets the property empty again and shows Default. Two
+-- buttons whose gravities differ (left and top) show nothing, as before
+on tour_inspector_gravity
+   local tButton, tOther, tPI, tEditor, tMenu, tWant, tFails
+   put tourSample("Push") into tButton
+   set the iconGravity of tButton to empty
+   put tourInspect(tButton) into tPI
+   get tourInspectorSection(tPI, "Icons")
+   put tourInspectorEditor(tPI, "iconGravity") into tEditor
+   if tEditor is empty then throw "the button's inspector has no Gravity"
+   put the long id of button "pulldown" of tEditor into tMenu
+   tourRecord "INFO inspector-gravity menu" && quote & tourJoin(the text of tMenu) & quote && \
+         "showing" && quote & the label of tMenu & quote && "for the empty iconGravity"
+   put "Default,left,top,right,bottom,topLeft,topRight,bottomLeft,bottomRight,center,resize" into tWant
+   replace comma with return in tWant
+   if the text of tMenu is not tWant then
+      put "the menu is" && quote & tourJoin(the text of tMenu) & quote & return after tFails
+   end if
+   if the label of tMenu is not "Default" then
+      put "the empty iconGravity shows" && quote & the label of tMenu & quote & ", not Default" & return after tFails
+   end if
+   tourShotStack tPI, "06d-inspector-button-gravity"
+   put tourGravityPick(tEditor, tButton, "topLeft", "topLeft") after tFails
+   put tourGravityPick(tEditor, tButton, "Default", empty) after tFails
+   -- Two buttons whose gravities differ: the inspector gives the editor no
+   -- value of theirs, and its menu shows nothing, as before, not Default
+   put tourSample("Off") into tOther
+   set the iconGravity of tButton to "left"
+   set the iconGravity of tOther to "top"
+   put tourInspect(tButton & return & tOther) into tPI
+   get tourInspectorSection(tPI, "Icons")
+   put tourInspectorEditor(tPI, "iconGravity") into tEditor
+   if tEditor is empty then
+      put "the two buttons' inspector has no Gravity" & return after tFails
+   else
+      put the label of button "pulldown" of tEditor into tWant
+      tourRecord "INFO inspector-gravity two buttons, left and top: showing" && quote & tWant & quote
+      if tWant is not empty then
+         put "two buttons with different gravities show" && quote & tWant & quote & ", not nothing" & return after tFails
+      end if
+   end if
+   tourCloseInspectors
+   set the iconGravity of tButton to empty
+   set the iconGravity of tOther to empty
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_inspector_gravity
+
+-- Chooses the item pItem of the Gravity menu of the inspector's editor
+-- pEditor as a click on it does (as tourSbPick does), once the inspector
+-- shows the button pButton's iconGravity; empty if the button then has
+-- the iconGravity pWant and the menu shows pItem, else a line saying what
+-- it has and shows
+function tourGravityPick pEditor, pButton, pItem, pWant
+   local tMenu, tLine, tGot
+   repeat 30 times
+      if the editorValue of pEditor is the iconGravity of pButton then exit repeat
+      tourWait 100
+   end repeat
+   put the long id of button "pulldown" of pEditor into tMenu
+   set the wholeMatches to true
+   put lineOffset(pItem, the text of tMenu) into tLine
+   if tLine is 0 or line tLine of the text of tMenu is not pItem then
+      return "the menu has no" && pItem & return
+   end if
+   set the label of tMenu to line tLine of the text of tMenu
+   dispatch "menuPick" to tMenu with line tLine of the text of tMenu
+   tourWait 300
+   put the iconGravity of pButton into tGot
+   tourRecord "INFO inspector-gravity" && pItem & ": iconGravity" && quote & tGot & quote && \
+         "(shown" && quote & the label of tMenu & quote & ")"
+   if tGot is not pWant then
+      return pItem && "gave the iconGravity" && quote & tGot & quote & ", not" && quote & pWant & quote & return
+   end if
+   if the label of tMenu is not pItem then
+      return pItem && "set" && quote & tGot & quote && "and shows" && quote & the label of tMenu & quote & return
+   end if
+   return empty
+end tourGravityPick
 
 on tour_inspector_graphic
    local tPI

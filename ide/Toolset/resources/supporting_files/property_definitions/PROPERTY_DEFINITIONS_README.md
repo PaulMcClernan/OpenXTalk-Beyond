@@ -67,12 +67,16 @@ Occurrences of \n in not-executable default values are replaced by return charac
 
 The options for an enum or set property. These should be comma delimited.
 
-If the `display value` of an option differs from its actual value, this can be achieved by
-using colon separation, eg
-`opt1:Option 1,opt2:Option 2,...`
+If the `display value` of an option differs from its actual value, write the label shown,
+a `|`, then the value, eg
+`Native|native,Legacy Look-and-Feel|legacy,...`
+The value can be empty: iconGravity's `Default|` shows Default for the empty value. (An
+earlier version of this file said `opt1:Option 1`, the value then the label with a colon;
+the editors read `Label|value`, and an enum's menu shows `opt1:Option 1` as it is written.)
 
 Option values may use the `execute:` syntax. If they do, the script is executed, and the
-options for the property are whatever is in the `it` variable afterward.
+options for the property are whatever is in the `it` variable afterward. An enum's menu
+shows those options as they are: a `|` in one is part of it, as in a stack's name.
 
 ## Subsection
 
