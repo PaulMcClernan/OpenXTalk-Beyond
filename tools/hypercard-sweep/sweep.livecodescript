@@ -16,10 +16,11 @@ script "HyperCardSweep"
 -- LEFT name error text (a handler left out, its text in base64); LINE
 -- name line how error text (a line left out of a handler that was kept,
 -- rule T39); ERR and THROW phase error source (an error while running,
--- base64); OPENED; DONE. Text that may hold returns is base64 so a line
--- stays a line.
+-- base64); MODAL phase name (a window that waited for a person, closed
+-- by the sweep, the name base64); OPENED; DONE. Text that may hold
+-- returns is base64 so a line stays a line.
 
-local sDone, sOut
+local sDone, sOut, sModal
 
 on openStack
    if the short name of the owner of the target is not "HyperCardSweep" then pass openStack
@@ -105,6 +106,7 @@ command sweepRun
    end if
 
    insert the script of stack "HyperCardSweepErrors" into back
+   send "sweepModalWatch" to me in 250 milliseconds
    put "open" into gSweepPhase
    try
       -- (by "do": "go to card 1 of" a variable is read when the script
@@ -159,6 +161,32 @@ command sweepTour pStack
       if there is not a pStack then exit repeat
    end repeat
 end sweepTour
+
+-- A modal window (a list dialog of the HyperCard library, a stack's own
+-- modal stack) waits until a person closes it, and nobody is there to:
+-- one still open a quarter of a second after it was first seen is
+-- closed, as its Cancel button or close box would close it, and logged.
+-- Without this the tour stopped at the first one, and the stack timed out
+command sweepModalWatch
+   local tLine, tSeen, tError
+   global gSweepPhase
+   repeat for each line tLine in the openStacks
+      if tLine is among the items of "HyperCardSweep,HyperCardSweepErrors" then next repeat
+      try
+         if the mode of stack tLine is among the items of "5,6" then
+            if sModal[tLine] then
+               sweepLog "MODAL" & tab & gSweepPhase & tab & sweepBase64(tLine)
+               close stack tLine
+            else
+               put true into tSeen[tLine]
+            end if
+         end if
+      catch tError
+      end try
+   end repeat
+   put tSeen into sModal
+   send "sweepModalWatch" to me in 250 milliseconds
+end sweepModalWatch
 
 -- The errors errorDialog collected since the last time, to the log
 command sweepFlush
