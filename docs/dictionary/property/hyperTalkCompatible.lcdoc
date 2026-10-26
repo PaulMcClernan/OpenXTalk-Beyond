@@ -152,7 +152,11 @@ When it is true, fifteen things are as they were in <HyperCard>, for the
   message after, while the <handler|handlers> that are running go on to
   their end as they were. Otherwise setting such a <script> is an
   error, as setting the <script> of a <behavior> whose <handler> is
-  running is in any <stack>.
+  running is in any <stack>. It is an error in these <stack|stacks>
+  too while the <preserveVariables> is true, for an <object> whose
+  <script> has script <local|locals>: the new <script> would start
+  without their values, which the <preserveVariables> keeps where the
+  <object> is not running. <HyperCard> had neither.
 - The <ID> of a <card> is its abbreviated ID, "card id" and its number,
   as in <HyperCard>, where otherwise it is the number: a <script> that
   puts the id of this card into a variable, goes to other
@@ -210,7 +214,8 @@ show groups (command), hide groups (command),
 round (function), statRound (function), seconds (function),
 convert (command), numToChar (function), charToNum (function),
 numToByte (function), script (property), behavior (property),
-ID (property), userLevel (property), play (command), do (command),
+ID (property), userLevel (property), preserveVariables (property),
+play (command), do (command), local (command),
 go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),

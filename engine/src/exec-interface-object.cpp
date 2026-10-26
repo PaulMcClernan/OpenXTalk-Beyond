@@ -1656,10 +1656,17 @@ void MCObject::SetScript(MCExecContext& ctxt, MCStringRef new_script)
 	//   until none of them runs (retirehandlers). A behavior's script is
 	//   refused as before, since the objects that use it keep their script
 	//   locals by its handlers, and so is every such script that a script
-	//   of any other stack sets
+	//   of any other stack sets. So is the script of an object with script
+	//   locals while the preserveVariables is true, which carries them into
+	//   the new script (MCHandlerlist::parse) only where it is compiled
+	//   into the object's own list: retirehandlers keeps that list for the
+	//   handlers that run, and the new script, compiled into a new one,
+	//   would start without them. HyperCard had neither
 	if (scriptdepth != 0)
 	{
-		if (!ctxt . IsHyperTalkCompatible() || m_is_parent_script || !retirehandlers())
+		if (!ctxt . IsHyperTalkCompatible() || m_is_parent_script
+		        || (MCpreservevariables && hlist != nullptr && hlist -> getnvars() != 0)
+		        || !retirehandlers())
 		{
 			ctxt . LegacyThrow(EE_OBJECT_SCRIPTEXECUTING);
 			return;

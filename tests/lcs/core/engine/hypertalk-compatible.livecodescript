@@ -20,8 +20,9 @@ one; the seconds, and dates converted to and from seconds, count from
 1904 in local time; numToChar and charToNum number the characters as
 HyperCard did, by the Mac's character set with the return as 13; a
 script can set the script of an object whose handler runs, which takes
-it at once while that handler goes on; the id of a card is "card id" and
-its number, which a script can go back to; the userLevel is at most 5,
+it at once while that handler goes on (unless it has script locals and
+the preserveVariables is true); the id of a card is "card id" and its
+number, which a script can go back to; the userLevel is at most 5,
 HyperCard's highest; and play plays the sound a field or a button names
 with card or background before it, as HyperCard did, of another card too
 and in text run by do. Each test checks the stack with the property off
@@ -1098,6 +1099,61 @@ on TestHyperTalkCompatibleSetScript
          line 7 of tLog is "error 360"
    _DeleteStack
 end TestHyperTalkCompatibleSetScript
+
+-- A button "L" whose script has a script local, and a button "N" whose
+-- script has none, each with an hcSetOwn that sets the script of its
+-- button to the script it has, with the preserveVariables pPreserve:
+-- what each logged, one a line, "set" or "error" and its number
+private function _PreserveLog pPreserve
+   global gHCLog
+   local tHandler, tWas
+   set the defaultStack to sStack
+   put "on hcSetOwn" & return & "global gHCLog" & return & "local tError" & return \
+         & "try" & return & "set the script of me to the script of me" & return \
+         & "put " & quote & "set" & quote & " & return after gHCLog" & return \
+         & "catch tError" & return \
+         & "put " & quote & "error " & quote & " & item 1 of line 1 of tError & return after gHCLog" & return \
+         & "end try" & return & "end hcSetOwn" into tHandler
+   create button "L"
+   set the script of button "L" of stack sStack to "local sKept = 1" & return & tHandler
+   create button "N"
+   set the script of button "N" of stack sStack to tHandler
+   put the preserveVariables into tWas
+   set the preserveVariables to pPreserve
+   put empty into gHCLog
+   send "hcSetOwn" to button "L" of stack sStack
+   send "hcSetOwn" to button "N" of stack sStack
+   set the preserveVariables to tWas
+   return gHCLog
+end _PreserveLog
+
+on TestHyperTalkCompatibleSetScriptPreserveOff
+   local tLog
+   _MakeStack false
+   put _PreserveLog(true) into tLog
+   TestAssert "off: with the preserveVariables true, a running object's script is not set", \
+         line 1 of tLog is "error 360" and line 2 of tLog is "error 360"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScriptPreserveOff
+
+-- With the preserveVariables true, setting a script carries the object's
+-- script locals into the new one, which a running object's new script,
+-- compiled apart from the one its handlers run in, would start without:
+-- that set is refused as before. HyperCard had neither
+on TestHyperTalkCompatibleSetScriptPreserve
+   local tLog
+   _MakeStack true
+   put _PreserveLog(true) into tLog
+   TestAssert "on: with the preserveVariables true, a running object with script locals keeps its script", \
+         line 1 of tLog is "error 360"
+   TestAssert "on: one without script locals takes the new one", line 2 of tLog is "set"
+   _DeleteStack
+   _MakeStack true
+   put _PreserveLog(false) into tLog
+   TestAssert "on: with the preserveVariables false, both take the new one", \
+         line 1 of tLog is "set" and line 2 of tLog is "set"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScriptPreserve
 
 -- The id of the stack's card, its short id, the id of its background
 -- group and of a button, whether the card's id is "card id" and its short
