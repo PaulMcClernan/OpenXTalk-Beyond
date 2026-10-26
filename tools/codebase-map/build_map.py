@@ -49,6 +49,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lcs  # noqa: E402
+sys.path.insert(0, os.path.join(HERE, os.pardir, 'oxt'))
+import stack_scripts  # noqa: E402
 
 try:
     import yaml
@@ -335,7 +337,7 @@ def lcb_analysis(root, files):
 def script_units(root, files, dumps):
     units = []
     for rel in files:
-        if rel.endswith('.livecodescript') and not rel.startswith('thirdparty/'):
+        if rel.endswith('.livecodescript') and not rel.startswith(('thirdparty/', 'stack-scripts/')):
             units.append(lcs.scan_lcs(os.path.join(root, rel), rel))
     binaries = [rel for rel in files if rel.endswith(('.livecode', '.rev', '.oxtstack'))
                 and rel.startswith(('ide/', 'ide-support/'))]
@@ -350,38 +352,23 @@ def script_units(root, files, dumps):
 
 
 def export_scripts(dumps, binaries, out):
-    """Write every object script of every dumped binary stack as its own
-    file, <out>/stack-scripts/<stack file>.bst/scripts/<name>.livecodescript,
-    laid out and named as Brian Milby's BST (github.com/Milby-Computer/hxt-bst)
-    lays out its exports, plus stack-scripts.zip of them all, so they can be
-    read and searched in an editor. A header names the stack file and the
-    object; the stack keeps the real script. Returns {stack file: [names]}."""
+    """Write the binary stacks' scripts as the repository keeps them in
+    stack-scripts/ (tools/oxt/stack_scripts.py, BST's layout and names), to
+    <out>/stack-scripts/, and all of them in <out>/stack-scripts.zip, for
+    the site. Returns {stack file: [names]}."""
     import zipfile
-    made = {}
-    zpath = os.path.join(out, 'stack-scripts.zip')
-    with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as z:
-        for rel in sorted(binaries):
-            d = os.path.join(dumps, rel.replace('/', '_').replace(' ', '_') + '.txt')
-            if not os.path.exists(d):
-                continue
-            names, seen = [], collections.Counter()
-            for name, label, lines in lcs.dump_scripts(d):
-                seen[name] += 1
-                if seen[name] > 1:
-                    name += '_%d' % seen[name]
-                text = '\n'.join(['script "%s"' % name,
-                                   '-- Stack file: %s' % rel,
-                                   '-- Object: %s' % label,
-                                   '-- Exported by tools/codebase-map for reading and searching;',
-                                   '-- the binary stack holds the script that runs.', ''] + lines) + '\n'
-                arc = 'stack-scripts/%s.bst/scripts/%s.livecodescript' % (rel, name)
-                path = os.path.join(out, *arc.split('/'))
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, 'w', encoding='utf-8', newline='\n') as f:
-                    f.write(text)
-                z.writestr(zipfile.ZipInfo(arc, (1980, 1, 1, 0, 0, 0)), text.encode('utf-8'))
-                names.append(name)
-            made[rel] = names
+    files = stack_scripts.exports(dumps, binaries)
+    made = collections.defaultdict(list)
+    with zipfile.ZipFile(os.path.join(out, 'stack-scripts.zip'), 'w', zipfile.ZIP_DEFLATED) as z:
+        for rel in sorted(files):
+            arc = 'stack-scripts/' + rel
+            path = os.path.join(out, *arc.split('/'))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8', newline='') as f:
+                f.write(files[rel])
+            z.writestr(zipfile.ZipInfo(arc, (1980, 1, 1, 0, 0, 0)), files[rel].encode('utf-8'))
+            stack, name = rel.split('.bst/scripts/')
+            made[stack].append(name[:-len(stack_scripts.SUFFIX)])
     return made
 
 

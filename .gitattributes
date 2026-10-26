@@ -76,3 +76,8 @@ prebuilt/cef-sha1sums text eol=lf
 *.hfs binary
 *.dc42 binary
 *.apm binary
+
+# stack-scripts/ (tools/oxt/stack_scripts.py) is made from the binary IDE
+# stacks byte for byte, a CR inside a script included, and CI compares it
+# byte for byte: Git must not change its line endings
+stack-scripts/** -text

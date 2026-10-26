@@ -571,6 +571,14 @@ jobs:
         timeout-minutes: 10
         run: tools/oxt/ide-stack-patch.sh "$PWD/linux-$ARCH-bin/LiveCode-Community" --check
 
+      # stack-scripts/ keeps every object script of the binary IDE stacks as
+      # a text file (tools/oxt/stack_scripts.py), so a diff shows what a
+      # stack change did; read from the stacks with the engine just built,
+      # it must match them (tools/oxt/stack-scripts.sh --check)
+      - name: Binary stack scripts
+        timeout-minutes: 10
+        run: tools/oxt/stack-scripts.sh "$PWD/linux-$ARCH-bin/LiveCode-Community" --check
+
       # The engine test suites of tests/ (tools/ci/run_engine_tests.py): the
       # LiveCode Script tests of tests/lcs, each run on its own by the
       # standalone engine just built, with -ui and a time limit, the
