@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, fourteen things are as they were in <HyperCard>, for the
+When it is true, fifteen things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -168,6 +168,18 @@ When it is true, fourteen things are as they were in <HyperCard>, for the
   finds what it found in <HyperCard> at that level. One set to 5 or less
   is as it was set, and one set above 5 is kept as it was set, as a
   <stack> without the <property> reads it.
+- The <play> <command> plays the sound that a <field> or a <button> of a
+  <card> or a <background> names, with card or background before it, in
+  a <script> and in text run by <do>, as <HyperCard> did: play card
+  field "Sound" of card "Settings" plays the sound that field names.
+  Otherwise the word card or background there is read as the kind of
+  <player>, and the <field> or <button> is looked for without it: with
+  the <HCAddressing> true, as File > Import Stack sets it, a <field> of
+  the <background>, so that no such object stops the <script> where the
+  <field> is the <card|card's>. File > Import Stack puts such a <field>
+  or <button> in parentheses in the <script|scripts> it imports, unless
+  it is one of another <card>, and every <stack> reads those as
+  <HyperCard> did.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -198,7 +210,7 @@ show groups (command), hide groups (command),
 round (function), statRound (function), seconds (function),
 convert (command), numToChar (function), charToNum (function),
 numToByte (function), script (property), behavior (property),
-ID (property), userLevel (property),
+ID (property), userLevel (property), play (command), do (command),
 go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),

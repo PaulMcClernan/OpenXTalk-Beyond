@@ -20,10 +20,12 @@ one; the seconds, and dates converted to and from seconds, count from
 1904 in local time; numToChar and charToNum number the characters as
 HyperCard did, by the Mac's character set with the return as 13; a
 script can set the script of an object whose handler runs, which takes
-it at once while that handler goes on; the id of a card is "card id"
-and its number, which a script can go back to; and the userLevel is at
-most 5, HyperCard's highest. Each test checks the stack with the
-property off too.
+it at once while that handler goes on; the id of a card is "card id" and
+its number, which a script can go back to; the userLevel is at most 5,
+HyperCard's highest; and play plays the sound a field or a button names
+with card or background before it, as HyperCard did, of another card too
+and in text run by do. Each test checks the stack with the property off
+too.
 */
 
 local sStack
@@ -1189,3 +1191,77 @@ on TestHyperTalkCompatibleUserLevel
    TestAssert "on: and is kept as it was set, as a stack without the property reads it", the userLevel is 8
    _DeleteStack
 end TestHyperTalkCompatibleUserLevel
+
+-- A stack from HyperCard (HCAddressing) with a card field "Here" on card
+-- 1 and a card field "Sound" on card 2, each naming a sound the stack
+-- does not have, and a button "P" whose hcPlay plays card 2's from its
+-- script, putting played or error into gHCPlayed
+private command _MakePlayStack pCompatible
+   local q
+   put quote into q
+   _MakeStack pCompatible
+   set the HCAddressing of stack sStack to true
+   create field "Here"
+   put "HCPlayNoSuchSound" into card field "Here" of card 1 of stack sStack
+   create button "P"
+   set the script of button "P" of stack sStack to "on hcPlay" & return \
+         & "global gHCPlayed" & return & "local tError" & return & "try" & return \
+         & "play card field " & q & "Sound" & q & " of card 2" & return \
+         & "put " & q & "played" & q & " into gHCPlayed" & return \
+         & "catch tError" & return & "put " & q & "error" & q & " into gHCPlayed" & return \
+         & "end try" & return & "play stop" & return & "end hcPlay"
+   create card
+   create field "Sound"
+   put "HCPlayNoSuchSound" into card field "Sound" of card 2 of stack sStack
+   go card 1 of stack sStack
+end _MakePlayStack
+
+-- play with a field of another card, the card's own field, a field the
+-- background does not have, a sound by its name, another card's field
+-- with a tempo and notes, and play stop, run by do, one a line: 7 where
+-- it played, error where it stopped; then hcPlay's, from a script
+private function _PlayValues
+   global gHCPlayed
+   local q, tValues
+   put quote into q
+   put _Values("play card field " & q & "Sound" & q & " of card 2" & return \
+         & "play cd fld " & q & "Here" & q & return \
+         & "play bg fld " & q & "Here" & q & return \
+         & "play " & q & "HCPlayNoSuchSound" & q & return \
+         & "play card field " & q & "Sound" & q & " of card 2 tempo 120 " & q & "c d e" & q & return \
+         & "play stop") into tValues
+   put empty into gHCPlayed
+   send "hcPlay" to button "P" of stack sStack
+   return tValues & gHCPlayed
+end _PlayValues
+
+on TestHyperTalkCompatiblePlayFieldOff
+   local tValues
+   _MakePlayStack false
+   put _PlayValues() into tValues
+   TestAssert "off: a field of another card is the background's, so no such object", line 1 of tValues is "error"
+   TestAssert "off: and so is a field of the card", line 2 of tValues is "error"
+   TestAssert "off: a field the background does not have is no such object", line 3 of tValues is "error"
+   TestAssert "off: a sound by its name plays", line 4 of tValues is 7
+   TestAssert "off: a field of another card with a tempo and notes is the background's", line 5 of tValues is "error"
+   TestAssert "off: play stop", line 6 of tValues is 7
+   TestAssert "off: in a script too", line 7 of tValues is "error"
+   _DeleteStack
+end TestHyperTalkCompatiblePlayFieldOff
+
+-- HyperCard played the sound its first argument named, so "play card
+-- field "x" of card "y"" played the one that card's field named (Christmas
+-- Carols plays each carol with do fld "song", whose text is such a play)
+on TestHyperTalkCompatiblePlayField
+   local tValues
+   _MakePlayStack true
+   put _PlayValues() into tValues
+   TestAssert "on: the sound a field of another card names plays", line 1 of tValues is 7
+   TestAssert "on: and the one a field of the card names", line 2 of tValues is 7
+   TestAssert "on: a field the background does not have is no such object", line 3 of tValues is "error"
+   TestAssert "on: a sound by its name plays", line 4 of tValues is 7
+   TestAssert "on: with a tempo and notes after the field", line 5 of tValues is 7
+   TestAssert "on: play stop", line 6 of tValues is 7
+   TestAssert "on: in a script too", line 7 of tValues is "played"
+   _DeleteStack
+end TestHyperTalkCompatiblePlayField

@@ -1137,6 +1137,10 @@ public:
 class MCMM : public MCStatement
 {
 	MCExpression *clip;
+	// OXT-Beyond: the clip read again with the "card" or "background"
+	//   before it, where a field or a button follows that word
+	//   (MCMM::parse), which a HyperCard stack plays in its place
+	MCExpression *hcclip;
 	MCExpression *tempo;
 	MCExpression *loc;
 	MCExpression *options;
@@ -1159,7 +1163,7 @@ protected:
 public:
 	MCMM()
 	{
-		clip = tempo = loc = options = NULL;
+		clip = hcclip = tempo = loc = options = NULL;
 		stack = NULL;
 		stop = looping = audio = video = player = pause = resume
 		                                 = stepforward = stepback = image = image_file = False;
