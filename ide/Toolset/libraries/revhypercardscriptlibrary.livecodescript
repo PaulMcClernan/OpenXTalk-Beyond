@@ -87,7 +87,12 @@ script "revHyperCardScriptLibrary"
 -- without the word "stack" after a background ("go last cd of bg
 -- "stocks" of stackName") or after "in" ("go to card "Help" in "Mailing
 -- List Maker""), as T31 does after a card; and a "go" to a background of
--- a stack, which this engine does not go to: its first card.
+-- a stack, which this engine does not go to: its first card. T44 puts in
+-- quotes an object's name that this engine reads as one of its constants
+-- ("show cd fld help", field 15 here), in a script that compiles too.
+-- T45 takes HyperCard's Home stack named but not gone to ("set the script
+-- of stack "Home" to tScript"), which here is the IDE's stack "home", to
+-- the library's hcHome(), in a script that compiles too.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -193,6 +198,12 @@ constant kGoPlaces = "card cd cards background bkgnd bg backgrounds stack stacks
 -- HyperCard's "open report printing" (T12): an "open" of anything else
 -- is HyperCard's of an application (T40)
 constant kOpenWords = "directory driver file folder printing process socket standarderror standardinput standardoutput stderr stdin stdout secure datagram elevated report"
+
+-- This engine's constants that HyperCard did not have, each with a value
+-- other than its name (engine/src/lextable.cpp's constant_table: "help"
+-- is 15, the help cursor's number): an object named by one of them not
+-- in quotes is another object here (T44)
+constant kEngineConstants = "arrow busy clock cross hand help ibeam none plus watch backslash cr crlf end endoffile eof infinity lf null scrollbarfactor slash"
 
 -- What the probes found: a name's verdict, so that each name is compiled
 -- once (keys are the name in lower case)
@@ -1130,6 +1141,15 @@ private function _Code pTokens
    return tList
 end _Code
 
+-- The first code token of the line (its "t" and "k"), or empty
+private function _FirstCode pLine
+   local tTokens, tCode
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   if item 1 of tCode is empty then return empty
+   return tTokens[item 1 of tCode]
+end _FirstCode
+
 -- The line with strings replaced by "" and the comment cut off
 private function _CodeText pLine
    local tTokens, i, tText
@@ -1266,11 +1286,15 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       -- (tContinued: the line before ends with \, so this one goes on with
       -- its statement and starts none, "drag from a to b \" then "with
       -- optionKey")
-      local tContinued, tGoesOn
+      -- (tGoesOn: this line ends with \, and its statement goes on with
+      -- the first code token of the next, tThen, which T2 reads)
+      local tContinued, tGoesOn, tThen
       put false into tContinued
       repeat with tKey = tSpans[i]["start"] to tSpans[i]["end"]
          put char -1 of word 1 to -1 of _CodeText(tLines[tKey]) is "\" into tGoesOn
-         put _RewriteLine(tLines[tKey], tVars, tRename, pExternals, tRenameHandlers, tContinued) into tLines[tKey]
+         put empty into tThen
+         if tGoesOn and tKey < tSpans[i]["end"] then put _FirstCode(tLines[tKey + 1]) into tThen
+         put _RewriteLine(tLines[tKey], tVars, tRename, pExternals, tRenameHandlers, tContinued, tThen) into tLines[tKey]
          put tGoesOn into tContinued
       end repeat
       _ContinuedCommands tLines, tSpans[i]["start"], tSpans[i]["end"], tVars
@@ -1652,14 +1676,22 @@ private function _CountOfObjects pTokens, pCode, pOf
 end _CountOfObjects
 
 -- The rules that work on one line of a handler (pContinued: the line
--- goes on with the statement of the line before)
-private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers, pContinued
+-- goes on with the statement of the line before; pThen: the line ends
+-- with \, and this is the first code token of the next, as _FirstCode
+-- gives it)
+private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers, pContinued, pThen
    local tTokens, tCode, tIndex, tPrev, tNext, tWord, tNew, tFirst, tAfter, tChanged
-   local tLine
+   local tLine, tThen
 
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
    put item 1 of tCode into tFirst
+   -- the token after the \ at the end, past the end of the line's tokens
+   -- (so that _Join leaves it out), for T2 to read
+   if pThen is an array and item -1 of tCode is not empty and _T(tTokens, item -1 of tCode) is "\" then
+      put tTokens["count"] + 1 into tThen
+      put pThen into tTokens[tThen]
+   end if
 
    -- T31: a string not closed at the end of the line, which HyperCard
    -- closed there ("domenu " & quote & "Quit HyperCard")
@@ -1733,9 +1765,13 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
          next repeat
       end if
 
-      -- T2: a variable whose name is refused
+      -- T2: a variable whose name is refused (where the word is last
+      -- before a \ that ends the line, read with the token after it: "or
+      -- menu \" then "is "Paste Card"", a doMenu's parameter)
       if pRename[tWord] is "where" then
-         if _VariableHere(tTokens, tWord, tPrev, tNext) then
+         if tThen is not empty and tNext is item -1 of tCode and _T(tTokens, tNext) is "\" then put tThen into tAfter
+         else put tNext into tAfter
+         if _VariableHere(tTokens, tWord, tPrev, tAfter) then
             put "hc_" & tTokens[tIndex]["t"] into tTokens[tIndex]["t"]
             _Fire "T2 variable named like a keyword"
             next repeat
@@ -1957,9 +1993,13 @@ private function _PhraseRules pLine
       end if
       -- fld "Notes" in card "Menu", first cd in bg "Recipes": "in" for
       -- "of" after an object, before the card or background it is on
+      -- ("the name of card it in bkgnd 2" too); not the operator "is in"
+      -- after one ("if the short name of this cd is in cd fld "Index"",
+      -- which "of" made a line that does not compile)
       if tWord is "in" and tNext is among the words of "card cd bkgnd bg background stack" and i > 2 \
             and (tPrev is among the words of kObjectWords \
-            or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and _T(tTokens, tIdx[i - 2]) is among the words of kObjectWords) \
+            or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and tPrev is not "is" \
+            and _T(tTokens, tIdx[i - 2]) is among the words of kObjectWords) \
             or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and _T(tTokens, tIdx[i - 2]) is "id" and _T(tTokens, tIdx[i - 3]) is among the words of kObjectWords)) then
          put "of" into tTokens[tIdx[i]]["t"]
          _Fire "T11 HyperCard object words"
@@ -2671,6 +2711,37 @@ private function _HyperCardRules pLine, pCompiled, pElse
       if tWord is "filename" and _T(tTokens, tIdx[i + 1]) is "(" and _T(tTokens, tIdx[i - 1]) is not among the words of "the of" then
          put "hcX_" & tTokens[tIdx[i]]["t"] into tTokens[tIdx[i]]["t"]
          _Fire "T20 fileName()"
+         next repeat
+      end if
+
+      -- T44: an object's name not in quotes that this engine reads as one
+      -- of its constants ("show cd fld help", field 15 here, "hide btn
+      -- arrow", button 29, "add 1 to fld Plus", field 13), where
+      -- HyperCard, which had no such constant, took the word as its text:
+      -- in quotes (any statement). No variable can have such a name here:
+      -- in a script that does not compile, T2 has renamed the variables
+      -- HyperCard let have one ("put "F1" into help")
+      if i > 1 and tWord is among the words of kEngineConstants \
+            and _T(tTokens, tIdx[i - 1]) is among the words of "field fld button btn card cd background bkgnd bg stack" \
+            and _T(tTokens, tIdx[i + 1]) is not "(" then
+         put quote & tTokens[tIdx[i]]["t"] & quote into tTokens[tIdx[i]]["t"]
+         put "s" into tTokens[tIdx[i]]["k"]
+         _Fire "T44 object name that is a constant here"
+         next repeat
+      end if
+
+      -- T45: HyperCard's Home stack named but not gone to ("set the script
+      -- of stack "Home" to tScript", "the long name of stack Home", "send
+      -- startUp to stack home"), which here is the IDE's own stack "home"
+      -- (and "stack Home" does not compile): the library's hcHome(),
+      -- HyperCard's Home if it was imported, else a stand-in, so that no
+      -- script of the stack reads or changes the IDE's (any statement but
+      -- a go, which goes home with hcGoHome or hcGo: T9, T16)
+      if tWord is "stack" and i < n and (_T(tTokens, tIdx[i + 1]) is "home" or _T(tTokens, tIdx[i + 1]) is quote & "home" & quote) \
+            and _StatementWord(tTokens, tIdx, i) is not "go" then
+         put "hcHome()" into tTokens[tIdx[i + 1]]["t"]
+         put "w" into tTokens[tIdx[i + 1]]["k"]
+         _Fire "T45 HyperCard's Home stack"
          next repeat
       end if
 

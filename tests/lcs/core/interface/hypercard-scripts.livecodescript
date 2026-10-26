@@ -937,6 +937,134 @@ on TestHyperCardScriptsT43
    _Close tStack
 end TestHyperCardScriptsT43
 
+on TestHyperCardScriptsT44
+   -- an object's name not in quotes that this engine reads as one of its
+   -- constants ("help" is 15 here), which HyperCard took as its text
+   local tStack, tScript, q, i
+   put quote into q
+   put _Rewrite("on mouseUp", "  show cd fld help", "  hide btn arrow of card none", "  add 1 to fld Plus", "  set the loc of bg btn help to 437,323", \
+         "  put help into x", "end mouseUp", "on mouseDown", "  put " & q & "F1" & q & " into help", "  put 1 into fld help", "end mouseDown") into tScript
+   TestAssert "T44: names in quotes", line 2 to 5 of tScript is _Lines("  show cd fld " & q & "help" & q, "  hide btn " & q & "arrow" & q & " of card " & q & "none" & q, \
+         "  add 1 to fld " & q & "Plus" & q, "  set the loc of bg btn " & q & "help" & q & " to 437,323")
+   TestAssert "T44: a value that is no object's name: unchanged", line 6 of tScript is "  put help into x"
+   TestAssert "T44: a variable so named (T2) names its field still", line 9 to 10 of tScript is _Lines("  put " & q & "F1" & q & " into hc_help", "  put 1 into fld hc_help")
+
+   -- and in a script that compiles, where "fld help" was field 15
+   put "HCScriptsT44" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   repeat with i = 1 to 15
+      create field ("F" & i)
+   end repeat
+   create field "help"
+   create field "Plus"
+   put 1 into field "Plus"
+   create button "Names"
+   set the script of button "Names" to _Lines("on mouseUp", "  put " & q & "x" & q & " into cd fld help", "  add 1 to fld Plus", "end mouseUp")
+   unlock messages
+   TestAssert "T44: the script compiles here as it is", _Compiles(the script of button "Names" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T44: in a script that compiles", line 2 to 3 of the script of button "Names" of card 1 of stack tStack \
+         is _Lines("  put " & q & "x" & q & " into cd fld " & q & "help" & q, "  add 1 to fld " & q & "Plus" & q)
+   set the defaultStack to tStack
+   send "mouseUp" to button "Names" of card 1 of stack tStack
+   TestAssert "T44: the fields named, as in HyperCard, and not fields 15 and 13", field "help" of card 1 of stack tStack is "x" \
+         and field "Plus" of card 1 of stack tStack is 2 and field "F15" of card 1 of stack tStack is empty and field "F13" of card 1 of stack tStack is empty
+   _Close tStack
+end TestHyperCardScriptsT44
+
+on TestHyperCardScriptsT45
+   -- HyperCard's Home stack named but not gone to, which here is the IDE's
+   -- stack "home"
+   local tStack, tScript, q, tHome, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", "  set the script of stack " & q & "Home" & q & " to tScript", "  get the long name of stack Home", \
+         "  if x then send " & q & "startUp" & q & " to stack home", "  go to stack " & q & "Home" & q, "  get the script of stack " & q & "Homer" & q, "end mouseUp") into tScript
+   TestAssert "T45: Home named", line 2 to 4 of tScript is _Lines("  set the script of stack hcHome() to tScript", "  get the long name of stack hcHome()", \
+         "  if x then send " & q & "startUp" & q & " to stack hcHome()")
+   TestAssert "T45: a go home, another stack: unchanged", line 5 to 6 of tScript is _Lines("  hcGoHome", "  get the script of stack " & q & "Homer" & q)
+   TestAssert "T45: those compile", _Compiles(tScript)
+
+   -- and run, in a script that compiles, with a stack called "home" in
+   -- memory as the IDE's is: its script stays as it was
+   put "HCScriptsT45" & the milliseconds into tStack
+   lock messages
+   if there is not a stack "home" then
+      create invisible stack "home"
+      set the script of stack "home" to _Lines("on hcT45Home", "end hcT45Home")
+      put "home" into tHome
+   end if
+   put the script of stack "home" into tScript
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Install"
+   set the script of button "Install" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the script of stack " & q & "Home" & q & " into tHome", \
+         "  put " & q & "on hcT45" & q & " & return & " & q & "end hcT45" & q & " after tHome", "  set the script of stack " & q & "Home" & q & " to tHome", \
+         "  put the script of stack " & q & "Home" & q & " into gHCScriptsTest", "end mouseUp")
+   create button "Start"
+   set the script of button "Start" to _Lines("on mouseUp", "  global gHCScriptsTest", "  send startUp to stack " & q & "Home" & q, "  put " & q & "started" & q & " into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   TestAssert "T45: the script compiles here as it is", _Compiles(the script of button "Install" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Install" of card 1 of stack tStack
+   -- (the engine ends a script with a return)
+   TestAssert "T45: the script went into HyperCard's Home, the stand-in", gHCScriptsTest is _Lines("on hcT45", "end hcT45") & return \
+         and the script of stack "HyperCard Home" is gHCScriptsTest
+   TestAssert "T45: the IDE's home is as it was", the script of stack "home" is tScript
+   -- startUp, which HyperCard's Home passed on, to the stand-in, which has
+   -- no handler for it
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Start" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T45: startUp sent to the stand-in goes on, as it did to Home", gHCScriptsTest is "started"
+   TestAssert "T45: and the IDE's home is still as it was", the script of stack "home" is tScript
+   _Close tStack
+
+   -- the stand-in's library when the stack it was made for has gone: the
+   -- next stack's
+   put "HCScriptsT45b" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Ask"
+   set the script of button "Ask" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the behavior of stack " & q & "Home" & q & " into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Ask" of card 1 of stack tStack
+   TestAssert "T45: the stand-in has the library of the stack that asks, the first one's gone", \
+         gHCScriptsTest is not empty and gHCScriptsTest is the behavior of stack tStack
+   _Close tStack
+   if there is a stack "HyperCard Home" then delete stack "HyperCard Home"
+   if tHome is not empty then delete stack tHome
+end TestHyperCardScriptsT45
+
+on TestHyperCardScriptsRulesFixed
+   -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
+   -- the operator "is in" after a card, and T2 at the end of a line
+   -- that goes on with \
+   local tScript, q
+   put quote into q
+   put _Rewrite("on mouseUp", "  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
+         "  if the short name of this stack is in fld 1 then beep", "  get fld Notes in card 2", "  get the name of card it in bkgnd " & q & "BBS" & q, "end mouseUp") into tScript
+   TestAssert "T11: is in after a card, as it was", line 2 to 3 of tScript is _Lines("  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
+         "  if the short name of this stack is in fld 1 then beep")
+   TestAssert "T11: in for of after an object's name still", line 4 to 5 of tScript is _Lines("  get fld Notes of card 2", "  get the name of card it of bkgnd " & q & "BBS" & q)
+   TestAssert "T11: those compile", _Compiles(tScript)
+
+   put _Rewrite("on mouseUp", "  put 1 into this", "  if this = 1 or this \", "  = 2 then beep", "  get the name of this \", "  card", "end mouseUp") into tScript
+   TestAssert "T2: the variable before a \, read with the next line", line 2 to 4 of tScript is _Lines("  put 1 into hc_this", "  if hc_this = 1 or hc_this \", "  = 2 then beep")
+   TestAssert "T2: and the word of the grammar before one", line 5 to 6 of tScript is _Lines("  get the name of this \", "  card")
+   TestAssert "T2: those compile", _Compiles(tScript)
+end TestHyperCardScriptsRulesFixed
+
 on TestHyperCardScriptsMoreFormsProbed
    -- T33: a window's name this engine does not take as a value, which
    -- only revHyperCardFixScripts (with its probes) finds
