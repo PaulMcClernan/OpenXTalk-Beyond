@@ -102,7 +102,12 @@ script "revHyperCardScriptLibrary"
 -- this engine does nothing for; HyperCard's own windows named in quotes
 -- ("the visible of window "Scroll"") and the watchers shown and hidden
 -- ("show variable watcher"); and the message box's properties without
--- "the" ("if visible of msg").
+-- "the" ("if visible of msg"). T47 takes a function called by a name
+-- that is one of this engine's commands ("put replace(":", ",", t) into
+-- t", "get sort(fld 1, "n")"), which compiles here and stops at the call
+-- as no handler: the stack's own function of that name, as T1 renamed
+-- it, else the library's stand-in for the external of that name
+-- (hcX_Replace, hcX_Sort, hcX_Find), in a script that compiles too.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -155,6 +160,10 @@ constant kNotCommands = "else end case default catch finally then on function co
 -- HyperTalk's own commands: an external of one of these names is never
 -- what a call to it means
 constant kHyperTalkCommands = "add answer arrowkey ask beep choose click close convert create debug delete dial disable divide domenu drag edit enable enterinfield enterkey export find flash functionkey get go help hide import lock mark multiply open palette picture play pop print push put read reply request reset returninfield returnkey save select send set show sort start stop subtract tabkey type unlock unmark visual wait write"
+
+-- The externals named like commands of this engine that the library
+-- stands in for, as hcX_<name>: called as functions ("replace(", T47)
+constant kCommandExternals = "replace sort find"
 
 -- The words a visual effect is made of here (engine/src/lextable.cpp)
 constant kVisualWords = "barn black blinds bottom card center checkerboard close curl dissolve door down effect fast flip from gray grey in inverse iris left normal open option out plain push reveal right scroll shrink slow slowly sound stretch to top up venetian very white wipe with zoom visual"
@@ -246,6 +255,11 @@ local sHyperTalk
 -- true), for _ExternalArguments (T37)
 local sCallees
 
+-- The stack's own functions (lower case, true), and the handlers renamed
+-- because this engine refuses their names (lower case, the new name), for
+-- T47 and T13
+local sStackFunctions, sRenameHandlers
+
 -- Each rule's count for the object being fixed, and for the whole stack
 local sFired
 local sFiredTotal
@@ -327,11 +341,14 @@ function revHyperCardFixScripts pStack
 
    put _Objects(sStack) into tObjects
    -- First pass: the handlers the stack defines (for the renamed ones, a
-   -- call anywhere in the stack is renamed too) and its externals
+   -- call anywhere in the stack is renamed too), which of them are
+   -- functions, and its externals
+   put empty into sStackFunctions
    repeat for each line tObject in tObjects
       repeat for each line tLine in the script of tObject
          if word 1 of tLine is among the items of "on,function" then
             put true into tDefines[_Lower(_Word2(tLine))]
+            if word 1 of tLine is "function" then put true into sStackFunctions[_Lower(_Word2(tLine))]
          end if
       end repeat
    end repeat
@@ -435,6 +452,7 @@ function revHyperCardRewriteScript pScript, pExternals, pHyperTalk
    end repeat
    put pHyperTalk is true into sHyperTalk
    put empty into sFired
+   put empty into sStackFunctions
    return _Rewrite(pScript, empty, tExternals, false)
 end revHyperCardRewriteScript
 
@@ -774,8 +792,10 @@ end _Externals
 private function _StandIns pStack, pDefines
    local tLine, tType, tName, tCall, tLibrary, tHandler, tOut, tDone
    put empty into sStandInNames
+   -- (an XCMD is called as a command, which a function of the library of
+   -- its name, hcX_Replace, does not answer)
    repeat for each line tLine in revHyperCardLibraryScript()
-      if word 1 of tLine is among the words of "on function command" then put true into tLibrary[_Lower(word 2 of tLine)]
+      if word 1 of tLine is among the words of "on command" then put true into tLibrary[_Lower(word 2 of tLine)]
    end repeat
    set the itemDelimiter to tab
    repeat for each line tLine in the uHyperCard["externals"] of pStack
@@ -1256,6 +1276,11 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
    -- library's, which does what HyperCard's menu items did; with it,
    -- doMenu is a message that reaches them as it is
    if not sHyperTalk then put "hcDoMenu" into tRenameHandlers["domenu"]
+   -- T47: the new names, and the stack's functions, this script's too
+   put tRenameHandlers into sRenameHandlers
+   repeat with i = 1 to tSpanCount
+      if word 1 of _CodeText(tLines[tSpans[i]["start"]]) is "function" then put true into sStackFunctions[tSpans[i]["name"]]
+   end repeat
    -- T37: the stack's own handlers, whose arguments are taken as an
    -- external's are (_ExternalArguments)
    put empty into sCallees
@@ -1758,11 +1783,12 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
          end if
       end if
 
-      -- T13: an external named like a keyword
+      -- T13: an external named like a keyword (but a function's call
+      -- reaches the stack's own function of that name, T47)
       if pExternals[tWord] and tWord is not among the words of kHyperTalkCommands \
             and tWord is not among the words of "set put get go if send do add show hide" \
             and (tWord is among the words of kCommands or tWord is among the words of kRefused or _HandlerRefused(tWord)) then
-         if _StatementStart(tTokens, tCode, tIndex) or (_T(tTokens, tNext) is "(" and _T(tTokens, tPrev) is not "the") then
+         if _StatementStart(tTokens, tCode, tIndex) or (_T(tTokens, tNext) is "(" and _T(tTokens, tPrev) is not "the" and not sStackFunctions[tWord]) then
             put "hcX_" & tTokens[tIndex]["t"] into tTokens[tIndex]["t"]
             _Fire "T13 external named like a keyword"
             next repeat
@@ -2740,6 +2766,26 @@ private function _HyperCardRules pLine, pCompiled, pElse
          put "hcX_" & tTokens[tIdx[i]]["t"] into tTokens[tIdx[i]]["t"]
          _Fire "T20 fileName()"
          next repeat
+      end if
+
+      -- T47: a function called by a name that is one of this engine's
+      -- commands ("put replace(":", ",", t) into t", "get sort(fld 1,
+      -- "n")"), which compiles here but is no function, and stops there
+      -- (any statement): the stack's own function of that name, as T1
+      -- renamed it, else the library's stand-in for the external of that
+      -- name, hcX_<name>. A statement that begins with one ("find (x)")
+      -- is the command
+      if i > 1 and _T(tTokens, tIdx[i + 1]) is "(" and tWord is among the words of kCommands \
+            and _T(tTokens, tIdx[i - 1]) is not among the words of "the then else on function end pass exit" then
+         if sStackFunctions[tWord] and sRenameHandlers[tWord] is not empty then
+            put sRenameHandlers[tWord] into tTokens[tIdx[i]]["t"]
+            _Fire "T47 function named like a command"
+            next repeat
+         else if tWord is among the words of kCommandExternals then
+            put "hcX_" & tTokens[tIdx[i]]["t"] into tTokens[tIdx[i]]["t"]
+            _Fire "T47 function named like a command"
+            next repeat
+         end if
       end if
 
       -- T44: an object's name not in quotes that this engine reads as one

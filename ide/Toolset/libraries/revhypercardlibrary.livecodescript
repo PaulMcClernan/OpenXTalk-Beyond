@@ -1853,6 +1853,8 @@ on hcWindow pVerb, pName, pLocation
             set the topLeft of stack pName to pLocation
          end if
          if the mode of stack pName is 0 then
+            -- (a hidden stack opens hidden)
+            set the visible of stack pName to true
             if the uHyperCard["picture"] of stack pName is true then
                topLevel stack pName
             else
@@ -1920,7 +1922,6 @@ on hcPicture pName, pType, pStyle, pVisible, pDepth, pFloating
    create invisible stack tTitle
    put the long id of it into tStack
    set the uHyperCard["picture"] of tStack to true
-   set the destroyStack of tStack to true
    set the title of tStack to tTitle
    set the defaultStack to the short name of tStack
    create image "Picture"
@@ -1934,6 +1935,7 @@ on hcPicture pName, pType, pStyle, pVisible, pDepth, pFloating
    set the height of tStack to max(the formattedHeight of image "Picture", 32)
    set the defaultStack to tDefault
    if pVisible is not false then
+      _HCReadyToShow tStack
       if pFloating is true then
          palette stack tTitle
       else
@@ -1941,8 +1943,26 @@ on hcPicture pName, pType, pStyle, pVisible, pDepth, pFloating
       end if
       set the defaultStack to tDefault
    end if
+   -- (closed, the window is gone, as in HyperCard)
+   set the destroyStack of tStack to true
    return empty
 end hcPicture
+
+-- Readies pStack, a window the library made hidden so that it was not
+-- seen being made, to be shown by the modal, palette or topLevel that
+-- opens it next. Made, it opened hidden, and a hidden stack opens hidden:
+-- a dialog that is not seen and is not waited for (the list dialogs gave
+-- back what Cancel gives, at once), a palette or picture never seen. It
+-- is closed, with no message sent, and made visible, so that it opens
+-- shown, as the window asked for
+private command _HCReadyToShow pStack
+   local tLocked
+   put the lockMessages into tLocked
+   lock messages
+   close pStack
+   set the lockMessages to tLocked
+   set the visible of pStack to true
+end _HCReadyToShow
 
 /*
 set the P of window W to V (rule T26), for the properties of HyperCard's
@@ -2557,7 +2577,6 @@ on Promptoid pMessage
    if there is not a stack "Promptoid" then
       create invisible stack "Promptoid"
       set the uHyperCard["promptoid"] of it to true
-      set the destroyStack of it to true
       set the width of it to 320
       set the height of it to 60
       set the defaultStack to "Promptoid"
@@ -2565,8 +2584,13 @@ on Promptoid pMessage
       set the rect of it to 10,10,310,50
       set the lockText of it to true
       set the defaultStack to tDefault
+      _HCReadyToShow the long id of stack "Promptoid"
+      -- (closed, the window is gone)
+      set the destroyStack of stack "Promptoid" to true
    end if
    put pMessage into field "Message" of stack "Promptoid"
+   -- (shown again, if a script hid it)
+   set the visible of stack "Promptoid" to true
    palette stack "Promptoid"
    set the defaultStack to tDefault
    return empty
@@ -2623,6 +2647,933 @@ on hcX_popUp
    return "popUp is not supported"
 end hcX_popUp
 
+-- The externals stacks call most for text and lists, and their dialogs:
+-- each does what its documentation says it did (the number of stacks of
+-- the corpus that call it is given). A call of one whose name this engine
+-- reads as one of its commands ("replace(", "sort(", "find(") is renamed
+-- hcX_<name> by the import (rule T47)
+
+-- LowerToUpper(text) (72 stacks): the text in capitals
+function LowerToUpper pText
+   return toUpper(pText)
+end LowerToUpper
+
+-- ChangeCase(text, form[, sentence endings]) (5 stacks): Steve Maller's
+-- XFCN, the form a number (1 capitals, 2 lower case, 3 a capital at the
+-- start of each sentence, 4 at the start of each word), or Ben Lawson's,
+-- the form a word whose first letter is enough (upper, lower, sentence,
+-- title, flip or reverse, random; upper when it is left out). Only the
+-- letters A to Z change, as in both
+function ChangeCase pText, pForm, pEndings
+   local tForm
+   if pText is "?" then return "ChangeCase(Container,<Case>,<SentenceEndings>)"
+   if pText is "!" then return "ChangeCase XFCN"
+   put _HCCaseForm(pForm) into tForm
+   if tForm is empty then return "Error: conversion form specified in param 2 not recognized."
+   return _HCChangeCase(pText, tForm, pEndings)
+end ChangeCase
+
+private function _HCCaseForm pForm
+   put word 1 to -1 of pForm into pForm
+   switch
+      case pForm is empty or pForm is "1"
+         return "upper"
+      case pForm is "2"
+         return "lower"
+      case pForm is "3"
+         return "sentence"
+      case pForm is "4"
+         return "title"
+      case pForm is "reverse"
+         return "flip"
+   end switch
+   switch char 1 of pForm
+      case "u"
+         return "upper"
+      case "l"
+         return "lower"
+      case "s"
+         return "sentence"
+      case "t"
+         return "title"
+      case "f"
+         return "flip"
+      case "r"
+         return "random"
+   end switch
+   return empty
+end _HCCaseForm
+
+-- pText with its letters A to Z in the form pForm (_HCCaseForm). A word
+-- starts after anything but a letter or an apostrophe; a sentence at the
+-- start of the text, after a return, and after one of pEndings (by
+-- default . ! and ?) that white space follows
+private function _HCChangeCase pText, pForm, pEndings
+   local tOut, tChar, tNum, tStart, tEnded
+   if pEndings is empty then put ".!?" into pEndings
+   put true into tStart
+   put false into tEnded
+   repeat for each char tChar in pText
+      put charToNum(tChar) into tNum
+      if (tNum >= 65 and tNum <= 90) or (tNum >= 97 and tNum <= 122) then
+         switch pForm
+            case "upper"
+               put toUpper(tChar) after tOut
+               break
+            case "lower"
+               put toLower(tChar) after tOut
+               break
+            case "flip"
+               if tNum <= 90 then
+                  put toLower(tChar) after tOut
+               else
+                  put toUpper(tChar) after tOut
+               end if
+               break
+            case "random"
+               if random(2) = 1 then
+                  put toUpper(tChar) after tOut
+               else
+                  put toLower(tChar) after tOut
+               end if
+               break
+            default
+               if tStart then
+                  put toUpper(tChar) after tOut
+               else
+                  put toLower(tChar) after tOut
+               end if
+         end switch
+         put false into tStart
+         put false into tEnded
+         next repeat
+      end if
+      put tChar after tOut
+      if pForm is "title" then
+         put tChar is not "'" into tStart
+      else if pForm is "sentence" then
+         if tChar is return or (tEnded and (tChar is space or tChar is tab)) then
+            put true into tStart
+         else if tChar is among the chars of pEndings then
+            put true into tEnded
+         else if tChar is not space and tChar is not tab then
+            put false into tEnded
+         end if
+      end if
+   end repeat
+   return tOut
+end _HCChangeCase
+
+-- Quoted(text) (3 stacks): the text in quotes
+function Quoted pText
+   return quote & pText & quote
+end Quoted
+
+-- Strip(characters, text) (4 stacks): the text without any of the
+-- characters, a capital and a small letter being two ("1234567890."
+-- leaves what is not a number)
+function Strip pChars, pText
+   local tChar
+   set the caseSensitive to true
+   repeat for each char tChar in pChars
+      replace tChar with empty in pText
+   end repeat
+   return pText
+end Strip
+
+/*
+Replace(...) (10 stacks; called hcX_Replace after the import, rule T47),
+the XFCNs of that name, which take their arguments in one of two orders:
+(old, new, text) in most stacks (Jon's XFCNs, Debate Coach, DataMinder,
+the DNA Translator, Import/Export Tools), the old string replaced with
+case counting; and (text, old, new[, case counts]), Dartmouth's, case
+not counting unless the fourth is true. With four, the order is
+Dartmouth's; with three, see hcReplaceTextFirst
+*/
+function hcX_Replace p1, p2, p3, p4
+   local tText, tOld, tNew
+   if paramCount() < 3 then return empty
+   if paramCount() > 3 or hcReplaceTextFirst(p1, p2, p3) then
+      put p1 into tText
+      put p2 into tOld
+      put p3 into tNew
+      set the caseSensitive to (p4 is true)
+   else
+      put p3 into tText
+      put p1 into tOld
+      put p2 into tNew
+      set the caseSensitive to true
+   end if
+   if tOld is empty then return tText
+   replace tOld with tNew in tText
+   return tText
+end hcX_Replace
+
+-- Whether a Replace with three arguments takes the text first: the text
+-- is the one the old string is in (the first is in the last: the text is
+-- last), or, when neither is, the longer of the first and the last; and
+-- an empty string is never the one replaced
+function hcReplaceTextFirst p1, p2, p3
+   set the caseSensitive to true
+   if p1 is not empty and p1 is in p3 then return false
+   if p2 is empty then return false
+   if p1 is empty then return true
+   return the number of chars of p1 > the number of chars of p3
+end hcReplaceTextFirst
+
+-- FullReplace(text, string[, replacement[, all[, start]]]) (13 stacks),
+-- Frederic Rinaldi's XFCN: the text with the string replaced (left out
+-- when there is no replacement), case not counting; every one unless all
+-- is false, from the character start on (1 when it is left out)
+function FullReplace pText, pSearch, pReplace, pAll, pStart
+   local tDone, tAt, tOut, tLength
+   if paramCount() = 1 and pText is "?" then return "FullReplace (<input>,<search pattern>[,<replace pattern>[,<all>[,<offset>]]])"
+   if paramCount() = 1 and pText is "!" then return "FullReplace 1.1 by Frederic Rinaldi"
+   if paramCount() < 2 then return "Error : Missing parameter(s)"
+   if pAll is empty then put true into pAll
+   if pAll is not among the items of "true,false" then return "Error : Param #4 must be boolean"
+   if pStart is empty then put 1 into pStart
+   if pStart is not an integer or pStart < 1 then return "Error : Param #5 must be > 0"
+   if pSearch is empty then return pText
+   put the number of chars of pSearch into tLength
+   put pStart - 1 into tDone
+   put char 1 to tDone of pText into tOut
+   repeat
+      put offset(pSearch, pText, tDone) into tAt
+      if tAt is 0 then exit repeat
+      put char tDone + 1 to tDone + tAt - 1 of pText & pReplace after tOut
+      add tAt + tLength - 1 to tDone
+      if pAll is false then exit repeat
+   end repeat
+   return tOut & char tDone + 1 to -1 of pText
+end FullReplace
+
+-- FullFind(text, string[, exactly[, all[, case[, start[, items]]]]])
+-- (16 stacks), Frederic Rinaldi's XFCN: where the string is in the text,
+-- as "X,Y,Z,T" (the number of its first character in the text, its line,
+-- the number of that character in the line, and its item there), the
+-- first time or, when all is true, every time, a line each; empty if it
+-- is not there. A whole word unless exactly is false; case not counting
+-- unless case is true; after the character start (0 when it is left
+-- out); and only in the items of each line that items lists, when it is
+-- given. Version 3's form is read too: after the string, in any order,
+-- "m=" and letters (A all, C case, E a whole word, B the beginning of a
+-- word, D accents, which here always count), "o=" the first character
+-- searched, "i=" the items, "s=" the item separator
+function FullFind pText, pString
+   local tExact, tBeginning, tAll, tCase, tSkip, tItems, tSeparator, tParam, tValue, i
+   if paramCount() = 1 and pText is "?" then return "FullFind(<container>,<pattern>[,<exactly>[,<all>[,<case sens.>[,<start>[,<item(s)>]]]]])"
+   if paramCount() = 1 and pText is "!" then return "FullFind 1.4 by Frederic Rinaldi"
+   if paramCount() < 2 then return "Error : Missing parameter(s)"
+   put false into tBeginning
+   put comma into tSeparator
+   put param(3) into tParam
+   if char 2 of tParam is "=" and char 1 of tParam is among the chars of "mois" then
+      put false into tExact
+      put false into tAll
+      put false into tCase
+      put 0 into tSkip
+      repeat with i = 3 to paramCount()
+         put param(i) into tParam
+         put char 3 to -1 of tParam into tValue
+         switch char 1 to 2 of tParam
+            case "m="
+               put "A" is in tValue into tAll
+               put "C" is in tValue into tCase
+               put "E" is in tValue into tExact
+               put "B" is in tValue into tBeginning
+               break
+            case "o="
+               if tValue is not an integer then return "Error : Incorrect param #" & i
+               if tValue < 0 then return "Error : offset must be >= 0"
+               put max(0, tValue - 1) into tSkip
+               break
+            case "i="
+               put tValue into tItems
+               break
+            case "s="
+               if the number of chars of tValue is not 1 then return "Error : Incorrect param #" & i
+               put tValue into tSeparator
+               break
+            default
+               return "Error : Incorrect param #" & i
+         end switch
+      end repeat
+   else
+      put _HCTrueFalse(param(3), true) into tExact
+      if tExact is empty then return "Error : Param 3 must be true|false"
+      put _HCTrueFalse(param(4), false) into tAll
+      if tAll is empty then return "Error : Param 4 must be true|false"
+      put _HCTrueFalse(param(5), false) into tCase
+      if tCase is empty then return "Error : Param 5 must be true|false"
+      put param(6) into tSkip
+      if tSkip is empty then put 0 into tSkip
+      if tSkip is not an integer or tSkip < 0 then return "Error : Param 6 must be a positive integer"
+      put param(7) into tItems
+   end if
+   repeat for each item tValue in tItems
+      if tValue is not an integer or tValue < 1 then return "Error : Param 7 must be an integer > 0"
+   end repeat
+   return _HCFullFind(pText, pString, tExact, tBeginning, tAll, tCase, tSkip, tItems, tSeparator)
+end FullFind
+
+-- pValue as true or false, pDefault when it is empty, and empty when it
+-- is neither
+private function _HCTrueFalse pValue, pDefault
+   if pValue is empty then return pDefault
+   if pValue is among the items of "true,false" then return pValue is true
+   return empty
+end _HCTrueFalse
+
+-- Where pString is in pText, for FullFind: from the character after
+-- pSkip, a whole word (pExact) or the beginning of one (pBeginning),
+-- case counting when pCase is true, in one of the items pItems (between
+-- pSeparator) of its line when there are any; the first or, when pAll is
+-- true, every one (none overlapping), a line "X,Y,Z,T" each
+private function _HCFullFind pText, pString, pExact, pBeginning, pAll, pCase, pSkip, pItems, pSeparator
+   local tLength, tAt, tEnd, tLine, tLineStart, tCounted, tReturn, tItem, tOut
+   if pString is empty then return empty
+   set the caseSensitive to pCase
+   put the number of chars of pString into tLength
+   put 1 into tLine
+   put 1 into tLineStart
+   put 0 into tCounted
+   repeat
+      put offset(pString, pText, pSkip) into tAt
+      if tAt is 0 then exit repeat
+      add pSkip to tAt
+      put tAt + tLength - 1 into tEnd
+      put tAt into pSkip
+      -- (a letter or digit on both sides of either end makes it part of
+      -- a longer word)
+      if (pExact or pBeginning) and _HCWordChar(char tAt - 1 of pText) and _HCWordChar(char 1 of pString) then next repeat
+      if pExact and _HCWordChar(char tEnd + 1 of pText) and _HCWordChar(char -1 of pString) then next repeat
+      -- its line, from the returns before it
+      repeat
+         put offset(return, pText, tCounted) into tReturn
+         if tReturn is 0 or tCounted + tReturn >= tAt then exit repeat
+         add tReturn to tCounted
+         add 1 to tLine
+         put tCounted + 1 into tLineStart
+      end repeat
+      set the itemDelimiter to pSeparator
+      put the number of items of (char tLineStart to tAt - 1 of pText & "x") into tItem
+      set the itemDelimiter to comma
+      if pItems is not empty then
+         if tItem is not among the items of pItems then next repeat
+         if pSeparator is in pString or return is in pString then next repeat
+      end if
+      put tAt & comma & tLine & comma & tAt - tLineStart + 1 & comma & tItem & return after tOut
+      if not pAll then exit repeat
+      put tEnd into pSkip
+   end repeat
+   delete the last char of tOut
+   return tOut
+end _HCFullFind
+
+-- Whether pChar is a letter or a digit, which a word is made of
+private function _HCWordChar pChar
+   set the caseSensitive to true
+   return pChar is among the chars of "0123456789" or toUpper(pChar) is not toLower(pChar)
+end _HCWordChar
+
+-- SortLines(text[, order]) (6 stacks): the lines of the text in
+-- alphabetical order, case not counting; descending when the order
+-- begins with "D"
+function SortLines pText, pOrder
+   if char 1 of pOrder is "D" then
+      sort lines of pText descending
+   else
+      sort lines of pText ascending
+   end if
+   return pText
+end SortLines
+
+-- SortItems(text[, lines[, order]]) (8 stacks): the items of the text
+-- (between commas or returns; the empty ones left out) in alphabetical
+-- order, case not counting, between commas, or one a line when lines is
+-- true; descending when the order begins with "D"
+function SortItems pText, pLines, pOrder
+   local tItem, tList
+   replace return with comma in pText
+   repeat for each item tItem in pText
+      if tItem is not empty then put tItem & return after tList
+   end repeat
+   delete the last char of tList
+   if char 1 of pOrder is "D" then
+      sort lines of tList descending
+   else
+      sort lines of tList ascending
+   end if
+   if pLines is not true then replace return with comma in tList
+   return tList
+end SortItems
+
+-- Sort(text[, type]) (6 stacks; called hcX_Sort after the import, rule
+-- T47), Boojum's XFCN: the lines of the text sorted, by the number each
+-- begins with (0 if none) when the type begins with "n", else in
+-- alphabetical order, case not counting (empty lines first)
+function hcX_Sort pText, pType
+   if char 1 of pType is "n" then
+      sort lines of pText numeric by _HCLeadingNumber(each)
+   else
+      sort lines of pText ascending
+   end if
+   return pText
+end hcX_Sort
+
+private function _HCLeadingNumber pText
+   local tNumber
+   if matchText(pText, "^[ \t]*(-?[0-9]*\.?[0-9]+)", tNumber) then return tNumber + 0
+   return 0
+end _HCLeadingNumber
+
+-- Find(text, string[, after line[, after item]]) (called hcX_Find after
+-- the import, rule T47), Boojum's XFCN: "line,item" of the first item of
+-- the text that is the string, case not counting, or that has it in it
+-- when the string begins with "<" (which is not part of it); 0 if there
+-- is none. The search begins on the line after the one given, or after
+-- the item given of that line
+function hcX_Find pText, pString, pAfterLine, pAfterItem
+   local tPart, tLine, tItem, tLineNumber, tItemNumber
+   put char 1 of pString is "<" into tPart
+   if tPart then delete char 1 of pString
+   if pAfterLine is not an integer then put 0 into pAfterLine
+   if pAfterItem is not an integer then put 0 into pAfterItem
+   put 0 into tLineNumber
+   repeat for each line tLine in pText
+      add 1 to tLineNumber
+      if tLineNumber < pAfterLine or (tLineNumber = pAfterLine and pAfterItem <= 0) then next repeat
+      put 0 into tItemNumber
+      repeat for each item tItem in tLine
+         add 1 to tItemNumber
+         if tLineNumber = pAfterLine and tItemNumber <= pAfterItem then next repeat
+         if (tPart and pString is in tItem) or (not tPart and tItem is pString) then
+            return tLineNumber & comma & tItemNumber
+         end if
+      end repeat
+   end repeat
+   return 0
+end hcX_Find
+
+/*
+FullSort(text[, option, ...][, list]) (19 stacks), Frederic Rinaldi's
+XFCN: the lines of the text (its items, when it has commas and no
+return) sorted, and the global FullSortList the number each had before,
+in their new order. The options come in any order and any case:
+"l=" (or "s=") the separator, a character or space, return, tab or
+quote; "i=" the item delimiter of "c=item"; "t=" by what: a (character
+codes, capitals first: the default), u (case not counting), i (as this
+system orders text), n (the number in it), d (the date in it, month/day/
+year), t (the time in it, hours:minutes); "d=" a (ascending, the
+default), d (descending), r (random) or l (in the order the list gives,
+numbers between commas, or else the order of the sort before, from
+FullSortList, to sort a second list as the first); and "c=" the part of
+each to sort by ("item 2", "word 1 to 5", "char 3 to *"). What has no
+number, date or time to sort by goes last
+*/
+function FullSort pText
+   global FullSortList
+   local tParam, tType, tDirection, tChunk, tSep, tItemSep, tList, tTrail, i
+   local tEntry, tEntries, tCount, tKeys, tOrder, tWithout, tUsed, tOut
+   if paramCount() = 0 then return "Error : Missing input parameter"
+   put "a" into tType
+   put "a" into tDirection
+   put comma into tItemSep
+   repeat with i = 2 to paramCount()
+      put param(i) into tParam
+      if char 2 of tParam is "=" then
+         switch char 1 of tParam
+            case "l"
+            case "s"
+               put _HCSeparator(char 3 to -1 of tParam) into tSep
+               break
+            case "i"
+               put _HCSeparator(char 3 to -1 of tParam) into tItemSep
+               break
+            case "t"
+               put toLower(char 3 of tParam) into tType
+               if tType is empty or tType is not among the chars of "andtiu" then return "Error : Char following " & quote & "t=" & quote & " must be [a,n,d,i,u]"
+               break
+            case "d"
+               put toLower(char 3 of tParam) into tDirection
+               if tDirection is empty or tDirection is not among the chars of "adrl" then return "Error : Char following " & quote & "d=" & quote & " must be [a,d,r,l]"
+               break
+            case "c"
+               put char 3 to -1 of tParam into tChunk
+               put word 1 to -1 of tChunk into tChunk
+               if word 1 of tChunk is not among the words of "char character word item" then return "Error : " & quote & "c=" & quote & " param must be followed by [char,word,item]"
+               if word 2 of tChunk is not an integer or word 2 of tChunk < 1 then return "Error : " & quote & "c=" & word 1 of tChunk & quote & " must be followed by a positive integer"
+               break
+            default
+               return "Error : First char of param 2..n must be [t,d,c,s]"
+         end switch
+      else if tParam is not empty then
+         put tParam into tList
+      end if
+   end repeat
+
+   -- the entries: between returns, else between commas
+   if tSep is empty then
+      if return is in pText then
+         put return into tSep
+      else if comma is in pText then
+         put comma into tSep
+      else
+         put return into tSep
+      end if
+   end if
+   if pText is not empty and char -1 of pText is tSep then
+      put tSep into tTrail
+      delete char -1 of pText
+   end if
+   set the itemDelimiter to tSep
+   put 0 into tCount
+   repeat for each item tEntry in pText
+      add 1 to tCount
+      put tEntry into tEntries[tCount]
+      put _HCSortKey(_HCChunkOf(tEntry, tChunk, tItemSep), tType) into tKeys[tCount]
+   end repeat
+   set the itemDelimiter to comma
+
+   -- their order
+   put empty into tOrder
+   switch tDirection
+      case "l"
+         if tList is empty then put FullSortList into tList
+         repeat for each item tEntry in tList
+            put word 1 to -1 of tEntry into tEntry
+            if tEntry is an integer and tEntry >= 1 and tEntry <= tCount and not tUsed[tEntry] then
+               put true into tUsed[tEntry]
+               put tEntry & return after tOrder
+            end if
+         end repeat
+         repeat with i = 1 to tCount
+            if not tUsed[i] then put i & return after tOrder
+         end repeat
+         break
+      default
+         repeat with i = 1 to tCount
+            if tType is among the chars of "ndt" and tKeys[i] is empty then
+               put i & return after tWithout
+            else
+               put i & return after tOrder
+            end if
+         end repeat
+         delete the last char of tOrder
+         if tDirection is "r" then
+            sort lines of tOrder by random(1000000)
+         else if tType is among the chars of "ndt" then
+            if tDirection is "d" then
+               sort lines of tOrder descending numeric by tKeys[each]
+            else
+               sort lines of tOrder ascending numeric by tKeys[each]
+            end if
+         else
+            set the caseSensitive to (tType is "a")
+            if tType is "i" then
+               if tDirection is "d" then
+                  sort lines of tOrder descending international by tKeys[each]
+               else
+                  sort lines of tOrder ascending international by tKeys[each]
+               end if
+            else if tDirection is "d" then
+               sort lines of tOrder descending text by tKeys[each]
+            else
+               sort lines of tOrder ascending text by tKeys[each]
+            end if
+            set the caseSensitive to false
+         end if
+         if tOrder is not empty then put return after tOrder
+         put tWithout after tOrder
+   end switch
+   delete the last char of tOrder
+
+   repeat for each line i in tOrder
+      put tEntries[i] & tSep after tOut
+   end repeat
+   delete the last char of tOut
+   replace return with comma in tOrder
+   put tOrder into FullSortList
+   return tOut & tTrail
+end FullSort
+
+-- The character a FullSort option names: space, return, tab, quote or
+-- comma by its name, else the option's first character
+private function _HCSeparator pName
+   if pName is among the words of "space return tab quote comma" then
+      return value(pName)
+   end if
+   return char 1 of pName
+end _HCSeparator
+
+-- The part pChunk ("item 2", "word 1 to 5", "char 3 to *") of pEntry, all
+-- of it with none
+private function _HCChunkOf pEntry, pChunk, pItemSep
+   local tFrom, tTo
+   if pChunk is empty then return pEntry
+   put word 2 of pChunk into tFrom
+   put tFrom into tTo
+   if word 3 of pChunk is "to" then
+      put word 4 of pChunk into tTo
+      if tTo is "*" then put -1 into tTo
+   end if
+   if tTo is not an integer then put tFrom into tTo
+   switch word 1 of pChunk
+      case "word"
+         return word tFrom to tTo of pEntry
+      case "item"
+         set the itemDelimiter to pItemSep
+         return item tFrom to tTo of pEntry
+   end switch
+   return char tFrom to tTo of pEntry
+end _HCChunkOf
+
+-- What FullSort sorts pText by for the type pType: for n, the first
+-- number in it; d, the first date (month/day/year) as year, month and
+-- day in one number; t, the first time in seconds from midnight; empty
+-- for none. For the others, the text
+private function _HCSortKey pText, pType
+   local tA, tB, tC, tD, tDate
+   switch pType
+      case "n"
+         if matchText(pText, "(-?[0-9]*\.?[0-9]+)", tA) then return tA + 0
+         return empty
+      case "d"
+         if not matchText(pText, "([0-9]{1,2})/([0-9]{1,2})/([0-9]{2,4})", tA, tB, tC) then return empty
+         put tA & "/" & tB & "/" & tC into tDate
+         convert tDate to dateItems
+         if the result is not empty then return empty
+         return item 1 of tDate * 10000 + item 2 of tDate * 100 + item 3 of tDate
+      case "t"
+         if not matchText(pText, "([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?[ ]*([AaPp][Mm])?", tA, tB, tC, tD) then return empty
+         if tD is not empty then
+            if tA = 12 then put 0 into tA
+            if char 1 of tD is "p" then add 12 to tA
+         end if
+         return tA * 3600 + tB * 60 + tC
+   end switch
+   return pText
+end _HCSortKey
+
+-- IsRunning(application) (16 stacks): whether the application is open,
+-- which a stack asked before it opened one (none is, here)
+function IsRunning pApplication
+   return false
+end IsRunning
+
+-- ChangeFileType(file, type, creator) (21 stacks): the Macintosh's type
+-- and creator of a file, which files here do not have; nothing is
+-- changed, and no error
+function ChangeFileType pFile, pType, pCreator
+   return empty
+end ChangeFileType
+
+/*
+DialogDisplay(id, button 1, button 2, button 3, text 1, ..., text 4,
+outline) (15 stacks), the XFCN: the stack's DLOG resource id as a dialog,
+the buttons and texts given in its items; the number of the button
+clicked. The resource is not imported, so the dialog is an answer dialog
+with the texts given, one a line, and the buttons given (button 1 the
+default, OK if none is); with no text and no button there is nothing to
+show, and nothing is shown: empty
+*/
+function DialogDisplay pID, pButton1, pButton2, pButton3, pText1, pText2, pText3, pText4
+   local tText, tButtons, tNames, i
+   repeat with i = 5 to 8
+      if param(i) is not empty then put param(i) & return after tText
+   end repeat
+   delete the last char of tText
+   repeat with i = 2 to 4
+      if param(i) is not empty then
+         put i - 1 into tButtons[the number of elements of tButtons + 1]
+         put param(i) & return after tNames
+      end if
+   end repeat
+   if tText is empty and tNames is empty then return empty
+   switch the number of elements of tButtons
+      case 0
+         answer tText
+         return 1
+      case 1
+         answer tText with line 1 of tNames
+         break
+      case 2
+         answer tText with line 2 of tNames or line 1 of tNames
+         break
+      default
+         answer tText with line 3 of tNames or line 2 of tNames or line 1 of tNames
+   end switch
+   repeat with i = 1 to the number of elements of tButtons
+      if line i of tNames is it then return tButtons[i]
+   end repeat
+   return empty
+end DialogDisplay
+
+/*
+ListSelect(mode, list[, ...]) (29 stacks), Frederic Rinaldi's XFCN: the
+user picks from the list (its lines, or its items when it has no return)
+in a dialog; the items picked, or their numbers in the list, between
+separators, empty if they cancel. The global ListSelectExit holds the
+name of the button that closed it. The mode is 0 or No (nothing to
+pick), 1 or One, 2 or Con (a run of them), 3 or Dis (any of them),
+after "*" to show the list sorted, and before "#" for numbers. The rest
+come in any order (hcListSelectOptions)
+*/
+function ListSelect pMode, pList
+   global ListSelectExit
+   local tParams, tOptions, tEntries, tCount, tEntry, tShown, tLine, tChosen, tOut, i
+   if paramCount() = 1 and pMode is "?" then return "ListSelect(<mode>,<list>[,s=#[,#]][,NoDoubleClick][,prompt][,OK][,Cancel][,loc|rect][,sep][,DLOG ID][,font[,size]])"
+   if paramCount() = 1 and pMode is "!" then return "ListSelect 4.8 by Frederic Rinaldi"
+   if paramCount() < 2 then return "Error : Missing Parameter(s)"
+   repeat with i = 3 to paramCount()
+      put param(i) into tParams[i - 2]
+   end repeat
+   put hcListSelectOptions(pMode, tParams) into tOptions
+   if tOptions["error"] is not empty then return tOptions["error"]
+
+   if return is in pList then set the itemDelimiter to return
+   put 0 into tCount
+   repeat for each item tEntry in pList
+      add 1 to tCount
+      put tEntry into tEntries[tCount]
+      put tCount & return after tShown
+   end repeat
+   set the itemDelimiter to comma
+   delete the last char of tShown
+   if tOptions["sorted"] then sort lines of tShown by tEntries[each]
+   repeat for each line i in tShown
+      put tEntries[i] & return after tOptions["list"]
+   end repeat
+   delete the last char of tOptions["list"]
+
+   put _HCListDialog(tOptions) into tChosen
+   put line 2 of tChosen into ListSelectExit
+   if line 3 of tChosen is not "ok" or tOptions["mode"] = 0 then return empty
+   repeat for each item tLine in line 1 of tChosen
+      put line tLine of tShown into i
+      if tOptions["numbers"] then
+         put i & tOptions["separator"] after tOut
+      else
+         put tEntries[i] & tOptions["separator"] after tOut
+      end if
+   end repeat
+   delete the last char of tOut
+   return tOut
+end ListSelect
+
+/*
+What ListSelect's mode and the parameters after its list ask for, in any
+order: "s=" and the lines picked at first (1 when it is left out, s=0
+none); "NoDoubleClick"; a place, "left,top", or a rect; a separator, one
+character or return or tab; a DLOG resource's id, a number, which is not
+imported; a font, "name,size"; and the rest are the prompt, the OK
+button's name and the Cancel button's, an empty one hiding it, and the
+font's name. Returns ["mode"] (0 to 3), ["sorted"], ["numbers"],
+["select"], ["double"], ["topLeft"], ["rect"], ["separator"],
+["prompt"], ["ok"], ["cancel"], ["font"] and ["size"], or ["error"]
+*/
+function hcListSelectOptions pMode, pParams
+   local tOptions, tParam, tStrings, i
+   put word 1 to -1 of pMode into pMode
+   put char 1 of pMode is "*" into tOptions["sorted"]
+   if tOptions["sorted"] then delete char 1 of pMode
+   put char -1 of pMode is "#" into tOptions["numbers"]
+   if tOptions["numbers"] then delete char -1 of pMode
+   switch
+      case pMode is "0" or char 1 of pMode is "N"
+         put 0 into tOptions["mode"]
+         break
+      case pMode is "1" or char 1 of pMode is "O"
+         put 1 into tOptions["mode"]
+         break
+      case pMode is "2" or char 1 of pMode is "C"
+         put 2 into tOptions["mode"]
+         break
+      case pMode is "3" or char 1 of pMode is "D"
+         put 3 into tOptions["mode"]
+         break
+      default
+         put "Error : Bad Mode Parameter" into tOptions["error"]
+         return tOptions
+   end switch
+   put 1 into tOptions["select"]
+   put true into tOptions["double"]
+   put comma into tOptions["separator"]
+   put "OK" into tOptions["ok"]
+   put "Cancel" into tOptions["cancel"]
+   put 0 into tStrings
+   repeat with i = 1 to the number of elements of pParams
+      put pParams[i] into tParam
+      switch
+         case char 1 to 2 of tParam is "s="
+            put char 3 to -1 of tParam into tOptions["select"]
+            break
+         case tParam is "NoDoubleClick"
+            put false into tOptions["double"]
+            break
+         case tParam is an integer
+            -- (a DLOG resource's id)
+            break
+         case _HCIntegers(tParam, 2)
+            put tParam into tOptions["topLeft"]
+            break
+         case _HCIntegers(tParam, 4)
+            put tParam into tOptions["rect"]
+            break
+         case the number of chars of tParam is 1
+            put tParam into tOptions["separator"]
+            break
+         case tParam is "return" or tParam is "tab"
+            put value(tParam) into tOptions["separator"]
+            break
+         case the number of items of tParam is 2 and item 2 of tParam is an integer and item 1 of tParam is not empty
+            put item 1 of tParam into tOptions["font"]
+            put item 2 of tParam into tOptions["size"]
+            break
+         default
+            add 1 to tStrings
+            switch tStrings
+               case 1
+                  put tParam into tOptions["prompt"]
+                  break
+               case 2
+                  put tParam into tOptions["ok"]
+                  break
+               case 3
+                  put tParam into tOptions["cancel"]
+                  break
+               case 4
+                  put tParam into tOptions["font"]
+                  break
+            end switch
+      end switch
+   end repeat
+   return tOptions
+end hcListSelectOptions
+
+-- Whether pText is pCount integers between commas
+private function _HCIntegers pText, pCount
+   local tItem
+   if the number of items of pText is not pCount or char -1 of pText is comma then return false
+   repeat for each item tItem in pText
+      if word 1 to -1 of tItem is not an integer then return false
+   end repeat
+   return true
+end _HCIntegers
+
+/*
+The dialog of ListSelect, its options as hcListSelectOptions gives them
+and pOptions["list"] the lines shown: the numbers of the lines picked on
+line 1, the name of the button that closed it on line 2 and on line 3
+"ok" or "cancel" (empty if it was closed otherwise). A double click is
+OK, unless the options say not; so are Return and Enter, and Escape is
+Cancel. Its place is the card window's centre, or the place given, from
+the card window's top left (rule T46)
+*/
+private function _HCListDialog pOptions
+   local tDefault, tName, tStack, tWidth, tHeight, tTop, tOut, tRect
+   put the defaultStack into tDefault
+   -- (a name of its own, so that no stack of the user's is touched; kept
+   -- until its choice is read)
+   put "HyperCard List " & the milliseconds into tName
+   create invisible stack tName
+   put the long id of it into tStack
+   set the title of tStack to "Choose"
+   set the defaultStack to tName
+   -- (a dialog opens centred on the card window, but where its own
+   -- preOpenStack puts it; and a list's hilites, lost as its stack
+   -- closes, are set there too, _HCReadyToShow closing it)
+   set the script of this card to "on preOpenStack" & return & \
+         "if the uTopLeft of the owner of me is not empty then set the topLeft of the owner of me to the uTopLeft of the owner of me" & return & \
+         "try" & return & "set the hilitedLines of field " & quote & "List" & quote & " of me to the uHilited of the owner of me" & return & \
+         "catch tError" & return & "end try" & return & \
+         "pass preOpenStack" & return & "end preOpenStack" & return & "on escapeKey" & return & \
+         "send " & quote & "mouseUp" & quote & " to button " & quote & "Cancel" & quote & " of me" & return & \
+         "end escapeKey"
+   put 10 into tTop
+   if pOptions["prompt"] is not empty then
+      create field "Prompt"
+      set the lockText of it to true
+      set the borderWidth of it to 0
+      set the opaque of it to false
+      set the threeD of it to false
+      put pOptions["prompt"] into field "Prompt"
+      put 34 into tTop
+   end if
+   create field "List"
+   set the lockText of it to true
+   set the dontWrap of it to true
+   set the vScrollbar of it to true
+   if pOptions["font"] is among the lines of the fontNames then set the textFont of it to pOptions["font"]
+   if pOptions["size"] is an integer and pOptions["size"] > 0 then set the textSize of it to pOptions["size"]
+   put pOptions["list"] into field "List"
+   if pOptions["mode"] > 0 then
+      set the listBehavior of it to true
+      set the multipleHilites of it to (pOptions["mode"] > 1)
+      set the nonContiguousHilites of it to (pOptions["mode"] = 3)
+      if pOptions["select"] is not 0 and pOptions["select"] is not empty then
+         if pOptions["mode"] = 1 then put item 1 of pOptions["select"] into pOptions["select"]
+         set the uHilited of tStack to pOptions["select"]
+      end if
+      if pOptions["double"] then
+         set the script of it to "on mouseDoubleUp" & return & \
+               "send " & quote & "mouseUp" & quote & " to button " & quote & "OK" & quote & " of the owner of me" & return & \
+               "end mouseDoubleUp"
+      end if
+   end if
+   put max(300, min(600, the formattedWidth of field "List" + 40)) into tWidth
+   put 300 into tHeight
+   if pOptions["rect"] is not empty then
+      put pOptions["rect"] into tRect
+      if item 3 of tRect - item 1 of tRect >= 160 and item 4 of tRect - item 2 of tRect >= 120 then
+         put item 3 of tRect - item 1 of tRect into tWidth
+         put item 4 of tRect - item 2 of tRect into tHeight
+      end if
+   end if
+   set the width of tStack to tWidth
+   set the height of tStack to tHeight
+   if there is a field "Prompt" then set the rect of field "Prompt" to 10, 8, tWidth - 10, 32
+   set the rect of field "List" to 10, tTop, tWidth - 10, tHeight - 44
+   -- (both buttons are made, an empty name hiding one: a double click
+   -- and Return are still OK, and Escape Cancel)
+   create button "OK"
+   set the label of it to pOptions["ok"]
+   set the visible of it to (pOptions["ok"] is not empty)
+   set the rect of it to tWidth - 100, tHeight - 36, tWidth - 10, tHeight - 10
+   set the default of it to true
+   set the script of it to "on mouseUp" & return & \
+         "set the uChosen of the owner of the owner of me to the hilitedLines of field " & quote & "List" & quote & " of the owner of me" & return & \
+         "set the uButton of the owner of the owner of me to the label of me" & return & \
+         "set the uHow of the owner of the owner of me to " & quote & "ok" & quote & return & \
+         "close stack (the short name of the owner of the owner of me)" & return & "end mouseUp"
+   create button "Cancel"
+   set the label of it to pOptions["cancel"]
+   set the visible of it to (pOptions["cancel"] is not empty)
+   if pOptions["ok"] is empty then
+      set the rect of it to tWidth - 100, tHeight - 36, tWidth - 10, tHeight - 10
+   else
+      set the rect of it to tWidth - 200, tHeight - 36, tWidth - 110, tHeight - 10
+   end if
+   set the script of it to "on mouseUp" & return & \
+         "set the uButton of the owner of the owner of me to the label of me" & return & \
+         "set the uHow of the owner of the owner of me to " & quote & "cancel" & quote & return & \
+         "close stack (the short name of the owner of the owner of me)" & return & "end mouseUp"
+   set the defaultStack to tDefault
+   if pOptions["rect"] is not empty then
+      set the uTopLeft of tStack to _HCPlace("topleft", item 1 to 2 of pOptions["rect"], false)
+   else if pOptions["topLeft"] is not empty then
+      set the uTopLeft of tStack to _HCPlace("topleft", pOptions["topLeft"], false)
+   end if
+   _HCReadyToShow tStack
+   modal stack tName
+   if exists(tStack) then
+      put the uChosen of tStack & return & the uButton of tStack & return & the uHow of tStack into tOut
+      delete stack tName
+   end if
+   return tOut
+end _HCListDialog
+
 -- The line of pList the user picks in a list dialog, or empty if they
 -- cancel
 function hcChooseLine pPrompt, pList
@@ -2638,6 +3589,10 @@ function hcChooseLine pPrompt, pList
    set the width of tStack to 360
    set the height of tStack to 300
    set the defaultStack to tName
+   -- (its first line hilited as it opens: a list's hilites are lost as
+   -- its stack closes, which _HCReadyToShow does)
+   set the script of this card to "on preOpenStack" & return & "set the hilitedLine of field " & quote & "List" & quote & " of me to 1" & return & \
+         "pass preOpenStack" & return & "end preOpenStack"
    create field "Prompt"
    set the rect of it to 10,10,350,34
    set the lockText of it to true
@@ -2648,7 +3603,6 @@ function hcChooseLine pPrompt, pList
    set the lockText of it to true
    set the vScrollbar of it to true
    put pList into field "List"
-   set the hilitedLine of field "List" to 1
    create button "OK"
    set the rect of it to 270,262,350,288
    set the default of it to true
@@ -2657,6 +3611,7 @@ function hcChooseLine pPrompt, pList
    set the rect of it to 180,262,260,288
    set the script of it to "on mouseUp" & return & "close stack (the short name of the owner of the owner of me)" & return & "end mouseUp"
    set the defaultStack to tDefault
+   _HCReadyToShow tStack
    modal stack tName
    if exists(tStack) then
       put the uChosen of tStack into tLine

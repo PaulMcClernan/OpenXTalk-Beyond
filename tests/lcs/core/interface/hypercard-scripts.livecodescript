@@ -1195,6 +1195,62 @@ on TestHyperCardScriptsT46
    _Close tPicture
 end TestHyperCardScriptsT46
 
+on TestHyperCardScriptsT47
+   -- T47: a function called by a name that is one of this engine's
+   -- commands compiles here and stops at the call, as no function: the
+   -- library's stand-in for the external (replace, sort, find), or the
+   -- stack's own function of that name, as T1 renamed it
+   local tScript, tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  put replace(" & q & ":" & q & ", " & q & "," & q & ", t) into t", \
+         "  get sort(fld 1, " & q & "n" & q & ")", \
+         "  put find(" & q & "x" & q & ", t) into tAt", \
+         "  find (t) in field 1", \
+         "  if t is empty then find (t)", \
+         "  put filter(t) into t", \
+         "end mouseUp") into tScript
+   TestAssert "T47: replace(, sort( and find( called as functions: the library's stand-ins", \
+         line 2 of tScript is "  put hcX_replace(" & q & ":" & q & ", " & q & "," & q & ", t) into t" \
+         and line 3 of tScript is "  get hcX_sort(fld 1, " & q & "n" & q & ")" \
+         and line 4 of tScript is "  put hcX_find(" & q & "x" & q & ", t) into tAt"
+   TestAssert "T47: find as a statement is the command", line 5 of tScript is "  find (t) in field 1" and line 6 of tScript is "  if t is empty then find (t)"
+   TestAssert "T47: a command's name the library stands in for no external of is left as it is", line 7 of tScript is "  put filter(t) into t"
+
+   put _Rewrite("function replace pText, pOld, pNew", "  return pText & pOld & pNew", "end replace", \
+         "on mouseUp", "  put replace(1, 2, 3) into x", "end mouseUp") into tScript
+   TestAssert "T47: the stack's own function of that name, as T1 renamed it", \
+         line 1 of tScript is "function hc_replace pText, pOld, pNew" and line 5 of tScript is "  put hc_replace(1, 2, 3) into x"
+   put revHyperCardRewriteScript(_Lines("function replace pText", "  return pText", "end replace", \
+         "on mouseUp", "  put replace(1) into x", "end mouseUp"), "Replace") into tScript
+   TestAssert "T47 and T13: with an external of that name too, the call is the stack's own function's, as in HyperCard", \
+         line 5 of tScript is "  put hc_replace(1) into x"
+
+   -- in a stack, scripts that compile: the stack's own function, which
+   -- does not compile and T1 renames, and the library's stand-in
+   put "HCT47" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the script of stack tStack to _Lines("function sort pList", "  return " & q & "own" & q & " && pList", "end sort")
+   set the defaultStack to tStack
+   create button "Own"
+   set the script of button "Own" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put sort(" & q & "b,a" & q & ") into gHCScriptsTest", "end mouseUp")
+   create button "Library"
+   set the script of button "Library" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put replace(" & q & "a" & q & ", " & q & "o" & q & ", " & q & "banana" & q & ") into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   TestAssert "T47: the calls compile as they are", _Compiles(the script of button "Own" of stack tStack) and _Compiles(the script of button "Library" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Own" of stack tStack
+   TestAssert "T47, in a script that compiles: the stack's own function, renamed", gHCScriptsTest is "own b,a"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Library" of stack tStack
+   TestAssert "T47, in a script that compiles: the library's Replace", gHCScriptsTest is "bonono"
+   _Close tStack
+end TestHyperCardScriptsT47
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
@@ -1506,6 +1562,232 @@ on TestHyperCardScriptsCommonExternals
    end if
    _Close tStack
 end TestHyperCardScriptsCommonExternals
+
+on TestHyperCardScriptsTextExternals
+   -- the externals stacks call most for text and lists, as the library
+   -- stands in for them, called as HyperTalk called them (replace(,
+   -- sort( and find( through T47)
+   local tStack, q, tExpected
+   global gHCScriptsTest
+   put quote into q
+   put "HCText" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Case"
+   set the script of button "Case" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put LowerToUpper(" & q & "abc 1" & q & ") & " & q & "|" & q & " & Quoted(" & q & "a" & q & ") & " & q & "|" & q & " & Strip(" & q & "-." & q & ", " & q & "1-2.3a-A" & q & ") into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & ChangeCase(" & q & "abc 123. def ghi" & q & ", 3) & " & q & "|" & q & " & ChangeCase(" & q & "it's done" & q & ", " & q & "Title" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & ChangeCase(" & q & "aBc" & q & ", " & q & "flip" & q & ") & " & q & "|" & q & " & ChangeCase(" & q & "x" & q & ", 9) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Replace"
+   set the script of button "Replace" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put replace(" & q & "a" & q & ", " & q & "o" & q & ", " & q & "banana" & q & ") & " & q & "|" & q & " & replace(" & q & "banana" & q & ", " & q & "A" & q & ", " & q & "o" & q & ") into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & replace(" & q & "banana" & q & ", " & q & "A" & q & ", " & q & "o" & q & ", true) after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullReplace(" & q & "a-b-c" & q & ", " & q & "-" & q & ", " & q & "+" & q & ") & " & q & "|" & q & " & FullReplace(" & q & "a-b-c" & q & ", " & q & "-" & q & ", " & q & "+" & q & ", false) after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullReplace(" & q & "A-a" & q & ", " & q & "a" & q & ", " & q & "x" & q & ") & " & q & "|" & q & " & FullReplace(" & q & "a" & q & ", " & q & "a" & q & ", " & q & "b" & q & ", 9) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Sort"
+   set the script of button "Sort" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put SortItems(" & q & "c,a,,b" & q & ") & " & q & "|" & q & " & SortItems(" & q & "b" & q & " & return & " & q & "a" & q & ", true) into gHCScriptsTest", \
+         "  put " & q & "b" & q & " & return & " & q & "a" & q & " & return & " & q & "c" & q & " into t", \
+         "  put " & q & "|" & q & " & SortLines(t, " & q & "Descending" & q & ") after gHCScriptsTest", \
+         "  put " & q & "10 x" & q & " & return & " & q & "9 y" & q & " & return & " & q & "z" & q & " into t", \
+         "  put " & q & "|" & q & " & sort(t, " & q & "numeric" & q & ") after gHCScriptsTest", \
+         "  put " & q & "a,b" & q & " & return & " & q & "c,dd" & q & " into t", \
+         "  put " & q & "|" & q & " & find(t, " & q & "DD" & q & ") & " & q & "|" & q & " & find(t, " & q & "<d" & q & ") & " & q & "|" & q & " & find(t, " & q & "c" & q & ", 2, 1) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "FullSort"
+   set the script of button "FullSort" to _Lines("on mouseUp", "  global gHCScriptsTest, FullSortList", \
+         "  put " & q & "b" & q & " & return & " & q & "a" & q & " & return & " & q & "A" & q & " into t", \
+         "  put FullSort(t) & " & q & "|" & q & " & FullSortList into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullSort(t, " & q & "t=u" & q & ") & " & q & "|" & q & " & FullSortList after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullSort(" & q & "3,10,2" & q & ", " & q & "t=n" & q & ", " & q & "d=d" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullSort(" & q & "x" & q & " & return & " & q & "y" & q & " & return & " & q & "z" & q & ", " & q & "d=l" & q & ", " & q & "3,1" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullSort(" & q & "1/2/1999,12/1/1998,2/2/1999" & q & ", " & q & "T=D" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullSort(t, " & q & "q=1" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "FullFind"
+   set the script of button "FullFind" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "The cat sat on the mat" & q & " into t", \
+         "  put FullFind(t, " & q & "at" & q & ") & " & q & "|" & q & " & FullFind(t, " & q & "at" & q & ", false) & " & q & "|" & q & " & FullFind(t, " & q & "at" & q & ", false, true) into gHCScriptsTest", \
+         "  put " & q & "upon a time" & q & " & return & " & q & "on and on" & q & " into t", \
+         "  put " & q & "|" & q & " & FullFind(t, " & q & "on" & q & ", true, true) & " & q & "|" & q & " & FullFind(" & q & "Apple apple" & q & ", " & q & "apple" & q & ", true, true, true) after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullFind(" & q & "ab ab ab" & q & ", " & q & "ab" & q & ", true, true, false, 3) after gHCScriptsTest", \
+         "  put " & q & "x,cat" & q & " & return & " & q & "cat,x" & q & " into t", \
+         "  put " & q & "|" & q & " & FullFind(t, " & q & "cat" & q & ", true, true, false, 0, 2) & " & q & "|" & q & " & FullFind(" & q & "ab" & q & " & return & " & q & "cd" & q & ", " & q & "b" & q & " & return & " & q & "c" & q & ", false) after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullFind(" & q & "The Cat cat" & q & ", " & q & "cat" & q & ", " & q & "m=ac" & q & ") & " & q & "|" & q & " & FullFind(" & q & "a;b;cat" & q & ", " & q & "cat" & q & ", " & q & "s=;" & q & ", " & q & "i=3" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullFind(" & q & "cat cat" & q & ", " & q & "cat" & q & ", " & q & "o=2" & q & ", " & q & "m=a" & q & ") & " & q & "|" & q & " & FullFind(" & q & "concat catalog" & q & ", " & q & "cat" & q & ", " & q & "m=ab" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & FullFind(" & q & "a" & q & ") & " & q & "|" & q & " & FullFind(" & q & "a" & q & ", " & q & "a" & q & ", " & q & "maybe" & q & ") & " & q & "|" & q & " & FullFind(" & q & "a" & q & ", " & q & "a" & q & ", " & q & "m=a" & q & ", " & q & "x=1" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Others"
+   set the script of button "Others" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put IsRunning(" & q & "Finder" & q & ") & " & q & "|" & q & " & ChangeFileType(" & q & "x" & q & ", " & q & "TEXT" & q & ", " & q & "ttxt" & q & ") & " & q & "|" & q & " & DialogDisplay() into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & ListSelect(" & q & "x" & q & ") & " & q & "|" & q & " & ListSelect(" & q & "Z" & q & ", " & q & "a,b" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Options"
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   set the script of button "Options" of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  local tParams, tOptions", \
+         "  put " & q & "s=2,3" & q & " into tParams[1]", \
+         "  put " & q & "NoDoubleClick" & q & " into tParams[2]", \
+         "  put " & q & "10,20" & q & " into tParams[3]", \
+         "  put " & q & "Pick one" & q & " into tParams[4]", \
+         "  put " & q & "Take" & q & " into tParams[5]", \
+         "  put empty into tParams[6]", \
+         "  put " & q & "Geneva,12" & q & " into tParams[7]", \
+         "  put 3001 into tParams[8]", \
+         "  put tab into tParams[9]", \
+         "  put hcListSelectOptions(" & q & "*2#" & q & ", tParams) into tOptions", \
+         "  put tOptions[" & q & "mode" & q & "] & " & q & "|" & q & " & tOptions[" & q & "sorted" & q & "] & " & q & "|" & q & " & tOptions[" & q & "numbers" & q & "] & " & q & "|" & q & " & tOptions[" & q & "select" & q & "] into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & tOptions[" & q & "double" & q & "] & " & q & "|" & q & " & tOptions[" & q & "topLeft" & q & "] & " & q & "|" & q & " & tOptions[" & q & "prompt" & q & "] & " & q & "|" & q & " & tOptions[" & q & "ok" & q & "] after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & tOptions[" & q & "cancel" & q & "] & " & q & "|" & q & " & tOptions[" & q & "font" & q & "] & " & q & "|" & q & " & tOptions[" & q & "size" & q & "] & " & q & "|" & q & " & (tOptions[" & q & "separator" & q & "] is tab) after gHCScriptsTest", \
+         "  put hcListSelectOptions(" & q & "One" & q & ", empty) into tOptions", \
+         "  put " & q & "|" & q & " & tOptions[" & q & "mode" & q & "] & tOptions[" & q & "select" & q & "] & tOptions[" & q & "double" & q & "] & tOptions[" & q & "ok" & q & "] & tOptions[" & q & "cancel" & q & "] & (tOptions[" & q & "separator" & q & "] is comma) after gHCScriptsTest", \
+         "  put hcListSelectOptions(" & q & "Dis" & q & ", empty) into tOptions", \
+         "  put " & q & "|" & q & " & tOptions[" & q & "mode" & q & "] after gHCScriptsTest", \
+         "  put hcListSelectOptions(" & q & "N" & q & ", empty) into tOptions", \
+         "  put tOptions[" & q & "mode" & q & "] after gHCScriptsTest", \
+         "  put hcListSelectOptions(" & q & "Q" & q & ", empty) into tOptions", \
+         "  put " & q & "|" & q & " & tOptions[" & q & "error" & q & "] after gHCScriptsTest", \
+         "end mouseUp")
+
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Case" of stack tStack
+   TestAssert "LowerToUpper, Quoted, Strip and ChangeCase", gHCScriptsTest is "ABC 1|" & q & "a" & q & "|123aA|Abc 123. Def ghi|It's Done|AbC|Error: conversion form specified in param 2 not recognized."
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Replace" of stack tStack
+   TestAssert "Replace in both orders, and FullReplace", gHCScriptsTest is "bonono|bonono|banana|a+b+c|a+b-c|x-x|Error : Param #4 must be boolean"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Sort" of stack tStack
+   put "a,b,c|a" & return & "b|c" & return & "b" & return & "a|z" & return & "9 y" & return & "10 x|2,2|2,2|0" into tExpected
+   TestAssert "SortItems, SortLines, Sort and Find", gHCScriptsTest is tExpected
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "FullSort" of stack tStack
+   put "A" & return & "a" & return & "b|3,2,1|a" & return & "A" & return & "b|2,3,1|10,3,2|z" & return & "x" & return & "y|12/1/1998,1/2/1999,2/2/1999|Error : First char of param 2..n must be [t,d,c,s]" into tExpected
+   TestAssert "FullSort: character codes, case not counting, numbers descending, a list's order, dates; FullSortList; an error", gHCScriptsTest is tExpected
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "FullFind" of stack tStack
+   put "|6,1,6,1|6,1,6,1" & return & "10,1,10,1" & return & "21,1,21,1|13,2,1,1" & return & "20,2,8,1|7,1,7,1|4,1,4,1" & return & "7,1,7,1|3,1,3,2|2,1,2,1" into tExpected
+   put "|9,1,9,1|5,1,5,3|5,1,5,1|8,1,8,1|Error : Missing parameter(s)|Error : Param 3 must be true|false|Error : Incorrect param #4" after tExpected
+   TestAssert "FullFind: whole words, every one, case, a start, items, a string over two lines, version 3's options, errors", gHCScriptsTest is tExpected
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Others" of stack tStack
+   TestAssert "IsRunning, ChangeFileType, DialogDisplay with nothing to show, ListSelect's errors", gHCScriptsTest is "false|||Error : Missing Parameter(s)|Error : Bad Mode Parameter"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Options" of stack tStack
+   TestAssert "ListSelect's options", gHCScriptsTest is "2|true|true|2,3|false|10,20|Pick one|Take||Geneva|12|true|11trueOKCanceltrue|30|Error : Bad Mode Parameter"
+   _Close tStack
+end TestHyperCardScriptsTextExternals
+
+on TestHyperCardScriptsDialogs
+   -- the library's list dialogs, Promptoid and picture windows, which it
+   -- makes hidden so that they are not seen being made, are shown, and a
+   -- dialog waits for its answer: a timer picks, as the user would
+   -- (made hidden and opened so, a dialog was not seen, and gave back at
+   -- once what Cancel gives)
+   local tStack, q, tTopLeft, tExpected
+   global gHCScriptsTest
+   put quote into q
+   put "HCDialogs" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create image "Map"
+   group it
+   set the name of it to "HC Pictures"
+   set the sharedBehavior of it to true
+   create button "Driver"
+   create button "At"
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   -- (set after the fix, which leaves them as they are)
+   set the script of button "Driver" of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest, ListSelectExit", \
+         "  put " & q & "a" & q & " & return & " & q & "b" & q & " & return & " & q & "c" & q & " into tList", \
+         "  pickLater 2, " & q & "OK" & q, \
+         "  put XScrollBox(1, " & q & "Pick one" & q & ", tList) & " & q & "|" & q & " after gHCScriptsTest", \
+         "  pickLater empty, " & q & "Cancel" & q, \
+         "  put ShowList(tList, " & q & "Pick" & q & ") & " & q & "|" & q & " after gHCScriptsTest", \
+         "  pickLater 3, " & q & "OK" & q, \
+         "  put ListSelect(1, " & q & "a,b,c" & q & ") & " & q & "/" & q & " & ListSelectExit & " & q & "|" & q & " after gHCScriptsTest", \
+         "  pickLater " & q & "1,2" & q & ", " & q & "OK" & q, \
+         "  put ListSelect(" & q & "*2#" & q & ", " & q & "pear" & q & " & return & " & q & "apple" & q & " & return & " & q & "fig" & q & ", " & q & "Pick fruit" & q & ", " & q & "Take" & q & ", " & q & "Leave" & q & ") & " & q & "/" & q & " & ListSelectExit & " & q & "|" & q & " after gHCScriptsTest", \
+         "  pickLater empty, " & q & "Escape" & q, \
+         "  put ListSelect(3, " & q & "a,b,c" & q & ") & " & q & "/" & q & " & ListSelectExit & " & q & "|" & q & " after gHCScriptsTest", \
+         "  pickLater 2, " & q & "Double" & q, \
+         "  put ListSelect(1, " & q & "a,b,c" & q & ", " & q & "s=3" & q & ") & " & q & "/" & q & " & ListSelectExit after gHCScriptsTest", \
+         "end mouseUp", \
+         "on pickLater pLines, pHow", \
+         "  send " & q & "pickIt" & q & " && quote & pLines & quote & comma & quote & pHow & quote to me in 300 milliseconds", \
+         "end pickLater", \
+         "on pickIt pLines, pHow", \
+         "  global gHCScriptsTest", \
+         "  local tDialog", \
+         "  repeat for each line tDialog in the openStacks", \
+         "    if tDialog begins with " & q & "HyperCard List" & q & " then exit repeat", \
+         "  end repeat", \
+         "  if not (tDialog begins with " & q & "HyperCard List" & q & ") then", \
+         "    put " & q & "(no dialog)" & q & " after gHCScriptsTest", \
+         "    exit pickIt", \
+         "  end if", \
+         "  put " & q & "(" & q & " & the mode of stack tDialog & comma & the visible of stack tDialog & comma & the hilitedLines of field " & q & "List" & q & " of stack tDialog & " & q & ")" & q & " after gHCScriptsTest", \
+         "  if pHow is " & q & "At" & q & " then put " & q & "(" & q & " & the topLeft of stack tDialog & " & q & ")" & q & " after gHCScriptsTest", \
+         "  try", \
+         "    if pLines is not empty then set the hilitedLines of field " & q & "List" & q & " of stack tDialog to pLines", \
+         "    switch pHow", \
+         "      case " & q & "Cancel" & q, \
+         "        send " & q & "mouseUp" & q & " to button " & q & "Cancel" & q & " of stack tDialog", \
+         "        break", \
+         "      case " & q & "Escape" & q, \
+         "        send " & q & "escapeKey" & q & " to card 1 of stack tDialog", \
+         "        break", \
+         "      case " & q & "Double" & q, \
+         "        send " & q & "mouseDoubleUp" & q & " to field " & q & "List" & q & " of stack tDialog", \
+         "        break", \
+         "      default", \
+         "        send " & q & "mouseUp" & q & " to button " & q & "OK" & q & " of stack tDialog", \
+         "    end switch", \
+         "  catch tError", \
+         "    put " & q & "(error)" & q & " after gHCScriptsTest", \
+         "  end try", \
+         "  -- (never left waiting)", \
+         "  if there is a stack tDialog and the mode of stack tDialog is not 0 then close stack tDialog", \
+         "end pickIt")
+   set the script of button "At" of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  send " & q & "pickIt" && q & " & quote & 2 & quote & comma & quote & " & q & "At" & q & " & quote to button " & q & "Driver" & q & " in 300 milliseconds", \
+         "  put ListSelect(1, " & q & "a,b" & q & ", " & q & "10,20" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Driver" of stack tStack
+   put "(5,true,1)2,b|(5,true,1)Cancel|(5,true,1)c/OK|(5,true,1)2,3/Take|(5,true,1)/Cancel|(5,true,3)b/OK" into tExpected
+   TestAssert "XScrollBox, ShowList and ListSelect: a dialog shown, its first line or the one asked for hilited, that waits for OK, Cancel, Escape or a double click", gHCScriptsTest is tExpected
+   set the defaultStack to tStack
+   put the topLeft of stack tStack into tTopLeft
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "At" of stack tStack
+   TestAssert "ListSelect at a place: from the card window's top left", \
+         gHCScriptsTest is "(5,true,1)(" & (item 1 of tTopLeft + 10) & comma & (item 2 of tTopLeft + 20) & ")b"
+   TestAssert "no dialog is left", "HyperCard List" is not in the openStacks and "HyperCard List" is not in the mainStacks
+
+   send "Promptoid" && q & "Hello" & q to button "Driver" of stack tStack
+   TestAssert "Promptoid: a palette, shown, with the message", the visible of stack "Promptoid" and the mode of stack "Promptoid" is 4 and field "Message" of stack "Promptoid" is "Hello"
+   hide stack "Promptoid"
+   send "Promptoid" && q & "Again" & q to button "Driver" of stack tStack
+   TestAssert "Promptoid: shown again with the next message", the visible of stack "Promptoid" and field "Message" of stack "Promptoid" is "Again"
+   _Close "Promptoid"
+
+   send "hcPicture" && q & "Map" & q & ", resource" to button "Driver" of stack tStack
+   TestAssert "picture: a window shown", the visible of stack "Map" and the mode of stack "Map" is 1
+   send "hcPicture" && q & "Map" & q & ", resource, plain, true, 1, true" to button "Driver" of stack tStack
+   TestAssert "picture, floating: a palette shown", the visible of stack "Map" and the mode of stack "Map" is 4
+   send "hcPicture" && q & "Map" & q & ", resource, plain, false" to button "Driver" of stack tStack
+   TestAssert "picture, not visible: hidden", there is a stack "Map" and not the visible of stack "Map"
+   _Close "Map"
+   _Close tStack
+end TestHyperCardScriptsDialogs
 
 on TestHyperCardScriptsLibraryMessages
    -- HyperCard's messages sent to an object with no handler for them end

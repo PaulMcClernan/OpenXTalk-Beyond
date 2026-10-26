@@ -46,7 +46,9 @@ There are two modes:
 
 Without a display, `click at`, paint tools and anything that waits for a
 person are not representative. Count them, but don't fix them because a
-headless run reported them.
+headless run reported them. A modal window, which would wait for a person
+until the stack timed out, is closed a quarter of a second after it opens,
+as its Cancel button would close it, and counted in the report.
 
 `--lib` loads the HyperCard libraries from another folder, such as a
 released build's `Toolset/libraries`. That lets you compare the released

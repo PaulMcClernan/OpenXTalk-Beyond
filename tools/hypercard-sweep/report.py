@@ -64,7 +64,7 @@ def read_run(folder):
         if not re.match(r"\d+\.txt$", name):
             continue
         stack = {"imported": False, "opened": False, "done": False, "exit": None, "left": [], "lines": [],
-                 "errors": [], "mace": (0, 0)}
+                 "errors": [], "mace": (0, 0), "modal": 0}
         with open(os.path.join(folder, name), encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 fields = line.rstrip("\n").split("\t")
@@ -88,6 +88,10 @@ def read_run(folder):
                         stack["mace"] = (int(fields[1]), int(fields[2]))
                     except ValueError:
                         stack["mace"] = (int(fields[1]) if fields[1].isdigit() else 0, 0)
+                elif kind == "MODAL":
+                    # a modal window nobody was there to close, closed
+                    # by the sweep as its Cancel button would
+                    stack["modal"] += 1
                 elif kind == "OPENED":
                     stack["opened"] = True
                 elif kind == "DONE":
@@ -157,6 +161,8 @@ def summary(folder, limit):
         print("errors while running", sum(len(s["errors"]) for s in imported),
               "in", sum(1 for s in imported if s["errors"]), "stacks;",
               "no error at all", sum(1 for s in imported if not s["errors"] and not s["left"]))
+        print("modal windows closed by the sweep (nobody to answer them)", sum(s["modal"] for s in imported),
+              "in", sum(1 for s in imported if s["modal"]), "stacks")
 
     groups = collections.defaultdict(lambda: {"stacks": set(), "count": 0, "examples": []})
     for name, stack in stacks.items():
@@ -256,6 +262,12 @@ def compare(first_folder, second_folder):
     print("no error at all (none while running, no handler left out):",
           sum(1 for name in both if not first[name]["errors"] and not first[name]["left"]), "then",
           sum(1 for name in both if not second[name]["errors"] and not second[name]["left"]))
+    print("modal windows closed by the sweep:", sum(first[name]["modal"] for name in both),
+          "in", sum(1 for name in both if first[name]["modal"]), "stacks, then",
+          sum(second[name]["modal"] for name in both),
+          "in", sum(1 for name in both if second[name]["modal"]), "stacks")
+    print("timed out:", sum(1 for name in both if first[name]["exit"] == "timeout"), "then",
+          sum(1 for name in both if second[name]["exit"] == "timeout"))
     print("stacks with errors while running in the second run only:",
           sum(1 for name in both if second[name]["errors"] and not first[name]["errors"]),
           "in the first only:", sum(1 for name in both if first[name]["errors"] and not second[name]["errors"]))
