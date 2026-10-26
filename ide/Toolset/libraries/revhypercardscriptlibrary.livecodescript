@@ -125,7 +125,11 @@ script "revHyperCardScriptLibrary"
 -- several fields together): HyperCard took the object the chunk's text
 -- names, and this engine the object the whole text names, with the chunk
 -- as text of it, and stops with an error. The chunk goes in
--- parentheses, in a script that compiles too.
+-- parentheses, in a script that compiles too. T51 takes a textFont set to
+-- a font named in several words not in quotes ("set the textFont to New
+-- York", "set textfont of me to new century schlbk"), which HyperCard
+-- took as the text it was, and this engine as its first word, running
+-- the rest as a command it cannot find: the name in quotes.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -3062,6 +3066,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tNew is empty then put _SetWindow(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetMessageBox(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetCardAndStyle(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetTextFont(tTokens, tIdx, i, tEnd) into tNew
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
@@ -4364,6 +4369,38 @@ private function _SetCursor pTokens, pIdx, pAt, pEnd
    _Fire "T17 cursor"
    return "set the cursor to hcCursor(" & _PlainName(pTokens, pIdx, j + 2, pEnd, false) & ")"
 end _SetCursor
+
+-- T51: set the textFont to a font named in several words not in quotes
+-- ("set the textFont to New York", "set textfont of me to new century
+-- schlbk", "chicago gray"), which HyperCard took as the text it was. This
+-- engine sets the font to the first word and runs the rest as a command,
+-- which stops with "can't find handler": the name in quotes. The value
+-- follows the last "to", as a chunk's range has one ("of char 1 to 3 of
+-- fld 1"). A name of one word, and a value that is an object or an
+-- expression ("to bg field FontName", "to line Keuze of fonts", "to it"),
+-- are left as they are
+private function _SetTextFont pTokens, pIdx, pAt, pEnd
+   local j, tProperty, tTo, tWords
+   put pAt + 1 into tProperty
+   if _T(pTokens, pIdx[tProperty]) is "the" then add 1 to tProperty
+   if _T(pTokens, pIdx[tProperty]) is not "textfont" or _T(pTokens, pIdx[tProperty + 1]) is not among the words of "of to" then return empty
+   put 0 into tTo
+   repeat with j = tProperty + 1 to pEnd
+      if _T(pTokens, pIdx[j]) is "to" then put j into tTo
+   end repeat
+   if tTo = 0 or not _PlainWords(pTokens, pIdx, tTo + 1, pEnd) then return empty
+   put 0 into tWords
+   repeat with j = tTo + 1 to pEnd
+      if _T(pTokens, pIdx[j]) is among the words of kObjectWords \
+            or _T(pTokens, pIdx[j]) is among the words of "me it target empty msg message selection" then
+         return empty
+      end if
+      if pTokens[pIdx[j]]["k"] is "w" then add 1 to tWords
+   end repeat
+   if tWords < 2 then return empty
+   _Fire "T51 a font name of several words not in quotes"
+   return _Span(pTokens, pIdx, pAt, tTo) && _Literal(_Span(pTokens, pIdx, tTo + 1, pEnd))
+end _SetTextFont
 
 -- T19: show and hide card picture, background picture (which this engine
 -- reads as a card named "picture"); T21: show, hide and close window,

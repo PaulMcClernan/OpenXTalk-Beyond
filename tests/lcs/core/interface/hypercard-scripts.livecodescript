@@ -1545,6 +1545,79 @@ on TestHyperCardScriptsT50
    _Close tStack
 end TestHyperCardScriptsT50
 
+on TestHyperCardScriptsT51
+   -- T51: a textFont set to a font named in several words not in quotes,
+   -- which HyperCard took as the text it was. This engine sets the font
+   -- to the first word and runs the rest as a command it cannot find:
+   -- the name in quotes (9 stacks)
+   local tScript, tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  set the textfont to New York", \
+         "  set textfont of me to new century schlbk", \
+         "  set textfont of cd btn " & q & "Cancel" & q & " to chicago gray", \
+         "  if tDim then set the textfont of the target to New Chicago", \
+         "  set the textFont of char 1 to 3 of fld 1 to Cooper Black", \
+         "end mouseUp") into tScript
+   TestAssert "T51: the textFont", line 2 of tScript is "  set the textfont to " & q & "New York" & q
+   TestAssert "T51: of me, three words", line 3 of tScript is "  set textfont of me to " & q & "new century schlbk" & q
+   TestAssert "T51: of a button", line 4 of tScript is "  set textfont of cd btn " & q & "Cancel" & q & " to " & q & "chicago gray" & q
+   TestAssert "T51: after then", line 5 of tScript is "  if tDim then set the textfont of the target to " & q & "New Chicago" & q
+   TestAssert "T51: the value after the last to, of a chunk's range", line 6 of tScript is "  set the textFont of char 1 to 3 of fld 1 to " & q & "Cooper Black" & q
+   TestAssert "T51: the script compiles", _Compiles(tScript)
+
+   -- unchanged: an object, a chunk, an expression, one word, a variable
+   put _Rewrite("on mouseUp", \
+         "  set textFont to bg field FontName", \
+         "  set textfont of fld 1 to line Keuze of fonts", \
+         "  set textFont to any item of pictureFonts", \
+         "  set the textFont of cd fld 2 to the textFont of fld 1", \
+         "  set the textFont to Geneva", \
+         "  set the textFont of me to tFont & tStyle", \
+         "  set the textFont to it", \
+         "end mouseUp") into tScript
+   TestAssert "T51: an object: unchanged", line 2 of tScript is "  set textFont to bg field FontName"
+   TestAssert "T51: a chunk: unchanged", line 3 of tScript is "  set textfont of fld 1 to line Keuze of fonts"
+   TestAssert "T51: any item: unchanged", line 4 of tScript is "  set textFont to any item of pictureFonts"
+   TestAssert "T51: a property: unchanged", line 5 of tScript is "  set the textFont of cd fld 2 to the textFont of fld 1"
+   TestAssert "T51: one word: unchanged", line 6 of tScript is "  set the textFont to Geneva"
+   TestAssert "T51: an expression: unchanged", line 7 of tScript is "  set the textFont of me to tFont & tStyle"
+   TestAssert "T51: it: unchanged", line 8 of tScript is "  set the textFont to it"
+
+   -- in a script that compiles: the font's whole name, where this engine
+   -- stopped with "can't find handler" at its second word
+   put "HCScriptsT51" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Font"
+   set the script of button "Font" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  set the textFont to New York", \
+         "  set the textFont of me to New Century Schlbk", \
+         "  put the textFont of me into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T51: the script compiles here as it is", _Compiles(the script of button "Font" of card 1 of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Font" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T51: as it is, it stops before the font is set", gHCScriptsTest is empty
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T51: in a script that compiles", line 3 to 4 of the script of button "Font" of card 1 of stack tStack \
+         is _Lines("  set the textFont to " & q & "New York" & q, \
+         "  set the textFont of me to " & q & "New Century Schlbk" & q)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Font" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T51: the font's whole name, as in HyperCard", gHCScriptsTest is "New Century Schlbk"
+   _Close tStack
+end TestHyperCardScriptsT51
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
