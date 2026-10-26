@@ -16,9 +16,13 @@ gives the one it uses, where it would give empty, HyperCard's own style
 names (condense, outline...) set a textStyle, and grouped text reads as
 group, not link, and is drawn as plain text, underlined only after show
 groups; round takes a number halfway between two integers to the even
-one; and the seconds, and dates converted to and from seconds, count
-from 1904 in local time. Each test checks the stack with the property
-off too.
+one; the seconds, and dates converted to and from seconds, count from
+1904 in local time; numToChar and charToNum number the characters as
+HyperCard did, by the Mac's character set with the return as 13; a
+script can set the script of an object whose handler runs, which takes
+it at once while that handler goes on; and the id of a card is "card id"
+and its number, which a script can go back to. Each test checks the
+stack with the property off too.
 */
 
 local sStack
@@ -926,3 +930,228 @@ on TestHyperTalkCompatibleSeconds
    put tZone into $TZ
    _DeleteStack
 end TestHyperTalkCompatibleSeconds
+
+-- numToChar of 165, 195 and 202 (a bullet, a check mark and a
+-- non-breaking space in HyperCard) as code points; charToNum of a bullet,
+-- a non-breaking space, an e with an acute accent and a Cyrillic letter
+-- that neither set of characters has; charToNum(return); whether
+-- numToChar(13) is the return; numToChar(10) as a code point; charToNum
+-- of a carriage return; how many of the numbers 0 to 255 do not come back
+-- from charToNum(numToChar(n)); the lines of text with numToChar(13) in
+-- it, and of a script made so, as some stacks make their buttons'
+-- scripts; charToNum of a byte; numToChar(65 + 256) and charToNum("A");
+-- whether numToChar(165) and charToNum of a bullet are the platform's
+-- (numToNativeChar and nativeCharToNum); and charToNum(numToChar(8226))
+-- with the useUnicode true
+private function _CharValues
+   return _Values("put codepointToNum(numToChar(165)) into tValue" & return \
+         & "put codepointToNum(numToChar(195)) into tValue" & return \
+         & "put codepointToNum(numToChar(202)) into tValue" & return \
+         & "put charToNum(numToCodepoint(8226)) into tValue" & return \
+         & "put charToNum(numToCodepoint(160)) into tValue" & return \
+         & "put charToNum(numToCodepoint(233)) into tValue" & return \
+         & "put charToNum(numToCodepoint(1234)) into tValue" & return \
+         & "put charToNum(return) into tValue" & return \
+         & "put numToChar(13) is return into tValue" & return \
+         & "put codepointToNum(numToChar(10)) into tValue" & return \
+         & "put charToNum(numToCodepoint(13)) into tValue" & return \
+         & "put 0 into tValue;repeat with tError = 0 to 255;" \
+         & "if charToNum(numToChar(tError)) is not tError then add 1 to tValue;end repeat" & return \
+         & "put the number of lines of (" & quote & "a" & quote & " & numToChar(13) & " & quote & "b" & quote & ") into tValue" & return \
+         & "set the script of the owner of me to " & quote & "on hcCharsTest" & quote & " & numToChar(13) & " \
+         & quote & "end hcCharsTest" & quote & ";put the number of lines of the script of the owner of me into tValue" & return \
+         & "put charToNum(numToByte(165)) into tValue" & return \
+         & "put numToChar(65 + 256) & charToNum(" & quote & "A" & quote & ") into tValue" & return \
+         & "put codepointToNum(numToChar(165)) is codepointToNum(numToNativeChar(165)) into tValue" & return \
+         & "put charToNum(numToCodepoint(8226)) is nativeCharToNum(numToCodepoint(8226)) into tValue" & return \
+         & "set the useUnicode to true;put charToNum(numToChar(8226)) into tValue;set the useUnicode to false")
+end _CharValues
+
+-- The platform's characters: MacRoman on the Mac, Windows-1252 on
+-- Windows, ISO 8859-1 on Linux, in which 10, a linefeed, is the return
+on TestHyperTalkCompatibleCharsOff
+   local tValues
+   _MakeStack false
+   put _CharValues() into tValues
+   TestAssert "off: a Cyrillic letter is 63, a question mark", line 7 of tValues is 63
+   TestAssert "off: charToNum(return) is 10", line 8 of tValues is 10
+   TestAssert "off: numToChar(13) is not the return", line 9 of tValues is false
+   TestAssert "off: numToChar(10) is code point 10, the return", line 10 of tValues is 10
+   TestAssert "off: charToNum of a carriage return is 13", line 11 of tValues is 13
+   TestAssert "off: charToNum(numToChar(n)) is n for 0 to 255", line 12 of tValues is 0
+   TestAssert "off: numToChar(13) does not end a line", line 13 of tValues is 1
+   TestAssert "off: nor a line of a script", line 14 of tValues is 1
+   TestAssert "off: charToNum of byte 165 is 165", line 15 of tValues is 165
+   TestAssert "off: numToChar(65 + 256) is A, and charToNum(A) 65", line 16 of tValues is "A65"
+   TestAssert "off: numToChar(165) is the platform's character 165", line 17 of tValues is true
+   TestAssert "off: charToNum of a bullet is the platform's number for it", line 18 of tValues is true
+   TestAssert "off: with the useUnicode, charToNum(numToChar(8226)) is 8226", line 19 of tValues is 8226
+   _DeleteStack
+end TestHyperTalkCompatibleCharsOff
+
+-- HyperCard's characters were the Mac's (MacRoman) on every Mac, and a
+-- carriage return (13) ended a line of text or of a script, where a
+-- linefeed (10) did not
+on TestHyperTalkCompatibleChars
+   local tValues
+   _MakeStack true
+   put _CharValues() into tValues
+   TestAssert "on: numToChar(165) is a bullet, U+2022", line 1 of tValues is 8226
+   TestAssert "on: numToChar(195) is a check mark, U+221A", line 2 of tValues is 8730
+   TestAssert "on: numToChar(202) is a non-breaking space, U+00A0", line 3 of tValues is 160
+   TestAssert "on: charToNum of a bullet is 165", line 4 of tValues is 165
+   TestAssert "on: charToNum of a non-breaking space is 202", line 5 of tValues is 202
+   TestAssert "on: charToNum of an e with an acute accent is 142", line 6 of tValues is 142
+   TestAssert "on: a Cyrillic letter is still 63, a question mark", line 7 of tValues is 63
+   TestAssert "on: charToNum(return) is 13", line 8 of tValues is 13
+   TestAssert "on: numToChar(13) is the return", line 9 of tValues is true
+   TestAssert "on: numToChar(10) is a carriage return, code point 13", line 10 of tValues is 13
+   TestAssert "on: charToNum of a carriage return is 10", line 11 of tValues is 10
+   TestAssert "on: charToNum(numToChar(n)) is n for 0 to 255", line 12 of tValues is 0
+   TestAssert "on: numToChar(13) ends a line", line 13 of tValues is 2
+   TestAssert "on: and a line of a script", line 14 of tValues is 2
+   TestAssert "on: charToNum of byte 165 is still 165", line 15 of tValues is 165
+   TestAssert "on: numToChar(65 + 256) is still A, and charToNum(A) 65", line 16 of tValues is "A65"
+   TestAssert "on: with the useUnicode, charToNum(numToChar(8226)) is still 8226", line 19 of tValues is 8226
+   _DeleteStack
+end TestHyperTalkCompatibleChars
+
+-- A button "T" whose hcToggle sets the script of the button itself, as a
+-- button that changes its own script as it is clicked does, to one whose
+-- hcToggle logs "new" and which has a handler the old one does not,
+-- hcAdded, and goes on: it logs the last line of its button's script,
+-- what hcWhich() gives and what hcAdded does. Then hcToggle once more,
+-- and a button "Q" whose behavior's handler sets the behavior's script.
+-- What they logged, one a line: "error" and its number where a set
+-- stopped, "no hcAdded" where there was none
+private function _SetScriptLog
+   global gHCLog, gHCNewScript
+   set the defaultStack to sStack
+   create button "T"
+   set the script of button "T" of stack sStack to "on hcToggle" & return \
+         & "global gHCLog, gHCNewScript" & return & "local tError" & return \
+         & "put " & quote & "old" & quote & " & return after gHCLog" & return \
+         & "try" & return & "set the script of me to gHCNewScript" & return \
+         & "put " & quote & "set" & quote & " & return after gHCLog" & return \
+         & "catch tError" & return \
+         & "put " & quote & "error " & quote & " & item 1 of line 1 of tError & return after gHCLog" & return \
+         & "end try" & return \
+         & "put last line of the script of me & return after gHCLog" & return \
+         & "put hcWhich() & return after gHCLog" & return \
+         & "try" & return & "hcAdded" & return & "catch tError" & return \
+         & "put " & quote & "no hcAdded" & quote & " & return after gHCLog" & return \
+         & "end try" & return & "end hcToggle" & return \
+         & "function hcWhich" & return & "return " & quote & "old" & quote & return & "end hcWhich"
+   put "on hcToggle" & return & "global gHCLog" & return \
+         & "put " & quote & "new" & quote & " & return after gHCLog" & return & "end hcToggle" & return \
+         & "function hcWhich" & return & "return " & quote & "new" & quote & return & "end hcWhich" & return \
+         & "on hcAdded" & return & "global gHCLog" & return \
+         & "put " & quote & "added" & quote & " & return after gHCLog" & return & "end hcAdded" into gHCNewScript
+   create button "P"
+   set the script of button "P" of stack sStack to "on hcBehave" & return \
+         & "global gHCLog" & return & "local tError" & return \
+         & "try" & return & "set the script of button " & quote & "P" & quote & " of stack " \
+         & quote & sStack & quote & " to empty" & return \
+         & "put " & quote & "set" & quote & " & return after gHCLog" & return \
+         & "catch tError" & return \
+         & "put " & quote & "error " & quote & " & item 1 of line 1 of tError & return after gHCLog" & return \
+         & "end try" & return & "end hcBehave"
+   create button "Q"
+   set the behavior of button "Q" of stack sStack to the long id of button "P" of stack sStack
+   put empty into gHCLog
+   send "hcToggle" to button "T" of stack sStack
+   send "hcToggle" to button "T" of stack sStack
+   send "hcBehave" to button "Q" of stack sStack
+   return gHCLog
+end _SetScriptLog
+
+on TestHyperTalkCompatibleSetScriptOff
+   local tLog
+   _MakeStack false
+   put _SetScriptLog() into tLog
+   TestAssert "off: setting the script of an object whose handler runs stops the script", \
+         line 2 of tLog is "error 360"
+   TestAssert "off: so the object keeps its script", line 3 of tLog is "end hcWhich"
+   TestAssert "off: and its messages go to it", line 4 of tLog is "old" and line 5 of tLog is "no hcAdded"
+   TestAssert "off: the next one too", line 6 of tLog is "old" and line 7 of tLog is "error 360"
+   TestAssert "off: a behavior's script, while its handler runs, is not set either", \
+         line 11 of tLog is "error 360"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScriptOff
+
+-- In HyperCard a script could set the script of an object whose handler
+-- ran, and the handler went on: a button changed its own script as it was
+-- clicked, so that the next click did something else
+on TestHyperTalkCompatibleSetScript
+   local tLog
+   _MakeStack true
+   put _SetScriptLog() into tLog
+   TestAssert "on: a handler sets the script of its own object", line 2 of tLog is "set"
+   TestAssert "on: which is the object's script at once", line 3 of tLog is "end hcAdded"
+   TestAssert "on: and takes the messages the handler sends after it", \
+         line 4 of tLog is "new" and line 5 of tLog is "added"
+   TestAssert "on: and the next one", line 6 of tLog is "new" and the number of lines of tLog is 7
+   TestAssert "on: a behavior's script, while its handler runs, is still not set", \
+         line 7 of tLog is "error 360"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScript
+
+-- The id of the stack's card, its short id, the id of its background
+-- group and of a button, whether the card's id is "card id" and its short
+-- id, and its abbreviated id, one a line
+private function _IdValues
+   return _Values("put the id of card 1 into tValue" & return \
+         & "put the short id of card 1 into tValue" & return \
+         & "put the id of group " & quote & "BG" & quote & " into tValue" & return \
+         & "put the id of button " & quote & "C" & quote & " into tValue" & return \
+         & "put the id of card 1 is (" & quote & "card id" & quote & " && the short id of card 1) into tValue" & return \
+         & "put the abbreviated id of card 1 into tValue")
+end _IdValues
+
+-- A handler that keeps the id of card 1, goes to card 2 and goes to what
+-- it kept, as HyperCard stacks did: the number of the card it is on then
+private function _GoBackToId
+   global gHCLog
+   set the defaultStack to sStack
+   create card
+   set the script of button "C" of card 1 of stack sStack to "on hcGoBack" & return \
+         & "global gHCLog" & return & "local tCard, tError" & return \
+         & "put the id of card 1 into tCard" & return \
+         & "go to card 2" & return \
+         & "try" & return & "go tCard" & return & "catch tError" & return & "end try" & return \
+         & "put the number of this card into gHCLog" & return & "end hcGoBack"
+   put empty into gHCLog
+   send "hcGoBack" to button "C" of card 1 of stack sStack
+   return gHCLog
+end _GoBackToId
+
+on TestHyperTalkCompatibleCardIdOff
+   local tValues
+   _MakeStack false
+   put _IdValues() into tValues
+   TestAssert "off: the id of a card is its number", line 1 of tValues is line 2 of tValues and line 2 of tValues is an integer
+   TestAssert "off: the id of a background is its number", line 3 of tValues is an integer
+   TestAssert "off: the id of a button is its number", line 4 of tValues is an integer
+   TestAssert "off: so it is not card id and that number", line 5 of tValues is "false"
+   TestAssert "off: the abbreviated id of a card is card id and its number", line 6 of tValues is "card id" && line 2 of tValues
+   TestAssert "off: a handler that goes to a card's id goes nowhere", _GoBackToId() is 2
+   _DeleteStack
+end TestHyperTalkCompatibleCardIdOff
+
+-- In HyperCard the id of a card was "card id 1234", and stacks kept it to
+-- go back to it ("put the id of this card into tCard" ... "go tCard") or
+-- compared it with one ("if the id of this card is "card id 3058""). The
+-- id of a background, a button or a field was a number, as here
+on TestHyperTalkCompatibleCardId
+   local tValues
+   _MakeStack true
+   put _IdValues() into tValues
+   TestAssert "on: the id of a card is card id and its number", line 1 of tValues is "card id" && line 2 of tValues
+   TestAssert "on: the short id of a card is its number", line 2 of tValues is an integer
+   TestAssert "on: the id of a background is its number", line 3 of tValues is an integer
+   TestAssert "on: the id of a button is its number", line 4 of tValues is an integer
+   TestAssert "on: so it is card id and that number", line 5 of tValues is "true"
+   TestAssert "on: the abbreviated id of a card is card id and its number", line 6 of tValues is "card id" && line 2 of tValues
+   TestAssert "on: a handler that goes to a card's id goes back to it", _GoBackToId() is 1
+   _DeleteStack
+end TestHyperTalkCompatibleCardId

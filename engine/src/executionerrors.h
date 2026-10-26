@@ -2790,7 +2790,13 @@ enum Exec_errors
     EE_MATCHES_BADLEFT,
 
     // {EE-0914} matches: illegal type for right operand
-    EE_MATCHES_BADRIGHT
+    EE_MATCHES_BADRIGHT,
+
+    // {EE-0915} array literal: error in key expression
+    EE_ARRAYLITERAL_BADKEY,
+
+    // {EE-0916} array literal: error in value expression
+    EE_ARRAYLITERAL_BADVALUE
     
 };
 

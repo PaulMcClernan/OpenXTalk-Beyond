@@ -1192,6 +1192,9 @@ jobs:
   # flip leave one of its frames. And a button's Gravity in the
   # inspector, which must read Default for the empty value
   # (inspector-gravity): a forum report from macOS showed a blank line.
+  # And the controls of a stack with HyperCard's names, as an imported
+  # one has, which the inspector and the right-click menu took for cards
+  # (inspector-hypercard).
   tour-macos-26:
     name: IDE tour on macOS 26 (arm64)
     needs: package
@@ -1254,7 +1257,7 @@ jobs:
         timeout-minutes: 15
         run: |
           python3 tools/ci/ui_tour.py --install "$RUNNER_TEMP/oxt-test" --platform mac-universal \
-            --appearance light --only sample,controls,field-scroll,image-frames,inspector,inspector-tabs,inspector-gravity,dictionary,preferences,standalone-settings --out "$RUNNER_TEMP/ui-tour"
+            --appearance light --only sample,controls,field-scroll,image-frames,inspector,inspector-tabs,inspector-gravity,inspector-hypercard,dictionary,preferences,standalone-settings --out "$RUNNER_TEMP/ui-tour"
 
       # As the test job runs it (see there), on macOS 26
       - name: Menu and backdrop check

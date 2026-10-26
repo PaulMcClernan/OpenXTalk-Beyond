@@ -129,7 +129,19 @@ Windows icons out of the Linux and Mac packages, draws the palette's
 controls and tools, gives the toolbar a modern look, and brings the dark
 appearance to Home, Learn, the xTalk Academy, About, xTalk Chat, the
 xTalk Assistant and the Dictionary (see
-[0.2.7-rc.6.5](#027-rc65-the-bug-hunt-round-five));
+[0.2.7-rc.6.5](#027-rc65-the-bug-hunt-round-five)), and 0.2.7-rc.6.6
+fixes what they reported on rc.6.5: crashes printing PDFs with links,
+typing after Close and Remove From Memory and showing 0 cards, pieces of
+lines left along a scrolled field, the Inspector's image ID, Gravity and
+Scrollbar width, the Tools palette's settings, the Dictionary's filters,
+the Message Box's Pending Messages and the IDE's own file dialog, brings
+the dark appearance to Release Notes, the Extension Manager, the script
+error window and the remastered examples, gives imported HyperCard
+stacks HyperCard's text properties, text styles, round, characters and
+card ids, and their controls their own Inspector and right-click menu,
+imports HyperCard stacks from disk images again, and lets scripts write
+literal arrays, as in LiveCode 10 (see
+[0.2.7-rc.6.6](#027-rc66-the-bug-hunt-round-six));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1599,6 +1611,185 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.6: the Bug Hunt, round six
+
+OXT-Beyond 0.2.7-rc.6.6 has everything in 0.2.7-rc.6.5, and scripts can
+write literal arrays, as in LiveCode 10: where an expression goes,
+`["red", "green", "blue"]` is an array keyed 1 to 3, and
+`{"name": "Ada", "born": 1815}` one with those two keys. Every script
+that compiled before compiles to what it did; `value` and `do` of text
+with a literal in it give the array, where they stopped with an error
+(tperry2x) (#261). In the spirit of the Bug Hunt, here is every other
+change since rc.6.5, each listed as the bug it squashes:
+
+- **A crash printing a PDF with links.** A PDF with more than one link,
+  from `print link` or from a field's link text, crashed the engine at
+  the end of its page (tperry2x): the PDF printer kept only part of each
+  link's address and read the rest of it from the memory past it. A PDF
+  with one link is as before (#228).
+- **A crash on cancel while printing links.** `cancel printing` or
+  `reset printing` while a PDF with links was printing could crash, as
+  the printer freed its links before the page that used them (#238).
+- **A crash typing after Close and Remove From Memory.** Typing in any
+  field crashed after removing a stack in which an undo had put deleted
+  text back into a field with more than one line selected, as an
+  autoTab field's is (tperry2x) (#238).
+- **`show 0 cards` ended the engine.** So did `show -1 cards`,
+  `show 65536 cards`, an empty count and `show marked cards` with no
+  card marked (tperry2x). They show no card, and the handler goes on;
+  every other count shows the same cards, with the same messages (#249).
+- **A Script Editor that hung on a comment.** Typing in a script with a
+  `/*` that is not closed, or a `*/` before a `/*`, hung the IDE (from
+  OXT DPE) (#250).
+- **A wait that hung the headless engine.** A wait without messages
+  (`wait 1 second`) hung the engine run with `-ui` while an object with
+  an idle handler was open, as a HyperCard stack's own idle handler is.
+  On the desktop such a wait now sleeps, and the next idle message comes
+  when the idleRate says (#242).
+- **Pieces of lines left along a scrolled field.** A scrolled field kept
+  a row of pieces of the lines scrolled past, along its top on macOS and
+  along the bottom of a field with no border everywhere, until it was
+  redrawn (tperry2x) (#238).
+- **Return that erased an autoTab field on the Mac.** On macOS, and in
+  the Macintosh look, Return in a "tab on return" field whose text
+  autoTab had selected replaced the text with a return; it moves on to
+  the next field, as on Windows and Linux (tperry2x) (#238).
+- **Pictures in text that lost their picture.** A char that shows an
+  image (its imageSource) lost the image, and its colours, text style,
+  font, size, link and metadata, when a return was put or typed in front
+  of it, when an undo put it back, and when it was copied or cut and
+  pasted (tperry2x). Chars without an image split as before (#245).
+- **An image's ID with an icon chooser.** The Inspector offered the icon
+  chooser for an image's ID, so a picture chosen there became the
+  image's new ID, and the image still showed nothing (tperry2x). The ID
+  is a number (#230).
+- **A field's Scrollbar width that did not stick.** The Inspector offered
+  12, 16 and 20, but the engine takes 16 and 20 as one width, the look's,
+  so choosing the other did nothing or went back (tperry2x). It offers 12
+  and Standard; the scrollbarWidth a script sets is as before (#230).
+- **A blank Gravity for a button.** The Inspector showed a blank line for
+  a button's empty icon gravity. It shows Default, and choosing Default
+  sets it back to empty (tperry2x). A property's options in a property
+  definitions file or a widget's metadata can be written `Label|value`
+  (#244).
+- **An Inspector showing a control that is gone.** After File > Close and
+  Remove From Memory, or Delete Substack in the Project Browser, the
+  Inspector went on showing the control that was gone (tperry2x). It
+  moves off it, as when a stack is closed, and no longer reads a deleted
+  stack back from its file to do so (#251).
+- **Flip or rotate an animated GIF.** Flip Image and Rotate Image keep
+  only the frame an image shows, and Undo cannot bring the others back.
+  For an animated GIF stored in its stack they ask first; still images,
+  images from a file and the flip and rotate commands are as before
+  (tperry2x, OpenXTalkPaul) (#241).
+- **Tool settings named by their tooltips.** With names shown, the
+  vector and paint tools' settings were named by whole sentences, cut off
+  once the Tools palette was narrower. They are Fill Color, Line Color,
+  Line Size, Brush Pattern, Polygon Sides and Corner Radius; their
+  tooltips are as they were (tperry2x) (#251).
+- **Dictionary filters that came off one at a time.** Each filter applied
+  in the Dictionary's left column has a cross, and Clear all removes them
+  all (tperry2x) (#251).
+- **Pending Messages cut off.** The Message Box's Pending Messages list
+  showed its lines cut off until the Message Box was resized (tperry2x).
+  They are whole as soon as it opens, and a row's buttons act on that
+  row's own message (#258).
+- **The IDE's own file dialog stopped with an error.** With the
+  systemFileSelector false, `answer folder`, `answer file` and
+  `ask file` stopped with an error as the dialog opened, and Return and
+  Escape did nothing. They open, and Return and Escape click OK and
+  Cancel (#255).
+- **Extension docs that the text dictionary did not see.** With the text
+  dictionary chosen in Preferences, an installed extension's docs never
+  reached the docs database that the Script Editor's documentation, the
+  xTalk Assistant and the MCP bridge read. They do, and so do those of
+  the extensions the IDE ships; uninstalling an extension removes its
+  entries (bwmilby) (#255).
+- **mergJSON missing from the Dictionary.** mergJSONEncode,
+  mergJSONDecode and the mergJSON library are in the Dictionary and the
+  text dictionary, for macOS, Windows and Linux (bwmilby) (#238).
+- **A PDF to "~/...".** `open printing to pdf` with a path that begins
+  with "~" prints to the home folder, as every other file command reads
+  "~", where it looked for a folder named "~" (#255).
+- **32-bit Intel Mac standalones with no code.** A stack set to build for
+  32-bit Intel Macs made an app with no code in it, and any build with
+  that target left out the stack's externals; OXT-Beyond has no 32-bit
+  Mac engine. It is built for 64-bit Intel Macs, with a warning, and the
+  32-bit box is disabled (tperry2x) (#247).
+- **The debugger and the Extension Builder.** A breakpoint or watch saved
+  for a deleted control no longer stops a stack's preOpenStack, and the
+  Extension Builder ignores the `._` files macOS leaves (from OXT DPE)
+  (#250).
+- **Light windows on a dark desktop.** Release Notes, the Extension
+  Manager's rows (Find More Widgets too), the script error window and the
+  Script Editor's Errors pane follow the dark appearance (tperry2x)
+  (#232), and on Windows so do the Project Browser's rows and tabbed
+  buttons such as the Object Library's (#234).
+- **Remastered examples that stayed light.** The remastered examples
+  (Learn > Examples) follow the dark appearance, as Learn does: their
+  pages, tiles and panels are dark, and each program's stage stays light
+  (tperry2x) (#257).
+- **Back in the remastered examples.** Back goes to the card you came
+  from, however you came; with none, to the card before, as it did.
+  Spin's tagline in Animate a Letter says that a click on a letter makes
+  an image of it to click and spin (tperry2x) (#251).
+- **HyperCard stacks.** An imported stack keeps its doMenu handlers, and
+  doMenu does HyperCard's menu items by name (#231); many more
+  HyperTalk lines compile, and a handler that does not compile keeps the
+  lines that do (#231, #237, #239, #240, #248); the HyperCard Library
+  stands in for the twenty externals imported stacks call most (#243,
+  #246); and in a stack whose `hyperTalkCompatible` is true, arithmetic
+  that gives no number goes on with HyperCard's INF and NAN, and messages
+  take HyperCard's dynamic path (#252), the `textFont`, `textSize`,
+  `textStyle` and `textHeight` of a button, a field or its text with none
+  of its own are the ones in use, a `textStyle` takes HyperCard's style
+  names, grouped text reads as group, and `round` takes a half to the
+  even number, as HyperCard's did (#256). Grouped text, HyperCard's
+  hypertext, is drawn as HyperCard drew it, underlined only after
+  `show groups`, and `the seconds` count from 1 January 1904 in local
+  time, as HyperCard's did, so seconds such a stack stored with rc.6.3
+  to rc.6.5 read as dates 66 years earlier (#260). In such a stack
+  `numToChar` and `charToNum` number the characters as the Mac did, on
+  every platform, a script can set the script of an object whose
+  handler is running, and the id of a card is "card id 1234", as in
+  HyperCard; and File > Import Stack has `play` take the sound a field
+  names (#262).
+  Every other stack is as before.
+- **Disk images that imported nothing.** File > Import Stack >
+  HyperCard Stack... with a disk image did nothing at all, on every
+  platform, as the list of the image's stacks never showed
+  (OpenXTalkPaul). It opens in the middle of the screen with the first
+  stack picked, and Import brings that stack in with its resource fork.
+  An image kept in a MacBinary file is read, and an HFS+ volume or a
+  compressed .dmg, which the importer does not read, is named, with how
+  to make a copy it reads, where it was "not a HyperCard stack" (#261).
+- **An import summary that never showed.** The window that says what a
+  HyperCard import brought in and what it did not stayed hidden. It
+  shows in the middle of the screen (#261).
+- **Go back after an import.** In the session a stack is imported in,
+  which in the web Stack Player is every session, a stack's first `go
+  back`, or a `pop card` after its own `push recent card`, went to the
+  import's hidden menus substack or to one of the HyperCard Library's own
+  windows, and Carrie's Coins and Datebook+ stopped there. They go back
+  through the stack's own cards now (#261).
+- **Imported HyperCard stacks in the IDE.** In a stack imported from
+  HyperCard, the engine names a control as HyperCard did (`card button
+  "OK"`), and the IDE took every button, field and image for a card: the
+  Inspector showed a card's properties, the right-click menu was the
+  card's, and Launch Editor did nothing. Each control has its own
+  Inspector and right-click menu now (OpenXTalkPaul) (#261).
+
+Under the hood, the engine's tests print PDFs with links and cancel
+them, undo in autoTab fields and show every count of cards; the IDE's
+tours scroll fields, flip an animated GIF, set a button's Gravity and
+inspect an imported stack's controls on Windows, macOS and Linux (#238,
+#241, #244, #249, #261). The scripts inside the
+IDE's binary stacks are kept as text in `stack-scripts/`, and the Linux
+build checks that they match the stacks (#254). The engine's tests
+write literal arrays, and every script in the repository compiles to
+what it did before them, and the IDE's tests answer the list of a disk
+image's stacks with Import and Cancel (#261).
 
 #### 0.2.7-rc.6.5: the Bug Hunt, round five
 

@@ -794,4 +794,17 @@ on TestImportHyperCard
    TestAssert "a stack the image has not", TestIsError(tReply) and TestText(tReply) contains "has no stack"
    put TestCall("import_hypercard", "{`file`:`" & TestGetInputFile("hypercard/forks/Stacks.dc42") & "`}") into tReply
    TestAssert "an image with no stack_path lists, and imports nothing", not TestIsError(tReply) and TestText(tReply) contains "Nothing was imported"
+   -- an HFS+ volume (here the HFS one with its signature changed) is a
+   -- disk image the library does not read, not "not a disk image"
+   local tData, tFile
+   put url ("binfile:" & TestGetInputFile("hypercard/forks/Stacks.hfs")) into tData
+   put "H+" into byte 1025 to 1026 of tData
+   put the temporary folder & "/mcb-test-hfsplus-" & the milliseconds & ".hfs" into tFile
+   put tData into url ("binfile:" & tFile)
+   put TestCall("import_hypercard", "{`file`:`" & tFile & "`,`list`:true}") into tReply
+   TestDiagnostic TestText(tReply)
+   TestAssert "an HFS+ volume, listed", TestIsError(tReply) and TestText(tReply) contains "The disk image cannot be read: an HFS+ volume"
+   put TestCall("import_hypercard", "{`file`:`" & tFile & "`}") into tReply
+   TestAssert "an HFS+ volume, imported", TestIsError(tReply) and TestText(tReply) contains "The disk image cannot be read: an HFS+ volume"
+   delete file tFile
 end TestImportHyperCard

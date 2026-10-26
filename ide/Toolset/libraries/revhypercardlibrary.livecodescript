@@ -736,7 +736,7 @@ function hcHome
       put the defaultStack into tDefault
       put the lockMessages into tLocked
       lock messages
-      create invisible stack "HyperCard Home"
+      get _HCNewHiddenStack("HyperCard Home")
       set the lockMessages to tLocked
       set the defaultStack to tDefault
    end if
@@ -1726,7 +1726,7 @@ private command _HCIdleCursorKeeper
    if there is a stack kHCIdleCursorKeeper then exit _HCIdleCursorKeeper
    put the defaultStack into tDefault
    lock messages
-   create invisible stack kHCIdleCursorKeeper
+   get _HCNewHiddenStack(kHCIdleCursorKeeper)
    set the script of stack kHCIdleCursorKeeper to _HCIdleCursorKeeperScript()
    close stack kHCIdleCursorKeeper
    unlock messages
@@ -2158,7 +2158,7 @@ on hcWindow pVerb, pName, pLocation
             -- (a hidden stack opens hidden)
             set the visible of stack pName to true
             if the uHyperCard["picture"] of stack pName is true then
-               topLevel stack pName
+               _HCPictureWindow pName
             else
                palette stack pName
             end if
@@ -2221,7 +2221,7 @@ on hcPicture pName, pType, pStyle, pVisible, pDepth, pFloating
    if there is a stack tTitle and the uHyperCard["picture"] of stack tTitle is true then
       delete stack tTitle
    end if
-   create invisible stack tTitle
+   get _HCNewHiddenStack(tTitle)
    put the long id of it into tStack
    set the uHyperCard["picture"] of tStack to true
    set the title of tStack to tTitle
@@ -2241,7 +2241,7 @@ on hcPicture pName, pType, pStyle, pVisible, pDepth, pFloating
       if pFloating is true then
          palette stack tTitle
       else
-         topLevel stack tTitle
+         _HCPictureWindow tTitle
       end if
       set the defaultStack to tDefault
    end if
@@ -2265,6 +2265,34 @@ private command _HCReadyToShow pStack
    set the lockMessages to tLocked
    set the visible of pStack to true
 end _HCReadyToShow
+
+-- A new invisible stack named pName, for one of the library's windows,
+-- as "create invisible stack" makes it, with what create puts into "it"
+-- returned. It is made with the recent cards locked: create opens a
+-- stack, and the card it opened on was the most recent card, where a
+-- stack's "go back", or its "pop card" after a "push recent card", went
+-- next. HyperCard's own windows were never cards to go back to. (A new
+-- stack is not one with HyperCard's order, whose cards lockRecent lets
+-- through)
+private function _HCNewHiddenStack pName
+   local tRecent
+   put the lockRecent into tRecent
+   set the lockRecent to true
+   create invisible stack pName
+   set the lockRecent to tRecent
+   return it
+end _HCNewHiddenStack
+
+-- topLevel stack pName, a picture window, with the recent cards locked,
+-- as _HCNewHiddenStack makes it: a window opened as a document is
+-- otherwise the most recent card
+private command _HCPictureWindow pName
+   local tRecent
+   put the lockRecent into tRecent
+   set the lockRecent to true
+   topLevel stack pName
+   set the lockRecent to tRecent
+end _HCPictureWindow
 
 /*
 set the P of window W to V (rule T26), for the properties of HyperCard's
@@ -2982,7 +3010,7 @@ on Promptoid pMessage
       return "There is already a window called Promptoid"
    end if
    if there is not a stack "Promptoid" then
-      create invisible stack "Promptoid"
+      get _HCNewHiddenStack("Promptoid")
       set the uHyperCard["promptoid"] of it to true
       set the width of it to 320
       set the height of it to 60
@@ -3915,7 +3943,7 @@ private function _HCListDialog pOptions
    -- (a name of its own, so that no stack of the user's is touched; kept
    -- until its choice is read)
    put "HyperCard List " & the milliseconds into tName
-   create invisible stack tName
+   get _HCNewHiddenStack(tName)
    put the long id of it into tStack
    set the title of tStack to "Choose"
    set the defaultStack to tName
@@ -4021,7 +4049,7 @@ function hcChooseLine pPrompt, pList
    -- (a name of its own, so that no stack of the user's is touched; kept
    -- until its choice is read)
    put "HyperCard List " & the milliseconds into tName
-   create invisible stack tName
+   get _HCNewHiddenStack(tName)
    put the long id of it into tStack
    set the title of tStack to "Choose"
    set the width of tStack to 360
@@ -4082,7 +4110,7 @@ private function _HCPopUp pText, pTop, pLeft
    put the defaultStack into tDefault
    if sHCPopUp is empty or not exists(sHCPopUp) then
       -- (a name of its own, so that no stack of the user's is touched)
-      create invisible stack ("HyperCard Popup " & the milliseconds)
+      get _HCNewHiddenStack("HyperCard Popup " & the milliseconds)
       put the long id of it into sHCPopUp
       set the defaultStack to the short name of sHCPopUp
       create button "Menu"
@@ -4122,11 +4150,13 @@ private function _HCSpeak pText
    return the result
 end _HCSpeak
 
--- pText as a JavaScript string literal
+-- pText as a JavaScript string literal. (Its carriage returns are
+-- numToCodepoint(13): this library runs in the imported stack, where
+-- numToChar(13) is the return, as in HyperCard)
 private function _HCJavaScriptString pText
    replace "\" with "\\" in pText
    replace quote with "\" & quote in pText
    replace return with "\n" in pText
-   replace numToChar(13) with "\r" in pText
+   replace numToCodepoint(13) with "\r" in pText
    return quote & pText & quote
 end _HCJavaScriptString

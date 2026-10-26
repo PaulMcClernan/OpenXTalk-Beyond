@@ -1221,7 +1221,9 @@ static void MCEngineSplitScriptIntoMessageAndParameters(MCExecContext& ctxt, MCS
             //   mptr (into which it points) only lasts as long as this method call.
             // SN-2015-06-03: [[ Bug 11277 ]] MCHandler::eval_ctxt refactored
             MCExecValue t_value;
-            ctxt . eval_ctxt(ctxt, *t_expression, t_value);
+            // OXT-Beyond: as text, with no literal arrays, so that a
+            //   parameter such as [x] is the text it was
+            ctxt . eval_ctxt(ctxt, *t_expression, t_value, true);
             if (!ctxt.HasError())
                 newparam->give_exec_argument(t_value);
             else

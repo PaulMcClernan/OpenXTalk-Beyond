@@ -14,8 +14,8 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 | Marker | Notes |
 | --- | --- |
 | [FIXME](#fixme) | 64 |
-| [HACK](#hack) | 29 |
-| [TODO](#todo) | 421 |
+| [HACK](#hack) | 32 |
+| [TODO](#todo) | 429 |
 
 ## FIXME
 
@@ -55,7 +55,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 - [engine/src/funcs.h:1148](engine/src/funcs.h#L1148) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1156](engine/src/funcs.h#L1156) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1589](engine/src/funcs.h#L1589) EE_CHARTONUM_BADSOURCE, PE_CHARTONUM_BADPARAM> // FIXME
-- [engine/src/globals.cpp:981](engine/src/globals.cpp#L981) FIXME use MCProperListRef
+- [engine/src/globals.cpp:983](engine/src/globals.cpp#L983) FIXME use MCProperListRef
 - [engine/src/mcsemaphore.h:61](engine/src/mcsemaphore.h#L61) FIXME mark as explicit
 - [engine/src/sysspec-url.cpp:341](engine/src/sysspec-url.cpp#L341) FIXME if wait() returns non-zero, cancel the URL
 - [engine/src/widget.lcb:911](engine/src/widget.lcb#L911) FIXME not actually implemented
@@ -118,13 +118,13 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 
 ### FIXME: builder (1)
 
-- [builder/docs_builder.livecodescript:382](builder/docs_builder.livecodescript#L382) FIXME This has to be kept in sync with the installer manifest, probably
+- [builder/docs_builder.livecodescript:387](builder/docs_builder.livecodescript#L387) FIXME This has to be kept in sync with the installer manifest, probably
 
 <a id="fixme-ide"></a>
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12033](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12033) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12248](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12248) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -134,9 +134,9 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 
 ## HACK
 
-Workarounds their authors were not happy with. 29 notes, by part of the repository:
+Workarounds their authors were not happy with. 32 notes, by part of the repository:
 
-[engine](#hack-engine) (8), [ide](#hack-ide) (8), [libfoundation](#hack-libfoundation) (3), [prebuilt](#hack-prebuilt) (3), [builder](#hack-builder) (2), [ide-support](#hack-ide-support) (2), [tests](#hack-tests) (2), [extensions](#hack-extensions) (1)
+[engine](#hack-engine) (8), [ide](#hack-ide) (8), [libfoundation](#hack-libfoundation) (3), [prebuilt](#hack-prebuilt) (3), [stack-scripts](#hack-stack-scripts) (3), [builder](#hack-builder) (2), [ide-support](#hack-ide-support) (2), [tests](#hack-tests) (2), [extensions](#hack-extensions) (1)
 
 <a id="hack-engine"></a>
 
@@ -156,11 +156,11 @@ Workarounds their authors were not happy with. 29 notes, by part of the reposito
 ### HACK: ide (8)
 
 - [ide/Toolset/libraries/revdebuggerlibrary.livecodescript:1438](ide/Toolset/libraries/revdebuggerlibrary.livecodescript#L1438) For now we have to hack this without access to the parser
-- [ide/Toolset/libraries/revdebuggerlibrary.livecodescript:2241](ide/Toolset/libraries/revdebuggerlibrary.livecodescript#L2241) calls IDE code, e.g get url. For now we hack around this.
+- [ide/Toolset/libraries/revdebuggerlibrary.livecodescript:2259](ide/Toolset/libraries/revdebuggerlibrary.livecodescript#L2259) calls IDE code, e.g get url. For now we hack around this.
 - [ide/Toolset/palettes/behaviors/revinspectorbehavior.livecodescript:41](ide/Toolset/palettes/behaviors/revinspectorbehavior.livecodescript#L41) HACK for stopping the gradient and effects palette getting stuck behind the inspector!!
 - [ide/Toolset/palettes/extension manager/revideextensionmanagerstorebehavior.livecodescript:24](ide/Toolset/palettes/extension%20manager/revideextensionmanagerstorebehavior.livecodescript#L24) Hack to get round bug 18946
-- [ide/Toolset/palettes/reverrordisplay.livecodescript:550](ide/Toolset/palettes/reverrordisplay.livecodescript#L550) attempting to highlight the appropriate line number. This is a total hack, but there doensn't seem
-- [ide/Toolset/palettes/script editor/behaviors/revsecommoneditorbehavior.livecodescript:3578](ide/Toolset/palettes/script%20editor/behaviors/revsecommoneditorbehavior.livecodescript#L3578) First wrap the script to the required width, this is a total hack as doing it properly would take quite a while.
+- [ide/Toolset/palettes/reverrordisplay.livecodescript:571](ide/Toolset/palettes/reverrordisplay.livecodescript#L571) attempting to highlight the appropriate line number. This is a total hack, but there doensn't seem
+- [ide/Toolset/palettes/script editor/behaviors/revsecommoneditorbehavior.livecodescript:3590](ide/Toolset/palettes/script%20editor/behaviors/revsecommoneditorbehavior.livecodescript#L3590) First wrap the script to the required width, this is a total hack as doing it properly would take quite a while.
 - [ide/Toolset/palettes/script editor/behaviors/revseeditorbehavior.livecodescript:2247](ide/Toolset/palettes/script%20editor/behaviors/revseeditorbehavior.livecodescript#L2247) this is clearly a bit of a hack, but hopefully doing is this way will minimize the risk.
 - [ide/Toolset/palettes/script editor/behaviors/revsevariablespanebehavior.livecodescript:116](ide/Toolset/palettes/script%20editor/behaviors/revsevariablespanebehavior.livecodescript#L116) If the user chooses a large font, we need to increase the size of the template, for now we just hack this as
 
@@ -180,6 +180,14 @@ Workarounds their authors were not happy with. 29 notes, by part of the reposito
 - [prebuilt/libicu.gyp:392](prebuilt/libicu.gyp#L392) Really nasty hack to prevent this from being treated as a path
 - [prebuilt/thirdparty.gyp:728](prebuilt/thirdparty.gyp#L728) Hack to put licuuc after lharfbuzz in library list
 
+<a id="hack-stack-scripts"></a>
+
+### HACK: stack-scripts (3)
+
+- [stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript:709](stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript#L709) hack. Use proper algorithm for adding items
+- [stack-scripts/ide/Toolset/palettes/revonline.rev.bst/scripts/stack_revOnline_field_id_1006.livecodescript:12](stack-scripts/ide/Toolset/palettes/revonline.rev.bst/scripts/stack_revOnline_field_id_1006.livecodescript#L12) hack
+- [stack-scripts/ide/Toolset/palettes/revonline.rev.bst/scripts/stack_revOnline_group_id_31860.livecodescript:64](stack-scripts/ide/Toolset/palettes/revonline.rev.bst/scripts/stack_revOnline_group_id_31860.livecodescript#L64) Temp hack not sure if this is right way to do it
+
 <a id="hack-builder"></a>
 
 ### HACK: builder (2)
@@ -192,7 +200,7 @@ Workarounds their authors were not happy with. 29 notes, by part of the reposito
 ### HACK: ide-support (2)
 
 - [ide-support/revdeploylibraryemscripten.livecodescript:258](ide-support/revdeploylibraryemscripten.livecodescript#L258) It will only work if firefox is not already running (or we could try a nasty apple script hack but that susceptible to menu/shortcut changes).
-- [ide-support/revsaveasstandalone.livecodescript:1900](ide-support/revsaveasstandalone.livecodescript#L1900) For now however, I've added this hack to allow users to work around the issue themselves.
+- [ide-support/revsaveasstandalone.livecodescript:1908](ide-support/revsaveasstandalone.livecodescript#L1908) For now however, I've added this hack to allow users to work around the issue themselves.
 
 <a id="hack-tests"></a>
 
@@ -209,9 +217,9 @@ Workarounds their authors were not happy with. 29 notes, by part of the reposito
 
 ## TODO
 
-Work left for later. 421 notes, by part of the repository:
+Work left for later. 429 notes, by part of the repository:
 
-[engine](#todo-engine) (261), [libfoundation](#todo-libfoundation) (47), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
+[engine](#todo-engine) (261), [libfoundation](#todo-libfoundation) (47), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [stack-scripts](#todo-stack-scripts) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
 
 <a id="todo-engine"></a>
 
@@ -225,7 +233,7 @@ Work left for later. 421 notes, by part of the repository:
 - [engine/exec-tests/text/EvalFontNames.test:11](engine/exec-tests/text/EvalFontNames.test#L11) TODO - check for standard fonts on other platforms
 - [engine/exec-tests/text/EvalFontSizes.test:10](engine/exec-tests/text/EvalFontSizes.test#L10) TODO - test font sizes on other platforms
 - [engine/exec-tests/text/EvalFontStyles.test:8](engine/exec-tests/text/EvalFontStyles.test#L8) TODO - test font sizes on other platforms
-- [engine/src/block.cpp:2353](engine/src/block.cpp#L2353) else if (!IsMacLF()) // TODO: if platform reverses selected text
+- [engine/src/block.cpp:2363](engine/src/block.cpp#L2363) else if (!IsMacLF()) // TODO: if platform reverses selected text
 - [engine/src/browser.lcb:221](engine/src/browser.lcb#L221) TODO - replace literal values with constants when possible
 - [engine/src/browser.lcb:240](engine/src/browser.lcb#L240) TODO - replace literal values with constants when possible
 - [engine/src/browser.lcb:244](engine/src/browser.lcb#L244) TODO - replace literal values with constants when possible
@@ -385,21 +393,21 @@ Work left for later. 421 notes, by part of the repository:
 - [engine/src/module-canvas.h:320](engine/src/module-canvas.h#L320) TODO - Implement image operations
 - [engine/src/module-canvas.h:363](engine/src/module-canvas.h#L363) TODO - add skew?"
 - [engine/src/module-engine.cpp:527](engine/src/module-engine.cpp#L527) TODO[C++11] This should be "static" but MSVC2010 doesn't support
-- [engine/src/object.cpp:661](engine/src/object.cpp#L661) TODO: filter out the C1 control codes too
-- [engine/src/object.cpp:1083](engine/src/object.cpp#L1083) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/object.h:1736](engine/src/object.h#L1736) TODO[C++11] uint32_t m_part_id = 0;
-- [engine/src/object.h:1739](engine/src/object.h#L1739) TODO[2017-04-27] These constructors should be constexpr
-- [engine/src/object.h:1740](engine/src/object.h#L1740) TODO[C++11] constexpr MCObjectPartHandle() = default;
-- [engine/src/object.h:1745](engine/src/object.h#L1745) TODO[C++11] MCObjectPartHandle(const MCObjectPartHandle&) = default;
-- [engine/src/object.h:1748](engine/src/object.h#L1748) TODO[C++11] MCObjectPartHandle(MCObjectPartHandle&& other) = deafult;
-- [engine/src/object.h:1759](engine/src/object.h#L1759) TODO[C++11] MCObjectPartHandle& operator=(const MCObjectPartHandle&) = default;
-- [engine/src/object.h:1766](engine/src/object.h#L1766) TODO[C++11] MCObjectPartHandle& operator=(MCObjectPartHandle&&) = default;
+- [engine/src/object.cpp:676](engine/src/object.cpp#L676) TODO: filter out the C1 control codes too
+- [engine/src/object.cpp:1135](engine/src/object.cpp#L1135) TODO[19681]: This can be removed when all engine messages are sent with
+- [engine/src/object.h:1756](engine/src/object.h#L1756) TODO[C++11] uint32_t m_part_id = 0;
+- [engine/src/object.h:1759](engine/src/object.h#L1759) TODO[2017-04-27] These constructors should be constexpr
+- [engine/src/object.h:1760](engine/src/object.h#L1760) TODO[C++11] constexpr MCObjectPartHandle() = default;
+- [engine/src/object.h:1765](engine/src/object.h#L1765) TODO[C++11] MCObjectPartHandle(const MCObjectPartHandle&) = default;
+- [engine/src/object.h:1768](engine/src/object.h#L1768) TODO[C++11] MCObjectPartHandle(MCObjectPartHandle&& other) = deafult;
+- [engine/src/object.h:1779](engine/src/object.h#L1779) TODO[C++11] MCObjectPartHandle& operator=(const MCObjectPartHandle&) = default;
+- [engine/src/object.h:1786](engine/src/object.h#L1786) TODO[C++11] MCObjectPartHandle& operator=(MCObjectPartHandle&&) = default;
 - [engine/src/paragraf.cpp:168](engine/src/paragraf.cpp#L168) TODO: trunctation
-- [engine/src/paragraf.cpp:2235](engine/src/paragraf.cpp#L2235) TODO: truncation if the paragraph would be too long
-- [engine/src/paragraf.cpp:2393](engine/src/paragraf.cpp#L2393) TODO: find out if ICU break iterator makes this redundant
-- [engine/src/paragraf.cpp:2409](engine/src/paragraf.cpp#L2409) TODO: find out if ICU break iterator makes this redundant
-- [engine/src/paragraf.cpp:2586](engine/src/paragraf.cpp#L2586) TODO: is this necessary with the ICU break iterator?
-- [engine/src/paragraf.cpp:2604](engine/src/paragraf.cpp#L2604) TODO: is this necessary with the ICU break iterator?
+- [engine/src/paragraf.cpp:2243](engine/src/paragraf.cpp#L2243) TODO: truncation if the paragraph would be too long
+- [engine/src/paragraf.cpp:2401](engine/src/paragraf.cpp#L2401) TODO: find out if ICU break iterator makes this redundant
+- [engine/src/paragraf.cpp:2417](engine/src/paragraf.cpp#L2417) TODO: find out if ICU break iterator makes this redundant
+- [engine/src/paragraf.cpp:2594](engine/src/paragraf.cpp#L2594) TODO: is this necessary with the ICU break iterator?
+- [engine/src/paragraf.cpp:2612](engine/src/paragraf.cpp#L2612) TODO: is this necessary with the ICU break iterator?
 - [engine/src/paragraf.h:881](engine/src/paragraf.h#L881) TODO: this should probably return a StringRef or a codepoint...
 - [engine/src/platform-recorder.cpp:50](engine/src/platform-recorder.cpp#L50) TODO - compression
 - [engine/src/platform.h:30](engine/src/platform.h#L30) COCOA-TODO: Remove external declaration.
@@ -421,7 +429,7 @@ Work left for later. 421 notes, by part of the repository:
 - [engine/src/srvscript.cpp:125](engine/src/srvscript.cpp#L125) TODO[2017-02-06] This is fragile; FindFile() should be
 - [engine/src/stack.cpp:644](engine/src/stack.cpp#L644) COCOA-TODO: Remove dependence on ifdef
 - [engine/src/stack.cpp:1544](engine/src/stack.cpp#L1544) COCOA-TODO: Remove dependence on ifdef
-- [engine/src/stack.cpp:1635](engine/src/stack.cpp#L1635) TODO[19681]: This can be removed when all engine messages are sent with
+- [engine/src/stack.cpp:1682](engine/src/stack.cpp#L1682) TODO[19681]: This can be removed when all engine messages are sent with
 - [engine/src/stackcache.cpp:210](engine/src/stackcache.cpp#L210) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackcache.cpp:272](engine/src/stackcache.cpp#L272) if defined(__ARM__) && 0 // TODO
 - [engine/src/stackfileformat.cpp:25](engine/src/stackfileformat.cpp#L25) TODO: change this, and comparisons for version >= 7000 / 5500, etc
@@ -604,10 +612,10 @@ Work left for later. 421 notes, by part of the repository:
 - [tests/lcb/stdlib/string.lcb:68](tests/lcb/stdlib/string.lcb#L68) test diagnostic "TODO test some Unicode corner cases"
 - [tests/lcb/stdlib/string.lcb:74](tests/lcb/stdlib/string.lcb#L74) test diagnostic "TODO case sensitivity options"
 - [tests/lcb/vm/foreign-invoke.lcb:119](tests/lcb/vm/foreign-invoke.lcb#L119) TODO
-- [tests/lcs/docs/validate-dictionary.livecodescript:189](tests/lcs/docs/validate-dictionary.livecodescript#L189) !TODO test associations are valid
-- [tests/lcs/docs/validate-dictionary.livecodescript:248](tests/lcs/docs/validate-dictionary.livecodescript#L248) TODO this should not be necessary if we fix all these docs but baby steps!!!
-- [tests/lcs/docs/validate-dictionary.livecodescript:257](tests/lcs/docs/validate-dictionary.livecodescript#L257) TODO this should not be necessary if we fix all these docs but baby steps!!!
-- [tests/lcs/docs/validate-dictionary.livecodescript:330](tests/lcs/docs/validate-dictionary.livecodescript#L330) !TODO parse all summaries and descriptions etc
+- [tests/lcs/docs/validate-dictionary.livecodescript:238](tests/lcs/docs/validate-dictionary.livecodescript#L238) !TODO test associations are valid
+- [tests/lcs/docs/validate-dictionary.livecodescript:297](tests/lcs/docs/validate-dictionary.livecodescript#L297) TODO this should not be necessary if we fix all these docs but baby steps!!!
+- [tests/lcs/docs/validate-dictionary.livecodescript:306](tests/lcs/docs/validate-dictionary.livecodescript#L306) TODO this should not be necessary if we fix all these docs but baby steps!!!
+- [tests/lcs/docs/validate-dictionary.livecodescript:379](tests/lcs/docs/validate-dictionary.livecodescript#L379) !TODO parse all summaries and descriptions etc
 - [tests/lcs/extensions/libraries/resourcestest/resourcestest.lcb:27](tests/lcs/extensions/libraries/resourcestest/resourcestest.lcb#L27) TODO: once we have 'the contents of resource file' or similar,
 
 <a id="todo-libgraphics"></a>
@@ -654,6 +662,19 @@ Work left for later. 421 notes, by part of the repository:
 - [libscript/src/script-execute.cpp:545](libscript/src/script-execute.cpp#L545) TODO: Split UnboxingConvert so that we don't resolve types twice.
 - [libscript/src/script-private.h:830](libscript/src/script-private.h#L830) TODO: Make this better for negative numbers.
 - [libscript/src/script-validate.hpp:243](libscript/src/script-validate.hpp#L243) TODO: Validate that p_address is the start of an opcode.
+
+<a id="todo-stack-scripts"></a>
+
+### TODO: stack-scripts (8)
+
+- [stack-scripts/ide/Documentation/Docs Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript:88](stack-scripts/ide/Documentation/Docs%20Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript#L88) !TODO test associations are valid
+- [stack-scripts/ide/Documentation/Docs Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript:145](stack-scripts/ide/Documentation/Docs%20Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript#L145) TODO this should not be necessary if we fix all these docs but baby steps!!!
+- [stack-scripts/ide/Documentation/Docs Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript:154](stack-scripts/ide/Documentation/Docs%20Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript#L154) TODO this should not be necessary if we fix all these docs but baby steps!!!
+- [stack-scripts/ide/Documentation/Docs Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript:217](stack-scripts/ide/Documentation/Docs%20Helper.livecode.bst/scripts/stack_LibrarySubstack.livecodescript#L217) !TODO parse all summaries and descriptions etc
+- [stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript:2664](stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript#L2664) TODO: [Optimization] When resizing for the first time we should look for auto hide scrollbars.
+- [stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript:3009](stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript#L3009) TODO: Should this value be the average of the current content height?
+- [stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript:3767](stack-scripts/ide/Toolset/palettes/revCore.8.livecode.bst/scripts/stack_revDataViewControl_button_id_1003.livecodescript#L3767) TODO: is this reliable? What if user renders view again? Will the cache update?
+- [stack-scripts/ide/Toolset/palettes/revpreferencesgui.rev.bst/scripts/stack_revPreferencesGUI.livecodescript:22](stack-scripts/ide/Toolset/palettes/revpreferencesgui.rev.bst/scripts/stack_revPreferencesGUI.livecodescript#L22) TODO we need the screen the user has used the menubar on on mac not the screen the menubar is on
 
 <a id="todo-builder"></a>
 

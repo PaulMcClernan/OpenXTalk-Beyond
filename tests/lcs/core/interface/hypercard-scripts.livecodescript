@@ -489,7 +489,7 @@ on TestHyperCardScriptsT37
    TestAssert "T37: a comma that ends the arguments", line 4 of tScript is "  ShowHistory " & q & "The Outcome" & q & ", 5, empty"
    TestAssert "T37: go cd", line 5 of tScript is "  go this cd"
    TestAssert "T37: go to card", line 6 of tScript is "  go to this card"
-   TestAssert "T37: the number of marked card i", line 7 of tScript is "  put the number of card id (the id of marked card i) into tn"
+   TestAssert "T37: the number of marked card i", line 7 of tScript is "  put the number of card id (the short id of marked card i) into tn"
    TestAssert "T37: palette after then", line 8 of tScript is "  if there is not a window " & q & "Nav" & q & " then hcPalette " & q & "Nav" & q & "," & q & "254,0" & q
    TestAssert "T37: the script compiles", _Compiles(tScript)
 
@@ -1389,6 +1389,83 @@ on TestHyperCardScriptsT48
    _Close tStack
 end TestHyperCardScriptsT48
 
+on TestHyperCardScriptsT49
+   -- T49: play with a sound named in a field or a button of the card or
+   -- the background, whose text HyperCard played. This engine reads the
+   -- "card" as a player's ("play card player "Movie"") and looks for the
+   -- field without it, in a stack from HyperCard one of the background:
+   -- the field in parentheses, its text (Merz Poetry, Sound Studio)
+   local tScript, tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  play cd fld " & q & "music box" & q, \
+         "  put " & q & "c" & q & " into thisNote", \
+         "  play card field sound tempo card field speed thisnote", \
+         "  play card field sound thisNote", \
+         "  play bg fld 1 c d e", \
+         "  play bkgnd btn id 7 tempo 120", \
+         "  if x then play cd fld 2 else play bg fld (n + 1)", \
+         "  play cd fld help", \
+         "  play flute tempo card field speed c d", \
+         "end mouseUp") into tScript
+   TestAssert "T49: a card field named in quotes", line 2 of tScript is "  play (cd fld " & q & "music box" & q & ")"
+   TestAssert "T49: with a tempo in a card field and the notes in a variable", \
+         line 4 of tScript is "  play (card field " & q & "sound" & q & ") tempo card field speed thisnote"
+   TestAssert "T49: with the notes in a variable", line 5 of tScript is "  play (card field " & q & "sound" & q & ") thisNote"
+   TestAssert "T49 and T35: a background field, the notes not in quotes", line 6 of tScript is "  play (bg fld 1) " & q & "c d e" & q
+   TestAssert "T49: a button by its id, with a tempo", line 7 of tScript is "  play (bkgnd btn id 7) tempo 120"
+   TestAssert "T49: after then and after else, a name in parentheses", \
+         line 8 of tScript is "  if x then play (cd fld 2) else play (bg fld (n + 1))"
+   TestAssert "T49 and T44: a name that is a constant here", line 9 of tScript is "  play (cd fld " & q & "help" & q & ")"
+   TestAssert "T35: a tempo in a card field, the notes not in quotes", line 10 of tScript is "  play flute tempo card field speed " & q & "c d" & q
+   TestAssert "T49: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a field of another card, a field with neither card nor
+   -- background (here as in HyperCard, one of the background), a name
+   -- with "the", a function's value as the name, a tempo in a field of
+   -- neither, which T35 leaves as it is
+   put _Rewrite("on mouseUp", \
+         "  play card field 1 of card 2", \
+         "  play field " & q & "x" & q, \
+         "  play the short name of bg btn 1", \
+         "  play card field f(1)", \
+         "  play flute tempo field 2 c d", \
+         "end mouseUp") into tScript
+   TestAssert "T49: a field of another card: unchanged", line 2 of tScript is "  play card field 1 of card 2"
+   TestAssert "T49: a field with neither card nor background: unchanged", line 3 of tScript is "  play field " & q & "x" & q
+   TestAssert "T49: a name with the: unchanged", line 4 of tScript is "  play the short name of bg btn 1"
+   TestAssert "T49: a function's value as the name: unchanged", line 5 of tScript is "  play card field f(1)"
+   TestAssert "T35: a tempo in a field of neither: unchanged", line 6 of tScript is "  play flute tempo field 2 c d"
+
+   -- in a script that compiles, in a stack from HyperCard: the card's
+   -- field, where this engine looked for one of the background and
+   -- stopped with "no such object"
+   put "HCScriptsT49" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the HCAddressing of stack tStack to true
+   set the defaultStack to tStack
+   create field "Sound"
+   put "HCScriptsNoSuchSound" into card field "Sound" of card 1 of stack tStack
+   create button "Play"
+   set the script of button "Play" to _Lines("on mouseUp", "  global gHCScriptsTest", "  try", \
+         "    play cd fld " & q & "Sound" & q, \
+         "    put " & q & "played" & q & " into gHCScriptsTest", \
+         "  catch tError", \
+         "    put " & q & "error" & q && "&& item 1 of tError into gHCScriptsTest", \
+         "  end try", \
+         "  play stop", "end mouseUp")
+   unlock messages
+   TestAssert "T49: the script compiles here as it is", _Compiles(the script of button "Play" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T49: in a script that compiles", line 4 of the script of button "Play" of card 1 of stack tStack is "    play (cd fld " & q & "Sound" & q & ")"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Play" of card 1 of stack tStack
+   TestAssert "T49: the card's field found, as in HyperCard", gHCScriptsTest is "played"
+   _Close tStack
+end TestHyperCardScriptsT49
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
@@ -1665,6 +1742,41 @@ on TestHyperCardScriptsHomeHandlers
    TestAssert "Home handlers: a stack's own getHomeInfo first", gHCScriptsTest is "own"
    _Close tStack
 end TestHyperCardScriptsHomeHandlers
+
+on TestHyperCardScriptsRecentCards
+   -- the stacks revHyperCardFixScripts makes and the library's own windows
+   -- are not recent cards: create opens a stack, and a stack's "go back",
+   -- or its "pop card" after a "push recent card", went to its card
+   local tStack, tPopped
+   global gHCScriptsTest
+   put "HCRecent" & the milliseconds into tStack
+   lock messages
+   if there is a stack "HyperCard Home" then delete stack "HyperCard Home"
+   create invisible stack tStack
+   set the hyperTalkCompatible of stack tStack to true
+   set the defaultStack to tStack
+   create card
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", "  get hcHome()", "  go back", \
+         "  put the number of this card & comma & the short name of this stack into gHCScriptsTest", "end mouseUp")
+   go to card 1 of stack tStack
+   go to card 2 of stack tStack
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "recent cards: not the library's", _Library(tStack) is not in the recentCards
+   TestAssert "recent cards: nor its menus'", _Menus(tStack) is not in the recentCards
+   push recent card
+   pop card into tPopped
+   TestAssert "recent cards: push recent card, the card gone to before", tPopped is the long id of card 1 of stack tStack
+
+   -- the library's stand-in for Home, made as the button asks for it
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of card 2 of stack tStack
+   TestAssert "recent cards: go back after the library made a stack, the card gone to before", gHCScriptsTest is "1," & tStack
+   TestAssert "recent cards: not the library's Home", "HyperCard Home" is not in the recentCards
+   _Close tStack
+   if there is a stack "HyperCard Home" then delete stack "HyperCard Home"
+end TestHyperCardScriptsRecentCards
 
 on TestHyperCardScriptsCommonExternals
    -- the externals stacks called most that the library stands in for
