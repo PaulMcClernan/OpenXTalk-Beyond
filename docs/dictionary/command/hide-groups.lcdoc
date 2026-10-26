@@ -34,12 +34,19 @@ The <hide groups> <command> sets the <global> <underlineLinks>
 <property>, so if a <stack|stack's> <underlineLinks> is true, 
 <hide groups> does not remove the underlining in that <stack>.
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import
+Stack sets it for a <stack> from <HyperCard>, <hide groups> takes off
+the underline that <show groups> put under its <grouped text>, which
+is drawn as plain text, as <HyperCard> drew it, unless the <stack> has
+an <underlineLinks> of its own.
+
 References: show groups (command), hide menubar (command),
 global (command), clickChunk (function), mouseChunk (function),
 clickText (function), mouseText (function), property (glossary),
 grouped text (glossary), command (glossary), function (glossary),
 hypertext (glossary), word (keyword), stack (object),
-underlineLinks (property)
+underlineLinks (property), hyperTalkCompatible (property),
+HyperCard (glossary)
 
 Tags: ui
 

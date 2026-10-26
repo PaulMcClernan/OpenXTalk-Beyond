@@ -173,6 +173,12 @@ extern "C" MC_DLLEXPORT_DEF void MCHyperXTalkMicroseconds(double& r_value)
 void MCDateTimeGetSeconds(MCExecContext &ctxt, double& r_value)
 {
 	r_value = floor(MCS_time());
+
+	// OXT-Beyond: in a stack whose hyperTalkCompatible is true, HyperCard's
+	//   seconds, from 1904 in local time (date.cpp); the long seconds, which
+	//   HyperCard did not have, are the engine's in every stack
+	if (ctxt . IsHyperTalkCompatible())
+		MCD_hypertalk_seconds(r_value, r_value);
 }
 
 void MCDateTimeGetLongSeconds(MCExecContext &ctxt, double& r_value)

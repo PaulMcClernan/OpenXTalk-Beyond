@@ -146,6 +146,10 @@ extern MCStringRef MChilitecolorname;
 extern MCColor MCselectioncolor;
 extern MCStringRef MCselectioncolorname;
 extern Linkatts MClinkatts;
+// OXT-Beyond: whether HyperCard's grouped text, the link text of a stack
+//   whose hyperTalkCompatible is true, is underlined (show groups, hide
+//   groups); false, as HyperCard started
+extern Boolean MChypertalkshowgroups;
 extern Boolean MCrelayergrouped;
 extern Boolean MCselectgrouped;
 extern Boolean MCselectintersect;

@@ -222,6 +222,11 @@ extern bool MCD_convert(MCExecContext& ctxt, MCValueRef p_input,
 extern bool MCD_convert_to_datetime(MCExecContext& ctxt, MCValueRef p_input, Convert_form p_primary_from, Convert_form p_secondary_from, MCDateTime &r_datetime);
 extern bool MCD_convert_from_datetime(MCExecContext& ctxt, MCDateTime p_datetime, Convert_form p_primary_from, Convert_form p_secondary_from, MCValueRef &r_output);
 
+// OXT-Beyond: the engine's seconds p_seconds (from 1970, universal time)
+//   as HyperCard's, from 1904 in local time, for "the seconds" in a stack
+//   whose hyperTalkCompatible is true (date.cpp)
+extern bool MCD_hypertalk_seconds(double p_seconds, double& r_seconds);
+
 extern void MCD_getlocaleformats();
 
 #endif

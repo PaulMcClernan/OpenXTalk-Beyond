@@ -2212,7 +2212,12 @@ void MCStack::SetHyperTalkCompatible(MCExecContext &ctxt, bool p_compatible)
         return;
     }
 
+    // the stack's link text, and its substacks', is drawn as HyperCard
+    // drew grouped text (MCBlock::draw)
+    bool t_changed = m_hypertalk_compatible != p_compatible;
     m_hypertalk_compatible = p_compatible;
+    if (t_changed)
+        MCRedrawDirtyScreen();
 }
 
 void MCStack::GetHyperTalkCompatible(MCExecContext &ctxt, bool &r_compatible)

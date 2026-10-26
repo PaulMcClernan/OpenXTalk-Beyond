@@ -216,6 +216,7 @@ MCStringRef MCselectioncolorname;
 Linkatts MClinkatts = { { 0, 0, 0xEFBE }, NULL,
                         { 0xFFFF, 0, 0 }, NULL,
                         { 0x5144, 0x1861, 0x8038 }, NULL, True };
+Boolean MChypertalkshowgroups;
 Boolean MCrelayergrouped;
 Boolean MCselectgrouped;
 Boolean MCselectintersect = True;
@@ -613,6 +614,7 @@ void X_clear_globals(void)
 	MClinkatts . visitedcolor . green = 0x1861;
 	MClinkatts . visitedcolor . blue = 0x8038;
 	MClinkatts . underline = True;
+	MChypertalkshowgroups = False;
 	MCrelayergrouped = False;
 	MCselectgrouped = False;
 	MCselectintersect = True;

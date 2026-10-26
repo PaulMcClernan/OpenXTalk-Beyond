@@ -39,9 +39,19 @@ The long seconds form returns a value with a precision to a millionth of
 a second. However, this value is not normally accurate past the third
 decimal place because of processor delays.
 
-References: wait (command), function (control structure),
-milliseconds (function), event (glossary), eon (glossary),
-return (glossary), decimal point (glossary)
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import
+Stack sets it for a <stack> from <HyperCard>, the <seconds> <function>
+<return|returns> the seconds since midnight, January 1, 1904 in local
+time, as <HyperCard|HyperCard's> did: 2082844800 more than in other
+stacks, plus the local time's offset from GMT, which is negative west
+of Greenwich. A date <convert|converted> to or from seconds in such a
+<stack> counts them the same way. The long seconds form is the same in
+every <stack>.
+
+References: wait (command), convert (command), function (control structure),
+milliseconds (function), hyperTalkCompatible (property), event (glossary),
+eon (glossary), return (glossary), decimal point (glossary),
+HyperCard (glossary)
 
 Tags: math
 

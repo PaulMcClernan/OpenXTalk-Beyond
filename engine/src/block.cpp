@@ -1257,14 +1257,24 @@ void MCBlock::draw(MCDC *dc, coord_t x, coord_t lx, coord_t cx, int2 y, findex_t
 	if (fontstyle & FA_LINK)
 	{
 		Linkatts *a = f->getstack()->getlinkatts();
-		if (flags & F_HILITED)
-			t_foreground_color = &a -> hilitecolor;
+		// OXT-Beyond: in a stack whose hyperTalkCompatible is true, link
+		//   text is HyperCard's grouped text, which HyperCard drew as the
+		//   text it was, in its own colour, clicked or not, and underlined
+		//   only after "show groups"; unless the stack has link colours or
+		//   an underlineLinks of its own
+		if (a == &MClinkatts && f->getstack()->ishypertalkcompatible())
+			ull = MChypertalkshowgroups;
 		else
-			if (flags & F_VISITED)
-				t_foreground_color = &a -> visitedcolor;
+		{
+			if (flags & F_HILITED)
+				t_foreground_color = &a -> hilitecolor;
 			else
-				t_foreground_color = &a -> color;
-		ull = a->underline;
+				if (flags & F_VISITED)
+					t_foreground_color = &a -> visitedcolor;
+				else
+					t_foreground_color = &a -> color;
+			ull = a->underline;
+		}
 	}
 
 	// MM-2013-11-05: [[ Bug 11547 ]] We now pack alpha values into pixels meaning we shouldn't check against MAXUNIT4. Not sure why this check was here previously.
