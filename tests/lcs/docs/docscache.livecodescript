@@ -8,7 +8,8 @@ script "TestDocsCache"
 -- extensions' docs, so the Script Editor and the xTalk Assistant found no
 -- entry for "put". The cache now notes the distributed file it holds and,
 -- when that changes, takes the distributed libraries' entries afresh and
--- keeps the extensions'.
+-- keeps the extensions'. An uninstalled extension's entries leave it
+-- (ideDocsRemoveLibrary), and they used to stay (openxtalk.org p=25441).
 
 constant kStub = "revDocsCacheTestIDE"
 
@@ -103,6 +104,18 @@ private function __Found pTerm
    end if
    return the number of elements of tEntries
 end __Found
+
+-- How many entries a lookup of pTerm finds in every library of the xTalk
+-- Script API, extensions' included, as the Script Editor's documentation
+-- pane looks
+private function __FoundInAny pTerm
+   local tEntries
+   put ideDocsFetchScriptData(pTerm) into tEntries
+   if tEntries is not an array then
+      return 0
+   end if
+   return the number of elements of tEntries
+end __FoundInAny
 
 -- Every entry of the cache, "library:name" lines, sorted
 private function __CacheEntries
@@ -247,3 +260,86 @@ on TestBrokenDistributedFile
    TestAssert "nothing noted", there is not a file (sCacheFolder & "/api.sqlite.source")
    TestAssert "extension entries as they were", __CacheEntries() is "Tree View:treeViewSelect"
 end TestBrokenDistributedFile
+
+-- An uninstalled extension's entries leave the cache (ideDocsRemoveLibrary,
+-- as revIDEExtensionUninstall calls it), and every other library's stay,
+-- among them a library of the same name under another API
+on TestRemoveLibrary
+   local tEntries
+   __AddDocs sCacheFolder, "livecode_script", "Tree View", "treeViewSelect,message" & return & "pathDelimiter,property"
+   __AddDocs sCacheFolder, "livecode_builder", "Tree View", "TreeViewNode,type"
+   __MakeDistributed "put,command"
+   TestAssert "the extension's entry found", __FoundInAny("treeViewSelect") is 1
+
+   ideDocsRemoveLibrary "livecode_script", "Tree View"
+   TestAssert "removed with no error", the result is empty
+   TestAssert "its entry gone", __FoundInAny("treeViewSelect") is 0
+   put __CacheEntries() into tEntries
+   TestDiagnostic tEntries
+   TestAssert "nothing of it left under its API", "Tree View:pathDelimiter" is not among the lines of tEntries
+   TestAssert "the same name under another API kept", "Tree View:TreeViewNode" is among the lines of tEntries
+   TestAssert "the core entries kept", __Found("put") is 1 and "Data Grid:dgText" is among the lines of tEntries
+   TestAssert "nothing else gone", the number of lines of tEntries is 4
+end TestRemoveLibrary
+
+-- An extension the user installed under the name of a library the
+-- distributed file documents (here the Data Grid's) wrote its entries over
+-- the distributed ones, with one the distributed library lacks: once it is
+-- uninstalled, the distributed entries are back, and only they
+on TestRemoveLibraryOfADistributedName
+   local tEntries
+   __MakeDistributed "put,command"
+   TestAssert "the distributed entry found", __FoundInAny("dgText") is 1
+   __CloseCache
+
+   -- The extension's, as revIDEGetExtensionDocsData writes them
+   __AddDocs sCacheFolder, "livecode_script", "Data Grid", "dgText,property" & return & "dgExtra,command"
+   TestAssert "the extension's entry found", __FoundInAny("dgExtra") is 1
+
+   ideDocsRemoveLibrary "livecode_script", "Data Grid"
+   TestAssert "removed with no error", the result is empty
+   TestAssert "the extension's entry gone", __FoundInAny("dgExtra") is 0
+   TestAssert "the distributed entry back, once", __FoundInAny("dgText") is 1
+   put __CacheEntries() into tEntries
+   TestDiagnostic tEntries
+   TestAssert "the core entries kept", __Found("put") is 1 and "LiveCode Builder:variable" is among the lines of tEntries
+   TestAssert "nothing twice", the number of lines of tEntries is 3
+end TestRemoveLibraryOfADistributedName
+
+-- A library or an API the cache does not have is nothing to remove
+on TestRemoveLibraryNotInTheCache
+   __AddDocs sCacheFolder, "livecode_script", "Tree View", "treeViewSelect,message"
+   __MakeDistributed "put,command"
+   ideDocsRemoveLibrary "livecode_script", "No Such Library"
+   TestAssert "an unknown library is no error", the result is empty
+   ideDocsRemoveLibrary "no_such_api", "Tree View"
+   TestAssert "an unknown API is no error", the result is empty
+   TestAssert "the extension's entry kept", __FoundInAny("treeViewSelect") is 1
+   TestAssert "the core entry kept", __Found("put") is 1
+end TestRemoveLibraryNotInTheCache
+
+-- With a distributed file that is not a dictionary, or none, the
+-- extension's entries still go, and nothing comes back
+on TestRemoveLibraryWithNoDistributedFile
+   __AddDocs sCacheFolder, "livecode_script", "Tree View", "treeViewSelect,message"
+   __AddDocs sCacheFolder, "livecode_script", "Other", "otherThing,command"
+   put "not a database" into url ("binfile:" & sDistFolder & "/api.sqlite")
+   ideDocsRemoveLibrary "livecode_script", "Tree View"
+   TestAssert "removed with no error", the result is empty
+   TestAssert "only the other library left", __CacheEntries() is "Other:otherThing"
+
+   __CloseCache
+   delete file (sDistFolder & "/api.sqlite")
+   ideDocsRemoveLibrary "livecode_script", "Other"
+   TestAssert "removed with no file", the result is empty
+   TestAssert "nothing left", __CacheEntries() is empty
+end TestRemoveLibraryWithNoDistributedFile
+
+-- A cache file with no tables, as the copy of a missing file leaves, has
+-- nothing to remove
+on TestRemoveLibraryFromAnEmptyCache
+   put empty into url ("binfile:" & sCacheFolder & "/api.sqlite")
+   ideDocsRemoveLibrary "livecode_script", "Tree View"
+   TestAssert "no error", the result is empty
+   TestAssert "nothing in it", __CacheEntries() is empty
+end TestRemoveLibraryFromAnEmptyCache

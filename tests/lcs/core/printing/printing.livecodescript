@@ -169,6 +169,56 @@ on TestPDFPrinterCancelWithLinks
    TestAssert "a reset pdf with links leaves no file", there is not a file tFile
 end TestPDFPrinterCancelWithLinks
 
+-- OXT-Beyond: "~" names the home folder in the path of a PDF, as it does
+-- in any file's (open file, URL "file:"). "open printing to pdf" took it
+-- for a folder named "~" in the default folder, so printing to "~/x.pdf"
+-- failed (0.2.7-rc.6.4 on Linux). The home folder is $HOME, set here to
+-- the test folder. Windows paths have no "~"
+on TestPDFPrinterHomeFolder
+   TestSkipIfNot "external", "revpdfprinter"
+   TestSkipIf "platform", "Win32"
+
+   local tFile, tStack, tHome
+   put TestGetTestBuildFolder() & slash & "test-home.pdf" into tFile
+   if there is a file tFile then
+      delete file tFile
+   end if
+   create stack
+   put it into tStack
+
+   put $HOME into tHome
+   put TestGetTestBuildFolder() into $HOME
+   open printing to pdf "~/test-home.pdf"
+   print card 1 of tStack
+   close printing
+   put tHome into $HOME
+
+   TestAssert "a pdf printed to ~/ is in the home folder", there is a file tFile
+end TestPDFPrinterHomeFolder
+
+-- OXT-Beyond: a relative path still names a file in the default folder
+-- (TestPDFPrinterHomeFolder)
+on TestPDFPrinterRelativePath
+   TestSkipIfNot "external", "revpdfprinter"
+
+   local tFile, tStack, tFolder
+   put TestGetTestBuildFolder() & slash & "test-relative.pdf" into tFile
+   if there is a file tFile then
+      delete file tFile
+   end if
+   create stack
+   put it into tStack
+
+   put the defaultFolder into tFolder
+   set the defaultFolder to TestGetTestBuildFolder()
+   open printing to pdf "test-relative.pdf"
+   print card 1 of tStack
+   close printing
+   set the defaultFolder to tFolder
+
+   TestAssert "a pdf printed to a relative path is in the default folder", there is a file tFile
+end TestPDFPrinterRelativePath
+
 private function _TestCountOf pNeedle, pData
    local tCount, tSkip, tFound
    put 0 into tCount

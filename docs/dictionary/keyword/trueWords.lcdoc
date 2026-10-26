@@ -30,7 +30,9 @@ container.
 A <trueWord> is a word chunk, delimited by Unicode word breaks, as
 determined by the ICU Library. When there are no alphabetic or numeric
 characters between two word breaks, that string is not considered by
-OpenXTalk to be a trueWord.
+OpenXTalk to be a trueWord. Some punctuation between two letters or two
+digits is part of a <trueWord>, as in "example.com" or "3.14", so the
+number of trueWords in "Hot potatoes are hot.Obviously." is 4.
 
 References: trueWord (keyword)
 

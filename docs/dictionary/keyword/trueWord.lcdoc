@@ -29,6 +29,10 @@ put trueWord 3 of line 3 of tText -- returns "обучение"
 Example:
 get trueWord 4 of ("The programme output:" && quote & "Hello World!" & quote) -- yields Hello
 
+Example:
+get trueWord 4 of "Hot potatoes are hot.Obviously." -- yields hot.Obviously
+get trueWord 4 of "Hot potatoes are hot. Obviously." -- yields hot
+
 Description:
 Use the <trueWord> keyword to refer to one or more words, delimited by
 Unicode word breaks.
@@ -37,6 +41,15 @@ A <trueWord> is a word chunk, delimited by Unicode word breaks, as
 determined by the ICU Library. When there are no alphabetic or numeric
 characters between two word breaks, that string is not considered by
 OpenXTalk to be a trueWord.
+
+Not every punctuation mark is a word break. A full stop, colon or
+apostrophe with a letter on each side of it is part of the word, as in
+"e.g", "example.com", "a:b" and "don't", and so is a full stop or comma
+with a digit on each side of it, as in "3.14" and "1,000". So
+trueWord 4 of "Hot potatoes are hot.Obviously." is "hot.Obviously",
+and with a space after the full stop it is "hot". A <word> is delimited
+by spaces, tabs and returns, so word 4 of the same text is
+"hot.Obviously.", with the last full stop.
 
 References: item (keyword), character (keyword), segment (keyword),
 sentence (keyword), line (keyword), word (keyword), paragraph (keyword),

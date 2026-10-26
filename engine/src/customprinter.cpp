@@ -2121,9 +2121,20 @@ bool MCCustomPrinterCreate(MCStringRef p_destination, MCStringRef p_filename, MC
         return false;
     }
 
-	MCAutoStringRef t_native_path;
+	// OXT-Beyond: the file's path is resolved as an opened file's is
+	// (MCS_open), so that "~" names the home folder on Linux and macOS:
+	// "open printing to pdf" took it for a folder named "~" in the default
+	// folder, and printing to "~/Documents/x.pdf" failed. A relative path
+	// names the file it did, in the default folder, and an empty one is
+	// left empty (resolved, it would name the default folder itself)
+	MCAutoStringRef t_resolved_path, t_native_path;
 	if (p_filename != nil)
-		/* UNCHECKED */ MCS_pathtonative(p_filename, &t_native_path);
+	{
+		if (MCStringIsEmpty(p_filename) ||
+			!MCS_resolvepath(p_filename, &t_resolved_path))
+			t_resolved_path = p_filename;
+		/* UNCHECKED */ MCS_pathtonative(*t_resolved_path, &t_native_path);
+	}
 
 	MCCustomPrinter *t_printer;
 	t_printer = new (nothrow) MCCustomPrinter(p_destination, t_device);
