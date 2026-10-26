@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, four things are as they were in <HyperCard>, for the
+When it is true, six things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -57,6 +57,34 @@ When it is true, four things are as they were in <HyperCard>, for the
   <card|cards> out of the pictures of its Recent dialog. A <script>
   that sets the <lockRecent> to true, goes to a <card> and then goes
   back returns to the <card> it came from.
+- A <handler> that goes to another <card>, with the <dynamicPaths>
+  true, as File > Import Stack sets it, still sends its messages
+  through its own <stack> first, as <HyperCard|HyperCard's> dynamic
+  path did: a message goes from the <object> through its <card>,
+  <background> and <stack>, then through the <card> the <handler> went
+  to, that <card|card's> backgrounds and <stack>, and on to Home. No
+  <object> gets the message twice, so a <background> the two
+  <card|cards> share is left out, and so is a second trip through a
+  <stack> the message has been through. Otherwise, a message that went
+  to another <stack> goes on to the <card> there in place of the
+  <handler|handler's> own <stack>, so a <handler> in the
+  <stack|stack's> <script> is not found; and one that went to another
+  <card> of its own <stack> reaches that <card> only in the
+  <development environment>, where it goes through the <stack> a second
+  time, and in a <standalone application> not at all.
+- Arithmetic that gives no number goes on with <HyperCard|HyperCard's>
+  result, an infinity or a NAN (not a number), where a <script> would
+  stop with an error: 1/0 is INF, -1/0 is -INF, ln(0) is -INF and 0/0 is
+  NAN(004). A NAN shows the code <HyperCard> gave it for what made it,
+  as <HyperCard> showed it: sqrt(-1) is -NAN(001) and ln(-1) is
+  NAN(036). An infinity or a NAN shows in capitals, where it shows as
+  inf or nan otherwise. Text such as NAN(036) is read back as the NAN
+  with that code, and a NAN is compared as text, so that x is "NAN(036)"
+  is true when x is ln(-1), as <HyperCard> stacks that test for one
+  expect: as a number, a NAN is equal to nothing. A number beyond this
+  engine's range, such as 10^400, is INF too: <HyperCard|HyperCard's>
+  numbers went further. <div> and <mod> by zero still stop the <script>,
+  as they did in <HyperCard>.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -78,9 +106,10 @@ are first compiled: a <script> already compiled keeps the <handler>
 names it was compiled with until it is set again.
 
 References: HCStack (property), HCAddressing (property),
-HCImportStat (property), lockMessages (property),
-lockRecent (property), openCard (message),
-closeCard (message), doMenu (command), import (command),
-stack (object), card (object), background (glossary),
-message path (glossary), recent cards (glossary),
-HyperCard (glossary), custom property (glossary)
+HCImportStat (property), lockMessages (property), lockRecent (property),
+dynamicPaths (property), go (command), div (operator), mod (operator),
+openCard (message), closeCard (message), doMenu (command),
+import (command), stack (object), card (object), background (glossary),
+message path (glossary), recent cards (glossary), HyperCard (glossary),
+development environment (glossary), standalone application (glossary),
+custom property (glossary)

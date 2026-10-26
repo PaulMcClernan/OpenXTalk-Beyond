@@ -4,9 +4,14 @@ OXT-Beyond: the hyperTalkCompatible of a stack, which File > Import Stack
 sets for a stack imported from HyperCard. Off, every message goes where
 it always went; on, a background part's message reaches the card before
 the background, a handler can be called doMenu, and doMenu is a message
-before it runs, even while messages are locked, as in HyperCard; and
+before it runs, even while messages are locked, as in HyperCard;
 lockRecent keeps no card of the stack out of the recent cards that go
-back goes through. Each test checks the stack with the property off too.
+back goes through; a handler that went to another stack still reaches
+its own stack's script before the dynamic path, and one that went to
+another card of its own stack reaches that card after it; and arithmetic
+that gives no number goes on with HyperCard's INF or NAN instead of
+stopping the script. Each test checks the stack with the property off
+too.
 */
 
 local sStack
@@ -207,6 +212,158 @@ on TestHyperTalkCompatibleGoBack
    _DeleteStack
 end TestHyperTalkCompatibleGoBack
 
+-- The test's stack, whose script logs "hcMine" and "hcBoth" and passes
+-- "hcBoth" on, and a second stack, whose script logs "hcTheirs" and
+-- "hcBoth", both with the dynamicPaths of a stack imported from
+-- HyperCard. Button "C" goes to the second stack and then sends the three
+-- messages: what the scripts logged, "no" and the message for one that
+-- found no handler, or empty if the button did not get to the second
+-- stack
+private function _AfterGoToOtherStack
+   global gHCOrder
+   local tOther, tLog, tScript, tMessage
+   put sStack & "Other" into tOther
+   set the dynamicPaths of stack sStack to true
+   put "on hcLog pWhat" & return & "global gHCOrder" & return \
+         & "put pWhat & comma after gHCOrder" & return & "end hcLog" into tLog
+   set the script of stack sStack to "on hcMine" & return & "hcLog " & quote & "mine" & quote & return \
+         & "end hcMine" & return & "on hcBoth" & return & "hcLog " & quote & "both here" & quote & return \
+         & "pass hcBoth" & return & "end hcBoth" & return & tLog
+   create invisible stack tOther
+   set the dynamicPaths of stack tOther to true
+   set the script of stack tOther to "on hcTheirs" & return & "hcLog " & quote & "theirs" & quote & return \
+         & "end hcTheirs" & return & "on hcBoth" & return & "hcLog " & quote & "both there" & quote & return \
+         & "end hcBoth" & return & tLog
+   put "on mouseUp pOther" & return & "global gHCOrder" & return & "local tError" & return & "go to stack pOther" & return \
+         & "if the short name of this stack is not pOther then exit mouseUp" & return into tScript
+   repeat for each item tMessage in "hcMine,hcTheirs,hcBoth"
+      put "try" & return & tMessage & return & "catch tError" & return \
+            & "put " & quote & "no" && tMessage & comma & quote & " after gHCOrder" & return \
+            & "end try" & return after tScript
+   end repeat
+   put "end mouseUp" after tScript
+   set the script of button "C" of stack sStack to tScript
+   put empty into gHCOrder
+   send "mouseUp" && quote & tOther & quote to button "C" of stack sStack
+   if there is a stack tOther then delete stack tOther
+   return gHCOrder
+end _AfterGoToOtherStack
+
+on TestHyperTalkCompatibleDynamicPathOff
+   local tOrder
+   _MakeStack false
+   put _AfterGoToOtherStack() into tOrder
+   if tOrder is empty then
+      TestSkip "off: the dynamic path after a go to another stack", "the go to the other stack did not get there"
+   else
+      TestAssert "off: after a go to another stack, a message takes the other stack's path instead of its own stack's", \
+            tOrder is "no hcMine,theirs,both there,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicPathOff
+
+-- HyperCard sent a message through the static path first (the object,
+-- its card, background and stack), and then through the dynamic path
+-- (the card a handler went to, its background and stack) to Home
+on TestHyperTalkCompatibleDynamicPath
+   local tOrder
+   _MakeStack true
+   put _AfterGoToOtherStack() into tOrder
+   if tOrder is empty then
+      TestSkip "on: the dynamic path after a go to another stack", "the go to the other stack did not get there"
+   else
+      TestAssert "on: after a go to another stack, a message reaches its own stack's script, then the other stack's", \
+            tOrder is "mine,theirs,both here,both there,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicPath
+
+-- The test's stack with a second card named "two": the background "BG" on
+-- both cards, a background "BG2" on card "two" alone, and a script on
+-- each of them that logs what it is and passes "hcBoth" on. Button "C" on
+-- card 1 goes to card "two" and then sends "hcCard", which only card
+-- "two"'s script has, "hcBoth", which every script has, and "hcKick",
+-- which the stack's script has and which calls "hcCard" from the stack:
+-- what the scripts logged, "no" and the message for one that found no
+-- handler, or empty if the button did not get to card "two"
+private function _AfterGoToCard
+   global gHCOrder
+   local tLog, tScript, tMessage
+   set the defaultStack to sStack
+   set the dynamicPaths of stack sStack to true
+   create card
+   set the name of card 2 of stack sStack to "two"
+   go card "two" of stack sStack
+   -- (the backgroundBehavior puts "BG" on a new card by itself)
+   if there is not a group "BG" of card "two" of stack sStack then \
+         place group "BG" onto card "two" of stack sStack
+   create group "BG2"
+   set the backgroundBehavior of group "BG2" of card "two" of stack sStack to true
+   put "on hcLog pWhat" & return & "global gHCOrder" & return \
+         & "put pWhat & comma after gHCOrder" & return & "end hcLog" into tLog
+   set the script of stack sStack to "on hcBoth" & return & "hcLog " & quote & "stack" & quote & return \
+         & "pass hcBoth" & return & "end hcBoth" & return & "on hcKick" & return \
+         & "hcLog " & quote & "kick" & quote & return & "hcCard" & return & "end hcKick" & return & tLog
+   set the script of card 1 of stack sStack to "on hcBoth" & return \
+         & "hcLog " & quote & "card1" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   set the script of group "BG" of stack sStack to "on hcBoth" & return \
+         & "hcLog " & quote & "bg" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   set the script of group "BG2" of card "two" of stack sStack to "on hcBoth" & return \
+         & "hcLog " & quote & "bg2" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   set the script of card "two" of stack sStack to "on hcCard" & return \
+         & "hcLog " & quote & "card2" & quote & return & "end hcCard" & return & "on hcBoth" & return \
+         & "hcLog " & quote & "card2" & quote & return & "pass hcBoth" & return & "end hcBoth"
+   go card 1 of stack sStack
+   put "on mouseUp" & return & "global gHCOrder" & return & "local tError" & return & "go card 2" & return \
+         & "if the short name of this card is not " & quote & "two" & quote & " then exit mouseUp" & return into tScript
+   repeat for each item tMessage in "hcCard,hcBoth,hcKick"
+      put "try" & return & tMessage & return & "catch tError" & return \
+            & "put " & quote & "no" && tMessage & comma & quote & " after gHCOrder" & return \
+            & "end try" & return after tScript
+   end repeat
+   put "end mouseUp" after tScript
+   set the script of button "C" of card 1 of stack sStack to tScript
+   put empty into gHCOrder
+   send "mouseUp" to button "C" of card 1 of stack sStack
+   return gHCOrder
+end _AfterGoToCard
+
+on TestHyperTalkCompatibleDynamicCardOff
+   local tOrder
+   _MakeStack false
+   put _AfterGoToCard() into tOrder
+   if tOrder is empty then
+      TestSkip "off: the dynamic path after a go to another card", "the go to the other card did not get there"
+   else if the environment begins with "development" then
+      -- the home stack sends the message on to the card gone to, which
+      -- sends it through that card's backgrounds and the stack a second time
+      TestAssert "off: after a go to another card, a message still takes the static path first", \
+            tOrder contains "card1,bg,stack,"
+   else
+      TestAssert "off: with no home stack, after a go to another card a message never reaches the card gone to", \
+            tOrder is "no hcCard,card1,bg,stack,no hcBoth,kick,no hcKick,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicCardOff
+
+-- HyperCard's dynamic path also took in a card of the handler's own stack
+-- that it had gone to: a message that reached the stack unhandled went on
+-- to the card gone to and the backgrounds of that card it had not been
+-- through, and then to Home, no object getting it twice
+on TestHyperTalkCompatibleDynamicCard
+   local tOrder
+   _MakeStack true
+   put _AfterGoToCard() into tOrder
+   if tOrder is empty then
+      TestSkip "on: the dynamic path after a go to another card", "the go to the other card did not get there"
+   else
+      TestAssert "the background is on both cards", there is a group "BG" of card "two" of stack sStack
+      TestAssert "on: after a go to another card, a message reaches that card and its own backgrounds after the stack, once each", \
+            tOrder is "card2,card1,bg,stack,card2,bg2,no hcBoth,kick,card2,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicCard
+
 on TestHyperTalkCompatibleSubstack
    _MakeStack true
    create invisible stack "HyperTalkSub"
@@ -230,3 +387,101 @@ on TestHyperTalkCompatibleSaved
    _DeleteStack
    delete file tPath
 end TestHyperTalkCompatibleSaved
+
+-- Each line of pStatements run by a script of the stack (button "C"'s),
+-- with tValue 7 before it: tValue after it, one a line, or "error" where
+-- the statement stopped the script
+private function _Values pStatements
+   global gHCValues, gHCStatements
+   set the script of button "C" of stack sStack to "on hcValues" & return \
+         & "global gHCValues, gHCStatements" & return & "local tStatement, tValue, tError" & return \
+         & "put empty into gHCValues" & return \
+         & "repeat for each line tStatement in gHCStatements" & return \
+         & "put 7 into tValue" & return & "try" & return & "do tStatement" & return \
+         & "put tValue & return after gHCValues" & return \
+         & "catch tError" & return & "put " & quote & "error" & quote & " & return after gHCValues" & return \
+         & "end try" & return & "end repeat" & return & "end hcValues"
+   put pStatements into gHCStatements
+   put empty into gHCValues
+   send "hcValues" to button "C" of stack sStack
+   return gHCValues
+end _Values
+
+-- pValue between brackets: compared so, an INF or a NAN is compared as
+-- text, where as a number a NAN is equal to nothing and "inf" is "INF"
+private function _Shown pValue
+   return "[" & pValue & "]"
+end _Shown
+
+on TestHyperTalkCompatibleArithmeticOff
+   local tValues
+   _MakeStack false
+   put _Values("put 1/0 into tValue" & return & "put 0/0 into tValue" & return \
+         & "divide tValue by 0" & return & "put sqrt(-1) into tValue" & return \
+         & "put ln(0) into tValue" & return & "put 10^400 into tValue" & return \
+         & "put 7 div 0 into tValue" & return & "put 1/4 into tValue" & return \
+         & "put (" & quote & "nan" & quote & " + 0) is " & quote & "nan" & quote & " into tValue") into tValues
+   TestAssert "off: 1/0 stops the script", line 1 of tValues is "error"
+   TestAssert "off: 0/0 stops the script", line 2 of tValues is "error"
+   TestAssert "off: divide by 0 stops the script", line 3 of tValues is "error"
+   TestAssert "off: sqrt(-1) stops the script", line 4 of tValues is "error"
+   TestAssert "off: ln(0) stops the script", line 5 of tValues is "error"
+   TestAssert "off: 10^400 stops the script", line 6 of tValues is "error"
+   TestAssert "off: div by 0 stops the script", line 7 of tValues is "error"
+   TestAssert "off: 1/4 is 0.25", line 8 of tValues is "0.25"
+   TestAssert "off: a NAN is equal to nothing, its own text included", line 9 of tValues is "false"
+   _DeleteStack
+end TestHyperTalkCompatibleArithmeticOff
+
+-- HyperCard's numbers (SANE's) had infinities and NANs, and it showed a
+-- NAN with the code of what made it: 1/0 was INF, sqrt(-1) -NAN(001) and
+-- ln(-1) NAN(036) there. div and mod by zero stopped the script, as here
+on TestHyperTalkCompatibleArithmetic
+   local tValues
+   _MakeStack true
+   put _Values("put 1/0 into tValue" & return & "put -1/0 into tValue" & return \
+         & "put 0/0 into tValue" & return & "divide tValue by 0" & return \
+         & "put 1/0 + 1 into tValue" & return & "put 1/0 > 10^300 into tValue" & return \
+         & "put 1/0 is " & quote & "INF" & quote & " into tValue" & return \
+         & "put (0/0) * 100 into tValue" & return & "put sqrt(-1) into tValue" & return \
+         & "put ln(-1) into tValue" & return & "put ln(0) into tValue" & return \
+         & "put asin(2) into tValue" & return & "put (-8)^(1/3) into tValue" & return \
+         & "put 10^400 into tValue" & return & "put 7 div 0 into tValue" & return \
+         & "put 5 mod 0 into tValue" & return & "put 1/4 into tValue" & return \
+         & "put (-8)^(1/3) is " & quote & "NAN(037)" & quote & " into tValue" & return \
+         & "put " & quote & "NAN(036)" & quote & " + 0 into tValue" & return \
+         & "put (" & quote & "nan" & quote & " + 0) is " & quote & "nan" & quote & " into tValue") into tValues
+   set the caseSensitive to true
+   TestAssert "on: 1/0 is INF", _Shown(line 1 of tValues) is "[INF]"
+   TestAssert "on: -1/0 is -INF", _Shown(line 2 of tValues) is "[-INF]"
+   TestAssert "on: 0/0 is NAN(004)", _Shown(line 3 of tValues) is "[NAN(004)]"
+   TestAssert "on: 7 divided by 0 is INF", _Shown(line 4 of tValues) is "[INF]"
+   TestAssert "on: INF + 1 is INF", _Shown(line 5 of tValues) is "[INF]"
+   TestAssert "on: INF is more than any number", line 6 of tValues is "true"
+   TestAssert "on: 1/0 is " & quote & "INF" & quote, line 7 of tValues is "true"
+   TestAssert "on: a NAN times 100 is a NAN", char 1 to 4 of _Shown(line 8 of tValues) is "[NAN"
+   TestAssert "on: sqrt(-1) is -NAN(001)", _Shown(line 9 of tValues) is "[-NAN(001)]"
+   TestAssert "on: ln(-1) is NAN(036)", _Shown(line 10 of tValues) is "[NAN(036)]"
+   TestAssert "on: ln(0) is -INF", _Shown(line 11 of tValues) is "[-INF]"
+   TestAssert "on: asin(2) is NAN(034)", _Shown(line 12 of tValues) is "[NAN(034)]"
+   TestAssert "on: (-8)^(1/3) is NAN(037)", _Shown(line 13 of tValues) is "[NAN(037)]"
+   TestAssert "on: 10^400 is INF", _Shown(line 14 of tValues) is "[INF]"
+   TestAssert "on: div by 0 still stops the script", line 15 of tValues is "error"
+   TestAssert "on: mod by 0 still stops the script", line 16 of tValues is "error"
+   TestAssert "on: 1/4 is still 0.25", line 17 of tValues is "0.25"
+   TestAssert "on: a NAN is compared as text, so (-8)^(1/3) is " & quote & "NAN(037)" & quote, \
+         line 18 of tValues is "true"
+   TestAssert "on: NAN(036) read from text keeps its code, in decimal", _Shown(line 19 of tValues) is "[NAN(036)]"
+   TestAssert "on: a NAN read from text is equal to its text", line 20 of tValues is "true"
+
+   -- a field shows them as HyperCard did
+   set the defaultStack to sStack
+   create field "F"
+   set the script of button "C" of stack sStack to "on mouseUp" & return & "local tError" & return \
+         & "try" & return & "put 1/0 & comma & 0/0 into field " & quote & "F" & quote & return \
+         & "catch tError" & return & "put " & quote & "error" & quote & " into field " & quote & "F" & quote & return \
+         & "end try" & return & "end mouseUp"
+   send "mouseUp" to button "C" of stack sStack
+   TestAssert "on: a field shows 1/0 and 0/0 as INF and NAN(004)", field "F" of stack sStack is "INF,NAN(004)"
+   _DeleteStack
+end TestHyperTalkCompatibleArithmetic
