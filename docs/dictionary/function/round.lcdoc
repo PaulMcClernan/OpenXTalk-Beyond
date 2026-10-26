@@ -55,10 +55,14 @@ specify a <precision>, zero is used, meaning that the <number> is
 rounded off to a whole number.
 
 >*Note:* The <statRound> <function> is equivalent to
-> <HyperCard|HyperTalk's> "round" <function>.
+> <HyperCard|HyperTalk's> "round" <function>. In a <stack> whose
+> <hyperTalkCompatible> is true, such as one <import|imported> from
+> <HyperCard>, <round> with no precision rounds as <statRound> does, so
+> round(2.5) is 2 there.
 
 References: function (control structure), compound (function),
 statRound (function), random (function), abs (function),
+hyperTalkCompatible (property), import (command), stack (object),
 extents (function), average (function), negative (glossary),
 HyperCard (glossary), return (glossary), decimal point (glossary),
 integer (keyword)

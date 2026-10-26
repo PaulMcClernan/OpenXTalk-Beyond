@@ -10,10 +10,11 @@ back goes through; a handler that went to another stack still reaches
 its own stack's script before the dynamic path, and one that went to
 another card of its own stack reaches that card after it; arithmetic
 that gives no number goes on with HyperCard's INF or NAN instead of
-stopping the script; and reading the textFont, textSize, textStyle or
+stopping the script; reading the textFont, textSize, textStyle or
 textHeight of a button, a field or a field's text with none of its own
-gives the one it uses, where it would give empty. Each test checks the
-stack with the property off too.
+gives the one it uses, where it would give empty; and round takes a
+number halfway between two integers to the even one. Each test checks
+the stack with the property off too.
 */
 
 local sStack
@@ -487,6 +488,57 @@ on TestHyperTalkCompatibleArithmetic
    TestAssert "on: a field shows 1/0 and 0/0 as INF and NAN(004)", field "F" of stack sStack is "INF,NAN(004)"
    _DeleteStack
 end TestHyperTalkCompatibleArithmetic
+
+-- round(2.5), round(3.5), round(-2.5), round(0.5), the round of (5.5 + 3)
+-- and the round of 5.5 + 3 (the HyperTalk Reference's two examples),
+-- round(2.6), round with a precision, and statRound(2.5)
+private function _RoundValues
+   return _Values("put round(2.5) into tValue" & return & "put round(3.5) into tValue" & return \
+         & "put round(-2.5) into tValue" & return & "put round(0.5) into tValue" & return \
+         & "put the round of (5.5 + 3) into tValue" & return & "put the round of 5.5 + 3 into tValue" & return \
+         & "put round(2.6) into tValue" & return & "put round(2.5, 0) into tValue" & return \
+         & "put round(0.125, 2) into tValue" & return & "put statRound(2.5) into tValue")
+end _RoundValues
+
+on TestHyperTalkCompatibleRoundOff
+   local tValues
+   _MakeStack false
+   put _RoundValues() into tValues
+   TestAssert "off: round(2.5) is 3", line 1 of tValues is "3"
+   TestAssert "off: round(3.5) is 4", line 2 of tValues is "4"
+   TestAssert "off: round(-2.5) is -3", line 3 of tValues is "-3"
+   TestAssert "off: round(0.5) is 1", line 4 of tValues is "1"
+   TestAssert "off: the round of (5.5 + 3) is 9", line 5 of tValues is "9"
+   TestAssert "off: the round of 5.5 + 3 is 9", line 6 of tValues is "9"
+   TestAssert "off: round(2.6) is 3", line 7 of tValues is "3"
+   TestAssert "off: round(2.5, 0) is 3", line 8 of tValues is "3"
+   TestAssert "off: round(0.125, 2) is 0.13", line 9 of tValues is "0.13"
+   TestAssert "off: statRound(2.5) is 2", line 10 of tValues is "2"
+   _DeleteStack
+end TestHyperTalkCompatibleRoundOff
+
+-- HyperCard's round took a number halfway between two integers to the
+-- even one: "odd integers plus exactly 0.5 round up; even integers (or 0)
+-- plus exactly 0.5 round down", a negative number as its absolute value
+-- (the HyperTalk Reference, whose examples are "the round of 5.5 + 3 --
+-- returns 9" and "the round of (5.5 + 3) -- returns 8"). round with a
+-- precision, which HyperCard did not have, is the same in every stack
+on TestHyperTalkCompatibleRound
+   local tValues
+   _MakeStack true
+   put _RoundValues() into tValues
+   TestAssert "on: round(2.5) is 2", line 1 of tValues is "2"
+   TestAssert "on: round(3.5) is 4", line 2 of tValues is "4"
+   TestAssert "on: round(-2.5) is -2", line 3 of tValues is "-2"
+   TestAssert "on: round(0.5) is 0", line 4 of tValues is "0"
+   TestAssert "on: the round of (5.5 + 3) is 8", line 5 of tValues is "8"
+   TestAssert "on: the round of 5.5 + 3 is 9", line 6 of tValues is "9"
+   TestAssert "on: round(2.6) is 3", line 7 of tValues is "3"
+   TestAssert "on: round(2.5, 0) is still 3", line 8 of tValues is "3"
+   TestAssert "on: round(0.125, 2) is still 0.13", line 9 of tValues is "0.13"
+   TestAssert "on: statRound(2.5) is 2", line 10 of tValues is "2"
+   _DeleteStack
+end TestHyperTalkCompatibleRound
 
 -- On the test's stack, which has the textFont Geneva and the textSize 12:
 -- a button "Plain" with no font, size or style of its own (as the import

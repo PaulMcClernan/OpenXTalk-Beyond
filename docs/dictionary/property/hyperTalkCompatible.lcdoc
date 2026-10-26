@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, seven things are as they were in <HyperCard>, for the
+When it is true, eight things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -96,6 +96,12 @@ When it is true, seven things are as they were in <HyperCard>, for the
   <HyperCard> set it. And the <effective> <textStyle> of an <object>
   with a style of its own but no <textSize> of its own is that style,
   the one it is drawn with, where otherwise it is its owner's.
+- The <round> <function> takes a number halfway between two integers to
+  the even one, as <statRound> does and as <HyperCard|HyperCard's>
+  round did: round(2.5) is 2, round(3.5) is 4 and round(-2.5) is -2,
+  where otherwise they are 3, 4 and -3. With a precision, which
+  <HyperCard|HyperCard's> round did not take, <round> is the same in
+  every <stack>.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -120,6 +126,7 @@ References: HCStack (property), HCAddressing (property),
 HCImportStat (property), lockMessages (property), lockRecent (property),
 dynamicPaths (property), textFont (property), textSize (property),
 textStyle (property), textHeight (property), effective (keyword),
+round (function), statRound (function),
 go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),
