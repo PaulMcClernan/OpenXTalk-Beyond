@@ -1972,11 +1972,19 @@ void MCParagraph::split(findex_t p_position)
     bptr = indextoblock(p_position, False);
 	findex_t i, l;
 	bptr->GetRange(i, l);
-    bptr->MoveRange(0, p_position - (i + l));
 	
 	// Create a new block to cover the range from the split point to the end
 	// of the original block.
+	// OXT-Beyond: copied before the block is trimmed, as every other split
+	//   of a block copies it first. Trimmed to nothing (a split at its start,
+	//   a return put before its first char), a block with an image frees all
+	//   its attributes (Bug 13082), and the copy made after that took none
+	//   of them: the char that moved to the new paragraph lost its
+	//   imageSource, and its font, colours, link and metadata with it
+	//   (tperry2x, openxtalk.org p=25422). The block that stays behind is
+	//   trimmed and freed as before.
 	MCBlock *tbptr = new (nothrow) MCBlock(*bptr);
+    bptr->MoveRange(0, p_position - (i + l));
 	bptr->append(tbptr);
 	blocks->splitat(tbptr);
 	pgptr->blocks = tbptr;
