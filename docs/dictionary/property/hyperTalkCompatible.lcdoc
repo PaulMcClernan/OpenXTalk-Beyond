@@ -111,4 +111,5 @@ dynamicPaths (property), go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), background (glossary),
 message path (glossary), recent cards (glossary), HyperCard (glossary),
+development environment (glossary), standalone application (glossary),
 custom property (glossary)
