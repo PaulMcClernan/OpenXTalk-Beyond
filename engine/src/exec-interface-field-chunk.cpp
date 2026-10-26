@@ -1371,6 +1371,16 @@ void MCField::SetTextAlignOfLineChunk(MCExecContext& ctxt, uint32_t p_part_id, i
 
 void MCField::GetTextSizeOfCharChunk(MCExecContext& ctxt, uint32_t p_part_id, int32_t si, int32_t ei, bool& r_mixed, uinteger_t*& r_value)
 {
+    // OXT-Beyond: in a HyperCard stack, text with no size of its own gives
+    //   the field's (MCObject::GetTextHeight)
+    if (ctxt . IsHyperTalkCompatible())
+    {
+        uinteger_t t_size;
+        GetEffectiveTextSizeOfCharChunk(ctxt, p_part_id, si, ei, r_mixed, t_size);
+        if (!r_mixed)
+            *r_value = t_size;
+        return;
+    }
     GetCharPropOfCharChunk< OptionalFieldPropType< PodFieldPropType<uinteger_t> > >(ctxt, this, p_part_id, si, ei, &MCBlock::GetTextSize, false, 0, r_mixed, r_value);
 }
 
@@ -2431,6 +2441,10 @@ void MCField::SetBackColorOfCharChunk(MCExecContext& ctxt, uint32_t p_part_id, i
 void MCField::GetTextFontOfCharChunk(MCExecContext& ctxt, uint32_t p_part_id, int32_t si, int32_t ei, bool& r_mixed, MCStringRef& r_value)
 {
     GetCharPropOfCharChunk< PodFieldPropType<MCStringRef> >(ctxt, this, p_part_id, si, ei, &MCBlock::GetTextFont, false, (MCStringRef)nil, r_mixed, r_value);
+    // OXT-Beyond: in a HyperCard stack, text with no font of its own gives
+    //   the field's (MCObject::GetTextHeight)
+    if (!r_mixed && r_value == nil && !ctxt . HasError() && ctxt . IsHyperTalkCompatible())
+        GetEffectiveTextFont(ctxt, r_value);
 }
 
 void MCField::GetEffectiveTextFontOfCharChunk(MCExecContext& ctxt, uint32_t p_part_id, int32_t si, int32_t ei, bool& r_mixed, MCStringRef& r_value)
@@ -2452,6 +2466,13 @@ void MCField::SetTextFontOfCharChunk(MCExecContext& ctxt, uint32_t p_part_id, in
 
 void MCField::GetTextStyleOfCharChunk(MCExecContext& ctxt, uint32_t p_part_id, int32_t si, int32_t ei, bool& r_mixed, MCInterfaceTextStyle& r_value)
 {
+    // OXT-Beyond: in a HyperCard stack, text with no style of its own gives
+    //   the field's (MCObject::GetTextHeight)
+    if (ctxt . IsHyperTalkCompatible())
+    {
+        GetEffectiveTextStyleOfCharChunk(ctxt, p_part_id, si, ei, r_mixed, r_value);
+        return;
+    }
     GetCharPropOfCharChunk< PodFieldPropType<MCInterfaceTextStyle> >(ctxt, this, p_part_id, si, ei, &MCBlock::GetTextStyle, false, r_value, r_mixed, r_value);
 }
 

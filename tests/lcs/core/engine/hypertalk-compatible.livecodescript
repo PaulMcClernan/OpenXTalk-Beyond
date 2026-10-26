@@ -8,10 +8,12 @@ before it runs, even while messages are locked, as in HyperCard;
 lockRecent keeps no card of the stack out of the recent cards that go
 back goes through; a handler that went to another stack still reaches
 its own stack's script before the dynamic path, and one that went to
-another card of its own stack reaches that card after it; and arithmetic
+another card of its own stack reaches that card after it; arithmetic
 that gives no number goes on with HyperCard's INF or NAN instead of
-stopping the script. Each test checks the stack with the property off
-too.
+stopping the script; and reading the textFont, textSize, textStyle or
+textHeight of a button, a field or a field's text with none of its own
+gives the one it uses, where it would give empty. Each test checks the
+stack with the property off too.
 */
 
 local sStack
@@ -485,3 +487,95 @@ on TestHyperTalkCompatibleArithmetic
    TestAssert "on: a field shows 1/0 and 0/0 as INF and NAN(004)", field "F" of stack sStack is "INF,NAN(004)"
    _DeleteStack
 end TestHyperTalkCompatibleArithmetic
+
+-- On the test's stack, which has the textFont Geneva and the textSize 12:
+-- a button "Plain" with no font, size or style of its own (as the import
+-- leaves many buttons), a button "Bold" with a style of its own and no
+-- size, a button "Sized" whose textSize a script set, which sets its
+-- textHeight to none, and a field "F", italic and 14 point, whose first
+-- word is in Courier and second word bold. Each line of _TextStatements
+-- reads one of their text properties
+private command _MakeTextObjects
+   set the defaultStack to sStack
+   set the textFont of stack sStack to "Geneva"
+   set the textSize of stack sStack to 12
+   create button "Plain"
+   create button "Bold"
+   set the textStyle of button "Bold" to "bold"
+   create button "Sized"
+   set the textSize of button "Sized" to 10
+   create field "F"
+   set the textStyle of field "F" to "italic"
+   set the textSize of field "F" to 14
+   put "one two" & return & "three" into field "F"
+   set the textFont of word 1 of field "F" to "Courier"
+   set the textStyle of word 2 of field "F" to "bold"
+end _MakeTextObjects
+
+private function _TextStatements
+   local q
+   put quote into q
+   return "put the textFont of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textSize of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textStyle of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textHeight of button " & q & "Plain" & q & " into tValue" & return \
+         & "put the textStyle of button " & q & "Bold" & q & " into tValue" & return \
+         & "put the effective textStyle of button " & q & "Bold" & q & " into tValue" & return \
+         & "put the textHeight of button " & q & "Sized" & q & " into tValue" & return \
+         & "put the textFont of word 1 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textFont of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textSize of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textStyle of line 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textStyle of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textStyle of line 1 of field " & q & "F" & q & " into tValue" & return \
+         & "put the textFont of line 1 of field " & q & "F" & q & " into tValue"
+end _TextStatements
+
+on TestHyperTalkCompatibleTextPropertiesOff
+   local tValues
+   _MakeStack false
+   _MakeTextObjects
+   put _Values(_TextStatements()) into tValues
+   TestAssert "off: a button with no font of its own has an empty textFont", line 1 of tValues is empty
+   TestAssert "off: and an empty textSize", line 2 of tValues is empty
+   TestAssert "off: and an empty textStyle", line 3 of tValues is empty
+   TestAssert "off: and an empty textHeight", line 4 of tValues is empty
+   TestAssert "off: a button's own style", line 5 of tValues is "bold"
+   TestAssert "off: the effective textStyle of a button with a style but no size of its own is still its owner's", \
+         line 6 of tValues is "plain"
+   TestAssert "off: setting the textSize leaves the textHeight empty", line 7 of tValues is empty
+   TestAssert "off: text with a font of its own", line 8 of tValues is "Courier"
+   TestAssert "off: text with no font of its own has an empty textFont", line 9 of tValues is empty
+   TestAssert "off: and an empty textSize", line 10 of tValues is empty
+   TestAssert "off: text with no style of its own has an empty textStyle", line 11 of tValues is empty
+   TestAssert "off: text with a style of its own", line 12 of tValues is "bold"
+   TestAssert "off: a line with a style in part of it is mixed", line 13 of tValues is "mixed"
+   TestAssert "off: a line with a font in part of it is mixed", line 14 of tValues is "mixed"
+   _DeleteStack
+end TestHyperTalkCompatibleTextPropertiesOff
+
+-- In HyperCard every button and field had its own font, size, style and
+-- height, and the text of a field had the field's unless a style run gave
+-- it others, so reading one always gave the one in use
+on TestHyperTalkCompatibleTextProperties
+   local tValues
+   _MakeStack true
+   _MakeTextObjects
+   put _Values(_TextStatements()) into tValues
+   TestAssert "on: a button with no font of its own gives the stack's", line 1 of tValues is "Geneva"
+   TestAssert "on: and the stack's size", line 2 of tValues is 12
+   TestAssert "on: and plain", line 3 of tValues is "plain"
+   TestAssert "on: and the height of its size", line 4 of tValues is 16
+   TestAssert "on: a button's own style", line 5 of tValues is "bold"
+   TestAssert "on: the effective textStyle of a button with a style but no size of its own is its own", \
+         line 6 of tValues is "bold"
+   TestAssert "on: setting the textSize to 10 gives the height of that size", line 7 of tValues is 13
+   TestAssert "on: text with a font of its own", line 8 of tValues is "Courier"
+   TestAssert "on: text with no font of its own gives the field's, which is the stack's", line 9 of tValues is "Geneva"
+   TestAssert "on: and the field's size", line 10 of tValues is 14
+   TestAssert "on: text with no style of its own gives the field's", line 11 of tValues is "italic"
+   TestAssert "on: text with a style of its own", line 12 of tValues is "bold"
+   TestAssert "on: a line in two styles is mixed", line 13 of tValues is "mixed"
+   TestAssert "on: a line in two fonts is mixed", line 14 of tValues is "mixed"
+   _DeleteStack
+end TestHyperTalkCompatibleTextProperties
