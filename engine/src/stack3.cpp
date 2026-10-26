@@ -1910,11 +1910,12 @@ void MCStack::flip(uint2 count)
 		}
 		state = oldstate;
 	}
-	else
-	{
-		// MW-2011-08-17: [[ Redraw ]] This shouldn't be reached anymore.
-		abort();
-	}
+	// OXT-Beyond: a count of 0 shows no card. "show 0 cards" asks for it, and
+	// so do "show -1 cards" (the number -1 is 0 cards), "show 65536 cards"
+	// (count has 16 bits), an empty count and "show marked cards" with no
+	// card marked. This called abort() for it, as a case that "shouldn't be
+	// reached anymore" (MW-2011-08-17: [[ Redraw ]]), which ended the engine
+	// (openxtalk.org p=25427)
 }
 
 bool MCStack::sort(MCExecContext &ctxt, Sort_type dir, Sort_type form,

@@ -31,7 +31,8 @@ Use the <show cards> <command> to do "flipbook"-style animation or to
 display a number of <card|cards> quickly to the user.
 
 The 'show number cards' form displays the <number> of <card|cards>, 
-starting with the <current card>. 
+starting with the <current card>. If the <number> is 0, no card is
+shown.
 
 The 'show all cards' form displays all the cards in the <current stack>, 
 starting and ending with the <current card>.
