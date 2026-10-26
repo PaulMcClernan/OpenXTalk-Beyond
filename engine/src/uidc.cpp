@@ -1172,10 +1172,13 @@ size_t MCUIDC::doshiftmessage(size_t index, real8 newtime)
         if (m_messages[t_index + 1].m_time > newtime)
             break;
     
-    // If the message is already in the correct place, do nothing
-    if (t_index == index)
-        return index;
-    
+    // OXT-Beyond: a message already in its place still takes its new time
+    // (ShiftMessageTo moves nothing then). Kept at its old time, the idle
+    // message that a wait without messages shifts here stayed due, so
+    // handlepending gave the wait no later time to sleep until, and
+    // MCUIDC::wait, which reads the clock only after it sleeps, never
+    // ended: a headless engine hung in "wait 1 second" while an object
+    // with an idle handler was open
     m_messages.ShiftMessageTo(t_index, index, newtime);
     
     return t_index;

@@ -507,6 +507,24 @@ wait 2 ticks
 TestAssert "the ticks change with time", the ticks - tTime >= 2
 end TestTicks
 
+-- OXT-Beyond: a wait without messages ends while an object with an idle
+-- handler is open. The wait moves the idle message on without sending it,
+-- and the message kept its old time when it stayed where it was in the
+-- queue, so once it was due it stayed due and a headless engine (as the
+-- tests run) waited for ever (MCUIDC::doshiftmessage). The wait is longer
+-- than the idleRate, so that the idle message falls due during it
+on TestWaitWithIdleHandler
+   TestSkipIfNot "wait"
+   local tTime, tWait
+   create stack "TestWaitIdle"
+   set the script of stack "TestWaitIdle" to "on idle" & return & "end idle"
+   put max(1000, the idleRate * 5) into tWait
+   put the milliseconds into tTime
+   wait tWait milliseconds
+   TestAssert "a wait ends while an idle handler waits", the milliseconds - tTime >= tWait
+   delete stack "TestWaitIdle"
+end TestWaitWithIdleHandler
+
 on TestEffectiveRectIsUpdatedWhileScreenIsLocked
    local tRectBefore, tRectAfter, tEffectiveRectBefore, tEffectiveRectAfter
    
