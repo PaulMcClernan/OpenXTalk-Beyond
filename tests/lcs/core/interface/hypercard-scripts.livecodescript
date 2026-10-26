@@ -1251,6 +1251,137 @@ on TestHyperCardScriptsT47
    _Close tStack
 end TestHyperCardScriptsT47
 
+on TestHyperCardScriptsT48
+   -- T48: HyperCard's menus read as values, which here read the IDE's
+   -- menu bar, or stop with "can't find background" where there is none:
+   -- the library's menus, which T22's statements change, and which start
+   -- as HyperCard 2.2's menu bar
+   local tScript, tStack, q, e
+   global gHCScriptsTest
+   put quote into q
+   put numToCodepoint(8230) into e
+   put _Rewrite("on mouseUp", \
+         "  put menu " & q & "Font" & q & " into tFonts", \
+         "  if last menuItem of menu 3 is " & q & "-" & q & " then delete last menuItem of menu 3", \
+         "  repeat with x = (the number of menuItems in menu " & q & "File" & q & ")-1 down to 6", \
+         "  end repeat", \
+         "  if there is not a menu " & q & "Art" & q & " then create menu " & q & "Art" & q, \
+         "  if there is a menuItem tItem in menu tMenu then beep", \
+         "  if the menus contains " & q & "Go" & q & " then delete menu " & q & "Go" & q, \
+         "  put the number of menus into n", \
+         "  if " & q & "File" & q & " = name of menu 2 and the enabled of menu 3 then beep", \
+         "  if x is in menu 5 then put line 2 of menu 7 into y", \
+         "  put the checkMark of menuItem (i + 1) of menu 3 into y", \
+         "  if there is no menuItem item i of tFonts in menu " & q & "Font" & q & " then beep", \
+         "end mouseUp") into tScript
+   TestAssert "T48: menu M as a value", line 2 of tScript is "  put hcMenuText(" & q & "Font" & q & ") into tFonts"
+   TestAssert "T48: last menuItem as a value, and T22's delete of it", \
+         line 3 of tScript is "  if hcMenuItem(" & q & "name" & q & ", 3, " & q & "last" & q & ") is " & q & "-" & q & " then hcDeleteMenuItem 3, " & q & "last" & q
+   TestAssert "T48: the number of menuItems in menu", line 4 of tScript is "  repeat with x = (hcMenuItemCount(" & q & "File" & q & "))-1 down to 6"
+   TestAssert "T48: there is not a menu, and T22's create", line 6 of tScript is "  if not hcThereIsMenu(" & q & "Art" & q & ") then hcCreateMenu " & q & "Art" & q
+   TestAssert "T48: there is a menuItem in menu", line 7 of tScript is "  if hcThereIsMenu(tMenu, tItem) then beep"
+   TestAssert "T48: the menus, and T22's delete menu", line 8 of tScript is "  if hcMenus() contains " & q & "Go" & q & " then hcDeleteMenu " & q & "Go" & q
+   TestAssert "T48: the number of menus", line 9 of tScript is "  put hcMenuCount() into n"
+   TestAssert "T48: a menu's name and enabled", \
+         line 10 of tScript is "  if " & q & "File" & q & " = hcMenuItem(" & q & "name" & q & ", 2, empty) and hcMenuItem(" & q & "enabled" & q & ", 3, empty) then beep"
+   TestAssert "T48: a menu in an expression, and a chunk of one", line 11 of tScript is "  if x is in hcMenuText(5) then put line 2 of hcMenuText(7) into y"
+   TestAssert "T48: a menu item's property, the item in parentheses", line 12 of tScript is "  put hcMenuItem(" & q & "checkmark" & q & ", 3, (i + 1)) into y"
+   TestAssert "T48: a menu item named by several words", line 13 of tScript is "  if not hcThereIsMenu(" & q & "Font" & q & ", item i of tFonts) then beep"
+
+   -- what a statement changes stays T22's
+   put _Rewrite("on mouseUp", \
+         "  put (" & q & "About" & q & " && tName) into menuItem 1 of menu 1", \
+         "  put " & q & "Duplicate" & q & " after menuItem 5 of menu " & q & "Edit" & q, \
+         "  set the enabled of menu " & q & "Map" & q & " to false", \
+         "  set the checkMark of menuItem (i + 1) of menu 3 to true", \
+         "  delete menuItem " & q & "Cut" & q & " from menu " & q & "Edit" & q, \
+         "  put menu 2 into menu " & q & "Copy" & q, \
+         "  put the short name of menu 2 into x", \
+         "end mouseUp") into tScript
+   TestAssert "T22: put into a menuItem, what is put in parentheses", line 2 of tScript is "  hcPutIntoMenu (" & q & "About" & q & " && tName), " & q & "into" & q & ", 1, empty, 1"
+   TestAssert "T22: put after a menuItem", line 3 of tScript is "  hcPutIntoMenu " & q & "Duplicate" & q & ", " & q & "after" & q & ", " & q & "Edit" & q & ", empty, 5"
+   TestAssert "T22: set the enabled of a menu, not read", line 4 of tScript is "  hcSetMenuItem " & q & "enabled" & q & ", " & q & "Map" & q & ", empty, false"
+   TestAssert "T22: set a property of a menu item in parentheses, not read", line 5 of tScript is "  hcSetMenuItem " & q & "checkmark" & q & ", 3, (i + 1), true"
+   TestAssert "T22: delete menuItem from menu", line 6 of tScript is "  hcDeleteMenuItem " & q & "Edit" & q & ", " & q & "Cut" & q
+   TestAssert "T48 and T22: a menu read, put into another", line 7 of tScript is "  hcPutIntoMenu hcMenuText(2), " & q & "into" & q & ", " & q & "Copy" & q & ", empty, empty"
+   TestAssert "T48: a form HyperCard did not have, left as it is", line 8 of tScript is "  put the short name of menu 2 into x"
+
+   -- a statement continued over lines: on its first line, the others left
+   -- empty, unless the next line starts with the "then" of its "if",
+   -- which must follow it: then it goes on with \ as it did
+   put _Rewrite("on mouseEnter", \
+         "  if the checkMark of menuItem 4 of menu 5 is true \", \
+         "      and x = 1 \", \
+         "      and y = 2 -- both set", \
+         "  then beep", \
+         "  put menu 1 \", \
+         "      into x", \
+         "  beep", \
+         "end mouseEnter") into tScript
+   TestAssert "T48: a continued if, its then on the next line, goes on with \", \
+         line 2 of tScript is "  if hcMenuItem(" & q & "checkmark" & q & ", 5, 4) is true  and x = 1  and y = 2 \" \
+         and line 3 of tScript is "\" and line 4 of tScript is "-- both set" and line 5 of tScript is "  then beep"
+   TestAssert "T48: a continued put on one line, the line count kept", \
+         line 6 of tScript is "  put hcMenuText(1)  into x" and line 7 of tScript is empty and line 8 of tScript is "  beep"
+   TestAssert "T48: the continued if compiles", _Compiles(tScript)
+
+   -- "the" before a menu item's place, in a value and in T22's statements
+   put _Rewrite("on mouseUp", \
+         "  set the name of the last menuItem of menu gHMnu to tName", \
+         "  put the enabled of the second menuItem of menu " & q & "File" & q & " into x", \
+         "  disable the last menuItem of menu 3", \
+         "end mouseUp") into tScript
+   TestAssert "T22: set a property of the last menuItem", line 2 of tScript is "  hcSetMenuItem " & q & "name" & q & ", gHMnu, " & q & "last" & q & ", tName"
+   TestAssert "T48: a property of the second menuItem", \
+         line 3 of tScript is "  put hcMenuItem(" & q & "enabled" & q & ", " & q & "File" & q & ", " & q & "second" & q & ") into x"
+   TestAssert "T22: disable the last menuItem", line 4 of tScript is "  hcEnableMenu false, 3, " & q & "last" & q
+
+   -- in a stack: the reads compile as they are, and read the library's
+   -- menus, which start as HyperCard 2.2's
+   put "HCT48" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Read"
+   set the script of button "Read" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  get the number of menus", \
+         "  put it into gHCScriptsTest", \
+         "  put comma & line 1 of the menus & comma & line 8 of the menus after gHCScriptsTest", \
+         "  put comma & the number of menuItems of menu " & q & "File" & q & " & comma & menuItem 2 of menu " & q & "File" & q & " & comma & last menuItem of menu 2 after gHCScriptsTest", \
+         "  put comma & (there is a menu " & q & "Art" & q & ") & comma & (there is a menuItem " & q & "Find..." & q & " of menu " & q & "Go" & q & ") & comma & (there is not a menuItem " & q & "Nope" & q & " in menu 4) after gHCScriptsTest", \
+         "  put comma & (the fontNames is empty or line 1 of menu " & q & "Font" & q & " is among the lines of the fontNames) & comma & (menu 7 is menu " & q & "Font" & q & ") after gHCScriptsTest", \
+         "  put comma & the name of menu 3 & comma & the enabled of menu " & q & "Edit" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Change"
+   set the script of button "Change" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  create menu " & q & "Art" & q, \
+         "  put " & q & "One,Two" & q & " into menu " & q & "Art" & q, \
+         "  put (there is a menu " & q & "Art" & q & ") & comma & the number of menus & comma & (menu " & q & "Art" & q & " is " & q & "One" & q & " & return & " & q & "Two" & q & ") into gHCScriptsTest", \
+         "  set the name of menu " & q & "Art" & q & " to " & q & "Pictures" & q, \
+         "  put comma & (there is a menu " & q & "Pictures" & q & ") & comma & (there is a menu " & q & "Art" & q & ") & comma & line 9 of the menus & comma & menuItem 2 of menu " & q & "Pictures" & q & " after gHCScriptsTest", \
+         "  put " & q & "Duplicate" & q & " after menuItem 5 of menu " & q & "Edit" & q, \
+         "  put comma & menuItem 6 of menu " & q & "Edit" & q & " & comma & menuItem 7 of menu " & q & "Edit" & q & " after gHCScriptsTest", \
+         "  disable menu " & q & "Edit" & q, \
+         "  put comma & the enabled of menu 3 after gHCScriptsTest", \
+         "  delete menu 2", \
+         "  put comma & the name of menu 2 after gHCScriptsTest", \
+         "  reset menubar", \
+         "  put comma & the number of menus & comma & (there is a menu " & q & "Pictures" & q & ") & comma & the number of menuItems of menu " & q & "Edit" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T48: the reads compile as they are", _Compiles(the script of button "Read" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Read" of stack tStack
+   TestAssert "T48: HyperCard 2.2's menus and their items, menu 7 the Font menu", \
+         gHCScriptsTest is "8,Apple,Style,16,Open Stack" & e & ",Quit HyperCard,false,true,true,true,true,Edit,true"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Change" of stack tStack
+   TestAssert "T48: what T22's statements change reads back; reset menubar puts HyperCard's menus back", \
+         gHCScriptsTest is "true,9,true,true,false,Pictures,Two,Duplicate,Clear,false,Edit,8,false,16"
+   _Close tStack
+end TestHyperCardScriptsT48
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
