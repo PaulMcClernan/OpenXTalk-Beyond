@@ -64,7 +64,7 @@ on hcMenuChoice pItem, pMenu, pWithout
    local tMessage, tKey, tError, tStack, tObjects
    put hcMenuMessage(pItem) into tMessage
    if tMessage is not empty then
-      send tMessage to this card
+      _HCSendMenuMessage tMessage
       return the result
    end if
    put _HCMenuKey(pItem) into tKey
@@ -1094,6 +1094,98 @@ on hcStopUsing pStack
 end hcStopUsing
 
 ----------------------------------------------------------------------
+-- open an application (rule T40)
+--
+-- HyperCard's "open" launched an application, with a document when the
+-- script named one ("open "My Letter" with "TeachText""). It asked "Where
+-- is ...?" when it could not find the application, and when it could not
+-- open it left "Couldn't open that application." in the result, which
+-- scripts test, and the script went on. Here an "open" of anything but a
+-- file, printing, a process or a socket is a "go", which stops the script
+-- with an error; the import rewrites it as hcOpen.
+
+-- The applications the user said where to find when asked, by name, for
+-- as long as the library is open
+local sHCApplications
+
+/*
+open pApplication, or pDocument with pApplication, as HyperCard did (rule
+T40): the application is pApplication itself when there is such a file
+(or, on a Mac, such an application's bundle), else one of that name in a
+Mac's Applications folders, else the file the user gives when asked
+"Where is ...?" (in the IDE, once a name, as for a stack). The document
+is pDocument, or a file of that name beside this stack's file or the
+HyperCard file it was imported from. Leaves "Couldn't open that
+application." in the result when there is no application to launch or
+it cannot be launched; an application already running counts as opened,
+as HyperCard brought it to the front
+*/
+on hcOpen pApplication, pDocument
+   local tApplication, tDocument, tResult
+   put _HCApplication(pApplication) into tApplication
+   if tApplication is empty then return "Couldn't open that application."
+   if pDocument is not empty then put _HCDocument(pDocument) into tDocument
+   put _HCLaunch(tApplication, tDocument) into tResult
+   if tResult is not empty and tResult is not "process is already open" then return "Couldn't open that application."
+   return empty
+end hcOpen
+
+-- The application pName names, as hcOpen finds it, or empty. HyperCard
+-- named one by its HFS path ("Disk:Apps:TeachText") or by its name
+private function _HCApplication pName
+   local tName, tFolder, tPath
+   if pName is empty then return empty
+   if there is a file pName or (pName ends with ".app" and there is a folder pName) then return pName
+   put _HCLastPart(pName) into tName
+   if tName is empty then return empty
+   if sHCApplications[tName] is not empty then return sHCApplications[tName]
+   if the platform is "MacOS" then
+      repeat for each item tFolder in "/Applications,/System/Applications," & specialFolderPath("home") & "/Applications"
+         put tFolder & slash & tName into tPath
+         if not (tPath ends with ".app") then put ".app" after tPath
+         if there is a folder tPath then return tPath
+      end repeat
+   end if
+   put _HCWhereIs(tName) into tPath
+   if tPath is empty then return empty
+   put tPath into sHCApplications[tName]
+   return tPath
+end _HCApplication
+
+-- The document pDocument names, as hcOpen finds it: pDocument as it is
+-- when there is no such file beside the stack either
+private function _HCDocument pDocument
+   local tName, tSet, tFolders, tFolder
+   if there is a file pDocument or there is a folder pDocument then return pDocument
+   put _HCLastPart(pDocument) into tName
+   put the customProperties["uHyperCard"] of me into tSet
+   set the itemDelimiter to slash
+   put item 1 to -2 of (the effective filename of me) into tFolders
+   put return & item 1 to -2 of tSet["file"] after tFolders
+   repeat for each line tFolder in tFolders
+      if tFolder is not empty and there is a file (tFolder & slash & tName) then return tFolder & slash & tName
+   end repeat
+   return pDocument
+end _HCDocument
+
+-- launch, in a handler of its own so that the result is launch's (on
+-- Linux it is empty even when there was nothing to launch, which is why
+-- _HCApplication finds the file first)
+private function _HCLaunch pApplication, pDocument
+   try
+      if pDocument is empty then
+         launch pApplication
+      else
+         launch pDocument with pApplication
+      end if
+   catch tError
+      -- (a player that cannot start a process: the web's, a phone's)
+      return "can't launch"
+   end try
+   return the result
+end _HCLaunch
+
+----------------------------------------------------------------------
 -- HyperCard 2.2's menus (rule T22)
 --
 -- A HyperCard stack made its own menus with "create menu", "put ... into
@@ -1260,6 +1352,34 @@ function hcMenuMessage pItem
    end repeat
    return empty
 end hcMenuMessage
+
+-- HyperCard's commands that this engine has too, which a menu message
+-- can be (_HCSendMenuMessage)
+constant kHCMenuCommands = "add answer ask beep choose click close convert create delete disable divide drag edit enable export find get go hide import lock mark multiply open palette play pop print push put read reply request reset save select send set show sort start stop subtract type unlock unmark visual wait write"
+
+-- Sends pMessage, the menu message of an item chosen, to this card, as
+-- HyperCard did. A handler of the stack's takes it, with its parameters
+-- as send gives them ("doImport single"). One of HyperCard's commands
+-- with parameters ("go to card id 90024", "hide field 1", "show fld
+-- "Notes"") runs as it was written, as HyperCard ran a command of its own
+-- that no handler took: send would hand it to the engine with its
+-- parameters evaluated first, and hide the field named by the text of
+-- field 1. A doMenu goes to the stack's doMenu handlers, called hcDoMenu
+-- in a stack imported without HyperCard's message order (rule T15)
+private command _HCSendMenuMessage pMessage
+   local tName
+   put word 1 of pMessage into tName
+   if tName is "doMenu" then
+      if the hyperTalkCompatible of stack (the mainStack of this stack) is not true then
+         put "hcDoMenu" into word 1 of pMessage
+      end if
+   else if word 2 of pMessage is not empty and tName is among the words of kHCMenuCommands then
+      do pMessage
+      return the result
+   end if
+   send pMessage to this card
+   return the result
+end _HCSendMenuMessage
 
 -- The key of pMenu in sHCMenus, the menu made if pCreate and it is not
 -- there yet

@@ -723,6 +723,220 @@ on TestHyperCardScriptsT39
    _Close tStack
 end TestHyperCardScriptsT39
 
+on TestHyperCardScriptsT40
+   -- open an application, or a document with one, which HyperCard
+   -- launched and this engine takes for a "go"; and HyperCard 2.4's open url
+   local tStack, tScript, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", "  open " & q & "ResEdit" & q, "  open docName with progName", "  if x then open it else open " & q & "TeachText" & q, \
+         "  open MacDraw 1.9.5", "  open Hard Disk:Apps:VersaTerm Pro", "  open " & q & ":Demo:" & q & " & the short name of me with " & q & "Think C" & q, \
+         "  open url tURL", "end mouseUp") into tScript
+   TestAssert "T40: open an application", line 2 of tScript is "  hcOpen " & q & "ResEdit" & q
+   TestAssert "T40: a document with an application", line 3 of tScript is "  hcOpen progName, docName"
+   TestAssert "T40: both branches of a one-line if", line 4 of tScript is "  if x then hcOpen it else hcOpen " & q & "TeachText" & q
+   TestAssert "T40: a name not in quotes, its version too", line 5 of tScript is "  hcOpen " & q & "MacDraw 1.9.5" & q
+   TestAssert "T40: an HFS path not in quotes", line 6 of tScript is "  hcOpen " & q & "Hard Disk:Apps:VersaTerm Pro" & q
+   TestAssert "T40: expressions", line 7 of tScript is "  hcOpen " & q & "Think C" & q & ", " & q & ":Demo:" & q & " & the short name of me"
+   TestAssert "T40: open url", line 8 of tScript is "  launch url tURL"
+   TestAssert "T40: those compile", _Compiles(tScript)
+   put _Rewrite("on mouseUp", "  open file tPath for read", "  open printing with dialog", "  open stack " & q & "Other" & q, \
+         "  open process tProc for update", "  open socket to tHost", "end mouseUp") into tScript
+   TestAssert "T40: what this engine opens: unchanged", line 2 to 6 of tScript is _Lines("  open file tPath for read", "  open printing with dialog", \
+         "  open stack " & q & "Other" & q, "  open process tProc for update", "  open socket to tHost")
+
+   -- in a script that compiles as well, and the library's hcOpen
+   put "HCScriptsT40" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "A"
+   set the script of button "A" to _Lines("on mouseUp", "  global gHCScriptsTest", "  open " & q & "No Such Application T40" & q, \
+         "  put the result into gHCScriptsTest", "  open " & q & "No Such Document" & q & " with " & q & "No Such Application T40" & q, \
+         "  put return & the result after gHCScriptsTest", "  open report printing", "  put return & the result after gHCScriptsTest", "end mouseUp")
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  open MacDraw 1.9.5", "  open url theURL", "end mouseUp")
+   unlock messages
+   TestAssert "T40: the first script compiles here as it is", _Compiles(the script of button "A" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "A" of stack tStack into tScript
+   TestAssert "T40: in a script that compiles", line 3 of tScript is "  hcOpen " & q & "No Such Application T40" & q \
+         and line 5 of tScript is "  hcOpen " & q & "No Such Application T40" & q & ", " & q & "No Such Document" & q \
+         and line 7 of tScript is "  hcOpenReportPrinting empty"
+   put the script of button "B" of stack tStack into tScript
+   TestAssert "T40: in one that does not", line 2 to 3 of tScript is _Lines("  hcOpen " & q & "MacDraw 1.9.5" & q, "  launch url theURL")
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "A" of stack tStack
+   TestAssert "T40: no such application: HyperCard's result, and the script goes on", \
+         gHCScriptsTest is _Lines("Couldn't open that application.", "Couldn't open that application.", "Report printing is not supported")
+   _Close tStack
+end TestHyperCardScriptsT40
+
+on TestHyperCardScriptsT41
+   -- the menu messages of put ... into menu: a statement HyperCard sent as
+   -- it was written, a list of messages, and an item by its place after
+   -- "the"
+   local tStack, tScript, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", "  put " & q & "Title Card" & q & " after menu " & q & "Quotes" & q & " with menuMsg go to card id 90024", \
+         "  put " & q & "New Protocol" & q & " after menu " & q & "Util" & q & " with menumsg doMenu " & q & "New Card" & q, \
+         "  put " & q & "A,B,C" & q & " after menu " & q & "Tools" & q & " with menuMsg AC_Front," & q & q & ",AC_Back", \
+         "  put " & q & "X,Y" & q & " after menu " & q & "M" & q & " with menuMsgs item 1 of tList, item 2 of tList", \
+         "  put " & q & "Import,-" & q & " before the last menuItem of menu " & q & "File" & q & " with menuMessages " & q & "doImport," & q, \
+         "  put " & q & "Sorted" & q & " after menu " & q & "Go" & q & " with menuMsg doSort", "end mouseUp") into tScript
+   TestAssert "T41: a statement, in quotes", line 2 of tScript is "  hcPutIntoMenu " & q & "Title Card" & q & ", " & q & "after" & q & ", " & q & "Quotes" & q & ", " & q & "go to card id 90024" & q
+   TestAssert "T41: a statement with a string", line 3 of tScript is "  hcPutIntoMenu " & q & "New Protocol" & q & ", " & q & "after" & q & ", " & q & "Util" & q & ", " & q & "doMenu " & q & " & quote & " & q & "New Card" & q & " & quote"
+   TestAssert "T41: a list of messages, one value", line 4 of tScript is "  hcPutIntoMenu " & q & "A,B,C" & q & ", " & q & "after" & q & ", " & q & "Tools" & q & ", AC_Front & comma & " & q & q & " & comma & AC_Back"
+   TestAssert "T41: a list of expressions", line 5 of tScript is "  hcPutIntoMenu " & q & "X,Y" & q & ", " & q & "after" & q & ", " & q & "M" & q & ", (item 1 of tList) & comma & (item 2 of tList)"
+   TestAssert "T22: before the last menuItem", line 6 of tScript is "  hcPutIntoMenu " & q & "Import,-" & q & ", " & q & "before" & q & ", " & q & "File" & q & ", " & q & "doImport," & q & ", " & q & "last" & q
+   TestAssert "T41: one name: unchanged", line 7 of tScript is "  hcPutIntoMenu " & q & "Sorted" & q & ", " & q & "after" & q & ", " & q & "Go" & q & ", doSort"
+   TestAssert "T41: those compile", _Compiles(tScript)
+
+   -- with the probe of revHyperCardFixScripts, a handler's call; and the
+   -- library sending each message when its item is chosen
+   put "HCScriptsT41" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the script of stack tStack to _Lines("on hcT41Quiz pWhich", "  global gHCScriptsTest", "  put comma & pWhich after gHCScriptsTest", "end hcT41Quiz", \
+         "on hcT41B", "  global gHCScriptsTest", "  put comma & " & q & "B" & q & " after gHCScriptsTest", "end hcT41B", \
+         "on doMenu pItem", "  global gHCScriptsTest", "  if pItem is " & q & "T41 Item" & q & " then", "    put comma & " & q & "D" & q & " after gHCScriptsTest", \
+         "  else", "    pass doMenu", "  end if", "end doMenu")
+   create field "Notes"
+   put "Notes T41" into field "Notes"
+   hide field "Notes"
+   create button "Menus"
+   set the script of button "Menus" to _Lines("on mouseUp", "  put " & q & "Go Two" & q & " after menu " & q & "Util" & q & " with menuMsg go to card " & q & "Two" & q, \
+         "  put " & q & "Show Notes" & q & " after menu " & q & "Util" & q & " with menumsg show fld " & q & "Notes" & q, \
+         "  put " & q & "Quiz" & q & " after menu " & q & "Util" & q & " with menuMsg hcT41Quiz capitals", \
+         "  put " & q & "A,B" & q & " after menu " & q & "Util" & q & " with menuMsgs hcT41A,hcT41B", \
+         "  put " & q & "Add" & q & " after menu " & q & "Util" & q & " with menuMsg doMenu " & q & "T41 Item" & q, "end mouseUp")
+   create button "Choose"
+   set the script of button "Choose" to _Lines("on mouseUp", "  global gHCScriptsTest", "  doMenu " & q & "Show Notes" & q, \
+         "  put the visible of field " & q & "Notes" & q & " into gHCScriptsTest", "  doMenu " & q & "Go Two" & q, \
+         "  put comma & the short name of this card after gHCScriptsTest", "  go to card 1", "  doMenu " & q & "Quiz" & q, \
+         "  doMenu " & q & "B" & q, "  doMenu " & q & "Add" & q, "end mouseUp")
+   create card "Two"
+   go to card 1
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put the script of button "Menus" of card 1 of stack tStack into tScript
+   TestAssert "T41: statements in quotes", line 2 to 3 of tScript is _Lines("  hcPutIntoMenu " & q & "Go Two" & q & ", " & q & "after" & q & ", " & q & "Util" & q & ", " & q & "go to card " & q & " & quote & " & q & "Two" & q & " & quote", \
+         "  hcPutIntoMenu " & q & "Show Notes" & q & ", " & q & "after" & q & ", " & q & "Util" & q & ", " & q & "show fld " & q & " & quote & " & q & "Notes" & q & " & quote")
+   TestAssert "T41: a handler's call that is no value here, in quotes (the probe)", line 4 of tScript is "  hcPutIntoMenu " & q & "Quiz" & q & ", " & q & "after" & q & ", " & q & "Util" & q & ", " & q & "hcT41Quiz capitals" & q
+   TestAssert "T41: a list of names", line 5 of tScript is "  hcPutIntoMenu " & q & "A,B" & q & ", " & q & "after" & q & ", " & q & "Util" & q & ", hcT41A & comma & hcT41B"
+   set the defaultStack to tStack
+   send "mouseUp" to button "Menus" of card 1 of stack tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Choose" of card 1 of stack tStack
+   TestAssert "T41: each message sent as HyperCard sent it (a command as written, a handler's call, a list, a doMenu)", gHCScriptsTest is "true,Two,capitals,B,D"
+   _Close tStack
+end TestHyperCardScriptsT41
+
+on TestHyperCardScriptsT42
+   -- do with a statement not in quotes, which HyperCard ran as it was
+   -- written; and T14's visual effect from a variable after "unlock
+   -- screen with"
+   local tStack, tScript, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", "  unlock screen with visual zoom theVisEffect", "  unlock screen with wipe it", \
+         "  unlock screen with visual effect dissolve EFFECT_SPEED", "  unlock screen with visual dissolve very fast", \
+         "  do go cd id 13086", "end mouseUp") into tScript
+   TestAssert "T14: unlock screen with a visual effect from a variable", line 2 to 4 of tScript is _Lines("  do " & q & "unlock screen with visual zoom" & q && "&& theVisEffect", \
+         "  do " & q & "unlock screen with wipe" & q && "&& it", "  do " & q & "unlock screen with visual effect dissolve" & q && "&& EFFECT_SPEED")
+   TestAssert "T14: unlock screen with this engine's words: unchanged", line 5 of tScript is "  unlock screen with visual dissolve very fast"
+   TestAssert "T42: without the probe, a do is left as it is", line 6 of tScript is "  do go cd id 13086"
+
+   -- with the probe of revHyperCardFixScripts: the statements run in the
+   -- handler's context, its variables included
+   put "HCScriptsT42" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "A"
+   set the script of button "A" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put " & q & "T42" & q & " into tWhere", \
+         "  do put tWhere & comma after gHCScriptsTest", "  do go cd " & q & "Two" & q, "  put the short name of this card after gHCScriptsTest", \
+         "  do put " & q & "x" & q & " && the short name of this card into tOut", "  put comma & tOut after gHCScriptsTest", \
+         "  put " & q & "put 1 into tOne" & q & " into tCmd", "  do tCmd", "  put comma & tOne after gHCScriptsTest", \
+         "  do put 1 into", "  put " & q & "open" & q & " into theVisEffect", "  lock screen", "  unlock screen with visual zoom theVisEffect", \
+         "  put comma & " & q & "end" & q & " after gHCScriptsTest", "end mouseUp")
+   create button "B"
+   set the script of button "B" to _Lines("on mouseUp", "  do go cd " & q & "Two" & q, "  do tCmd", "end mouseUp")
+   create card "Two"
+   go to card 1
+   unlock messages
+   TestAssert "T42: the first script does not compile here as it is", not _Compiles(the script of button "A" of card 1 of stack tStack)
+   TestAssert "T42: the second does", _Compiles(the script of button "B" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "A" of card 1 of stack tStack into tScript
+   TestAssert "T42: statements in quotes", line 4 to 5 of tScript is _Lines("  do " & q & "put tWhere & comma after gHCScriptsTest" & q, \
+         "  do " & q & "go cd " & q & " & quote & " & q & "Two" & q & " & quote") \
+         and line 7 of tScript is "  do " & q & "put " & q & " & quote & " & q & "x" & q & " & quote & " & q & " && the short name of this card into tOut" & q
+   TestAssert "T42: a do of an expression: unchanged", line 10 of tScript is "  do tCmd"
+   TestAssert "T42: a statement that does not compile here either: not put in quotes", "do " & q & "put 1 into" is not in tScript
+   TestAssert "T42: in a script that compiles, where the do ran its first word alone (go)", line 2 to 3 of the script of button "B" of card 1 of stack tStack \
+         is _Lines("  do " & q & "go cd " & q & " & quote & " & q & "Two" & q & " & quote", "  do tCmd")
+   TestAssert "T42: the script compiles", _Compiles(tScript)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "A" of card 1 of stack tStack
+   TestAssert "T42: each statement run as HyperCard ran it", gHCScriptsTest is "T42,Two,x Two,1,end"
+   _Close tStack
+end TestHyperCardScriptsT42
+
+on TestHyperCardScriptsT43
+   -- go to a card of a stack named without the word "stack" after a
+   -- background or after "in", and to a background of a stack, which this
+   -- engine does not go to
+   local tStack, tScript, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", "  go last cd of bg " & q & "stocks" & q & " of stackName", "  go bkgnd " & q & "Workouts" & q & " of importStack", \
+         "  go to card " & q & "print utility" & q & " in " & q & "Utilities 1.1" & q, "  go background " & q & "The Tree" & q & " of stack oldTree", \
+         "  go to card 3 in a new window", "  go cd x of bg 2", "  go to card 2 of bg 3 of this stack", "  go to the first card in naam", "end mouseUp") into tScript
+   TestAssert "T43: a card of a background of a stack named without stack", line 2 of tScript is "  do hcGo(" & q & "go last cd of bg " & q & " & quote & " & q & "stocks" & q & " & quote & " & q & " of stack tHCStack" & q & ", " & q & "stackName" & q & ")"
+   TestAssert "T43: a background of a stack named without stack: its first card", line 3 of tScript is "  do hcGo(" & q & "go card 1 of bkgnd " & q & " & quote & " & q & "Workouts" & q & " & quote & " & q & " of stack tHCStack" & q & ", " & q & "importStack" & q & ")"
+   TestAssert "T43: in a stack", line 4 of tScript is "  do hcGo(" & q & "go to card " & q & " & quote & " & q & "print utility" & q & " & quote & " & q & " of stack tHCStack" & q & ", quote & " & q & "Utilities 1.1" & q & " & quote)"
+   TestAssert "T43: a background of a stack named with stack: its first card", line 5 of tScript is "  do hcGo(" & q & "go card 1 of background " & q & " & quote & " & q & "The Tree" & q & " & quote & " & q & " of stack tHCStack" & q & ", " & q & "oldTree" & q & ")"
+   TestAssert "T43: in a new window, a background of this stack: unchanged", line 6 to 8 of tScript is _Lines("  go to card 3 in a new window", "  go cd x of bg 2", "  go to card 2 of bg 3 of this stack")
+   TestAssert "T43: in a stack named by a variable", line 9 of tScript is "  do hcGo(" & q & "go to the first card of stack tHCStack" & q & ", " & q & "naam" & q & ")"
+   TestAssert "T43: those compile", _Compiles(tScript)
+
+   -- and the go run: the first card of the background, and the card, of
+   -- the stack a variable names
+   put "HCScriptsT43" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Go"
+   set the script of button "Go" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the short name of this stack into tName", \
+         "  go bkgnd " & q & "Second" & q & " of tName", "  put the short name of this card into gHCScriptsTest", \
+         "  go to card " & q & "Three" & q & " in tName", "  put comma & the short name of this card after gHCScriptsTest", "end mouseUp")
+   -- (a go in a stack this engine compiles as a window's, and stops at)
+   create button "In"
+   set the script of button "In" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the short name of this stack into tName", \
+         "  go last card in tName", "  put comma & the short name of this card after gHCScriptsTest", "end mouseUp")
+   create card "Two"
+   create group "Second"
+   set the backgroundBehavior of group "Second" to true
+   create card "Three"
+   create card "Four"
+   go to card 1
+   unlock messages
+   TestAssert "T43: the second script compiles here as it is", _Compiles(the script of button "In" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T43: in a script that compiles", line 4 of the script of button "In" of card 1 of stack tStack \
+         is "  do hcGo(" & q & "go last card of stack tHCStack" & q & ", " & q & "tName" & q & ")"
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Go" of card 1 of stack tStack
+   send "mouseUp" to button "In" of card 1 of stack tStack
+   TestAssert "T43: the first card of the background, the card, and the last card, as HyperCard went", gHCScriptsTest is "Two,Three,Four"
+   _Close tStack
+end TestHyperCardScriptsT43
+
 on TestHyperCardScriptsMoreFormsProbed
    -- T33: a window's name this engine does not take as a value, which
    -- only revHyperCardFixScripts (with its probes) finds
@@ -1308,11 +1522,12 @@ on TestHyperCardScriptsImported
    local tStack, tReport, tLine, tObject, tFailed
    put _ImportFile("TestV1.stack", "TestV1.stack") into tStack
    put revHyperCardFixScripts(tStack) into tReport
-   -- (4 scripts that did not compile; 38 that did, for "go home",
+   -- (4 scripts that did not compile; 43 that did, for "go home",
    -- "arrowKey", the cursor, "go" to another stack, by "stack" or by
-   -- its name alone, and doMenu, which goes to the library's hcDoMenu
-   -- in a stack without HyperCard's message order)
-   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 42 rewritten" is in tReport
+   -- its name alone, doMenu, which goes to the library's hcDoMenu in a
+   -- stack without HyperCard's message order, and "open MacPaint" and
+   -- "open the short name of the target with MacPaint", T40's)
+   TestAssert "TestV1: scripts rewritten", "HyperCard scripts: 47 rewritten" is in tReport
    set the itemDelimiter to tab
    repeat for each line tLine in tReport
       if item 2 of tLine is empty then next repeat
