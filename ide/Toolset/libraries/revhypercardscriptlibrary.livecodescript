@@ -44,7 +44,11 @@ script "revHyperCardScriptLibrary"
 -- the item's name not in quotes, T28 the properties of the message box,
 -- T29 HyperCard the application: its name and version, send to it, T30
 -- "choose tool" by HyperCard's number or by a name in a variable, T32 the
--- card's rect and HyperCard's text styles). T33, in scripts that do not
+-- card's rect and HyperCard's text styles, T40 "open" an application or
+-- a document with one, which this engine takes for a "go", and HyperCard
+-- 2.4's "open url", T41 a menu message that is a statement, which
+-- HyperCard sent as it was written ("with menuMsg go to card id 90024"),
+-- or a list of messages). T33, in scripts that do not
 -- compile, takes more forms HyperCard took: an answer's replies not in
 -- quotes, "convert" of an expression, functions written without "the",
 -- "go to card 1 of home", and names of several words not in quotes
@@ -75,7 +79,15 @@ script "revHyperCardScriptLibrary"
 -- ("exit saveToDisk" in a handler called createText): the handler's own
 -- name; and "global" with names in quotes or nothing between two commas
 -- ("global "Mapper"", "global a, , b,"). T39 is the salvage of the lines
--- of a handler, in step 2.
+-- of a handler, in step 2. T42 takes "do" with a statement not in quotes
+-- ("do go cd id 13086"), which HyperCard ran as the statement it was:
+-- in quotes, where the probe finds it is no expression and compiles as
+-- a statement (in a script that compiles too, where such a do runs its
+-- first word alone). T43 takes a "go" to a card of a stack named
+-- without the word "stack" after a background ("go last cd of bg
+-- "stocks" of stackName") or after "in" ("go to card "Help" in "Mailing
+-- List Maker""), as T31 does after a card; and a "go" to a background of
+-- a stack, which this engine does not go to: its first card.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -175,6 +187,12 @@ constant kMessageBoxProperties = "visible loc location rect rectangle top left b
 -- the words a "go" names its destination with, as against an expression
 -- whose value is the destination (T25)
 constant kGoPlaces = "card cd cards background bkgnd bg backgrounds stack stacks this next prev previous first last back forth home help recent any middle mid second third fourth fifth sixth seventh eighth ninth tenth marked id window url"
+
+-- The words after "open" that say what this engine opens
+-- (engine/src/lextable.cpp's open_table, and the words before it), and
+-- HyperCard's "open report printing" (T12): an "open" of anything else
+-- is HyperCard's of an application (T40)
+constant kOpenWords = "directory driver file folder printing process socket standarderror standardinput standardoutput stderr stdin stdout secure datagram elevated report"
 
 -- What the probes found: a name's verdict, so that each name is compiled
 -- once (keys are the name in lower case)
@@ -2625,7 +2643,7 @@ end _PlayNotes
 -- compiling or not, one statement a line at most (a statement continued
 -- with \ is left as it is)
 private function _HyperCardRules pLine, pCompiled, pElse
-   local tTokens, tCode, tIdx, n, tItem, i, j, tEnd, tWord, tNew
+   local tTokens, tCode, tIdx, n, tItem, i, j, tEnd, tWord, tNew, tStackAt
 
    -- (pElse: the rest of a line from its else, whose phrases are done)
    if pCompiled and pElse is not true then put _PlayNotes(pLine) into pLine
@@ -2681,7 +2699,9 @@ private function _HyperCardRules pLine, pCompiled, pElse
                   put "of" into tTokens[tIdx[j]]["t"]
                end if
             end repeat
-            put _GoStack(tTokens, tIdx, i, tEnd) into tNew
+            -- (T43 first, as it makes an "in" "of")
+            put _GoStackAt(tTokens, tIdx, i, tEnd) into tStackAt
+            put _GoStack(tTokens, tIdx, i, tEnd, tStackAt) into tNew
             if tNew is empty then put _GoTo(tTokens, tIdx, i, tEnd) into tNew
             break
          case "set"
@@ -2756,6 +2776,12 @@ private function _HyperCardRules pLine, pCompiled, pElse
                _Fire "T29 HyperCard the application"
                put "hcSendToHyperCard" && _Span(tTokens, tIdx, i + 1, tEnd - 2) into tNew
             end if
+            break
+         case "open"
+            put _OpenApplication(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "do"
+            put _DoStatement(tTokens, tIdx, i, tEnd) into tNew
             break
          case "domenu"
          case "hcdomenu"
@@ -2960,21 +2986,80 @@ end _Literal
 -- "No such card" in the result; this engine stops with an error. The
 -- statement is run by the library's hcGo, which finds the stack first
 -- (the files beside the one imported, the disk image it came from) and
--- runs it with the stack expression in the variable tHCStack
-private function _GoStack pTokens, pIdx, pAt, pEnd
-   local j, k, tLast
-   repeat with j = pAt + 1 to pEnd
-      if _T(pTokens, pIdx[j]) is "stack" and _T(pTokens, pIdx[j - 1]) is not "this" then
-         put j into k
-         exit repeat
+-- runs it with the stack expression in the variable tHCStack. pStackAt:
+-- where a stack named without the word "stack" starts (T43, _GoStackAt)
+private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
+   local j, k, tLast, tFirst, tCard, tStack
+   if pStackAt is empty then
+      repeat with j = pAt + 1 to pEnd
+         if _T(pTokens, pIdx[j]) is "stack" and _T(pTokens, pIdx[j - 1]) is not "this" then
+            put j into k
+            exit repeat
+         end if
+      end repeat
+      if k is empty or k = pEnd then return empty
+      if _T(pTokens, pIdx[k + 1]) is among the words of "id this" then return empty
+      put k + 1 into pStackAt
+   else
+      put pStackAt - 1 into k
+      put "stack " into tStack
+   end if
+   put _ExpressionEnd(pTokens, pIdx, pStackAt, pEnd, "in as without") into tLast
+   -- T43: a background of the stack ("go bkgnd "Workouts" of stack
+   -- tName"), which this engine does not go to (it stays on the card it
+   -- is on): its first card, where HyperCard went, as "go bkgnd" without
+   -- a stack does here
+   put pAt + 1 into tFirst
+   if _T(pTokens, pIdx[tFirst]) is "to" then add 1 to tFirst
+   if tFirst < k and _T(pTokens, pIdx[tFirst]) is among the words of "background bkgnd bg" then
+      put "card 1 of " into tCard
+      _Fire "T43 go to a card of a stack"
+   end if
+   _Fire "T16 go to a stack not open"
+   return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[tFirst] - 1) & tCard & _Raw(pTokens, pIdx[tFirst], pIdx[pStackAt] - 1) & tStack & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(_Span(pTokens, pIdx, pStackAt, tLast)) & ")"
+end _GoStack
+
+-- T43: where the stack starts in a go to a card or a background of a
+-- stack named without the word "stack": after "of" following a
+-- background ("go last cd of bg "stocks" of stackName", "go bkgnd
+-- "Workouts" of importStack"), or after "in" following a card or a
+-- background ("go to card "Help" in "Mailing List Maker"", "go last card
+-- in omaNimi", which this engine compiles as a window and stops at when
+-- it runs), which HyperCard took as "of stack". That "in" becomes "of".
+-- Empty if there is none ("of" after a card alone is T31's, in a script
+-- that does not compile)
+private function _GoStackAt @pTokens, pIdx, pAt, pEnd
+   local j, tItem, tNext, tDepth, tAt, tBackground
+   put false into tAt
+   put false into tBackground
+   put 0 into tDepth
+   repeat with j = pAt + 1 to pEnd - 1
+      put _T(pTokens, pIdx[j]) into tItem
+      if tItem is "(" then add 1 to tDepth
+      if tItem is ")" then subtract 1 from tDepth
+      if tDepth > 0 or tItem is ")" then next repeat
+      if tItem is among the words of "card cd" then put true into tAt
+      if tItem is among the words of "background bkgnd bg" then
+         put true into tAt
+         put true into tBackground
+      end if
+      if tItem is among the words of "stack char character word item line url" then return empty
+      if tAt and (tItem is "in" or (tItem is "of" and tBackground)) then
+         put _T(pTokens, pIdx[j + 1]) into tNext
+         -- (a card's background, whose own "of" may follow)
+         if tItem is "of" and tNext is among the words of "background bkgnd bg" then next repeat
+         if pTokens[pIdx[j + 1]]["k"] is "s" or (pTokens[pIdx[j + 1]]["k"] is "w" \
+               and tNext is not among the words of kGoPlaces and tNext is not among the words of kObjectWords \
+               and tNext is not among the words of "the me target a new window this") then
+            put "of" into pTokens[pIdx[j]]["t"]
+            _Fire "T43 go to a card of a stack"
+            return j + 1
+         end if
+         return empty
       end if
    end repeat
-   if k is empty or k = pEnd then return empty
-   if _T(pTokens, pIdx[k + 1]) is among the words of "id this" then return empty
-   put _ExpressionEnd(pTokens, pIdx, k + 1, pEnd, "in as without") into tLast
-   _Fire "T16 go to a stack not open"
-   return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[k + 1] - 1) & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(_Span(pTokens, pIdx, k + 1, tLast)) & ")"
-end _GoStack
+   return empty
+end _GoStackAt
 
 -- T25: go to a destination given by an expression ("go " & quote &
 -- "Addresses" & quote, "go to it", "go tWhere"), which HyperCard took for
@@ -2994,6 +3079,96 @@ private function _GoTo pTokens, pIdx, pAt, pEnd
    _Fire "T25 go to a destination by its name"
    return "hcGoTo" && _PlainName(pTokens, pIdx, j, tLast, true) & tTail
 end _GoTo
+
+-- T40: open an application, or a document with one ("open "TeachText"",
+-- "open tDoc with tApp", "open MacDraw 1.9.5"), which HyperCard launched,
+-- asking "Where is ...?" when it could not find the application and
+-- failing that leaving "Couldn't open that application." in the result.
+-- This engine takes an "open" of anything but a file, printing, a process
+-- or a socket for a "go", which stops with an error when there is no
+-- such stack; the library's hcOpen launches the application instead. And
+-- HyperCard 2.4's "open url", which gave the URL to the browser (launch
+-- url here), and "open report printing" in a script that compiles, which
+-- T12 takes in one that does not. An "open" of what this engine opens
+-- (kOpenWords), or of a place a "go" names ("open stack", which
+-- HyperCard did not have), is left as it is
+private function _OpenApplication pTokens, pIdx, pAt, pEnd
+   local tWord, tLast
+   if pAt = pEnd then return empty
+   put _T(pTokens, pIdx[pAt + 1]) into tWord
+   if tWord is "url" and pAt + 1 < pEnd then
+      _Fire "T40 open an application"
+      return "launch url" && _Span(pTokens, pIdx, pAt + 2, pEnd)
+   end if
+   if tWord is "report" and pAt + 2 = pEnd and _T(pTokens, pIdx[pEnd]) is "printing" then
+      _Fire "T12 HyperCard command to the library"
+      return "hcOpenReportPrinting empty"
+   end if
+   if tWord is among the words of kOpenWords or tWord is among the words of kGoPlaces or tWord is "with" then return empty
+   if tWord is "the" and _T(pTokens, pIdx[pAt + 2]) is among the words of kGoPlaces then return empty
+   -- (the document, then "with" and the application)
+   put _ExpressionEnd(pTokens, pIdx, pAt + 1, pEnd, "with") into tLast
+   if tLast = pEnd - 1 then return empty
+   _Fire "T40 open an application"
+   if tLast < pEnd then
+      return "hcOpen" && _OpenName(pTokens, pIdx, tLast + 2, pEnd) & ", " & _OpenName(pTokens, pIdx, pAt + 1, tLast)
+   end if
+   return "hcOpen" && _OpenName(pTokens, pIdx, pAt + 1, pEnd)
+end _OpenApplication
+
+-- T40: the code tokens pFrom to pTo as the name of an application or a
+-- document. A name HyperCard took as the text it was, words, numbers,
+-- dots and the colons of an HFS path ("open MacDraw 1.9.5", "open Hard
+-- Disk:Apps:VersaTerm Pro"), is put in quotes, and so is one word this
+-- engine does not take as a value; anything else is an expression, kept
+-- as it is unless the probe finds it is no expression here, when its text
+-- is the name
+private function _OpenName pTokens, pIdx, pFrom, pTo
+   local j, tKind, tWords, tSpan
+   put _Span(pTokens, pIdx, pFrom, pTo) into tSpan
+   put 0 into tWords
+   repeat with j = pFrom to pTo
+      put pTokens[pIdx[j]]["k"] into tKind
+      if tKind is "w" and _T(pTokens, pIdx[j]) is not among the words of kNotPlain then
+         add 1 to tWords
+      else if not (tKind is "n" or (tKind is "p" and pTokens[pIdx[j]]["t"] is among the chars of ".:")) then
+         put empty into tWords
+         exit repeat
+      end if
+   end repeat
+   if tWords is not empty and tWords > 0 then
+      if pFrom < pTo or _ValueRefused(tSpan) then return _Literal(tSpan)
+      return tSpan
+   end if
+   -- (in parentheses: get takes an expression and leaves the rest of the
+   -- line, so "get go to card 3" compiles)
+   if sProbe is not empty and not _Compiles("on hcProbe" & return & "get (" & tSpan & ")" & return & "end hcProbe") then return _Literal(tSpan)
+   return tSpan
+end _OpenName
+
+-- T42: do with a statement not in quotes ("do go cd id 13086", "do put
+-- offset(x, y) into z"), which HyperCard ran as the statement it was.
+-- Here do takes an expression: the line does not compile, or does and
+-- runs the first word alone ("do go cd "Two"" does "go", which stops
+-- with an error). The statement is put in quotes, where the probe finds
+-- it is no expression and compiles as a statement; do then runs it in
+-- the handler's context, its variables included. A do of an expression
+-- ("do tCommands") is left as it is, and so is HyperCard 2.2's "do
+-- tScript as AppleScript"
+private function _DoStatement pTokens, pIdx, pAt, pEnd
+   local tSpan, j
+   if pAt = pEnd or sProbe is empty or pTokens[pIdx[pAt + 1]]["k"] is not "w" then return empty
+   repeat with j = pAt + 1 to pEnd
+      if _T(pTokens, pIdx[j]) is "as" then return empty
+   end repeat
+   put _Span(pTokens, pIdx, pAt + 1, pEnd) into tSpan
+   -- (in parentheses, as get takes an expression and leaves the rest of
+   -- the line: "get go to card 3" compiles)
+   if _Compiles("on hcProbe" & return & "get (" & tSpan & ")" & return & "end hcProbe") then return empty
+   if not _Compiles("on hcProbe" & return & tSpan & return & "end hcProbe") then return empty
+   _Fire "T42 do with a statement not in quotes"
+   return "do" && _Literal(tSpan)
+end _DoStatement
 
 -- T33: the code tokens pFrom to pTo as a name HyperCard took as the text
 -- it was ("set the cursor to Mouse Cursor", "go Electronic Parts", "hide
@@ -3360,12 +3535,18 @@ end _SetMenuItem
 -- put E into (after, before) menu M [with menuMsg(s) X], put E into
 -- menuItem I of menu M: hcPutIntoMenu E, "into", M, X, I
 private function _PutIntoMenu pTokens, pIdx, pAt, pEnd
-   local tPrep, tWith, tMenu, tItem, tMessages
+   local tPrep, tWith, tMenu, tItem, tMessages, tOrdinal, tLast
    put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "into after before", "menu menuitem") into tPrep
    if tPrep is empty then
-      -- put E into last menuItem of menu M
-      put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "into after before", kMenuOrdinals) into tPrep
-      if tPrep is not empty and _T(pTokens, pIdx[tPrep + 2]) is not "menuitem" then put empty into tPrep
+      -- put E into [the] last menuItem of menu M
+      put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "into after before", kMenuOrdinals && "the") into tPrep
+      if tPrep is not empty then
+         put tPrep + 1 into tOrdinal
+         if _T(pTokens, pIdx[tOrdinal]) is "the" then add 1 to tOrdinal
+         if _T(pTokens, pIdx[tOrdinal]) is not among the words of kMenuOrdinals or _T(pTokens, pIdx[tOrdinal + 1]) is not "menuitem" then
+            put empty into tPrep
+         end if
+      end if
    end if
    if tPrep is empty or tPrep + 2 > pEnd then return empty
    put "empty" into tMessages
@@ -3374,7 +3555,7 @@ private function _PutIntoMenu pTokens, pIdx, pAt, pEnd
    put _FindWord(pTokens, pIdx, tPrep + 2, pEnd, "with", "menumsg menumsgs menumessage menumessages") into tWith
    if tWith is not empty then
       if tWith + 2 > pEnd or tWith = tPrep + 2 then return empty
-      put _Span(pTokens, pIdx, tWith + 2, pEnd) into tMessages
+      put pEnd into tLast
       put tWith - 1 into pEnd
    end if
    if _T(pTokens, pIdx[tPrep + 1]) is "menuitem" then
@@ -3382,17 +3563,93 @@ private function _PutIntoMenu pTokens, pIdx, pAt, pEnd
       if tMenu is empty or tMenu = tPrep + 2 or tMenu + 2 > pEnd then return empty
       put _Span(pTokens, pIdx, tPrep + 2, tMenu - 1) into tItem
       put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
-   else if _T(pTokens, pIdx[tPrep + 2]) is "menuitem" then
-      put _FindWord(pTokens, pIdx, tPrep + 3, pEnd, "of in", "menu") into tMenu
-      if tMenu is not tPrep + 3 or tMenu + 2 > pEnd then return empty
-      put quote & _T(pTokens, pIdx[tPrep + 1]) & quote into tItem
+   else if tOrdinal is not empty then
+      put _FindWord(pTokens, pIdx, tOrdinal + 2, pEnd, "of in", "menu") into tMenu
+      if tMenu is not tOrdinal + 2 or tMenu + 2 > pEnd then return empty
+      put quote & _T(pTokens, pIdx[tOrdinal]) & quote into tItem
       put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else
       put _Span(pTokens, pIdx, tPrep + 2, pEnd) into tMenu
    end if
+   if tWith is not empty then put _MenuMessages(pTokens, pIdx, tWith + 2, tLast) into tMessages
    _Fire "T22 HyperCard menus"
    return "hcPutIntoMenu" && _Span(pTokens, pIdx, pAt + 1, tPrep - 1) & comma && quote & _T(pTokens, pIdx[tPrep]) & quote & comma && tMenu & comma && tMessages & comma && tItem
 end _PutIntoMenu
+
+-- The menu messages after "with menuMsgs": one for each item put into the
+-- menu, separated by commas. HyperCard took each as an expression where
+-- it was one ("doHelp", tMessages, item i of tList, "go cd " & it), and
+-- otherwise as the text written, a statement it sent when the item was
+-- chosen ("with menuMsg go to card id 90024", "with menumsg doMenu "New
+-- Card"", which here do not compile): then the whole list is put in
+-- quotes, one string with its commas, which the library's hcPutIntoMenu
+-- takes apart. A list of expressions ("AC_Front,AC_Closer", ""AC_Undo",
+-- "",...") becomes one, its expressions joined by commas: as it was, the
+-- second message was taken for the menu item to put into, and those after
+-- it were lost
+private function _MenuMessages pTokens, pIdx, pFrom, pTo
+   local j, tDepth, tStart, tCount, tParts, tSpan, tOut
+   put 0 into tDepth
+   put pFrom into tStart
+   put 0 into tCount
+   repeat with j = pFrom to pTo + 1
+      if j <= pTo then
+         if _T(pTokens, pIdx[j]) is "(" then add 1 to tDepth
+         if _T(pTokens, pIdx[j]) is ")" then subtract 1 from tDepth
+         if tDepth is not 0 or _T(pTokens, pIdx[j]) is not comma then next repeat
+      end if
+      add 1 to tCount
+      if tStart > j - 1 then
+         put "empty" into tParts[tCount]
+      else
+         put _Span(pTokens, pIdx, tStart, j - 1) into tSpan
+         if _MenuMessageIsStatement(pTokens, pIdx, tStart, j - 1, tSpan) then
+            _Fire "T41 menu messages"
+            return _Literal(_Span(pTokens, pIdx, pFrom, pTo))
+         end if
+         if tStart < j - 1 then put "(" & tSpan & ")" into tSpan
+         put tSpan into tParts[tCount]
+      end if
+      put j + 1 into tStart
+   end repeat
+   if tCount = 1 then return _Span(pTokens, pIdx, pFrom, pTo)
+   _Fire "T41 menu messages"
+   repeat with j = 1 to tCount
+      if j > 1 then put " & comma & " after tOut
+      put tParts[j] after tOut
+   end repeat
+   return tOut
+end _MenuMessages
+
+-- _MenuMessages on the text after "with menuMsgs" (rule T12, which takes
+-- a line at a time), the comment after it kept
+private function _MenuMessagesText pText
+   local tTokens, tCode, tIdx, n, tItem, tNew, tComment
+   put _Tokens(pText) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   if n = 0 then return pText
+   put _MenuMessages(tTokens, tIdx, 1, n) into tNew
+   if tNew is _Span(tTokens, tIdx, 1, n) then return pText
+   if tTokens[tTokens["count"]]["k"] is "c" then put space & tTokens[tTokens["count"]]["t"] into tComment
+   return tNew & tComment
+end _MenuMessagesText
+
+-- Whether the menu message pSpan, the code tokens pFrom to pTo, is a
+-- statement rather than an expression: it starts with a name (not a
+-- function's, before "(") and does not compile as get's value (in
+-- parentheses, as get leaves what follows its expression); or, with no
+-- probe (a script rewritten outside revHyperCardFixScripts), it starts
+-- with one of HyperTalk's commands followed by more
+private function _MenuMessageIsStatement pTokens, pIdx, pFrom, pTo, pSpan
+   if pTokens[pIdx[pFrom]]["k"] is not "w" or (pFrom < pTo and _T(pTokens, pIdx[pFrom + 1]) is "(") then return false
+   if sProbe is not empty then return not _Compiles("on hcProbe" & return & "get (" & pSpan & ")" & return & "end hcProbe")
+   return pFrom < pTo and _T(pTokens, pIdx[pFrom]) is among the words of kHyperTalkCommands
+end _MenuMessageIsStatement
 
 -- enable and disable menu M, menuItem I of menu M; create menu M; delete
 -- menu M, menuItem I of menu M
@@ -3533,7 +3790,7 @@ private function _LineCommands pLine
       put sMatch[4] into c
       put sMatch[5] into d
       _Fire "T12 HyperCard command to the library"
-      return tIndent & "hcPutIntoMenu" && a & comma && quote & b & quote & comma && c & comma && d
+      return tIndent & "hcPutIntoMenu" && a & comma && quote & b & quote & comma && c & comma && _MenuMessagesText(d)
    end if
    if _Match(pLine, "(?i)^(\s*(?:(?:then|else)\s+)?)palette\s+(.+?,.+)$") then
       put sMatch[1] into tIndent
@@ -3627,13 +3884,25 @@ end _Quoted
 
 -- T14: a visual effect with a variable where this engine expects one of
 -- its words (HyperCard evaluated it): the statement is run with do, the
--- variables' values put in
+-- variables' values put in. And the same after "unlock screen with"
+-- ("unlock screen with visual zoom theVisEffect", "unlock screen with
+-- wipe it"), whose first three words are kept as they are
 private function _Visual pLine
-   local tTokens, tCode, tItem, tWord, tUnknown, tOut, tIndent, tLiteral
+   local tTokens, tCode, tItem, tWord, tUnknown, tOut, tIndent, tLiteral, tFrom, n
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
-   if _T(tTokens, item 1 of tCode) is not "visual" then return pLine
+   if _T(tTokens, item 1 of tCode) is "visual" then
+      put 1 into tFrom
+   else if _T(tTokens, item 1 of tCode) is "unlock" and _T(tTokens, item 2 of tCode) is "screen" \
+         and _T(tTokens, item 3 of tCode) is "with" and the number of items of tCode > 3 then
+      put 4 into tFrom
+   else
+      return pLine
+   end if
+   put 0 into n
    repeat for each item tItem in tCode
+      add 1 to n
+      if n < tFrom then next repeat
       if tTokens[tItem]["k"] is "w" and _T(tTokens, tItem) is not among the words of kVisualWords then
          put true into tUnknown
       else if tTokens[tItem]["k"] is not "w" then
@@ -3644,8 +3913,10 @@ private function _Visual pLine
    if not tUnknown then return pLine
    if tTokens[1]["k"] is "sp" then put tTokens[1]["t"] into tIndent
    put empty into tLiteral
+   put 0 into n
    repeat for each item tItem in tCode
-      if _T(tTokens, tItem) is among the words of kVisualWords then
+      add 1 to n
+      if n < tFrom or _T(tTokens, tItem) is among the words of kVisualWords then
          put tTokens[tItem]["t"] & space after tLiteral
       else
          if tLiteral is not empty then
