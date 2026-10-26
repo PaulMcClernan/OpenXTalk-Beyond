@@ -2071,10 +2071,11 @@ function inKey
 end inKey
 
 -- HyperCard's own messages, sent by a script to an object with no handler
--- for them ("send mouseUp to bg btn 3", "send tabKey to this card"):
--- HyperCard took them at the end of the path; this engine stops with
--- "can't find handler". Here they end, as they did, and go on to the
--- engine as they would
+-- for them ("send mouseUp to bg btn 3", "send tabKey to this card", "send
+-- startUp to stack "Home"" when Home is the stand-in, hcHome): HyperCard
+-- took them at the end of the path; this engine stops with "can't find
+-- handler". Here they end, as they did, and go on to the engine as they
+-- would
 on mouseUp
    pass mouseUp
 end mouseUp
@@ -2118,6 +2119,10 @@ end returnKey
 on enterKey
    pass enterKey
 end enterKey
+
+on startUp
+   pass startUp
+end startUp
 
 -- splashDialog id, seconds, ...: a splash screen while the stack starts,
 -- from a resource that is not imported; nothing is shown

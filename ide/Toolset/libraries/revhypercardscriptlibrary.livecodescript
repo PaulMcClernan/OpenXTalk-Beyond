@@ -1141,6 +1141,15 @@ private function _Code pTokens
    return tList
 end _Code
 
+-- The first code token of the line (its "t" and "k"), or empty
+private function _FirstCode pLine
+   local tTokens, tCode
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   if item 1 of tCode is empty then return empty
+   return tTokens[item 1 of tCode]
+end _FirstCode
+
 -- The line with strings replaced by "" and the comment cut off
 private function _CodeText pLine
    local tTokens, i, tText
@@ -1277,11 +1286,15 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       -- (tContinued: the line before ends with \, so this one goes on with
       -- its statement and starts none, "drag from a to b \" then "with
       -- optionKey")
-      local tContinued, tGoesOn
+      -- (tGoesOn: this line ends with \, and its statement goes on with
+      -- the first code token of the next, tThen, which T2 reads)
+      local tContinued, tGoesOn, tThen
       put false into tContinued
       repeat with tKey = tSpans[i]["start"] to tSpans[i]["end"]
          put char -1 of word 1 to -1 of _CodeText(tLines[tKey]) is "\" into tGoesOn
-         put _RewriteLine(tLines[tKey], tVars, tRename, pExternals, tRenameHandlers, tContinued) into tLines[tKey]
+         put empty into tThen
+         if tGoesOn and tKey < tSpans[i]["end"] then put _FirstCode(tLines[tKey + 1]) into tThen
+         put _RewriteLine(tLines[tKey], tVars, tRename, pExternals, tRenameHandlers, tContinued, tThen) into tLines[tKey]
          put tGoesOn into tContinued
       end repeat
       _ContinuedCommands tLines, tSpans[i]["start"], tSpans[i]["end"], tVars
@@ -1663,14 +1676,22 @@ private function _CountOfObjects pTokens, pCode, pOf
 end _CountOfObjects
 
 -- The rules that work on one line of a handler (pContinued: the line
--- goes on with the statement of the line before)
-private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers, pContinued
+-- goes on with the statement of the line before; pThen: the line ends
+-- with \, and this is the first code token of the next, as _FirstCode
+-- gives it)
+private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers, pContinued, pThen
    local tTokens, tCode, tIndex, tPrev, tNext, tWord, tNew, tFirst, tAfter, tChanged
-   local tLine
+   local tLine, tThen
 
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
    put item 1 of tCode into tFirst
+   -- the token after the \ at the end, past the end of the line's tokens
+   -- (so that _Join leaves it out), for T2 to read
+   if pThen is an array and item -1 of tCode is not empty and _T(tTokens, item -1 of tCode) is "\" then
+      put tTokens["count"] + 1 into tThen
+      put pThen into tTokens[tThen]
+   end if
 
    -- T31: a string not closed at the end of the line, which HyperCard
    -- closed there ("domenu " & quote & "Quit HyperCard")
@@ -1744,9 +1765,13 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
          next repeat
       end if
 
-      -- T2: a variable whose name is refused
+      -- T2: a variable whose name is refused (where the word is last
+      -- before a \ that ends the line, read with the token after it: "or
+      -- menu \" then "is "Paste Card"", a doMenu's parameter)
       if pRename[tWord] is "where" then
-         if _VariableHere(tTokens, tWord, tPrev, tNext) then
+         if tThen is not empty and tNext is item -1 of tCode and _T(tTokens, tNext) is "\" then put tThen into tAfter
+         else put tNext into tAfter
+         if _VariableHere(tTokens, tWord, tPrev, tAfter) then
             put "hc_" & tTokens[tIndex]["t"] into tTokens[tIndex]["t"]
             _Fire "T2 variable named like a keyword"
             next repeat
@@ -1968,9 +1993,13 @@ private function _PhraseRules pLine
       end if
       -- fld "Notes" in card "Menu", first cd in bg "Recipes": "in" for
       -- "of" after an object, before the card or background it is on
+      -- ("the name of card it in bkgnd 2" too); not the operator "is in"
+      -- after one ("if the short name of this cd is in cd fld "Index"",
+      -- which "of" made a line that does not compile)
       if tWord is "in" and tNext is among the words of "card cd bkgnd bg background stack" and i > 2 \
             and (tPrev is among the words of kObjectWords \
-            or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and _T(tTokens, tIdx[i - 2]) is among the words of kObjectWords) \
+            or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and tPrev is not "is" \
+            and _T(tTokens, tIdx[i - 2]) is among the words of kObjectWords) \
             or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and _T(tTokens, tIdx[i - 2]) is "id" and _T(tTokens, tIdx[i - 3]) is among the words of kObjectWords)) then
          put "of" into tTokens[tIdx[i]]["t"]
          _Fire "T11 HyperCard object words"

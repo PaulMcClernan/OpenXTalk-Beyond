@@ -977,7 +977,7 @@ end TestHyperCardScriptsT44
 on TestHyperCardScriptsT45
    -- HyperCard's Home stack named but not gone to, which here is the IDE's
    -- stack "home"
-   local tStack, tScript, q, tHome
+   local tStack, tScript, q, tHome, tError
    global gHCScriptsTest
    put quote into q
    put _Rewrite("on mouseUp", "  set the script of stack " & q & "Home" & q & " to tScript", "  get the long name of stack Home", \
@@ -1003,6 +1003,8 @@ on TestHyperCardScriptsT45
    set the script of button "Install" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the script of stack " & q & "Home" & q & " into tHome", \
          "  put " & q & "on hcT45" & q & " & return & " & q & "end hcT45" & q & " after tHome", "  set the script of stack " & q & "Home" & q & " to tHome", \
          "  put the script of stack " & q & "Home" & q & " into gHCScriptsTest", "end mouseUp")
+   create button "Start"
+   set the script of button "Start" to _Lines("on mouseUp", "  global gHCScriptsTest", "  send startUp to stack " & q & "Home" & q, "  put " & q & "started" & q & " into gHCScriptsTest", "end mouseUp")
    unlock messages
    TestAssert "T45: the script compiles here as it is", _Compiles(the script of button "Install" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
@@ -1013,6 +1015,15 @@ on TestHyperCardScriptsT45
    TestAssert "T45: the script went into HyperCard's Home, the stand-in", gHCScriptsTest is _Lines("on hcT45", "end hcT45") & return \
          and the script of stack "HyperCard Home" is gHCScriptsTest
    TestAssert "T45: the IDE's home is as it was", the script of stack "home" is tScript
+   -- startUp, which HyperCard's Home passed on, to the stand-in, which has
+   -- no handler for it
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Start" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T45: startUp sent to the stand-in goes on, as it did to Home", gHCScriptsTest is "started"
+   TestAssert "T45: and the IDE's home is still as it was", the script of stack "home" is tScript
    _Close tStack
 
    -- the stand-in's library when the stack it was made for has gone: the
@@ -1034,6 +1045,25 @@ on TestHyperCardScriptsT45
    if there is a stack "HyperCard Home" then delete stack "HyperCard Home"
    if tHome is not empty then delete stack tHome
 end TestHyperCardScriptsT45
+
+on TestHyperCardScriptsRulesFixed
+   -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
+   -- the operator "is in" after a card, and T2 at the end of a line
+   -- that goes on with \
+   local tScript, q
+   put quote into q
+   put _Rewrite("on mouseUp", "  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
+         "  if the short name of this stack is in fld 1 then beep", "  get fld Notes in card 2", "  get the name of card it in bkgnd " & q & "BBS" & q, "end mouseUp") into tScript
+   TestAssert "T11: is in after a card, as it was", line 2 to 3 of tScript is _Lines("  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
+         "  if the short name of this stack is in fld 1 then beep")
+   TestAssert "T11: in for of after an object's name still", line 4 to 5 of tScript is _Lines("  get fld Notes of card 2", "  get the name of card it of bkgnd " & q & "BBS" & q)
+   TestAssert "T11: those compile", _Compiles(tScript)
+
+   put _Rewrite("on mouseUp", "  put 1 into this", "  if this = 1 or this \", "  = 2 then beep", "  get the name of this \", "  card", "end mouseUp") into tScript
+   TestAssert "T2: the variable before a \, read with the next line", line 2 to 4 of tScript is _Lines("  put 1 into hc_this", "  if hc_this = 1 or hc_this \", "  = 2 then beep")
+   TestAssert "T2: and the word of the grammar before one", line 5 to 6 of tScript is _Lines("  get the name of this \", "  card")
+   TestAssert "T2: those compile", _Compiles(tScript)
+end TestHyperCardScriptsRulesFixed
 
 on TestHyperCardScriptsMoreFormsProbed
    -- T33: a window's name this engine does not take as a value, which
