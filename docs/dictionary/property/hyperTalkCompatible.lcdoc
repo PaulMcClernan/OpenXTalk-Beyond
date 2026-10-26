@@ -95,7 +95,11 @@ When it is true, eight things are as they were in <HyperCard>, for the
   <textHeight> to none, the <textHeight> is the one for that size, as
   <HyperCard> set it. And the <effective> <textStyle> of an <object>
   with a style of its own but no <textSize> of its own is that style,
-  the one it is drawn with, where otherwise it is its owner's.
+  the one it is drawn with, where otherwise it is its owner's. A
+  <script> can set a <textStyle> to <HyperCard|HyperCard's> own style
+  names, from a variable or a field too: condense and extend are
+  condensed and expanded, and outline and shadow, which this engine
+  does not draw, are left out, where they stop the <script> otherwise.
 - The <round> <function> takes a number halfway between two integers to
   the even one, as <statRound> does and as <HyperCard|HyperCard's>
   round did: round(2.5) is 2, round(3.5) is 4 and round(-2.5) is -2,

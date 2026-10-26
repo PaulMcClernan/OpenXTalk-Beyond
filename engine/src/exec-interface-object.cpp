@@ -827,6 +827,12 @@ static void MCInterfaceTextStyleParse(MCExecContext& ctxt, MCStringRef p_input, 
 	uindex_t t_new_offset;
 	t_new_offset = 0;
 
+	// OXT-Beyond: in a stack whose hyperTalkCompatible is true, HyperCard's
+	//   style names (below), and the spaces after a style ("bold ,italic")
+	//   and an empty style ("bold,") left out, as hcTextStyle leaves them
+	bool t_hypertalk;
+	t_hypertalk = ctxt . IsHyperTalkCompatible();
+
 	while (t_success && t_old_offset <= t_length)
 	{
 		MCAutoStringRef t_text_style;
@@ -837,7 +843,20 @@ static void MCInterfaceTextStyleParse(MCExecContext& ctxt, MCStringRef p_input, 
 		while (MCStringGetNativeCharAtIndex(p_input, t_old_offset) == ' ')
 			t_old_offset++;
 
-		t_success = MCStringCopySubstring(p_input, MCRangeMakeMinMax(t_old_offset, t_new_offset), &t_text_style);
+		uindex_t t_end_offset;
+		t_end_offset = t_new_offset;
+		if (t_hypertalk)
+		{
+			while (t_end_offset > t_old_offset && MCStringGetNativeCharAtIndex(p_input, t_end_offset - 1) == ' ')
+				t_end_offset--;
+			if (t_end_offset <= t_old_offset)
+			{
+				t_old_offset = t_new_offset + 1;
+				continue;
+			}
+		}
+
+		t_success = MCStringCopySubstring(p_input, MCRangeMakeMinMax(t_old_offset, t_end_offset), &t_text_style);
 
 		if (t_success)
 		{
@@ -889,11 +908,38 @@ static void MCInterfaceTextStyleParse(MCExecContext& ctxt, MCStringRef p_input, 
 				style |= FA_STRIKEOUT;
 				continue;
 			}
-			if (MCStringIsEqualToCString(*t_text_style, MCgroupstring, kMCCompareCaseless) || 
+			if (MCStringIsEqualToCString(*t_text_style, MCgroupstring, kMCCompareCaseless) ||
 				MCStringIsEqualToCString(*t_text_style, MClinkstring, kMCCompareCaseless))
 			{
 				style |= FA_LINK;
 				continue;
+			}
+
+			// OXT-Beyond: in a stack whose hyperTalkCompatible is true,
+			//   HyperCard's own style names: condense and extend are
+			//   condensed and expanded, and outline and shadow, which this
+			//   engine does not draw, are left out, as the HyperCard
+			//   Library's hcTextStyle does with a style written in a script
+			//   (rule T32). A style that comes from a variable or a field
+			//   ("bold,outline") is set without them, where it stopped the
+			//   script.
+			if (t_hypertalk)
+			{
+				if (MCStringIsEqualToCString(*t_text_style, "condense", kMCCompareCaseless))
+				{
+					style &= ~FA_EXPAND;
+					style |= FA_CONDENSED;
+					continue;
+				}
+				if (MCStringIsEqualToCString(*t_text_style, "extend", kMCCompareCaseless))
+				{
+					style &= ~FA_EXPAND;
+					style |= FA_EXPANDED;
+					continue;
+				}
+				if (MCStringIsEqualToCString(*t_text_style, "outline", kMCCompareCaseless) ||
+					MCStringIsEqualToCString(*t_text_style, "shadow", kMCCompareCaseless))
+					continue;
 			}
 
 			ctxt . LegacyThrow(EE_OBJECT_BADSTYLE);

@@ -12,7 +12,8 @@ another card of its own stack reaches that card after it; arithmetic
 that gives no number goes on with HyperCard's INF or NAN instead of
 stopping the script; reading the textFont, textSize, textStyle or
 textHeight of a button, a field or a field's text with none of its own
-gives the one it uses, where it would give empty; and round takes a
+gives the one it uses, where it would give empty, and HyperCard's own
+style names (condense, outline...) set a textStyle; and round takes a
 number halfway between two integers to the even one. Each test checks
 the stack with the property off too.
 */
@@ -631,3 +632,64 @@ on TestHyperTalkCompatibleTextProperties
    TestAssert "on: a line in two fonts is mixed", line 14 of tValues is "mixed"
    _DeleteStack
 end TestHyperTalkCompatibleTextProperties
+
+-- HyperCard's own style names in a value, where the HyperCard Library's
+-- rule T32 cannot rewrite them: "bold,outline" on the button "Plain",
+-- "condense" on the button "Bold", "extend,shadow" on the first word of
+-- the field "F", "shadow" on the button "Sized", and "bold ,italic,",
+-- with a space and an empty style, on the button "Plain", each set and
+-- read
+private function _StyleNameStatements
+   local q
+   put quote into q
+   return "set the textStyle of button " & q & "Plain" & q & " to (" & q & "bold," & q & " & " & q & "outline" & q & ")" & return \
+         & "put the textStyle of button " & q & "Plain" & q & " into tValue" & return \
+         & "set the textStyle of button " & q & "Bold" & q & " to (" & q & "condense" & q & ")" & return \
+         & "put the textStyle of button " & q & "Bold" & q & " into tValue" & return \
+         & "set the textStyle of word 1 of field " & q & "F" & q & " to (" & q & "extend," & q & " & " & q & "shadow" & q & ")" & return \
+         & "put the textStyle of word 1 of field " & q & "F" & q & " into tValue" & return \
+         & "set the textStyle of button " & q & "Sized" & q & " to (" & q & "shadow" & q & ")" & return \
+         & "put the textStyle of button " & q & "Sized" & q & " into tValue" & return \
+         & "set the textStyle of button " & q & "Plain" & q & " to (" & q & "bold ,italic," & q & ")" & return \
+         & "put the textStyle of button " & q & "Plain" & q & " into tValue"
+end _StyleNameStatements
+
+on TestHyperTalkCompatibleTextStyleNamesOff
+   local tValues
+   _MakeStack false
+   _MakeTextObjects
+   put _Values(_StyleNameStatements()) into tValues
+   TestAssert "off: setting the textStyle to bold,outline stops the script", line 1 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 2 of tValues is empty
+   TestAssert "off: condense stops the script", line 3 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 4 of tValues is "bold"
+   TestAssert "off: extend,shadow on text stops the script", line 5 of tValues is "error"
+   TestAssert "off: and leaves its style as it was", line 6 of tValues is empty
+   TestAssert "off: shadow stops the script", line 7 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 8 of tValues is empty
+   TestAssert "off: a space after a style, or an empty style, stops the script", line 9 of tValues is "error"
+   TestAssert "off: and leaves the style as it was", line 10 of tValues is empty
+   _DeleteStack
+end TestHyperTalkCompatibleTextStyleNamesOff
+
+-- HyperCard's condense and extend are condensed and expanded here, and its
+-- outline and shadow, which this engine does not draw, are left out, with
+-- the spaces after a style and an empty style, as the HyperCard Library's
+-- hcTextStyle leaves them out of a style written in a script
+on TestHyperTalkCompatibleTextStyleNames
+   local tValues
+   _MakeStack true
+   _MakeTextObjects
+   put _Values(_StyleNameStatements()) into tValues
+   TestAssert "on: bold,outline is set", line 1 of tValues is 7
+   TestAssert "on: as bold", line 2 of tValues is "bold"
+   TestAssert "on: condense is set", line 3 of tValues is 7
+   TestAssert "on: as condensed", line 4 of tValues is "condensed"
+   TestAssert "on: extend,shadow on text is set", line 5 of tValues is 7
+   TestAssert "on: as expanded", line 6 of tValues is "expanded"
+   TestAssert "on: shadow is set", line 7 of tValues is 7
+   TestAssert "on: as plain", line 8 of tValues is "plain"
+   TestAssert "on: a space after a style, and an empty style, are left out", line 9 of tValues is 7
+   TestAssert "on: so bold ,italic, is bold and italic", line 10 of tValues is "bold,italic"
+   _DeleteStack
+end TestHyperTalkCompatibleTextStyleNames
