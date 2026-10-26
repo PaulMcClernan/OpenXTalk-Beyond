@@ -442,7 +442,11 @@
 	}
 
 	function displayFilters(){
-		// First display the applied filters
+		// First display the applied filters. OXT-Beyond: each with a cross,
+		// as a click on one removes it, which nothing said, and once any is
+		// applied, a button that clears them all, where before they were
+		// cleared one at a time or by opening the Dictionary again
+		// (tperry2x, openxtalk.org p=25436 and p=25444)
 		var tHTML = "";
 		$.each(tState.filters, function(filter_category, filter)
 		{
@@ -452,14 +456,22 @@
 			{
 				tHTML += '<button type="button" ';
 				tHTML += 'class="btn btn-default btn-sm remove_filter" ';
+				tHTML += 'title="Remove this filter" ';
 				tHTML += 'filter_category="'+filter_category+'" ';
 				tHTML += 'filter_value="'+value+'" ';
 				tHTML += 'filter_name="'+name+'">';
 				tHTML += name;
+				tHTML += ' <span aria-hidden="true">&times;</span>';
 				tHTML += '</button>';
 			});
 			tHTML += '</div>';
 		});
+		if (!jQuery.isEmptyObject(tState.filters))
+		{
+			tHTML += '<div style="margin-bottom:10px">';
+			tHTML += '<button type="button" class="btn btn-default btn-sm clear_filters">Clear all</button>';
+			tHTML += '</div>';
+		}
 		$("#filters").html(tHTML);
 
 		// Next display the filter options
@@ -1590,6 +1602,11 @@
 			var filter_value = $(this).attr("filter_value");
 			var filter_name = $(this).attr("filter_name");
 			filter_remove(filter_tag,filter_value,filter_name);
+		});
+
+		$("body").on( "click", ".clear_filters", function() {
+			tState.filters = {};
+			dataFilter();
 		});
 
 		$("body").on( "click", ".external_link", function(e) {

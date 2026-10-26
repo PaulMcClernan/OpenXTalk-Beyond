@@ -1478,6 +1478,7 @@ pObject (String): The long ID of the object you wish to unsubscribe from the mes
 pObjectList (optional string): A list of objects, one per line.
 **/
 on revIDEUnsubscribe pMessage, pObject, pObjectList
+   local tStacksChecked, tInMemory
    # If not object is specified, get the long ID of the calling object
    if pObject is empty then
       put the long ID of the target into pObject
@@ -1489,7 +1490,16 @@ on revIDEUnsubscribe pMessage, pObject, pObjectList
          delete line lineoffset(pObject, sSubscriptions[pMessage & "," & tObject]["callback targets"]) of sSubscriptions[pMessage & "," & tObject]["callback targets"]
          # If the object is no longer needed, unlisten.
          if sSubscriptions[pMessage & "," & tObject]["callback targets"] is empty then
-            revIDEPropertyDeregisterListenerForObject tObject
+            -- OXT-Beyond: unless its stack is no longer in memory. The engine
+            -- drops the listener of an object once it is deleted, so there is
+            -- nothing to cancel, and exists() of the object, to cancel it,
+            -- read the stack from its file again: the Inspector, moving off
+            -- an object of a saved stack just removed from memory or
+            -- deleted, brought the stack back (openxtalk.org p=25429)
+            __ideObjectStackInMemory tObject, tStacksChecked, tInMemory
+            if tInMemory then
+               revIDEPropertyDeregisterListenerForObject tObject
+            end if
          end if
       end repeat
    else if pMessage is "ideMoveStack" then
@@ -1503,6 +1513,51 @@ on revIDEUnsubscribe pMessage, pObject, pObjectList
       end if
    end if
 end revIDEUnsubscribe
+
+-- OXT-Beyond: whether the main stack that the long id pObject names is in
+-- memory, into rInMemory. It is false only when that is certain: no main
+-- stack has that name or that stack file, and no substack that name, which
+-- is where the engine looks before it reads a stack from its file. It
+-- loads nothing, and calls no function handler, so that it leaves the
+-- result as it was. xChecked keeps the answer for each stack, for the
+-- other objects of the same stack
+private command __ideObjectStackInMemory pObject, @xChecked, @rInMemory
+   local tStack, tMainStack
+   put true into rInMemory
+   -- A long id ends with its main stack, as stack "<name or stack file>"
+   if word -2 of pObject is not "stack" then
+      exit __ideObjectStackInMemory
+   end if
+   put word -1 of pObject into tStack
+   if the number of chars of tStack < 3 or char 1 of tStack is not quote \
+         or char -1 of tStack is not quote then
+      exit __ideObjectStackInMemory
+   end if
+   put char 2 to -2 of tStack into tStack
+   -- The engine can take a number for the number of a substack, and a name
+   -- with a quote or a return in it is left to the engine as before
+   if tStack is a number or quote is in tStack or return is in tStack then
+      exit __ideObjectStackInMemory
+   end if
+   if tStack is among the keys of xChecked then
+      put xChecked[tStack] into rInMemory
+      exit __ideObjectStackInMemory
+   end if
+   -- The quick answers first: a main stack of that name, or an open one
+   -- from that stack file
+   if tStack is not among the lines of the mainStacks \
+         and tStack is not among the lines of the stacks then
+      put false into rInMemory
+      repeat for each line tMainStack in the mainStacks
+         if the filename of stack tMainStack is tStack \
+               or tStack is among the lines of the substacks of stack tMainStack then
+            put true into rInMemory
+            exit repeat
+         end if
+      end repeat
+   end if
+   put rInMemory into xChecked[tStack]
+end __ideObjectStackInMemory
 
 /**
 Unsubscribes the object from all messages

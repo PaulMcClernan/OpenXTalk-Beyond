@@ -3303,12 +3303,31 @@ end tmInkPaleIcon
 -- The paint tools have no title, and their tooltips go on to say what
 -- each does ("Pencil Tool - Draw a freehand line on an image"), which in
 -- a tile was cut off at the top and the bottom (OpenXTalkPaul,
--- openxtalk.org, October 2026); the filter still finds the rest of it
+-- openxtalk.org, October 2026); the filter still finds the rest of it.
+-- The vector and paint tools' settings have no title and no " - " either,
+-- and their tooltips are sentences ("Set number of paint polygon sides"),
+-- which were cut off as the palette was made narrower, where the tools'
+-- names still fitted (tperry2x, openxtalk.org p=25435): each has a short
+-- name, and its tooltip, which the filter finds too, says the rest
 private function tmItemTitle pTypeID, @pItem, pTooltip
    local tDash
    if pTypeID is "com.livecode.tool.Browse" then return "Run"
    if pTypeID is "com.livecode.tool.Pointer" then return "Edit"
    if pItem["title"] is not empty then return pItem["title"]
+   switch pTypeID
+      case "com.livecode.tool.FillColor"
+         return "Fill Color"
+      case "com.livecode.tool.LineColor"
+         return "Line Color"
+      case "com.livecode.tool.LineSize"
+         return "Line Size"
+      case "com.livecode.tool.BrushPattern"
+         return "Brush Pattern"
+      case "com.livecode.tool.PolygonSides"
+         return "Polygon Sides"
+      case "com.livecode.tool.RoundRadius"
+         return "Corner Radius"
+   end switch
    put offset(" - ", pTooltip) into tDash
    if tDash > 1 then return char 1 to tDash - 1 of pTooltip
    return pTooltip

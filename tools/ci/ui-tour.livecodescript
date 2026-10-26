@@ -503,6 +503,12 @@ on tour_tools_modern_sizes
    tourTmNamesWhole "with every section, at 390"
    tourTmCheck the text of tourTmNamed("tmLabel:com.livecode.tool.Pencil") is "Pencil Tool", \
          "a paint tool's name is its tooltip's first part (" & the text of tourTmNamed("tmLabel:com.livecode.tool.Pencil") & ")"
+   -- and a tool setting's is short, where its tooltip, a sentence, was
+   -- cut off once the palette was made narrower (openxtalk.org p=25435)
+   tourTmCheck the text of tourTmNamed("tmLabel:com.livecode.tool.PolygonSides") is "Polygon Sides" \
+         and the text of tourTmNamed("tmLabel:com.livecode.tool.RoundRadius") is "Corner Radius", \
+         "a tool setting's name is short (" & the text of tourTmNamed("tmLabel:com.livecode.tool.PolygonSides") & \
+         "," && the text of tourTmNamed("tmLabel:com.livecode.tool.RoundRadius") & ")"
    dispatch "tmMenuPick" to stack "revTools" with "Vector Tools"
    dispatch "tmMenuPick" to stack "revTools" with "Paint Tools"
    revIDESetPreference "revTools_modernNames", false

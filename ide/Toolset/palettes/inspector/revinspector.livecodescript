@@ -13,6 +13,7 @@ on inspectorMessagesRegister
    revIDESubscribe "ideCloseStack"
    revIDESubscribe "ideNameChanged"
    revIDESubscribe "ideMainstackChanged"
+   revIDESubscribe "ideDestroyStack"
 end inspectorMessagesRegister
 
 on inspectorMessagesDeRegister
@@ -23,6 +24,7 @@ on inspectorMessagesDeRegister
    revIDEUnsubscribe "ideCloseStack"
    revIDEUnsubscribe "ideNameChanged"
    revIDEUnsubscribe "ideMainstackChanged"
+   revIDEUnsubscribe "ideDestroyStack"
 end inspectorMessagesDeRegister 
 
 on inspectorCloseAll
@@ -182,6 +184,15 @@ end ideNewStack
 on ideCloseStack
    ideSelectedObjectChanged
 end ideCloseStack
+
+-- OXT-Beyond: File > Close and Remove From Memory, and Delete Substack in
+-- the Project Browser, delete the stack with messages locked, so that
+-- neither its closing nor the end of its selection reached the Inspector,
+-- which went on showing an object that was gone (openxtalk.org p=25429).
+-- Both send ideDestroyStack once the stack is gone
+on ideDestroyStack
+   ideSelectedObjectChanged
+end ideDestroyStack
 
 on stackNameChanged pOldName, pNewLongID
    lock screen
