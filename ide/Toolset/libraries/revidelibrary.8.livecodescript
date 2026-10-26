@@ -10515,7 +10515,41 @@ on revIDEMoveForward pObjectList
    revIDERelayerControls pObjectList, "move forward"
 end revIDEMoveForward
 
+-- OXT-Beyond: true when the Object menu may flip or rotate the images
+-- pImages (pAction is "Flip" or "Rotate"), after asking when any of them
+-- is an animated GIF stored in its stack. The flip and rotate commands
+-- edit an image's pixels, and the pixels of an animated GIF are those of
+-- the frame it shows: the engine keeps that frame and drops the others
+-- (MCImage::convert_to_mutable), and Undo gives back that one frame
+-- (tperry2x, openxtalk.org p=25392). So the menu asks first, as
+-- OpenXTalkPaul suggested (p=25417). A referenced image is not asked
+-- about: flip draws it flipped from its file, and rotate refuses it. The
+-- commands themselves, and revIDEFlipImages and revIDERotateImages, ask
+-- nothing, as before.
+private function framesLostAgreed pImages, pAction
+   local tImage, tList, tDoing, tMessage, tSubstitutions
+   if not revIDEEnsureControlsOfType(pImages, "image") then return true
+   repeat for each line tImage in pImages
+      if the filename of tImage is empty and the frameCount of tImage > 1 then
+         put the name of tImage & ":" && the frameCount of tImage && "frames" & return after tList
+      end if
+   end repeat
+   if tList is empty then return true
+   delete the last char of tList
+   if pAction is "Flip" then
+      put "Flipping" into tDoing
+   else
+      put "Rotating" into tDoing
+   end if
+   put tDoing into tSubstitutions[1]
+   put tList into tSubstitutions[2]
+   put revIDELocalise("%1 an animated image keeps only the frame it is showing. Its other frames will be lost, and Undo can't bring them back." & return & return & "%2", tSubstitutions) into tMessage
+   answer warning tMessage with revIDELocalise("Cancel") or revIDELocalise(pAction)
+   return it is revIDELocalise(pAction)
+end framesLostAgreed
+
 on revIDEActionFlipImage pOrientation
+   if not framesLostAgreed(the selobj, "Flip") then exit revIDEActionFlipImage
    revIDEFlipImages the selobj, pOrientation
 end revIDEActionFlipImage
 
@@ -10599,6 +10633,7 @@ on revIDEActionRotateImageBy
 end revIDEActionRotateImageBy
 
 on revIDEActionRotateImage pAngle
+   if not framesLostAgreed(the selobj, "Rotate") then exit revIDEActionRotateImage
    revIDERotateImages the selobj, pAngle
 end revIDEActionRotateImage
 

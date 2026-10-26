@@ -20,9 +20,11 @@ script "oxt_ui_tour"
 -- and on the Mac the useSystemWindowColor) (and stacks opened with their title
 -- bars above the screen, which the IDE moves where they can be dragged:
 -- title-bar, a card that must show at once each change a script makes
--- to its border: card-border, and fields that must show what they showed
+-- to its border: card-border, fields that must show what they showed
 -- once they are scrolled down and back to the top, by a script and with
--- the system's mouse wheel: field-scroll), the Property Inspector (each section for a
+-- the system's mouse wheel: field-scroll, and an animated GIF, which the
+-- Object menu's Flip Image and Rotate Image must ask about before they
+-- keep one of its frames: image-frames), the Property Inspector (each section for a
 -- button, its section icons clicked with the system's mouse: inspector-tabs, the
 -- Text section of a field, a field's Scrollbar width, which offers 12 and
 -- Standard and sets the width the field has when its stack is opened again
@@ -76,7 +78,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -2367,6 +2369,153 @@ command tourWheel pDown, pCount
       if word 1 to -1 of it is not empty then tourRecord "INFO wheel:" && tourJoin(word 1 to -1 of it)
    end if
 end tourWheel
+
+-- A 4 by 2 animated GIF of two frames (red and blue, then green and
+-- yellow), and a still GIF of the first
+constant kFramesAnimated = "R0lGODlhBAACAIEAAP8AAAAA/wAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQEFAAAACwAAAAABAACAAAICQABAAgQQCDBgAAh+QQFFAACACwAAAAABAACAIEAoAD/yAAAAAAAAAAICQABAAgQQCDBgAA7"
+constant kFramesStill = "R0lGODdhBAACAIEAAP8AAAAA/wAAAAAAACwAAAAABAACAAAICQABAAgQQCDBgAA7"
+local sFramesAsked, sFramesShot
+
+-- An animated GIF stored in its stack keeps only the frame it shows once
+-- it is flipped or rotated (tperry2x, rc.6.5, p=25392), so the Object
+-- menu's Flip Image and Rotate Image ask first (OpenXTalkPaul, p=25417):
+-- Cancel leaves the image as it was, and Flip flips it, its one frame
+-- left. A still image, and an animated GIF from a file, which flip draws
+-- flipped from its file, are flipped with no question
+on tour_image_frames
+   local tName, tArea, tDefault, tFile, tAnimated, tStill, tReferenced, tFails, tError
+   put "oxt_image_frames" into tName
+   put line 1 of the working screenRects into tArea
+   put the defaultStack into tDefault
+   put specialFolderPath("temporary") & "/oxt_tour_frames.gif" into tFile
+   put base64Decode(kFramesAnimated) into URL ("binfile:" & tFile)
+   lock messages
+   if there is a stack tName then delete stack tName
+   create stack tName
+   set the rect of stack tName to item 1 of tArea + 360, item 2 of tArea + 120, \
+         item 1 of tArea + 680, item 2 of tArea + 320
+   set the defaultStack to tName
+   create image "animated"
+   put it into tAnimated
+   set the text of tAnimated to base64Decode(kFramesAnimated)
+   set the topLeft of tAnimated to 40, 40
+   create image "still"
+   put it into tStill
+   set the text of tStill to base64Decode(kFramesStill)
+   set the topLeft of tStill to 140, 40
+   create image "referenced"
+   put it into tReferenced
+   set the filename of tReferenced to tFile
+   set the topLeft of tReferenced to 240, 40
+   -- closed, it opens again as a user's does (tourTbMake)
+   close stack tName
+   set the defaultStack to tDefault
+   unlock messages
+   go stack tName
+   tourOnScreen tName
+   tourMouseAway
+   put empty into sFramesShot
+   try
+      if the frameCount of tAnimated is not 2 or the frameCount of tReferenced is not 2 then
+         put "the animated GIF has" && the frameCount of tAnimated && "frames, and from its file" && \
+               the frameCount of tReferenced & return into tFails
+      else
+         put tourFramesChecks(tAnimated, tStill, tReferenced) into tFails
+      end if
+      tourShotStack tName, "04e-image-frames"
+   catch tError
+      put tourJoin(tError) & return after tFails
+   end try
+   revIDEDeselectAll
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if there is a file tFile then delete file tFile
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_image_frames
+
+-- A line for each way the Object menu's Flip Image and Rotate Image of
+-- the images of tour_image_frames do not do as it says: the animated
+-- image pAnimated (two frames), the still image pStill and the animated
+-- GIF from a file pReferenced
+function tourFramesChecks pAnimated, pStill, pReferenced
+   local tText, tData, tAsked, tPick, tFails
+   -- the animated image: asked, and Cancel leaves it as it was
+   put the text of pAnimated into tText
+   repeat for each item tPick in "Flip Image|Horizontal,Rotate Image|90"
+      put tourFramesPick(pAnimated, tPick, "Cancel") into tAsked
+      if tAsked is empty then
+         put tPick && "asked nothing about the animated image" & return after tFails
+      else if "image" && quote & "animated" & quote & ": 2 frames" is not in tAsked then
+         put tPick && "asked about the animated image without naming it and its frames:" && tourJoin(tAsked) & return after tFails
+      end if
+      if the text of pAnimated is not tText or the frameCount of pAnimated is not 2 then
+         put tPick && "then Cancel changed the animated image: it has" && the frameCount of pAnimated && "frames" & return after tFails
+      end if
+   end repeat
+   -- and Flip flips it
+   put tourFramesPick(pAnimated, "Flip Image|Horizontal", "Flip") into tAsked
+   if tAsked is empty then put "Flip Image asked nothing about the animated image the second time" & return after tFails
+   if the frameCount of pAnimated is not 0 then
+      put "Flip Image then Flip did not flip the animated image: it has" && the frameCount of pAnimated && "frames" & return after tFails
+   end if
+   -- the still image: flipped, no question
+   put the imageData of pStill into tData
+   put tourFramesPick(pStill, "Flip Image|Horizontal", "Cancel") into tAsked
+   if tAsked is not empty then put "Flip Image asked about the still image:" && tourJoin(tAsked) & return after tFails
+   if the imageData of pStill is tData then put "Flip Image did not flip the still image" & return after tFails
+   -- the animated GIF from its file: no question, its frames kept
+   put tourFramesPick(pReferenced, "Flip Image|Horizontal", "Cancel") into tAsked
+   if tAsked is not empty then put "Flip Image asked about the animated GIF from a file:" && tourJoin(tAsked) & return after tFails
+   if the frameCount of pReferenced is not 2 then
+      put "Flip Image changed the animated GIF from a file: it has" && the frameCount of pReferenced && "frames" & return after tFails
+   end if
+   return tFails
+end tourFramesChecks
+
+-- The question the Object menu's pPick (as "Flip Image|Horizontal") asks
+-- with the object pObject selected, answered with its button pButton:
+-- empty when it asks nothing
+function tourFramesPick pObject, pPick, pButton
+   local tMessage
+   put empty into sFramesAsked
+   revIDESelectObjects pObject
+   send "tourFramesAnswer" && quote & pButton & quote to me in 1500 milliseconds
+   put the result into tMessage
+   dispatch "revMenubarObjectMenuPick" to stack "revMenuBar" with pPick
+   cancel tMessage
+   revIDEDeselectAll
+   tourUnlockScreen "image-frames"
+   tourRecord "INFO image-frames" && pPick && "of" && the short name of pObject & ":" && \
+         tourJoin(line 1 to -1 of sFramesAsked)
+   return sFramesAsked
+end tourFramesPick
+
+-- (sent) The text of the Answer Dialog open now, and a snapshot of it the
+-- first time, then its button pButton pressed, as a click on it does
+on tourFramesAnswer pButton
+   local tDialog, i, tError
+   put "Answer Dialog" into tDialog
+   if there is not a stack tDialog or the mode of stack tDialog is 0 then exit tourFramesAnswer
+   put "asked" into sFramesAsked
+   repeat with i = 1 to the number of fields of card 1 of stack tDialog
+      put return & the text of field i of card 1 of stack tDialog after sFramesAsked
+   end repeat
+   if sFramesShot is empty then
+      put "shot" into sFramesShot
+      try
+         tourShotStack tDialog, "04e-image-frames-question"
+      catch tError
+         tourRecord "INFO image-frames the question's snapshot FAILED" && tourJoin(tError)
+      end try
+   end if
+   if there is a button pButton of stack tDialog then
+      send "mouseUp" to button pButton of stack tDialog
+   else
+      put return & "with no button" && pButton after sFramesAsked
+      tourCloseDialogs
+   end if
+end tourFramesAnswer
 
 on tour_inspector
    local tPI, tSection, tShown, tIndex, tError
