@@ -8,6 +8,8 @@ script "HyperCardSweep"
 --   HC_OUT   the log file
 --   HC_LIB   the folder of the HyperCard libraries to load
 --            (ide/Toolset/libraries in a checkout)
+--   HC_ICONS the IDE's revicons.rev, with HyperCard's brushes and
+--            patterns (ide/Toolset/palettes in a checkout), or empty
 --   HC_MODE  "fix" to stop after the scripts are fixed; "run" to go on
 --            and open the stack, go to its first 40 cards and click up to
 --            20 buttons on each of the first 20, the way a person would
@@ -37,6 +39,13 @@ command sweepRun
    global gSweepPhase
    put $HC_OUT into sOut
    start using stack ($HC_LIB & "/revhypercardscriptlibrary.livecodescript")
+   -- as in the IDE, which keeps revIcons in memory: HyperCard's brushes
+   -- and patterns (images 101 to 136, and 137 on, of its substacks), so
+   -- that a "set the pattern to 12" or a "reset paint" finds them. The
+   -- stack is loaded, not opened, so it is not among the openStacks
+   if $HC_ICONS is not empty and there is a file $HC_ICONS then
+      get the short name of stack $HC_ICONS
+   end if
    -- errors while running come here instead of a dialog
    create invisible stack "HyperCardSweepErrors"
    set the script of stack "HyperCardSweepErrors" to "on errorDialog pError" & return \

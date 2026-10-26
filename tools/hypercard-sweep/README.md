@@ -62,6 +62,18 @@ There are two modes:
   sent the messages of a handler that had gone to another stack to that
   stack in place of its own (pull request 252 changed that).
 
+The IDE keeps its stack revIcons in memory, and its substacks hold
+HyperCard's brushes and patterns, so a stack's `set the pattern to 12`
+or `reset paint` finds them there. The sweep loads that stack too
+(`--icons`, by default this checkout's
+`ide/Toolset/palettes/revicons.rev`). Runs from before then
+counted every such line as an error ("brushPattern: can't find image",
+"brush: can't find image") that the IDE does not raise, so they are not
+comparable with runs after. With the pattern found, such a stack goes on
+to paint with `drag`, which a run without a display cannot do, so some of
+them now time out there instead (5 of the 26 stacks of the disk image
+that had those errors).
+
 Without a display, `click at`, paint tools and anything that waits for a
 person are not representative. Count them, but don't fix them because a
 headless run reported them. A modal window, which would wait for a person

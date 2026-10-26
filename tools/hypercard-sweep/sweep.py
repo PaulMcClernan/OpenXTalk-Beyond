@@ -12,6 +12,8 @@ already ends with an EXIT line is skipped, so a run that was stopped
 goes on where it was. --lib is the folder of the HyperCard libraries to
 load (default: this checkout's ide/Toolset/libraries), so a branch's
 rules can be measured against the released ones with the same engine.
+--icons is the IDE's revicons.rev (default: this checkout's), which the
+IDE keeps in memory and which holds HyperCard's brushes and patterns.
 --image is the disk image extract.py read the stacks from: a stack then
 finds the stacks beside it on the image, as one imported from that image
 by File > Import Stack does.
@@ -26,6 +28,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIBRARIES = os.path.normpath(os.path.join(HERE, "..", "..", "ide", "Toolset", "libraries"))
+ICONS = os.path.normpath(os.path.join(HERE, "..", "..", "ide", "Toolset", "palettes", "revicons.rev"))
 
 
 def volume_name(image):
@@ -76,7 +79,8 @@ def one(args, stack):
     if os.path.exists(log):
         os.remove(log)
     env = dict(os.environ, HC_IN=os.path.abspath(stack), HC_OUT=os.path.abspath(log),
-               HC_LIB=os.path.abspath(args.lib), HC_MODE=args.mode,
+               HC_LIB=os.path.abspath(args.lib), HC_ICONS=os.path.abspath(args.icons) if args.icons else "",
+               HC_MODE=args.mode,
                HC_ORDER="1" if args.hypertalk_order else "0",
                HC_IMAGE=os.path.abspath(args.image) if name in args.paths else "",
                HC_IMAGEPATH=args.paths.get(name, ""))
@@ -105,6 +109,8 @@ def main():
     parser.add_argument("--out", required=True, help="the folder for this run's logs")
     parser.add_argument("--mode", choices=["fix", "run"], default="fix")
     parser.add_argument("--lib", default=LIBRARIES)
+    parser.add_argument("--icons", default=ICONS,
+                        help="the IDE's revicons.rev, with HyperCard's brushes and patterns (empty: none)")
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 2)
     parser.add_argument("--timeout", type=float, default=None,
                         help="seconds per stack (default: 60 for fix, 25 for run)")
