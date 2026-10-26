@@ -1433,9 +1433,10 @@ static bool MCExecContextParseExpression(MCScriptPoint &sp, MCExpression *&r_exp
     return MCExecContextParseWholeExpression(sp, r_exp);
 }
 
-void MCExecContext::eval(MCExecContext &ctxt, MCStringRef p_expression, MCValueRef &r_value)
+void MCExecContext::eval(MCExecContext &ctxt, MCStringRef p_expression, MCValueRef &r_value, bool p_text)
 {
     MCScriptPoint sp(ctxt, p_expression);
+    sp.setliteralarrays(!p_text);
     // SN-2015-06-03: [[ Bug 11277 ]] When we are out of handler, then it simply
     //  sets the ScriptPoint handler to NULL (same as post-constructor state).
     sp.sethandler(ctxt . GetHandler());
@@ -1449,9 +1450,10 @@ void MCExecContext::eval(MCExecContext &ctxt, MCStringRef p_expression, MCValueR
     delete exp;
 }
 
-void MCExecContext::eval_ctxt(MCExecContext &ctxt, MCStringRef p_expression, MCExecValue& r_value)
+void MCExecContext::eval_ctxt(MCExecContext &ctxt, MCStringRef p_expression, MCExecValue& r_value, bool p_text)
 {
     MCScriptPoint sp(ctxt, p_expression);
+    sp.setliteralarrays(!p_text);
     // SN-2015-06-03: [[ Bug 11277 ]] When we are out of handler, then it simply
     //  sets the ScriptPoint handler to NULL (same as post-constructor state).
     sp.sethandler(ctxt . GetHandler());
@@ -1533,9 +1535,10 @@ static Exec_stat MCExecContextParseDo(MCScriptPoint &sp, MCStringRef p_script, u
     return stat;
 }
 
-void MCExecContext::doscript(MCExecContext &ctxt, MCStringRef p_script, uinteger_t p_line, uinteger_t p_pos)
+void MCExecContext::doscript(MCExecContext &ctxt, MCStringRef p_script, uinteger_t p_line, uinteger_t p_pos, bool p_text)
 {
     MCScriptPoint sp(ctxt, p_script);
+    sp.setliteralarrays(!p_text);
     MCStatement *statements = NULL;
     Exec_stat stat;
     Boolean oldexplicit = MCexplicitvariables;

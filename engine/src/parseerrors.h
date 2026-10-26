@@ -1801,6 +1801,18 @@ enum Parse_errors
     
     // {PE-0585} macSetIcon: bad parameters
     PE_MACSETICON_BADPARAM,
+
+    // {PE-0586} array literal: missing ',' or closing bracket
+    PE_ARRAYLITERAL_NOEND,
+
+    // {PE-0587} array literal: error in key expression
+    PE_ARRAYLITERAL_BADKEY,
+
+    // {PE-0588} array literal: missing ':' after key
+    PE_ARRAYLITERAL_NOCOLON,
+
+    // {PE-0589} array literal: error in value expression
+    PE_ARRAYLITERAL_BADVALUE,
 };
 
 extern const char *MCparsingerrors;

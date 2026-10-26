@@ -1689,9 +1689,13 @@ public:
 
     // SN-2015-06-03: [[ Bug 11277 ]] Refactor MCExecPoint update
     void deletestatements(MCStatement* p_statements);
-    void eval_ctxt(MCExecContext &ctxt, MCStringRef p_expression, MCExecValue &r_value);
-    void eval(MCExecContext &ctxt, MCStringRef p_expression, MCValueRef &r_value);
-    void doscript(MCExecContext &ctxt, MCStringRef p_script, uinteger_t p_line, uinteger_t p_pos);
+    // OXT-Beyond: p_text is true for text that is worked out only if it
+    //   compiles, and is left as text otherwise (a merge template's [[...]]
+    //   and <?...?>, a parameter of send given as text): a "[" or "{" there
+    //   begins no literal array, so that such text is left as it was
+    void eval_ctxt(MCExecContext &ctxt, MCStringRef p_expression, MCExecValue &r_value, bool p_text = false);
+    void eval(MCExecContext &ctxt, MCStringRef p_expression, MCValueRef &r_value, bool p_text = false);
+    void doscript(MCExecContext &ctxt, MCStringRef p_script, uinteger_t p_line, uinteger_t p_pos, bool p_text = false);
     
 	//////////
 	

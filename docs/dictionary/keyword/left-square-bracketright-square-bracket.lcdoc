@@ -6,7 +6,7 @@ Syntax: []
 
 Summary:
 The square bracket characters [ ] surround the <element> name in an
-<array> reference.
+<array> reference, and the values of a literal array.
 
 Introduced: 1.0
 
@@ -19,6 +19,12 @@ put thisValue into myArray["someKey"]
 
 Example:
 if myArray["someOtherKey"] is "A" then beep
+
+Example:
+put ["red", "green", "blue"] into tColors -- tColors[2] is "green"
+
+Example:
+put {"name": "Ada", "born": 1815} into tPerson
 
 Description:
 Use square brackets [ ] to specify which <element> in an <array> you are
@@ -38,6 +44,40 @@ single square bracket does not cause an <error>, but the bracket is
 interpreted as part of the <variable> name, rather than as the marker
 for the <key> of an <array> reference.
 
+**Literal arrays:** Where an expression goes, square brackets around a
+list of values, with commas between them, make an <array> whose keys are
+1, 2, 3 and on, in the order the values are written. Curly brackets
+around a list of elements, each a key, a colon and a value, make an
+array of those elements:
+
+    put [10, "two", 1 + 2] into tList -- tList[3] is 3
+    put {"name": "Ada", "born": 1815} into tPerson
+    put {"list": [1, 2], "map": {"x": "y"}} into tData
+    put [] into tEmpty -- an array with no elements
+
+Each key and each value is an expression, worked out each time the
+literal is reached, so that a literal gives a new array each time. A
+comma may follow the last element, but every element must be written
+out: `[1,,2]` is an error. A key given twice gives its element the later
+value, keys being compared as the <caseSensitive> says, and a key that
+is an array with elements is an error. A literal can be written over
+more than one line only with a "\" at the end of each line but the last.
+
+A square bracket after a variable's name is still that variable's key,
+with or without a space before it: `put tA [1] into tB` puts `tA[1]`
+into `tB`.
+
+>*Note:* Literal arrays are as in LiveCode 10. A script that compiled
+> before means what it did: a handler, a <do> script or a
+> <value(function)> expression is read with literal arrays only if it
+> does not compile without them, and one that compiles neither way gives
+> the error it gave before. Text that is worked out only if it compiles,
+> and left as text otherwise, is never read with them: a <merge>
+> template's `[[...]]` and `<?...?>`, and a parameter of <send> given as
+> text. So wiki, JSON or JavaScript text there is left as it was. A
+> <value(function)> or <do> of text that was an error before, such as
+> `value("[1, 2]")`, now gives an array.
+
 >*Note:* Arrays in OpenXTalk are associative (also known as hash tables).
 > This means that when an array element is accessed using square bracket
 > notation, the value in between the brackets is used to "look up" the
@@ -46,9 +86,10 @@ for the <key> of an <array> reference.
 > keys, but OpenXTalk internally converts these to strings before
 > retrieving the array elements.
 
-References: split (command), arrayEncode (function), array (glossary),
-variable (glossary), error (glossary), key (glossary), element (keyword),
-() (operator)
+References: split (command), do (command), send (command),
+arrayEncode (function), merge (function), value (function),
+caseSensitive (property), array (glossary), variable (glossary),
+error (glossary), key (glossary), element (keyword), () (operator)
 
 Tags: properties
 

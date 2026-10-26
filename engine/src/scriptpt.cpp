@@ -129,6 +129,8 @@ MCScriptPoint::MCScriptPoint(MCObject *o, MCHandlerlist *hl, MCDataRef s)
 	tagged = False;
 	in_tag = False;
 	was_in_tag = False;
+	m_key_colon = false;
+	m_literal_arrays = true;
 	token_nameref = MCValueRetain(kMCEmptyName);
 }
 
@@ -153,6 +155,8 @@ MCScriptPoint::MCScriptPoint(MCObject *o, MCHandlerlist *hl, MCStringRef s)
     tagged = False;
     in_tag = False;
     was_in_tag = False;
+    m_key_colon = false;
+    m_literal_arrays = true;
     token_nameref = MCValueRetain(kMCEmptyName);
 }
 
@@ -175,6 +179,8 @@ MCScriptPoint::MCScriptPoint(MCScriptPoint &sp)
 	tagged = sp.tagged;
 	in_tag = sp.in_tag;
 	was_in_tag = sp.was_in_tag;
+	m_key_colon = sp.m_key_colon;
+	m_literal_arrays = sp.m_literal_arrays;
 	token_nameref = MCValueRetain(kMCEmptyName);
     m_type = ST_UNDEFINED;
 }
@@ -197,6 +203,8 @@ MCScriptPoint::MCScriptPoint(MCExecContext &ctxt)
     tagged = False;
     in_tag = False;
     was_in_tag = False;
+    m_key_colon = false;
+    m_literal_arrays = true;
     token_nameref = MCValueRetain(kMCEmptyName);
     m_type = ST_UNDEFINED;
 }
@@ -222,6 +230,8 @@ MCScriptPoint::MCScriptPoint(MCExecContext &ctxt, MCStringRef p_string)
     tagged = False;
     in_tag = False;
     was_in_tag = False;
+    m_key_colon = false;
+    m_literal_arrays = true;
     token_nameref = MCValueRetain(kMCEmptyName);
     
     m_type = ST_UNDEFINED;
@@ -248,6 +258,8 @@ MCScriptPoint::MCScriptPoint(MCStringRef p_string)
 	tagged = False;
 	in_tag = False;
 	was_in_tag = False;
+	m_key_colon = false;
+	m_literal_arrays = true;
 	token_nameref = MCValueRetain(kMCEmptyName);
     
     m_type = ST_UNDEFINED;
@@ -270,6 +282,8 @@ MCScriptPoint& MCScriptPoint::operator =(const MCScriptPoint& sp)
 	line = sp.line;
 	pos = sp.pos;
     m_type = sp.m_type;
+    m_key_colon = sp.m_key_colon;
+    m_literal_arrays = sp.m_literal_arrays;
     MCValueAssign(token_nameref, sp.token_nameref);
 	return *this;
 }
@@ -1246,6 +1260,13 @@ Parse_stat MCScriptPoint::next(Symbol_type &type)
 		}
 		break;
 	case ST_OP:
+		// OXT-Beyond: where a key of a literal array is read, a colon is a
+		// token by itself, which ends the key (MCArrayLiteral)
+		if (m_key_colon && getcurrent() == ':')
+		{
+			advance();
+			break;
+		}
 		while (True)
 		{
 			Symbol_type newtype = gettype(getcurrent());
@@ -1579,6 +1600,14 @@ Parse_stat MCScriptPoint::parseexp(Boolean single, Boolean items,
 					return PS_ERROR;
 				}
 		}
+		// OXT-Beyond: a colon ends the key of an element of a literal
+		// array, as a comma ends its value (MCArrayLiteral)
+		if (!needfact && depth == 0 && m_key_colon && type == ST_OP &&
+			token_is_cstring(":"))
+		{
+			backup();
+			return PS_NORMAL;
+		}
 		// OXT-Beyond: HyperXTalk's "matches wildcard" and "matches regex"
 		// operators (MCMatches). "matches" is no keyword, so variables,
 		// handlers and custom properties keep the name: it is the operator
@@ -1666,6 +1695,30 @@ Parse_stat MCScriptPoint::parseexp(Boolean single, Boolean items,
 				return PS_NORMAL;
 			}
 			break;
+		// OXT-Beyond: a literal array, "[...]" or "{...}" (MCArrayLiteral).
+		// Neither began an expression before, so it is read only where what
+		// holds it did not compile without it (MCNewSyntax), and never in
+		// text that is worked out only if it compiles (m_literal_arrays)
+		case ST_LB:
+		case ST_LC:
+			if (needfact && !doingthe && m_literal_arrays && MCNewSyntax::Read())
+			{
+				newfact = new (nothrow) MCArrayLiteral(type == ST_LC);
+				if (newfact == nil)
+				{
+					MCperror->add(PE_OUTOFMEMORY, *this);
+					return PS_ERROR;
+				}
+				if (newfact->parse(*this, doingthe) != PS_NORMAL)
+				{
+					delete newfact;
+					return PS_ERROR;
+				}
+				insertfactor(newfact, curfact, top);
+				needfact = False;
+				break;
+			}
+			/* FALLTHROUGH */
 		default:
 			if (lookup(SP_FACTOR, te) == PS_NORMAL)
 			{

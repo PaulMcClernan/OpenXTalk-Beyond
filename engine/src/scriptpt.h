@@ -118,6 +118,16 @@ class MCScriptPoint
 	// MW-2011-06-23: This is true if we backed up over a tag change point.
 	Boolean was_in_tag;
 
+	// OXT-Beyond: true while the key of an element of a literal array of
+	// keys and values is read (MCArrayLiteral): a colon is then a token by
+	// itself, and ends the key's expression
+	bool m_key_colon;
+
+	// OXT-Beyond: false where a "[" or "{" begins no literal array
+	// (MCArrayLiteral): in text that is worked out only if it compiles,
+	// and left as text otherwise (MCExecContext::eval's p_text)
+	bool m_literal_arrays;
+
 public:
 	MCScriptPoint(MCScriptPoint &sp);
     MCScriptPoint(MCObject *, MCHandlerlist *, MCDataRef utf8_script);
@@ -138,6 +148,26 @@ public:
 	void allowescapes(Boolean which)
 	{
 		escapes = which;
+	}
+
+	// OXT-Beyond: whether a key of a literal array is being read (m_key_colon)
+	bool getkeycolon(void) const
+	{
+		return m_key_colon;
+	}
+	void setkeycolon(bool p_key_colon)
+	{
+		m_key_colon = p_key_colon;
+	}
+
+	// OXT-Beyond: whether literal arrays are read (m_literal_arrays)
+	bool getliteralarrays(void) const
+	{
+		return m_literal_arrays;
+	}
+	void setliteralarrays(bool p_literal_arrays)
+	{
+		m_literal_arrays = p_literal_arrays;
 	}
 	
 	// MW-2009-03-03: If allowtags is true then we use PHP style tagged parsing,

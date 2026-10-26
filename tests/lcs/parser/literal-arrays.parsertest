@@ -1,0 +1,99 @@
+%% Copyright (C) 2026 OXT-Beyond contributors.
+%%
+%% This file is part of OXT-Beyond.
+%%
+%% OXT-Beyond is free software; you can redistribute it and/or modify it
+%% under the terms of the GNU General Public License v3 as published by the
+%% Free Software Foundation.
+%%
+%% OXT-Beyond is distributed in the hope that it will be useful, but WITHOUT
+%% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+%% FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+%% for more details.
+%%
+%% You should have received a copy of the GNU General Public License
+%% along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
+
+%% Literal arrays (tests/lcs/core/array/literals.livecodescript): where an
+%% expression goes, a sequence [...] or an array of keys and values {...}
+
+%TEST ArrayLiteralSequence
+on parse_test
+   local tList
+   put [1, "two", 1 + 2, [], [[4]]] into tList
+end parse_test
+%EXPECT PASS
+%SUCCESS
+%ENDTEST
+
+%TEST ArrayLiteralKeyed
+on parse_test
+   local tKeyed, tKey
+   put {"a": 1, tKey: -2, tKey & "b": {"c": [3]}, (4): 5, "e":-6,} into tKeyed
+end parse_test
+%EXPECT PASS
+%SUCCESS
+%ENDTEST
+
+%TEST ArrayLiteralEmpty
+on parse_test
+   local tList
+   put [] into tList
+   put {} into tList
+   put [ ] after tList
+end parse_test
+%EXPECT PASS
+%SUCCESS
+%ENDTEST
+
+%TEST ArrayLiteralWhereAnExpressionGoes
+on parse_test
+   local tValue, tElement
+   get [1, 2]
+   return {"a": 1}
+end parse_test
+on parse_test_two
+   local tValue, tElement
+   if [1] is an array then beep
+   repeat for each element tElement in [1, 2, 3]
+      add tElement to tValue
+   end repeat
+   switch the number of elements of {"a": 1}
+      case 1
+         break
+   end switch
+   parse_test_three [1], {"b": 2}
+   put parse_test_four([3]) into tValue
+   set the cValue of me to ["x"]
+end parse_test_two
+on parse_test_three pA, pB
+end parse_test_three
+function parse_test_four pA
+   return pA
+end parse_test_four
+%EXPECT PASS
+%SUCCESS
+%ENDTEST
+
+%TEST ArrayLiteralContinued
+on parse_test
+   local tKeyed
+   put {"one": 1, \
+         "two": [2, \
+               3]} into tKeyed
+end parse_test
+%EXPECT PASS
+%SUCCESS
+%ENDTEST
+
+%% A square bracket after a variable is its key, as before
+%TEST ArrayLiteralVariableKeys
+on parse_test
+   local tA, tB
+   put tA [1] into tB
+   put tA[1][2] into tB
+   put tA[tB[1]] into tB
+end parse_test
+%EXPECT PASS
+%SUCCESS
+%ENDTEST

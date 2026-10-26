@@ -1372,12 +1372,15 @@ bool MCStringsMerge(MCExecContext& ctxt, MCStringRef p_format, MCStringRef& r_st
 				if (t_is_expression)
 				{
                     // SN-2015-06-03: [[ Bug 11277 ]] MCHandler::eval refactored
-                    ctxt.eval(t_ctxt, *t_expression, &t_value);
+                    // OXT-Beyond: as text, with no literal arrays, so that
+                    //   one that did not compile before is left as it was
+                    ctxt.eval(t_ctxt, *t_expression, &t_value, true);
 				}
 				else
                 {
                     // SN-2015-06-03: [[ Bug 11277 ]] MCHandler::doscript refactored
-                    ctxt.doscript(t_ctxt, *t_expression, 0, 0);
+                    // OXT-Beyond: as text, with no literal arrays (above)
+                    ctxt.doscript(t_ctxt, *t_expression, 0, 0, true);
 
 					t_value = MCresult->getvalueref();
                     // SN-2014-08-11: [[ Bug 13139 ]] The result must be emptied after a doscript()
