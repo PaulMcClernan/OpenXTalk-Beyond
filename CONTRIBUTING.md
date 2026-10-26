@@ -212,6 +212,12 @@ can store but not diff or merge.
   a session. Before an IDE change to such a stack, clean that data out in
   a commit of its own, so that the commit with your change, and the diff
   of the stack's dump, show only your change.
+- Commit `stack-scripts/` with every binary stack change. It keeps each
+  object script of the binary stacks as a text file, so the diff shows
+  what changed; `tools/oxt/ide-stack-patch.sh` updates it, and after any
+  other change run `tools/oxt/stack-scripts.sh <development engine>`. The
+  Linux build checks that it matches the stacks. Do not edit these files:
+  they are made from the stacks.
 - Do not remove other people's credits or dated comments from stacks.
 - The "OpenXTalk Lite" text that is still inside binary stacks will be
   changed in reviewable steps like these; please coordinate in an issue

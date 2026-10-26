@@ -17,6 +17,7 @@ development engine without a user interface.
 | `xtalk_extensions.py` | pins, fetches and builds the xTalk Suite extensions listed in `xtalk-extensions.json` (see [xTalk Suite extensions](#xtalk-suite-extensions-xtalk_extensionspy)) |
 | `make_runtimes_asset.py` | builds an `oxt-runtimes-<label>.zip` asset from this repository's CI builds (`--builds`), or from an installed OXT Lite as for 1.15 (see [The runtimes asset](#the-runtimes-asset)) |
 | `ide-stack-patch.sh`, `ide-stack-patch.livecodescript` | apply the script, property and image patches in `ide-stack-patches/` to the binary IDE stacks, verified (see [Binary IDE stacks](#binary-ide-stacks)) |
+| `stack-scripts.sh`, `stack_scripts.py` | keep every object script of the binary IDE stacks as a text file in `stack-scripts/`, or check that they match (see [The stacks' scripts as text](#the-stacks-scripts-as-text-stack-scripts)) |
 | `ide-stack-dump.livecodescript` | writes every object of a stack file as text, to compare two versions of a stack |
 | `legacy_todo.py` | writes [LEGACY-TODO.md](../../LEGACY-TODO.md), the FIXME, TODO and HACK notes in the inherited code, linked to their lines; `--check` tells whether it is up to date |
 
@@ -1099,3 +1100,28 @@ every script and image patch is applied, from the stack files' bytes,
 without an engine. Property patches cannot be seen in the bytes that way, so
 the Linux build checks every patch with the engine it built
 (`tools/oxt/ide-stack-patch.sh <engine> --check`).
+
+### The stacks' scripts as text: stack-scripts/
+
+So that Git can show what a stack change did, `stack-scripts/` at the root
+of the repository keeps every object script of every binary stack in `ide/`
+and `ide-support/` as a file of its own,
+`stack-scripts/<stack file>.bst/scripts/<name>.livecodescript`, laid out and
+named the way Brian Milby's [BST](https://github.com/Milby-Computer/hxt-bst)
+names its exports: `stack_<stack>` for a stack's script,
+`stack_<stack>_<type>_id_<id>` for an object's (the innermost stack for an
+object in a substack). A header names the stack file and the object. The
+files are made from the stacks, never the other way round:
+
+```
+tools/oxt/stack-scripts.sh <development engine>          # write them
+tools/oxt/stack-scripts.sh <development engine> --check  # compare only
+```
+
+`ide-stack-patch.sh` runs it after applying patches. After any other change
+to a binary stack, run it and commit `stack-scripts/` with the stack; the
+Linux build runs it with `--check` with the engine it built and fails if a
+file is missing, out of date or left over. Two stacks the engine does not
+load (`colchooser.livecode`, `revcolorchooser.rev` in `ide/Toolset/palettes`)
+have no files. `tools/oxt/stack_scripts.py` does the work; the codebase map
+uses it too.
