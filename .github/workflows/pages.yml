@@ -269,7 +269,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the site
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ runner.temp }}/site
 
@@ -287,4 +287,4 @@ jobs:
     steps:
       - name: Deploy
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

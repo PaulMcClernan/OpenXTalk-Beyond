@@ -2448,7 +2448,11 @@ change is reviewable text that CI checks:
   `OXT-Beyond-<ver>-linux-x86_64-binaries.tar.xz`). The tool saves the
   patched stacks in `ide/` and verifies that nothing else in them
   changed; patches that are applied already are left alone;
-- commit each patch file together with the stack it changes. CI checks
+- commit each patch file together with the stack it changes, and with
+  `stack-scripts/`, which the tool brings up to date: every object script
+  of the binary stacks as a text file (`tools/oxt/stack-scripts.sh`, see
+  [tools/oxt/README.md](tools/oxt/README.md#the-stacks-scripts-as-text-stack-scripts)),
+  so the diff shows the change. CI checks
   that every script patch is applied (`tools/ci/check_ide_stacks.py`)
   and the Linux build that every property and image patch is
   (`tools/oxt/ide-stack-patch.sh --check` with the engine it built);
@@ -2469,7 +2473,8 @@ Saving from the IDE also keeps what the IDE and your session left in
 the stack (font lists, the script open in the editor, other session
 data), and some stacks already hold such data from long ago. Clean it out
 first, in a commit of its own, so that the dump diff of your change shows
-only your change.
+only your change. Then run `tools/oxt/stack-scripts.sh <development
+engine>` and commit `stack-scripts/` with the stack.
 
 The "OpenXTalk Lite" text still inside some binary stacks is meant to be
 changed with patches, a few stacks at a time.
