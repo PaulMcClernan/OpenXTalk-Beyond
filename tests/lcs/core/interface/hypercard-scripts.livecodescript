@@ -489,7 +489,7 @@ on TestHyperCardScriptsT37
    TestAssert "T37: a comma that ends the arguments", line 4 of tScript is "  ShowHistory " & q & "The Outcome" & q & ", 5, empty"
    TestAssert "T37: go cd", line 5 of tScript is "  go this cd"
    TestAssert "T37: go to card", line 6 of tScript is "  go to this card"
-   TestAssert "T37: the number of marked card i", line 7 of tScript is "  put the number of card id (the id of marked card i) into tn"
+   TestAssert "T37: the number of marked card i", line 7 of tScript is "  put the number of card id (the short id of marked card i) into tn"
    TestAssert "T37: palette after then", line 8 of tScript is "  if there is not a window " & q & "Nav" & q & " then hcPalette " & q & "Nav" & q & "," & q & "254,0" & q
    TestAssert "T37: the script compiles", _Compiles(tScript)
 

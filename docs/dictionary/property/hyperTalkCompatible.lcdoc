@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, twelve things are as they were in <HyperCard>, for the
+When it is true, thirteen things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -153,6 +153,14 @@ When it is true, twelve things are as they were in <HyperCard>, for the
   their end as they were. Otherwise setting such a <script> is an
   error, as setting the <script> of a <behavior> whose <handler> is
   running is in any <stack>.
+- The <ID> of a <card> is its abbreviated ID, "card id" and its number,
+  as in <HyperCard>, where otherwise it is the number: a <script> that
+  puts the id of this card into a variable, goes to other
+  <card|cards> and then goes to that variable comes back to the
+  <card>, and the id of this card is "card id 3058" is true on the
+  <card> whose short ID is 3058. The short ID of a <card>, and the
+  <ID> of a <background>, a <button> or a <field>, are numbers either
+  way, as they were in <HyperCard>.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -183,6 +191,7 @@ show groups (command), hide groups (command),
 round (function), statRound (function), seconds (function),
 convert (command), numToChar (function), charToNum (function),
 numToByte (function), script (property), behavior (property),
+ID (property),
 go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),

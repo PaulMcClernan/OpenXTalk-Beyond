@@ -2407,13 +2407,14 @@ private function _ParserForms pLine, pVars
       -- T37: the number of marked card i, which HyperCard took as the
       -- number of the i-th marked card, and this engine as the number of
       -- marked cards (then "card i" is left over): the number of the card
-      -- with that card's id
+      -- with that card's id (its short id: in a stack with HyperCard's
+      -- rules, the id of a card is "card id 1234", as in HyperCard)
       repeat with j = i to tEnd - 5
          if _T(tTokens, tIdx[j]) is "the" and _T(tTokens, tIdx[j + 1]) is "number" and _T(tTokens, tIdx[j + 2]) is "of" \
                and _T(tTokens, tIdx[j + 3]) is "marked" and _T(tTokens, tIdx[j + 4]) is among the words of "card cd" \
                and tTokens[tIdx[j + 5]]["k"] is among the items of "w,n" \
                and (j + 5 = tEnd or _T(tTokens, tIdx[j + 6]) is among the words of kAfterValue) then
-            _Replace tTokens, tIdx, j, j + 5, "the number of card id (the id of marked card" && tTokens[tIdx[j + 5]]["t"] & ")"
+            _Replace tTokens, tIdx, j, j + 5, "the number of card id (the short id of marked card" && tTokens[tIdx[j + 5]]["t"] & ")"
             _Fire "T37 more forms HyperCard took"
          end if
       end repeat

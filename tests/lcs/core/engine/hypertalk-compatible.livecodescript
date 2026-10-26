@@ -18,10 +18,11 @@ group, not link, and is drawn as plain text, underlined only after show
 groups; round takes a number halfway between two integers to the even
 one; the seconds, and dates converted to and from seconds, count from
 1904 in local time; numToChar and charToNum number the characters as
-HyperCard did, by the Mac's character set with the return as 13; and a
+HyperCard did, by the Mac's character set with the return as 13; a
 script can set the script of an object whose handler runs, which takes
-it at once while that handler goes on. Each test checks the stack with
-the property off too.
+it at once while that handler goes on; and the id of a card is "card id"
+and its number, which a script can go back to. Each test checks the
+stack with the property off too.
 */
 
 local sStack
@@ -1094,3 +1095,63 @@ on TestHyperTalkCompatibleSetScript
          line 7 of tLog is "error 360"
    _DeleteStack
 end TestHyperTalkCompatibleSetScript
+
+-- The id of the stack's card, its short id, the id of its background
+-- group and of a button, whether the card's id is "card id" and its short
+-- id, and its abbreviated id, one a line
+private function _IdValues
+   return _Values("put the id of card 1 into tValue" & return \
+         & "put the short id of card 1 into tValue" & return \
+         & "put the id of group " & quote & "BG" & quote & " into tValue" & return \
+         & "put the id of button " & quote & "C" & quote & " into tValue" & return \
+         & "put the id of card 1 is (" & quote & "card id" & quote & " && the short id of card 1) into tValue" & return \
+         & "put the abbreviated id of card 1 into tValue")
+end _IdValues
+
+-- A handler that keeps the id of card 1, goes to card 2 and goes to what
+-- it kept, as HyperCard stacks did: the number of the card it is on then
+private function _GoBackToId
+   global gHCLog
+   set the defaultStack to sStack
+   create card
+   set the script of button "C" of card 1 of stack sStack to "on hcGoBack" & return \
+         & "global gHCLog" & return & "local tCard, tError" & return \
+         & "put the id of card 1 into tCard" & return \
+         & "go to card 2" & return \
+         & "try" & return & "go tCard" & return & "catch tError" & return & "end try" & return \
+         & "put the number of this card into gHCLog" & return & "end hcGoBack"
+   put empty into gHCLog
+   send "hcGoBack" to button "C" of card 1 of stack sStack
+   return gHCLog
+end _GoBackToId
+
+on TestHyperTalkCompatibleCardIdOff
+   local tValues
+   _MakeStack false
+   put _IdValues() into tValues
+   TestAssert "off: the id of a card is its number", line 1 of tValues is line 2 of tValues and line 2 of tValues is an integer
+   TestAssert "off: the id of a background is its number", line 3 of tValues is an integer
+   TestAssert "off: the id of a button is its number", line 4 of tValues is an integer
+   TestAssert "off: so it is not card id and that number", line 5 of tValues is "false"
+   TestAssert "off: the abbreviated id of a card is card id and its number", line 6 of tValues is "card id" && line 2 of tValues
+   TestAssert "off: a handler that goes to a card's id goes nowhere", _GoBackToId() is 2
+   _DeleteStack
+end TestHyperTalkCompatibleCardIdOff
+
+-- In HyperCard the id of a card was "card id 1234", and stacks kept it to
+-- go back to it ("put the id of this card into tCard" ... "go tCard") or
+-- compared it with one ("if the id of this card is "card id 3058""). The
+-- id of a background, a button or a field was a number, as here
+on TestHyperTalkCompatibleCardId
+   local tValues
+   _MakeStack true
+   put _IdValues() into tValues
+   TestAssert "on: the id of a card is card id and its number", line 1 of tValues is "card id" && line 2 of tValues
+   TestAssert "on: the short id of a card is its number", line 2 of tValues is an integer
+   TestAssert "on: the id of a background is its number", line 3 of tValues is an integer
+   TestAssert "on: the id of a button is its number", line 4 of tValues is an integer
+   TestAssert "on: so it is card id and that number", line 5 of tValues is "true"
+   TestAssert "on: the abbreviated id of a card is card id and its number", line 6 of tValues is "card id" && line 2 of tValues
+   TestAssert "on: a handler that goes to a card's id goes back to it", _GoBackToId() is 1
+   _DeleteStack
+end TestHyperTalkCompatibleCardId

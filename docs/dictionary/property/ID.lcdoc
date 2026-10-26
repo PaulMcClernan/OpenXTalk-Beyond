@@ -69,6 +69,13 @@ The abbreviated ID of an object is the object's type, followed by "id",
 followed by the object's short ID. For example, if a button's short ID
 is "27", its abbreviated ID is "button id 27".
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import Stack
+sets it for a <stack> imported from <HyperCard>, the <ID> of a <card>
+with no modifier is its abbreviated ID, such as "card id 1234", as it was
+in <HyperCard>, so that a <script> that keeps it can <go> back to it. Its
+short ID is still the number, and so is the <ID> of every other
+<object(glossary)> there.
+
 The <long> id of an object includes information about its owner (and about
 the <owner> of that <object(glossary)>, and so forth). For example,
 suppose a <stack> named "My Stack" contains a <card> whose ID is 11.
@@ -125,7 +132,7 @@ file (keyword), button (keyword),
 long (keyword), integer (keyword), stack (object), image (object),
 name (property), HCAddressing (property), owner (property),
 groupIDs (property), HCStack (property), altID (property),
-cardIDs (property)
+cardIDs (property), hyperTalkCompatible (property), go (command)
 
 Tags: objects
 
