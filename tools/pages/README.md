@@ -9,7 +9,7 @@ Pages site, so that anyone can open them with nothing to download:
 | `https://<owner>.github.io/<repository>/` | the front page ([index.html](index.html)), which links to both |
 | `.../ide/` | the web IDE |
 | `.../player/` | the Stack Player |
-| `.../map/` | the [codebase map](../codebase-map/README.md), for contributors |
+| `.../map/` | the [codebase map](../codebase-map/README.md), for contributors, with the binary stacks' scripts as files beside it (`stack-scripts/`, `stack-scripts.zip`) |
 
 The workflow [pages.yml](../../.github/workflows/pages.yml) builds no
 part of the IDE or the player: it takes the two sites as a release ships them

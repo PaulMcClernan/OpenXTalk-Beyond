@@ -205,6 +205,13 @@ can store but not diff or merge.
   your clone, so that the stack is saved by the engine this project
   ships. Keep it in its own commit, and say in the commit message which
   objects, properties or scripts changed and why.
+- Make every change you can outside the IDE (with a patch); saving a
+  stack from the IDE also keeps whatever the IDE and your session left
+  in it. Many stacks already hold data that does not belong there: font
+  lists, the script that was open in the editor, and other data bound to
+  a session. Before an IDE change to such a stack, clean that data out in
+  a commit of its own, so that the commit with your change, and the diff
+  of the stack's dump, show only your change.
 - Do not remove other people's credits or dated comments from stacks.
 - The "OpenXTalk Lite" text that is still inside binary stacks will be
   changed in reviewable steps like these; please coordinate in an issue

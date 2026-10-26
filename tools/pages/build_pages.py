@@ -29,7 +29,10 @@ given.
   DIR/player/        OXT-Beyond-<version>-web-player.zip's site
                      (tools/web-player)
   DIR/map/           the codebase map: the one self-contained page that
-                     tools/codebase-map/build_map.py writes (index.html)
+                     tools/codebase-map/build_map.py writes (index.html),
+                     and beside it, when build_map.py wrote them next to
+                     the page, the binary stacks' scripts as files
+                     (stack-scripts/ and stack-scripts.zip)
 
 Each zip holds its site in one folder (StackPlayer/, or the web IDE's
 folder named after its zip); the folder with index.html is the one taken.
@@ -132,6 +135,11 @@ def build(args):
     if args.map:
         os.makedirs(os.path.join(out, 'map'))
         shutil.copyfile(args.map, os.path.join(out, 'map', 'index.html'))
+        here = os.path.dirname(os.path.abspath(args.map))
+        if os.path.isdir(os.path.join(here, 'stack-scripts')):
+            shutil.copytree(os.path.join(here, 'stack-scripts'), os.path.join(out, 'map', 'stack-scripts'))
+        if os.path.isfile(os.path.join(here, 'stack-scripts.zip')):
+            shutil.copyfile(os.path.join(here, 'stack-scripts.zip'), os.path.join(out, 'map', 'stack-scripts.zip'))
         parts['MAP'] = args.map_version or ''
     front_page(out, parts)
     check_sizes(out)
