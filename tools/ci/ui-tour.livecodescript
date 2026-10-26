@@ -80,7 +80,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,example,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -4047,6 +4047,49 @@ on tour_learn
    if there is a stack kLearn and the mode of stack kLearn is not 0 then close stack kLearn
    if tError is not empty then throw tError
 end tour_learn
+
+-- A remastered example, as Learn's Examples open it: Animate a Letter,
+-- its front page and a program card. Its page follows the desktop, light
+-- or dark (openxtalk.org p=25438: it stayed light in the dark); the stage
+-- a program runs on stays light in both
+on tour_example
+   local tPath, tStack, tWant, tSeen, tError
+   set the itemDelimiter to slash
+   put item 1 to -2 of revEnvironmentToolsetPath() & "/Resources/Examples/Remastered/Animate a Letter.oxtstack" into tPath
+   set the itemDelimiter to comma
+   if there is no file tPath then throw "no remastered example at" && tPath
+   choose browse tool
+   go stack tPath
+   put the short name of stack tPath into tStack
+   try
+      tourWait 1500
+      tourShotStack tStack, "24f-example"
+      if $OXT_TOUR_APPEARANCE is "dark" then
+         put "16,22,36" into tWant
+      else
+         put "241,245,249" into tWant
+      end if
+      put the backgroundColor of stack tStack into tSeen
+      tourRecord "INFO the example's page" && tSeen && "(" & the uLook of stack tStack & ")"
+      if $OXT_TOUR_APPEARANCE is not empty and tSeen is not tWant then
+         throw "the example's page is" && tSeen & ", not" && tWant && "(" & $OXT_TOUR_APPEARANCE & ")"
+      end if
+      go card 2 of stack tStack
+      tourWait 1000
+      tourShotStack tStack, "24f-example-program"
+      put the backgroundColor of graphic "Stage" of card 2 of stack tStack into tSeen
+      if tSeen is not "255,255,255" then
+         throw "the example's stage is" && tSeen & ", not white"
+      end if
+   catch tError
+   end try
+   choose pointer tool
+   if there is a stack tStack then
+      close stack tStack
+      delete stack tStack
+   end if
+   if tError is not empty then throw tError
+end tour_example
 
 -- The xTalk Academy (palettes/academy), as Help > xTalk Academy opens it:
 -- the first page of its first course, with the courses in the sidebar,

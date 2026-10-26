@@ -260,7 +260,7 @@ private command buildFront
    set the textStyle of tObj to "bold"
    put lkLabel("Lesson Plan_title", lkR(tX + 64, tY + 29, tX + tWidth - 8, tY + 49), "The Lesson Plan", 14, lkColor("ink"), "Lesson Plan") into tObj
    set the textStyle of tObj to "bold"
-   set the cRest of group "Lesson Plan" to "255,255,255"
+   set the cRest of group "Lesson Plan" to lkDarkLiteral("255,255,255", "fill")
    set the cLit of group "Lesson Plan" to lkMix("255,255,255", lkColor("teal"), 0.07)
    set the script of group "Lesson Plan" to exScript("Start/Lesson Plan")
    set the cLessonPlan of group "Lesson Plan" to sOrig["plan"]
@@ -533,7 +533,7 @@ private command buildLesson5
    set the traversalOn of tObj to true
    set the autoHilite of tObj to true
    set the opaque of tObj to true
-   set the backgroundColor of tObj to "255,255,221"
+   set the backgroundColor of tObj to lkDarkLiteral("255,255,221", "fill")
    set the showBorder of tObj to true
    set the threeD of tObj to false
    set the borderWidth of tObj to 1

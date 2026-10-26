@@ -56,10 +56,91 @@ end preOpenStack
 
 on preOpenCard
    frameCame
+   frameLook
    frameRest
    frameSync
    pass preOpenCard
 end preOpenCard
+
+-- Light or dark, as the desktop is: the IDE says which
+-- (revIDEAppearanceIsDark, as its own windows read it). The build gave
+-- each object whose colours are not the same in the dark the custom
+-- property sets uLight and uDark (tools/examples/build-examples.
+-- livecodescript says what is in them), and the stack's custom property
+-- uLook says which it has on (empty: light, as it is saved). Without the
+-- IDE, in a standalone or a browser, it stays light. The stage and what
+-- the programs put on it have no sets: they are the same in both.
+command frameLook
+   local tWant, tCard, tCtl, tCardId, tError
+   put "light" into tWant
+   try
+      if revIDEAppearanceIsDark() is true then
+         put "dark" into tWant
+      end if
+   catch tError
+      -- (no IDE: light)
+   end try
+   if the uLook of this stack is tWant or (the uLook of this stack is empty and tWant is "light") then
+      exit frameLook
+   end if
+   lock screen
+   lock messages
+   frameLookOne the long id of this stack, tWant, empty
+   repeat with tCard = 1 to the number of cards of this stack
+      put the id of card tCard of this stack into tCardId
+      frameLookOne the long id of card tCard of this stack, tWant, empty
+      repeat with tCtl = 1 to the number of controls of card tCard of this stack
+         frameLookOne the long id of control tCtl of card tCard of this stack, tWant, tCardId
+      end repeat
+   end repeat
+   set the uLook of this stack to tWant
+   unlock messages
+   unlock screen
+end frameLook
+
+-- Puts the look pWant ("light" or "dark") on the object pObj, met on the
+-- card whose id is pCardId: its colours, the colours its custom
+-- properties hold, a field's text in colour on that card (unless the user
+-- has changed the text), an icon's drawing
+private command frameLookOne pObj, pWant, pCardId
+   local tA, tOther, tKey, tCustom
+   if pWant is "dark" then
+      put the customProperties["uDark"] of pObj into tA
+   else
+      put the customProperties["uLight"] of pObj into tA
+   end if
+   if tA is not an array then
+      exit frameLookOne
+   end if
+   if tA["props"] is not empty then
+      set the properties of pObj to arrayDecode(tA["props"])
+   end if
+   repeat for each key tKey in tA
+      if char 1 to 2 of tKey is "c:" then
+         if tCustom is not an array then
+            put the customProperties of pObj into tCustom
+         end if
+         put tA[tKey] into tCustom[char 3 to -1 of tKey]
+      end if
+   end repeat
+   if tCustom is an array then
+      set the customProperties of pObj to tCustom
+   end if
+   if word 1 of pObj is "field" and tA["h:" & pCardId] is not empty then
+      if the text of pObj is tA["x:" & pCardId] then
+         set the htmlText of pObj to tA["h:" & pCardId]
+      end if
+   else if word 1 of pObj is "image" and tA["t:"] is not empty then
+      if pWant is "dark" then
+         put the customProperties["uLight"] of pObj into tOther
+      else
+         put the customProperties["uDark"] of pObj into tOther
+      end if
+      if the text of pObj is tOther["t:"] then
+         set the text of pObj to tA["t:"]
+      end if
+   end if
+end frameLookOne
 
 -- The sidebar's list and buttons, the stage and the panel, and the
 -- panel's chips, for this card

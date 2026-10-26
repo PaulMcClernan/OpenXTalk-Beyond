@@ -182,7 +182,7 @@ private command siSwitch pName, pGroup, pLeft, pTop, pRight, pLabel
    lkShadow tObj, 3, 1, 30
    put lkLabel(pName & "_label", lkR(pLeft + 56, pTop + 8, pRight - 8, pTop + 26), pLabel, 13, lkColor("ink"), pName) into tObj
    siMiddle tObj, pTop + 17
-   set the cRest of group pName to "255,255,255"
+   set the cRest of group pName to lkDarkLiteral("255,255,255", "fill")
    set the cLit of group pName to lkMix("255,255,255", sAccent, 0.07)
 end siSwitch
 
@@ -194,7 +194,7 @@ private command siChoice pName, pGroup, pLeft, pTop, pRight, pBottom, pLabel
    lkBorder tObj, lkColor("line")
    put lkLabel(pName & "_label", lkR(pLeft, pTop, pRight, pBottom), pLabel, 13, lkColor("ink"), pName, "center") into tObj
    siMiddle tObj, (pTop + pBottom) div 2
-   set the cRest of group pName to "255,255,255"
+   set the cRest of group pName to lkDarkLiteral("255,255,255", "fill")
    set the cLit of group pName to lkMix("255,255,255", sAccent, 0.07)
 end siChoice
 
@@ -303,7 +303,7 @@ private command buildControls pFieldA, pButtonText
    set the backgroundColor of tObj to sAccent
    set the borderColor of tObj to sAccent
    set the hiliteColor of tObj to lkMix(sAccent, "0,0,0", 0.2)
-   set the textColor of tObj to "255,255,255"
+   set the textColor of tObj to lkDarkLiteral("255,255,255", "ink")
    set the textSize of tObj to 13
    set the textStyle of tObj to "bold"
    set the showFocusBorder of tObj to false
@@ -315,7 +315,7 @@ private command buildControls pFieldA, pButtonText
    set the textSize of tObj to 13
    set the textColor of tObj to lkColor("ink")
    set the opaque of tObj to true
-   set the backgroundColor of tObj to "255,255,255"
+   set the backgroundColor of tObj to lkDarkLiteral("255,255,255", "fill")
    set the threeD of tObj to false
    set the showBorder of tObj to true
    set the borderColor of tObj to lkColor("line")

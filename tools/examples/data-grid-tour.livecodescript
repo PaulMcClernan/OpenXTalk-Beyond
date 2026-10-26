@@ -814,7 +814,7 @@ private command buildBehaviors
    end if
    set the htmlText of tObj to tHtml
    wheelThumb tObj, "BehaviorCodeThumb", empty
-   set the backgroundColor of graphic "BehaviorCodeThumb" to "100,116,139"
+   set the backgroundColor of graphic "BehaviorCodeThumb" to lkDarkLiteral("100,116,139", "fill")
 end buildBehaviors
 
 -- A line of the behavior as the card shows it: without the mark the
@@ -954,7 +954,7 @@ private command resourceTile pName, pLeft, pTop, pRight, pBottom, pTitle, pText,
    put lkLabel(pName & "_text", lkR(pLeft + 80, pTop + 56, pRight - 24, pBottom - 12), pText, 13, lkColor("soft"), pName) into tObj
    set the fixedLineHeight of tObj to true
    set the textHeight of tObj to 19
-   set the cRest of group pName to "255,255,255"
+   set the cRest of group pName to lkDarkLiteral("255,255,255", "fill")
    set the cLit of group pName to lkMix("255,255,255", lkColor("indigo"), 0.06)
    set the script of group pName to exScript("Summary/" & pName)
 end resourceTile
@@ -1460,7 +1460,7 @@ private command formTemplate pWidth, pScript
    set the defaultStack to kTemplates
    delete field "Label"
    set the rect of graphic "Background" to 0, 0, pWidth, kRowHeight
-   set the backgroundColor of graphic "Background" to "255,255,255"
+   set the backgroundColor of graphic "Background" to lkDarkLiteral("255,255,255", "fill")
    put lkLabel("Employee ID", lkR(14, 14, 48, 30), sOrig["mockEmployee ID"], 12, empty, "Row Template") into tObj
    set the blendLevel of tObj to 45
    put lkLabel("Name", lkR(52, 6, pWidth - 134, 24), sOrig["mockName"], 13, empty, "Row Template") into tObj

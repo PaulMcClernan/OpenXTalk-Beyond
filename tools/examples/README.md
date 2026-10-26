@@ -128,6 +128,24 @@ checked for the web.
 | `OXT_EXAMPLES_OUT` | The folder the stacks go into |
 | `OXT_INSTALL` | The install to load revXML and the drawing library from, when the engine run is not in one |
 | `OXT_EXAMPLES_DEBUG` | Set, a failure writes the engine's whole error |
+| `OXT_EXAMPLES_KEEP_LIGHT` | Set, the light stack is the one already in the output folder, as it was built before: only the dark colours and the window's script are added to it, so its light look stays as it was to the pixel |
+
+### Light and dark
+
+A remaster follows the desktop between light and dark, as Learn does
+(openxtalk.org p=25438). Each example is built twice, with the kit's
+colours light and then dark (`lkSetDark`), in the same order, so the two
+builds have the same objects with the same ids. Where an object's colours
+differ, the light stack keeps both, in the custom property sets `uLight`
+and `uDark` (`build-examples.livecodescript` says what is in them), and
+the window's script puts the one the desktop wants on every object when a
+card opens (`frameLook`): dark when the IDE's `revIDEAppearanceIsDark()`
+says so, light otherwise, and light where there is no IDE (a standalone, a
+browser). In the dark build, `lkDarkLiteral` and `lkMix` turn the light
+page's colours written as numbers (a white panel, a slate ink, white
+tinted with the accent) into the dark page's. The sidebar and the scripts
+panel are dark in both. The stage and what a program puts on it are left
+as they are, light: the programs were written for a white stage.
 
 ## The window
 
