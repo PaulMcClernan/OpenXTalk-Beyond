@@ -715,6 +715,38 @@ on hcGoHome
    return "Can't find the Home stack"
 end hcGoHome
 
+/*
+HyperCard's Home stack, for a script that names it other than to go there
+(rule T45: "set the script of stack "Home" to tScript", "the long name of
+stack Home", "send startUp to stack home"): HyperCard's Home if one was
+imported, else the library's stand-in, an invisible stack "HyperCard
+Home" made the first time, with this library as its behavior so that a
+message sent to it reaches the library's getHomeInfo and the others.
+Here a stack called "home" is the IDE's own: a stack that installed its
+handlers into Home's script, or locked Home, would change the IDE's. The
+stand-in keeps them instead, for as long as the IDE runs, though not in
+every stack's message path as HyperCard's Home was
+*/
+function hcHome
+   local tDefault, tLocked, tBehavior, tWas
+   if _HCIsHyperCardStack("Home") then return the long name of stack "Home"
+   if there is not a stack "HyperCard Home" then
+      put the defaultStack into tDefault
+      put the lockMessages into tLocked
+      lock messages
+      create invisible stack "HyperCard Home"
+      set the lockMessages to tLocked
+      set the defaultStack to tDefault
+   end if
+   -- (and again when the stack whose library it was has gone)
+   put the behavior of me into tBehavior
+   put the behavior of stack "HyperCard Home" into tWas
+   if tBehavior is not empty and exists(tBehavior) and (tWas is empty or not exists(tWas)) then
+      set the behavior of stack "HyperCard Home" to tBehavior
+   end if
+   return the long name of stack "HyperCard Home"
+end hcHome
+
 -- HyperCard 2's Home stack had handlers other stacks called, as they
 -- were in every user's message path (a CD's stacks call getHomeInfo in
 -- 47 stacks, lastHCItem in 11, setUserLevelFive in 9). With no Home

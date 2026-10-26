@@ -87,7 +87,12 @@ script "revHyperCardScriptLibrary"
 -- without the word "stack" after a background ("go last cd of bg
 -- "stocks" of stackName") or after "in" ("go to card "Help" in "Mailing
 -- List Maker""), as T31 does after a card; and a "go" to a background of
--- a stack, which this engine does not go to: its first card.
+-- a stack, which this engine does not go to: its first card. T44 puts in
+-- quotes an object's name that this engine reads as one of its constants
+-- ("show cd fld help", field 15 here), in a script that compiles too.
+-- T45 takes HyperCard's Home stack named but not gone to ("set the script
+-- of stack "Home" to tScript"), which here is the IDE's stack "home", to
+-- the library's hcHome(), in a script that compiles too.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -193,6 +198,12 @@ constant kGoPlaces = "card cd cards background bkgnd bg backgrounds stack stacks
 -- HyperCard's "open report printing" (T12): an "open" of anything else
 -- is HyperCard's of an application (T40)
 constant kOpenWords = "directory driver file folder printing process socket standarderror standardinput standardoutput stderr stdin stdout secure datagram elevated report"
+
+-- This engine's constants that HyperCard did not have, each with a value
+-- other than its name (engine/src/lextable.cpp's constant_table: "help"
+-- is 15, the help cursor's number): an object named by one of them not
+-- in quotes is another object here (T44)
+constant kEngineConstants = "arrow busy clock cross hand help ibeam none plus watch backslash cr crlf end endoffile eof infinity lf null scrollbarfactor slash"
 
 -- What the probes found: a name's verdict, so that each name is compiled
 -- once (keys are the name in lower case)
@@ -2671,6 +2682,37 @@ private function _HyperCardRules pLine, pCompiled, pElse
       if tWord is "filename" and _T(tTokens, tIdx[i + 1]) is "(" and _T(tTokens, tIdx[i - 1]) is not among the words of "the of" then
          put "hcX_" & tTokens[tIdx[i]]["t"] into tTokens[tIdx[i]]["t"]
          _Fire "T20 fileName()"
+         next repeat
+      end if
+
+      -- T44: an object's name not in quotes that this engine reads as one
+      -- of its constants ("show cd fld help", field 15 here, "hide btn
+      -- arrow", button 29, "add 1 to fld Plus", field 13), where
+      -- HyperCard, which had no such constant, took the word as its text:
+      -- in quotes (any statement). No variable can have such a name here:
+      -- in a script that does not compile, T2 has renamed the variables
+      -- HyperCard let have one ("put "F1" into help")
+      if i > 1 and tWord is among the words of kEngineConstants \
+            and _T(tTokens, tIdx[i - 1]) is among the words of "field fld button btn card cd background bkgnd bg stack" \
+            and _T(tTokens, tIdx[i + 1]) is not "(" then
+         put quote & tTokens[tIdx[i]]["t"] & quote into tTokens[tIdx[i]]["t"]
+         put "s" into tTokens[tIdx[i]]["k"]
+         _Fire "T44 object name that is a constant here"
+         next repeat
+      end if
+
+      -- T45: HyperCard's Home stack named but not gone to ("set the script
+      -- of stack "Home" to tScript", "the long name of stack Home", "send
+      -- startUp to stack home"), which here is the IDE's own stack "home"
+      -- (and "stack Home" does not compile): the library's hcHome(),
+      -- HyperCard's Home if it was imported, else a stand-in, so that no
+      -- script of the stack reads or changes the IDE's (any statement but
+      -- a go, which goes home with hcGoHome or hcGo: T9, T16)
+      if tWord is "stack" and i < n and (_T(tTokens, tIdx[i + 1]) is "home" or _T(tTokens, tIdx[i + 1]) is quote & "home" & quote) \
+            and _StatementWord(tTokens, tIdx, i) is not "go" then
+         put "hcHome()" into tTokens[tIdx[i + 1]]["t"]
+         put "w" into tTokens[tIdx[i + 1]]["k"]
+         _Fire "T45 HyperCard's Home stack"
          next repeat
       end if
 
