@@ -12,10 +12,10 @@ another card of its own stack reaches that card after it; arithmetic
 that gives no number goes on with HyperCard's INF or NAN instead of
 stopping the script; reading the textFont, textSize, textStyle or
 textHeight of a button, a field or a field's text with none of its own
-gives the one it uses, where it would give empty, and HyperCard's own
-style names (condense, outline...) set a textStyle; and round takes a
-number halfway between two integers to the even one. Each test checks
-the stack with the property off too.
+gives the one it uses, where it would give empty, HyperCard's own style
+names (condense, outline...) set a textStyle, and grouped text reads as
+group, not link; and round takes a number halfway between two integers
+to the even one. Each test checks the stack with the property off too.
 */
 
 local sStack
@@ -693,3 +693,48 @@ on TestHyperTalkCompatibleTextStyleNames
    TestAssert "on: so bold ,italic, is bold and italic", line 10 of tValues is "bold,italic"
    _DeleteStack
 end TestHyperTalkCompatibleTextStyleNames
+
+-- Grouped text, HyperCard's group style, which this engine calls link:
+-- the second word of the field "F" set to group and the second line to
+-- bold,link, each read, and whether "group" is in the style of the word,
+-- as a HyperCard script tests a clicked link
+private function _GroupStatements
+   local q
+   put quote into q
+   return "set the textStyle of word 2 of field " & q & "F" & q & " to " & q & "group" & q & return \
+         & "put the textStyle of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put " & q & "group" & q & " is in the textStyle of word 2 of field " & q & "F" & q & " into tValue" & return \
+         & "set the textStyle of line 2 of field " & q & "F" & q & " to " & q & "bold,link" & q & return \
+         & "put the textStyle of line 2 of field " & q & "F" & q & " into tValue" & return \
+         & "put the effective textStyle of word 2 of field " & q & "F" & q & " into tValue"
+end _GroupStatements
+
+on TestHyperTalkCompatibleGroupStyleOff
+   local tValues
+   _MakeStack false
+   _MakeTextObjects
+   put _Values(_GroupStatements()) into tValues
+   TestAssert "off: group is set", line 1 of tValues is 7
+   TestAssert "off: as link", line 2 of tValues is "link"
+   TestAssert "off: so group is not in its style", line 3 of tValues is false
+   TestAssert "off: bold,link is set", line 4 of tValues is 7
+   TestAssert "off: as bold,link", line 5 of tValues is "bold,link"
+   TestAssert "off: the effective textStyle is link", line 6 of tValues is "link"
+   _DeleteStack
+end TestHyperTalkCompatibleGroupStyleOff
+
+-- HyperCard's grouped text reads as group, by HyperCard's name, so that
+-- if the textStyle of the clickChunk contains "group" finds a link
+on TestHyperTalkCompatibleGroupStyle
+   local tValues
+   _MakeStack true
+   _MakeTextObjects
+   put _Values(_GroupStatements()) into tValues
+   TestAssert "on: group is set", line 1 of tValues is 7
+   TestAssert "on: as group", line 2 of tValues is "group"
+   TestAssert "on: so group is in its style", line 3 of tValues is true
+   TestAssert "on: bold,link is set", line 4 of tValues is 7
+   TestAssert "on: as bold,group", line 5 of tValues is "bold,group"
+   TestAssert "on: the effective textStyle is group", line 6 of tValues is "group"
+   _DeleteStack
+end TestHyperTalkCompatibleGroupStyle

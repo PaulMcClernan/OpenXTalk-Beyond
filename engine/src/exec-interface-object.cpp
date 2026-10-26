@@ -1015,10 +1015,15 @@ static void MCInterfaceTextStyleFormat(MCExecContext& ctxt, const MCInterfaceTex
 						MCListAppend(*t_styles, *t_style));
 	}
 
+	// OXT-Beyond: in a stack whose hyperTalkCompatible is true, the link
+	//   style is HyperCard's group, by HyperCard's name, which its scripts
+	//   look for in a clicked link ("if the textStyle of the clickChunk
+	//   contains "group""). The import makes HyperCard's grouped text link
+	//   text, and a style with group in it sets link in every stack.
 	if (t_success && p_input . style & FA_LINK)
 	{
 		MCAutoStringRef t_style;
-		t_success = (MCStringCreateWithCString(MClinkstring, &t_style) &&
+		t_success = (MCStringCreateWithCString(ctxt . IsHyperTalkCompatible() ? MCgroupstring : MClinkstring, &t_style) &&
 						MCListAppend(*t_styles, *t_style));
 	}
 
