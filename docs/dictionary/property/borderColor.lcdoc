@@ -79,7 +79,11 @@ depending on the <object type>:
   effect unless the <button(object)|button's> <menuMode> <property> is
   set to "comboBox" or "popup". If the <button(object)|button's>
   <threeD> <property> is set to true, the <borderColor> has no effect
-  regardless of the <button(object)|button's> <style>.
+  regardless of the <button(object)|button's> <style>. A
+  <button(object)> whose <style> is "roundRect" or "oval" draws its
+  border in its <foregroundColor>, the color of its label, whatever its
+  <threeD>, so its <borderColor> has no effect either: set its
+  <foregroundColor> to change the color of its border.
 
 
 * The <borderColor> of a <field(keyword)> determines the color of the
@@ -133,7 +137,8 @@ textStyle (property), borderColor (property), showBorder (property),
 borderPixel (property), hGrid (property), penBack (property),
 vGrid (property), hiliteColor (property), markerFilled (property),
 style (property), threeD (property), menuMode (property),
-owner (property), topColor (property), selectionHandleColor (property)
+owner (property), topColor (property), selectionHandleColor (property),
+foregroundColor (property)
 
 Tags: ui
 
