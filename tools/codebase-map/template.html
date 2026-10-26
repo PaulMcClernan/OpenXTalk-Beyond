@@ -79,6 +79,7 @@ tr:hover td{background:var(--soft)}
 ul.small{margin:4px 0 8px;padding-left:1.2em}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font:500 .78rem var(--f-mono);background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:2px 6px}
+a.chip{color:var(--accent);text-decoration:none}a.chip:hover,a.chip:focus-visible{border-color:var(--accent);text-decoration:underline}
 .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 input[type=search],select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:7px 10px}
 input[type=search]{min-width:0;flex:1 1 260px}
@@ -447,7 +448,7 @@ BUILD.overview=el=>{
   el.append(h('div',{class:'grid3'},
     h('div',{class:'panel'},h('h3',null,'The two boundaries that break things'),h('p',{class:'small'},'Engine to IDE: the engine opens home in development mode, the IDE handles engine messages in its front and back scripts, and it reads engine properties that exist only for it. IDE to user stacks: every frontscript and library sits in the message path of every stack a user opens, so a handler there that forgets to pass, or shares a name with a user\'s handler, changes what old stacks see.'),h('p',{class:'small',style:'margin-top:6px'},h('button',{class:'lnk',onclick:()=>show('ide')},'See the message path →'))),
     h('div',{class:'panel'},h('h3',null,'The biggest single hub'),h('p',{class:'small'},ulink(hub.id),` is called from ${hub.fanin} other scripts and changed in ${hub.churn} commits in the window. Treat a change to any public handler in it as a change to the whole IDE.`)),
-    h('div',{class:'panel'},h('h3',null,'Binary stacks hide code'),h('p',{class:'small'},`${nBin} of the scripts mapped here live inside binary stacks (.livecode, .rev, .oxtstack). Git can't diff them; they change through tools/oxt/ide-stack-patches, and the IDE compile check is what catches mistakes in them. This map read them by dumping each stack with the released engine.`))));
+    h('div',{class:'panel'},h('h3',null,'Binary stacks hide code'),h('p',{class:'small'},`${nBin} of the scripts mapped here live inside binary stacks (.livecode, .rev, .oxtstack). Git can't diff them; they change through tools/oxt/ide-stack-patches, and the IDE compile check is what catches mistakes in them. This map read them by dumping each stack with the released engine.`),U.some(u=>u.exports&&u.exports.length)?h('p',{class:'small'},'Every object script in them is also exported to a file of its own, named for its object the way Brian Milby\'s ',h('a',{href:'https://github.com/Milby-Computer/hxt-bst',target:'_blank',rel:'noopener'},'BST'),' names them, to read or search in an editor: ',h('a',{href:'stack-scripts.zip'},'download them all (zip)'),', or open a stack in the impact view to see its own.'):null)));
 };
 
 /* Impact */
@@ -481,7 +482,8 @@ function openImpact(t,ref){show('impact');renderImpact(t,ref);window.scrollTo({t
 function ciFor(path){return D.ci.filter(w=>w.scripts.some(s=>path===s||path.startsWith(s+'/'))||w.paths.some(p=>{const b=p.replace(/\*.*$/,'');return b&&path.startsWith(b)}))}
 function partners(path){return D.pairs.filter(p=>p[0]===path||p[1]===path).map(p=>[p[0]===path?p[1]:p[0],p[2]]).sort((a,b)=>b[1]-a[1]).slice(0,12)}
 function checklist(u){const L=[];const p=u.path;
-  if(u.kind==='binary')L.push(['c','Binary stack: change its scripts and properties with a patch file in tools/oxt/ide-stack-patches (applied by tools/oxt/ide-stack-patch.sh) and commit the patch with the stack. Do not open and re-save it otherwise.']);
+  if(u.kind==='binary'){L.push(['c','Binary stack: change its scripts and properties with a patch file in tools/oxt/ide-stack-patches (applied by tools/oxt/ide-stack-patch.sh) and commit the patch with the stack. Do not open and re-save it otherwise.']);
+    L.push(['w','If only the IDE can make the change (adding or deleting objects), saving also keeps whatever the IDE and your session left in the stack: font lists, the script open in the editor, other session data. Clean that out first, in a commit of its own, so the dump diff of your change shows only your change.'])}
   if(u.role.startsWith('frontscript'))L.push(['c',(u.role.includes('while')?'Frontscript while a tool or mode is active:':'Frontscript:')+' it sees every message of every stack before the stack does. Each handler must pass its message unless swallowing it is the point, and a new handler name must not collide with names user stacks use.']);
   else if(u.role)L.push(['w',`In the message path as a ${u.role}: a new public handler here can be reached by, and can shadow, handlers in users' stacks.`]);
   if(u.fanin)L.push(['w',`Check the ${u.fanin} calling scripts below before renaming a handler or changing its parameters or result.`]);
@@ -515,6 +517,8 @@ function renderImpact(t,ref){impactOut.replaceChildren();const P=(...k)=>impactO
       sec('Tests and CI scripts that name it',ul(u.test_ids.map(i=>ulink(i)))),
       sec('Usually changes together with',ul(partners(u.path).map(([f,n])=>[plink(f),h('span',{class:'muted'},` · ${n} commits`)]))),
       sec('CI workflows that name this path',ul(ciFor(u.path).map(w=>h('span',{class:'mono'},short(w.file)))))));
+    if(u.exports&&u.exports.length){const base=`stack-scripts/${u.path.split('/').map(encodeURIComponent).join('/')}.bst/scripts/`;
+      P(sec(`Its scripts as files (${u.exports.length})`,h('p',{class:'small muted'},'Each object script of this stack, exported to a file named for its object, to read or search in an editor. The stack holds the script that runs. ',h('a',{href:'stack-scripts.zip'},'All binary stacks\' scripts (zip)'),'.'),h('div',{class:'chips'},u.exports.map(n=>h('a',{class:'chip mono',href:base+n+'.livecodescript',target:'_blank',rel:'noopener'},n)))))}
     if(u.pubs.length||u.subs.length)P(sec('IDE message bus',h('p',{class:'small'},'Sends: ',u.pubs.join(', ')||'none'),h('p',{class:'small'},'Subscribes to: ',u.subs.join(', ')||'none')));
   }
   else if(t==='handler'){const x=D.handlers[ref];
@@ -663,7 +667,7 @@ BUILD.method=el=>{
     h('div',{class:'grid2',style:'margin-top:10px'},
       h('div',null,h('h3',null,'What was read'),h('ul',{class:'small'},
         h('li',null,`Every tracked file of OXT-Beyond at ${D.head.split(' ')[0]} and of xtalk-suite at ${(D.suite.head||'?').split(' ')[0]}.`),
-        h('li',null,`${U.length} scripts: every .livecodescript, plus the scripts inside ${U.filter(u=>u.kind==='binary').length} binary IDE stacks, dumped with tools/oxt/ide-stack-dump.livecodescript run headless on the released v0.2.7-rc.6.4 Linux engine (stacks loaded with messages locked, never saved).`),
+        h('li',null,`${U.length} scripts: every .livecodescript, plus the scripts inside ${U.filter(u=>u.kind==='binary').length} binary IDE stacks, dumped with tools/oxt/ide-stack-dump.livecodescript run headless on ${D.engine_label?'the Linux engine of '+D.engine_label:'a released Linux engine'} (stacks loaded with messages locked, never saved).`),
         D.missing_dumps.length?h('li',null,'Not dumped, because the engine refused to load them: ',D.missing_dumps.join(', '),'.'):null,
         h('li',null,'The targets and dependencies of every .gyp file; the module line and "use" lines of every .lcb file; every workflow in .github/workflows.'),
         h('li',null,'In engine/src: #include lines, the externs of globals.h, the message table of mcstring.cpp and the rev*/_* properties of lextable.cpp.'),
@@ -676,7 +680,7 @@ BUILD.method=el=>{
         h('li',null,'A handler "passes" if its body contains pass with its own name anywhere, so a conditional pass counts as passing.'),
         h('li',null,'Nothing was built or run except the stack dumps. Use the map as a list of places to look, then confirm with the IDE compile check, the engine tests and a before-and-after run on the released build.'))))));
   el.append(h('div',{class:'panel'},h('h3',null,'Regenerate it'),h('p',{class:'small'},'The generator is tools/codebase-map in the OXT-Beyond repository, and the Web pages workflow (.github/workflows/pages.yml) runs it every time it builds the site, so this page is as new as the site. To make it yourself, with both repositories checked out (OXT-Beyond with its history), a released Linux engine unpacked and d3 7.9.0 from npm:'),
-    h('pre',{class:'mono cmd'},'bash OpenXTalk-Beyond/tools/codebase-map/make_dumps.sh OpenXTalk-Beyond linux-x86_64-bin/LiveCode-Community dumps\npython3 OpenXTalk-Beyond/tools/codebase-map/build_map.py --beyond OpenXTalk-Beyond \\\n    --suite xtalk-suite --dumps dumps --d3 package/dist/d3.min.js --out out\n# out/index.html is this page; out/map-data.json is its data')));
+    h('pre',{class:'mono cmd'},'bash OpenXTalk-Beyond/tools/codebase-map/make_dumps.sh OpenXTalk-Beyond linux-x86_64-bin/LiveCode-Community dumps\npython3 OpenXTalk-Beyond/tools/codebase-map/build_map.py --beyond OpenXTalk-Beyond \\\n    --suite xtalk-suite --dumps dumps --d3 package/dist/d3.min.js --out out\n# out/index.html is this page; out/map-data.json is its data\n# out/stack-scripts/ and out/stack-scripts.zip: the binary stacks\' scripts as files')));
 };
 
 const start=(location.hash||'').slice(1);

@@ -2465,6 +2465,11 @@ stored in it), commit it on its own, and show what changed with the
 diff of the stack's dump before and after
 (`tools/oxt/ide-stack-dump.livecodescript`, see
 [tools/oxt/README.md](tools/oxt/README.md#binary-ide-stacks)).
+Saving from the IDE also keeps what the IDE and your session left in
+the stack (font lists, the script open in the editor, other session
+data), and some stacks already hold such data from long ago. Clean it out
+first, in a commit of its own, so that the dump diff of your change shows
+only your change.
 
 The "OpenXTalk Lite" text still inside some binary stacks is meant to be
 changed with patches, a few stacks at a time.

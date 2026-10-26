@@ -26,6 +26,8 @@ claude.ai Artifact), both from template.html. The GitHub Pages workflow
 DUMPDIR holds text dumps of the binary IDE stacks, one per stack, made by
 make_dumps.sh with a released engine (tools/oxt/ide-stack-dump.livecodescript).
 Without it the binary stacks' scripts are left out and the page says so.
+With it, OUTDIR also gets stack-scripts/ and stack-scripts.zip: every
+object script of those stacks as a file of its own (export_scripts).
 
 Everything here is read-only and lexical: it reads files and git history
 and never builds or runs the code it maps. Where a number is an
@@ -40,6 +42,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -346,6 +349,42 @@ def script_units(root, files, dumps):
     return units, missing
 
 
+def export_scripts(dumps, binaries, out):
+    """Write every object script of every dumped binary stack as its own
+    file, <out>/stack-scripts/<stack file>.bst/scripts/<name>.livecodescript,
+    laid out and named as Brian Milby's BST (github.com/Milby-Computer/hxt-bst)
+    lays out its exports, plus stack-scripts.zip of them all, so they can be
+    read and searched in an editor. A header names the stack file and the
+    object; the stack keeps the real script. Returns {stack file: [names]}."""
+    import zipfile
+    made = {}
+    zpath = os.path.join(out, 'stack-scripts.zip')
+    with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as z:
+        for rel in sorted(binaries):
+            d = os.path.join(dumps, rel.replace('/', '_').replace(' ', '_') + '.txt')
+            if not os.path.exists(d):
+                continue
+            names, seen = [], collections.Counter()
+            for name, label, lines in lcs.dump_scripts(d):
+                seen[name] += 1
+                if seen[name] > 1:
+                    name += '_%d' % seen[name]
+                text = '\n'.join(['script "%s"' % name,
+                                   '-- Stack file: %s' % rel,
+                                   '-- Object: %s' % label,
+                                   '-- Exported by tools/codebase-map for reading and searching;',
+                                   '-- the binary stack holds the script that runs.', ''] + lines) + '\n'
+                arc = 'stack-scripts/%s.bst/scripts/%s.livecodescript' % (rel, name)
+                path = os.path.join(out, *arc.split('/'))
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, 'w', encoding='utf-8', newline='\n') as f:
+                    f.write(text)
+                z.writestr(zipfile.ZipInfo(arc, (1980, 1, 1, 0, 0, 0)), text.encode('utf-8'))
+                names.append(name)
+            made[rel] = names
+    return made
+
+
 def boot_order(root):
     """The library load order in home.livecodescript (revInternal__InitialiseLibraries)."""
     t = open(os.path.join(root, 'ide/Toolset/home.livecodescript'), encoding='utf-8', errors='replace').read()
@@ -589,6 +628,8 @@ def main():
                     'without it index.html loads d3 from cdnjs')
     ap.add_argument('--d3-license', help="d3's LICENSE, put above the inlined copy (ISC asks for its notice); "
                     'default: the LICENSE of the npm package that holds --d3')
+    ap.add_argument('--engine-label', default='',
+                    help='the release whose engine made the --dumps (shown on the page)')
     ap.add_argument('--template', default=os.path.join(HERE, 'template.html'))
     a = ap.parse_args()
     root = a.beyond
@@ -611,6 +652,11 @@ def main():
     eng = engine_analysis(root)
     lcb = lcb_analysis(root, files)
     units, missing = script_units(root, files, a.dumps)
+    exports = {}
+    if a.dumps:
+        os.makedirs(a.out, exist_ok=True)
+        shutil.rmtree(os.path.join(a.out, 'stack-scripts'), ignore_errors=True)
+        exports = export_scripts(a.dumps, [u.path for u in units if u.kind == 'binary'], a.out)
     S = analyse_scripts(units, eng['messages'], eng['devprops'])
     boot = boot_order(root)
     ci = ci_analysis(root, files)
@@ -669,6 +715,7 @@ def main():
             tests=len(test_refs[u.id]), test_ids=sorted(test_refs[u.id])[:30],
             churn=hist['churn'].get(u.path, 0), fixes=hist['fixes'].get(u.path, 0),
             pubs=sorted(u.publishes), subs=sorted(u.subscribes),
+            exports=exports.get(u.path, []),
         ))
 
     E = [dict(s=s, d=d, k=k, n=n) for (s, d, k), n in sorted(S['edges'].items())
@@ -906,6 +953,7 @@ def main():
         cochange=cochange, hot=hot[:80], suite=suite,
         pairs=[[x, y, n] for (x, y), n in hist['pairs'].most_common(4000) if n >= 2],
         missing_dumps=missing,
+        engine_label=a.engine_label if a.dumps else '',
     )
     os.makedirs(a.out, exist_ok=True)
     js = json.dumps(data, separators=(',', ':'))

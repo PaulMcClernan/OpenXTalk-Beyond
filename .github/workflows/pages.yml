@@ -225,7 +225,7 @@ jobs:
             tar -xJf "$work"/engine/*-linux-x86_64-binaries.tar.xz -C "$work/engine"
             engine=$(find "$work/engine" -type f -name LiveCode-Community | head -n 1)
             bash tools/codebase-map/make_dumps.sh . "$engine" "$work/dumps"
-            dumps=(--dumps "$work/dumps")
+            dumps=(--dumps "$work/dumps" --engine-label "$etag")
             echo "MAP_ENGINE=$etag" >> "$GITHUB_ENV"
           else
             echo "::warning::$etag has no Linux binaries; the map leaves out the binary stacks' scripts"
