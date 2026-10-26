@@ -176,7 +176,7 @@ private command rowsPanel pName, pRect, pTitle, pRows, pColor, pActions
       set the top of tObj to tTop + 18 - (the formattedHeight of tObj + 4) div 2
       if line tIndex of pActions is not empty then
          get exIcon(tGroup & "_go", "chevron-right", lkColor("muted"), lkR(tR - 34, tTop + 10, tR - 18, tTop + 26), tGroup)
-         set the cRest of group tGroup to "255,255,255"
+         set the cRest of group tGroup to lkDarkLiteral("255,255,255", "fill")
          set the cLit of group tGroup to lkMix("255,255,255", pColor, 0.07)
          set the cAction of group tGroup to line tIndex of pActions
       end if

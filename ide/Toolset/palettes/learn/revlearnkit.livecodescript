@@ -57,6 +57,9 @@ local sScroll, sDrag
 -- True in the dark appearance (lkReadAppearance); the pending look again
 -- at macOS's appearance after a switch, and how many looks are left
 local sDark, sAppearanceMsg, sAppearanceTries
+-- True while a build draws its dark copy (lkSetDark): the light page's
+-- literal colours are drawn as the dark page's (lkDarkLiteral)
+local sDarkMap
 
 ################################################################################
 #
@@ -297,6 +300,60 @@ function lkReadAppearance
    return true
 end lkReadAppearance
 
+-- The kit's colours set to the dark appearance's (pDark true) or the light
+-- one's, whatever the desktop's: for a build that draws both, as the
+-- remastered examples' does (tools/examples/build-examples.livecodescript).
+-- A window that shows itself reads the desktop with lkReadAppearance.
+command lkSetDark pDark
+   put pDark is true into sDark
+   put pDark is true into sDarkMap
+end lkSetDark
+
+-- For a build's dark copy (lkSetDark): a colour written as a number for
+-- the light page, as the dark page has it. pUse is "fill" (a panel, a
+-- page), "ink" (text) or "line" (a border). White text stays white (it is
+-- on an accent); other colours are not the page's and stay as they are.
+-- Outside such a build, the colour as it is.
+function lkDarkLiteral pColor, pUse
+   if sDarkMap is not true then
+      return pColor
+   end if
+   switch pUse
+      case "fill"
+         switch pColor
+            case "255,255,255"
+               return lkColor("panel")
+            case "248,250,252"
+            case "241,245,249"
+               return lkColor("bg")
+            case "226,232,240"
+               return lkColor("line")
+         end switch
+         break
+      case "ink"
+         switch pColor
+            case "15,23,42"
+            case "30,41,59"
+               return lkColor("ink")
+            case "51,65,85"
+               return lkColor("text")
+            case "71,85,105"
+               return lkColor("soft")
+            case "100,116,139"
+               return lkColor("muted")
+         end switch
+         break
+      case "line"
+         switch pColor
+            case "226,232,240"
+            case "203,213,225"
+               return lkColor("line")
+         end switch
+         break
+   end switch
+   return pColor
+end lkDarkLiteral
+
 -- The stack follows the desktop between light and dark: the IDE's
 -- ideSystemAppearanceChanged (from the engine's systemAppearanceChanged)
 -- arrives here, and when the appearance has changed the kit sends
@@ -384,6 +441,12 @@ end lkClear
 -- pFrom mixed with pTo: 0 is pFrom, 1 is pTo
 function lkMix pFrom, pTo, pAmount
    local tOut, tItem
+   -- (in a build's dark copy, white tinted with an accent is the dark
+   -- panel tinted with it, as lkTint has it)
+   if sDarkMap is true and pFrom is "255,255,255" and pAmount > 0 and pAmount < 0.5 then
+      put lkColor("panel") into pFrom
+      put min(1, pAmount * 1.8) into pAmount
+   end if
    if pAmount <= 0 then
       return pFrom
    end if
@@ -486,7 +549,7 @@ function lkBox pName, pRect, pColor, pRadius, pGroup
       set the opaque of tObj to false
    else
       set the opaque of tObj to true
-      set the backgroundColor of tObj to pColor
+      set the backgroundColor of tObj to lkDarkLiteral(pColor, "fill")
    end if
    set the rect of tObj to pRect
    return tObj
@@ -501,7 +564,7 @@ end lkOval
 
 command lkBorder pObj, pColor
    set the lineSize of pObj to 1
-   set the foregroundColor of pObj to pColor
+   set the foregroundColor of pObj to lkDarkLiteral(pColor, "line")
 end lkBorder
 
 function lkLabel pName, pRect, pText, pSize, pColor, pGroup, pAlign
@@ -524,7 +587,7 @@ function lkLabel pName, pRect, pText, pSize, pColor, pGroup, pAlign
    set the margins of tObj to "0," & kTextInset & ",0,0"
    set the dontWrap of tObj to false
    set the textSize of tObj to pSize
-   set the textColor of tObj to pColor
+   set the textColor of tObj to lkDarkLiteral(pColor, "ink")
    if pAlign is not empty then
       set the textAlign of tObj to pAlign
    end if

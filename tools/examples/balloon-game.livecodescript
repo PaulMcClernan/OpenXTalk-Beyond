@@ -528,7 +528,7 @@ private command rowsPanel pName, pRect, pTitle, pRows, pColor, pActions
       set the height of tObj to the formattedHeight of tObj + 4
       set the top of tObj to tTop + 16 - (the formattedHeight of tObj) div 2
       if line tIndex of pActions is not empty then
-         set the cRest of group tGroup to "255,255,255"
+         set the cRest of group tGroup to lkDarkLiteral("255,255,255", "fill")
          set the cLit of group tGroup to lkMix("255,255,255", pColor, 0.07)
          set the cAction of group tGroup to line tIndex of pActions
       end if

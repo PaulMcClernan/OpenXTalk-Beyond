@@ -269,7 +269,7 @@ private command buildStory
    put lkLabel("Story", lkR(kStageLeft + 16, kStageTop + 108, kStageRight - 16, kStageBottom - 24), \
          empty, 14, lkColor("ink"), empty) into tObj
    set the opaque of tObj to true
-   set the backgroundColor of tObj to "255,247,237"
+   set the backgroundColor of tObj to lkDarkLiteral("255,247,237", "fill")
    set the borderColor of tObj to lkMix("255,255,255", lkColor("orange"), 0.35)
    set the showBorder of tObj to true
    set the threeD of tObj to false

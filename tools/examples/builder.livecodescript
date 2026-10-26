@@ -468,14 +468,14 @@ function exButton pName, pLeft, pTop, pHeight, pLabel, pIcon, pStyle, pAccent, p
          put tInk into tIconInk
          break
       case "ghost"
-         put "255,255,255" into tRest
+         put lkDarkLiteral("255,255,255", "fill") into tRest
          put lkMix("255,255,255", pAccent, 0.08) into tLit
          put lkColor("line") into tLine
          put lkColor("ink") into tInk
          put pAccent into tIconInk
          break
       case "light"
-         put "255,255,255" into tRest
+         put lkDarkLiteral("255,255,255", "fill") into tRest
          put lkMix("255,255,255", pAccent, 0.14) into tLit
          put lkMix(pAccent, lkColor("ink"), 0.2) into tInk
          put pAccent into tIconInk
@@ -524,7 +524,7 @@ function exLetter pName, pLetter, pLeft, pTop, pColor
    set the opaque of tObj to true
    set the backgroundColor of tObj to pColor
    set the cColor of tObj to pColor
-   set the textColor of tObj to "255,255,255"
+   set the textColor of tObj to lkDarkLiteral("255,255,255", "ink")
    set the textSize of tObj to 34
    set the textStyle of tObj to "bold"
    set the textAlign of tObj to "center"
@@ -658,7 +658,7 @@ command exProgramTiles pTop, pColumns, pHeight, pGap
       put lkLabel(tName & "_title", lkR(tX + 64, tY + 29, tX + tWidth - 8, tY + 49), exCardInfo(tIndex, "title"), 14, lkColor("ink"), tName) into tObj
       set the textStyle of tObj to "bold"
       lkEllipsize tObj
-      set the cRest of group tName to "255,255,255"
+      set the cRest of group tName to lkDarkLiteral("255,255,255", "fill")
       set the cLit of group tName to lkMix("255,255,255", tAccent, 0.07)
       set the cAction of group tName to "go" && exCardInfo(tIndex, "name")
    end repeat

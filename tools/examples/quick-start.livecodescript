@@ -320,7 +320,7 @@ private command buildNarration
    put lkLabel("Lesson", lkR(kPlayLeft, kNarratorTop, kPlayRight, kNarratorTop + 188), empty, 13, lkColor("ink"), "Narration") into tObj
    set the rect of tObj to kPlayLeft, kNarratorTop, kPlayRight, kNarratorTop + 188
    set the opaque of tObj to true
-   set the backgroundColor of tObj to "255,255,255"
+   set the backgroundColor of tObj to lkDarkLiteral("255,255,255", "fill")
    set the showBorder of tObj to true
    set the threeD of tObj to false
    set the borderColor of tObj to lkColor("orange")
@@ -543,7 +543,7 @@ private function lessonButton pName, pRect
    set the opaque of tObj to true
    set the backgroundColor of tObj to lkColor("orange")
    set the hiliteColor of tObj to lkMix(lkColor("orange"), lkColor("ink"), 0.25)
-   set the textColor of tObj to "255,255,255"
+   set the textColor of tObj to lkDarkLiteral("255,255,255", "ink")
    set the textSize of tObj to 14
    set the textStyle of tObj to "bold"
    set the traversalOn of tObj to false
@@ -629,7 +629,7 @@ private command buildButtonsAndFields
    set the borderColor of tObj to "203,213,225"
    set the margins of tObj to 8
    -- (white, over the canvas's dots)
-   set the backgroundColor of tObj to "255,255,255"
+   set the backgroundColor of tObj to lkDarkLiteral("255,255,255", "fill")
    set the opaque of tObj to true
    set the hilite of button "Green" of tObj to true
    set the script of tObj to exScript("Buttons & Fields/Colors")
@@ -650,7 +650,7 @@ private command buildButtonsAndFields
    set the borderColor of tObj to lkColor("line")
    set the showFocusBorder of tObj to false
    set the opaque of tObj to true
-   set the backgroundColor of tObj to "255,255,255"
+   set the backgroundColor of tObj to lkDarkLiteral("255,255,255", "fill")
    set the textSize of tObj to 12
    set the textColor of tObj to lkColor("soft")
    set the margins of tObj to "10,6,6,6"
