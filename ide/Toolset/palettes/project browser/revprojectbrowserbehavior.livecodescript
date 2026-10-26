@@ -418,7 +418,8 @@ command setUpProjectView
    -- (text_1 to text_3), which is white there
    set the viewProp["row color"] of group "objectList" of me to revIDEColor("dataView_themedRowColor")
    set the viewProp["alternate row color"] of group "objectList" of me to revIDEColor("dataView_themedRowAlternateColor")
-   
+   pbKeepRowsDark
+
    set the viewProp["fixed row height"] of group "objectList" of me to "true"
    set the viewProp["row height"] of group "objectList" of me to the effective textSize of me + 14
    set the viewProp["cache"] of group "objectList" of me to "none"
@@ -426,6 +427,25 @@ command setUpProjectView
    set the viewProp["drop indicator template"] of group "objectList" of me to the long id of group "pbDragIndicator" of card "templates" of this stack
    set the foregroundColor of graphic "indicator" of group "pbDragIndicator" of card "templates" of this stack to revIDEColor("edition_color")
 end setUpProjectView
+
+-- OXT-Beyond: the stack's own preOpenStack (OpenXTalk's dark mode from
+-- before the rows took the appearance's colours) inverts the list when the
+-- window's colour is dark: group "content" in the blendExclusion ink, over
+-- image "cover-square". That turns light rows dark, and it is still how
+-- they are dark on Linux, where the systemAppearance is always light and
+-- the rows are light. On Windows the window is dark and the systemAppearance
+-- is dark too, so the rows were dark already, and inverting them made them
+-- light grey under dark text, with orange counts. Where the rows are dark
+-- the inversion is turned off.
+private command pbKeepRowsDark
+   if there is not a card "list" of me then exit pbKeepRowsDark
+   if the ink of group "content" of card "list" of me is not "blendExclusion" then exit pbKeepRowsDark
+   if revIDEColor("dataView_themedRowColor") is "255,255,255" then exit pbKeepRowsDark
+   set the ink of group "content" of card "list" of me to "srcCopy"
+   if there is an image "cover-square" of card "list" of me then
+      hide image "cover-square" of card "list" of me
+   end if
+end pbKeepRowsDark
 
 command buildProjectView pRememberExpansion
    local tStacks, tFrontScripts, tBackScripts,tRow, tVisibleROws, tChildren

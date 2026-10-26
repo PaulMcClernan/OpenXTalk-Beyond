@@ -1661,7 +1661,14 @@ on tour_controls
    tourGrab "Tabs"
    put tourMaxDiff(3, 0, 4, 30, tBack) into tMax
    tourCtlCheck tMax >= 16, "the tabs are drawn (" & tMax & ")"
-   
+   -- On a dark card the pane under the tabs is dark too: Windows' theme
+   -- drew it white, under the names in the dark mode's white
+   if tBack < 100 then
+      put tourLum(sPixWidth div 2, sPixHeight * 2 div 3) into tInside
+      tourRecord "INFO controls: the tabs' pane is" && tInside && "on the card's" && tBack
+      tourCtlCheck tInside < 100, "the tabs' pane is dark on the dark card (" & tInside & ")"
+   end if
+
    tourGrab "Track"
    put tourMaxDiff(0, 0, sPixWidth, sPixHeight, tBack) into tMax
    tourCtlCheck tMax >= 12, "a scrollbar with nothing to scroll draws its track (" & tMax & ")"
@@ -2565,6 +2572,16 @@ on tour_project_browser
    if tStack is empty or there is not a stack tStack then throw "no stack for the palette project browser"
    if not the visible of stack tStack then throw "the palette project browser (" & tStack & ") is not visible"
    tourShotStack tStack, "12-project-browser"
+   -- OpenXTalk's dark mode inverts the list (the blendExclusion ink) when
+   -- the window is dark: right for light rows (Linux), wrong for rows dark
+   -- already (Windows), which it showed light grey under dark text
+   local tInk, tRows
+   put the ink of group "content" of card "list" of stack tStack into tInk
+   put revIDEColor("dataView_themedRowColor") into tRows
+   tourRecord "INFO the Project Browser's rows" && tRows && "under the ink" && tInk
+   if tInk is "blendExclusion" and tRows is not "255,255,255" then
+      throw "the Project Browser inverts rows that are dark already (" & tRows & "), so they show light"
+   end if
    close stack tStack
 end tour_project_browser
 

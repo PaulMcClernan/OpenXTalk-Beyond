@@ -869,7 +869,64 @@ Boolean MCNativeTheme::drawwidget(MCDC *dc, const MCWidgetInfo &winfo, const MCR
 			return True; // Skip Windows native theme drawing
 		}
 	}
-	
+
+	// OXT-Beyond: tabbed buttons in dark mode. The Windows theme draws its
+	// tabs and their pane light whatever the appearance, under names in the
+	// dark mode's white, so a tabbed button (the Object Library's, or one in
+	// a user's stack) was a white box with names that could not be read.
+	// In dark mode they are drawn as the buttons above are: the pane in the
+	// window's dark colour with a grey border, the chosen tab joined to it,
+	// the others a little lighter. Light mode still draws the theme's.
+	if (winfo.type == WTHEME_TYPE_TAB || winfo.type == WTHEME_TYPE_TABPANE)
+	{
+		MCSystemAppearance t_appearance;
+		MCscreen->getsystemappearance(t_appearance);
+		if (t_appearance == kMCSystemAppearanceDark)
+		{
+			if (winfo.type == WTHEME_TYPE_TABPANE)
+			{
+				dc->setforeground(dc->getbg());
+				dc->fillrect(drect);
+				dc->setforeground(dc->getgray());
+				dc->drawrect(drect);
+				return True;
+			}
+
+			MCRectangle t_tab = drect;
+			if (winfo.state & WTHEME_STATE_HILITED)
+			{
+				// The chosen tab's last row is the pane's top border: it is
+				// filled, so the tab opens into the pane, and the tab's
+				// sides and top are drawn
+				dc->setforeground(dc->getbg());
+				dc->fillrect(t_tab);
+				dc->setforeground(dc->getgray());
+				int2 t_left = t_tab.x;
+				int2 t_right = t_tab.x + t_tab.width - 1;
+				int2 t_top = t_tab.y;
+				int2 t_bottom = t_tab.y + t_tab.height - 1;
+				dc->drawline(t_left, t_bottom, t_left, t_top);
+				dc->drawline(t_left, t_top, t_right, t_top);
+				dc->drawline(t_right, t_top, t_right, t_bottom);
+				return True;
+			}
+
+			// The other tabs stop above the pane, as the theme's do
+			if (t_tab.height > 1)
+				t_tab.height--;
+			MCColor t_fill;
+			if (winfo.state & (WTHEME_STATE_HOVER | WTHEME_STATE_PRESSED))
+				t_fill.red = t_fill.green = t_fill.blue = 0x3C3C;
+			else
+				t_fill.red = t_fill.green = t_fill.blue = 0x2D2D;
+			dc->setforeground(t_fill);
+			dc->fillrect(t_tab);
+			dc->setforeground(dc->getgray());
+			dc->drawrect(t_tab);
+			return True;
+		}
+	}
+
 	HANDLE htheme = GetTheme(winfo.type);
 	if (!htheme)
 		return False;
