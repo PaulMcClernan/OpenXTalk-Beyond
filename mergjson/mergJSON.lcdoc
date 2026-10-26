@@ -39,9 +39,9 @@ Syntax: mergJSONEncode(<pVariableName>, [<pForceRootType>, <pPretty>])
 
 Introduced: 8.0
 
-OS: ios,android,linux,mac,windows
+OS: mac, windows, linux
 
-Platforms: mobile,desktop,server
+Platforms: desktop
 
 Summary: The function encodes an array as JSON.
 
@@ -95,9 +95,9 @@ Summary: The function decodes JSON to an array.
 
 Introduced: 8.0
 
-OS: ios,android,linux,mac,windows
+OS: mac, windows, linux
 
-Platforms: mobile,desktop,server
+Platforms: desktop
 
 Parameters:
 pJSON (string): The UTF8 encoded JSON to decode.

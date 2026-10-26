@@ -668,8 +668,9 @@ user interface.
 LiveCode's Dictionary, the guides and Tom Perry's text dictionary
 (*Preferences > Dictionary*) are generated from their sources, the only
 copies Git keeps: the `.lcdoc` files of `docs/dictionary` and
-`docs/glossary`, the documentation comments of the LiveCode Builder
-modules in `libscript/src` and `engine/src`, the guides in `docs/guides`
+`docs/glossary` and mergJSON's (`mergjson/mergJSON.lcdoc`), the
+documentation comments of the LiveCode Builder modules in
+`libscript/src` and `engine/src`, the guides in `docs/guides`
 and `ide/Documentation/guides`, and the documentation of the extensions
 that OXT-Beyond installs and of the IDE library. For the
 [xTalk Suite extensions](#xtalk-suite-extensions) that documentation is
