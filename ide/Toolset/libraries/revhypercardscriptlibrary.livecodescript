@@ -4249,8 +4249,8 @@ private function _ShowHide pTokens, pIdx, pAt, pEnd
 end _ShowHide
 
 -- T12 and T8: HyperCard commands this engine does not have, to the
--- library's handlers; and "group" in a text style, which is not a style
--- here
+-- library's handlers; and "group" after a comma in a text style, which
+-- this engine would read as a group (an object) and not compile
 private function _LineCommands pLine
    local tIndent, tRest, a, b, c, d
    -- Each pattern is matched with the inside of strings and comments
@@ -4315,11 +4315,15 @@ private function _LineCommands pLine
       _Fire "T37 more forms HyperCard took"
       return tIndent & "hcPalette" && a
    end if
-   if _Match(pLine, "(?i)^(\s*set\s+(?:the\s+)?textstyle\b.*\bto\b.*?),\s*group\b(.*)$") then
+   -- (quoted, it is the style group, which this engine calls link: "set
+   -- textStyle of it to bold,group" makes the text bold and grouped, as
+   -- in HyperCard, and rule T32 then takes the style through hcTextStyle.
+   -- It was left out of the style, so the text was not grouped)
+   if _Match(pLine, "(?i)^(\s*set\s+(?:the\s+)?textstyle\b.*\bto\b.*?,\s*)group\b(.*)$") then
       put sMatch[1] into a
       put sMatch[2] into b
       _Fire "T12 HyperCard command to the library"
-      return a & b
+      return a & quote & "group" & quote & b
    end if
    return pLine
 end _LineCommands

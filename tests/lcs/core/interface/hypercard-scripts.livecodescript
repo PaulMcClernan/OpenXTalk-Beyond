@@ -338,6 +338,13 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T32: the rect of this card", line 2 of tScript is "  hcSetCardRect 0,0,512,342"
    TestAssert "T32: a text style of HyperCard's", line 3 of tScript is "  set the textStyle of fld 1 to hcTextStyle(" & q & "bold,condense" & q & ")"
    TestAssert "T32: a text style of this engine's: unchanged", line 4 of tScript is "  set the textStyle of fld 1 to bold"
+
+   -- group after a comma, which would not compile, is quoted (T12), where
+   -- it was left out of the style, and T32 then takes the style
+   put _Rewrite("on mouseUp", "  set textStyle of it to bold,group", "  set the textStyle of the foundChunk to bold, condense, group", "end mouseUp") into tScript
+   TestAssert "T12: group after a comma in a text style is kept, quoted", line 2 of tScript is "  set textStyle of it to hcTextStyle(bold," & q & "group" & q & ")"
+   TestAssert "T12: and with HyperCard's other styles", line 3 of tScript is "  set the textStyle of the foundChunk to hcTextStyle(bold, condense, " & q & "group" & q & ")"
+   TestAssert "T12: the handler compiles", _Compiles(tScript)
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsMoreForms
