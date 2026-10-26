@@ -1596,6 +1596,21 @@ MCStackHandle MCStack::getstack()
 	return GetHandle();
 }
 
+/* OXT-Beyond: whether the dynamic card's path, once a message takes it,
+ * passes through p_stack: the dynamic card's own stack, or a stack that
+ * one passes its messages to (its mainstack, the home stack). */
+static bool MCStackIsOnDynamicPath(MCStack *p_stack)
+{
+	MCObject *t_object = MCdynamiccard -> getparent();
+	while (t_object != nil && t_object -> gettype() == CT_STACK)
+	{
+		if (t_object == p_stack)
+			return true;
+		t_object = t_object -> getparent();
+	}
+	return false;
+}
+
 Exec_stat MCStack::handle(Handler_type htype, MCNameRef message, MCParameter *params, MCObject *passing_object)
 {
 	if (!opened)
@@ -1618,8 +1633,24 @@ Exec_stat MCStack::handle(Handler_type htype, MCNameRef message, MCParameter *pa
 	// object.
 	Exec_stat stat;
 	stat = ES_NOT_HANDLED;
+	bool t_dynamic_after;
+	t_dynamic_after = false;
 	if (!MCdynamicpath || MCdynamiccard->getparent() == this)
 		stat = handleself(htype, message, params);
+	else if (passing_object != nil && ishypertalkcompatible() && !MCStackIsOnDynamicPath(this))
+	{
+		// OXT-Beyond: in HyperCard the dynamic path came after the stack of
+		//   the static path: a handler that had gone to a card of another
+		//   stack still sent its messages through its own object, card,
+		//   background and stack first, and then through the card it had
+		//   gone to, that card's background and stack, and Home. So in a
+		//   stack whose hyperTalkCompatible is true, the message is handled
+		//   here first (the script, its behavior and the externals below),
+		//   and goes on to the dynamic card after (below), where it would
+		//   otherwise go on to the dynamic card instead of this stack.
+		stat = handleself(htype, message, params);
+		t_dynamic_after = true;
+	}
 	else if (passing_object != nil)
 	{
 		// MW-2011-06-20:  If dynamic path is enabled, and this stack is not the parent
@@ -1647,6 +1678,24 @@ Exec_stat MCStack::handle(Handler_type htype, MCNameRef message, MCParameter *pa
                 stat = ES_NORMAL;
             }
         }
+	}
+
+	// OXT-Beyond: then the dynamic path (see above), which goes on from the
+	//   dynamic card's stack to Home. If a handler here deleted the dynamic
+	//   card, the message goes on from this stack, with no dynamic path.
+	if (t_dynamic_after && (stat == ES_PASS || stat == ES_NOT_HANDLED))
+	{
+		MCdynamicpath = False;
+		if (MCdynamiccard.IsValid())
+		{
+			Exec_stat oldstat = stat;
+			stat = MCdynamiccard->handle(htype, message, params, this);
+			if (oldstat == ES_PASS && stat == ES_NOT_HANDLED)
+				stat = ES_PASS;
+			if (stat == ES_ERROR && !MCerrorptr)
+				MCerrorptr = this;
+			return stat;
+		}
 	}
 
 	// MW-2011-06-30: Cleanup of message path - this clause handles the transition

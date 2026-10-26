@@ -4,9 +4,11 @@ OXT-Beyond: the hyperTalkCompatible of a stack, which File > Import Stack
 sets for a stack imported from HyperCard. Off, every message goes where
 it always went; on, a background part's message reaches the card before
 the background, a handler can be called doMenu, and doMenu is a message
-before it runs, even while messages are locked, as in HyperCard; and
+before it runs, even while messages are locked, as in HyperCard;
 lockRecent keeps no card of the stack out of the recent cards that go
-back goes through. Each test checks the stack with the property off too.
+back goes through; and a handler that went to another stack still
+reaches its own stack's script before the dynamic path. Each test checks
+the stack with the property off too.
 */
 
 local sStack
@@ -206,6 +208,72 @@ on TestHyperTalkCompatibleGoBack
    end if
    _DeleteStack
 end TestHyperTalkCompatibleGoBack
+
+-- The test's stack, whose script logs "hcMine" and "hcBoth" and passes
+-- "hcBoth" on, and a second stack, whose script logs "hcTheirs" and
+-- "hcBoth", both with the dynamicPaths of a stack imported from
+-- HyperCard. Button "C" goes to the second stack and then sends the three
+-- messages: what the scripts logged, "no" and the message for one that
+-- found no handler, or empty if the button did not get to the second
+-- stack
+private function _AfterGoToOtherStack
+   global gHCOrder
+   local tOther, tLog, tScript, tMessage
+   put sStack & "Other" into tOther
+   set the dynamicPaths of stack sStack to true
+   put "on hcLog pWhat" & return & "global gHCOrder" & return \
+         & "put pWhat & comma after gHCOrder" & return & "end hcLog" into tLog
+   set the script of stack sStack to "on hcMine" & return & "hcLog " & quote & "mine" & quote & return \
+         & "end hcMine" & return & "on hcBoth" & return & "hcLog " & quote & "both here" & quote & return \
+         & "pass hcBoth" & return & "end hcBoth" & return & tLog
+   create invisible stack tOther
+   set the dynamicPaths of stack tOther to true
+   set the script of stack tOther to "on hcTheirs" & return & "hcLog " & quote & "theirs" & quote & return \
+         & "end hcTheirs" & return & "on hcBoth" & return & "hcLog " & quote & "both there" & quote & return \
+         & "end hcBoth" & return & tLog
+   put "on mouseUp pOther" & return & "global gHCOrder" & return & "local tError" & return & "go to stack pOther" & return \
+         & "if the short name of this stack is not pOther then exit mouseUp" & return into tScript
+   repeat for each item tMessage in "hcMine,hcTheirs,hcBoth"
+      put "try" & return & tMessage & return & "catch tError" & return \
+            & "put " & quote & "no" && tMessage & comma & quote & " after gHCOrder" & return \
+            & "end try" & return after tScript
+   end repeat
+   put "end mouseUp" after tScript
+   set the script of button "C" of stack sStack to tScript
+   put empty into gHCOrder
+   send "mouseUp" && quote & tOther & quote to button "C" of stack sStack
+   if there is a stack tOther then delete stack tOther
+   return gHCOrder
+end _AfterGoToOtherStack
+
+on TestHyperTalkCompatibleDynamicPathOff
+   local tOrder
+   _MakeStack false
+   put _AfterGoToOtherStack() into tOrder
+   if tOrder is empty then
+      TestSkip "off: the dynamic path after a go to another stack", "the go to the other stack did not get there"
+   else
+      TestAssert "off: after a go to another stack, a message takes the other stack's path instead of its own stack's", \
+            tOrder is "no hcMine,theirs,both there,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicPathOff
+
+-- HyperCard sent a message through the static path first (the object,
+-- its card, background and stack), and then through the dynamic path
+-- (the card a handler went to, its background and stack) to Home
+on TestHyperTalkCompatibleDynamicPath
+   local tOrder
+   _MakeStack true
+   put _AfterGoToOtherStack() into tOrder
+   if tOrder is empty then
+      TestSkip "on: the dynamic path after a go to another stack", "the go to the other stack did not get there"
+   else
+      TestAssert "on: after a go to another stack, a message reaches its own stack's script, then the other stack's", \
+            tOrder is "mine,theirs,both here,both there,"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDynamicPath
 
 on TestHyperTalkCompatibleSubstack
    _MakeStack true

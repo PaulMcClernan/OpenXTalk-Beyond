@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, four things are as they were in <HyperCard>, for the
+When it is true, five things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -57,6 +57,15 @@ When it is true, four things are as they were in <HyperCard>, for the
   <card|cards> out of the pictures of its Recent dialog. A <script>
   that sets the <lockRecent> to true, goes to a <card> and then goes
   back returns to the <card> it came from.
+- A <handler> that goes to a <card> of another <stack>, with the
+  <dynamicPaths> true, as File > Import Stack sets it, still sends its
+  messages through its own <stack> first: a message goes from the
+  <object> through its <card>, <background> and <stack>, then through
+  the <card> it went to, that <card|card's> <background> and <stack>,
+  and on to Home, as <HyperCard|HyperCard's> dynamic path did.
+  Otherwise the message goes on to the <card> it went to in place of
+  the <handler|handler's> own <stack>, so a <handler> in the
+  <stack|stack's> <script> is not found.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -78,9 +87,9 @@ are first compiled: a <script> already compiled keeps the <handler>
 names it was compiled with until it is set again.
 
 References: HCStack (property), HCAddressing (property),
-HCImportStat (property), lockMessages (property),
-lockRecent (property), openCard (message),
-closeCard (message), doMenu (command), import (command),
-stack (object), card (object), background (glossary),
-message path (glossary), recent cards (glossary),
-HyperCard (glossary), custom property (glossary)
+HCImportStat (property), lockMessages (property), lockRecent (property),
+dynamicPaths (property), go (command), openCard (message),
+closeCard (message), doMenu (command), import (command), stack (object),
+card (object), background (glossary), message path (glossary),
+recent cards (glossary), HyperCard (glossary),
+custom property (glossary)
