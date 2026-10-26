@@ -36,14 +36,19 @@ on preOpenCard
          put false into tStandaloneSettingsA["MacOSX x86-32"] -- turn this off (depreciated)
          set the hilite of btn "MacOSX x86-32" to false
          send mouseup to group "Flavors" of card "OS X" of this stack
-         set the tooltip of btn "MacOSX x86-32" to "Disabled, as lipo on this version of MacOS can't make 32-bit apps."
+         set the tooltip of btn "MacOSX x86-32" to "Disabled, as OXT-Beyond has no 32-bit Mac engine to build with."
          show btn "compatnote"
          hide btn "compat2"
          
       else
          enable btn "MacOS-IntelArmUniversal"
-         enable btn "MacOSX x86-32"
-         set the tooltip of btn "MacOSX x86-32" to "(OSX 10.9 to MacOS 10.14)"
+         -- OXT-Beyond: disabled here too, as there is no 32-bit Mac engine to
+         -- build with. A stack still set to 32-bit Intel keeps its setting,
+         -- which the box shows, and the standalone builder builds it for
+         -- 64-bit Intel Macs instead (revSBRemove32BitMacFromSettings in
+         -- revsblibrary)
+         disable btn "MacOSX x86-32"
+         set the tooltip of btn "MacOSX x86-32" to "Disabled, as OXT-Beyond has no 32-bit Mac engine to build with."
          hide btn "compatnote"
          show btn "compat2"
          
@@ -59,7 +64,10 @@ on preOpenCard
       -- we aren't on a mac, so it's pointless trying this (no lipo cmd)
       put "false" into isMac
       disable btn "MacOS-IntelArmUniversal"
-      disable btn "MacOSX x86-32" -- can still build for 32-bit macos
+      -- OXT-Beyond: nor is there a 32-bit Mac engine, as its tooltip says
+      -- here too
+      disable btn "MacOSX x86-32"
+      set the tooltip of btn "MacOSX x86-32" to "Disabled, as OXT-Beyond has no 32-bit Mac engine to build with."
       disable btn "MacOSX x86-64"
       set the hilite of btn "MacOS-IntelArmUniversal" to false
       set the hilite of btn "MacOSX x86-64" to false
