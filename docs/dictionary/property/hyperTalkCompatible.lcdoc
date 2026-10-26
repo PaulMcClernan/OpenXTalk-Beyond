@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, fifteen things are as they were in <HyperCard>, for the
+When it is true, sixteen things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -184,6 +184,18 @@ When it is true, fifteen things are as they were in <HyperCard>, for the
   or <button> in parentheses in the <script|scripts> it imports, unless
   it is one of another <card>, and every <stack> reads those as
   <HyperCard> did.
+- A <script> can call one of <HyperCard|HyperCard's> own messages, or
+  <send> it, where no <handler> takes it or the last one to take it
+  <pass|passes> it, and go on, as in <HyperCard>, where the message went
+  on to <HyperCard> at the end of the <message path> and ended there: a
+  <script> calls openCard to run its <card|card's> <openCard> <handler>
+  again, or sends <mouseUp> or <idle> to an <object> with no
+  <handler> for it. Otherwise it stops the <script> with can't find
+  handler. These are the messages <HyperCard> sent when something
+  happened: the open, close, new, delete and mouse messages, exitField,
+  idle, startUp, suspend, resume, suspendStack, resumeStack, sizeWindow
+  and moveWindow. One whose end <HyperCard> acted on, such as <tabKey>
+  or <help>, and one that is not <HyperCard|HyperCard's>, still stop it.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -215,7 +227,9 @@ round (function), statRound (function), seconds (function),
 convert (command), numToChar (function), charToNum (function),
 numToByte (function), script (property), behavior (property),
 ID (property), userLevel (property), preserveVariables (property),
-play (command), do (command), local (command),
+play (command), do (command), local (command), send (command),
+pass (control structure), mouseUp (message), idle (message),
+tabKey (message), help (message),
 go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),

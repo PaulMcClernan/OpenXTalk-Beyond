@@ -23,10 +23,12 @@ script can set the script of an object whose handler runs, which takes
 it at once while that handler goes on (unless it has script locals and
 the preserveVariables is true); the id of a card is "card id" and its
 number, which a script can go back to; the userLevel is at most 5,
-HyperCard's highest; and play plays the sound a field or a button names
+HyperCard's highest; play plays the sound a field or a button names
 with card or background before it, as HyperCard did, of another card too
-and in text run by do. Each test checks the stack with the property off
-too.
+and in text run by do; and a script can call or send one of HyperCard's
+own messages (openCard, mouseUp, idle...) that no handler takes, or that
+the last one passes, and go on. Each test checks the stack with the
+property off too.
 */
 
 local sStack
@@ -1321,3 +1323,59 @@ on TestHyperTalkCompatiblePlayField
    TestAssert "on: in a script too", line 7 of tValues is "played"
    _DeleteStack
 end TestHyperTalkCompatiblePlayField
+
+-- Run by do, one a line, 7 where the script went on and error where it
+-- stopped: openCard, which no handler takes; idle sent to button "C",
+-- and mouseUp to button "B", which have no handler for them; moveWindow,
+-- which the stack's handler passes, putting passed into gHCMoved;
+-- closeField, whose handler in the background stops with an error; a
+-- message no handler takes that is not HyperCard's; and help, whose end
+-- HyperCard acted on
+private function _MessageValues
+   local q
+   put quote into q
+   set the script of stack sStack to the script of stack sStack & return & "on moveWindow" & return \
+         & "global gHCMoved" & return & "put " & q & "passed" & q & " into gHCMoved" & return \
+         & "pass moveWindow" & return & "end moveWindow"
+   set the script of group "BG" of stack sStack to the script of group "BG" of stack sStack & return \
+         & "on closeField" & return & "throw " & q & "hcThrown" & q & return & "end closeField"
+   return _Values("openCard" & return & "send " & q & "idle" & q & " to me" & return \
+         & "send " & q & "mouseUp" & q & " to button " & q & "B" & q & " of stack " & q & sStack & q & return \
+         & "moveWindow" & return & "closeField" & return & "hcNoSuchMessage" & return & "help")
+end _MessageValues
+
+on TestHyperTalkCompatibleMessagesOff
+   global gHCMoved
+   local tValues
+   _MakeStack false
+   put empty into gHCMoved
+   put _MessageValues() into tValues
+   TestAssert "off: openCard with no handler for it stops the script", line 1 of tValues is "error"
+   TestAssert "off: and so does idle sent with none", line 2 of tValues is "error"
+   TestAssert "off: and mouseUp sent to a button with none", line 3 of tValues is "error"
+   TestAssert "off: and moveWindow that the stack's handler passes", line 4 of tValues is "error" and gHCMoved is "passed"
+   TestAssert "off: an error in a handler that takes one stops it", line 5 of tValues is "error"
+   TestAssert "off: a message no handler takes", line 6 of tValues is "error"
+   TestAssert "off: and help", line 7 of tValues is "error"
+   _DeleteStack
+end TestHyperTalkCompatibleMessagesOff
+
+-- HyperCard's own messages went on to HyperCard at the end of the message
+-- path, which did nothing with them, so a script could call openCard to
+-- run the card's openCard again, or send mouseUp to a button, whether or
+-- not a handler took it
+on TestHyperTalkCompatibleMessages
+   global gHCMoved
+   local tValues
+   _MakeStack true
+   put empty into gHCMoved
+   put _MessageValues() into tValues
+   TestAssert "on: openCard with no handler for it ends there", line 1 of tValues is 7
+   TestAssert "on: and so does idle sent with none", line 2 of tValues is 7
+   TestAssert "on: and mouseUp sent to a button with none", line 3 of tValues is 7
+   TestAssert "on: and moveWindow that the stack's handler passes", line 4 of tValues is 7 and gHCMoved is "passed"
+   TestAssert "on: an error in a handler that takes one still stops it", line 5 of tValues is "error"
+   TestAssert "on: a message no handler takes that is not HyperCard's still stops it", line 6 of tValues is "error"
+   TestAssert "on: and so does help, which HyperCard acted on", line 7 of tValues is "error"
+   _DeleteStack
+end TestHyperTalkCompatibleMessages
