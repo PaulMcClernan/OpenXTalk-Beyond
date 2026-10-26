@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, nine things are as they were in <HyperCard>, for the
+When it is true, ten things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -119,6 +119,19 @@ When it is true, nine things are as they were in <HyperCard>, for the
   where otherwise they are 3, 4 and -3. With a precision, which
   <HyperCard|HyperCard's> round did not take, <round> is the same in
   every <stack>.
+- The <seconds> <function>, and a date or time <convert|converted> to
+  or from seconds, count from midnight on January 1, 1904 in local
+  time, as <HyperCard|HyperCard's> seconds did, where otherwise they
+  count from midnight on January 1, 1970 in universal time (GMT):
+  convert 0 to dateItems gives 1904,1,1,0,0,0,6. A day is 86400 of them
+  in any time zone, so a date's seconds and 86400 more are the next
+  day's, across a change to or from daylight saving time too, where
+  otherwise they can fall an hour short of it, and the seconds mod 86400
+  are the time of day. Seconds that a <stack> kept from
+  <HyperCard>, and dates its <script|scripts> write as seconds (if the
+  seconds > 2643134400, the evening of October 3, 1987), are the dates
+  they were. The long seconds, which <HyperCard> did not have, are the
+  same in every <stack>.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -146,8 +159,8 @@ textStyle (property), textHeight (property), effective (keyword),
 linkColor (property), linkHiliteColor (property),
 linkVisitedColor (property), underlineLinks (property),
 show groups (command), hide groups (command),
-round (function), statRound (function),
-go (command), div (operator), mod (operator),
+round (function), statRound (function), seconds (function),
+convert (command), go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),
 field (object), background (glossary),

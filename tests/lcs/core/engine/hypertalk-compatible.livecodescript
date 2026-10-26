@@ -15,8 +15,10 @@ textHeight of a button, a field or a field's text with none of its own
 gives the one it uses, where it would give empty, HyperCard's own style
 names (condense, outline...) set a textStyle, and grouped text reads as
 group, not link, and is drawn as plain text, underlined only after show
-groups; and round takes a number halfway between two integers to the
-even one. Each test checks the stack with the property off too.
+groups; round takes a number halfway between two integers to the even
+one; and the seconds, and dates converted to and from seconds, count
+from 1904 in local time. Each test checks the stack with the property
+off too.
 */
 
 local sStack
@@ -813,3 +815,114 @@ on TestHyperTalkCompatibleGroupLook
    TestAssert "on: and with the stack's linkColor empty again, as plain text", tColourless is tPlain
    _DeleteStack
 end TestHyperTalkCompatibleGroupLook
+
+-- In a script of the test's stack: 0 and 2643134400 (eight in the evening
+-- of 3 October 1987, which the Star Trek stack counts down to) converted
+-- to dateItems, 2643148800 from seconds to dateItems, 10/4/1987, 1/1/1904
+-- and 1987,10,4,0,0,0,1 to seconds, whether 2643148800 is a date, the
+-- seconds less the long seconds, the seconds of 10/31/2026 with two days'
+-- more (86400 each) as a date, across the end of daylight saving time in
+-- the United States on 1 November, and the seconds of 10/31/2026 mod 86400
+private function _SecondsValues
+   return _Values("put 0 into tValue;convert tValue to dateItems" & return \
+         & "put 2643134400 into tValue;convert tValue to dateItems" & return \
+         & "put 2643148800 into tValue;convert tValue from seconds to dateItems" & return \
+         & "put" && quote & "10/4/1987" & quote && "into tValue;convert tValue to seconds" & return \
+         & "put" && quote & "1/1/1904" & quote && "into tValue;convert tValue to seconds" & return \
+         & "put" && quote & "1987,10,4,0,0,0,1" & quote && "into tValue;convert tValue to seconds" & return \
+         & "put 2643148800 is a date into tValue" & return \
+         & "put the seconds - trunc(the long seconds) into tValue" & return \
+         & "put" && quote & "10/31/2026" & quote && "into tValue;convert tValue to seconds;" \
+         & "add 2 * 86400 to tValue;convert tValue to short date" & return \
+         & "put" && quote & "10/31/2026" & quote && "into tValue;convert tValue to seconds;" \
+         & "put tValue mod 86400 into tValue")
+end _SecondsValues
+
+-- The local time's distance from universal time now, in seconds east of
+-- it, from the internet date
+private function _LocalOffset
+   local tZone, tOffset
+   put last word of the internet date into tZone
+   put char 2 to 3 of tZone * 3600 + char 4 to 5 of tZone * 60 into tOffset
+   if char 1 of tZone is "-" then return 0 - tOffset
+   return tOffset
+end _LocalOffset
+
+-- New York's time zone for the engine, where it can be set: the engine
+-- takes it from $TZ on Linux, if the system has it. True if it was; the
+-- caller gives $TZ back
+private function _SetNewYork
+   local tSummer, tWinter
+   if the platform is not "Linux" then return false
+   put "America/New_York" into $TZ
+   put "7/1/2026 12:00 PM" into tSummer
+   convert tSummer to internet date
+   put "1/1/2026 12:00 PM" into tWinter
+   convert tWinter to internet date
+   return last word of tSummer is "-0400" and last word of tWinter is "-0500"
+end _SetNewYork
+
+-- The engine counts the seconds from 1970 in universal time, so in New
+-- York a date's seconds are 4 or 5 hours' more than a multiple of 86400,
+-- and two days' more seconds from 10/31/2026 are an hour short of 11/2
+on TestHyperTalkCompatibleSecondsOff
+   local tValues, tZone
+   _MakeStack false
+   put _SecondsValues() into tValues
+   TestAssert "off: 0 seconds is in 1970, or on its eve west of Greenwich", \
+         item 1 to 3 of line 1 of tValues is "1970,1,1" or item 1 to 3 of line 1 of tValues is "1969,12,31"
+   TestAssert "off: 2643134400 seconds is not in 1987", item 1 of line 2 of tValues is not 1987
+   TestAssert "off: nor 2643148800 from seconds", item 1 of line 3 of tValues is not 1987
+   TestAssert "off: 10/4/1987 is 560304000 seconds, or the local time's distance from it", \
+         abs(line 4 of tValues - 560304000) <= 50400
+   TestAssert "off: 1/1/1904 is -2082844800 seconds, or the local time's distance from it", \
+         abs(line 5 of tValues + 2082844800) <= 50400
+   TestAssert "off: 1987,10,4,0,0,0,1 is the seconds of 10/4/1987", line 6 of tValues is line 4 of tValues
+   TestAssert "off: the seconds are the long seconds'", abs(line 8 of tValues) <= 1
+   put $TZ into tZone
+   if _SetNewYork() then
+      put _SecondsValues() into tValues
+      TestAssert "off, in New York: 10/4/1987 is 560318400 seconds", line 4 of tValues is 560318400
+      TestAssert "off, in New York: two days' more seconds from 10/31/2026 are 11/1/26", line 9 of tValues is "11/1/26"
+      TestAssert "off, in New York: the seconds of 10/31/2026 mod 86400 are 14400", line 10 of tValues is 14400
+   else
+      TestSkip "off, in New York's time zone", "the engine takes a time zone from $TZ only on Linux"
+   end if
+   put tZone into $TZ
+   _DeleteStack
+end TestHyperTalkCompatibleSecondsOff
+
+private command _CheckHyperTalkSeconds pValues, pWhere
+   TestAssert pWhere & ": 0 seconds is midnight on 1 January 1904, a Friday", line 1 of pValues is "1904,1,1,0,0,0,6"
+   TestAssert pWhere & ": 2643134400 seconds is 8 PM on 3 October 1987, a Saturday", line 2 of pValues is "1987,10,3,20,0,0,7"
+   TestAssert pWhere & ": 2643148800 from seconds is midnight on 4 October 1987", line 3 of pValues is "1987,10,4,0,0,0,1"
+   TestAssert pWhere & ": 10/4/1987 is 2643148800 seconds", line 4 of pValues is 2643148800
+   TestAssert pWhere & ": 1/1/1904 is 0 seconds", line 5 of pValues is 0
+   TestAssert pWhere & ": 1987,10,4,0,0,0,1 is 2643148800 seconds", line 6 of pValues is 2643148800
+   TestAssert pWhere & ": 2643148800 is a date", line 7 of pValues is true
+   TestAssert pWhere & ": the seconds are the long seconds' from 1904, in local time", \
+         abs(line 8 of pValues - 2082844800 - _LocalOffset()) <= 1
+   TestAssert pWhere & ": two days' more seconds from 10/31/2026 are 11/2/26", line 9 of pValues is "11/2/26"
+   TestAssert pWhere & ": the seconds of a date mod 86400 are 0", line 10 of pValues is 0
+end _CheckHyperTalkSeconds
+
+-- HyperCard counted its seconds from midnight on 1 January 1904 by the
+-- Macintosh's clock, which kept local time, so a day was 86400 of them in
+-- any time zone: a date's seconds with two days' more were the date two
+-- days on, across a change of daylight saving time too, and the same
+-- seconds were the same date and time wherever they were converted
+on TestHyperTalkCompatibleSeconds
+   local tValues, tZone
+   _MakeStack true
+   put _SecondsValues() into tValues
+   _CheckHyperTalkSeconds tValues, "on"
+   put $TZ into tZone
+   if _SetNewYork() then
+      put _SecondsValues() into tValues
+      _CheckHyperTalkSeconds tValues, "on, in New York"
+   else
+      TestSkip "on, in New York's time zone", "the engine takes a time zone from $TZ only on Linux"
+   end if
+   put tZone into $TZ
+   _DeleteStack
+end TestHyperTalkCompatibleSeconds

@@ -1023,6 +1023,101 @@ static bool convert_parse_time(MCExecContext &ctxt, const MCDateTimeLocale *p_lo
 	return false;
 }
 
+// OXT-Beyond: HyperCard's seconds. In a stack whose hyperTalkCompatible is
+//   true (MCExecContext::IsHyperTalkCompatible), the seconds, and a date
+//   converted to or from seconds, count from midnight on 1 January 1904 in
+//   local time, as HyperCard's did (it read the Macintosh's clock, which
+//   kept local time), where the engine's count from 1970 in universal time.
+//   A day is 86400 of them whatever the time zone, so a date's seconds and
+//   86400 more are the next day's, across a change to or from daylight
+//   saving time too, and the seconds mod 86400 are the time of day. They
+//   are counted here, where the system's own conversions would be limited
+//   to the years its time_t holds.
+
+// The days from 1 January 1904 to 1 January 1970
+#define kMCDateHyperTalkEpochDays 24107
+
+static int64_t hypertalk_floor_div(int64_t p_numerator, int64_t p_denominator)
+{
+	int64_t t_quotient = p_numerator / p_denominator;
+	if ((p_numerator % p_denominator != 0) && ((p_numerator < 0) != (p_denominator < 0)))
+		t_quotient -= 1;
+	return t_quotient;
+}
+
+// The days from 1 January 1904 to the date (Howard Hinnant's
+// days_from_civil, from 1970 there, in the proleptic Gregorian calendar);
+// the month is 1 to 12
+static int64_t hypertalk_days_from_civil(int64_t p_year, int64_t p_month, int64_t p_day)
+{
+	p_year -= p_month <= 2 ? 1 : 0;
+	int64_t t_era = hypertalk_floor_div(p_year, 400);
+	int64_t t_year_of_era = p_year - t_era * 400;
+	int64_t t_day_of_year = (153 * (p_month > 2 ? p_month - 3 : p_month + 9) + 2) / 5 + p_day - 1;
+	int64_t t_day_of_era = t_year_of_era * 365 + t_year_of_era / 4 - t_year_of_era / 100 + t_day_of_year;
+	return t_era * 146097 + t_day_of_era - 719468 + kMCDateHyperTalkEpochDays;
+}
+
+// The date of the day p_days after 1 January 1904 (civil_from_days)
+static void hypertalk_civil_from_days(int64_t p_days, MCDateTime& x_datetime)
+{
+	int64_t t_days = p_days - kMCDateHyperTalkEpochDays + 719468;
+	int64_t t_era = hypertalk_floor_div(t_days, 146097);
+	int64_t t_day_of_era = t_days - t_era * 146097;
+	int64_t t_year_of_era = (t_day_of_era - t_day_of_era / 1460 + t_day_of_era / 36524 - t_day_of_era / 146096) / 365;
+	int64_t t_day_of_year = t_day_of_era - (365 * t_year_of_era + t_year_of_era / 4 - t_year_of_era / 100);
+	int64_t t_month_index = (5 * t_day_of_year + 2) / 153;
+	x_datetime . day = (int4)(t_day_of_year - (153 * t_month_index + 2) / 5 + 1);
+	x_datetime . month = (int4)(t_month_index < 10 ? t_month_index + 3 : t_month_index - 9);
+	x_datetime . year = (int4)(t_year_of_era + t_era * 400 + (x_datetime . month <= 2 ? 1 : 0));
+}
+
+// The date and time, in universal time as the conversions keep it, of
+// HyperCard's seconds p_seconds, to the nearest second; false where the
+// system cannot convert it
+static bool hypertalk_seconds_to_datetime(double p_seconds, MCDateTime& r_datetime)
+{
+	// About 31 million years either way, as on Windows (w32date.cpp)
+	if (!(fabs(p_seconds) < 1e15))
+		return false;
+
+	int64_t t_seconds = (int64_t)floor(p_seconds + 0.5);
+	int64_t t_days = hypertalk_floor_div(t_seconds, 86400);
+	int64_t t_time = t_seconds - t_days * 86400;
+
+	MCDateTime t_datetime;
+	hypertalk_civil_from_days(t_days, t_datetime);
+	t_datetime . hour = (int4)(t_time / 3600);
+	t_datetime . minute = (int4)(t_time / 60 % 60);
+	t_datetime . second = (int4)(t_time % 60);
+	t_datetime . bias = 0;
+
+	if (!MCS_datetimetouniversal(t_datetime))
+		return false;
+
+	r_datetime = t_datetime;
+	return true;
+}
+
+// HyperCard's seconds of a date and time in universal time
+static bool hypertalk_seconds_from_datetime(MCDateTime p_datetime, double& r_seconds)
+{
+	if (!MCS_datetimetolocal(p_datetime))
+		return false;
+
+	r_seconds = (double)hypertalk_days_from_civil(p_datetime . year, p_datetime . month, p_datetime . day) * 86400.0 +
+			p_datetime . hour * 3600 + p_datetime . minute * 60 + p_datetime . second;
+	return true;
+}
+
+bool MCD_hypertalk_seconds(double p_seconds, double& r_seconds)
+{
+	MCDateTime t_datetime;
+	if (!MCS_secondstodatetime(p_seconds, t_datetime))
+		return false;
+	return hypertalk_seconds_from_datetime(t_datetime, r_seconds);
+}
+
 bool MCD_convert_to_datetime(MCExecContext &ctxt, MCValueRef p_input, Convert_form p_primary_from, Convert_form p_secondary_from, MCDateTime &r_datetime)
 {
     bool t_success = true;
@@ -1044,7 +1139,11 @@ bool MCD_convert_to_datetime(MCExecContext &ctxt, MCValueRef p_input, Convert_fo
 			if (!ctxt.ConvertToReal(p_input, t_seconds))
 				return false;
 
-			t_success = MCS_secondstodatetime(t_seconds, t_datetime);
+			// OXT-Beyond: HyperCard's seconds in a HyperCard stack
+			if (ctxt.IsHyperTalkCompatible())
+				t_success = hypertalk_seconds_to_datetime(t_seconds, t_datetime);
+			else
+				t_success = MCS_secondstodatetime(t_seconds, t_datetime);
 		}
 		else if (p_primary_from == CF_DATEITEMS)
 		{
@@ -1186,7 +1285,12 @@ bool MCD_convert_to_datetime(MCExecContext &ctxt, MCValueRef p_input, Convert_fo
 		if (t_seconds < SECONDS_MIN || t_seconds > SECONDS_MAX)
 			return false;
         
-		t_success = MCS_secondstodatetime(t_seconds, t_datetime);
+		// OXT-Beyond: HyperCard's seconds in a HyperCard stack, the same
+		//   numbers being dates
+		if (ctxt.IsHyperTalkCompatible())
+			t_success = hypertalk_seconds_to_datetime(t_seconds, t_datetime);
+		else
+			t_success = MCS_secondstodatetime(t_seconds, t_datetime);
 	}
 	else if (!MCValueIsEmpty(p_input))
 	{
@@ -1317,7 +1421,11 @@ bool MCD_convert_from_datetime(MCExecContext &ctxt, MCDateTime p_datetime, Conve
 	{
 		double t_seconds;
         
-		t_success = MCS_datetimetoseconds(p_datetime, t_seconds);
+		// OXT-Beyond: HyperCard's seconds in a HyperCard stack
+		if (ctxt.IsHyperTalkCompatible())
+			t_success = hypertalk_seconds_from_datetime(p_datetime, t_seconds);
+		else
+			t_success = MCS_datetimetoseconds(p_datetime, t_seconds);
         
 		if (!t_success)
 			return False;

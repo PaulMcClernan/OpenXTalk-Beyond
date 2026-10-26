@@ -30,10 +30,14 @@ of seconds since the start of the <eon>.
 When used with the wait or <send> <command|commands>, the <seconds>
 <keyword> designates a time period measured in seconds.
 
+In a <stack> whose <hyperTalkCompatible> is true, a date
+<convert|converted> to or from seconds counts them from midnight,
+January 1, 1904 in local time, as <HyperCard> did.
+
 References: wait (command), convert (command), send (command),
 seconds (function), command (glossary), keyword (glossary),
 eon (glossary), ticks (keyword), second (keyword), milliseconds (keyword),
-number (property)
+number (property), hyperTalkCompatible (property), HyperCard (glossary)
 
 Tags: math
 
