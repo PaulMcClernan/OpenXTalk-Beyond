@@ -49,11 +49,42 @@ There are two modes:
   those handlers never ran, and runs from before then are not
   comparable with runs after.)
 
+  Each visit and each click is a message of its own, as a person does
+  one thing at a time. The engine starts each one afresh, as it starts
+  each of a person's clicks: no screen or messages left locked by the
+  click before, and no dynamic path left from it (after a `go`, the
+  rest of that handler's messages go on to the card it went to as well
+  as through its own stack). The stack's own `idle` and timer messages
+  run in between. Runs from before then made every visit and click in
+  one handler, so they are not comparable with runs after: there, a
+  button's `go home` that opened another stack once left the stack's
+  own handlers unanswered for the rest of the tour, as the engine then
+  sent the messages of a handler that had gone to another stack to that
+  stack in place of its own (pull request 252 changed that).
+
 Without a display, `click at`, paint tools and anything that waits for a
 person are not representative. Count them, but don't fix them because a
 headless run reported them. A modal window, which would wait for a person
 until the stack timed out, is closed a quarter of a second after it opens,
 as its Cancel button would close it, and counted in the report.
+
+`--hypertalk-order` sets each stack's `hyperTalkCompatible` before its
+scripts are fixed, as File > Import Stack does unless File > Import
+Stack > HyperCard Message Order is turned off, so the stack runs with
+HyperCard's rules: its message order and dynamic path, its arithmetic,
+its text properties and styles, its `round` and its seconds. Use it for
+every sweep with an engine that has the property (0.2.7-rc.6.3 and
+later), since that is how the stacks are imported, and compare a run
+with it only with another run with it.
+
+`--image` names the disk image that `extract.py` read the stacks from.
+A stack then finds the other stacks of its application on that image, as
+one that File > Import Stack imported from the image does: a `go` or a
+`start using` that names a stack opens the one in the same folder on the
+image, or else the first one of that name anywhere on it. Without
+`--image`, no such stack is found, because the stacks folder names its
+files by number. Compare a run with `--image` only with another run with
+it.
 
 `--lib` loads the HyperCard libraries from another folder, such as a
 released build's `Toolset/libraries`. That lets you compare the released
@@ -97,6 +128,12 @@ each, the stacks with no error at all, and the kinds of error that came
 more or less often in the second. A handler that compiles now runs, so it
 can reach an XCMD or XFCN the stack does not have: count those, but
 they are not regressions.
+
+How long a stack takes depends on how busy the machine is, so a stack
+that comes close to the time limit can time out in one run and not in
+another, and its errors with it. Compare runs made with the same
+`--jobs` on the same machine, and read a change of a few timed-out
+stacks, and of their errors, as possibly that.
 
 ## The logs
 
