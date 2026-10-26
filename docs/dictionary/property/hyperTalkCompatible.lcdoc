@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, thirteen things are as they were in <HyperCard>, for the
+When it is true, fourteen things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -161,6 +161,13 @@ When it is true, thirteen things are as they were in <HyperCard>, for the
   <card> whose short ID is 3058. The short ID of a <card>, and the
   <ID> of a <background>, a <button> or a <field>, are numbers either
   way, as they were in <HyperCard>.
+- The <userLevel> is at most 5, <HyperCard|HyperCard's> highest level
+  (scripting), where otherwise it is 8 until a <script> sets it: a
+  <stack> that tests whether it is 5 (if the userLevel is 5 then pass
+  doMenu), or names a <button> by it ("UserLevel" && the userLevel),
+  finds what it found in <HyperCard> at that level. One set to 5 or less
+  is as it was set, and one set above 5 is kept as it was set, as a
+  <stack> without the <property> reads it.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -191,7 +198,7 @@ show groups (command), hide groups (command),
 round (function), statRound (function), seconds (function),
 convert (command), numToChar (function), charToNum (function),
 numToByte (function), script (property), behavior (property),
-ID (property),
+ID (property), userLevel (property),
 go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),

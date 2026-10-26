@@ -20,9 +20,10 @@ one; the seconds, and dates converted to and from seconds, count from
 1904 in local time; numToChar and charToNum number the characters as
 HyperCard did, by the Mac's character set with the return as 13; a
 script can set the script of an object whose handler runs, which takes
-it at once while that handler goes on; and the id of a card is "card id"
-and its number, which a script can go back to. Each test checks the
-stack with the property off too.
+it at once while that handler goes on; the id of a card is "card id"
+and its number, which a script can go back to; and the userLevel is at
+most 5, HyperCard's highest. Each test checks the stack with the
+property off too.
 */
 
 local sStack
@@ -1155,3 +1156,36 @@ on TestHyperTalkCompatibleCardId
    TestAssert "on: a handler that goes to a card's id goes back to it", _GoBackToId() is 1
    _DeleteStack
 end TestHyperTalkCompatibleCardId
+
+-- The userLevel as the stack's script reads it, then after it sets it to
+-- 3, and to 8, and whether it is 5 then, one a line
+private function _UserLevelValues
+   return _Values("put the userLevel into tValue" & return \
+         & "set the userLevel to 3; put the userLevel into tValue" & return \
+         & "set the userLevel to 8; put the userLevel into tValue" & return \
+         & "put the userLevel is 5 into tValue")
+end _UserLevelValues
+
+on TestHyperTalkCompatibleUserLevelOff
+   local tValues
+   _MakeStack false
+   put _UserLevelValues() into tValues
+   TestAssert "off: the userLevel is 8", line 1 of tValues is 8
+   TestAssert "off: as a script sets it", line 2 of tValues is 3 and line 3 of tValues is 8
+   TestAssert "off: so it is not 5", line 4 of tValues is "false"
+   _DeleteStack
+end TestHyperTalkCompatibleUserLevelOff
+
+-- HyperCard's userLevel went from 1 (browsing) to 5 (scripting), and its
+-- stacks test for 5 ("if the userLevel is 5 then pass doMenu") or name a
+-- button by it ("UserLevel" && the userLevel)
+on TestHyperTalkCompatibleUserLevel
+   local tValues
+   _MakeStack true
+   put _UserLevelValues() into tValues
+   TestAssert "on: the userLevel is HyperCard's highest, 5", line 1 of tValues is 5
+   TestAssert "on: one set below it is as it is set", line 2 of tValues is 3
+   TestAssert "on: one set above it reads as 5", line 3 of tValues is 5 and line 4 of tValues is "true"
+   TestAssert "on: and is kept as it was set, as a stack without the property reads it", the userLevel is 8
+   _DeleteStack
+end TestHyperTalkCompatibleUserLevel

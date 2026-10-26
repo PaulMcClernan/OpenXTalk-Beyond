@@ -26,8 +26,17 @@ A handler can set the <userLevel> to any number without causing a
 <error|script error>, but the <behavior> of the <application> is not
 changed. 
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import
+Stack sets it for a <stack> imported from <HyperCard>, the <userLevel>
+is at most 5, <HyperCard|HyperCard's> highest level (scripting), so a
+<script> there that checks whether it is 5, or names a <button> by it,
+finds what it found in <HyperCard> at that level. A <userLevel> set
+above 5 is kept as it was set, and a <script> of any other <stack>
+reads it so.
+
 References: edit (command), choose (command), stacks (function),
 property (glossary), OpenXTalk (glossary), behavior (glossary),
 value (glossary), error (glossary), import (glossary),
-HyperCard (glossary), application (glossary), cantModify (property)
+HyperCard (glossary), application (glossary), cantModify (property),
+hyperTalkCompatible (property)
 

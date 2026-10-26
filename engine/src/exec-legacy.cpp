@@ -650,9 +650,18 @@ void MCLegacySetRemapColor(MCExecContext& ctxt, bool p_value)
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// OXT-Beyond: HyperCard's userLevel went from 1 (browsing) to 5
+//   (scripting), and its stacks test for 5 ("if the userLevel is 5 then
+//   pass doMenu") or name a button by it ("UserLevel" && the userLevel),
+//   which this engine's 8, a level no HyperCard had, made false or no such
+//   button. In a HyperCard stack (MCExecContext::IsHyperTalkCompatible) a
+//   userLevel above 5 reads as 5, HyperCard's highest; it is kept as it
+//   was set, which every other stack reads
 void MCLegacyGetUserLevel(MCExecContext& ctxt, uinteger_t& r_value)
 {
 	r_value = MCuserlevel;
+	if (r_value > 5 && ctxt . IsHyperTalkCompatible())
+		r_value = 5;
 }
 
 void MCLegacySetUserLevel(MCExecContext& ctxt, uinteger_t p_value)
