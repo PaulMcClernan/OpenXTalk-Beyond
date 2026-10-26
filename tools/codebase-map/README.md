@@ -29,12 +29,12 @@ out, and the page says which.
 With the dumps, `build_map.py` also writes every object script of the
 binary stacks as a file of its own, `out/stack-scripts/<stack
 file>.bst/scripts/<name>.livecodescript`, and all of them in
-`out/stack-scripts.zip`, to read and search in an editor. The layout and
-the names (`stack_<stack>`, `stack_<stack>_<type>_id_<id>`) are those of
-Brian Milby's [BST](https://github.com/Milby-Computer/hxt-bst), and a
-header in each file names its stack file and object. The site puts them
-beside the page, and the page links each stack's scripts from its impact
-view. `--engine-label` names the release whose engine made the dumps.
+`out/stack-scripts.zip`: the same files the repository keeps in
+[stack-scripts/](../../stack-scripts/README.md), made by the same code
+([tools/oxt/stack_scripts.py](../oxt/stack_scripts.py)). The site puts
+them beside the page, and the page links each stack's scripts from its
+impact view. The map leaves `stack-scripts/` out of its own count of
+scripts, since those are the binary stacks' scripts again. `--engine-label` names the release whose engine made the dumps.
 
 ## Making it on your own computer
 

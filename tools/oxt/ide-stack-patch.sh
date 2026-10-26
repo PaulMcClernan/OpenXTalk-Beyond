@@ -11,7 +11,8 @@
 # of a CI run). --check only reports whether each patch is applied.
 #
 # Run it again after changing a patch: patches that are applied already are
-# left alone. Do not use a Windows engine on a PC where OXT-Beyond or
+# left alone. Without --check it then brings stack-scripts/ up to date with
+# the stacks (tools/oxt/stack-scripts.sh); commit that with the patch. Do not use a Windows engine on a PC where OXT-Beyond or
 # LiveCode is running: a second Windows engine hands its command line to
 # the running one (engine/src/w32relaunch.cpp) instead of running it.
 set -eu
@@ -46,4 +47,8 @@ fi
 status=0
 OXT_PATCH_ROOT="$repo/ide" OXT_PATCH_CHECK="$check" \
     $timeout_cmd "$engine" -ui "$here/ide-stack-patch.livecodescript" || status=$?
+# A patched script must show in stack-scripts/ too (tools/oxt/stack-scripts.sh)
+if [ $status -eq 0 ] && [ -z "$check" ]; then
+    "$here/stack-scripts.sh" "$engine" || status=$?
+fi
 exit $status
