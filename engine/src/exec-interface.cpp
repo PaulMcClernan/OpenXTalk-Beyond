@@ -2557,6 +2557,8 @@ void MCInterfaceExecMoveObjectAlong(MCExecContext& ctxt, MCObject *p_target, MCP
 void MCInterfaceExecHideGroups(MCExecContext& ctxt)
 {
 	MClinkatts.underline = False;
+	// OXT-Beyond: and HyperCard's grouped text (MCBlock::draw)
+	MChypertalkshowgroups = False;
 	
 	// MW-2011-08-17: [[ Redraw ]] We've changed a global property that could
 	//   affect the display of all stacks.
@@ -2628,6 +2630,8 @@ void MCInterfaceExecHideTaskBar(MCExecContext& ctxt)
 void MCInterfaceExecShowGroups(MCExecContext& ctxt)
 {
 	MClinkatts.underline = True;
+	// OXT-Beyond: and HyperCard's grouped text (MCBlock::draw)
+	MChypertalkshowgroups = True;
 
 	// MW-2011-08-17: [[ Redraw ]] We've changed a global property that could
 	//   affect the display of all stacks.

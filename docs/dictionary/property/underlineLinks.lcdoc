@@ -47,6 +47,12 @@ true, <grouped text> in the <stack> is underlined regardless of the
 <grouped text> in the <stack> is not underlined regardless of the
 <global> setting.
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import
+Stack sets it for a <stack> from <HyperCard>, and whose
+<underlineLinks> is empty, <grouped text> is underlined only after
+<show groups>, as in <HyperCard>, which started without it, and not
+after <hide groups>, whatever the <global> <underlineLinks>.
+
 Text with its textStyle set to "link" is treated specially by the
 <clickText>, <clickChunk>, <mouseText>, and <mouseChunk>
 <function|functions>: a style run of <grouped text> is treated as a
@@ -64,7 +70,8 @@ References: show groups (command), global (command),
 clickChunk (function), mouseChunk (function), clickText (function),
 mouseText (function), property (glossary), grouped text (glossary),
 function (glossary), hypertext (glossary), word (keyword),
-default (keyword), stack (object)
+default (keyword), stack (object), hide groups (command),
+hyperTalkCompatible (property), HyperCard (glossary)
 
 Tags: ui
 

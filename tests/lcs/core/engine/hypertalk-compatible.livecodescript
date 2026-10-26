@@ -14,8 +14,9 @@ stopping the script; reading the textFont, textSize, textStyle or
 textHeight of a button, a field or a field's text with none of its own
 gives the one it uses, where it would give empty, HyperCard's own style
 names (condense, outline...) set a textStyle, and grouped text reads as
-group, not link; and round takes a number halfway between two integers
-to the even one. Each test checks the stack with the property off too.
+group, not link, and is drawn as plain text, underlined only after show
+groups; and round takes a number halfway between two integers to the
+even one. Each test checks the stack with the property off too.
 */
 
 local sStack
@@ -738,3 +739,77 @@ on TestHyperTalkCompatibleGroupStyle
    TestAssert "on: the effective textStyle is group", line 6 of tValues is "group"
    _DeleteStack
 end TestHyperTalkCompatibleGroupStyle
+
+-- A locked field "L" on the test's stack whose second word has the style
+-- pStyle, as it is drawn: how many pixels of its snapshot are blue, as
+-- link text is drawn here, and how many are dark, as text in the field's
+-- own colour is, as "blue,dark"
+private function _Look pStyle
+   local tData, tBlue, tDark, r, g, b, i
+   set the defaultStack to sStack
+   if there is not a field "L" then
+      create field "L"
+      set the rect of field "L" to 0,0,200,40
+      set the lockText of field "L" to true
+      put "one two three" into field "L"
+   end if
+   set the textStyle of word 2 of field "L" to pStyle
+   import snapshot from field "L"
+   put the imageData of last image into tData
+   delete last image
+   put 0 into tBlue
+   put 0 into tDark
+   repeat with i = 0 to (the number of bytes of tData) div 4 - 1
+      put byteToNum(byte i * 4 + 2 of tData) into r
+      put byteToNum(byte i * 4 + 3 of tData) into g
+      put byteToNum(byte i * 4 + 4 of tData) into b
+      if b > r + 60 and b > g + 60 then add 1 to tBlue
+      if r < 100 and g < 100 and b < 100 then add 1 to tDark
+   end repeat
+   return tBlue & comma & tDark
+end _Look
+
+-- Link text is drawn in the link colour, and hide groups takes its
+-- underline off (the global underlineLinks, given back after)
+on TestHyperTalkCompatibleGroupLookOff
+   local tUnderlineLinks, tPlain, tShown, tHidden
+   put the underlineLinks into tUnderlineLinks
+   _MakeStack false
+   put _Look("plain") into tPlain
+   show groups
+   put _Look("link") into tShown
+   hide groups
+   put _Look("link") into tHidden
+   set the underlineLinks to tUnderlineLinks
+   TestAssert "off: link text is drawn in the link colour", item 1 of tShown > item 1 of tPlain
+   TestAssert "off: and after hide groups", item 1 of tHidden > item 1 of tPlain
+   TestAssert "off: hide groups takes the underline off", tHidden is not tShown
+   _DeleteStack
+end TestHyperTalkCompatibleGroupLookOff
+
+-- HyperCard drew grouped text as the text it was, in its own colour, and
+-- underlined it only after show groups, which it started without; a
+-- stack with a link colour of its own draws its link text in it
+on TestHyperTalkCompatibleGroupLook
+   local tUnderlineLinks, tPlain, tUnderlined, tGroup, tShown, tHidden, tColoured, tColourless
+   put the underlineLinks into tUnderlineLinks
+   _MakeStack true
+   put _Look("plain") into tPlain
+   put _Look("underline") into tUnderlined
+   put _Look("group") into tGroup
+   show groups
+   put _Look("group") into tShown
+   hide groups
+   put _Look("group") into tHidden
+   set the linkColor of stack sStack to "0,0,255"
+   put _Look("group") into tColoured
+   set the linkColor of stack sStack to empty
+   put _Look("group") into tColourless
+   set the underlineLinks to tUnderlineLinks
+   TestAssert "on: grouped text is drawn as plain text", tGroup is tPlain
+   TestAssert "on: show groups underlines it", tShown is tUnderlined
+   TestAssert "on: hide groups takes the underline off", tHidden is tPlain
+   TestAssert "on: in a stack with a linkColor of its own, it is drawn in that colour", item 1 of tColoured > item 1 of tPlain
+   TestAssert "on: and with the stack's linkColor empty again, as plain text", tColourless is tPlain
+   _DeleteStack
+end TestHyperTalkCompatibleGroupLook

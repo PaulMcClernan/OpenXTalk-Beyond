@@ -31,12 +31,19 @@ The <show groups> <command> sets the <global> <underlineLinks>
 <property>, so if a <stack|stack's> <underlineLinks> is false, <show
 groups> does not display the underlining in that <stack>.
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import
+Stack sets it for a <stack> from <HyperCard>, <grouped text> is drawn
+as <HyperCard> drew it, as plain text, until <show groups> underlines
+it, as <HyperCard|HyperCard's> show groups did, unless the <stack> has
+an <underlineLinks> of its own.
+
 References: show (command), hide groups (command), show menubar (command),
 global (command), clickChunk (function), mouseChunk (function),
 clickText (function), mouseText (function), property (glossary),
 grouped text (glossary), command (glossary), function (glossary),
 hypertext (glossary), link (keyword), word (keyword), stack (object),
-underlineLinks (property)
+underlineLinks (property), hyperTalkCompatible (property),
+HyperCard (glossary)
 
 Tags: ui
 

@@ -50,11 +50,20 @@ in that <stack> is shown with the <stack|stack's> <linkColor>
 <property>, regardless of the <global> setting. <property>, regardless
 of the <global> setting.
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import
+Stack sets it for a <stack> from <HyperCard>, <grouped text> is drawn
+in its own colour, as <HyperCard> drew it, unless the <stack> has a
+<linkColor>, <linkHiliteColor>, <linkVisitedColor> or <underlineLinks>
+of its own: the <global> <property> is not used there.
+
 References: global (command), colorNames (function), property (glossary),
 grouped text (glossary), hexadecimal (glossary), integer (glossary),
 browser (glossary), color reference (glossary), link (keyword),
 default (keyword), stack (object), backgroundColor (property),
-colors (property), visited (property), foregroundColor (property)
+colors (property), visited (property), foregroundColor (property),
+linkHiliteColor (property), linkVisitedColor (property),
+underlineLinks (property), hyperTalkCompatible (property),
+HyperCard (glossary)
 
 Tags: ui
 
