@@ -1797,7 +1797,7 @@ on TestHyperCardScriptsStartupExternals
    -- the stack's windows (a headless engine has none), looked at by a
    -- hidden stack's timer that stops when the cursor is put back or the
    -- stack closes or goes
-   local tStack, q, tExpected, tError
+   local tStack, tGone, tCursorScript, q, tExpected, tError
    global gHCScriptsTest, gHCScriptsSeen
    put quote into q
    if there is a stack "Answer Dialog" then
@@ -1860,11 +1860,12 @@ on TestHyperCardScriptsStartupExternals
          "  put " & q & "|" & q & " & the result after gHCScriptsTest", \
          "end mouseUp")
    create button "Cursor"
-   set the script of button "Cursor" to _Lines("on mouseUp pCursor", "  global gHCScriptsTest", \
+   put _Lines("on mouseUp pCursor", "  global gHCScriptsTest", \
          "  put the defaultCursor into tBefore", \
          "  IdleCursor pCursor", \
          "  put the result & (the defaultCursor is tBefore) into gHCScriptsTest", \
-         "end mouseUp")
+         "end mouseUp") into tCursorScript
+   set the script of button "Cursor" to tCursorScript
    unlock messages
    get revHyperCardFixScripts(tStack)
 
@@ -1902,13 +1903,23 @@ on TestHyperCardScriptsStartupExternals
    wait 300 milliseconds with messages
    TestAssert "IdleCursor: the stack closed, the watch stops", tError is empty and "hcIdleCursorWatch" is not in the pendingMessages
    -- (deleted with messages locked, as a stack that goes when it closes is,
-   -- which no handler of the library sees)
-   open stack tStack
-   send "mouseUp" && q & "cross" & q to button "Cursor" of stack tStack
+   -- which no handler of the library sees; a stack of its own, open as it
+   -- is made, as a stack closed here may not open again in a headless
+   -- engine)
+   put tStack & "Gone" into tGone
+   lock messages
+   create invisible stack tGone
+   set the defaultStack to tGone
+   create button "Cursor"
+   set the script of button "Cursor" to tCursorScript
+   unlock messages
+   get revHyperCardFixScripts(tGone)
+   send "mouseUp" && q & "cross" & q to button "Cursor" of stack tGone
    put "hcIdleCursorWatch" is in the pendingMessages into tExpected
-   _Close tStack
+   _Close tGone
    wait 300 milliseconds with messages
    TestAssert "IdleCursor: the stack deleted, the watch stops", tExpected and "hcIdleCursorWatch" is not in the pendingMessages
+   _Close tStack
    _Close "revHyperCardIdleCursor"
    _Close "Answer Dialog"
 end TestHyperCardScriptsStartupExternals
