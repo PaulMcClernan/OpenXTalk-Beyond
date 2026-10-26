@@ -39,7 +39,7 @@ command exBuild pFolder
          "Change Color|Change Color|Click a letter to change the color (Shift-click to reset).|palette|program" & return & \
          "Move Around|Move Around|Click a letter to move it around the card.|move|program" & return & \
          "Jump|Jump|Click a letter to make it jump.|arrow-big-up|program" & return & \
-         "Spin|Spin|Click a letter to make it spin.|rotate-cw|program" & return & \
+         "Spin|Spin|Click a letter to make an image of it, then click the image to make it spin.|rotate-cw|program" & return & \
          "Popup|Popup|Click a letter to pop up in another spot.|sparkles|program" & return & \
          "Dance Crazy|Dance Crazy|Click a letter to make it dance crazy.|music|program" & return & \
          "Keep Score|Keep Score|Drag a letter to the red ball to score points.|trophy|program" & return & \
