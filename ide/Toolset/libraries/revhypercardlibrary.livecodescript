@@ -1848,6 +1848,93 @@ end hcTextStyle
 on hcSetPaintText pProperty, pValue
 end hcSetPaintText
 
+-- sort the cards of a background (rule T54): HyperCard sorted the cards
+-- of one background among the places they had and left the stack's
+-- other cards where they were. This engine sorts the cards of a stack,
+-- or its marked cards, and refuses a background, so the rule writes
+-- "hcSortBegin the long id of <the background>, <marked>; sort marked
+-- cards ... by ...; hcSortEnd": hcSortBegin marks the background's cards
+-- of the stack the sort sorts (with pMarked, those of them that are
+-- marked) and keeps its order and marks, the engine's sort puts the
+-- marked cards in their order, by the script's own expression, and
+-- hcSortEnd puts them in the places the background's cards had, the
+-- other cards where they were, and the marks as they were.
+-- The engine's sort takes the cards from the current card round, so
+-- hcSortBegin starts it on the first card: cards whose keys are equal
+-- keep the stack's order. It ends on the first card, with closeCard and
+-- openCard if that is another card (messages unlocked), and so does
+-- this; the screen and messages stay locked from hcSortBegin to
+-- hcSortEnd, so no other card sees a message, and no window comes
+-- forward (the stack's currentCard, not "go")
+local sHCSort
+
+on hcSortBegin pBackground, pMarked
+   local tStack, tBackground, tId
+   put the long id of stack (the defaultStack) into tStack
+   put the short id of pBackground into tBackground
+   put empty into sHCSort
+   put tStack into sHCSort["stack"]
+   put the cardIDs of tStack into sHCSort["order"]
+   put the short id of this card of tStack into sHCSort["card"]
+   put the lockMessages into sHCSort["lock"]
+   lock screen
+   lock messages
+   repeat for each line tId in sHCSort["order"]
+      put the mark of card id tId of tStack into sHCSort["marked"][tId]
+      if tBackground is among the lines of the backgroundIDs of card id tId of tStack \
+            and (pMarked is not true or sHCSort["marked"][tId]) then
+         put true into sHCSort["sorted"][tId]
+         set the mark of card id tId of tStack to true
+      else
+         set the mark of card id tId of tStack to false
+      end if
+   end repeat
+   set the currentCard of tStack to 1
+end hcSortBegin
+
+on hcSortEnd
+   local tStack, tId, tSorted, tOrder, i
+   if sHCSort["stack"] is empty then exit hcSortEnd
+   put sHCSort["stack"] into tStack
+   if not exists(tStack) then
+      set the lockMessages to sHCSort["lock"]
+      unlock screen
+      put empty into sHCSort
+      exit hcSortEnd
+   end if
+   -- the background's cards in their new order, in the places they had
+   repeat for each line tId in the cardIDs of tStack
+      if sHCSort["sorted"][tId] then put tId & return after tSorted
+   end repeat
+   put 0 into i
+   repeat for each line tId in sHCSort["order"]
+      if sHCSort["sorted"][tId] then
+         add 1 to i
+         put line i of tSorted & return after tOrder
+      else
+         put tId & return after tOrder
+      end if
+   end repeat
+   put 0 into i
+   repeat for each line tId in tOrder
+      add 1 to i
+      if there is a card id tId of tStack and the number of card id tId of tStack is not i then
+         set the number of card id tId of tStack to i
+      end if
+   end repeat
+   repeat for each line tId in sHCSort["order"]
+      if there is a card id tId of tStack then set the mark of card id tId of tStack to sHCSort["marked"][tId]
+   end repeat
+   -- back to the card the sort began on, quietly, then to the first
+   if there is a card id sHCSort["card"] of tStack then
+      set the currentCard of tStack to the number of card id sHCSort["card"] of tStack
+   end if
+   set the lockMessages to sHCSort["lock"]
+   set the currentCard of tStack to 1
+   unlock screen
+   put empty into sHCSort
+end hcSortEnd
+
 -- choose tool N (rule T30): HyperCard's tools by their numbers in the
 -- tools palette (1 browse to 18 polygon), or by a name with or without
 -- "tool" after it; this engine's "choose tool x" stops with an error

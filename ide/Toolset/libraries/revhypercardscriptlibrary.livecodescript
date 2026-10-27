@@ -141,7 +141,12 @@ script "revHyperCardScriptLibrary"
 -- textAlign to center"), HyperCard's style and alignment for the text
 -- its text tool painted, which this engine cannot set and stops at: the
 -- library's hcSetPaintText, which does nothing, as this engine's own
--- textFont, textSize and textHeight set so do.
+-- textFont, textSize and textHeight set so do. T54 takes the cards of a
+-- background sorted ("sort cards of this bg by field "Name"", "sort
+-- bkgnd "Data" numeric by ..."), which this engine refuses, and "sort
+-- this stack", which is its "sort cards": the background's cards are
+-- marked, sorted as marked cards and put back in the places they had
+-- (the library's hcSortBegin and hcSortEnd).
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -3083,6 +3088,9 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tNew is empty then put _SetShowPict(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetPaintText(tTokens, tIdx, i, tEnd) into tNew
             break
+         case "sort"
+            put _SortCards(tTokens, tIdx, i, tEnd, n) into tNew
+            break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
             break
@@ -4439,6 +4447,60 @@ private function _SetPaintText pTokens, pIdx, pAt, pEnd
    end if
    return "hcSetPaintText" && quote & "textAlign" & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
 end _SetPaintText
+
+-- T54: sort the cards of a background ("sort cards of this bg by field
+-- "Name"", "sort bkgnd "Data" numeric by line 1 of field f", "sort this
+-- background by ...", "sort marked cards of bkgnd 2 by ..."), which
+-- HyperCard took and this engine refuses ("sort: error sorting"); and
+-- sort this stack ("sort this stack by ...", "sort stack descending by
+-- ..."), which here is "sort cards". A background's cards are sorted
+-- among the places they had, as in HyperCard, by the script's own
+-- expression, its variables and all: the library's hcSortBegin marks
+-- them (with "marked", the ones of them that are marked), this
+-- engine's "sort marked cards" sorts them, and hcSortEnd puts them back
+-- in their places, in their new order, and the marks back as they were.
+-- That is three statements, so a sort of a background alone on its line
+-- only (a sort after "then" is left as it is)
+private function _SortCards pTokens, pIdx, pAt, pEnd, pCount
+   local j, k, tMarked, tRefEnd, tBy
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "this" and _T(pTokens, pIdx[j + 1]) is "stack" then add 1 to j
+   if _T(pTokens, pIdx[j]) is "stack" then
+      if j = pEnd or _T(pTokens, pIdx[j + 1]) is not among the words of "ascending descending text numeric international datetime by" then
+         return empty
+      end if
+      _Fire "T54 sort a background's cards, and this stack"
+      return "sort cards" && _Span(pTokens, pIdx, j + 1, pEnd)
+   end if
+   put pAt + 1 into j
+   put false into tMarked
+   if _T(pTokens, pIdx[j]) is "marked" then
+      put true into tMarked
+      add 1 to j
+   end if
+   if _T(pTokens, pIdx[j]) is among the words of "cards cds" then
+      if _T(pTokens, pIdx[j + 1]) is not "of" then return empty
+      add 2 to j
+   else if tMarked then
+      return empty
+   end if
+   if j > pEnd then return empty
+   put _CardRefEnd(pTokens, pIdx, j, pEnd) into tRefEnd
+   if tRefEnd = 0 or _PictureKind(pTokens, pIdx, j) is not "background" then return empty
+   -- the order and the kind of sort, then "by"
+   put 0 into tBy
+   repeat with k = tRefEnd + 1 to pEnd
+      if _T(pTokens, pIdx[k]) is "by" then
+         put k into tBy
+         exit repeat
+      end if
+      if _T(pTokens, pIdx[k]) is not among the words of "ascending descending text numeric international datetime" then return empty
+   end repeat
+   if tBy = 0 or tBy = pEnd or pAt > 1 or pEnd < pCount then return empty
+   _Fire "T54 sort a background's cards, and this stack"
+   return "hcSortBegin the long id of" && _Span(pTokens, pIdx, j, tRefEnd) & comma && tMarked & ";" \
+         && "sort marked cards" && _Span(pTokens, pIdx, tRefEnd + 1, pEnd) & ";" && "hcSortEnd"
+end _SortCards
 
 -- T19: show and hide card picture, background picture (which this engine
 -- reads as a card named "picture"); T21: show, hide and close window,

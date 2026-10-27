@@ -1774,6 +1774,121 @@ on TestHyperCardScriptsT53
    _Close tStack
 end TestHyperCardScriptsT53
 
+on TestHyperCardScriptsT54
+   -- T54: the cards of a background sorted, which this engine refuses
+   -- ("sort: error sorting"), and sort this stack, which here is "sort
+   -- cards": the background's cards sorted among the places they had,
+   -- by the script's own expression (84 statements in 41 corpus stacks)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest, gHCScriptsCards
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  sort cards of this bg by bg field " & q & "Name" & q, \
+         "  sort bkgnd " & q & "Tape Database" & q & " numeric by line 1 of field fieldName", \
+         "  Sort this background descending by field " & q & "Name" & q, \
+         "  sort marked cards of bkgnd 2 by fld 1", \
+         "  sort this stack descending text by short name of this card", \
+         "  sort stack by field FontNameSize", \
+         "end mouseUp") into tScript
+   TestAssert "T54: the cards of this background", line 2 of tScript \
+         is "  hcSortBegin the long id of this bg, false; sort marked cards by bg field " & q & "Name" & q & "; hcSortEnd"
+   TestAssert "T54: a background by name, numeric", line 3 of tScript \
+         is "  hcSortBegin the long id of bkgnd " & q & "Tape Database" & q & ", false; sort marked cards numeric by line 1 of field fieldName; hcSortEnd"
+   TestAssert "T54: this background, descending", line 4 of tScript \
+         is "  hcSortBegin the long id of this background, false; sort marked cards descending by field " & q & "Name" & q & "; hcSortEnd"
+   TestAssert "T54: the marked cards of a background by number", line 5 of tScript \
+         is "  hcSortBegin the long id of bkgnd 2, true; sort marked cards by fld 1; hcSortEnd"
+   TestAssert "T54: this stack", line 6 of tScript is "  sort cards descending text by short name of this card"
+   TestAssert "T54: stack", line 7 of tScript is "  sort cards by field FontNameSize"
+   TestAssert "T54: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a field's lines, this engine's own sorts, a sort after
+   -- then (three statements cannot go there), a background of another
+   -- stack
+   put _Rewrite("on mouseUp", \
+         "  sort bg fld " & q & "gobg" & q, \
+         "  sort cards by fld 1", \
+         "  sort marked cards descending by fld 1", \
+         "  sort lines of fld 1 descending", \
+         "  if x then sort this bg by fld 1", \
+         "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1", \
+         "end mouseUp") into tScript
+   TestAssert "T54: a background field's lines: unchanged", line 2 of tScript is "  sort bg fld " & q & "gobg" & q
+   TestAssert "T54: sort cards: unchanged", line 3 of tScript is "  sort cards by fld 1"
+   TestAssert "T54: sort marked cards: unchanged", line 4 of tScript is "  sort marked cards descending by fld 1"
+   TestAssert "T54: sort lines: unchanged", line 5 of tScript is "  sort lines of fld 1 descending"
+   TestAssert "T54: after then: unchanged", line 6 of tScript is "  if x then sort this bg by fld 1"
+   TestAssert "T54: another stack's background: unchanged", line 7 of tScript is "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1"
+
+   -- in a script that compiles: five cards, of backgrounds A and B in
+   -- turn, the A cards sorted by a field of theirs named in a variable,
+   -- into the places they had; the B cards and the marks left as they
+   -- were. Sorted from the fourth card: A2 and A3, whose keys are equal,
+   -- keep the stack's order all the same, and as this engine's sort, it
+   -- ends on the first card, with closeCard and openCard to those two
+   -- cards only
+   put "HCScriptsT54" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the name of card 1 of stack tStack to "A1"
+   create card "B1"
+   create card "A2"
+   create card "B2"
+   create card "A3"
+   go to card "A1"
+   create group "A"
+   set the backgroundBehavior of group "A" to true
+   create field "Key" in group "A"
+   place group "A" onto card "A2"
+   place group "A" onto card "A3"
+   go to card "B1"
+   create group "B"
+   set the backgroundBehavior of group "B" to true
+   place group "B" onto card "B2"
+   put "c" into field "Key" of card "A1"
+   put "a" into field "Key" of card "A2"
+   put "a" into field "Key" of card "A3"
+   set the mark of card "B1" to true
+   set the script of stack tStack to _Lines("on openCard", "  global gHCScriptsCards", \
+         "  put " & q & "open" & q & " && the short name of the target & comma after gHCScriptsCards", "end openCard", \
+         "on closeCard", "  global gHCScriptsCards", \
+         "  put " & q & "close" & q & " && the short name of the target & comma after gHCScriptsCards", "end closeCard")
+   create button "Sort" in group "B"
+   set the script of button "Sort" of card "B1" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  local tField, tNames, i", \
+         "  put " & q & "Key" & q & " into tField", \
+         "  put empty into gHCScriptsTest", \
+         "  sort cards of bkgnd " & q & "A" & q & " by bg field tField", \
+         "  repeat with i = 1 to the number of cards", \
+         "    put the short name of card i & comma after tNames", \
+         "  end repeat", \
+         "  put tNames & the mark of card " & q & "B1" & q & " & comma & the mark of card " & q & "A1" & q & " into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   set the defaultStack to tStack
+   try
+      send "mouseUp" to button "Sort" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: as it is, the sort stops", gHCScriptsTest is empty
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T54: in a script that compiles", _Compiles(the script of button "Sort" of card "B1" of stack tStack)
+   go to card "B2" of stack tStack
+   set the defaultStack to tStack
+   put empty into gHCScriptsCards
+   try
+      send "mouseUp" to button "Sort" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: the A cards in their places, in order; the B cards and the marks as they were", \
+         gHCScriptsTest is "A2,B1,A3,B2,A1,true,false"
+   TestAssert "T54: on the first card, as this engine's sort ends", the short name of this card of stack tStack is "A2"
+   TestAssert "T54: closeCard to the card it began on, openCard to the first, no other card", \
+         gHCScriptsCards is "close B2,open A2,"
+   _Close tStack
+end TestHyperCardScriptsT54
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
