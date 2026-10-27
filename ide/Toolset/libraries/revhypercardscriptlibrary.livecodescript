@@ -3034,6 +3034,27 @@ private function _ParserForms pLine, pVars
                put "empty" into tTokens[tIdx[i + 1]]["t"]
                put "w" into tTokens[tIdx[i + 1]]["k"]
                _Fire "T34 more forms HyperCard took"
+               break
+            end if
+            -- T75: select (theLine), select fieldData(), select after text
+            -- of fieldData(): the object or the chunk a value names, in
+            -- parentheses or from a function of the stack, which HyperCard
+            -- selected as if it were written there (the arrow keys of the
+            -- Guide to XCMDs put the selectedLine into theLine, add 1 to
+            -- its word 2 and select (theLine); WB2D's buttons select
+            -- fieldData(), which returns "card field id 13"). This
+            -- engine's select takes a variable, or one of its own
+            -- functions, there, and refuses a value in parentheses or a
+            -- call of a handler, so the script did not compile: "do" with
+            -- the statement and the value after it, which reads the value
+            -- as HyperCard did
+            put i + 1 into j
+            if _T(tTokens, tIdx[j]) is among the words of "before after" then add 1 to j
+            if _T(tTokens, tIdx[j]) is "text" and _T(tTokens, tIdx[j + 1]) is "of" then add 2 to j
+            if j < tEnd and _SelectValue(tTokens, tIdx, j, tEnd) then
+               put "do" && quote & _Span(tTokens, tIdx, i, j - 1) & quote && "&&" into tItem
+               _Replace tTokens, tIdx, i, j - 1, tItem
+               _Fire "T75 select a value"
             end if
             break
          case "repeat"
@@ -3259,6 +3280,37 @@ private function _ParserForms pLine, pVars
    end repeat
    return _Join(tTokens)
 end _ParserForms
+
+-- T75: whether the code tokens pFrom to pTo are one value in parentheses,
+-- or one call of a function of the stack (_StackFunction), and no more
+private function _SelectValue pTokens, pIdx, pFrom, pTo
+   local tDepth, k
+   if _T(pTokens, pIdx[pFrom]) is not "(" then
+      if pTokens[pIdx[pFrom]]["k"] is not "w" or not _StackFunction(_T(pTokens, pIdx[pFrom])) then return false
+      add 1 to pFrom
+      if _T(pTokens, pIdx[pFrom]) is not "(" then return false
+   end if
+   put 0 into tDepth
+   repeat with k = pFrom to pTo
+      if _T(pTokens, pIdx[k]) is "(" then add 1 to tDepth
+      if _T(pTokens, pIdx[k]) is ")" then subtract 1 from tDepth
+      if tDepth = 0 then return k = pTo
+   end repeat
+   return false
+end _SelectValue
+
+-- T75: whether pName is a function the stack defines, by its name or the
+-- new one T1 or T62 gave it, and not one of this engine's own (a call of
+-- which a select takes as it is)
+private function _StackFunction pName
+   local tOld
+   if pName is among the lines of the functionNames then return false
+   if sStackFunctions[pName] then return true
+   repeat for each key tOld in sRenameHandlers
+      if sStackFunctions[tOld] and _Lower(sRenameHandlers[tOld]) is pName then return true
+   end repeat
+   return false
+end _StackFunction
 
 -- T34: the arguments of an external (an XCMD or XFCN of the stack) that
 -- are one word not in quotes and no value here ("ink on, 8", "video

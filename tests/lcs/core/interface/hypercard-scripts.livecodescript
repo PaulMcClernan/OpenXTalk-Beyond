@@ -5804,6 +5804,99 @@ on TestHyperCardScriptsT74
    _Close tStack
 end TestHyperCardScriptsT74
 
+on TestHyperCardScriptsT75
+   -- T75: a select of the object or the chunk a value names, in
+   -- parentheses or from a function of the stack, which HyperCard
+   -- selected ("select (theLine)", the Guide to XCMDs' arrow keys, after
+   -- "add 1 to word 2 of theLine"; "select after text of fieldData()",
+   -- WB2D's) and this engine's select refuses: "do" with the statement and
+   -- the value after it. A select it takes is left as it is
+   local tScript, q, tStack, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on arr what", \
+         "  put the selectedLine into theLine", \
+         "  add 1 to word 2 of theLine", \
+         "  select (theLine)", \
+         "  if what is 1 then select after (theLine)", \
+         "  select fieldData()", \
+         "  select after text of fieldData()", \
+         "  Select Before Text Of fieldData() -- the start", \
+         "  select selectedLine()", \
+         "  select foundLine()", \
+         "  select fld (theName)", \
+         "  select text of fld (theName)", \
+         "  select line 2 of fld 1", \
+         "  select theLine", \
+         "  select " & q & q, \
+         "end arr", \
+         "function fieldData", \
+         "  return " & q & "card field id 13" & q, \
+         "end fieldData", \
+         "function selectedLine", \
+         "  return " & q & "line 1 of card field 1" & q, \
+         "end selectedLine") into tScript
+   TestAssert "T75: a value in parentheses", line 4 of tScript is "  do " & q & "select" & q & " && (theLine)"
+   TestAssert "T75: after then, with after", line 5 of tScript is "  if what is 1 then do " & q & "select after" & q & " && (theLine)"
+   TestAssert "T75: a function of the stack", line 6 of tScript is "  do " & q & "select" & q & " && fieldData()"
+   TestAssert "T75: after text of a function of the stack", line 7 of tScript is "  do " & q & "select after text of" & q & " && fieldData()"
+   TestAssert "T75: in any case, a comment kept", line 8 of tScript is "  do " & q & "Select Before Text Of" & q & " && fieldData() -- the start"
+   TestAssert "T75: a function of the stack T62 renames", line 9 of tScript is "  do " & q & "select" & q & " && hc_selectedline()" \
+         and line 20 of tScript is "function hc_selectedline"
+   TestAssert "T75: one of this engine's functions, unchanged", line 10 of tScript is "  select foundLine()"
+   TestAssert "T75: a field named by a value, unchanged", line 11 of tScript is "  select fld (theName)"
+   TestAssert "T75: the text of a field named by a value, unchanged", line 12 of tScript is "  select text of fld (theName)"
+   TestAssert "T75: a chunk, unchanged", line 13 of tScript is "  select line 2 of fld 1"
+   TestAssert "T75: a variable, unchanged", line 14 of tScript is "  select theLine"
+   TestAssert "T75: select " & q & q & ", T34's", line 15 of tScript is "  select empty"
+   TestAssert "T75: those compile", _Compiles(tScript)
+
+   put _Rewrite("on mouseUp", \
+         "  select (theLine) & x", \
+         "  select other()", \
+         "  select (a) of (b)", \
+         "end mouseUp") into tScript
+   TestAssert "T75: more than a value, unchanged", line 2 of tScript is "  select (theLine) & x"
+   TestAssert "T75: a call of no function of the stack, unchanged", line 3 of tScript is "  select other()"
+   TestAssert "T75: a value with more after it, unchanged", line 4 of tScript is "  select (a) of (b)"
+
+   -- Fixed by revHyperCardFixScripts and run: the line after the one
+   -- selected, as the arrow key went to in HyperCard, then the end of the
+   -- text of the field the function names
+   put "HCSelectValue" & the milliseconds into tStack
+   lock messages
+   create stack tStack
+   set the defaultStack to tStack
+   create field "List"
+   put _Lines("one", "two", "three") into field "List"
+   create field "Notes"
+   put "Notes" into field "Notes"
+   create button "Down"
+   set the script of button "Down" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  select line 1 of card field " & q & "List" & q, \
+         "  put the selectedLine into theLine", \
+         "  add 1 to word 2 of theLine", \
+         "  select (theLine)", \
+         "  put the selectedText into gHCScriptsTest", \
+         "  select after text of fieldData()", \
+         "  put " & q & "|" & q & " & word 1 to 4 of the selectedChunk & " & q & "|" & q & " & the short name of the selectedField after gHCScriptsTest", \
+         "  select empty", \
+         "end mouseUp", \
+         "function fieldData", \
+         "  return " & q & "card field " & q & " & quote & " & q & "Notes" & q & " & quote", \
+         "end fieldData")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T75: in a stack fixed", line 6 of the script of button "Down" of stack tStack is "  do " & q & "select" & q & " && (theLine)"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Down" of stack tStack
+   catch tError
+   end try
+   TestAssert "T75: the line after the one selected, then after the text of the field named", gHCScriptsTest is "two|char 6 to 5|Notes"
+   _Close tStack
+end TestHyperCardScriptsT75
+
 on TestHyperCardScriptsT11In
    -- T11's "in" for "of" between an object and the card, background or
    -- stack it is on, in a script that compiles here as it is ("hide card
