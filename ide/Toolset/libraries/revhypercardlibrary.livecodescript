@@ -608,6 +608,20 @@ function hcLongVersion
    return "02418000"
 end hcLongVersion
 
+-- the version of a stack (rule T55): in HyperCard five items, the
+-- versions of HyperCard that made the stack, last compacted it, first
+-- changed it after that and last changed it, each as the long version
+-- gives one, and the seconds when it was last changed. The import keeps
+-- none of them, so each version is HyperCard's as this library gives it
+-- (hcLongVersion), and the seconds are now. pStack, the stack's long id,
+-- is one the script found, as HyperCard's "can't find stack" stopped it
+-- where it found none
+function hcStackVersion pStack
+   local tVersion
+   put hcLongVersion() into tVersion
+   return tVersion & comma & tVersion & comma & tVersion & comma & tVersion & comma & the seconds
+end hcStackVersion
+
 -- Whether HyperCard was in the background (MultiFinder): never here
 function hcSuspended
    return false

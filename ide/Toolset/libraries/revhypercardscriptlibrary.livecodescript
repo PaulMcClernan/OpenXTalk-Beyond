@@ -146,7 +146,11 @@ script "revHyperCardScriptLibrary"
 -- bkgnd "Data" numeric by ..."), which this engine refuses, and "sort
 -- this stack", which is its "sort cards": the background's cards are
 -- marked, sorted as marked cards and put back in the places they had
--- (the library's hcSortBegin and hcSortEnd).
+-- (the library's hcSortBegin and hcSortEnd). T55 takes the version of a
+-- stack ("item 4 of the version of this stack"), which this engine
+-- takes for its own version followed by "of": a script with one does
+-- not compile, and "get the version of this stack" stops ("source is
+-- not a container"): the library's hcStackVersion.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -2745,7 +2749,7 @@ end _AloneAsValue
 -- T10: the version and the long version, which in HyperCard are
 -- HyperCard's, not this engine's (scripts test "the version < 2")
 private function _VersionRule pLine
-   local tTokens, tCode, tIdx, n, tItem, i, tWord
+   local tTokens, tCode, tIdx, n, tItem, i, tWord, tAt, tStart
    if "heapspace" is in pLine then put _HeapSpaceRule(pLine) into pLine
    if "version" is not in pLine then return pLine
    put _Tokens(pLine) into tTokens
@@ -2756,6 +2760,28 @@ private function _VersionRule pLine
       put tItem into tIdx[n]
    end repeat
    repeat with i = 2 to n
+      -- T55: the version of a stack ("get the version of this stack",
+      -- "item 3 of the version of stack x"), which this engine takes for
+      -- its own version followed by "of": the script does not compile,
+      -- or "get the version of this stack" stops ("source is not a
+      -- container"). The library's hcStackVersion; "of stack" alone is
+      -- this stack's (T11)
+      if _T(tTokens, tIdx[i]) is "version" and _T(tTokens, tIdx[i + 1]) is "of" \
+            and (_T(tTokens, tIdx[i + 2]) is "stack" or (_T(tTokens, tIdx[i + 2]) is "this" and _T(tTokens, tIdx[i + 3]) is "stack")) then
+         put _StackRefEnd(tTokens, tIdx, i + 2, n) into tAt
+         if tAt > 0 then
+            put i into tStart
+            if _T(tTokens, tIdx[tStart - 1]) is "long" then subtract 1 from tStart
+            if _T(tTokens, tIdx[tStart - 1]) is "the" then subtract 1 from tStart
+            if tAt = i + 2 then
+               _Replace tTokens, tIdx, tStart, tAt, "hcStackVersion(the long id of this stack)"
+            else
+               _Replace tTokens, tIdx, tStart, tAt, "hcStackVersion(the long id of" && _Span(tTokens, tIdx, i + 2, tAt) & ")"
+            end if
+            _Fire "T55 the version of a stack"
+            next repeat
+         end if
+      end if
       if _T(tTokens, tIdx[i]) is not "version" or _T(tTokens, tIdx[i + 1]) is "of" then next repeat
       if _T(tTokens, tIdx[i - 1]) is "long" and _T(tTokens, tIdx[i - 2]) is "the" then
          _Replace tTokens, tIdx, i - 2, i, "hcLongVersion()"
@@ -4662,6 +4688,45 @@ private function _PictureKind pTokens, pIdx, pFrom
    if _T(pTokens, pIdx[pFrom]) is among the words of "background bkgnd bg" then return "background"
    return "card"
 end _PictureKind
+
+-- T55: the last code token of a stack named from pFrom ("this stack",
+-- "stack "Data"", "stack tName", "stack ("x" & y)"), or 0; "stack" with
+-- no name after it (this stack, as T11 takes it) ends at pFrom
+private function _StackRefEnd pTokens, pIdx, pFrom, pTo
+   local j, tDepth
+   put pFrom into j
+   if _T(pTokens, pIdx[j]) is "this" then
+      if _T(pTokens, pIdx[j + 1]) is not "stack" then return 0
+      return j + 1
+   end if
+   if _T(pTokens, pIdx[j]) is not "stack" then return 0
+   if j = pTo then return j
+   add 1 to j
+   if _T(pTokens, pIdx[j]) is "(" then
+      put 0 into tDepth
+      repeat with j = j to pTo
+         if _T(pTokens, pIdx[j]) is "(" then
+            add 1 to tDepth
+         else if _T(pTokens, pIdx[j]) is ")" then
+            subtract 1 from tDepth
+            if tDepth = 0 then exit repeat
+         end if
+      end repeat
+      if j > pTo then
+         return 0
+      end if
+   else if pTokens[pIdx[j]]["k"] is not "s" then
+      -- a name in a variable; anything else after "stack" (an operator,
+      -- "is", "into") leaves it alone, this stack
+      if pTokens[pIdx[j]]["k"] is not "w" or _T(pTokens, pIdx[j]) is among the words of kNotPlain \
+            or _T(pTokens, pIdx[j]) is among the words of kObjectWords \
+            or _T(pTokens, pIdx[j]) is among the words of "into then else to with from" then
+         return pFrom
+      end if
+   end if
+   if j < pTo and _T(pTokens, pIdx[j + 1]) is "of" then return 0
+   return j
+end _StackRefEnd
 
 -- T12 and T8: HyperCard commands this engine does not have, to the
 -- library's handlers; and "group" after a comma in a text style, which

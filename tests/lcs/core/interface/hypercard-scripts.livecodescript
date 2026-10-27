@@ -1889,6 +1889,58 @@ on TestHyperCardScriptsT54
    _Close tStack
 end TestHyperCardScriptsT54
 
+on TestHyperCardScriptsT55
+   -- T55: the version of a stack, which this engine takes for its own
+   -- version followed by "of", so that a script with one does not compile
+   -- or stops ("source is not a container"): the library's hcStackVersion,
+   -- HyperCard's long version four times and the seconds (7 statements in
+   -- 5 corpus stacks: StackCOMPACTER stopped as it opened)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on openStack", \
+         "  get the version of this stack", \
+         "  put item 1 of the version of stack " & q & "Data" & q & " into v", \
+         "  return (item 4 of the long version of stack stackName >= 2000000)", \
+         "  if char 1 to 2 of item 3 of the version of this stack < 2 then beep", \
+         "  put the version of stack into x", \
+         "  put the version into y", \
+         "end openStack") into tScript
+   TestAssert "T55: the version of this stack", line 2 of tScript is "  get hcStackVersion(the long id of this stack)"
+   TestAssert "T55: of a stack by name", line 3 of tScript is "  put item 1 of hcStackVersion(the long id of stack " & q & "Data" & q & ") into v"
+   TestAssert "T55: the long version, of a stack in a variable", line 4 of tScript is "  return (item 4 of hcStackVersion(the long id of stack stackName) >= 2000000)"
+   TestAssert "T55: an item of it", line 5 of tScript is "  if char 1 to 2 of item 3 of hcStackVersion(the long id of this stack) < 2 then beep"
+   TestAssert "T55: of stack, this stack", line 6 of tScript is "  put hcStackVersion(the long id of this stack) into x"
+   TestAssert "T55: HyperCard's version: still T10's", line 7 of tScript is "  put hcVersion() into y"
+   TestAssert "T55: the script compiles", _Compiles(tScript)
+
+   -- in a script that compiles
+   put "HCScriptsT55" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Version"
+   set the script of button "Version" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  get the version of this stack", \
+         "  put the number of items of it & comma & item 1 of it & comma & (item 5 of it is a number) into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Version" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T55: as it is, it stops", gHCScriptsTest is empty
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Version" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T55: five items, HyperCard's long version first", gHCScriptsTest is "5,02418000,true"
+   _Close tStack
+end TestHyperCardScriptsT55
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
