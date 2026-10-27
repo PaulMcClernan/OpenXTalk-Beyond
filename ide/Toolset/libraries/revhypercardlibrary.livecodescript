@@ -1853,14 +1853,100 @@ function hcTextStyle
    return tOut
 end hcTextStyle
 
--- set the textStyle or the textAlign with no object (rule T53):
--- HyperCard's style and alignment for the text its text tool painted.
--- This engine reads them as empty and stops a script that sets them,
--- where its textFont, textSize and textHeight set so do nothing, as it
--- paints no text with its text tool. This does nothing either; a list of
--- styles ("bold,italic") comes as several parameters
+/*
+The paint text (rule T53): HyperCard's textFont, textSize, textHeight,
+textStyle and textAlign of the text its text tool painted, set and read
+with no object ("set textSize to 9", "the textHeight div 2"). This
+engine paints no text with its text tool: it reads them as empty and
+stops a script that sets the textStyle or the textAlign, where its
+textFont, textSize and textHeight set so do nothing. They are kept here
+as a script set them, by name, as the library keeps HyperCard's windows
+and message box; one not set is as HyperCard's "reset paint" left it
+(its reference: Geneva, 12, plain and left, and a textHeight of the
+textSize and a third of it, 16)
+*/
+local sHCPaintText
+
+-- HyperCard's text styles in the order of their flags (the Mac's, then
+-- its own group), the order it gave a list back in whatever order it was
+-- set in, as it kept the flags (scripts compare the textStyle with
+-- "outline,condense" and "bold,underline,condense")
+constant kHCPaintTextStyles = "bold italic underline outline shadow condense extend group"
+
+-- set the textFont, the textSize, the textHeight, the textStyle or the
+-- textAlign with no object (rule T53), kept for hcPaintText: a list of
+-- styles ("bold,italic") comes as several parameters, and a textSize set
+-- takes the textHeight back to its default, which follows the size. A
+-- value HyperCard would have refused is kept as it is, as no script
+-- stops here for it
 on hcSetPaintText pProperty, pValue
+   local i, tStyle, tStyles, tOthers
+   if pProperty is "textStyle" then
+      repeat with i = 3 to paramCount()
+         put comma & param(i) after pValue
+      end repeat
+      -- (each style once, in HyperCard's order; plain is no style)
+      repeat for each item tStyle in pValue
+         put word 1 to -1 of tStyle into tStyle
+         if tStyle is among the words of kHCPaintTextStyles then
+            put true into tStyles[tStyle]
+         else if tStyle is not "plain" and tStyle is not empty then
+            put comma & tStyle after tOthers
+         end if
+      end repeat
+      put empty into pValue
+      repeat for each word tStyle in kHCPaintTextStyles
+         if tStyles[tStyle] then put comma & tStyle after pValue
+      end repeat
+      put tOthers after pValue
+      delete char 1 of pValue
+      if pValue is empty then
+         put "plain" into pValue
+      end if
+   else if pProperty is "textAlign" then
+      put toLower(word 1 to -1 of pValue) into pValue
+   end if
+   put pValue into sHCPaintText[pProperty]
+   if pProperty is "textSize" then put empty into sHCPaintText["textHeight"]
 end hcSetPaintText
+
+-- the textFont, the textSize, the textHeight, the textStyle or the
+-- textAlign read with no object (rule T53): as hcSetPaintText kept it,
+-- else HyperCard's default
+function hcPaintText pProperty
+   local tSize
+   if sHCPaintText[pProperty] is not empty then return sHCPaintText[pProperty]
+   switch pProperty
+      case "textFont"
+         return "Geneva"
+      case "textSize"
+         return 12
+      case "textHeight"
+         put hcPaintText("textSize") into tSize
+         if tSize is not a number then return 16
+         return tSize + tSize div 3
+      case "textStyle"
+         return "plain"
+      case "textAlign"
+         return "left"
+   end switch
+   return empty
+end hcPaintText
+
+-- reset paint (rule T53): HyperCard's took the paint text back to its
+-- defaults with the rest, which this engine's reset paint, with no
+-- paint text, leaves. HyperCard's never failed; this engine's sets the
+-- rest all the same, and then stops the script where it cannot find the
+-- brushes' images, which the IDE keeps in revIcons ("brush: can't find
+-- image" in a standalone)
+on hcResetPaint
+   local tError
+   put empty into sHCPaintText
+   try
+      reset paint
+   catch tError
+   end try
+end hcResetPaint
 
 -- sort the cards of a background (rule T54): HyperCard sorted the cards
 -- of one background among the places they had and left the stack's

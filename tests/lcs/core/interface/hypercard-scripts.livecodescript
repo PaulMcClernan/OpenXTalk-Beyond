@@ -378,6 +378,12 @@ on TestHyperCardScriptsMoreForms
    TestAssert "T33: a modifier key after with: unchanged", line 2 of tScript is "  type " & q & "C" & q & " with commandKey"
    TestAssert "T33: modifier keys after with: unchanged", line 3 of tScript is "  drag from 1,1 to 9,9 with optionKey, shiftKey"
    TestAssert "T33: the long version of HyperCard: still T10's", line 4 of tScript is "  get hcLongVersion()"
+
+   -- go home in new window, which HyperCard took for "in a new window"
+   -- (My First Book of HyperCard 2's), no different for the Home stack
+   put _Rewrite("on mouseUp", "  go home in new window", "  if x then go to stack home in a new window", "end mouseUp") into tScript
+   TestAssert "T9: go home in new window", line 2 of tScript is "  hcGoHome"
+   TestAssert "T9: go home in a new window, after then", line 3 of tScript is "  if x then hcGoHome"
 end TestHyperCardScriptsMoreForms
 
 on TestHyperCardScriptsT35
@@ -433,6 +439,31 @@ on TestHyperCardScriptsT35
    TestAssert "T35: play a voice and an item: unchanged", line 3 of tScript is "  play harpsichord item 2 of tNotes"
    TestAssert "T35: play a voice and the: unchanged", line 4 of tScript is "  play flute the notes of me"
    TestAssert "T35: play's notes on the next line: unchanged", line 5 of tScript is "  play harpsichord line \"
+
+   -- the sound in quotes after then, or in parentheses (Home
+   -- Improvements', Resource Library's), and a sound named by a word this
+   -- engine's play takes for its own (Garbage's "play step", a video's
+   -- step with no clip here); unchanged: play stop, HyperCard's own, a
+   -- variable's notes, it too (Tiny Tim's, Canary's), and one note after
+   -- a sound in quotes, which this engine reads as the text it is
+   put _Rewrite("on mouseUp", "  if qq > 1 then play " & q & "Harpsichord" & q & " g3q d4 e ch", \
+         "  play (field " & q & "Name" & q & ") tempo 220 cq e f gw", "  play step", "  play step tempo 200 c d", \
+         "  if x then play stop", "  put " & q & "c d" & q & " into tNotes", "  if x then play " & q & "boing" & q & " tNotes", \
+         "  play " & q & "Harpsichord" & q & " tempo 150 it", "  play harpsichord it", \
+         "  if whatCharacter is space then play " & q & "Silence" & q & " r", "  play " & q & "boing" & q & "c d e", "end mouseUp") into tScript
+   TestAssert "T35: play's notes after a sound in quotes, after then", line 2 of tScript \
+         is "  if qq > 1 then play " & q & "Harpsichord" & q && q & "g3q d4 e ch" & q
+   TestAssert "T35: play's notes after a sound in parentheses", line 3 of tScript \
+         is "  play (field " & q & "Name" & q & ") tempo 220 " & q & "cq e f gw" & q
+   TestAssert "T35: a sound named step", line 4 of tScript is "  play " & q & "step" & q
+   TestAssert "T35: a sound named step, its tempo and notes", line 5 of tScript is "  play " & q & "step" & q & " tempo 200 " & q & "c d" & q
+   TestAssert "T35: play stop: unchanged", line 6 of tScript is "  if x then play stop"
+   TestAssert "T35: a variable after a sound in quotes: unchanged", line 8 of tScript is "  if x then play " & q & "boing" & q & " tNotes"
+   TestAssert "T35: it after a sound in quotes: unchanged", line 9 of tScript is "  play " & q & "Harpsichord" & q & " tempo 150 it"
+   TestAssert "T35: it after a voice: unchanged", line 10 of tScript is "  play harpsichord it"
+   TestAssert "T35: one note after a sound in quotes: unchanged", line 11 of tScript is "  if whatCharacter is space then play " & q & "Silence" & q & " r"
+   TestAssert "T35: notes against a sound in quotes, a space between", line 12 of tScript is "  play " & q & "boing" & q && q & "c d e" & q
+   TestAssert "T35: the play lines compile", _Compiles(tScript)
 end TestHyperCardScriptsT35
 
 on TestHyperCardScriptsT34
@@ -1560,14 +1591,15 @@ on TestHyperCardScriptsT51
          "  if tDim then set the textfont of the target to New Chicago", \
          "  set the textFont of char 1 to 3 of fld 1 to Cooper Black", \
          "end mouseUp") into tScript
-   TestAssert "T51: the textFont", line 2 of tScript is "  set the textfont to " & q & "New York" & q
+   TestAssert "T51: the textFont, the paint text's (T53)", line 2 of tScript is "  hcSetPaintText " & q & "textFont" & q & ", " & q & "New York" & q
    TestAssert "T51: of me, three words", line 3 of tScript is "  set textfont of me to " & q & "new century schlbk" & q
    TestAssert "T51: of a button", line 4 of tScript is "  set textfont of cd btn " & q & "Cancel" & q & " to " & q & "chicago gray" & q
    TestAssert "T51: after then", line 5 of tScript is "  if tDim then set the textfont of the target to " & q & "New Chicago" & q
    TestAssert "T51: the value after the last to, of a chunk's range", line 6 of tScript is "  set the textFont of char 1 to 3 of fld 1 to " & q & "Cooper Black" & q
    TestAssert "T51: the script compiles", _Compiles(tScript)
 
-   -- unchanged: an object, a chunk, an expression, one word, a variable
+   -- unchanged: a chunk, a property, an expression; with no object, an
+   -- object, an expression, one word and it are the paint text's (T53)
    put _Rewrite("on mouseUp", \
          "  set textFont to bg field FontName", \
          "  set textfont of fld 1 to line Keuze of fonts", \
@@ -1577,13 +1609,13 @@ on TestHyperCardScriptsT51
          "  set the textFont of me to tFont & tStyle", \
          "  set the textFont to it", \
          "end mouseUp") into tScript
-   TestAssert "T51: an object: unchanged", line 2 of tScript is "  set textFont to bg field FontName"
+   TestAssert "T51: an object, the paint text's (T53)", line 2 of tScript is "  hcSetPaintText " & q & "textFont" & q & ", bg field FontName"
    TestAssert "T51: a chunk: unchanged", line 3 of tScript is "  set textfont of fld 1 to line Keuze of fonts"
-   TestAssert "T51: any item: unchanged", line 4 of tScript is "  set textFont to any item of pictureFonts"
+   TestAssert "T51: any item, the paint text's (T53)", line 4 of tScript is "  hcSetPaintText " & q & "textFont" & q & ", any item of pictureFonts"
    TestAssert "T51: a property: unchanged", line 5 of tScript is "  set the textFont of cd fld 2 to the textFont of fld 1"
-   TestAssert "T51: one word: unchanged", line 6 of tScript is "  set the textFont to Geneva"
+   TestAssert "T51: one word, the paint text's (T53)", line 6 of tScript is "  hcSetPaintText " & q & "textFont" & q & ", Geneva"
    TestAssert "T51: an expression: unchanged", line 7 of tScript is "  set the textFont of me to tFont & tStyle"
-   TestAssert "T51: it: unchanged", line 8 of tScript is "  set the textFont to it"
+   TestAssert "T51: it, the paint text's (T53)", line 8 of tScript is "  hcSetPaintText " & q & "textFont" & q & ", it"
 
    -- in a script that compiles: the font's whole name, where this engine
    -- stopped with "can't find handler" at its second word
@@ -1607,7 +1639,7 @@ on TestHyperCardScriptsT51
    TestAssert "T51: as it is, it stops before the font is set", gHCScriptsTest is empty
    get revHyperCardFixScripts(tStack)
    TestAssert "T51: in a script that compiles", line 3 to 4 of the script of button "Font" of card 1 of stack tStack \
-         is _Lines("  set the textFont to " & q & "New York" & q, \
+         is _Lines("  hcSetPaintText " & q & "textFont" & q & ", " & q & "New York" & q, \
          "  set the textFont of me to " & q & "New Century Schlbk" & q)
    put empty into gHCScriptsTest
    try
@@ -1705,11 +1737,15 @@ on TestHyperCardScriptsT52
 end TestHyperCardScriptsT52
 
 on TestHyperCardScriptsT53
-   -- T53: the textStyle and the textAlign set with no object, HyperCard's
-   -- for the text its text tool painted, which this engine reads as empty
-   -- but stops at when a script sets them: the library's hcSetPaintText,
-   -- which does nothing, as this engine's textFont set so does (274
-   -- statements in 37 corpus stacks)
+   -- T53: the textFont, the textSize, the textHeight, the textStyle and
+   -- the textAlign set and read with no object, HyperCard's for the text
+   -- its text tool painted. This engine reads them as empty, stops at a
+   -- script that sets the textStyle or the textAlign (274 statements in
+   -- 37 corpus stacks) and does not compile one read before div ("the
+   -- textHeight div 2", Graph Maker's) or the textStyle before any
+   -- operator: the library's hcSetPaintText, which keeps what a script
+   -- set, hcPaintText, which reads it back or HyperCard's default, and
+   -- hcResetPaint for reset paint (21 corpus stacks read them)
    local tScript, tStack, q, tError
    global gHCScriptsTest
    put quote into q
@@ -1728,23 +1764,64 @@ on TestHyperCardScriptsT53
    TestAssert "T53: an expression", line 6 of tScript is "  hcSetPaintText " & q & "textStyle" & q & ", any item of theTextStyle"
    TestAssert "T53: the script compiles", _Compiles(tScript)
 
-   -- unchanged: the style of an object or a chunk, the textSize (which
-   -- this engine sets to nothing as it is), a read
+   -- the textSize, the textHeight and the textFont, which this engine
+   -- sets so to nothing; a font named in several words not in quotes as
+   -- the text it is (T51)
+   put _Rewrite("on mouseUp", \
+         "  set the textSize to 12", \
+         "  set textHeight to 18", \
+         "  set the textFont to New York", \
+         "  set textfont to tFont", \
+         "end mouseUp") into tScript
+   TestAssert "T53: the textSize", line 2 of tScript is "  hcSetPaintText " & q & "textSize" & q & ", 12"
+   TestAssert "T53: the textHeight, without the", line 3 of tScript is "  hcSetPaintText " & q & "textHeight" & q & ", 18"
+   TestAssert "T53: the textFont, several words", line 4 of tScript is "  hcSetPaintText " & q & "textFont" & q & ", " & q & "New York" & q
+   TestAssert "T53: the textFont, a variable", line 5 of tScript is "  hcSetPaintText " & q & "textFont" & q & ", tFont"
+
+   -- read (Graph Maker's "the textHeight div 2", Stack Starter's "the
+   -- textStyle is "Plain""), set to its own read, and reset paint
+   put _Rewrite("on mouseUp", \
+         "  put the textHeight div 2 into h", \
+         "  if the textStyle is " & q & "Plain" & q & " then beep", \
+         "  put the textFont & comma & the TEXTSIZE into x", \
+         "  set the textSize to the textSize + 2", \
+         "  set the textSize of fld 1 to the textSize", \
+         "  reset paint", \
+         "  if x then reset paint else beep", \
+         "end mouseUp") into tScript
+   TestAssert "T53: a read before div", line 2 of tScript is "  put hcPaintText(" & q & "textHeight" & q & ") div 2 into h"
+   TestAssert "T53: a read before is", line 3 of tScript is "  if hcPaintText(" & q & "textStyle" & q & ") is " & q & "Plain" & q & " then beep"
+   TestAssert "T53: two reads, in any case", line 4 of tScript \
+         is "  put hcPaintText(" & q & "textFont" & q & ") & comma & hcPaintText(" & q & "textSize" & q & ") into x"
+   TestAssert "T53: set to its own read", line 5 of tScript is "  hcSetPaintText " & q & "textSize" & q & ", hcPaintText(" & q & "textSize" & q & ") + 2"
+   TestAssert "T53: a field's set to the paint text's", line 6 of tScript is "  set the textSize of fld 1 to hcPaintText(" & q & "textSize" & q & ")"
+   TestAssert "T53: reset paint", line 7 of tScript is "  hcResetPaint"
+   TestAssert "T53: reset paint after then", line 8 of tScript is "  if x then hcResetPaint else beep"
+   TestAssert "T53: the reads compile", _Compiles(tScript)
+
+   -- unchanged: the style of an object or a chunk, set or read, the
+   -- textHeight of a field, reset printing
    put _Rewrite("on mouseUp", \
          "  set the textStyle of fld 1 to bold", \
          "  set the textAlign of cd btn 2 to center", \
          "  set textStyle of word 1 of fld 1 to italic", \
-         "  set the textSize to 12", \
-         "  get the textStyle", \
+         "  get the textStyle of word 1 of fld 1", \
+         "  put the textHeight of fld 2 into h", \
+         "  reset printing", \
          "end mouseUp") into tScript
    TestAssert "T53: of a field: unchanged", line 2 of tScript is "  set the textStyle of fld 1 to bold"
    TestAssert "T53: of a button: unchanged", line 3 of tScript is "  set the textAlign of cd btn 2 to center"
    TestAssert "T53: of a chunk: unchanged", line 4 of tScript is "  set textStyle of word 1 of fld 1 to italic"
-   TestAssert "T53: the textSize: unchanged", line 5 of tScript is "  set the textSize to 12"
-   TestAssert "T53: a read: unchanged", line 6 of tScript is "  get the textStyle"
+   TestAssert "T53: a chunk's read: unchanged", line 5 of tScript is "  get the textStyle of word 1 of fld 1"
+   TestAssert "T53: a field's read: unchanged", line 6 of tScript is "  put the textHeight of fld 2 into h"
+   TestAssert "T53: reset printing: unchanged", line 7 of tScript is "  reset printing"
 
-   -- in a script that compiles: it goes on past them, where this engine
-   -- stopped at the first
+   -- in a script that compiles: it goes on past the sets, where this
+   -- engine stopped at the first, and reads back what a script set, or
+   -- HyperCard's defaults (its reference's: Geneva, 12, a textHeight of
+   -- the textSize and a third of it, plain, left); a list of styles in
+   -- HyperCard's order; and it goes on past reset paint, which here,
+   -- with no revIcons, stops at the brushes' images it cannot find
    put "HCScriptsT53" & the milliseconds into tStack
    lock messages
    create invisible stack tStack
@@ -1756,6 +1833,19 @@ on TestHyperCardScriptsT53
          "  set the textAlign to center", \
          "  put 2 into gHCScriptsTest", \
          "end mouseUp")
+   create button "Read"
+   set the script of button "Read" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put the textFont & comma & the textSize & comma & the textHeight & comma & the textStyle & comma & the textAlign into gHCScriptsTest", \
+         "  set the textSize to 9", \
+         "  set the textFont to New York", \
+         "  put return & the textFont & comma & the textSize & comma & the textHeight after gHCScriptsTest", \
+         "  set textStyle to italic, Bold", \
+         "  set the textAlign to Right", \
+         "  set the textHeight to 14", \
+         "  put return & the textStyle & comma & the textAlign & comma & the textHeight after gHCScriptsTest", \
+         "  reset paint", \
+         "  put return & the textFont & comma & the textSize & comma & the textHeight & comma & the textStyle & comma & the textAlign after gHCScriptsTest", \
+         "end mouseUp")
    unlock messages
    put empty into gHCScriptsTest
    try
@@ -1763,8 +1853,19 @@ on TestHyperCardScriptsT53
    catch tError
    end try
    TestAssert "T53: as it is, it stops at the textStyle", gHCScriptsTest is 1
+   TestAssert "T53: as it is, the reads do not compile", not _Compiles(the script of button "Read" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
    TestAssert "T53: in a script that compiles", _Compiles(the script of button "Paint" of card 1 of stack tStack)
+   TestAssert "T53: the reads in a script that compiles", _Compiles(the script of button "Read" of card 1 of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Read" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T53: HyperCard's defaults, as reset paint leaves them", line 1 of gHCScriptsTest is "Geneva,12,16,plain,left"
+   TestAssert "T53: the font and the size a script set, the height that follows the size", line 2 of gHCScriptsTest is "New York,9,12"
+   TestAssert "T53: the styles in HyperCard's order, the alignment, the height a script set", line 3 of gHCScriptsTest is "bold,italic,right,14"
+   TestAssert "T53: reset paint, to HyperCard's defaults", line 4 of gHCScriptsTest is "Geneva,12,16,plain,left"
    put empty into gHCScriptsTest
    try
       send "mouseUp" to button "Paint" of card 1 of stack tStack

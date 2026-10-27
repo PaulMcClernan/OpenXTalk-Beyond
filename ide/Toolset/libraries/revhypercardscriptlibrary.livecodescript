@@ -260,6 +260,11 @@ constant kWindowProperties = "scale scroll hilitedbutton zoom dithering globallo
 -- The properties of the message box that scripts read and set (T28)
 constant kMessageBoxProperties = "visible loc location rect rectangle top left bottom right width height topleft bottomright textfont textsize textstyle textalign"
 
+-- HyperCard's properties of the text its text tool painted, set and read
+-- with no object ("set textSize to 9", "the textHeight div 2"), by the
+-- names the library's hcSetPaintText and hcPaintText take (T53)
+constant kPaintText = "textFont textSize textHeight textStyle textAlign"
+
 -- HyperCard's own windows by the names scripts gave them in quotes
 -- ("the visible of window "Scroll""), which are no stacks here (T46);
 -- the library's kHCOwnWindows
@@ -2363,7 +2368,8 @@ private function _ParserForms pLine, pVars
          case "play"
             -- T35: play harpsichord c d e f (and after "tempo 200"): the
             -- notes not in quotes, which HyperCard read as the text they
-            -- were; one word that is a variable of the handler stays, and
+            -- were; one word that is a variable of the handler, or it,
+            -- stays ("play "Harpsichord" tempo 150 it", Tiny Tim's), and
             -- so does an expression ("play x line n of tNotes": a note is
             -- never "of" or "the"), and a line that goes on after "\".
             -- The sound, and the tempo, can be in a field of the card or
@@ -2371,8 +2377,36 @@ private function _ParserForms pLine, pVars
             -- e": T49 puts the sound's in parentheses). Another tempo is
             -- one word or number: one in another field or an expression
             -- ("tempo field 2", "tempo the speed of me") leaves the line
-            -- as it is
+            -- as it is. The sound can be in quotes, or an expression in
+            -- parentheses, too ("if qq>1 then play "Harpsichord" g3q d4 e
+            -- ch", Home Improvements', "play (field "Name") tempo 220 cq e
+            -- f gw", Resource Library's: T5 takes a sound in quotes only
+            -- at the start of its line). A sound named by one word alone,
+            -- or before the tempo, that this engine's play takes for its
+            -- own ("play step", Garbage's, which here is a video's "step
+            -- forward" with no clip, and does not compile) or refuses as a
+            -- value, which HyperCard took as the sound's name, is put in
+            -- quotes; "play stop" was HyperCard's own too
             put _PlayObject(tTokens, tIdx, i + 1, tEnd) into j
+            if j is 0 and _T(tTokens, tIdx[i + 1]) is "(" then
+               put 0 into tDepth
+               repeat with j = i + 1 to tEnd
+                  if _T(tTokens, tIdx[j]) is "(" then add 1 to tDepth
+                  if _T(tTokens, tIdx[j]) is ")" then subtract 1 from tDepth
+                  if tDepth = 0 then exit repeat
+               end repeat
+               if j > tEnd then
+                  break
+               end if
+            else if j is 0 and tTokens[tIdx[i + 1]]["k"] is "w" and not pVars[_T(tTokens, tIdx[i + 1])] \
+                  and (i + 1 = tEnd or _T(tTokens, tIdx[i + 2]) is "tempo") \
+                  and _T(tTokens, tIdx[i + 1]) is not among the words of "stop tempo" \
+                  and (_T(tTokens, tIdx[i + 1]) is among the words of "step pause resume video" \
+                  or _ValueRefused(_T(tTokens, tIdx[i + 1]))) then
+               put quote & tTokens[tIdx[i + 1]]["t"] & quote into tTokens[tIdx[i + 1]]["t"]
+               put "s" into tTokens[tIdx[i + 1]]["k"]
+               _Fire "T35 more forms HyperCard took"
+            end if
             if j is 0 then put i + 1 into j
             add 1 to j
             if _T(tTokens, tIdx[j]) is "tempo" then
@@ -2385,8 +2419,12 @@ private function _ParserForms pLine, pVars
                   add 2 to j
                end if
             end if
-            if tTokens[tIdx[i + 1]]["k"] is "w" and _T(tTokens, tIdx[i + 1]) is not among the words of "stop tempo" and j <= tEnd \
-                  and not (j = tEnd and pVars[_T(tTokens, tIdx[j])]) then
+            -- (after a sound in quotes or in parentheses, notes of one
+            -- word stay as they are, which this engine reads as the text
+            -- they are, or the variable HyperCard read too)
+            if ((tTokens[tIdx[i + 1]]["k"] is "s" or _T(tTokens, tIdx[i + 1]) is "(") and j < tEnd \
+                  or tTokens[tIdx[i + 1]]["k"] is "w" and _T(tTokens, tIdx[i + 1]) is not among the words of "stop tempo" and j <= tEnd) \
+                  and not (j = tEnd and (pVars[_T(tTokens, tIdx[j])] or _T(tTokens, tIdx[j]) is "it")) then
                put true into tAt
                repeat with k = j to tEnd
                   if tTokens[tIdx[k]]["k"] is "s" or _T(tTokens, tIdx[k]) is among the words of "& && ( ) , then else of the \" then
@@ -2396,7 +2434,11 @@ private function _ParserForms pLine, pVars
                end repeat
                if tAt and j = tEnd and tTokens[tIdx[j]]["k"] is not "w" then put false into tAt
                if tAt then
-                  _Replace tTokens, tIdx, j, tEnd, quote & _Span(tTokens, tIdx, j, tEnd) & quote
+                  -- (apart from a sound in quotes they were written
+                  -- against: "play "boing"c d e")
+                  get quote & _Span(tTokens, tIdx, j, tEnd) & quote
+                  if tTokens[tIdx[j] - 1]["k"] is not "sp" then put space before it
+                  _Replace tTokens, tIdx, j, tEnd, it
                   _Fire "T35 more forms HyperCard took"
                end if
             end if
@@ -2858,8 +2900,11 @@ private function _GoHome @pTokens, pIdx, pAt, pCount
    end if
    if _T(pTokens, pIdx[j]) is "stack" then add 1 to j
    if _T(pTokens, pIdx[j]) is not "home" and _T(pTokens, pIdx[j]) is not quote & "home" & quote then return false
-   -- (HyperCard's "in a new window" is no different for the Home stack)
+   -- (HyperCard's "in a new window" is no different for the Home stack,
+   -- and neither is "in new window", which HyperCard took too: "go home
+   -- in new window", My First Book of HyperCard 2's)
    if j + 4 = pCount and _Span(pTokens, pIdx, j + 1, pCount) is "in a new window" then put pCount into j
+   if j + 3 = pCount and _Span(pTokens, pIdx, j + 1, pCount) is "in new window" then put pCount into j
    if j <> pCount then return false
    _Replace pTokens, pIdx, pAt, j, "hcGoHome"
    return true
@@ -2985,6 +3030,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
       put _MessageBoxProperties(pLine) into pLine
       put _HyperCardObject(pLine) into pLine
       put _PictureProperties(pLine) into pLine
+      put _PaintTextReads(pLine) into pLine
    end if
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -3113,9 +3159,11 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tNew is empty then put _SetWindow(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetMessageBox(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetCardAndStyle(tTokens, tIdx, i, tEnd) into tNew
+            -- (T53 before T51, which takes a font of several words with no
+            -- object too: "set the textFont to New York")
+            if tNew is empty then put _SetPaintText(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetTextFont(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetShowPict(tTokens, tIdx, i, tEnd) into tNew
-            if tNew is empty then put _SetPaintText(tTokens, tIdx, i, tEnd) into tNew
             break
          case "sort"
             put _SortCards(tTokens, tIdx, i, tEnd, n) into tNew
@@ -3128,6 +3176,15 @@ private function _HyperCardRules pLine, pCompiled, pElse
          case "create"
          case "delete"
             put _MenuCommand(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "reset"
+            -- T53: reset paint, which HyperCard's paint text went back to
+            -- its defaults with too: the library's hcResetPaint, which
+            -- resets this engine's paint properties and the paint text's
+            if _T(tTokens, tIdx[i + 1]) is "paint" and i + 1 = tEnd then
+               _Fire "T53 the paint text's properties"
+               put "hcResetPaint" into tNew
+            end if
             break
          case "start"
          case "stop"
@@ -4457,7 +4514,7 @@ end _SetCursor
 -- expression ("to bg field FontName", "to line Keuze of fonts", "to it"),
 -- are left as they are
 private function _SetTextFont pTokens, pIdx, pAt, pEnd
-   local j, tProperty, tTo, tWords
+   local j, tProperty, tTo, tFont
    put pAt + 1 into tProperty
    if _T(pTokens, pIdx[tProperty]) is "the" then add 1 to tProperty
    if _T(pTokens, pIdx[tProperty]) is not "textfont" or _T(pTokens, pIdx[tProperty + 1]) is not among the words of "of to" then return empty
@@ -4465,9 +4522,20 @@ private function _SetTextFont pTokens, pIdx, pAt, pEnd
    repeat with j = tProperty + 1 to pEnd
       if _T(pTokens, pIdx[j]) is "to" then put j into tTo
    end repeat
-   if tTo = 0 or not _PlainWords(pTokens, pIdx, tTo + 1, pEnd) then return empty
+   if tTo = 0 then return empty
+   put _FontLiteral(pTokens, pIdx, tTo + 1, pEnd) into tFont
+   if tFont is empty then return empty
+   return _Span(pTokens, pIdx, pAt, tTo) && tFont
+end _SetTextFont
+
+-- T51: the code tokens pFrom to pEnd, a font named in several plain words
+-- not in quotes ("New York", "new century schlbk"), as the text they are,
+-- in quotes; else empty
+private function _FontLiteral pTokens, pIdx, pFrom, pEnd
+   local j, tWords
+   if not _PlainWords(pTokens, pIdx, pFrom, pEnd) then return empty
    put 0 into tWords
-   repeat with j = tTo + 1 to pEnd
+   repeat with j = pFrom to pEnd
       if _T(pTokens, pIdx[j]) is among the words of kObjectWords \
             or _T(pTokens, pIdx[j]) is among the words of "me it target empty msg message selection" then
          return empty
@@ -4476,31 +4544,78 @@ private function _SetTextFont pTokens, pIdx, pAt, pEnd
    end repeat
    if tWords < 2 then return empty
    _Fire "T51 a font name of several words not in quotes"
-   return _Span(pTokens, pIdx, pAt, tTo) && _Literal(_Span(pTokens, pIdx, tTo + 1, pEnd))
-end _SetTextFont
+   return _Literal(_Span(pTokens, pIdx, pFrom, pEnd))
+end _FontLiteral
 
--- T53: set the textStyle or the textAlign with no object ("set textstyle
--- to plain", "set the textAlign to "right"", "set the textStyle to
--- bold,italic"), HyperCard's style and alignment for the text its text
--- tool painted. This engine reads them as empty, but setting them stops
--- the script ("can't find object", "no object to set property"), where
--- its textFont, textSize and textHeight set so do nothing: the library's
--- hcSetPaintText, which does nothing either, with the value as it was
--- (a list of styles is its parameters)
+-- T53: the textFont, the textSize, the textHeight, the textStyle or the
+-- textAlign set with no object ("set textstyle to plain", "set the
+-- textAlign to "right"", "set the textStyle to bold,italic", "set
+-- textSize to 9"), HyperCard's for the text its text tool painted, which
+-- a script read back (_PaintTextReads). Setting the textStyle or the
+-- textAlign stops the script here ("can't find object", "no object to
+-- set property"), where the other three set so do nothing: the library's
+-- hcSetPaintText, which keeps the value as it was (a list of styles is
+-- its parameters), for hcPaintText to give back. A font named in several
+-- words not in quotes is the text it was (T51: "set the textFont to New
+-- York")
 private function _SetPaintText pTokens, pIdx, pAt, pEnd
-   local tProperty
+   local tProperty, tValue
    put pAt + 1 into tProperty
    if _T(pTokens, pIdx[tProperty]) is "the" then add 1 to tProperty
-   if _T(pTokens, pIdx[tProperty]) is not among the words of "textstyle textalign" \
+   if _T(pTokens, pIdx[tProperty]) is not among the words of kPaintText \
          or _T(pTokens, pIdx[tProperty + 1]) is not "to" or tProperty + 1 >= pEnd then
       return empty
    end if
-   _Fire "T53 the paint text's textStyle and textAlign"
-   if _T(pTokens, pIdx[tProperty]) is "textstyle" then
-      return "hcSetPaintText" && quote & "textStyle" & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
+   put _Span(pTokens, pIdx, tProperty + 2, pEnd) into tValue
+   if _T(pTokens, pIdx[tProperty]) is "textfont" then
+      get _FontLiteral(pTokens, pIdx, tProperty + 2, pEnd)
+      if it is not empty then put it into tValue
    end if
-   return "hcSetPaintText" && quote & "textAlign" & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
+   _Fire "T53 the paint text's properties"
+   return "hcSetPaintText" && quote & _PaintTextName(_T(pTokens, pIdx[tProperty])) & quote & comma && tValue
 end _SetPaintText
+
+-- The paint text's property pWord, a word of kPaintText in any case, by
+-- the name the library takes ("textheight": "textHeight")
+private function _PaintTextName pWord
+   local tName
+   repeat for each word tName in kPaintText
+      if tName is pWord then return tName
+   end repeat
+   return pWord
+end _PaintTextName
+
+-- T53: the paint text's textFont, textSize, textHeight, textStyle or
+-- textAlign read with no object ("put the textHeight div 2 into h", "if
+-- the textStyle is "Plain" then", "put the textFont into oldFont"),
+-- HyperCard's for the text its text tool painted, as a script set it or
+-- as HyperCard had it ("reset paint": Geneva, 12, a textHeight of 16,
+-- plain and left): the library's hcPaintText. This engine reads them as
+-- empty, and does not compile one before div ("the textHeight div 2",
+-- Graph Maker's) or the textStyle before any operator ("the textStyle is
+-- "Plain"", Stack Starter's). One of an object or a chunk ("the textSize
+-- of fld 1", "the textFont of msg", T28's) and the one a set sets ("set
+-- the textSize to 12", _SetPaintText's) are not taken
+private function _PaintTextReads pLine
+   local tTokens, tCode, tIdx, n, tItem, i, tChanged
+   if "text" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = n down to 2
+      if _T(tTokens, tIdx[i]) is not among the words of kPaintText or _T(tTokens, tIdx[i - 1]) is not "the" then next repeat
+      if _T(tTokens, tIdx[i + 1]) is among the words of "of in" or _T(tTokens, tIdx[i - 2]) is "set" then next repeat
+      _Replace tTokens, tIdx, i - 1, i, "hcPaintText(" & quote & _PaintTextName(_T(tTokens, tIdx[i])) & quote & ")"
+      _Fire "T53 the paint text's properties"
+      put true into tChanged
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _PaintTextReads
 
 -- T54: sort the cards of a background ("sort cards of this bg by field
 -- "Name"", "sort bkgnd "Data" numeric by line 1 of field f", "sort this
