@@ -1229,7 +1229,8 @@ on TestHyperCardScriptsT46
          "  hcWindow " & q & "hide" & q & ", " & q & "message watcher" & q)
 
    -- and run: show card window at, and the loc of a window, compile here
-   -- as they are; the loc of card window does not. tPalette is another
+   -- as they are; the loc of card window does not, but without "the" in a
+   -- sum it does, and stops there ("can't find stack"). tPalette is another
    -- stack's card window; tPlte a palette the import made from a PLTE
    -- resource, tPicture a picture window, which HyperCard placed from the
    -- card window's top left
@@ -1266,6 +1267,11 @@ on TestHyperCardScriptsT46
          "  put the rect of window " & q & tPicture & q & " into gHCScriptsTest", "  put comma & the globalLoc of window " & q & tPicture & q & " after gHCScriptsTest", "end mouseUp")
    create button "Card"
    set the script of button "Card" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set the loc of card window to 30,40", "  put the loc of card window into gHCScriptsTest", "end mouseUp")
+   create button "Sum"
+   set the rect of button "Sum" to 10,20,110,40
+   set the script of button "Sum" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put item 1 of loc of card window + 5 into gHCScriptsTest", \
+         "  put comma & (top of cd window -1) after gHCScriptsTest", "  put comma & max(left of card window + left of me, \", \
+         "  top of the card window + 1) after gHCScriptsTest", "end mouseUp")
    create button "Own"
    set the script of button "Own" to _Lines("on mouseUp", "  global gHCScriptsTest", "  show window " & q & "Scroll" & q, "  show tool window", \
          "  set the loc of window " & q & "Variable Watcher" & q & " to " & q & "0,18" & q, \
@@ -1279,6 +1285,7 @@ on TestHyperCardScriptsT46
    unlock messages
    TestAssert "T46: show card window at, and the loc of a window, compile here as they are", \
          _Compiles(the script of button "Show" of card 1 of stack tStack) and _Compiles(the script of button "Other" of card 1 of stack tStack)
+   TestAssert "T46: a property of the card window in a sum compiles here as it is", _Compiles(the script of button "Sum" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
    set the defaultStack to tStack
    send "mouseUp" to button "Show" of card 1 of stack tStack
@@ -1292,6 +1299,10 @@ on TestHyperCardScriptsT46
    send "mouseUp" to button "Card" of card 1 of stack tStack
    TestAssert "T46: the card window's location, set and read, is its top left", the topLeft of stack tStack is "30,40" and gHCScriptsTest is "30,40"
    put the topLeft of stack tStack into tOrigin
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Sum" of card 1 of stack tStack
+   TestAssert "T46: a property of the card window without the, in a sum: this stack's, its loc its top left", \
+         gHCScriptsTest is (item 1 of tOrigin + 5) & comma & (item 2 of tOrigin - 1) & comma & max(item 1 of tOrigin + 10, item 2 of tOrigin + 1)
    put empty into gHCScriptsTest
    send "mouseUp" to button "Plte" of card 1 of stack tStack
    TestAssert "T46: a palette's location, set, read, shown at and opened at: from the card window's top left", gHCScriptsTest is "10,10,20,30,5,6" \

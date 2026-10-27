@@ -99,7 +99,10 @@ script "revHyperCardScriptLibrary"
 -- ("set the loc of card window to 0,20") and from the card window's top
 -- left for every other (the message box, a palette, a picture: "the loc
 -- of window "Tools Palette"", "show msg at 15,300"), and this engine by
--- a stack's centre on the screen; "show" and "hide card window", which
+-- a stack's centre on the screen; a property of the card window
+-- without "the" and followed by a sum ("item 1 of loc of card window
+-- +191"), which this engine takes for a card of a stack named by the sum
+-- and stops at; "show" and "hide card window", which
 -- this engine does nothing for; HyperCard's own windows named in quotes
 -- ("the visible of window "Scroll"") and the watchers shown and hidden
 -- ("show variable watcher"); and the message box's properties without
@@ -3491,6 +3494,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
    if pElse is not true then
       put _MenuItemProperties(pLine) into pLine
       put _MenuReads(pLine) into pLine
+      put _CardWindow(pLine) into pLine
       put _HyperCardWindows(pLine) into pLine
       put _MessageBoxProperties(pLine) into pLine
       put _HyperCardObject(pLine) into pLine
@@ -4673,6 +4677,40 @@ private function _SetMessageBox pTokens, pIdx, pAt, pEnd
    _Fire "T28 message box properties"
    return "hcSetMessageBox" && quote & tProperty & quote & comma && _Span(pTokens, pIdx, j + 3 + tRef, pEnd)
 end _SetMessageBox
+
+-- T46: a property of the card window, in a script that compiles too: the
+-- window of this stack, its loc its top left ("put item 1 of it + item 1
+-- of loc of card window +191 into horiz", WorkStation's; "left of card
+-- window + left of me + 1", HyperFTP's). Without "the" and followed by a
+-- plus, a minus or a comma, it compiles here, as a card of a stack named
+-- by what follows, and stops there ("can't find stack"); a script that
+-- does not compile has had it rewritten by _PhraseRules already
+private function _CardWindow pLine
+   local tTokens, tCode, tIdx, n, tItem, i, tAt, tChanged
+   if "window" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   put false into tChanged
+   repeat with i = 2 to n - 1
+      if _T(tTokens, tIdx[i]) is not among the words of "card cd" or _T(tTokens, tIdx[i + 1]) is not "window" then next repeat
+      put i into tAt
+      if _T(tTokens, tIdx[tAt - 1]) is "the" then subtract 1 from tAt
+      if tAt < 3 or _T(tTokens, tIdx[tAt - 1]) is not "of" then next repeat
+      if _T(tTokens, tIdx[tAt - 2]) is among the words of "loc location" then
+         put "topLeft" into tTokens[tIdx[tAt - 2]]["t"]
+      end if
+      _Replace tTokens, tIdx, tAt, i + 1, "this stack"
+      put true into tChanged
+      _Fire "T46 HyperCard's windows"
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _CardWindow
 
 -- T28: the properties of HyperCard's own windows ("the visible of tool
 -- window", "set the visible of the variable watcher to true"), which
