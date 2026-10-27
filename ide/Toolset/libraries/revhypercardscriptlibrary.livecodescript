@@ -1243,9 +1243,12 @@ end _RenamedFunctions
 -- handler has that name, and this engine runs the message as its own
 -- command ("move", which stops with an error): the handler's new name,
 -- in quotes. Not a message sent to a window, a program or HyperCard (an
--- external's window takes "close"), nor doMenu (T15's)
+-- external's window takes "close"; HyperCard, named in quotes too ("send
+-- "go to next card" to "hyperCard"", Bring in the Expert's, whose stack
+-- has its own "on go"), runs its own handler, not the stack's), nor doMenu
+-- (T15's)
 private function _RenamedMessages pLine, pRename
-   local tTokens, tCode, tIndex, tNext, tAfter, tWord, tText, tLength, tChanged
+   local tTokens, tCode, tIndex, tNext, tAfter, tWord, tText, tLength, tChanged, tTo
    if "send" is not in pLine then return pLine
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -1256,8 +1259,10 @@ private function _RenamedMessages pLine, pRename
       put _NextCode(tCode, tNext) into tAfter
       if tAfter is not empty then
          if _Lower(tTokens[tAfter]["t"]) is not among the words of "to else" then next repeat
-         if _Lower(tTokens[tAfter]["t"]) is "to" and _NextCode(tCode, tAfter) is not empty \
-               and _Lower(tTokens[_NextCode(tCode, tAfter)]["t"]) is among the words of "window program hypercard" then next repeat
+         if _Lower(tTokens[tAfter]["t"]) is "to" and _NextCode(tCode, tAfter) is not empty then
+            put _Lower(tTokens[_NextCode(tCode, tAfter)]["t"]) into tTo
+            if tTo is among the words of "window program hypercard" or tTo is quote & "hypercard" & quote then next repeat
+         end if
       end if
       if tTokens[tNext]["k"] is "w" then
          put _Lower(tTokens[tNext]["t"]) into tWord
@@ -3804,8 +3809,12 @@ private function _HyperCardRules pLine, pCompiled, pElse
             -- T29: send ... to HyperCard, the application, which had the
             -- message's built-in handler: hcSendToHyperCard (a message
             -- named by a word this engine reads as one of its constants,
-            -- "send help to hypercard", in quotes, as T44 puts it)
-            if tEnd > i + 2 and _T(tTokens, tIdx[tEnd]) is "hypercard" and _T(tTokens, tIdx[tEnd - 1]) is "to" then
+            -- "send help to hypercard", in quotes, as T44 puts it). Also
+            -- HyperCard named in quotes ("send "go to next card" to
+            -- "hyperCard"", Bring in the Expert's), which here names no
+            -- object and stops with an error
+            if tEnd > i + 2 and (_T(tTokens, tIdx[tEnd]) is "hypercard" or _T(tTokens, tIdx[tEnd]) is quote & "hypercard" & quote) \
+                  and _T(tTokens, tIdx[tEnd - 1]) is "to" then
                _Fire "T29 HyperCard the application"
                if tEnd = i + 3 and tTokens[tIdx[i + 1]]["k"] is "w" and _T(tTokens, tIdx[i + 1]) is among the words of kEngineConstants then
                   put "hcSendToHyperCard" && quote & tTokens[tIdx[i + 1]]["t"] & quote into tNew

@@ -3026,7 +3026,10 @@ on TestHyperCardScriptsT1Sends
    -- which HyperCard's handler took, and which here found no handler of
    -- that name and ran as this engine's own command, stopping with an
    -- error: the new name, in quotes. A message to a window, and one no
-   -- handler of the stack is named, are left as they are
+   -- handler of the stack is named, are left as they are, and so is one
+   -- to HyperCard, named in quotes too ("send "go to next card" to
+   -- "hyperCard"", Bring in the Expert's, whose stack has its own "on
+   -- go"), which HyperCard's own handler took (T29)
    local tScript, tStack, q, tError, tCard
    global gHCScriptsTest
    put quote into q
@@ -3037,6 +3040,8 @@ on TestHyperCardScriptsT1Sends
          "  send " & q & "close" & q & " to window " & q & "NLU" & q, \
          "  send " & q & "sort" & q & " to me", \
          "  put " & q & "send move to me" & q & " into y -- send move", \
+         "  send " & q & "move north" & q & " to " & q & "hyperCard" & q, \
+         "  send " & q & "move north" & q & " to HyperCard", \
          "end mouseUp", "on move", "end move", "on reset", "end reset", "on close", "end close") into tScript
    TestAssert "T1: a message to a renamed handler, not in quotes and in them, with its parameters", line 2 to 3 of tScript \
          is _Lines("  send " & q & "hc_move" & q & " to card id cardID", "  send " & q & "hc_move north" & q & " to this card")
@@ -3044,6 +3049,8 @@ on TestHyperCardScriptsT1Sends
    TestAssert "T1: to a window, to no handler of the stack, in a string: unchanged", line 5 to 7 of tScript \
          is _Lines("  send " & q & "close" & q & " to window " & q & "NLU" & q, "  send " & q & "sort" & q & " to me", \
          "  put " & q & "send move to me" & q & " into y -- send move")
+   TestAssert "T1, T29: to HyperCard, in quotes or not: its own handler, not the stack's", line 8 to 9 of tScript \
+         is _Lines("  hcSendToHyperCard " & q & "move north" & q, "  hcSendToHyperCard " & q & "move north" & q)
    TestAssert "T1: those compile", _Compiles(tScript)
 
    -- in a stack: the message to another card's handler
@@ -3060,6 +3067,12 @@ on TestHyperCardScriptsT1Sends
    set the script of button "Go" to _Lines("on mouseUp", "  global gHCScriptsTest, cardID", \
          "  put " & tCard & " into cardID", "  send move to card id cardID", \
          "  send " & q & "move north" & q & " to card id cardID", "end mouseUp")
+   -- (and HyperCard's go, past the stack's own)
+   set the script of stack tStack to _Lines("on go", "  global gHCScriptsTest", \
+         "  put " & q & "the stack's go" & q & " after gHCScriptsTest", "end go")
+   create button "HC"
+   set the script of button "HC" to _Lines("on mouseUp", \
+         "  send " & q & "go to next card" & q & " to " & q & "hyperCard" & q, "end mouseUp")
    unlock messages
    get revHyperCardFixScripts(tStack)
    set the defaultStack to tStack
@@ -3069,6 +3082,13 @@ on TestHyperCardScriptsT1Sends
    catch tError
    end try
    TestAssert "T1: the card's handler takes the message", tError is empty and gHCScriptsTest is "moved moved north"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "HC" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T29: send to HyperCard in quotes goes to the next card, not by the stack's go", \
+         tError is empty and gHCScriptsTest is empty and the short name of this card of stack tStack is "North"
    _Close tStack
 end TestHyperCardScriptsT1Sends
 
