@@ -136,7 +136,21 @@ script "revHyperCardScriptLibrary"
 -- picture of a card or a background it names ("hide picture of card
 -- "FX"", "show pict of this cd"), which stops with an error here: the
 -- library's hcShowPict and hcShowPicture, which read and set whether
--- the picture T19 shows and hides is shown.
+-- the picture T19 shows and hides is shown. T53 takes the textStyle and
+-- the textAlign set with no object ("set textstyle to plain", "set the
+-- textAlign to center"), HyperCard's style and alignment for the text
+-- its text tool painted, which this engine cannot set and stops at: the
+-- library's hcSetPaintText, which does nothing, as this engine's own
+-- textFont, textSize and textHeight set so do. T54 takes the cards of a
+-- background sorted ("sort cards of this bg by field "Name"", "sort
+-- bkgnd "Data" numeric by ..."), which this engine refuses, and "sort
+-- this stack", which is its "sort cards": the background's cards are
+-- marked, sorted as marked cards and put back in the places they had
+-- (the library's hcSortBegin and hcSortEnd). T55 takes the version of a
+-- stack ("item 4 of the version of this stack"), which this engine
+-- takes for its own version followed by "of": a script with one does
+-- not compile, and "get the version of this stack" stops ("source is
+-- not a container"): the library's hcStackVersion.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -2735,7 +2749,7 @@ end _AloneAsValue
 -- T10: the version and the long version, which in HyperCard are
 -- HyperCard's, not this engine's (scripts test "the version < 2")
 private function _VersionRule pLine
-   local tTokens, tCode, tIdx, n, tItem, i, tWord
+   local tTokens, tCode, tIdx, n, tItem, i, tWord, tAt, tStart
    if "heapspace" is in pLine then put _HeapSpaceRule(pLine) into pLine
    if "version" is not in pLine then return pLine
    put _Tokens(pLine) into tTokens
@@ -2746,6 +2760,28 @@ private function _VersionRule pLine
       put tItem into tIdx[n]
    end repeat
    repeat with i = 2 to n
+      -- T55: the version of a stack ("get the version of this stack",
+      -- "item 3 of the version of stack x"), which this engine takes for
+      -- its own version followed by "of": the script does not compile,
+      -- or "get the version of this stack" stops ("source is not a
+      -- container"). The library's hcStackVersion; "of stack" alone is
+      -- this stack's (T11)
+      if _T(tTokens, tIdx[i]) is "version" and _T(tTokens, tIdx[i + 1]) is "of" \
+            and (_T(tTokens, tIdx[i + 2]) is "stack" or (_T(tTokens, tIdx[i + 2]) is "this" and _T(tTokens, tIdx[i + 3]) is "stack")) then
+         put _StackRefEnd(tTokens, tIdx, i + 2, n) into tAt
+         if tAt > 0 then
+            put i into tStart
+            if _T(tTokens, tIdx[tStart - 1]) is "long" then subtract 1 from tStart
+            if _T(tTokens, tIdx[tStart - 1]) is "the" then subtract 1 from tStart
+            if tAt = i + 2 then
+               _Replace tTokens, tIdx, tStart, tAt, "hcStackVersion(the long id of this stack)"
+            else
+               _Replace tTokens, tIdx, tStart, tAt, "hcStackVersion(the long id of" && _Span(tTokens, tIdx, i + 2, tAt) & ")"
+            end if
+            _Fire "T55 the version of a stack"
+            next repeat
+         end if
+      end if
       if _T(tTokens, tIdx[i]) is not "version" or _T(tTokens, tIdx[i + 1]) is "of" then next repeat
       if _T(tTokens, tIdx[i - 1]) is "long" and _T(tTokens, tIdx[i - 2]) is "the" then
          _Replace tTokens, tIdx, i - 2, i, "hcLongVersion()"
@@ -3076,6 +3112,10 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tNew is empty then put _SetCardAndStyle(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetTextFont(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetShowPict(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetPaintText(tTokens, tIdx, i, tEnd) into tNew
+            break
+         case "sort"
+            put _SortCards(tTokens, tIdx, i, tEnd, n) into tNew
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
@@ -4411,6 +4451,83 @@ private function _SetTextFont pTokens, pIdx, pAt, pEnd
    return _Span(pTokens, pIdx, pAt, tTo) && _Literal(_Span(pTokens, pIdx, tTo + 1, pEnd))
 end _SetTextFont
 
+-- T53: set the textStyle or the textAlign with no object ("set textstyle
+-- to plain", "set the textAlign to "right"", "set the textStyle to
+-- bold,italic"), HyperCard's style and alignment for the text its text
+-- tool painted. This engine reads them as empty, but setting them stops
+-- the script ("can't find object", "no object to set property"), where
+-- its textFont, textSize and textHeight set so do nothing: the library's
+-- hcSetPaintText, which does nothing either, with the value as it was
+-- (a list of styles is its parameters)
+private function _SetPaintText pTokens, pIdx, pAt, pEnd
+   local tProperty
+   put pAt + 1 into tProperty
+   if _T(pTokens, pIdx[tProperty]) is "the" then add 1 to tProperty
+   if _T(pTokens, pIdx[tProperty]) is not among the words of "textstyle textalign" \
+         or _T(pTokens, pIdx[tProperty + 1]) is not "to" or tProperty + 1 >= pEnd then
+      return empty
+   end if
+   _Fire "T53 the paint text's textStyle and textAlign"
+   if _T(pTokens, pIdx[tProperty]) is "textstyle" then
+      return "hcSetPaintText" && quote & "textStyle" & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
+   end if
+   return "hcSetPaintText" && quote & "textAlign" & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
+end _SetPaintText
+
+-- T54: sort the cards of a background ("sort cards of this bg by field
+-- "Name"", "sort bkgnd "Data" numeric by line 1 of field f", "sort this
+-- background by ...", "sort marked cards of bkgnd 2 by ..."), which
+-- HyperCard took and this engine refuses ("sort: error sorting"); and
+-- sort this stack ("sort this stack by ...", "sort stack descending by
+-- ..."), which here is "sort cards". A background's cards are sorted
+-- among the places they had, as in HyperCard, by the script's own
+-- expression, its variables and all: the library's hcSortBegin marks
+-- them (with "marked", the ones of them that are marked), this
+-- engine's "sort marked cards" sorts them, and hcSortEnd puts them back
+-- in their places, in their new order, and the marks back as they were.
+-- That is three statements, so a sort of a background alone on its line
+-- only (a sort after "then" is left as it is)
+private function _SortCards pTokens, pIdx, pAt, pEnd, pCount
+   local j, k, tMarked, tRefEnd, tBy
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "this" and _T(pTokens, pIdx[j + 1]) is "stack" then add 1 to j
+   if _T(pTokens, pIdx[j]) is "stack" then
+      if j = pEnd or _T(pTokens, pIdx[j + 1]) is not among the words of "ascending descending text numeric international datetime by" then
+         return empty
+      end if
+      _Fire "T54 sort a background's cards, and this stack"
+      return "sort cards" && _Span(pTokens, pIdx, j + 1, pEnd)
+   end if
+   put pAt + 1 into j
+   put false into tMarked
+   if _T(pTokens, pIdx[j]) is "marked" then
+      put true into tMarked
+      add 1 to j
+   end if
+   if _T(pTokens, pIdx[j]) is among the words of "cards cds" then
+      if _T(pTokens, pIdx[j + 1]) is not "of" then return empty
+      add 2 to j
+   else if tMarked then
+      return empty
+   end if
+   if j > pEnd then return empty
+   put _CardRefEnd(pTokens, pIdx, j, pEnd) into tRefEnd
+   if tRefEnd = 0 or _PictureKind(pTokens, pIdx, j) is not "background" then return empty
+   -- the order and the kind of sort, then "by"
+   put 0 into tBy
+   repeat with k = tRefEnd + 1 to pEnd
+      if _T(pTokens, pIdx[k]) is "by" then
+         put k into tBy
+         exit repeat
+      end if
+      if _T(pTokens, pIdx[k]) is not among the words of "ascending descending text numeric international datetime" then return empty
+   end repeat
+   if tBy = 0 or tBy = pEnd or pAt > 1 or pEnd < pCount then return empty
+   _Fire "T54 sort a background's cards, and this stack"
+   return "hcSortBegin the long id of" && _Span(pTokens, pIdx, j, tRefEnd) & comma && tMarked & ";" \
+         && "sort marked cards" && _Span(pTokens, pIdx, tRefEnd + 1, pEnd) & ";" && "hcSortEnd"
+end _SortCards
+
 -- T19: show and hide card picture, background picture (which this engine
 -- reads as a card named "picture"); T21: show, hide and close window,
 -- and HyperCard's own windows (the scroll window, the tool window...),
@@ -4571,6 +4688,45 @@ private function _PictureKind pTokens, pIdx, pFrom
    if _T(pTokens, pIdx[pFrom]) is among the words of "background bkgnd bg" then return "background"
    return "card"
 end _PictureKind
+
+-- T55: the last code token of a stack named from pFrom ("this stack",
+-- "stack "Data"", "stack tName", "stack ("x" & y)"), or 0; "stack" with
+-- no name after it (this stack, as T11 takes it) ends at pFrom
+private function _StackRefEnd pTokens, pIdx, pFrom, pTo
+   local j, tDepth
+   put pFrom into j
+   if _T(pTokens, pIdx[j]) is "this" then
+      if _T(pTokens, pIdx[j + 1]) is not "stack" then return 0
+      return j + 1
+   end if
+   if _T(pTokens, pIdx[j]) is not "stack" then return 0
+   if j = pTo then return j
+   add 1 to j
+   if _T(pTokens, pIdx[j]) is "(" then
+      put 0 into tDepth
+      repeat with j = j to pTo
+         if _T(pTokens, pIdx[j]) is "(" then
+            add 1 to tDepth
+         else if _T(pTokens, pIdx[j]) is ")" then
+            subtract 1 from tDepth
+            if tDepth = 0 then exit repeat
+         end if
+      end repeat
+      if j > pTo then
+         return 0
+      end if
+   else if pTokens[pIdx[j]]["k"] is not "s" then
+      -- a name in a variable; anything else after "stack" (an operator,
+      -- "is", "into") leaves it alone, this stack
+      if pTokens[pIdx[j]]["k"] is not "w" or _T(pTokens, pIdx[j]) is among the words of kNotPlain \
+            or _T(pTokens, pIdx[j]) is among the words of kObjectWords \
+            or _T(pTokens, pIdx[j]) is among the words of "into then else to with from" then
+         return pFrom
+      end if
+   end if
+   if j < pTo and _T(pTokens, pIdx[j + 1]) is "of" then return 0
+   return j
+end _StackRefEnd
 
 -- T12 and T8: HyperCard commands this engine does not have, to the
 -- library's handlers; and "group" after a comma in a text style, which

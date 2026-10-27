@@ -1704,6 +1704,243 @@ on TestHyperCardScriptsT52
    _Close tStack
 end TestHyperCardScriptsT52
 
+on TestHyperCardScriptsT53
+   -- T53: the textStyle and the textAlign set with no object, HyperCard's
+   -- for the text its text tool painted, which this engine reads as empty
+   -- but stops at when a script sets them: the library's hcSetPaintText,
+   -- which does nothing, as this engine's textFont set so does (274
+   -- statements in 37 corpus stacks)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  set textstyle to plain", \
+         "  set the textAlign to " & q & "right" & q, \
+         "  set the textStyle to bold,italic", \
+         "  if tCount > 10 then set textstyle to plain else set textstyle to bold", \
+         "  set textStyle to any item of theTextStyle", \
+         "end mouseUp") into tScript
+   TestAssert "T53: the textStyle", line 2 of tScript is "  hcSetPaintText " & q & "textStyle" & q & ", plain"
+   TestAssert "T53: the textAlign, with the", line 3 of tScript is "  hcSetPaintText " & q & "textAlign" & q & ", " & q & "right" & q
+   TestAssert "T53: a list of styles", line 4 of tScript is "  hcSetPaintText " & q & "textStyle" & q & ", bold,italic"
+   TestAssert "T53: after then and after else", line 5 of tScript \
+         is "  if tCount > 10 then hcSetPaintText " & q & "textStyle" & q & ", plain else hcSetPaintText " & q & "textStyle" & q & ", bold"
+   TestAssert "T53: an expression", line 6 of tScript is "  hcSetPaintText " & q & "textStyle" & q & ", any item of theTextStyle"
+   TestAssert "T53: the script compiles", _Compiles(tScript)
+
+   -- unchanged: the style of an object or a chunk, the textSize (which
+   -- this engine sets to nothing as it is), a read
+   put _Rewrite("on mouseUp", \
+         "  set the textStyle of fld 1 to bold", \
+         "  set the textAlign of cd btn 2 to center", \
+         "  set textStyle of word 1 of fld 1 to italic", \
+         "  set the textSize to 12", \
+         "  get the textStyle", \
+         "end mouseUp") into tScript
+   TestAssert "T53: of a field: unchanged", line 2 of tScript is "  set the textStyle of fld 1 to bold"
+   TestAssert "T53: of a button: unchanged", line 3 of tScript is "  set the textAlign of cd btn 2 to center"
+   TestAssert "T53: of a chunk: unchanged", line 4 of tScript is "  set textStyle of word 1 of fld 1 to italic"
+   TestAssert "T53: the textSize: unchanged", line 5 of tScript is "  set the textSize to 12"
+   TestAssert "T53: a read: unchanged", line 6 of tScript is "  get the textStyle"
+
+   -- in a script that compiles: it goes on past them, where this engine
+   -- stopped at the first
+   put "HCScriptsT53" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Paint"
+   set the script of button "Paint" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put 1 into gHCScriptsTest", \
+         "  set the textStyle to bold", \
+         "  set the textAlign to center", \
+         "  put 2 into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Paint" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T53: as it is, it stops at the textStyle", gHCScriptsTest is 1
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T53: in a script that compiles", _Compiles(the script of button "Paint" of card 1 of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Paint" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T53: it goes on, as in HyperCard", gHCScriptsTest is 2
+   _Close tStack
+end TestHyperCardScriptsT53
+
+on TestHyperCardScriptsT54
+   -- T54: the cards of a background sorted, which this engine refuses
+   -- ("sort: error sorting"), and sort this stack, which here is "sort
+   -- cards": the background's cards sorted among the places they had,
+   -- by the script's own expression (84 statements in 41 corpus stacks)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest, gHCScriptsCards
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  sort cards of this bg by bg field " & q & "Name" & q, \
+         "  sort bkgnd " & q & "Tape Database" & q & " numeric by line 1 of field fieldName", \
+         "  Sort this background descending by field " & q & "Name" & q, \
+         "  sort marked cards of bkgnd 2 by fld 1", \
+         "  sort this stack descending text by short name of this card", \
+         "  sort stack by field FontNameSize", \
+         "end mouseUp") into tScript
+   TestAssert "T54: the cards of this background", line 2 of tScript \
+         is "  hcSortBegin the long id of this bg, false; sort marked cards by bg field " & q & "Name" & q & "; hcSortEnd"
+   TestAssert "T54: a background by name, numeric", line 3 of tScript \
+         is "  hcSortBegin the long id of bkgnd " & q & "Tape Database" & q & ", false; sort marked cards numeric by line 1 of field fieldName; hcSortEnd"
+   TestAssert "T54: this background, descending", line 4 of tScript \
+         is "  hcSortBegin the long id of this background, false; sort marked cards descending by field " & q & "Name" & q & "; hcSortEnd"
+   TestAssert "T54: the marked cards of a background by number", line 5 of tScript \
+         is "  hcSortBegin the long id of bkgnd 2, true; sort marked cards by fld 1; hcSortEnd"
+   TestAssert "T54: this stack", line 6 of tScript is "  sort cards descending text by short name of this card"
+   TestAssert "T54: stack", line 7 of tScript is "  sort cards by field FontNameSize"
+   TestAssert "T54: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a field's lines, this engine's own sorts, a sort after
+   -- then (three statements cannot go there), a background of another
+   -- stack
+   put _Rewrite("on mouseUp", \
+         "  sort bg fld " & q & "gobg" & q, \
+         "  sort cards by fld 1", \
+         "  sort marked cards descending by fld 1", \
+         "  sort lines of fld 1 descending", \
+         "  if x then sort this bg by fld 1", \
+         "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1", \
+         "end mouseUp") into tScript
+   TestAssert "T54: a background field's lines: unchanged", line 2 of tScript is "  sort bg fld " & q & "gobg" & q
+   TestAssert "T54: sort cards: unchanged", line 3 of tScript is "  sort cards by fld 1"
+   TestAssert "T54: sort marked cards: unchanged", line 4 of tScript is "  sort marked cards descending by fld 1"
+   TestAssert "T54: sort lines: unchanged", line 5 of tScript is "  sort lines of fld 1 descending"
+   TestAssert "T54: after then: unchanged", line 6 of tScript is "  if x then sort this bg by fld 1"
+   TestAssert "T54: another stack's background: unchanged", line 7 of tScript is "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1"
+
+   -- in a script that compiles: five cards, of backgrounds A and B in
+   -- turn, the A cards sorted by a field of theirs named in a variable,
+   -- into the places they had; the B cards and the marks left as they
+   -- were. Sorted from the fourth card: A2 and A3, whose keys are equal,
+   -- keep the stack's order all the same, and as this engine's sort, it
+   -- ends on the first card, with closeCard and openCard to those two
+   -- cards only
+   put "HCScriptsT54" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the name of card 1 of stack tStack to "A1"
+   create card "B1"
+   create card "A2"
+   create card "B2"
+   create card "A3"
+   go to card "A1"
+   create group "A"
+   set the backgroundBehavior of group "A" to true
+   create field "Key" in group "A"
+   place group "A" onto card "A2"
+   place group "A" onto card "A3"
+   go to card "B1"
+   create group "B"
+   set the backgroundBehavior of group "B" to true
+   place group "B" onto card "B2"
+   put "c" into field "Key" of card "A1"
+   put "a" into field "Key" of card "A2"
+   put "a" into field "Key" of card "A3"
+   set the mark of card "B1" to true
+   set the script of stack tStack to _Lines("on openCard", "  global gHCScriptsCards", \
+         "  put " & q & "open" & q & " && the short name of the target & comma after gHCScriptsCards", "end openCard", \
+         "on closeCard", "  global gHCScriptsCards", \
+         "  put " & q & "close" & q & " && the short name of the target & comma after gHCScriptsCards", "end closeCard")
+   create button "Sort" in group "B"
+   set the script of button "Sort" of card "B1" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  local tField, tNames, i", \
+         "  put " & q & "Key" & q & " into tField", \
+         "  put empty into gHCScriptsTest", \
+         "  sort cards of bkgnd " & q & "A" & q & " by bg field tField", \
+         "  repeat with i = 1 to the number of cards", \
+         "    put the short name of card i & comma after tNames", \
+         "  end repeat", \
+         "  put tNames & the mark of card " & q & "B1" & q & " & comma & the mark of card " & q & "A1" & q & " into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   set the defaultStack to tStack
+   try
+      send "mouseUp" to button "Sort" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: as it is, the sort stops", gHCScriptsTest is empty
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T54: in a script that compiles", _Compiles(the script of button "Sort" of card "B1" of stack tStack)
+   go to card "B2" of stack tStack
+   set the defaultStack to tStack
+   put empty into gHCScriptsCards
+   try
+      send "mouseUp" to button "Sort" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: the A cards in their places, in order; the B cards and the marks as they were", \
+         gHCScriptsTest is "A2,B1,A3,B2,A1,true,false"
+   TestAssert "T54: on the first card, as this engine's sort ends", the short name of this card of stack tStack is "A2"
+   TestAssert "T54: closeCard to the card it began on, openCard to the first, no other card", \
+         gHCScriptsCards is "close B2,open A2,"
+   _Close tStack
+end TestHyperCardScriptsT54
+
+on TestHyperCardScriptsT55
+   -- T55: the version of a stack, which this engine takes for its own
+   -- version followed by "of", so that a script with one does not compile
+   -- or stops ("source is not a container"): the library's hcStackVersion,
+   -- HyperCard's long version four times and the seconds (7 statements in
+   -- 5 corpus stacks: StackCOMPACTER stopped as it opened)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on openStack", \
+         "  get the version of this stack", \
+         "  put item 1 of the version of stack " & q & "Data" & q & " into v", \
+         "  return (item 4 of the long version of stack stackName >= 2000000)", \
+         "  if char 1 to 2 of item 3 of the version of this stack < 2 then beep", \
+         "  put the version of stack into x", \
+         "  put the version into y", \
+         "end openStack") into tScript
+   TestAssert "T55: the version of this stack", line 2 of tScript is "  get hcStackVersion(the long id of this stack)"
+   TestAssert "T55: of a stack by name", line 3 of tScript is "  put item 1 of hcStackVersion(the long id of stack " & q & "Data" & q & ") into v"
+   TestAssert "T55: the long version, of a stack in a variable", line 4 of tScript is "  return (item 4 of hcStackVersion(the long id of stack stackName) >= 2000000)"
+   TestAssert "T55: an item of it", line 5 of tScript is "  if char 1 to 2 of item 3 of hcStackVersion(the long id of this stack) < 2 then beep"
+   TestAssert "T55: of stack, this stack", line 6 of tScript is "  put hcStackVersion(the long id of this stack) into x"
+   TestAssert "T55: HyperCard's version: still T10's", line 7 of tScript is "  put hcVersion() into y"
+   TestAssert "T55: the script compiles", _Compiles(tScript)
+
+   -- in a script that compiles
+   put "HCScriptsT55" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Version"
+   set the script of button "Version" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  get the version of this stack", \
+         "  put the number of items of it & comma & item 1 of it & comma & (item 5 of it is a number) into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Version" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T55: as it is, it stops", gHCScriptsTest is empty
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Version" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T55: five items, HyperCard's long version first", gHCScriptsTest is "5,02418000,true"
+   _Close tStack
+end TestHyperCardScriptsT55
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
