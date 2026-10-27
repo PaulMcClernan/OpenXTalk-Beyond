@@ -230,3 +230,62 @@ on TestGoNextBackgroundFromCardWithNone
 
    delete stack tStack
 end TestGoNextBackgroundFromCardWithNone
+
+-- A stack of four cards whose first card alone has a background, and its
+-- second card marked
+command _TestGoBackgroundStack
+   local tStack
+   create stack
+   put the short name of it into tStack
+   set the defaultStack to tStack
+   create button "B"
+   group button "B"
+   set the name of group 1 to "Bg"
+   create card
+   create card
+   create card
+   set the backgroundBehavior of group "Bg" of card 1 to true
+   mark card 2 of stack tStack
+   go to card 1 of stack tStack
+   return tStack for value
+end _TestGoBackgroundStack
+
+on TestGoCardOfBackgroundNotFound
+   -- a go to a card of a background that finds no card leaves the stack
+   -- with all its cards (Script Manager's "go cd 1 of bg b" over every
+   -- background left it counting none, and every go to a card by number
+   -- after it failed)
+   local tStack, tWhat
+   repeat for each item tWhat in "card 3,card (1+1),card " & quote & "Nope" & quote & ",card id 99999"
+      _TestGoBackgroundStack
+      put it into tStack
+      do "go to" && tWhat && "of bkgnd 1"
+      TestAssert "a go to" && tWhat && "of a background that has none finds no card", the result is not empty
+      TestAssert "a go to" && tWhat && "of a background that has none stays", the number of this card is 1
+      TestAssert "a go to" && tWhat && "of a background that has none leaves the stack its cards", \
+            the number of cards of stack tStack is 4
+      TestAssert "a go to" && tWhat && "of a background that has none leaves the stack its marked cards", \
+            the number of marked cards of stack tStack is 1
+      go to card 3
+      TestAssert "after a go to" && tWhat && "of a background that has none, a go to a card by number", \
+            the number of this card is 3
+      delete stack tStack
+   end repeat
+end TestGoCardOfBackgroundNotFound
+
+on TestGoBackground
+   -- a go to a background chooses its card, and leaves the stack with all
+   -- its cards
+   local tStack
+   _TestGoBackgroundStack
+   put it into tStack
+   go to bkgnd 1
+   TestAssert "a go to a background goes to its card", the number of this card is 1
+   TestAssert "a go to a background leaves the stack its cards", the number of cards of stack tStack is 4
+   go to card 3
+   TestAssert "after a go to a background, a go to a card by number", the number of this card is 3
+   go to card 1 of bkgnd "Bg"
+   TestAssert "a go to a card of a background", the number of this card is 1
+   TestAssert "a go to a card of a background leaves the stack its cards", the number of cards of stack tStack is 4
+   delete stack tStack
+end TestGoBackground
