@@ -19,10 +19,13 @@ script "HyperCardSweep"
 -- The log's lines: IMPORTED name cards; NOIMPORT error; FIX summary;
 -- LEFT name error text (a handler left out, its text in base64); LINE
 -- name line how error text (a line left out of a handler that was kept,
--- rule T39); ERR and THROW phase error source (an error while running,
--- base64); MODAL phase name (a window that waited for a person, closed
--- by the sweep, the name base64); OPENED; DONE. Text that may hold
--- returns is base64 so a line stays a line.
+-- rule T39); AT phase (a step of the run as it starts: open, card N,
+-- click N,M, so that the last one of a stack that timed out is where it
+-- stopped); ERR and THROW phase error source (an error while running,
+-- base64); ABORT phase (a step a script ended with "exit to top", after
+-- which the tour went on); MODAL phase name (a window that waited for a
+-- person, closed by the sweep, the name base64); OPENED; DONE. Text that
+-- may hold returns is base64 so a line stays a line.
 
 local sDone, sOut, sModal, sTour
 
@@ -130,7 +133,7 @@ command sweepRun
 
    insert the script of stack "HyperCardSweepErrors" into back
    send "sweepModalWatch" to me in 250 milliseconds
-   put "open" into gSweepPhase
+   put tStack into sTour["stack"]
    -- The import opened the stack with messages locked, before its scripts
    -- were fixed, so its own openStack, openBackground and openCard have
    -- not run, and "go" to a stack already open sends none. Closed (with
@@ -144,6 +147,7 @@ command sweepRun
    catch tError
    end try
    unlock messages
+   sweepStep "open", "sweepRun", "sweepOpened"
    try
       -- (by "do": "go to card 1 of" a variable is read when the script
       -- loads, before the stack is there)
@@ -151,10 +155,16 @@ command sweepRun
    catch tError
       sweepLog "THROW" & tab & "open" & tab & sweepBase64(tError) & tab & sweepBase64(sweepSource(tError))
    end try
+   sweepStepDone
+   sweepOpened
+end sweepRun
+
+-- The stack is open: its tour
+command sweepOpened
    sweepFlush
    sweepLog "OPENED"
-   sweepTour tStack
-end sweepRun
+   sweepTour sTour["stack"]
+end sweepOpened
 
 -- Go to the stack's first 40 cards, and on each of the first 20 click up
 -- to 20 buttons, back on the card before each click. One visit or one
@@ -185,8 +195,8 @@ command sweepTourStep
       sweepTourDone
    else if sTour["button"] < sTour["buttons"] then
       add 1 to sTour["button"]
-      put "click" && sTour["card"] & "," & sTour["button"] into gSweepPhase
       put sTour["cardid"] into tCardId
+      sweepStep "click" && sTour["card"] & "," & sTour["button"], "sweepTourStep", "sweepTourStep"
       try
          if exists(tCardId) and the long id of this card of tStack is not tCardId then
             lock messages
@@ -200,29 +210,67 @@ command sweepTourStep
       catch tError
          sweepLog "THROW" & tab & gSweepPhase & tab & sweepBase64(tError) & tab & sweepBase64(sweepSource(tError))
       end try
+      sweepStepDone
       sweepFlush
       send "sweepTourStep" to me in 0 milliseconds
    else if sTour["card"] < sTour["cards"] then
       add 1 to sTour["card"]
-      put "card" && sTour["card"] into gSweepPhase
+      sweepStep "card" && sTour["card"], "sweepTourStep", "sweepCardVisited"
       try
          do "go to card" && sTour["card"] && "of" && tStack
       catch tError
          sweepLog "THROW" & tab & gSweepPhase & tab & sweepBase64(tError) & tab & sweepBase64(sweepSource(tError))
       end try
+      sweepStepDone
       sweepFlush
-      -- its buttons, on the first 20 cards
-      put 0 into sTour["button"]
-      put 0 into sTour["buttons"]
-      if there is a tStack and sTour["card"] <= 20 then
-         put the long id of card sTour["card"] of tStack into sTour["cardid"]
-         put min(20, the number of buttons of sTour["cardid"]) into sTour["buttons"]
-      end if
-      send "sweepTourStep" to me in 0 milliseconds
+      sweepCardVisited
    else
       sweepTourDone
    end if
 end sweepTourStep
+
+-- The card the tour went to: its buttons, on the first 20 cards, and on
+-- to the next step
+command sweepCardVisited
+   local tStack
+   put sTour["stack"] into tStack
+   put 0 into sTour["button"]
+   put 0 into sTour["buttons"]
+   if there is a tStack and sTour["card"] <= 20 then
+      put the long id of card sTour["card"] of tStack into sTour["cardid"]
+      put min(20, the number of buttons of sTour["cardid"]) into sTour["buttons"]
+   end if
+   send "sweepTourStep" to me in 0 milliseconds
+end sweepCardVisited
+
+-- A step of the run (pPhase) starts: logged, so that a stack that timed
+-- out shows where it stopped, and pending until sweepStepDone. A
+-- script's "exit to top" ends every handler that is running, the
+-- sweep's own pRunning too, before it goes on: sweepModalWatch finds the
+-- step pending with pRunning no longer running, and goes on with
+-- pResume, as a person goes on after a click that stopped. Without this
+-- the tour stopped at the first such step, and the stack timed out
+command sweepStep pPhase, pRunning, pResume
+   global gSweepPhase
+   put pPhase into gSweepPhase
+   sweepLog "AT" & tab & pPhase
+   put pRunning into sTour["running"]
+   put pResume into sTour["resume"]
+   put pPhase into sTour["pending"]
+end sweepStep
+
+command sweepStepDone
+   put empty into sTour["pending"]
+end sweepStepDone
+
+-- Whether a handler named pHandler is running
+function sweepIsRunning pHandler
+   local tLine
+   repeat for each line tLine in the executionContexts
+      if item -2 of tLine is pHandler then return true
+   end repeat
+   return false
+end sweepIsRunning
 
 command sweepTourDone
    sweepLog "DONE"
@@ -233,10 +281,23 @@ end sweepTourDone
 -- modal stack) waits until a person closes it, and nobody is there to:
 -- one still open a quarter of a second after it was first seen is
 -- closed, as its Cancel button or close box would close it, and logged.
--- Without this the tour stopped at the first one, and the stack timed out
+-- Without this the tour stopped at the first one, and the stack timed out.
+-- The watch also goes on with the tour after a step that a script ended
+-- with "exit to top" (sweepStep)
 command sweepModalWatch
-   local tLine, tSeen, tError
+   local tLine, tSeen, tError, tResume
    global gSweepPhase
+   -- (first, so that a script's "exit to top" as a window closes does not
+   -- end the watch)
+   send "sweepModalWatch" to me in 250 milliseconds
+   -- a step a script ended with "exit to top" (sweepStep)
+   if sTour["pending"] is not empty and not sweepIsRunning(sTour["running"]) then
+      put sTour["resume"] into tResume
+      put empty into sTour["pending"]
+      sweepFlush
+      sweepLog "ABORT" & tab & gSweepPhase
+      send tResume to me in 0 milliseconds
+   end if
    repeat for each line tLine in the openStacks
       if tLine is among the items of "HyperCardSweep,HyperCardSweepErrors" then next repeat
       try
@@ -252,7 +313,6 @@ command sweepModalWatch
       end try
    end repeat
    put tSeen into sModal
-   send "sweepModalWatch" to me in 250 milliseconds
 end sweepModalWatch
 
 -- The errors errorDialog collected since the last time, to the log
