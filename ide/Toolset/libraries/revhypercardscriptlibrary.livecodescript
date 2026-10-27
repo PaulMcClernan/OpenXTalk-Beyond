@@ -983,6 +983,12 @@ private function _AddLibrary pStack, pStandIns
    -- the one marked as it, under the first free name
    put the short name of pStack into tMain
    put kLibraryName && "(" & tMain & ")" into tBase
+   -- (a stack's name here has no comma: setting one makes each a "_", so
+   -- that the library of "A,B,C's" is "HyperCard Library (A_B_C's)", the
+   -- name it is found by. The name asked for, with its commas, was not
+   -- found once set, and the import stopped there with an error: no
+   -- library, and the stack's scripts' calls of it failed)
+   replace comma with "_" in tBase
    put tBase into tName
    put 1 into tCount
    repeat while tName is among the lines of the substacks of pStack \
@@ -1031,6 +1037,8 @@ private function _AddMenus pStack, pLibrary, pName
    local tBase, tName, tCount, tTemp
    if the behavior of stack pLibrary of pStack is not empty then return empty
    put kMenusName && "(" & pName & ")" into tBase
+   -- (with no comma, as _AddLibrary's)
+   replace comma with "_" in tBase
    put tBase into tName
    put 1 into tCount
    repeat while tName is among the lines of the substacks of pStack \

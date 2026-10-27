@@ -4349,6 +4349,65 @@ on TestHyperCardScriptsNumberName
    unlock messages
 end TestHyperCardScriptsNumberName
 
+on TestHyperCardScriptsCommaName
+   -- a stack whose name has commas, as HyperCard named a stack by its
+   -- file ("W #8 - Dec 1, 1988"): its library, and with HyperCard's
+   -- message order its menus, are made, each with a "_" for a comma, as
+   -- this engine names a stack whose name is set with one
+   local tFolder, tName, tStack, tError, tLibrary, tMenus
+   global gHCScriptsTest
+   put the temporary folder & "/hccomma" & the milliseconds into tFolder
+   create folder tFolder
+   put "A,B,C's" into tName
+   put url ("binfile:" & TestGetInputFile("hypercard/TestCardsBackgrounds.stack")) into url ("binfile:" & tFolder & "/" & tName)
+   lock messages
+   try
+      import stack from file (tFolder & "/" & tName)
+   catch tError
+   end try
+   unlock messages
+   TestAssert "a name with commas: imported", tError is empty and there is a stack tName
+   if there is a stack tName then
+      put the long id of stack tName into tStack
+      lock messages
+      set the hyperTalkCompatible of tStack to true
+      set the defaultStack to tName
+      create button "B" in card 1 of tStack
+      set the script of button "B" of card 1 of tStack to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the version into gHCScriptsTest", "end mouseUp")
+      unlock messages
+      put empty into tError
+      try
+         get revHyperCardFixScripts(tStack)
+      catch tError
+      end try
+      TestAssert "a name with commas: no error", tError is empty
+      TestAssert "a name with commas: the stack keeps it", the short name of tStack is tName
+      put empty into tLibrary
+      put empty into tMenus
+      if the behavior of tStack is not empty then
+         put the short name of the behavior of tStack into tLibrary
+         if the behavior of stack tLibrary of tStack is not empty then
+            put the short name of the behavior of stack tLibrary of tStack into tMenus
+         end if
+      end if
+      TestAssert "a name with commas: its library, a _ for each comma", \
+            tLibrary is "HyperCard Library (A_B_C's)" and tLibrary is among the lines of the substacks of tStack
+      TestAssert "a name with commas: its menus, a _ for each comma", \
+            tMenus is "HyperCard Menus (A_B_C's)" and tMenus is among the lines of the substacks of tStack
+      put empty into gHCScriptsTest
+      try
+         send "mouseUp" to button "B" of card 1 of tStack
+      catch tError
+      end try
+      TestAssert "a name with commas: the library answers", gHCScriptsTest is "2.4.1"
+      lock messages
+      delete tStack
+      unlock messages
+   end if
+   delete file (tFolder & "/" & tName)
+   delete folder tFolder
+end TestHyperCardScriptsCommaName
+
 on TestHyperCardScriptsStandIns
    -- calls to the externals stacks call most reach the library's
    -- stand-ins (those that need no dialog)
