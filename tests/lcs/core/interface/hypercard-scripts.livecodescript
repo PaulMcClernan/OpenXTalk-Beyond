@@ -3794,6 +3794,78 @@ on TestHyperCardScriptsTextExternals
    _Close tStack
 end TestHyperCardScriptsTextExternals
 
+on TestHyperCardScriptsResourceExternals
+   -- the library's FontName, available, IsFile, FileIsOpen and translit,
+   -- for the externals of those names (the fonts; the stack's resources,
+   -- from the import's list of its resource fork; a file there, or open;
+   -- characters changed, taken out, or all but some taken out)
+   local tStack, tTab, tFolder, tFile, q, tExpected
+   global gHCScriptsTest
+   put quote into q
+   put tab into tTab
+   put "HCScriptsResources" & the milliseconds into tStack
+   put the tempName into tFolder
+   create folder tFolder
+   put tFolder & "/Notes" into tFile
+   put "x" into URL ("file:" & tFile)
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the uHyperCard["resources"] of stack tStack to _Lines("Xdna" & tTab & "128" & tTab & "40" & tTab & "Yeast", \
+         "XDNA" & tTab & "129" & tTab & "40" & tTab & "Upper", "Xdna" & tTab & "130" & tTab & "40" & tTab, \
+         "PICT" & tTab & "200" & tTab & "900" & tTab & "Chart", "Xdna" & tTab & "131" & tTab & "40" & tTab & "Plant")
+   set the uHyperCard["file"] of stack tStack to tFolder & "/Stack"
+   create button "Fonts"
+   set the script of button "Fonts" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put (FontName() is replaceText(the fontNames, return, comma)) & comma into gHCScriptsTest", \
+         "  put (available(" & q & "fonts" & q & ") is the fontNames) & comma after gHCScriptsTest", \
+         "  if the fontNames is empty then put true after gHCScriptsTest else put available(font, line -1 of the fontNames) after gHCScriptsTest", \
+         "  put comma & available(font, " & q & "No Font Called This" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Resources"
+   set the script of button "Resources" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put available(" & q & "Xdna" & q & ") & " & q & "|" & q & " & available(" & q & "pict" & q & ") & " & q & "|" & q & " & available(" & q & "types" & q & ") into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & available(" & q & "Xdna" & q & ", " & q & "Plant" & q & ") & " & q & "|" & q & " & available(" & q & "soun" & q & ") & " & q & "|" & q & " & available(" & q & "Xdna" & q & ", empty, " & q & "Other" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Files"
+   set the script of button "Files" to _Lines("on mouseUp pFile", "  global gHCScriptsTest", \
+         "  put IsFile(pFile) & comma & IsFile(pFile & " & q & "2" & q & ") & comma & IsFile(" & q & "Notes" & q & ") into gHCScriptsTest", \
+         "  put comma & FileIsOpen(pFile) after gHCScriptsTest", "  open file pFile", \
+         "  put comma & FileIsOpen(pFile) & comma & FileIsOpen(" & q & "Notes" & q & ") after gHCScriptsTest", "  close file pFile", \
+         "  put comma & FileIsOpen(pFile) & comma & FileIsOpen(empty) after gHCScriptsTest", "end mouseUp")
+   create button "Translit"
+   set the script of button "Translit" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put translit(" & q & "ATGC" & q & ", " & q & "TACG" & q & ", " & q & "AATTGGCC" & q & ") into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "atugcATUGC" & q & ", " & q & "TAACGTAACG" & q & ", " & q & "aTgx" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "m" & q & ", " & q & q & ", " & q & "mmol" & q & ") & " & q & "|" & q & " & translit(" & q & "ab" & q & ", " & q & "x" & q & ", " & q & "abc" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & length(translit(" & q & "\Aa" & q & ", " & q & q & ", " & q & "AaTGaC" & q & ")) after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\ATUGC.N*" & q & ", " & q & " " & q & ", " & q & "AT1G-C" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\t" & q & ", " & q & "," & q & ", " & q & "a" & q & " & tab & " & q & "b" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\r" & q & ", " & q & q & ", " & q & "a" & q & " & return & " & q & "b" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\n" & q & ", " & q & q & ", " & q & "a" & q & " & numToChar(13) & return & " & q & "b" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(comma, return, " & q & "a,b" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Fonts" of stack tStack
+   TestAssert "FontName: the fonts, by commas; available: the fonts, and whether there is one", gHCScriptsTest is "true,true,true,false"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Resources" of stack tStack
+   put "Yeast" & return & "Plant|Chart|Xdna" & return & "XDNA" & return & "PICT|true||" into tExpected
+   TestAssert "available: the stack's named resources of a type, its case counting; PICT; the types; one by name; no sounds; none in a file", gHCScriptsTest is tExpected
+   put empty into gHCScriptsTest
+   send "mouseUp" && quote & tFile & quote to button "Files" of stack tStack
+   TestAssert "IsFile and FileIsOpen, by path and by a name alone in the stack's folder", gHCScriptsTest is "true,false,true,false,true,true,false,Error : Missing or empty parameter"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Translit" of stack tStack
+   put "TTAACCGG|TACx|ol|xxc|3|AT G C|a,b|ab|a" & return & "b|a" & return & "b" into tExpected
+   TestAssert "translit: characters changed, its case counting, taken out, to the last of to; all but some; tab, return and line feed", gHCScriptsTest is tExpected
+   _Close tStack
+   delete file tFile
+   delete folder tFolder
+end TestHyperCardScriptsResourceExternals
+
 on TestHyperCardScriptsDialogs
    -- the library's list dialogs, Promptoid and picture windows, which it
    -- makes hidden so that they are not seen being made, are shown, and a
