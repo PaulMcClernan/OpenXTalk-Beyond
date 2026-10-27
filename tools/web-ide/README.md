@@ -133,5 +133,18 @@ page asks for the engine and the IDE with the site's stamp (`?v=`, a
 digest of the three files, which `build_site.py` puts in the page), so a
 browser that kept another version's copies, from the same address, never
 starts them with this version's.
+
+The page also keeps its own copy of the engine's WebAssembly and of the
+IDE in the browser's Cache Storage, under those stamped addresses, so a
+later visit downloads neither, whatever the server's cache headers say
+(GitHub Pages allows ten minutes). The engine is compiled as it arrives
+(`WebAssembly.compileStreaming`), not once all of it is here, and the
+progress bar counts to the sizes `build_site.py` measured, so a server that
+compresses (GitHub Pages gzips) does not throw it off. A new stamp's copies
+replace the old ones once both are kept. The copy is a convenience only: a
+browser that cannot keep one (a page that is neither https nor localhost, a
+private window, no room) or lacks streaming compilation loads the IDE as
+before, with XMLHttpRequest, and so does a load whose quicker way fails; a
+start that fails deletes the copy, so the next visit downloads it again.
 Its script carries `data-cfasync="false"`, so Cloudflare's Rocket Loader
 leaves it as it is.

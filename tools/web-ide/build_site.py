@@ -367,14 +367,18 @@ def main(argv=None):
         with open(PAGE, encoding='utf-8') as f:
             page = f.read()
         stamp = site_stamp(out, (base + '.js', base + '.wasm', 'ide.zip'))
+        # The sizes the page's progress bar counts to: a server that
+        # compresses tells the browser the compressed size, and the page
+        # counts the bytes unpacked
+        wasm = os.path.getsize(os.path.join(out, base + '.wasm'))
         for key, value in (('@ENGINE@', base), ('@VERSION@', version or engine_version),
-                           ('@STAMP@', stamp), ('@SOURCE_URL@', args.source_url)):
+                           ('@STAMP@', stamp), ('@SOURCE_URL@', args.source_url),
+                           ('@ENGINE_BYTES@', str(wasm)), ('@IDE_BYTES@', str(zipped))):
             if key not in page:
                 raise BuildError('%s has no %s' % (PAGE, key))
             page = page.replace(key, value)
         with open(os.path.join(out, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
             f.write(page)
-        wasm = os.path.getsize(os.path.join(out, base + '.wasm'))
         log('  %s.wasm: %.1f MB' % (base, wasm / 1e6))
         log('Site: %s (%.1f MB)' % (out, (zipped + wasm) / 1e6))
         if args.zip:

@@ -321,6 +321,9 @@
             return;
           }
           failed = true;
+          // The copy this browser kept may be why: the next visit downloads
+          // the engine and the IDE again (forgetCache is below)
+          forgetCache();
           loading.classList.remove('done');
           fill.classList.remove('busy');
           setStatus('');
@@ -343,19 +346,30 @@
 
         // The engine and the IDE are downloaded together, and the bar
         // shows both. The engine's script is added once both are here: the
-        // engine takes the IDE from the request below
+        // engine takes the IDE from Module.livecodeStandaloneRequest
         // (engine/src/em-preamble.js) and its WebAssembly from
         // instantiateWasm.
-        var parts = {engine: {loaded: 0, total: 0}, ide: {loaded: 0, total: 0}};
+        //
+        // Each part's size is the one build_site.py measured: with a server
+        // that compresses (GitHub Pages gzips), what the browser is told is
+        // the compressed size, and what it counts is the bytes unpacked.
+        var parts = {engine: {loaded: 0, total: +'@ENGINE_BYTES@'},
+                     ide: {loaded: 0, total: +'@IDE_BYTES@'}};
+        var verb = 'Downloading';
         function progress() {
           var loaded = parts.engine.loaded + parts.ide.loaded;
           var total = parts.engine.total + parts.ide.total;
           if (total > 0) {
             fill.style.width = Math.min(100, 100 * loaded / total).toFixed(1) + '%';
-            setStatus('Downloading the IDE... ' + megabytes(loaded) + ' of ' + megabytes(total) + ' MB');
+            setStatus(verb + ' the IDE... ' + megabytes(loaded) + ' of ' + megabytes(total) + ' MB');
           }
         }
 
+        // The way every browser loads it, and the way this page loaded it
+        // before it kept a copy: XMLHttpRequest, the whole of each part,
+        // and the engine compiled once all of it is here. Used when the
+        // browser lacks what the quicker way below needs, or that way
+        // fails before the engine starts.
         function download(url, part) {
           return new Promise(function(resolve, reject) {
             var xhr = new XMLHttpRequest();
@@ -381,6 +395,204 @@
               reject(new Error('could not download ' + url));
             };
             xhr.send();
+          });
+        }
+
+        function loadSlowly() {
+          parts.engine.loaded = parts.ide.loaded = 0;
+          verb = 'Downloading';
+          return Promise.all([download(stamped(ENGINE + '.wasm'), 'engine'), download(stamped(IDE), 'ide')]).then(function(done) {
+            return {wasm: done[0].response, ide: done[1]};
+          });
+        }
+
+        // The quicker way. A copy of the engine's WebAssembly and of the IDE
+        // is kept in the browser (its Cache Storage, under the stamped
+        // addresses), so a visit after the first takes them from there and
+        // downloads nothing; the copies of another stamp are deleted once
+        // this one's are kept. And the engine is compiled as its
+        // WebAssembly arrives (compileStreaming), not after. The copy is
+        // only a convenience: a browser that keeps none (a page that is not
+        // https or localhost, a private window, no room) still loads the
+        // IDE, and a failed start deletes it, so the next visit downloads
+        // it again.
+        var CACHE = 'oxt-web-ide ' + location.pathname.replace(/[^\/]*$/, '');
+        var quick = typeof fetch === 'function' && typeof Response === 'function' &&
+                    typeof ReadableStream === 'function' &&
+                    typeof WebAssembly.compileStreaming === 'function';
+
+        function openCache() {
+          try {
+            if (window.caches) {
+              return caches.open(CACHE).catch(function() {
+                return null;
+              });
+            }
+          } catch (e) {
+          }
+          return Promise.resolve(null);
+        }
+
+        function forgetCache() {
+          try {
+            if (window.caches && CACHE) {
+              caches.delete(CACHE).catch(function() {});
+            }
+          } catch (e) {
+          }
+        }
+
+        // Once both are kept: the other stamps' copies go
+        function tidyCache(cache) {
+          cache.keys().then(function(requests) {
+            requests.forEach(function(request) {
+              if (request.url.slice(-STAMP.length - 3) !== '?v=' + STAMP) {
+                cache.delete(request).catch(function() {});
+              }
+            });
+          }).catch(function() {});
+        }
+
+        // The body of response, counted into part as it arrives
+        function counted(response, part) {
+          var reader = response.body.getReader();
+          return new ReadableStream({
+            pull: function(controller) {
+              return reader.read().then(function(chunk) {
+                if (chunk.done) {
+                  controller.close();
+                } else {
+                  parts[part].loaded += chunk.value.byteLength;
+                  progress();
+                  controller.enqueue(chunk.value);
+                }
+              });
+            },
+            cancel: function(reason) {
+              return reader.cancel(reason);
+            }
+          });
+        }
+
+        // The kept copy of url, or a new download of it, kept as it arrives
+        // (put reads its own branch of the body). Answers the response and
+        // whether it came from the copy.
+        function fetchKept(cache, url, signal) {
+          var kept = cache ? cache.match(url).catch(function() {
+            return null;
+          }) : Promise.resolve(null);
+          return kept.then(function(response) {
+            if (response) {
+              return {response: response, kept: true};
+            }
+            return fetch(url, signal ? {signal: signal} : undefined).then(function(response) {
+              if (!response.ok || !response.body) {
+                throw new Error(url + ': ' + response.status + ' ' + response.statusText);
+              }
+              var stored = null;
+              if (cache) {
+                stored = cache.put(url, response.clone()).then(function() {
+                  return true;
+                }, function() {
+                  return false;
+                });
+              }
+              return {response: response, kept: false, stored: stored};
+            });
+          });
+        }
+
+        var aborter = null;
+        function loadQuickly(cache) {
+          var engineUrl = stamped(ENGINE + '.wasm');
+          var ideUrl = stamped(IDE);
+          var stores = [];
+          // Stops the downloads of a load that fails, for the slower way
+          aborter = typeof AbortController === 'function' ? new AbortController() : null;
+          var signal = aborter && aborter.signal;
+
+          // The engine, compiled as it arrives. compileStreaming needs the
+          // type application/wasm, which this response has whatever the
+          // server said.
+          var engine = fetchKept(cache, engineUrl, signal).then(function(got) {
+            if (got.stored) {
+              stores.push(got.stored);
+            }
+            var wasm = new Response(counted(got.response, 'engine'),
+                                    {headers: {'Content-Type': 'application/wasm'}});
+            return WebAssembly.compileStreaming(wasm).catch(function(error) {
+              // A kept copy that does not compile is not used again
+              if (got.kept && cache) {
+                cache.delete(engineUrl).catch(function() {});
+              }
+              throw error;
+            });
+          });
+
+          var ide = fetchKept(cache, ideUrl, signal).then(function(got) {
+            if (got.stored) {
+              stores.push(got.stored);
+            }
+            return new Response(counted(got.response, 'ide')).arrayBuffer().then(function(buffer) {
+              if (!buffer.byteLength || (parts.ide.total && buffer.byteLength !== parts.ide.total)) {
+                if (got.kept && cache) {
+                  cache.delete(ideUrl).catch(function() {});
+                }
+                throw new Error(IDE + ' has ' + buffer.byteLength + ' bytes, not ' + parts.ide.total);
+              }
+              return buffer;
+            });
+          });
+
+          return Promise.all([engine, ide]).then(function(done) {
+            if (cache && stores.length) {
+              Promise.all(stores).then(function(kept) {
+                if (kept.every(Boolean)) {
+                  tidyCache(cache);
+                }
+              });
+            } else if (cache) {
+              tidyCache(cache);
+            }
+            // What the engine reads of the request it is handed
+            // (engine/src/em-preamble.js, em-standalone.js): a finished
+            // request whose response is the IDE. An engine that waits for
+            // the request's load event (one older than the page's handing
+            // it over) is sent one.
+            return {module: done[0],
+                    ide: {readyState: 4, status: 200, statusText: 'OK', response: done[1],
+                          addEventListener: function(type, listener) {
+                            if (type === 'load') {
+                              setTimeout(listener, 0);
+                            }
+                          }}};
+          });
+        }
+
+        function load() {
+          if (!quick) {
+            return loadSlowly();
+          }
+          return openCache().then(function(cache) {
+            // The bar says where the parts come from
+            if (cache) {
+              return Promise.all([cache.match(stamped(ENGINE + '.wasm')), cache.match(stamped(IDE))]).then(function(found) {
+                if (found[0] && found[1]) {
+                  verb = 'Loading';
+                }
+                return cache;
+              }, function() {
+                return cache;
+              });
+            }
+            return cache;
+          }).then(loadQuickly).catch(function(error) {
+            console.warn('The web IDE is downloaded the slower way: ' + (error && error.message || error));
+            if (aborter) {
+              aborter.abort();
+            }
+            forgetCache();
+            return loadSlowly();
           });
         }
 
@@ -415,10 +627,16 @@
             fail('The web IDE stopped (' + what + '). The browser\'s console has the details.');
           },
 
-          // The engine's WebAssembly, from the download below
+          // The engine's WebAssembly, from the download below: compiled
+          // already (engineModule) or the bytes to compile (engineBinary)
           instantiateWasm: function(imports, receiveInstance) {
-            WebAssembly.instantiate(engineBinary, imports).then(function(result) {
-              engineBinary = null;
+            var instantiated = engineModule ?
+              WebAssembly.instantiate(engineModule, imports).then(function(instance) {
+                return {instance: instance, module: engineModule};
+              }) :
+              WebAssembly.instantiate(engineBinary, imports);
+            instantiated.then(function(result) {
+              engineBinary = engineModule = null;
               receiveInstance(result.instance, result.module);
             }, function(error) {
               fail('The web IDE\'s engine could not start: ' + error.message + '.');
@@ -427,10 +645,12 @@
           },
         };
         var engineBinary = null;
+        var engineModule = null;
 
-        Promise.all([download(stamped(ENGINE + '.wasm'), 'engine'), download(stamped(IDE), 'ide')]).then(function(done) {
-          engineBinary = done[0].response;
-          Module.livecodeStandaloneRequest = done[1];
+        load().then(function(done) {
+          engineModule = done.module || null;
+          engineBinary = done.wasm || null;
+          Module.livecodeStandaloneRequest = done.ide;
           fill.style.width = '100%';
           fill.classList.add('busy');
           setStatus('Starting the engine...');
