@@ -1684,6 +1684,10 @@ MCGroup *MCStack::getbackground(Chunk_term etype, MCStringRef p_string,
 	case CT_NEXT:
 		{
 			MCGroup *gptr = (MCGroup *)curcard->getchild(CT_FIRST, kMCEmptyString, otype, CT_BACKGROUND);
+			// OXT-Beyond: a card with no background has no next one (this
+			//   went on from no group, and the engine crashed)
+			if (gptr == NULL)
+				return NULL;
 			while (True)
 			{
 				gptr = gptr->next();
@@ -1695,6 +1699,9 @@ MCGroup *MCStack::getbackground(Chunk_term etype, MCStringRef p_string,
 	case CT_PREV:
 		{
 			MCGroup *gptr = (MCGroup *)curcard->getchild(CT_FIRST, kMCEmptyString, otype, CT_BACKGROUND);
+			// OXT-Beyond: nor a previous one
+			if (gptr == NULL)
+				return NULL;
 			while (True)
 			{
 				gptr = gptr->prev();
@@ -1795,6 +1802,10 @@ MCGroup *MCStack::getbackgroundbyordinal(Chunk_term p_ordinal)
         case CT_NEXT:
 		{
 			MCGroup *gptr = (MCGroup *)curcard->getchild(CT_FIRST, kMCEmptyString, CT_GROUP, CT_BACKGROUND);
+			// OXT-Beyond: a card with no background has no next one (this
+			//   went on from no group, and the engine crashed)
+			if (gptr == NULL)
+				return NULL;
 			while (True)
 			{
 				gptr = gptr->next();
@@ -1806,6 +1817,9 @@ MCGroup *MCStack::getbackgroundbyordinal(Chunk_term p_ordinal)
         case CT_PREV:
 		{
 			MCGroup *gptr = (MCGroup *)curcard->getchild(CT_FIRST, kMCEmptyString, CT_GROUP, CT_BACKGROUND);
+			// OXT-Beyond: nor a previous one
+			if (gptr == NULL)
+				return NULL;
 			while (True)
 			{
 				gptr = gptr->prev();

@@ -979,6 +979,62 @@ on hcGoTo pDest, pWindow
 end hcGoTo
 
 /*
+go to a background without a card (rule T69: "go to bkgnd "Game"", "go bg
+i", "go next bkgnd"), which HyperCard went to the first card of, leaving
+"No such card" in the result when there was no such background. Here a
+"go" to a background without a card stays on the card it is on (and then
+counts only that background's cards until a "go" names a card), and one to
+"card 1" of a background that is not there goes to the stack's first
+card. pHow is how pWhich names the background: "id", or "name" for its
+name or number; or pHow is the ordinal that names it ("next", "last",
+"this"...). The backgrounds are those of this stack, the stack a "go"
+without one goes in
+*/
+on hcGoBackground pHow, pWhich
+   local tCount, tNumber
+   switch pHow
+      case "id"
+         if there is not a background id pWhich then return "No such card"
+         go to card 1 of background id pWhich
+         return the result
+      case "name"
+         if there is not a background pWhich then return "No such card"
+         go to card 1 of background pWhich
+         return the result
+      case "this"
+      case "next"
+      case "prev"
+      case "previous"
+         -- (from this card's background: this engine crashes going to
+         -- the next or the previous background from a card with none)
+         if not (there is this background) then return "No such card"
+         do "go to card 1 of" && pHow && "background"
+         return the result
+      default
+         -- (by number: this engine counts only this card's groups for the
+         -- last, the middle and any background)
+         put the number of backgrounds into tCount
+         switch pHow
+            case "last"
+               put tCount into tNumber
+               break
+            case "middle"
+            case "mid"
+               put tCount div 2 + 1 into tNumber
+               break
+            case "any"
+               if tCount > 0 then put random(tCount) into tNumber
+               break
+            default
+               put wordOffset(pHow, "first second third fourth fifth sixth seventh eighth ninth tenth") into tNumber
+         end switch
+         if tNumber is empty or tNumber < 1 or tNumber > tCount then return "No such card"
+         go to card 1 of background tNumber
+         return the result
+   end switch
+end hcGoBackground
+
+/*
 The stack "go" should go to for pStack, which HyperCard may have named
 by its HFS path ("Disk:Stacks:Name"): pStack itself when there is such a
 stack; else a HyperCard stack of that name beside the file this stack was
@@ -2370,6 +2426,25 @@ on hcHelp pObject
    return the result
 end hcHelp
 
+-- quit as a command (rule T70): HyperCard had no quit command but sent
+-- the message quit as it quit, and a script that called quit sent that
+-- message as any command: a stack's own "on quit" took it (Preschool
+-- Primer's QUIT buttons, whose stack's "on quit" chooses Quit
+-- HyperCard; rule T1 names that handler hc_quit, as this engine takes no
+-- handler called quit), and HyperCard let it go if no handler did (NAIC
+-- Stack's "if it is "Cancel" then quit", Universal Card Copier's "quit
+-- mouseUp" after an error). This engine's quit quits at once, in the IDE
+-- the IDE itself, past the stack's handler. Here the message goes from
+-- the object whose script ran it, pObject, with pParameter if the script
+-- gave one, and ends there if no handler takes it
+on hcQuit pObject, pParameter
+   if the paramCount > 1 then
+      dispatch "hc_quit" to pObject with pParameter
+   else
+      dispatch "hc_quit" to pObject
+   end if
+end hcQuit
+
 -- (pTarget: the object the message goes to, this card if it is empty)
 private function _HCKeyHandled pMessage, pParameter, pTarget
    local tHandled
@@ -3128,6 +3203,74 @@ end enterKey
 on startUp
    pass startUp
 end startUp
+
+-- The rest of the messages that rule T35 sends when a script calls one
+-- alone, as a command ("idle" in Script Printer's and Script Manager's
+-- handlers, "resume", "resumeStack", "newCard"), or that a script sends
+-- itself ("send "idle" to me", QTPlay): the same. A handler here does not
+-- make this engine send any of them more often: it sends idle,
+-- mouseWithin and mouseStillDown to an object only for a handler of its
+-- own script or of its own behavior, and this library is the stack's
+-- behavior
+on idle
+   pass idle
+end idle
+
+on resume
+   pass resume
+end resume
+
+on suspend
+   pass suspend
+end suspend
+
+on resumeStack
+   pass resumeStack
+end resumeStack
+
+on suspendStack
+   pass suspendStack
+end suspendStack
+
+on openField
+   pass openField
+end openField
+
+on closeField
+   pass closeField
+end closeField
+
+on exitField
+   pass exitField
+end exitField
+
+on mouseStillDown
+   pass mouseStillDown
+end mouseStillDown
+
+on mouseEnter
+   pass mouseEnter
+end mouseEnter
+
+on mouseLeave
+   pass mouseLeave
+end mouseLeave
+
+on mouseWithin
+   pass mouseWithin
+end mouseWithin
+
+on newCard
+   pass newCard
+end newCard
+
+on newBackground
+   pass newBackground
+end newBackground
+
+on newStack
+   pass newStack
+end newStack
 
 -- splashDialog id, seconds, ...: a splash screen while the stack starts,
 -- from a resource that is not imported; nothing is shown

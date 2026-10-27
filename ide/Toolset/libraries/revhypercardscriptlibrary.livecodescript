@@ -99,7 +99,10 @@ script "revHyperCardScriptLibrary"
 -- ("set the loc of card window to 0,20") and from the card window's top
 -- left for every other (the message box, a palette, a picture: "the loc
 -- of window "Tools Palette"", "show msg at 15,300"), and this engine by
--- a stack's centre on the screen; "show" and "hide card window", which
+-- a stack's centre on the screen; a property of the card window
+-- without "the" and followed by a sum ("item 1 of loc of card window
+-- +191"), which this engine takes for a card of a stack named by the sum
+-- and stops at; "show" and "hide card window", which
 -- this engine does nothing for; HyperCard's own windows named in quotes
 -- ("the visible of window "Scroll"") and the watchers shown and hidden
 -- ("show variable watcher"); and the message box's properties without
@@ -290,6 +293,11 @@ constant kWindowPlaces = "loc location rect rectangle topleft bottomright top le
 -- the words a "go" names its destination with, as against an expression
 -- whose value is the destination (T25)
 constant kGoPlaces = "card cd cards background bkgnd bg backgrounds stack stacks this next prev previous first last back forth home help recent any middle mid second third fourth fifth sixth seventh eighth ninth tenth marked id window url"
+
+-- The words that name a background, and the ordinals a "go" names one by
+-- ("go next bkgnd", T69)
+constant kBackgroundWords = "background bkgnd bg"
+constant kBackgroundOrdinals = "this next prev previous first second third fourth fifth sixth seventh eighth ninth tenth last middle mid any"
 
 -- The words after "open" that say what this engine opens
 -- (engine/src/lextable.cpp's open_table, and the words before it), and
@@ -2165,6 +2173,24 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
          end if
       end if
 
+      -- T44: an object called home, its name not in quotes ("go to card
+      -- home", Zaum Gadget's, whose card is called Home; "hide bg btn
+      -- home"), which this engine reads as the "home" of "go home" and
+      -- refuses: in quotes, as HyperCard took it, or the value of the
+      -- handler's variable called home, which HyperCard took first (a
+      -- stack called home is HyperCard's Home: T45)
+      if tWord is "home" and _T(tTokens, tPrev) is among the words of "field fld button btn card cd background bkgnd bg" \
+            and _T(tTokens, tNext) is not "(" then
+         if pVars["home"] then
+            put "(" & tTokens[tIndex]["t"] & ")" into tTokens[tIndex]["t"]
+         else
+            put quote & tTokens[tIndex]["t"] & quote into tTokens[tIndex]["t"]
+            put "s" into tTokens[tIndex]["k"]
+         end if
+         _Fire "T44 object name that is a constant here"
+         next repeat
+      end if
+
       -- T13: an external named like a keyword (but a function's call
       -- reaches the stack's own function of that name, T47)
       if pExternals[tWord] and tWord is not among the words of kHyperTalkCommands \
@@ -2510,8 +2536,10 @@ private function _PhraseRules pLine, pThen
       -- "of" after an object, before the card or background it is on
       -- ("the name of card it in bkgnd 2" too); not the operator "is in"
       -- after one ("if the short name of this cd is in cd fld "Index"",
-      -- which "of" made a line that does not compile)
+      -- which "of" made a line that does not compile), nor find's "in"
+      -- before the field it looks in (_FindsIn)
       if tWord is "in" and tNext is among the words of "card cd bkgnd bg background stack" and i > 2 \
+            and not _FindsIn(tTokens, tIdx, i) \
             and (tPrev is among the words of kObjectWords \
             or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and tPrev is not "is" \
             and _T(tTokens, tIdx[i - 2]) is among the words of kObjectWords) \
@@ -2791,6 +2819,18 @@ private function _ParserForms pLine, pVars
                   _Replace tTokens, tIdx, j, tEnd, it
                   _Fire "T35 more forms HyperCard took"
                end if
+            end if
+            break
+         case "find"
+            -- T37: find string, a word of find's forms alone that is a
+            -- variable of the handler ("on searchStackFor string", Windoid's
+            -- MultiWord Find), which HyperCard took for the text to find:
+            -- in parentheses, a value
+            if i + 1 = tEnd and tTokens[tIdx[i + 1]]["k"] is "w" and pVars[_T(tTokens, tIdx[i + 1])] \
+                  and _T(tTokens, tIdx[i + 1]) is among the words of "whole string words word chars characters normal" then
+               put "(" before tTokens[tIdx[i + 1]]["t"]
+               put ")" after tTokens[tIdx[i + 1]]["t"]
+               _Fire "T37 more forms HyperCard took"
             end if
             break
          case "select"
@@ -3486,6 +3526,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
    if pElse is not true then
       put _MenuItemProperties(pLine) into pLine
       put _MenuReads(pLine) into pLine
+      put _CardWindow(pLine) into pLine
       put _HyperCardWindows(pLine) into pLine
       put _MessageBoxProperties(pLine) into pLine
       put _HyperCardObject(pLine) into pLine
@@ -3577,6 +3618,32 @@ private function _HyperCardRules pLine, pCompiled, pElse
          _Fire "T45 HyperCard's Home stack"
          next repeat
       end if
+      -- T45: and Home named without "stack" ("get the long name of home",
+      -- Lab Logger's; "if the cantmodify of home then", Color Tools';
+      -- "send startup to home", DevStackFix's), which compiles here as the
+      -- "home" of "go home" and stops ("error in object expression"), or
+      -- in a go does not compile ("go to card "Reset BBS" of home",
+      -- HyperBBS's; T9 takes "go home" and "go to card 1 of home" to
+      -- hcGoHome): Home's stack, not a variable called home
+      -- (_HomeNamed)
+      if tWord is "home" and _HomeNamed(tTokens, tIdx, i) then
+         put "stack hcHome()" into tTokens[tIdx[i]]["t"]
+         _Fire "T45 HyperCard's Home stack"
+         next repeat
+      end if
+
+      -- T11: "in" for "of" after an object, before the card, background
+      -- or stack it is on, in a script that compiles too ("hide card field
+      -- "Sentence" in card 2", Teaching to Read; "get the id of first card
+      -- in bkgnd id 2618", RefStak 88; "btn 1 in this card"): this engine
+      -- reads such an "in" as a text chunk's and stops with "source is not
+      -- a container" (_InForOf; _PhraseRules takes the same in a script
+      -- that does not compile)
+      if tWord is "in" and _InForOf(tTokens, tIdx, i) then
+         put "of" into tTokens[tIdx[i]]["t"]
+         _Fire "T11 HyperCard object words"
+         next repeat
+      end if
 
       -- T50: a property of an object named by a chunk of a variable or of
       -- a function's value ("the textHeight of item 1 of fieldList",
@@ -3638,6 +3705,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             -- (T43 first, as it makes an "in" "of")
             put _GoStackAt(tTokens, tIdx, i, tEnd) into tStackAt
             put _GoStack(tTokens, tIdx, i, tEnd, tStackAt) into tNew
+            if tNew is empty then put _GoBackground(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _GoTo(tTokens, tIdx, i, tEnd) into tNew
             break
          case "set"
@@ -3744,6 +3812,22 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tEnd = i then
                _Fire "T18 key and picture commands"
                put "hcHelp the long id of me" into tNew
+            end if
+            break
+         case "quit"
+            -- T70: quit, which was no command of HyperCard's but the
+            -- message it sent as it quit: a script that called it sent
+            -- the message, which a stack's own "on quit" took (renamed
+            -- hc_quit by T1) and HyperCard let go if none did ("if it is
+            -- "Cancel" then quit", "quit mouseUp" for an exit). This
+            -- engine's quit quits at once, the IDE itself in the IDE,
+            -- past the stack's handler: the library's hcQuit sends the
+            -- message from this object, as HyperCard did
+            _Fire "T70 quit"
+            if tEnd = i then
+               put "hcQuit the long id of me" into tNew
+            else
+               put "hcQuit the long id of me," && _Span(tTokens, tIdx, i + 1, tEnd) into tNew
             end if
             break
          case "choose"
@@ -3875,7 +3959,8 @@ private function _HyperCardRules pLine, pCompiled, pElse
             -- command: what no handler took, HyperCard took; here it is
             -- passed off the end of the message path, where this engine
             -- has no such command and stops with an error. Sent instead,
-            -- it goes the same way and ends quietly
+            -- it goes the same way and ends quietly, in the HyperCard
+            -- Library's handler of it, which passes it on
             if tEnd = i then
                _Fire "T35 more forms HyperCard took"
                put "send" && quote & tTokens[tIdx[i]]["t"] & quote && "to me" into tNew
@@ -4032,10 +4117,17 @@ end _Literal
 -- "No such card" in the result; this engine stops with an error. The
 -- statement is run by the library's hcGo, which finds the stack first
 -- (the files beside the one imported, the disk image it came from) and
--- runs it with the stack expression in the variable tHCStack. pStackAt:
--- where a stack named without the word "stack" starts (T43, _GoStackAt)
+-- runs it with the stack expression in the variable tHCStack. A name of
+-- several words that the probe finds is no expression here, which
+-- HyperCard took as the text it was ("go to stack flood control", "go to
+-- card "Player" of stack Chess Library"; "go stack the stack you wish to
+-- process", Script Changer's, which made HyperCard ask "Where is the
+-- stack you wish to process?"), is that text in quotes: as an
+-- expression, the statement hcGo makes did not compile and stopped the
+-- handler. pStackAt: where a stack named without the word "stack" starts
+-- (T43, _GoStackAt)
 private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
-   local j, k, tLast, tFirst, tCard, tStack
+   local j, k, tLast, tFirst, tCard, tStack, tName
    if pStackAt is empty then
       repeat with j = pAt + 1 to pEnd
          if _T(pTokens, pIdx[j]) is "stack" and _T(pTokens, pIdx[j - 1]) is not "this" then
@@ -4053,8 +4145,8 @@ private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
    put _ExpressionEnd(pTokens, pIdx, pStackAt, pEnd, "in as without") into tLast
    -- T43: a background of the stack ("go bkgnd "Workouts" of stack
    -- tName"), which this engine does not go to (it stays on the card it
-   -- is on): its first card, where HyperCard went, as "go bkgnd" without
-   -- a stack does here
+   -- is on): its first card, where HyperCard went, as T69 has a "go
+   -- bkgnd" without a stack go
    put pAt + 1 into tFirst
    if _T(pTokens, pIdx[tFirst]) is "to" then add 1 to tFirst
    if tFirst < k and _T(pTokens, pIdx[tFirst]) is among the words of "background bkgnd bg" then
@@ -4062,8 +4154,55 @@ private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
       _Fire "T43 go to a card of a stack"
    end if
    _Fire "T16 go to a stack not open"
-   return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[tFirst] - 1) & tCard & _Raw(pTokens, pIdx[tFirst], pIdx[pStackAt] - 1) & tStack & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(_Span(pTokens, pIdx, pStackAt, tLast)) & ")"
+   put _Span(pTokens, pIdx, pStackAt, tLast) into tName
+   if pStackAt < tLast and sProbe is not empty and not _Compiles("on hcProbe" & return & "get (" & tName & ")" & return & "end hcProbe") then
+      put _Literal(tName) into tName
+      _Fire "T33 more forms HyperCard took"
+   end if
+   return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[tFirst] - 1) & tCard & _Raw(pTokens, pIdx[tFirst], pIdx[pStackAt] - 1) & tStack & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(tName) & ")"
 end _GoStack
+
+-- T69: a "go" to a background without a card ("go to background
+-- "Game"", Art Game's openStack, which then hid a button of that
+-- background; "go bg i", "go next bkgnd"), which HyperCard went to the
+-- first card of ("If you name a stack (or background) without specifying
+-- a card, HyperCard goes to the first card of the stack (or background)",
+-- its AppleScript reference), leaving "No such card" in the result when
+-- there was no such background. This engine stays on the card it is on,
+-- and then counts only that background's cards ("the number of this
+-- card" is 0, "go to card 3" goes to its third) until a "go" names a card.
+-- The statement goes to the library's hcGoBackground with the
+-- background's id, its name or number, or the ordinal that names it. A
+-- "go" with more after the background ("of this stack", "in a new
+-- window") gets "card 1 of" before the background instead, which goes to
+-- its first card too (or to the stack's first card when there is no such
+-- background). Empty when the "go" names no background, or a card
+private function _GoBackground pTokens, pIdx, pAt, pEnd
+   local j, k, tWord, tMore
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "to" then add 1 to j
+   if j >= pEnd then return empty
+   put _T(pTokens, pIdx[j]) into tWord
+   if tWord is not among the words of kBackgroundWords then
+      if tWord is not among the words of kBackgroundOrdinals then return empty
+      if _T(pTokens, pIdx[j + 1]) is not among the words of kBackgroundWords then return empty
+   end if
+   put false into tMore
+   repeat with k = j + 1 to pEnd
+      if _T(pTokens, pIdx[k]) is among the words of "stack in as" then put true into tMore
+   end repeat
+   _Fire "T69 go to a background"
+   if tMore or (tWord is among the words of kBackgroundOrdinals and j + 1 < pEnd) then
+      return _Span(pTokens, pIdx, pAt, j - 1) && "card 1 of" && _Span(pTokens, pIdx, j, pEnd)
+   end if
+   if tWord is among the words of kBackgroundOrdinals then
+      return "hcGoBackground" && quote & tWord & quote
+   end if
+   if _T(pTokens, pIdx[j + 1]) is "id" and j + 2 <= pEnd then
+      return "hcGoBackground" && quote & "id" & quote & "," && _Span(pTokens, pIdx, j + 2, pEnd)
+   end if
+   return "hcGoBackground" && quote & "name" & quote & "," && _Span(pTokens, pIdx, j + 1, pEnd)
+end _GoBackground
 
 -- T43: where the stack starts in a go to a card or a background of a
 -- stack named without the word "stack": after "of" following a
@@ -4626,6 +4765,40 @@ private function _SetMessageBox pTokens, pIdx, pAt, pEnd
    return "hcSetMessageBox" && quote & tProperty & quote & comma && _Span(pTokens, pIdx, j + 3 + tRef, pEnd)
 end _SetMessageBox
 
+-- T46: a property of the card window, in a script that compiles too: the
+-- window of this stack, its loc its top left ("put item 1 of it + item 1
+-- of loc of card window +191 into horiz", WorkStation's; "left of card
+-- window + left of me + 1", HyperFTP's). Without "the" and followed by a
+-- plus, a minus or a comma, it compiles here, as a card of a stack named
+-- by what follows, and stops there ("can't find stack"); a script that
+-- does not compile has had it rewritten by _PhraseRules already
+private function _CardWindow pLine
+   local tTokens, tCode, tIdx, n, tItem, i, tAt, tChanged
+   if "window" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   put false into tChanged
+   repeat with i = 2 to n - 1
+      if _T(tTokens, tIdx[i]) is not among the words of "card cd" or _T(tTokens, tIdx[i + 1]) is not "window" then next repeat
+      put i into tAt
+      if _T(tTokens, tIdx[tAt - 1]) is "the" then subtract 1 from tAt
+      if tAt < 3 or _T(tTokens, tIdx[tAt - 1]) is not "of" then next repeat
+      if _T(tTokens, tIdx[tAt - 2]) is among the words of "loc location" then
+         put "topLeft" into tTokens[tIdx[tAt - 2]]["t"]
+      end if
+      _Replace tTokens, tIdx, tAt, i + 1, "this stack"
+      put true into tChanged
+      _Fire "T46 HyperCard's windows"
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _CardWindow
+
 -- T28: the properties of HyperCard's own windows ("the visible of tool
 -- window", "set the visible of the variable watcher to true"), which
 -- this engine does not have: what a script sets reads back
@@ -4921,6 +5094,58 @@ private function _NamedByAName pLine
    if not tChanged then return pLine
    return _Join(tTokens)
 end _NamedByAName
+
+-- Whether the "in" at pAt is HyperCard's "of" between an object and the
+-- card, background or stack it is on (T11): after an object's type
+-- ("first card in bkgnd 2"), its name or number ("fld "Notes" in card
+-- "Menu"") or its id ("btn id 3 in card 2"), before "card", "bkgnd",
+-- "stack", or "this" and one of them. Never the operator "is in", a
+-- count's "in" ("the number of card fields in card 2"), which this
+-- engine takes, nor find's (_FindsIn)
+private function _InForOf pTokens, pIdx, pAt
+   local tPrev, tNext
+   if pAt < 3 then return false
+   put _T(pTokens, pIdx[pAt + 1]) into tNext
+   if tNext is "this" then put _T(pTokens, pIdx[pAt + 2]) into tNext
+   if tNext is not among the words of "card cd bkgnd bg background stack" then return false
+   if _FindsIn(pTokens, pIdx, pAt) then return false
+   put _T(pTokens, pIdx[pAt - 1]) into tPrev
+   if tPrev is among the words of kObjectWords then return true
+   if pTokens[pIdx[pAt - 1]]["k"] is not among the items of "s,n,w" or tPrev is "is" \
+         or tPrev is among the words of kNeverNamesAfterCard then return false
+   if _T(pTokens, pIdx[pAt - 2]) is among the words of kObjectWords then return true
+   return pAt > 3 and _T(pTokens, pIdx[pAt - 2]) is "id" and _T(pTokens, pIdx[pAt - 3]) is among the words of kObjectWords
+end _InForOf
+
+-- Whether the "in" at pAt is find's, before the field it looks in
+-- ("find word the short name of bkgnd btn id 122 in bkgnd field kk",
+-- MacSUNRISE; "find cd fld "name" in cd fld "names"", Lesson 1 Severn
+-- Ojibwe), which T11 does not take for "of" after the object that ends
+-- the text to find
+private function _FindsIn pTokens, pIdx, pAt
+   return _T(pTokens, pIdx[pAt + 2]) is among the words of "field fld" \
+         and _StatementWord(pTokens, pIdx, pAt) is "find"
+end _FindsIn
+
+-- T45: whether the word home at pAt, not in quotes, names HyperCard's
+-- Home stack: the stack of a send ("send startup to home"), or what has
+-- a property ("the long name of home"), cards ("the number of cards of
+-- home") or a card ("card "Reset BBS" of home", "last card of home"), as
+-- against a chunk of a variable called home ("word 2 of home", "the
+-- length of home")
+private function _HomeNamed pTokens, pIdx, pAt
+   local tBefore, tOwner
+   if pAt < 3 or pTokens[pIdx[pAt]]["k"] is not "w" or _T(pTokens, pIdx[pAt + 1]) is "(" then return false
+   put _T(pTokens, pIdx[pAt - 1]) into tBefore
+   if tBefore is "to" then return _StatementWord(pTokens, pIdx, pAt) is "send"
+   if tBefore is not "of" then return false
+   put _T(pTokens, pIdx[pAt - 2]) into tOwner
+   if pTokens[pIdx[pAt - 2]]["k"] is "w" and (tOwner is among the words of kChunkObjectProperties \
+         or tOwner is among the words of "name script cards cds backgrounds bkgnds bgs card cd background bkgnd bg") then return true
+   -- (a card or a background by its name, number or id)
+   if pAt > 3 and _T(pTokens, pIdx[pAt - 3]) is among the words of "card cd background bkgnd bg" then return true
+   return pAt > 4 and _T(pTokens, pIdx[pAt - 3]) is "id" and _T(pTokens, pIdx[pAt - 4]) is among the words of "card cd background bkgnd bg"
+end _HomeNamed
 
 -- Whether the code tokens pFrom to pTo, a stack's name, are one T65
 -- takes: not Home (T45's, which here is the IDE's own) nor a word that

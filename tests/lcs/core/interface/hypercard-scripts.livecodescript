@@ -658,6 +658,13 @@ on TestHyperCardScriptsT37
    put _Rewrite("on mouseUp", "  go card number of this stack", "  answer error & x", "end mouseUp") into tScript
    TestAssert "T37: number of this stack: a card's name, as before", line 2 of tScript is "  go card " & q & "number" & q & " of this stack"
    TestAssert "T37: answer error and more: unchanged", line 3 of tScript is "  answer error & x"
+
+   -- find string, the word of a form alone that is a variable (Windoid's
+   -- "on searchStackFor string"): the text to find
+   put _Rewrite("on searchStackFor string", "  find string", "  if x then find string", "end searchStackFor", \
+         "on mouseUp", "  find words", "end mouseUp") into tScript
+   TestAssert "T37: find a variable named like a form of find", line 2 to 3 of tScript is _Lines("  find (string)", "  if x then find (string)")
+   TestAssert "T37: find a form that is no variable: unchanged", line 6 of tScript is "  find words"
 end TestHyperCardScriptsT37
 
 on TestHyperCardScriptsT37Probed
@@ -1085,6 +1092,13 @@ on TestHyperCardScriptsT44
          "  add 1 to fld " & q & "Plus" & q, "  set the loc of bg btn " & q & "help" & q & " to 437,323")
    TestAssert "T44: a value that is no object's name: unchanged", line 6 of tScript is "  put help into x"
    TestAssert "T44: a variable so named (T2) names its field still", line 9 to 10 of tScript is _Lines("  put " & q & "F1" & q & " into hc_help", "  put 1 into fld hc_help")
+   -- an object called home, which this engine reads as the "home" of "go
+   -- home" (Zaum Gadget's card Home); a variable called home, which
+   -- HyperCard took first
+   put _Rewrite("on mouseUp", "  go to card home", "  hide bg btn Home", "end mouseUp", "on mouseDown", "  put 2 into home", "  go to card home", "end mouseDown") into tScript
+   TestAssert "T44: an object called home, in quotes", line 2 to 3 of tScript is _Lines("  go to card " & q & "home" & q, "  hide bg btn " & q & "Home" & q)
+   TestAssert "T44: a variable called home names its card still", line 7 of tScript is "  go to card (home)"
+   TestAssert "T44: those compile", _Compiles(tScript)
 
    -- and in a script that compiles, where "fld help" was field 15
    put "HCScriptsT44" & the milliseconds into tStack
@@ -1099,7 +1113,12 @@ on TestHyperCardScriptsT44
    put 1 into field "Plus"
    create button "Names"
    set the script of button "Names" to _Lines("on mouseUp", "  put " & q & "x" & q & " into cd fld help", "  add 1 to fld Plus", "end mouseUp")
+   create button "Go"
+   set the script of button "Go" to _Lines("on mouseUp", "  go to card home", "end mouseUp")
+   create card "Home"
+   go to card 1 of stack tStack
    unlock messages
+   TestAssert "T44: go to card home does not compile here as it is", not _Compiles(the script of button "Go" of card 1 of stack tStack)
    TestAssert "T44: the script compiles here as it is", _Compiles(the script of button "Names" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
    TestAssert "T44: in a script that compiles", line 2 to 3 of the script of button "Names" of card 1 of stack tStack \
@@ -1108,6 +1127,9 @@ on TestHyperCardScriptsT44
    send "mouseUp" to button "Names" of card 1 of stack tStack
    TestAssert "T44: the fields named, as in HyperCard, and not fields 15 and 13", field "help" of card 1 of stack tStack is "x" \
          and field "Plus" of card 1 of stack tStack is 2 and field "F15" of card 1 of stack tStack is empty and field "F13" of card 1 of stack tStack is empty
+   go to card 1 of stack tStack
+   send "mouseUp" to button "Go" of card 1 of stack tStack
+   TestAssert "T44: go to card home: the card called Home", the short name of this card of stack tStack is "Home"
    _Close tStack
 end TestHyperCardScriptsT44
 
@@ -1123,6 +1145,18 @@ on TestHyperCardScriptsT45
          "  if x then send " & q & "startUp" & q & " to stack hcHome()")
    TestAssert "T45: a go home, another stack: unchanged", line 5 to 6 of tScript is _Lines("  hcGoHome", "  get the script of stack " & q & "Homer" & q)
    TestAssert "T45: those compile", _Compiles(tScript)
+   -- Home named without "stack": a send's stack, and what has a property
+   -- or a card; a variable called home: unchanged
+   put _Rewrite("on mouseUp", "  if the cantmodify of home then beep", "  get the value of word 2 of the long name of home", "  send startup to Home", \
+         "  go to card " & q & "Reset BBS" & q & " of home", "  get the number of cards of home", "  go to card 1 of home", "end mouseUp", \
+         "on mouseDown", "  put 1 into home", "  put word 2 of home into x", "  put the length of home into x", "  add 1 to home", "end mouseDown") into tScript
+   TestAssert "T45: Home named without stack", line 2 to 6 of tScript is _Lines("  if the cantmodify of stack hcHome() then beep", \
+         "  get the value of word 2 of the long name of stack hcHome()", "  send startup to stack hcHome()", \
+         "  go to card " & q & "Reset BBS" & q & " of stack hcHome()", "  get the number of cards of stack hcHome()")
+   TestAssert "T45: its first card, T9's", line 7 of tScript is "  hcGoHome"
+   TestAssert "T45: a variable called home: unchanged", line 10 to 13 of tScript \
+         is _Lines("  put 1 into home", "  put word 2 of home into x", "  put the length of home into x", "  add 1 to home")
+   TestAssert "T45: those compile too", _Compiles(tScript)
 
    -- and run, in a script that compiles, with a stack called "home" in
    -- memory as the IDE's is: its script stays as it was
@@ -1142,8 +1176,12 @@ on TestHyperCardScriptsT45
          "  put the script of stack " & q & "Home" & q & " into gHCScriptsTest", "end mouseUp")
    create button "Start"
    set the script of button "Start" to _Lines("on mouseUp", "  global gHCScriptsTest", "  send startUp to stack " & q & "Home" & q, "  put " & q & "started" & q & " into gHCScriptsTest", "end mouseUp")
+   create button "Bare"
+   set the script of button "Bare" to _Lines("on mouseUp", "  global gHCScriptsTest", "  send startup to home", \
+         "  if not the cantmodify of home then put the long name of home into gHCScriptsTest", "end mouseUp")
    unlock messages
    TestAssert "T45: the script compiles here as it is", _Compiles(the script of button "Install" of card 1 of stack tStack)
+   TestAssert "T45: Home without stack compiles here as it is", _Compiles(the script of button "Bare" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
    set the defaultStack to tStack
    put empty into gHCScriptsTest
@@ -1161,6 +1199,9 @@ on TestHyperCardScriptsT45
    end try
    TestAssert "T45: startUp sent to the stand-in goes on, as it did to Home", gHCScriptsTest is "started"
    TestAssert "T45: and the IDE's home is still as it was", the script of stack "home" is tScript
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Bare" of card 1 of stack tStack
+   TestAssert "T45: Home without stack, in a script that compiles: the stand-in", gHCScriptsTest is the long name of stack "HyperCard Home"
    _Close tStack
 
    -- the stand-in's library when the stack it was made for has gone: the
@@ -1229,7 +1270,8 @@ on TestHyperCardScriptsT46
          "  hcWindow " & q & "hide" & q & ", " & q & "message watcher" & q)
 
    -- and run: show card window at, and the loc of a window, compile here
-   -- as they are; the loc of card window does not. tPalette is another
+   -- as they are; the loc of card window does not, but without "the" in a
+   -- sum it does, and stops there ("can't find stack"). tPalette is another
    -- stack's card window; tPlte a palette the import made from a PLTE
    -- resource, tPicture a picture window, which HyperCard placed from the
    -- card window's top left
@@ -1266,6 +1308,11 @@ on TestHyperCardScriptsT46
          "  put the rect of window " & q & tPicture & q & " into gHCScriptsTest", "  put comma & the globalLoc of window " & q & tPicture & q & " after gHCScriptsTest", "end mouseUp")
    create button "Card"
    set the script of button "Card" to _Lines("on mouseUp", "  global gHCScriptsTest", "  set the loc of card window to 30,40", "  put the loc of card window into gHCScriptsTest", "end mouseUp")
+   create button "Sum"
+   set the rect of button "Sum" to 10,20,110,40
+   set the script of button "Sum" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put item 1 of loc of card window + 5 into gHCScriptsTest", \
+         "  put comma & (top of cd window -1) after gHCScriptsTest", "  put comma & max(left of card window + left of me, \", \
+         "  top of the card window + 1) after gHCScriptsTest", "end mouseUp")
    create button "Own"
    set the script of button "Own" to _Lines("on mouseUp", "  global gHCScriptsTest", "  show window " & q & "Scroll" & q, "  show tool window", \
          "  set the loc of window " & q & "Variable Watcher" & q & " to " & q & "0,18" & q, \
@@ -1279,6 +1326,7 @@ on TestHyperCardScriptsT46
    unlock messages
    TestAssert "T46: show card window at, and the loc of a window, compile here as they are", \
          _Compiles(the script of button "Show" of card 1 of stack tStack) and _Compiles(the script of button "Other" of card 1 of stack tStack)
+   TestAssert "T46: a property of the card window in a sum compiles here as it is", _Compiles(the script of button "Sum" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
    set the defaultStack to tStack
    send "mouseUp" to button "Show" of card 1 of stack tStack
@@ -1292,6 +1340,10 @@ on TestHyperCardScriptsT46
    send "mouseUp" to button "Card" of card 1 of stack tStack
    TestAssert "T46: the card window's location, set and read, is its top left", the topLeft of stack tStack is "30,40" and gHCScriptsTest is "30,40"
    put the topLeft of stack tStack into tOrigin
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Sum" of card 1 of stack tStack
+   TestAssert "T46: a property of the card window without the, in a sum: this stack's, its loc its top left", \
+         gHCScriptsTest is (item 1 of tOrigin + 5) & comma & (item 2 of tOrigin - 1) & comma & max(item 1 of tOrigin + 10, item 2 of tOrigin + 1)
    put empty into gHCScriptsTest
    send "mouseUp" to button "Plte" of card 1 of stack tStack
    TestAssert "T46: a palette's location, set, read, shown at and opened at: from the card window's top left", gHCScriptsTest is "10,10,20,30,5,6" \
@@ -3236,10 +3288,13 @@ on TestHyperCardScriptsRulesFixed
    local tScript, q
    put quote into q
    put _Rewrite("on mouseUp", "  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
-         "  if the short name of this stack is in fld 1 then beep", "  get fld Notes in card 2", "  get the name of card it in bkgnd " & q & "BBS" & q, "end mouseUp") into tScript
+         "  if the short name of this stack is in fld 1 then beep", "  get fld Notes in card 2", "  get the name of card it in bkgnd " & q & "BBS" & q, \
+         "  find cd fld " & q & "name" & q & " in cd fld " & q & "names" & q, "  find word the short name of bkgnd btn id 122 in bkgnd field kk", "end mouseUp") into tScript
    TestAssert "T11: is in after a card, as it was", line 2 to 3 of tScript is _Lines("  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
          "  if the short name of this stack is in fld 1 then beep")
    TestAssert "T11: in for of after an object's name still", line 4 to 5 of tScript is _Lines("  get fld Notes of card 2", "  get the name of card it of bkgnd " & q & "BBS" & q)
+   TestAssert "T11: find's in, before the field it looks in, as it was", line 6 to 7 of tScript is _Lines("  find cd fld " & q & "name" & q & " in cd fld " & q & "names" & q, \
+         "  find word the short name of bkgnd btn id 122 in bkgnd field kk")
    TestAssert "T11: those compile", _Compiles(tScript)
 
    put _Rewrite("on mouseUp", "  put 1 into this", "  if this = 1 or this \", "  = 2 then beep", "  get the name of this \", "  card", "end mouseUp") into tScript
@@ -3963,6 +4018,17 @@ on TestHyperCardScriptsLibraryMessages
          "  send " & quote & "closeCard" & quote & " to this card", \
          "  put MultiFinder() & comma & FileExists(empty) & comma & (CapsLock() is among the words of " & quote & "true false" & quote & ") into gHCScriptsTest", \
          "end mouseUp")
+   -- the rest of HyperCard's messages, called alone (rule T35 sends them)
+   -- or sent: Script Printer's idle, SNOWBALL's resume, QuickTime Tools'
+   -- resumeStack, ExerciseLog's newCard
+   create field "F"
+   create button "C"
+   set the script of button "C" to _Lines("on mouseUp", "  idle", "  resumeStack", \
+         "  send " & quote & "resume" & quote & " to this card", \
+         "  send " & quote & "newCard" & quote & " to this card", \
+         "  send " & quote & "closeField" & quote & " to field " & quote & "F" & quote, \
+         "  send " & quote & "mouseWithin" & quote & " to button " & quote & "Quiet" & quote, \
+         "end mouseUp")
    unlock messages
    get revHyperCardFixScripts(tStack)
    put empty into gHCScriptsTest
@@ -3972,6 +4038,11 @@ on TestHyperCardScriptsLibraryMessages
    end try
    TestAssert "messages sent to no handler end in the library", tError is empty
    TestAssert "MultiFinder, FileExists and CapsLock answer", gHCScriptsTest is "true,false,true"
+   try
+      send "mouseUp" to button "C" of stack tStack
+   catch tError
+   end try
+   TestAssert "the rest of HyperCard's messages, called alone or sent to no handler, end in the library", tError is empty
    _Close tStack
 end TestHyperCardScriptsLibraryMessages
 
@@ -4730,6 +4801,260 @@ on TestHyperCardScriptsT68
    set the dragSpeed to tSpeed
    _Close tStack
 end TestHyperCardScriptsT68
+
+on TestHyperCardScriptsT69
+   -- T69: a "go" to a background without a card ("go to background
+   -- "Game"", Art Game's openStack, which then hid a button of that
+   -- background; "go bg i", "go next bkgnd"; 117 stacks of the corpus),
+   -- which HyperCard went to the first card of, leaving "No such card" in
+   -- the result when there was no such background. This engine stays on
+   -- the card it is on, and then counts only that background's cards
+   -- until a "go" names a card. The statement goes to the library's
+   -- hcGoBackground; with more after the background, "card 1 of" goes
+   -- before it. A "go" to a card of a background is left as it is
+   local tScript, tStack, q, tError, tLine
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  go to background " & q & "Game" & q, \
+         "  go bg i", \
+         "  go to bkgnd id 2295", \
+         "  go next bkgnd", \
+         "  if x then go bg " & q & "A" & q & " else go last bg", \
+         "  go to bg " & q & "X" & q & " of this stack", \
+         "  go to card 1 of bg " & q & "Game" & q, \
+         "  go to next card of this bg", \
+         "  put " & q & "go bg 2" & q & " into y -- go bg 2", \
+         "end mouseUp") into tScript
+   TestAssert "T69: a background by its name, by a variable, by its id, by an ordinal", line 2 to 5 of tScript \
+         is _Lines("  hcGoBackground " & q & "name" & q & ", " & q & "Game" & q, "  hcGoBackground " & q & "name" & q & ", i", \
+         "  hcGoBackground " & q & "id" & q & ", 2295", "  hcGoBackground " & q & "next" & q)
+   TestAssert "T69: after then and after else", line 6 of tScript \
+         is "  if x then hcGoBackground " & q & "name" & q & ", " & q & "A" & q & " else hcGoBackground " & q & "last" & q
+   TestAssert "T69: with more after the background, its card 1", line 7 of tScript is "  go to card 1 of bg " & q & "X" & q & " of this stack"
+   TestAssert "T69: a card of a background, a string, a comment: unchanged", line 8 to 10 of tScript \
+         is _Lines("  go to card 1 of bg " & q & "Game" & q, "  go to next card of this bg", "  put " & q & "go bg 2" & q & " into y -- go bg 2")
+   TestAssert "T69: those compile", _Compiles(tScript)
+
+   -- in a stack: card 1 has background A, cards 2 and 3 Game, card 4 A
+   put "HCScriptsT69" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create group "A"
+   set the backgroundBehavior of group "A" to true
+   create card
+   remove background "A" from this card
+   create group "Game"
+   set the backgroundBehavior of group "Game" to true
+   create button "FirstRev" in group "Game"
+   create card
+   create card
+   remove background "Game" from this card
+   place background "A" onto this card
+   go to card 1 of stack tStack
+   repeat for each line tLine in "Game,go to background " & q & "Game" & q & cr & "Hide,go to background " & q & "Game" & q & "; hide bkgnd button " & q & "FirstRev" & q & cr \
+         & "Nope,go bg " & q & "Nope" & q & cr & "Next,go next bkgnd" & cr & "Last,go last bg" & cr & "Id,go to bkgnd id " & the short id of background "Game"
+      create button (item 1 of tLine)
+      set the script of button (item 1 of tLine) to _Lines("on mouseUp", "  global gHCScriptsTest", \
+            "  " & replaceText(item 2 to -1 of tLine, "; ", return & "  "), "  put the result into gHCScriptsTest", "end mouseUp")
+   end repeat
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   set the defaultStack to tStack
+   -- (first, while no "go" has left this engine counting one background's
+   -- cards, as one to a background does without the rule)
+   put empty into tError
+   try
+      send "mouseUp" to button "Hide" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T69: a button of the background hidden on its card (Art Game's)", tError is empty \
+         and not the visible of button "FirstRev" of card 2 of stack tStack
+   repeat for each item tLine in "Game,Next,Last,Id"
+      go to card 1 of stack tStack
+      put "x" into gHCScriptsTest
+      put empty into tError
+      try
+         send "mouseUp" to button tLine of card 1 of stack tStack
+      catch tError
+      end try
+      TestAssert "T69:" && tLine & ": the background's first card, and every card counted", tError is empty and gHCScriptsTest is empty \
+            and the number of this card of stack tStack is 2 and the number of cards of stack tStack is 4
+   end repeat
+   go to card 1 of stack tStack
+   put empty into tError
+   try
+      send "mouseUp" to button "Nope" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T69: no such background: no such card, and the card stays", tError is empty and gHCScriptsTest is "No such card" \
+         and the number of this card of stack tStack is 1 and the number of cards of stack tStack is 4
+   _Close tStack
+end TestHyperCardScriptsT69
+
+on TestHyperCardScriptsT16Names
+   -- T16: a go to a stack named by several words not in quotes, which
+   -- HyperCard took as the text they were ("go to stack flood control";
+   -- "go stack the stack you wish to process", whose "Where is ...?" asked
+   -- for a stack): in quotes, where the probe finds no expression. A name
+   -- that is an expression is kept
+   local tStack, tTarget, q, tScript, tError
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT16" & the milliseconds into tStack
+   put "HCScripts Flood Control" into tTarget
+   lock messages
+   create invisible stack tTarget
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Go"
+   set the script of button "Go" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack HCScripts Flood Control", "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "Ask"
+   set the script of button "Ask" to _Lines("on mouseUp", "  go stack the stack you wish to process", "  go to card " & q & "Player" & q & " of stack Chess Library", \
+         "  go to stack short name of me", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put the script of button "Ask" of card 1 of stack tStack into tScript
+   TestAssert "T16: a name of several words, in quotes", line 2 to 3 of tScript is _Lines("  do hcGo(" & q & "go stack tHCStack" & q & ", quote & " & q & "the stack you wish to process" & q & " & quote)", \
+         "  do hcGo(" & q & "go to card " & q & " & quote & " & q & "Player" & q & " & quote & " & q & " of stack tHCStack" & q & ", quote & " & q & "Chess Library" & q & " & quote)")
+   TestAssert "T16: an expression: kept (T66's the)", line 4 of tScript is "  do hcGo(" & q & "go to stack tHCStack" & q & ", " & q & "the short name of me" & q & ")"
+   set the defaultStack to tStack
+   put "none" into gHCScriptsTest
+   try
+      send "mouseUp" to button "Go" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T16: went to the stack named by several words", tError is empty and gHCScriptsTest is empty and the short name of this stack is tTarget
+   _Close tTarget
+   _Close tStack
+end TestHyperCardScriptsT16Names
+
+on TestHyperCardScriptsT70
+   -- T70: quit, which was no command of HyperCard's but the message it
+   -- sent as it quit: a stack's own "on quit" took it (Preschool
+   -- Primer's, renamed hc_quit by T1), and HyperCard let it go if none
+   -- did ("if it is "Cancel" then quit", NAIC Stack's). This engine's
+   -- quit quit at once, in the IDE the IDE itself: the library's hcQuit
+   local tScript, tStack, tOther, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  quit", \
+         "  if it is " & q & "Cancel" & q & " then quit", \
+         "  quit mouseUp", \
+         "  if x then quit else beep", \
+         "end mouseUp") into tScript
+   TestAssert "T70: quit alone", line 2 of tScript is "  hcQuit the long id of me"
+   TestAssert "T70: quit after then", line 3 of tScript is "  if it is " & q & "Cancel" & q & " then hcQuit the long id of me"
+   TestAssert "T70: quit with a parameter", line 4 of tScript is "  hcQuit the long id of me, mouseUp"
+   TestAssert "T70: quit before else", line 5 of tScript is "  if x then hcQuit the long id of me else beep"
+   TestAssert "T70: those compile", _Compiles(tScript)
+
+   -- the stack's own handler takes it, with its parameter
+   put "HCScriptsT70" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the script of stack tStack to _Lines("on quit pWhy", "  global gHCScriptsTest", \
+         "  put " & q & "quit" & q & " && pWhy after gHCScriptsTest", "end quit")
+   create button "Quit"
+   set the script of button "Quit" to _Lines("on mouseUp", "  quit", "  quit mouseUp", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Quit" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T70: the stack's own handler takes quit", tError is empty and gHCScriptsTest is "quit quit mouseUp"
+
+   -- and with no handler of it, nothing quits and the script goes on
+   put "HCScriptsT70None" & the milliseconds into tOther
+   lock messages
+   create invisible stack tOther
+   set the defaultStack to tOther
+   create button "Cancel"
+   set the script of button "Cancel" to _Lines("on mouseUp", "  global gHCScriptsTest", "  if true then quit", \
+         "  put " & q & "went on" & q & " into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tOther)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Cancel" of card 1 of stack tOther
+   catch tError
+   end try
+   TestAssert "T70: with no handler of quit, nothing quits", tError is empty and gHCScriptsTest is "went on"
+   _Close tOther
+   _Close tStack
+end TestHyperCardScriptsT70
+
+on TestHyperCardScriptsT11In
+   -- T11's "in" for "of" between an object and the card, background or
+   -- stack it is on, in a script that compiles here as it is ("hide card
+   -- field "Sentence" in card 2", Teaching to Read; "get the id of first
+   -- card in bkgnd id 2618", RefStak 88), where this engine stopped with
+   -- "source is not a container"; and the "in"s it runs as they are: a
+   -- count's, a text chunk's, the operator "is in"
+   local tStack, tBg, tScript, tError, tFirst, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT11In" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create field "Notes"
+   create button "Next"
+   group field "Notes" and button "Next"
+   set the backgroundBehavior of group 1 to true
+   set the name of group 1 to "Bg"
+   put the id of group 1 into tBg
+   put the id of card 1 into tFirst
+   create card "Two"
+   create field "Words"
+   create card "Three"
+   go to card 1 of stack tStack
+   create button "In"
+   put _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "x" & q & " into field " & q & "Words" & q & " in card 2", \
+         "  hide card field " & q & "Words" & q & " in card 2", \
+         "  get the short name of bg btn " & q & "Next" & q & " in this bkgnd", "  put it into gHCScriptsTest", \
+         "  get the id of first card in bkgnd id " & tBg, "  put comma & it after gHCScriptsTest", \
+         "  get the short name of card " & q & "Three" & q & " in this stack", "  put comma & it after gHCScriptsTest", \
+         "  put comma & the number of card fields in card 2 after gHCScriptsTest", \
+         "  put comma & word 1 in field " & q & "Words" & q & " of card 2 after gHCScriptsTest", \
+         "  if " & q & "x" & q & " is in field " & q & "Words" & q & " of card 2 then put comma & " & q & "is in" & q & " after gHCScriptsTest", \
+         "  find the short name of bg btn " & q & "Next" & q & " in bkgnd field " & q & "Notes" & q, \
+         "end mouseUp") into tScript
+   set the script of button "In" to tScript
+   unlock messages
+   TestAssert "T11: an object in a card compiles here as it is", _Compiles(tScript)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "In" of card 1 of stack tStack into tScript
+   TestAssert "T11: in for of before a card, in a script that compiles", line 3 to 4 of tScript is _Lines( \
+         "  put " & q & "x" & q & " into field " & q & "Words" & q & " of card 2", "  hide card field " & q & "Words" & q & " of card 2")
+   TestAssert "T11: in for of before this background, a background's id and this stack", line 5 to 9 of tScript is _Lines( \
+         "  get the short name of bg btn " & q & "Next" & q & " of this bkgnd", "  put it into gHCScriptsTest", \
+         "  get the id of first card of bkgnd id " & tBg, "  put comma & it after gHCScriptsTest", \
+         "  get the short name of card " & q & "Three" & q & " of this stack")
+   TestAssert "T11: a count's in, a text chunk's and is in, as they were", line 11 to 13 of tScript is _Lines( \
+         "  put comma & the number of card fields in card 2 after gHCScriptsTest", \
+         "  put comma & word 1 in field " & q & "Words" & q & " of card 2 after gHCScriptsTest", \
+         "  if " & q & "x" & q & " is in field " & q & "Words" & q & " of card 2 then put comma & " & q & "is in" & q & " after gHCScriptsTest")
+   TestAssert "T11: find's in, before the field it looks in, as it was", \
+         line 14 of tScript is "  find the short name of bg btn " & q & "Next" & q & " in bkgnd field " & q & "Notes" & q
+   put empty into gHCScriptsTest
+   set the defaultStack to tStack
+   try
+      send "mouseUp" to button "In" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T11: the objects in a card, a background and a stack are found", tError is empty \
+         and gHCScriptsTest is "Next," & tFirst & ",Three,1,x,is in"
+   TestAssert "T11: the field in card 2 filled and hidden", field "Words" of card 2 of stack tStack is "x" \
+         and the visible of field "Words" of card 2 of stack tStack is false
+   _Close tStack
+end TestHyperCardScriptsT11In
 
 on TestHyperCardScriptsBuiltIns
    -- HyperCard's commands this engine does not have, as the rewritten
