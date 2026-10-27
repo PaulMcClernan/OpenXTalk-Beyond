@@ -2572,9 +2572,9 @@ end tmShapeSvg
 -- programs draw it. The classic look's pictures of them are made for its
 -- grey palette: white and pale grey, 12 to 20 points, which Large Icons
 -- blurred and the light look all but hid (tmInkPaleIcon only inked the
--- palest). Those of the paint tools and the image and player are
+-- palest). Those of the paint tools and the image are
 -- Lucide's (pencil, brush, paint-bucket, spray-can, square-dashed,
--- eraser, hexagon, image, film; and square-check, with a larger tick,
+-- eraser, hexagon, image; and square-check, with a larger tick,
 -- for the check box), the
 -- rest are drawn here. The fill and line colour tools are white where
 -- the colour chosen goes: revToolsOptionClicked tints that white with a
@@ -2583,24 +2583,38 @@ end tmShapeSvg
 -- menu's Drawn Icons is off (tmDrawnIcons).
 private function tmDrawnIconSvg pTypeID
    switch pTypeID
+      -- (the buttons: a face tinted with the ink, as a button's is shaded,
+      -- and "OK" on it; an empty box with a dash did not read as a button:
+      -- openxtalk.org, October 2026)
       case "com.livecode.interface.classic.Button"
-         return "<rect x='2' y='6' width='20' height='12' rx='3'/><path d='M8 12h8'/>"
+         return "<rect x='1.5' y='5.5' width='21' height='13' rx='3.5' fill='@ink' fill-opacity='0.15'/>" & \
+               "<ellipse cx='8.75' cy='12' rx='2.25' ry='3' stroke-width='1.75'/>" & \
+               "<path d='M14 9v6M17.5 9 14 12.4M15.4 11l2.3 4' stroke-width='1.75'/>"
       case "com.livecode.interface.classic.DefaultButton"
-         return "<rect x='2.5' y='6.5' width='19' height='11' rx='3' stroke-width='3'/>" & \
-               "<path d='M8 12h8'/>"
+         return "<rect x='2' y='6' width='20' height='12' rx='3' stroke-width='3' fill='@ink' fill-opacity='0.15'/>" & \
+               "<ellipse cx='8.75' cy='12' rx='2.25' ry='3' stroke-width='1.75'/>" & \
+               "<path d='M14 9v6M17.5 9 14 12.4M15.4 11l2.3 4' stroke-width='1.75'/>"
       case "com.livecode.interface.classic.RectangleButton"
-         return "<rect x='2' y='6' width='20' height='12'/><path d='M8 12h8'/>"
+         return "<rect x='1.5' y='5.5' width='21' height='13' fill='@ink' fill-opacity='0.15'/>" & \
+               "<ellipse cx='8.75' cy='12' rx='2.25' ry='3' stroke-width='1.75'/>" & \
+               "<path d='M14 9v6M17.5 9 14 12.4M15.4 11l2.3 4' stroke-width='1.75'/>"
       case "com.livecode.interface.classic.Checkbox"
          return "<rect x='3' y='3' width='18' height='18' rx='2'/><path d='m8 12 3 3 5-6'/>"
       case "com.livecode.interface.classic.RadioButton"
          return "<circle cx='12' cy='12' r='9'/>" & \
                "<circle cx='12' cy='12' r='3.5' fill='@ink' stroke='none'/>"
       case "com.livecode.interface.classic.TabPanel"
-         return "<path d='M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/>" & \
-               "<path d='M3 9V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v4'/>" & \
-               "<path d='M11 6h6a1 1 0 0 1 1 1v2'/>"
+         -- (three tabs, the first one open onto the panel; two tabs, one
+         -- shorter, read as a folder)
+         return "<path d='M3 19V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4h12v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/>" & \
+               "<path d='M9 9V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3z' fill='@ink' fill-opacity='0.15'/>" & \
+               "<path d='M15 9V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3z' fill='@ink' fill-opacity='0.15'/>"
       case "com.livecode.interface.classic.LabelField"
-         return "<path d='M4 7V4h16v3'/><path d='M9 20h6'/><path d='M12 4v16'/>"
+         -- (text with no box, as a label is: "Ab"; the field below is the
+         -- box a user types in. A "T" is the text tool in GIMP and
+         -- Inkscape: openxtalk.org, October 2026)
+         return "<path d='M2.5 18 7 6l4.5 12M4.2 14h5.6'/><path d='M15 6v12'/>" & \
+               "<circle cx='18.5' cy='14.5' r='3.5'/>"
       case "com.livecode.interface.classic.Field"
          return "<rect x='2' y='6' width='20' height='12' rx='2'/><path d='M6.5 9v6'/>"
       case "com.livecode.interface.classic.TextArea"
@@ -2629,8 +2643,10 @@ private function tmDrawnIconSvg pTypeID
          return "<rect x='2' y='6' width='20' height='12' rx='2'/><path d='M15 6v12'/>" & \
                "<path d='M6 9v6'/><path d='m17 11 1.5 1.5L20 11'/>"
       case "com.livecode.interface.classic.PopupMenu"
-         return "<rect x='3' y='3' width='15' height='15' rx='2'/><path d='M7 8h7'/>" & \
-               "<path d='M7 12.5h7'/><path d='M21 8v11a2 2 0 0 1-2 2H8'/>"
+         -- (a menu open where the pointer clicked, one item chosen)
+         return "<rect x='3' y='3' width='14' height='16' rx='2'/><path d='M6 7h8'/>" & \
+               "<rect x='5' y='9.5' width='10' height='3' rx='1' fill='@ink' stroke='none'/>" & \
+               "<path d='M6 15.5h6'/><path d='m14.5 13.5 7 3-3 1-1 3z' fill='@ink' stroke-width='1.5'/>"
       case "com.livecode.interface.classic.Progressbar"
          return "<rect x='2' y='8' width='20' height='8' rx='4'/>" & \
                "<path d='M6 12h6' stroke-width='4'/>"
@@ -2647,9 +2663,11 @@ private function tmDrawnIconSvg pTypeID
          return "<rect x='3' y='3' width='18' height='18' rx='2'/><circle cx='9' cy='9' r='2'/>" & \
                "<path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/>"
       case "com.livecode.interface.classic.Player"
-         return "<rect x='3' y='3' width='18' height='18' rx='2'/><path d='M7 3v18'/>" & \
-               "<path d='M3 7.5h4'/><path d='M3 12h18'/><path d='M3 16.5h4'/>" & \
-               "<path d='M17 3v18'/><path d='M17 7.5h4'/><path d='M17 16.5h4'/>"
+         -- (a movie with its play button and the controller's bar under it,
+         -- as a player shows one)
+         return "<rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 16h18'/>" & \
+               "<path d='M10 6.5v6l5-3z' fill='@ink' stroke-width='1.5'/>" & \
+               "<path d='M6.5 18.5h5' stroke-width='2.5'/>"
       case "com.livecode.interface.classic.LineGraphic"
          return "<path d='M5 19 19 5'/>"
       case "com.livecode.interface.classic.CurveGraphic"
