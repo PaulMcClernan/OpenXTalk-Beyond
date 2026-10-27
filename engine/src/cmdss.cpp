@@ -684,6 +684,14 @@ void MCGo::exec_ctxt(MCExecContext &ctxt)
             // If getchild() failed, we try to find a stack from the expression
             if (cptr == NULL)
             {
+				// The background and the marked cards this go looked in are
+				// this stack's, and not the stack it looks for now: they end
+				// here, as they do when a card is found. Left set, a "go to
+				// card 3 of bkgnd 1" that found no card left the stack
+				// counting the cards of that background alone, and every
+				// "go" to a card of it by number or name after that failed.
+				sptr -> clearbackground();
+				sptr -> clearmark();
 				sptr = findstack(ctxt, *t_exp, CT_STACK, cptr);
 				if (sptr == nullptr)
 				{
@@ -707,7 +715,14 @@ void MCGo::exec_ctxt(MCExecContext &ctxt)
 	}
 	else
         if (cptr == nil && sptr != nil)
+        {
             cptr = (MCCard *)sptr->getchild(CT_THIS, kMCEmptyString, CT_CARD);
+            // A background with no card ("go to bkgnd 2") chooses the card
+            // and no more, as the background of "go to card 1 of bkgnd 2"
+            // does: left set, the stack counted that background's cards
+            // alone ("the number of cards") until a later go cleared it.
+            sptr -> clearbackground();
+        }
     
 	MCAutoStringRef t_window;
     if (!thisstack)

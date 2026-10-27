@@ -983,6 +983,12 @@ private function _AddLibrary pStack, pStandIns
    -- the one marked as it, under the first free name
    put the short name of pStack into tMain
    put kLibraryName && "(" & tMain & ")" into tBase
+   -- (a stack's name here has no comma: setting one makes each a "_", so
+   -- that the library of "A,B,C's" is "HyperCard Library (A_B_C's)", the
+   -- name it is found by. The name asked for, with its commas, was not
+   -- found once set, and the import stopped there with an error: no
+   -- library, and the stack's scripts' calls of it failed)
+   replace comma with "_" in tBase
    put tBase into tName
    put 1 into tCount
    repeat while tName is among the lines of the substacks of pStack \
@@ -1031,6 +1037,8 @@ private function _AddMenus pStack, pLibrary, pName
    local tBase, tName, tCount, tTemp
    if the behavior of stack pLibrary of pStack is not empty then return empty
    put kMenusName && "(" & pName & ")" into tBase
+   -- (with no comma, as _AddLibrary's)
+   replace comma with "_" in tBase
    put tBase into tName
    put 1 into tCount
    repeat while tName is among the lines of the substacks of pStack \
@@ -1766,11 +1774,30 @@ end _GlobalNames
 -- the loop waits on, when it waits on one ("put last character of
 -- stackFolder into lastChar", "get the last char of process"), and a put
 -- of a value that calls no handler into another variable ("if it is not
--- ":" then put it before char 1 of holdPictName"). In a script that
--- compiles too
+-- ":" then put it before char 1 of holdPictName"). A loop with no
+-- condition ("repeat", "repeat forever") that waits for the colon in an
+-- if of its own (_ColonLoopForever: Script Manager's "if last char of
+-- filename is ":" then exit repeat", the HyperTextBooks' "if last char
+-- of manx <> ":" then delete last char of manx" and "else", "delete last
+-- char of manx", "exit repeat") gets "until <text> is empty" in its
+-- head, as "forever". In a script that compiles too
 private command _ColonLoops @pLines, pStart, pEnd
    local i, k, n, tHead, tCode, tLine, tLines, tText, tWait, tOk, tEnded, tDeletes, tReads, tTokens, tAt
    repeat with i = pStart + 1 to pEnd - 1
+      if _Lower(word 1 of pLines[i]) is "repeat" and _Lower(_CodeSpaced(pLines[i])) is among the items of "repeat,repeat forever" then
+         put _ColonLoopForever(pLines, i, pEnd) into tText
+         if tText is empty then next repeat
+         put _Tokens(pLines[i]) into tTokens
+         put _Code(tTokens) into tAt
+         if the number of items of tAt is 1 then
+            put " until" && tText && "is empty" after tTokens[item 1 of tAt]["t"]
+         else
+            put "until" && tText && "is empty" into tTokens[item 2 of tAt]["t"]
+         end if
+         put _Join(tTokens) into pLines[i]
+         _Fire "T74 a loop that waits for a colon"
+         next repeat
+      end if
       if quote & ":" & quote is not in pLines[i] then next repeat
       put _ColonLoopHead(pLines[i]) into tHead
       if tHead is empty then next repeat
@@ -1833,6 +1860,102 @@ private command _ColonLoops @pLines, pStart, pEnd
       _Fire "T74 a loop that waits for a colon"
    end repeat
 end _ColonLoops
+
+-- T74: the text of a loop with no condition, its head pLines[pAt]
+-- ("repeat" or "repeat forever"), that waits for a colon at the end of
+-- the text in an if of its own, or empty. Each of its lines is one that
+-- _ColonLoopLine takes, or an if that tests the text's last character
+-- for a colon (_ColonTest), on one line or with its else and end if, one
+-- at a time, or an exit (exit repeat, or exit or return with a name or
+-- none) only where the text ends with a colon: after then when the if
+-- tests that it does, after else when it tests that it does not. So
+-- with the text empty nothing leaves the loop. And it has at least one
+-- of each: a delete of the text's last character, a test and an exit
+private function _ColonLoopForever @pLines, pAt, pEnd
+   local k, tCode, tText, tState, tColon, tTest, tA, tB, tStatement, tExitHere, tLine, tInto, tCount
+   put 0 into tCount["test"]
+   put 0 into tCount["delete"]
+   put 0 into tCount["exit"]
+   repeat with k = pAt + 1 to pEnd - 1
+      put _CodeSpaced(pLines[k]) into tCode
+      put empty into tStatement
+      put empty into tB
+      if _Lower(tCode) is "end repeat" then
+         if tState is among the words of "then else" then return empty
+         if tCount["test"] = 0 or tCount["delete"] = 0 or tCount["exit"] = 0 then return empty
+         -- (and nothing puts into the text)
+         repeat for each key tA in tInto
+            if _Lower(tA) is _Lower(tText) then return empty
+         end repeat
+         return tText
+      else if matchText(tCode, "(?i)^if (.+) then(?: (.+))?$", tA, tB) and _ColonTest(tA) is not empty then
+         if tState is among the words of "then else" then return empty
+         put _ColonTest(tA) into tTest
+         if not _ColonLoopText(tText, tTest["text"]) then return empty
+         add 1 to tCount["test"]
+         put tTest["colon"] into tColon
+         put tColon into tExitHere
+         put tB into tStatement
+         -- (an if on one line may have its else on the next)
+         if tStatement is empty then
+            put "then" into tState
+         else
+            put "single" into tState
+         end if
+      else if matchText(tCode, "(?i)^else(?: (.+))?$", tB) then
+         if tState is not among the words of "then single" then return empty
+         put not tColon into tExitHere
+         put tB into tStatement
+         if tStatement is empty then
+            put "else" into tState
+         else
+            put empty into tState
+         end if
+      else if _Lower(tCode) is "end if" then
+         if tState is not among the words of "then else" then return empty
+         put empty into tState
+      else
+         if tState is "single" then put empty into tState
+         put (tState is "then" and tColon) or (tState is "else" and not tColon) into tExitHere
+         put tCode into tStatement
+      end if
+      if tStatement is empty then next repeat
+      if matchText(tStatement, "(?i)^(exit [^ ]+|return( [^ ]+)?)$") then
+         if not tExitHere then return empty
+         add 1 to tCount["exit"]
+      else
+         put _ColonLoopLine(tStatement) into tLine
+         if tLine is empty then return empty
+         if tLine["kind"] is "delete" then
+            if not _ColonLoopText(tText, tLine["text"]) then return empty
+            add 1 to tCount["delete"]
+         else if tLine["into"] is not empty then
+            put true into tInto[tLine["into"]]
+         end if
+      end if
+   end repeat
+   return empty
+end _ColonLoopForever
+
+-- T74: a test of the last character of a variable for a colon, "the last
+-- char of x is ":"" (or "= ":"", and "is not" or "<>" for one that it is
+-- not): ["text"] the variable, ["colon"] true for a test that it is one.
+-- Empty for any other
+private function _ColonTest pCode
+   local tA, tB, tC, tOperator, tTest
+   if not matchText(pCode, "(?i)^(the )?last (char|character) of ([^ ]+) (is not|is|=|< >) " & quote & ":" & quote & "$", tA, tB, tC, tOperator) then return empty
+   put tC into tTest["text"]
+   put _Lower(tOperator) is among the items of "is,=" into tTest["colon"]
+   return tTest
+end _ColonTest
+
+-- T74: whether pName is the text of a loop, pText, which the first name
+-- given it becomes when it has none
+private function _ColonLoopText @pText, pName
+   if not _LoopVariable(pName) then return false
+   if pText is empty then put pName into pText
+   return _Lower(pName) is _Lower(pText)
+end _ColonLoopText
 
 -- T74: the head of a loop that waits for a colon at the end of a text,
 -- "repeat until E is ":"" (or "= ":"") or "repeat while E is not ":"" (or
@@ -3026,6 +3149,27 @@ private function _ParserForms pLine, pVars
                put "empty" into tTokens[tIdx[i + 1]]["t"]
                put "w" into tTokens[tIdx[i + 1]]["k"]
                _Fire "T34 more forms HyperCard took"
+               break
+            end if
+            -- T75: select (theLine), select fieldData(), select after text
+            -- of fieldData(): the object or the chunk a value names, in
+            -- parentheses or from a function of the stack, which HyperCard
+            -- selected as if it were written there (the arrow keys of the
+            -- Guide to XCMDs put the selectedLine into theLine, add 1 to
+            -- its word 2 and select (theLine); WB2D's buttons select
+            -- fieldData(), which returns "card field id 13"). This
+            -- engine's select takes a variable, or one of its own
+            -- functions, there, and refuses a value in parentheses or a
+            -- call of a handler, so the script did not compile: "do" with
+            -- the statement and the value after it, which reads the value
+            -- as HyperCard did
+            put i + 1 into j
+            if _T(tTokens, tIdx[j]) is among the words of "before after" then add 1 to j
+            if _T(tTokens, tIdx[j]) is "text" and _T(tTokens, tIdx[j + 1]) is "of" then add 2 to j
+            if j < tEnd and _SelectValue(tTokens, tIdx, j, tEnd) then
+               put "do" && quote & _Span(tTokens, tIdx, i, j - 1) & quote && "&&" into tItem
+               _Replace tTokens, tIdx, i, j - 1, tItem
+               _Fire "T75 select a value"
             end if
             break
          case "repeat"
@@ -3251,6 +3395,37 @@ private function _ParserForms pLine, pVars
    end repeat
    return _Join(tTokens)
 end _ParserForms
+
+-- T75: whether the code tokens pFrom to pTo are one value in parentheses,
+-- or one call of a function of the stack (_StackFunction), and no more
+private function _SelectValue pTokens, pIdx, pFrom, pTo
+   local tDepth, k
+   if _T(pTokens, pIdx[pFrom]) is not "(" then
+      if pTokens[pIdx[pFrom]]["k"] is not "w" or not _StackFunction(_T(pTokens, pIdx[pFrom])) then return false
+      add 1 to pFrom
+      if _T(pTokens, pIdx[pFrom]) is not "(" then return false
+   end if
+   put 0 into tDepth
+   repeat with k = pFrom to pTo
+      if _T(pTokens, pIdx[k]) is "(" then add 1 to tDepth
+      if _T(pTokens, pIdx[k]) is ")" then subtract 1 from tDepth
+      if tDepth = 0 then return k = pTo
+   end repeat
+   return false
+end _SelectValue
+
+-- T75: whether pName is a function the stack defines, by its name or the
+-- new one T1 or T62 gave it, and not one of this engine's own (a call of
+-- which a select takes as it is)
+private function _StackFunction pName
+   local tOld
+   if pName is among the lines of the functionNames then return false
+   if sStackFunctions[pName] then return true
+   repeat for each key tOld in sRenameHandlers
+      if sStackFunctions[tOld] and _Lower(sRenameHandlers[tOld]) is pName then return true
+   end repeat
+   return false
+end _StackFunction
 
 -- T34: the arguments of an external (an XCMD or XFCN of the stack) that
 -- are one word not in quotes and no value here ("ink on, 8", "video

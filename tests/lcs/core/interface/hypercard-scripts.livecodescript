@@ -4349,6 +4349,65 @@ on TestHyperCardScriptsNumberName
    unlock messages
 end TestHyperCardScriptsNumberName
 
+on TestHyperCardScriptsCommaName
+   -- a stack whose name has commas, as HyperCard named a stack by its
+   -- file ("W #8 - Dec 1, 1988"): its library, and with HyperCard's
+   -- message order its menus, are made, each with a "_" for a comma, as
+   -- this engine names a stack whose name is set with one
+   local tFolder, tName, tStack, tError, tLibrary, tMenus
+   global gHCScriptsTest
+   put the temporary folder & "/hccomma" & the milliseconds into tFolder
+   create folder tFolder
+   put "A,B,C's" into tName
+   put url ("binfile:" & TestGetInputFile("hypercard/TestCardsBackgrounds.stack")) into url ("binfile:" & tFolder & "/" & tName)
+   lock messages
+   try
+      import stack from file (tFolder & "/" & tName)
+   catch tError
+   end try
+   unlock messages
+   TestAssert "a name with commas: imported", tError is empty and there is a stack tName
+   if there is a stack tName then
+      put the long id of stack tName into tStack
+      lock messages
+      set the hyperTalkCompatible of tStack to true
+      set the defaultStack to tName
+      create button "B" in card 1 of tStack
+      set the script of button "B" of card 1 of tStack to _Lines("on mouseUp", "  global gHCScriptsTest", "  put the version into gHCScriptsTest", "end mouseUp")
+      unlock messages
+      put empty into tError
+      try
+         get revHyperCardFixScripts(tStack)
+      catch tError
+      end try
+      TestAssert "a name with commas: no error", tError is empty
+      TestAssert "a name with commas: the stack keeps it", the short name of tStack is tName
+      put empty into tLibrary
+      put empty into tMenus
+      if the behavior of tStack is not empty then
+         put the short name of the behavior of tStack into tLibrary
+         if the behavior of stack tLibrary of tStack is not empty then
+            put the short name of the behavior of stack tLibrary of tStack into tMenus
+         end if
+      end if
+      TestAssert "a name with commas: its library, a _ for each comma", \
+            tLibrary is "HyperCard Library (A_B_C's)" and tLibrary is among the lines of the substacks of tStack
+      TestAssert "a name with commas: its menus, a _ for each comma", \
+            tMenus is "HyperCard Menus (A_B_C's)" and tMenus is among the lines of the substacks of tStack
+      put empty into gHCScriptsTest
+      try
+         send "mouseUp" to button "B" of card 1 of tStack
+      catch tError
+      end try
+      TestAssert "a name with commas: the library answers", gHCScriptsTest is "2.4.1"
+      lock messages
+      delete tStack
+      unlock messages
+   end if
+   delete file (tFolder & "/" & tName)
+   delete folder tFolder
+end TestHyperCardScriptsCommaName
+
 on TestHyperCardScriptsStandIns
    -- calls to the externals stacks call most reach the library's
    -- stand-ins (those that need no dialog)
@@ -4561,6 +4620,86 @@ on TestHyperCardScriptsGoStack
    delete file (tFolder & "/Sibling")
    delete folder tFolder
 end TestHyperCardScriptsGoStack
+
+on TestHyperCardScriptsNearestCopy
+   -- a stack a script goes to, on the disk image the stack came from in
+   -- two copies and not in its folder: the copy nearest the stack, whose
+   -- folder has the most of the stack's folders, as the copy that came
+   -- with it is; of copies as near, the first on the disk. Home, which
+   -- HyperCard never asked for, is the first on the disk, as it was
+   local tStack, tImage, tError, q, tLine, tPaths
+   global gHCScriptsTest
+   put quote into q
+   put TestGetInputFile("hypercard/forks/Twins.hfs") into tImage
+   set the itemDelimiter to tab
+   repeat for each line tLine in revHyperCardImageStacks(tImage)
+      put item 1 of tLine & return after tPaths
+   end repeat
+   set the itemDelimiter to comma
+   TestAssert "two copies of each on the disk, the farther first", \
+         tPaths is _Lines("Twins Disk:Archive:Home", "Twins Disk:Archive:Twin", "Twins Disk:Suite:Data:Home", "Twins Disk:Suite:Data:Twin") & return
+   put "HCNearest" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the uHyperCard["image"] of stack tStack to tImage
+   set the uHyperCard["imagepath"] of stack tStack to "Twins Disk:Suite:Usage:Main"
+   set the defaultStack to tStack
+   create button "Twin"
+   set the script of button "Twin" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack " & q & "Twin" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+
+   put "unset" into gHCScriptsTest
+   try
+      send "mouseUp" to button "Twin" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "two copies: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Twin"
+   if there is a stack "Twin" then
+      TestAssert "two copies: the one nearest the stack", the uHyperCard["imagepath"] of stack "Twin" is "Twins Disk:Suite:Data:Twin"
+   end if
+   _Close "Twin"
+
+   lock messages
+   set the uHyperCard["imagepath"] of stack tStack to "Twins Disk:Main"
+   unlock messages
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "Twin" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "two copies as near: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Twin"
+   if there is a stack "Twin" then
+      TestAssert "two copies as near: the first on the disk", the uHyperCard["imagepath"] of stack "Twin" is "Twins Disk:Archive:Twin"
+   end if
+   _Close "Twin"
+
+   -- (only where no stack is called Home, so as not to touch another, an
+   -- IDE's)
+   if there is not a stack "Home" then
+      lock messages
+      set the uHyperCard["imagepath"] of stack tStack to "Twins Disk:Suite:Usage:Main"
+      set the defaultStack to tStack
+      create button "Home" in card 1 of stack tStack
+      set the script of button "Home" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", "  go home", "  put the result into gHCScriptsTest", "end mouseUp")
+      unlock messages
+      get revHyperCardFixScripts(tStack)
+      TestAssert "Home: go home, rewritten", "hcGoHome" is in the script of button "Home" of card 1 of stack tStack
+      put "unset" into gHCScriptsTest
+      put empty into tError
+      try
+         send "mouseUp" to button "Home" of card 1 of stack tStack
+      catch tError
+      end try
+      TestAssert "Home: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Home"
+      if there is a stack "Home" then
+         TestAssert "Home: the first on the disk, not the nearest", the uHyperCard["imagepath"] of stack "Home" is "Twins Disk:Archive:Home"
+      end if
+      _Close "Home"
+   end if
+   _Close tStack
+end TestHyperCardScriptsNearestCopy
 
 on TestHyperCardScriptsHelp
    -- T18: help, HyperCard's command for its Help stack ("help", a Help
@@ -5744,6 +5883,222 @@ on TestHyperCardScriptsT74
    end if
    _Close tStack
 end TestHyperCardScriptsT74
+
+on TestHyperCardScriptsT74Repeat
+   -- T74: a loop with no condition that waits for the colon in an if of
+   -- its own (Script Manager's folderName, the HyperTextBooks' button that
+   -- reads text files, Gophers Helper's head()): "until <text> is empty"
+   -- in its head. A loop that could leave with the text empty, or does
+   -- anything more, is left as it is
+   local tScript, q, tStack, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  repeat", \
+         "    if last char of pathName is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of pathName", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of manx <> " & q & ":" & q & " then delete last char of manx", \
+         "    else", \
+         "      delete last char of manx", \
+         "      exit repeat", \
+         "    end if", \
+         "  end repeat", \
+         "  Repeat Forever -- to the folder", \
+         "    delete the last character of r", \
+         "    if the last character of r = " & q & ":" & q & " then", \
+         "      return r", \
+         "    end if", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit mouseUp", \
+         "    if x is " & q & "Disk" & q & " then put 1 into y", \
+         "    delete last char of x", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is not " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "    add 1 to n", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of y", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "    put y into x", \
+         "  end repeat", \
+         "  repeat", \
+         "    delete last char of x", \
+         "    if last char of x is " & q & ":" & q & " then put x into y", \
+         "  end repeat", \
+         "  repeat", \
+         "    exit repeat", \
+         "    delete last char of x", \
+         "    if last char of x is " & q & ":" & q & " then put x into y", \
+         "  end repeat", \
+         "  repeat while x is not empty", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "  end repeat", \
+         "end mouseUp") into tScript
+   TestAssert "T74 repeat: an exit at the colon, then the delete", line 2 of tScript is "  repeat until pathName is empty"
+   TestAssert "T74 repeat: <>, a delete after then, and the exit after else", line 6 of tScript is "  repeat until manx is empty"
+   TestAssert "T74 repeat: forever, in any case, the delete first, and a return; a comment kept", \
+         line 13 of tScript is "  Repeat until r is empty -- to the folder"
+   TestAssert "T74 repeat: exit from the handler, and a put into another variable", line 19 of tScript is "  repeat until x is empty"
+   TestAssert "T74 repeat: an exit where there is no colon, unchanged", line 24 of tScript is "  repeat"
+   TestAssert "T74 repeat: another statement, unchanged", line 28 of tScript is "  repeat"
+   TestAssert "T74 repeat: a delete from another variable, unchanged", line 33 of tScript is "  repeat"
+   TestAssert "T74 repeat: a put into the text, unchanged", line 37 of tScript is "  repeat"
+   TestAssert "T74 repeat: no exit, unchanged", line 42 of tScript is "  repeat"
+   TestAssert "T74 repeat: an exit that is not in the if, unchanged", line 46 of tScript is "  repeat"
+   TestAssert "T74 repeat: a loop with a condition, unchanged", line 51 of tScript is "  repeat while x is not empty"
+   TestAssert "T74 repeat: those compile", _Compiles(tScript)
+
+   -- In a script that compiles as it is, run: a path with colons gives
+   -- its folder, as in HyperCard, and one without gives none, and ends
+   put "HCColonRepeats" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Folder"
+   set the script of button "Folder" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put folderName(" & q & "Disk:Folder:Stack" & q & ") & " & q & "|" & q & " & folderName(" & q & "/Users/me/Stack" & q & ") & " & q & "|" & q & \
+         " & head(" & q & "Disk:Folder:Stack" & q & ") & " & q & "|" & q & " & head(" & q & "/Users/me/Stack" & q & ") into gHCScriptsTest", \
+         "end mouseUp", \
+         "function folderName pPath", \
+         "  repeat", \
+         "    if last char of pPath is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of pPath", \
+         "  end repeat", \
+         "  delete last char of pPath", \
+         "  return pPath", \
+         "end folderName", \
+         "function head r", \
+         "  repeat forever", \
+         "    delete last char of r", \
+         "    if last char of r is " & q & ":" & q & " then", \
+         "      return r", \
+         "    end if", \
+         "  end repeat", \
+         "end head")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put line 6 of the script of button "Folder" of stack tStack into tScript
+   put return & line 14 of the script of button "Folder" of stack tStack after tScript
+   TestAssert "T74 repeat: in a script that compiles too", \
+         tScript is "  repeat until pPath is empty" & return & "  repeat until r is empty"
+   -- (without it the loops would not end)
+   if tScript is "  repeat until pPath is empty" & return & "  repeat until r is empty" then
+      put empty into gHCScriptsTest
+      try
+         send "mouseUp" to button "Folder" of stack tStack
+      catch tError
+      end try
+      TestAssert "T74 repeat: the folder of a path with colons, and none of one without", gHCScriptsTest is "Disk:Folder||Disk:Folder:|"
+   end if
+   _Close tStack
+end TestHyperCardScriptsT74Repeat
+
+on TestHyperCardScriptsT75
+   -- T75: a select of the object or the chunk a value names, in
+   -- parentheses or from a function of the stack, which HyperCard
+   -- selected ("select (theLine)", the Guide to XCMDs' arrow keys, after
+   -- "add 1 to word 2 of theLine"; "select after text of fieldData()",
+   -- WB2D's) and this engine's select refuses: "do" with the statement and
+   -- the value after it. A select it takes is left as it is
+   local tScript, q, tStack, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on arr what", \
+         "  put the selectedLine into theLine", \
+         "  add 1 to word 2 of theLine", \
+         "  select (theLine)", \
+         "  if what is 1 then select after (theLine)", \
+         "  select fieldData()", \
+         "  select after text of fieldData()", \
+         "  Select Before Text Of fieldData() -- the start", \
+         "  select selectedLine()", \
+         "  select foundLine()", \
+         "  select fld (theName)", \
+         "  select text of fld (theName)", \
+         "  select line 2 of fld 1", \
+         "  select theLine", \
+         "  select " & q & q, \
+         "end arr", \
+         "function fieldData", \
+         "  return " & q & "card field id 13" & q, \
+         "end fieldData", \
+         "function selectedLine", \
+         "  return " & q & "line 1 of card field 1" & q, \
+         "end selectedLine") into tScript
+   TestAssert "T75: a value in parentheses", line 4 of tScript is "  do " & q & "select" & q & " && (theLine)"
+   TestAssert "T75: after then, with after", line 5 of tScript is "  if what is 1 then do " & q & "select after" & q & " && (theLine)"
+   TestAssert "T75: a function of the stack", line 6 of tScript is "  do " & q & "select" & q & " && fieldData()"
+   TestAssert "T75: after text of a function of the stack", line 7 of tScript is "  do " & q & "select after text of" & q & " && fieldData()"
+   TestAssert "T75: in any case, a comment kept", line 8 of tScript is "  do " & q & "Select Before Text Of" & q & " && fieldData() -- the start"
+   TestAssert "T75: a function of the stack T62 renames", line 9 of tScript is "  do " & q & "select" & q & " && hc_selectedline()" \
+         and line 20 of tScript is "function hc_selectedline"
+   TestAssert "T75: one of this engine's functions, unchanged", line 10 of tScript is "  select foundLine()"
+   TestAssert "T75: a field named by a value, unchanged", line 11 of tScript is "  select fld (theName)"
+   TestAssert "T75: the text of a field named by a value, unchanged", line 12 of tScript is "  select text of fld (theName)"
+   TestAssert "T75: a chunk, unchanged", line 13 of tScript is "  select line 2 of fld 1"
+   TestAssert "T75: a variable, unchanged", line 14 of tScript is "  select theLine"
+   TestAssert "T75: select " & q & q & ", T34's", line 15 of tScript is "  select empty"
+   TestAssert "T75: those compile", _Compiles(tScript)
+
+   put _Rewrite("on mouseUp", \
+         "  select (theLine) & x", \
+         "  select other()", \
+         "  select (a) of (b)", \
+         "end mouseUp") into tScript
+   TestAssert "T75: more than a value, unchanged", line 2 of tScript is "  select (theLine) & x"
+   TestAssert "T75: a call of no function of the stack, unchanged", line 3 of tScript is "  select other()"
+   TestAssert "T75: a value with more after it, unchanged", line 4 of tScript is "  select (a) of (b)"
+
+   -- Fixed by revHyperCardFixScripts and run: the line after the one
+   -- selected, as the arrow key went to in HyperCard, then the end of the
+   -- text of the field the function names
+   put "HCSelectValue" & the milliseconds into tStack
+   lock messages
+   create stack tStack
+   set the defaultStack to tStack
+   create field "List"
+   put _Lines("one", "two", "three") into field "List"
+   create field "Notes"
+   put "Notes" into field "Notes"
+   create button "Down"
+   set the script of button "Down" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  select line 1 of card field " & q & "List" & q, \
+         "  put the selectedLine into theLine", \
+         "  add 1 to word 2 of theLine", \
+         "  select (theLine)", \
+         "  put the selectedText into gHCScriptsTest", \
+         "  select after text of fieldData()", \
+         "  put " & q & "|" & q & " & word 1 to 4 of the selectedChunk & " & q & "|" & q & " & the short name of the selectedField after gHCScriptsTest", \
+         "  select empty", \
+         "end mouseUp", \
+         "function fieldData", \
+         "  return " & q & "card field " & q & " & quote & " & q & "Notes" & q & " & quote", \
+         "end fieldData")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T75: in a stack fixed", line 6 of the script of button "Down" of stack tStack is "  do " & q & "select" & q & " && (theLine)"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Down" of stack tStack
+   catch tError
+   end try
+   TestAssert "T75: the line after the one selected, then after the text of the field named", gHCScriptsTest is "two|char 6 to 5|Notes"
+   _Close tStack
+end TestHyperCardScriptsT75
 
 on TestHyperCardScriptsT11In
    -- T11's "in" for "of" between an object and the card, background or

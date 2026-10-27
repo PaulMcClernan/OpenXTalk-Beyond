@@ -48,6 +48,12 @@ forks/Stacks.hfs            a plain HFS volume (Inside Macintosh: Files, chapter
                             its catalog in two leaf nodes
 forks/Stacks.dc42           the volume as a DiskCopy 4.2 image
 forks/Stacks.apm            the volume behind an Apple partition map, as on CDs
+forks/Twins.hfs             a plain HFS volume, "Twins Disk", with two copies of
+                            a stack of one name, Archive:Twin, first on the
+                            disk, and Suite:Data:Twin, and two of a Home in
+                            the same folders (STAK, all
+                            ../TestCardsBackgrounds.stack), for the HyperCard
+                            Library's search for the copy nearest a stack
 forks/TestCardsBackgrounds.applesingle
                             ../TestCardsBackgrounds.stack and the fork in one
                             AppleSingle file, named "Synthetic Stack"
@@ -351,11 +357,12 @@ def hfs_extents(extents):
     return b"".join(struct.pack(">HH", start, count) for start, count in extents)
 
 
-def hfs_volume(name, folders, files):
+def hfs_volume(name, folders, files, split=None):
     """folders: [(id, parent, name)]; files: [(id, parent, name, type,
     creator, data, rsrc, data_runs, rsrc_runs)], each *_runs a list of
     block counts the fork is cut into, laid out with a free block between
-    them so that each run is its own extent"""
+    them so that each run is its own extent; split: how many of the
+    catalog's records go in its first leaf (half of them if None)"""
     blocks = []                          # allocation block contents
 
     def allocate(data, runs):
@@ -396,7 +403,7 @@ def hfs_volume(name, folders, files):
         catalog.append(((parent, fname), record))
     catalog.sort(key=lambda r: (r[0][0], r[0][1].lower()))
     records = [hfs_key(*key) + data for key, data in catalog]
-    half = len(records) // 2
+    half = len(records) // 2 if split is None else split
     # the catalog: header (block 2), leaves 1 and 2 (blocks 3 and 4),
     # linked forward; no index node, as the depth is 1 and the root a leaf
     blocks[2] = hfs_header_node(1, len(records), 1, 2, 37, 3, 1)
@@ -514,10 +521,20 @@ def main():
         (21, 17, "Lost Type", b"????", b"????", stack, b"", [16], []),
         (22, 2, "Read Me", b"TEXT", b"ttxt", b"An old disk.\r", b"", [1], []),
     ])
+    # two stacks of one name, and two Homes, the farther one of each first
+    # on the disk (the catalog's order is the parent folder's id, then the
+    # name)
+    twins = hfs_volume("Twins Disk", [(16, 2, "Archive"), (17, 2, "Suite"), (18, 17, "Data")], [
+        (20, 16, "Twin", b"STAK", b"WILD", stack, b"", [16], []),
+        (21, 18, "Twin", b"STAK", b"WILD", stack, b"", [16], []),
+        (22, 16, "Home", b"STAK", b"WILD", stack, b"", [16], []),
+        (23, 18, "Home", b"STAK", b"WILD", stack, b"", [16], []),
+    ], split=5)
     files = {
         "Stacks.hfs": volume,
         "Stacks.dc42": diskcopy42("Old Disk", volume),
         "Stacks.apm": partition_map(volume),
+        "Twins.hfs": twins,
         "AddColor.rsrc": colours,
         "Synthetic.rsrc": fork,
         "Pictures.rsrc": pictures,
