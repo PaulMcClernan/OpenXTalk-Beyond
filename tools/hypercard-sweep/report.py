@@ -64,7 +64,7 @@ def read_run(folder):
         if not re.match(r"\d+\.txt$", name):
             continue
         stack = {"imported": False, "opened": False, "done": False, "exit": None, "left": [], "lines": [],
-                 "errors": [], "mace": (0, 0), "modal": 0}
+                 "errors": [], "mace": (0, 0), "modal": 0, "at": "", "aborts": 0}
         with open(os.path.join(folder, name), encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 fields = line.rstrip("\n").split("\t")
@@ -92,6 +92,14 @@ def read_run(folder):
                     # a modal window nobody was there to close, closed
                     # by the sweep as its Cancel button would
                     stack["modal"] += 1
+                elif kind == "AT" and len(fields) > 1:
+                    # a step of the run as it starts: the last one of a
+                    # stack that timed out is where it stopped
+                    stack["at"] = fields[1]
+                elif kind == "ABORT":
+                    # a step a script ended with "exit to top", after
+                    # which the tour went on
+                    stack["aborts"] += 1
                 elif kind == "OPENED":
                     stack["opened"] = True
                 elif kind == "DONE":
@@ -139,6 +147,22 @@ def source_line(error, text):
     return lines[line - 1].strip() if 0 < line <= len(lines) else ""
 
 
+def timed_out_while(stacks):
+    """Where the stacks that timed out were, by the last step they
+    started (AT): opening, going to a card or clicking a button (a run
+    from before the AT lines logged none)"""
+    steps = {"open": "opening", "card": "going to a card", "click": "clicking a button"}
+    where = collections.Counter()
+    for stack in stacks:
+        if stack["exit"] != "timeout":
+            continue
+        if stack["at"]:
+            where[steps.get(stack["at"].split(" ")[0], stack["at"])] += 1
+        else:
+            where["after opening, not logged" if stack["opened"] else "before opening"] += 1
+    return ", ".join("%s %d" % (step, count) for step, count in where.most_common()) or "none"
+
+
 def summary(folder, limit):
     stacks = read_run(folder)
     imported = [s for s in stacks.values() if s["imported"]]
@@ -163,6 +187,10 @@ def summary(folder, limit):
               "no error at all", sum(1 for s in imported if not s["errors"] and not s["left"]))
         print("modal windows closed by the sweep (nobody to answer them)", sum(s["modal"] for s in imported),
               "in", sum(1 for s in imported if s["modal"]), "stacks")
+        if any(s["at"] for s in imported):
+            print("steps a script ended with exit to top (the tour went on)", sum(s["aborts"] for s in imported),
+                  "in", sum(1 for s in imported if s["aborts"]), "stacks")
+            print("timed out while:", timed_out_while(imported))
 
     groups = collections.defaultdict(lambda: {"stacks": set(), "count": 0, "examples": []})
     for name, stack in stacks.items():
@@ -268,6 +296,13 @@ def compare(first_folder, second_folder):
           "in", sum(1 for name in both if second[name]["modal"]), "stacks")
     print("timed out:", sum(1 for name in both if first[name]["exit"] == "timeout"), "then",
           sum(1 for name in both if second[name]["exit"] == "timeout"))
+    if any(first[name]["at"] or second[name]["at"] for name in both):
+        print("steps a script ended with exit to top:", sum(first[name]["aborts"] for name in both),
+              "in", sum(1 for name in both if first[name]["aborts"]), "stacks, then",
+              sum(second[name]["aborts"] for name in both),
+              "in", sum(1 for name in both if second[name]["aborts"]), "stacks")
+        print("timed out while:", timed_out_while(first[name] for name in both), "| then",
+              timed_out_while(second[name] for name in both))
     print("stacks with errors while running in the second run only:",
           sum(1 for name in both if second[name]["errors"] and not first[name]["errors"]),
           "in the first only:", sum(1 for name in both if first[name]["errors"] and not second[name]["errors"]))

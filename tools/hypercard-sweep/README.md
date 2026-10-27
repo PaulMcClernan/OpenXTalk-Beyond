@@ -80,6 +80,17 @@ headless run reported them. A modal window, which would wait for a person
 until the stack timed out, is closed a quarter of a second after it opens,
 as its Cancel button would close it, and counted in the report.
 
+A script's `exit to top` ends every handler that is running, the sweep's
+own too, so before the sweep went on after one, the tour stopped at the
+first click or card visit whose script ended with it, and the stack timed
+out. Now the sweep notices such a step within a quarter of a second, logs
+it (`ABORT`) and goes on with the next step, as a person goes on after a
+click that stopped. It also logs each step as it starts (`AT`), so that
+the report says where the stacks that timed out were: opening, going to
+a card or clicking a button. Runs from before then are not comparable
+with runs after: 56 of the 165 stacks of the disk image that timed out
+with no error at all have an `exit to top` in their scripts.
+
 `--hypertalk-order` sets each stack's `hyperTalkCompatible` before its
 scripts are fixed, as File > Import Stack does unless File > Import
 Stack > HyperCard Message Order is turned off, so the stack runs with
@@ -159,8 +170,11 @@ following lines are written:
 | `FIX` | the import report's summary |
 | `LEFT` | handler, compile error, its rewritten text |
 | `LINE` | handler, line in it, `skipped` or `stops`, compile error, the line's HyperTalk |
+| `AT` | phase: a step of the run as it starts (`open`, `card N`, `click N,M`) |
 | `OPENED` | none |
 | `ERR` or `THROW` | phase, error, the script line and its object |
+| `ABORT` | phase: a step a script ended with `exit to top`, after which the tour went on |
+| `MODAL` | phase, the name of a modal window the sweep closed |
 | `DONE` | none |
 | `EXIT` | the engine's exit code, or `timeout` |
 
