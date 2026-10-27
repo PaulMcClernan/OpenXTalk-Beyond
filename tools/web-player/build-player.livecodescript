@@ -308,7 +308,42 @@ private command makeSamples pFolder
    makeGrid pFolder & "/Grid.livecode"
    makeData pFolder & "/Data.livecode"
    makeHyper pFolder & "/Hyper.livecode"
+   makeMover pFolder & "/Mover.livecode"
 end makeSamples
+
+-- A stack that sizes and centres its own window as it opens, as the
+-- box2dxt platformer does (buildPfUI): in the page's window it must show
+-- itself, not the player's card. moverReport says, two seconds later,
+-- where it is and what else is open.
+private command makeMover pFile
+   local tStack, tScript
+   create stack "Mover"
+   put the long id of stack "Mover" into tStack
+   set the rect of tStack to 0,0,480,320
+   set the backgroundColor of tStack to "#CC3366"
+   set the defaultStack to "Mover"
+   put "on openStack" & return & \
+         "   set the width of this stack to 1024" & return & \
+         "   set the height of this stack to 640" & return & \
+         "   set the loc of this stack to the screenLoc" & return & \
+         "   send `moverReport` to me in 2000 milliseconds" & return & \
+         "end openStack" & return & \
+         "on moverReport" & return & \
+         "   local tOpen" & return & \
+         "   put the openStacks into tOpen" & return & \
+         "   replace return with `;` in tOpen" & return & \
+         "   write `SAMPLE mover rect=` & the rect of this stack & ` screenRect=` & the screenRect & ` player=` & the mode of stack `Stack Player` & ` open=` & tOpen & return to stdout" & return & \
+         "end moverReport" into tScript
+   replace "`" with quote in tScript
+   set the script of tStack to tScript
+   if the result is not empty then
+      throw "the Mover sample's script: " & the result
+   end if
+   sampleLabel "Moved", "20,18,600,56", 22, "bold"
+   put "A stack that sized and centred itself" into field "Moved"
+   save stack "Mover" as pFile
+   delete stack "Mover"
+end makeMover
 
 -- Cards, a palette substack, a script error and a widget
 private command makeTour pFile

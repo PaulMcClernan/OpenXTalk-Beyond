@@ -329,6 +329,44 @@ def serve(site):
     return server
 
 
+def png_pixel(data, x, y):
+    """The (r, g, b) of pixel x, y of a PNG (8 bits a channel, RGB or RGBA,
+    not interlaced: what the browser's screenshots are)."""
+    import struct
+    import zlib
+    pos, idat, width, channels = 8, b'', 0, 4
+    while pos < len(data):
+        length, kind = struct.unpack('>I4s', data[pos:pos + 8])
+        chunk = data[pos + 8:pos + 8 + length]
+        if kind == b'IHDR':
+            width = struct.unpack('>I', chunk[:4])[0]
+            channels = {2: 3, 6: 4}[chunk[9]]
+        elif kind == b'IDAT':
+            idat += chunk
+        pos += 12 + length
+    raw = zlib.decompress(idat)
+    stride = width * channels
+    prev = bytearray(stride)
+    for row in range(y + 1):
+        start = row * (stride + 1)
+        kind, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+        for i in range(stride):
+            a = line[i - channels] if i >= channels else 0
+            b = prev[i]
+            c = prev[i - channels] if i >= channels else 0
+            if kind == 1:
+                line[i] = (line[i] + a) & 255
+            elif kind == 2:
+                line[i] = (line[i] + b) & 255
+            elif kind == 3:
+                line[i] = (line[i] + (a + b) // 2) & 255
+            elif kind == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        prev = line
+    return tuple(prev[x * channels:x * channels + 3])
+
+
 def check(site, samples, work):
     from playwright.sync_api import sync_playwright
     shots = os.path.join(work, 'check')
@@ -595,6 +633,27 @@ def check(site, samples, work):
             third.keyboard.press('Enter')
             third.wait_for_timeout(500)
         third.screenshot(path=os.path.join(shots, '15-disk-image-stack.png'))
+        before = len(third_lines)
+        third.click('#home')
+        wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
+
+        # Mover: a stack that sizes and centres its own window as it opens
+        # (as the box2dxt platformer does) shows itself in the page's
+        # window, not the player's card. Its colour is #CC3366.
+        got = open_files(third, [os.path.join(samples, 'Mover.livecode')], 'Mover', third_lines)
+        third.wait_for_timeout(2500)
+        report = [x for x in third_lines if x.startswith('SAMPLE mover')]
+        box = third.locator('#canvas').bounding_box()
+        shot = third.screenshot(clip=box)
+        with open(os.path.join(shots, '16-mover.png'), 'wb') as f:
+            f.write(shot)
+        points = [(20, 80), (box['width'] // 2, box['height'] // 3), (20, box['height'] - 20)]
+        colours = [png_pixel(shot, int(x), int(y)) for x, y in points]
+        log('  mover canvas %s: %s | %s' % (box, ', '.join('%s=#%02X%02X%02X' % ((p,) + c) for p, c in zip(points, colours)),
+                                           ' | '.join(report)))
+        expect('mover-shows-itself', any(x.startswith('PLAYER opened Mover') for x in got)
+               and all(abs(c[0] - 0xCC) < 24 and abs(c[1] - 0x33) < 24 and abs(c[2] - 0x66) < 24 for c in colours),
+               ' | '.join(report + ['#%02X%02X%02X' % c for c in colours]))
         before = len(third_lines)
         third.click('#home')
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
