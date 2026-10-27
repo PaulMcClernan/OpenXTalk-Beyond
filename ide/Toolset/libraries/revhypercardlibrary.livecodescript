@@ -1150,9 +1150,17 @@ end _HCLastPart
 -- the path of a copy that can be imported, or empty. On the disk image,
 -- else a stack of that name anywhere on it, as a person would answer
 -- "Where is ...?", unless pNear: only where HyperCard looked without
--- asking
+-- asking. Of several, the one nearest this stack, whose folder has the
+-- most of this stack's folders, from the disk down, as the copy that
+-- came with it is (LabUse, in "Lab Logger 1.02:Logger:Usage", goes to
+-- "Lab Logger 1.02:Logger:Logger", not to the Logger of version 1.0,
+-- which is first on the disk and has not the fields it reads there); of
+-- copies as near, the first on the disk, which was the one taken. A
+-- Home is the first on the disk, as it was: HyperCard never asked where
+-- Home was, and went to the one it used, not one that came with a stack
 private function _HCFindSibling pStack, pName, pNear
    local tSet, tFolder, tFile, tStacks, tLine, tPath, tHFSFolder, tAny, tRelative, tUp, tSub
+   local tStackFolder, tShared, tAnyShared
    put the customProperties["uHyperCard"] of me into tSet
    put 0 into tUp
    if char 1 of pStack is ":" then
@@ -1191,12 +1199,14 @@ private function _HCFindSibling pStack, pName, pNear
       return empty
    end try
    set the itemDelimiter to ":"
-   put item 1 to -2 of tSet["imagepath"] into tHFSFolder
+   put item 1 to -2 of tSet["imagepath"] into tStackFolder
+   put tStackFolder into tHFSFolder
    if tRelative is not empty then
       if tUp > 0 then put item 1 to -(tUp + 1) of tHFSFolder into tHFSFolder
       put tHFSFolder & ":" & item 1 to -2 of tRelative into tHFSFolder
       if char -1 of tHFSFolder is ":" then delete char -1 of tHFSFolder
    end if
+   put -1 into tAnyShared
    repeat for each line tLine in tStacks
       set the itemDelimiter to tab
       put item 1 of tLine into tLine
@@ -1205,7 +1215,17 @@ private function _HCFindSibling pStack, pName, pNear
          put tLine into tPath
          exit repeat
       end if
-      if tAny is empty and the last item of tLine is pName then put tLine into tAny
+      if the last item of tLine is pName then
+         if pName is "Home" then
+            put 0 into tShared
+         else
+            put _HCFoldersShared(item 1 to -2 of tLine, tStackFolder) into tShared
+         end if
+         if tShared > tAnyShared then
+            put tLine into tAny
+            put tShared into tAnyShared
+         end if
+      end if
    end repeat
    if tPath is empty and not pNear then put tAny into tPath
    if tPath is empty then return empty
@@ -1216,6 +1236,19 @@ private function _HCFindSibling pStack, pName, pNear
    -- (the copy goes once the stack is imported: _HCImport)
    return tFile & return & tSet["image"] & return & tPath
 end _HCFindSibling
+
+-- How many folders the HFS paths of two folders have in common from the
+-- disk down ("Disk:A:B" and "Disk:A:C" have 2, the disk and A), names
+-- compared as HFS compared them, case aside
+private function _HCFoldersShared pOne, pTwo
+   local tCount, i
+   set the itemDelimiter to ":"
+   put min(the number of items of pOne, the number of items of pTwo) into tCount
+   repeat with i = 1 to tCount
+      if item i of pOne is not item i of pTwo then return i - 1
+   end repeat
+   return tCount
+end _HCFoldersShared
 
 -- "Where is ...?", as HyperCard asked, in the IDE only, once a name
 private function _HCWhereIs pName

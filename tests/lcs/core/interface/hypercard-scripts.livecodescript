@@ -4621,6 +4621,86 @@ on TestHyperCardScriptsGoStack
    delete folder tFolder
 end TestHyperCardScriptsGoStack
 
+on TestHyperCardScriptsNearestCopy
+   -- a stack a script goes to, on the disk image the stack came from in
+   -- two copies and not in its folder: the copy nearest the stack, whose
+   -- folder has the most of the stack's folders, as the copy that came
+   -- with it is; of copies as near, the first on the disk. Home, which
+   -- HyperCard never asked for, is the first on the disk, as it was
+   local tStack, tImage, tError, q, tLine, tPaths
+   global gHCScriptsTest
+   put quote into q
+   put TestGetInputFile("hypercard/forks/Twins.hfs") into tImage
+   set the itemDelimiter to tab
+   repeat for each line tLine in revHyperCardImageStacks(tImage)
+      put item 1 of tLine & return after tPaths
+   end repeat
+   set the itemDelimiter to comma
+   TestAssert "two copies of each on the disk, the farther first", \
+         tPaths is _Lines("Twins Disk:Archive:Home", "Twins Disk:Archive:Twin", "Twins Disk:Suite:Data:Home", "Twins Disk:Suite:Data:Twin") & return
+   put "HCNearest" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the uHyperCard["image"] of stack tStack to tImage
+   set the uHyperCard["imagepath"] of stack tStack to "Twins Disk:Suite:Usage:Main"
+   set the defaultStack to tStack
+   create button "Twin"
+   set the script of button "Twin" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack " & q & "Twin" & q, "  put the result into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+
+   put "unset" into gHCScriptsTest
+   try
+      send "mouseUp" to button "Twin" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "two copies: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Twin"
+   if there is a stack "Twin" then
+      TestAssert "two copies: the one nearest the stack", the uHyperCard["imagepath"] of stack "Twin" is "Twins Disk:Suite:Data:Twin"
+   end if
+   _Close "Twin"
+
+   lock messages
+   set the uHyperCard["imagepath"] of stack tStack to "Twins Disk:Main"
+   unlock messages
+   put "unset" into gHCScriptsTest
+   put empty into tError
+   try
+      send "mouseUp" to button "Twin" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "two copies as near: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Twin"
+   if there is a stack "Twin" then
+      TestAssert "two copies as near: the first on the disk", the uHyperCard["imagepath"] of stack "Twin" is "Twins Disk:Archive:Twin"
+   end if
+   _Close "Twin"
+
+   -- (only where no stack is called Home, so as not to touch another, an
+   -- IDE's)
+   if there is not a stack "Home" then
+      lock messages
+      set the uHyperCard["imagepath"] of stack tStack to "Twins Disk:Suite:Usage:Main"
+      set the defaultStack to tStack
+      create button "Home" in card 1 of stack tStack
+      set the script of button "Home" of card 1 of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", "  go home", "  put the result into gHCScriptsTest", "end mouseUp")
+      unlock messages
+      get revHyperCardFixScripts(tStack)
+      TestAssert "Home: go home, rewritten", "hcGoHome" is in the script of button "Home" of card 1 of stack tStack
+      put "unset" into gHCScriptsTest
+      put empty into tError
+      try
+         send "mouseUp" to button "Home" of card 1 of stack tStack
+      catch tError
+      end try
+      TestAssert "Home: found, no error", tError is empty and gHCScriptsTest is empty and there is a stack "Home"
+      if there is a stack "Home" then
+         TestAssert "Home: the first on the disk, not the nearest", the uHyperCard["imagepath"] of stack "Home" is "Twins Disk:Archive:Home"
+      end if
+      _Close "Home"
+   end if
+   _Close tStack
+end TestHyperCardScriptsNearestCopy
+
 on TestHyperCardScriptsHelp
    -- T18: help, HyperCard's command for its Help stack ("help", a Help
    -- button's; 10 stacks of the corpus call it with no handler of their
