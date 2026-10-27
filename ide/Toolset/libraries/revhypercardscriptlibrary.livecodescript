@@ -291,6 +291,11 @@ constant kWindowPlaces = "loc location rect rectangle topleft bottomright top le
 -- whose value is the destination (T25)
 constant kGoPlaces = "card cd cards background bkgnd bg backgrounds stack stacks this next prev previous first last back forth home help recent any middle mid second third fourth fifth sixth seventh eighth ninth tenth marked id window url"
 
+-- The words that name a background, and the ordinals a "go" names one by
+-- ("go next bkgnd", T69)
+constant kBackgroundWords = "background bkgnd bg"
+constant kBackgroundOrdinals = "this next prev previous first second third fourth fifth sixth seventh eighth ninth tenth last middle mid any"
+
 -- The words after "open" that say what this engine opens
 -- (engine/src/lextable.cpp's open_table, and the words before it), and
 -- HyperCard's "open report printing" (T12): an "open" of anything else
@@ -3638,6 +3643,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             -- (T43 first, as it makes an "in" "of")
             put _GoStackAt(tTokens, tIdx, i, tEnd) into tStackAt
             put _GoStack(tTokens, tIdx, i, tEnd, tStackAt) into tNew
+            if tNew is empty then put _GoBackground(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _GoTo(tTokens, tIdx, i, tEnd) into tNew
             break
          case "set"
@@ -4053,8 +4059,8 @@ private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
    put _ExpressionEnd(pTokens, pIdx, pStackAt, pEnd, "in as without") into tLast
    -- T43: a background of the stack ("go bkgnd "Workouts" of stack
    -- tName"), which this engine does not go to (it stays on the card it
-   -- is on): its first card, where HyperCard went, as "go bkgnd" without
-   -- a stack does here
+   -- is on): its first card, where HyperCard went, as T69 has a "go
+   -- bkgnd" without a stack go
    put pAt + 1 into tFirst
    if _T(pTokens, pIdx[tFirst]) is "to" then add 1 to tFirst
    if tFirst < k and _T(pTokens, pIdx[tFirst]) is among the words of "background bkgnd bg" then
@@ -4064,6 +4070,48 @@ private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
    _Fire "T16 go to a stack not open"
    return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[tFirst] - 1) & tCard & _Raw(pTokens, pIdx[tFirst], pIdx[pStackAt] - 1) & tStack & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(_Span(pTokens, pIdx, pStackAt, tLast)) & ")"
 end _GoStack
+
+-- T69: a "go" to a background without a card ("go to background
+-- "Game"", Art Game's openStack, which then hid a button of that
+-- background; "go bg i", "go next bkgnd"), which HyperCard went to the
+-- first card of ("If you name a stack (or background) without specifying
+-- a card, HyperCard goes to the first card of the stack (or background)",
+-- its AppleScript reference), leaving "No such card" in the result when
+-- there was no such background. This engine stays on the card it is on,
+-- and then counts only that background's cards ("the number of this
+-- card" is 0, "go to card 3" goes to its third) until a "go" names a card.
+-- The statement goes to the library's hcGoBackground with the
+-- background's id, its name or number, or the ordinal that names it. A
+-- "go" with more after the background ("of this stack", "in a new
+-- window") gets "card 1 of" before the background instead, which goes to
+-- its first card too (or to the stack's first card when there is no such
+-- background). Empty when the "go" names no background, or a card
+private function _GoBackground pTokens, pIdx, pAt, pEnd
+   local j, k, tWord, tMore
+   put pAt + 1 into j
+   if _T(pTokens, pIdx[j]) is "to" then add 1 to j
+   if j >= pEnd then return empty
+   put _T(pTokens, pIdx[j]) into tWord
+   if tWord is not among the words of kBackgroundWords then
+      if tWord is not among the words of kBackgroundOrdinals then return empty
+      if _T(pTokens, pIdx[j + 1]) is not among the words of kBackgroundWords then return empty
+   end if
+   put false into tMore
+   repeat with k = j + 1 to pEnd
+      if _T(pTokens, pIdx[k]) is among the words of "stack in as" then put true into tMore
+   end repeat
+   _Fire "T69 go to a background"
+   if tMore or (tWord is among the words of kBackgroundOrdinals and j + 1 < pEnd) then
+      return _Span(pTokens, pIdx, pAt, j - 1) && "card 1 of" && _Span(pTokens, pIdx, j, pEnd)
+   end if
+   if tWord is among the words of kBackgroundOrdinals then
+      return "hcGoBackground" && quote & tWord & quote
+   end if
+   if _T(pTokens, pIdx[j + 1]) is "id" and j + 2 <= pEnd then
+      return "hcGoBackground" && quote & "id" & quote & "," && _Span(pTokens, pIdx, j + 2, pEnd)
+   end if
+   return "hcGoBackground" && quote & "name" & quote & "," && _Span(pTokens, pIdx, j + 1, pEnd)
+end _GoBackground
 
 -- T43: where the stack starts in a go to a card or a background of a
 -- stack named without the word "stack": after "of" following a

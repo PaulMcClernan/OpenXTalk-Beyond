@@ -979,6 +979,62 @@ on hcGoTo pDest, pWindow
 end hcGoTo
 
 /*
+go to a background without a card (rule T69: "go to bkgnd "Game"", "go bg
+i", "go next bkgnd"), which HyperCard went to the first card of, leaving
+"No such card" in the result when there was no such background. Here a
+"go" to a background without a card stays on the card it is on (and then
+counts only that background's cards until a "go" names a card), and one to
+"card 1" of a background that is not there goes to the stack's first
+card. pHow is how pWhich names the background: "id", or "name" for its
+name or number; or pHow is the ordinal that names it ("next", "last",
+"this"...). The backgrounds are those of this stack, the stack a "go"
+without one goes in
+*/
+on hcGoBackground pHow, pWhich
+   local tCount, tNumber
+   switch pHow
+      case "id"
+         if there is not a background id pWhich then return "No such card"
+         go to card 1 of background id pWhich
+         return the result
+      case "name"
+         if there is not a background pWhich then return "No such card"
+         go to card 1 of background pWhich
+         return the result
+      case "this"
+      case "next"
+      case "prev"
+      case "previous"
+         -- (from this card's background: this engine crashes going to
+         -- the next or the previous background from a card with none)
+         if not (there is this background) then return "No such card"
+         do "go to card 1 of" && pHow && "background"
+         return the result
+      default
+         -- (by number: this engine counts only this card's groups for the
+         -- last, the middle and any background)
+         put the number of backgrounds into tCount
+         switch pHow
+            case "last"
+               put tCount into tNumber
+               break
+            case "middle"
+            case "mid"
+               put tCount div 2 + 1 into tNumber
+               break
+            case "any"
+               if tCount > 0 then put random(tCount) into tNumber
+               break
+            default
+               put wordOffset(pHow, "first second third fourth fifth sixth seventh eighth ninth tenth") into tNumber
+         end switch
+         if tNumber is empty or tNumber < 1 or tNumber > tCount then return "No such card"
+         go to card 1 of background tNumber
+         return the result
+   end switch
+end hcGoBackground
+
+/*
 The stack "go" should go to for pStack, which HyperCard may have named
 by its HFS path ("Disk:Stacks:Name"): pStack itself when there is such a
 stack; else a HyperCard stack of that name beside the file this stack was

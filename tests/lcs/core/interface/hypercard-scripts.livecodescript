@@ -4731,6 +4731,97 @@ on TestHyperCardScriptsT68
    _Close tStack
 end TestHyperCardScriptsT68
 
+on TestHyperCardScriptsT69
+   -- T69: a "go" to a background without a card ("go to background
+   -- "Game"", Art Game's openStack, which then hid a button of that
+   -- background; "go bg i", "go next bkgnd"; 117 stacks of the corpus),
+   -- which HyperCard went to the first card of, leaving "No such card" in
+   -- the result when there was no such background. This engine stays on
+   -- the card it is on, and then counts only that background's cards
+   -- until a "go" names a card. The statement goes to the library's
+   -- hcGoBackground; with more after the background, "card 1 of" goes
+   -- before it. A "go" to a card of a background is left as it is
+   local tScript, tStack, q, tError, tLine
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  go to background " & q & "Game" & q, \
+         "  go bg i", \
+         "  go to bkgnd id 2295", \
+         "  go next bkgnd", \
+         "  if x then go bg " & q & "A" & q & " else go last bg", \
+         "  go to bg " & q & "X" & q & " of this stack", \
+         "  go to card 1 of bg " & q & "Game" & q, \
+         "  go to next card of this bg", \
+         "  put " & q & "go bg 2" & q & " into y -- go bg 2", \
+         "end mouseUp") into tScript
+   TestAssert "T69: a background by its name, by a variable, by its id, by an ordinal", line 2 to 5 of tScript \
+         is _Lines("  hcGoBackground " & q & "name" & q & ", " & q & "Game" & q, "  hcGoBackground " & q & "name" & q & ", i", \
+         "  hcGoBackground " & q & "id" & q & ", 2295", "  hcGoBackground " & q & "next" & q)
+   TestAssert "T69: after then and after else", line 6 of tScript \
+         is "  if x then hcGoBackground " & q & "name" & q & ", " & q & "A" & q & " else hcGoBackground " & q & "last" & q
+   TestAssert "T69: with more after the background, its card 1", line 7 of tScript is "  go to card 1 of bg " & q & "X" & q & " of this stack"
+   TestAssert "T69: a card of a background, a string, a comment: unchanged", line 8 to 10 of tScript \
+         is _Lines("  go to card 1 of bg " & q & "Game" & q, "  go to next card of this bg", "  put " & q & "go bg 2" & q & " into y -- go bg 2")
+   TestAssert "T69: those compile", _Compiles(tScript)
+
+   -- in a stack: card 1 has background A, cards 2 and 3 Game, card 4 A
+   put "HCScriptsT69" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create group "A"
+   set the backgroundBehavior of group "A" to true
+   create card
+   remove background "A" from this card
+   create group "Game"
+   set the backgroundBehavior of group "Game" to true
+   create button "FirstRev" in group "Game"
+   create card
+   create card
+   remove background "Game" from this card
+   place background "A" onto this card
+   go to card 1 of stack tStack
+   repeat for each line tLine in "Game,go to background " & q & "Game" & q & cr & "Hide,go to background " & q & "Game" & q & "; hide bkgnd button " & q & "FirstRev" & q & cr \
+         & "Nope,go bg " & q & "Nope" & q & cr & "Next,go next bkgnd" & cr & "Last,go last bg" & cr & "Id,go to bkgnd id " & the short id of background "Game"
+      create button (item 1 of tLine)
+      set the script of button (item 1 of tLine) to _Lines("on mouseUp", "  global gHCScriptsTest", \
+            "  " & replaceText(item 2 to -1 of tLine, "; ", return & "  "), "  put the result into gHCScriptsTest", "end mouseUp")
+   end repeat
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   set the defaultStack to tStack
+   -- (first, while no "go" has left this engine counting one background's
+   -- cards, as one to a background does without the rule)
+   put empty into tError
+   try
+      send "mouseUp" to button "Hide" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T69: a button of the background hidden on its card (Art Game's)", tError is empty \
+         and not the visible of button "FirstRev" of card 2 of stack tStack
+   repeat for each item tLine in "Game,Next,Last,Id"
+      go to card 1 of stack tStack
+      put "x" into gHCScriptsTest
+      put empty into tError
+      try
+         send "mouseUp" to button tLine of card 1 of stack tStack
+      catch tError
+      end try
+      TestAssert "T69:" && tLine & ": the background's first card, and every card counted", tError is empty and gHCScriptsTest is empty \
+            and the number of this card of stack tStack is 2 and the number of cards of stack tStack is 4
+   end repeat
+   go to card 1 of stack tStack
+   put empty into tError
+   try
+      send "mouseUp" to button "Nope" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T69: no such background: no such card, and the card stays", tError is empty and gHCScriptsTest is "No such card" \
+         and the number of this card of stack tStack is 1 and the number of cards of stack tStack is 4
+   _Close tStack
+end TestHyperCardScriptsT69
+
 on TestHyperCardScriptsBuiltIns
    -- HyperCard's commands this engine does not have, as the rewritten
    -- scripts call them: cursors, key commands, card pictures, picture
