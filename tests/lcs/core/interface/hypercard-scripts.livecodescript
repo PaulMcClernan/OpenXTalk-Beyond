@@ -658,6 +658,13 @@ on TestHyperCardScriptsT37
    put _Rewrite("on mouseUp", "  go card number of this stack", "  answer error & x", "end mouseUp") into tScript
    TestAssert "T37: number of this stack: a card's name, as before", line 2 of tScript is "  go card " & q & "number" & q & " of this stack"
    TestAssert "T37: answer error and more: unchanged", line 3 of tScript is "  answer error & x"
+
+   -- find string, the word of a form alone that is a variable (Windoid's
+   -- "on searchStackFor string"): the text to find
+   put _Rewrite("on searchStackFor string", "  find string", "  if x then find string", "end searchStackFor", \
+         "on mouseUp", "  find words", "end mouseUp") into tScript
+   TestAssert "T37: find a variable named like a form of find", line 2 to 3 of tScript is _Lines("  find (string)", "  if x then find (string)")
+   TestAssert "T37: find a form that is no variable: unchanged", line 6 of tScript is "  find words"
 end TestHyperCardScriptsT37
 
 on TestHyperCardScriptsT37Probed

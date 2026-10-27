@@ -2819,6 +2819,18 @@ private function _ParserForms pLine, pVars
                end if
             end if
             break
+         case "find"
+            -- T37: find string, a word of find's forms alone that is a
+            -- variable of the handler ("on searchStackFor string", Windoid's
+            -- MultiWord Find), which HyperCard took for the text to find:
+            -- in parentheses, a value
+            if i + 1 = tEnd and tTokens[tIdx[i + 1]]["k"] is "w" and pVars[_T(tTokens, tIdx[i + 1])] \
+                  and _T(tTokens, tIdx[i + 1]) is among the words of "whole string words word chars characters normal" then
+               put "(" before tTokens[tIdx[i + 1]]["t"]
+               put ")" after tTokens[tIdx[i + 1]]["t"]
+               _Fire "T37 more forms HyperCard took"
+            end if
+            break
          case "select"
             -- T34: select "", which HyperCard took as select empty
             if i + 1 = tEnd and tTokens[tIdx[i + 1]]["t"] is quote & quote then
