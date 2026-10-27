@@ -2363,7 +2363,8 @@ private function _ParserForms pLine, pVars
          case "play"
             -- T35: play harpsichord c d e f (and after "tempo 200"): the
             -- notes not in quotes, which HyperCard read as the text they
-            -- were; one word that is a variable of the handler stays, and
+            -- were; one word that is a variable of the handler, or it,
+            -- stays ("play "Harpsichord" tempo 150 it", Tiny Tim's), and
             -- so does an expression ("play x line n of tNotes": a note is
             -- never "of" or "the"), and a line that goes on after "\".
             -- The sound, and the tempo, can be in a field of the card or
@@ -2371,8 +2372,36 @@ private function _ParserForms pLine, pVars
             -- e": T49 puts the sound's in parentheses). Another tempo is
             -- one word or number: one in another field or an expression
             -- ("tempo field 2", "tempo the speed of me") leaves the line
-            -- as it is
+            -- as it is. The sound can be in quotes, or an expression in
+            -- parentheses, too ("if qq>1 then play "Harpsichord" g3q d4 e
+            -- ch", Home Improvements', "play (field "Name") tempo 220 cq e
+            -- f gw", Resource Library's: T5 takes a sound in quotes only
+            -- at the start of its line). A sound named by one word alone,
+            -- or before the tempo, that this engine's play takes for its
+            -- own ("play step", Garbage's, which here is a video's "step
+            -- forward" with no clip, and does not compile) or refuses as a
+            -- value, which HyperCard took as the sound's name, is put in
+            -- quotes; "play stop" was HyperCard's own too
             put _PlayObject(tTokens, tIdx, i + 1, tEnd) into j
+            if j is 0 and _T(tTokens, tIdx[i + 1]) is "(" then
+               put 0 into tDepth
+               repeat with j = i + 1 to tEnd
+                  if _T(tTokens, tIdx[j]) is "(" then add 1 to tDepth
+                  if _T(tTokens, tIdx[j]) is ")" then subtract 1 from tDepth
+                  if tDepth = 0 then exit repeat
+               end repeat
+               if j > tEnd then
+                  break
+               end if
+            else if j is 0 and tTokens[tIdx[i + 1]]["k"] is "w" and not pVars[_T(tTokens, tIdx[i + 1])] \
+                  and (i + 1 = tEnd or _T(tTokens, tIdx[i + 2]) is "tempo") \
+                  and _T(tTokens, tIdx[i + 1]) is not among the words of "stop tempo" \
+                  and (_T(tTokens, tIdx[i + 1]) is among the words of "step pause resume video" \
+                  or _ValueRefused(_T(tTokens, tIdx[i + 1]))) then
+               put quote & tTokens[tIdx[i + 1]]["t"] & quote into tTokens[tIdx[i + 1]]["t"]
+               put "s" into tTokens[tIdx[i + 1]]["k"]
+               _Fire "T35 more forms HyperCard took"
+            end if
             if j is 0 then put i + 1 into j
             add 1 to j
             if _T(tTokens, tIdx[j]) is "tempo" then
@@ -2385,8 +2414,12 @@ private function _ParserForms pLine, pVars
                   add 2 to j
                end if
             end if
-            if tTokens[tIdx[i + 1]]["k"] is "w" and _T(tTokens, tIdx[i + 1]) is not among the words of "stop tempo" and j <= tEnd \
-                  and not (j = tEnd and pVars[_T(tTokens, tIdx[j])]) then
+            -- (after a sound in quotes or in parentheses, notes of one
+            -- word stay as they are, which this engine reads as the text
+            -- they are, or the variable HyperCard read too)
+            if ((tTokens[tIdx[i + 1]]["k"] is "s" or _T(tTokens, tIdx[i + 1]) is "(") and j < tEnd \
+                  or tTokens[tIdx[i + 1]]["k"] is "w" and _T(tTokens, tIdx[i + 1]) is not among the words of "stop tempo" and j <= tEnd) \
+                  and not (j = tEnd and (pVars[_T(tTokens, tIdx[j])] or _T(tTokens, tIdx[j]) is "it")) then
                put true into tAt
                repeat with k = j to tEnd
                   if tTokens[tIdx[k]]["k"] is "s" or _T(tTokens, tIdx[k]) is among the words of "& && ( ) , then else of the \" then
@@ -2396,7 +2429,11 @@ private function _ParserForms pLine, pVars
                end repeat
                if tAt and j = tEnd and tTokens[tIdx[j]]["k"] is not "w" then put false into tAt
                if tAt then
-                  _Replace tTokens, tIdx, j, tEnd, quote & _Span(tTokens, tIdx, j, tEnd) & quote
+                  -- (apart from a sound in quotes they were written
+                  -- against: "play "boing"c d e")
+                  get quote & _Span(tTokens, tIdx, j, tEnd) & quote
+                  if tTokens[tIdx[j] - 1]["k"] is not "sp" then put space before it
+                  _Replace tTokens, tIdx, j, tEnd, it
                   _Fire "T35 more forms HyperCard took"
                end if
             end if
@@ -2858,8 +2895,11 @@ private function _GoHome @pTokens, pIdx, pAt, pCount
    end if
    if _T(pTokens, pIdx[j]) is "stack" then add 1 to j
    if _T(pTokens, pIdx[j]) is not "home" and _T(pTokens, pIdx[j]) is not quote & "home" & quote then return false
-   -- (HyperCard's "in a new window" is no different for the Home stack)
+   -- (HyperCard's "in a new window" is no different for the Home stack,
+   -- and neither is "in new window", which HyperCard took too: "go home
+   -- in new window", My First Book of HyperCard 2's)
    if j + 4 = pCount and _Span(pTokens, pIdx, j + 1, pCount) is "in a new window" then put pCount into j
+   if j + 3 = pCount and _Span(pTokens, pIdx, j + 1, pCount) is "in new window" then put pCount into j
    if j <> pCount then return false
    _Replace pTokens, pIdx, pAt, j, "hcGoHome"
    return true

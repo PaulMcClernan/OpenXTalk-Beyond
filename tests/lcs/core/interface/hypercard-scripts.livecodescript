@@ -378,6 +378,12 @@ on TestHyperCardScriptsMoreForms
    TestAssert "T33: a modifier key after with: unchanged", line 2 of tScript is "  type " & q & "C" & q & " with commandKey"
    TestAssert "T33: modifier keys after with: unchanged", line 3 of tScript is "  drag from 1,1 to 9,9 with optionKey, shiftKey"
    TestAssert "T33: the long version of HyperCard: still T10's", line 4 of tScript is "  get hcLongVersion()"
+
+   -- go home in new window, which HyperCard took for "in a new window"
+   -- (My First Book of HyperCard 2's), no different for the Home stack
+   put _Rewrite("on mouseUp", "  go home in new window", "  if x then go to stack home in a new window", "end mouseUp") into tScript
+   TestAssert "T9: go home in new window", line 2 of tScript is "  hcGoHome"
+   TestAssert "T9: go home in a new window, after then", line 3 of tScript is "  if x then hcGoHome"
 end TestHyperCardScriptsMoreForms
 
 on TestHyperCardScriptsT35
@@ -433,6 +439,31 @@ on TestHyperCardScriptsT35
    TestAssert "T35: play a voice and an item: unchanged", line 3 of tScript is "  play harpsichord item 2 of tNotes"
    TestAssert "T35: play a voice and the: unchanged", line 4 of tScript is "  play flute the notes of me"
    TestAssert "T35: play's notes on the next line: unchanged", line 5 of tScript is "  play harpsichord line \"
+
+   -- the sound in quotes after then, or in parentheses (Home
+   -- Improvements', Resource Library's), and a sound named by a word this
+   -- engine's play takes for its own (Garbage's "play step", a video's
+   -- step with no clip here); unchanged: play stop, HyperCard's own, a
+   -- variable's notes, it too (Tiny Tim's, Canary's), and one note after
+   -- a sound in quotes, which this engine reads as the text it is
+   put _Rewrite("on mouseUp", "  if qq > 1 then play " & q & "Harpsichord" & q & " g3q d4 e ch", \
+         "  play (field " & q & "Name" & q & ") tempo 220 cq e f gw", "  play step", "  play step tempo 200 c d", \
+         "  if x then play stop", "  put " & q & "c d" & q & " into tNotes", "  if x then play " & q & "boing" & q & " tNotes", \
+         "  play " & q & "Harpsichord" & q & " tempo 150 it", "  play harpsichord it", \
+         "  if whatCharacter is space then play " & q & "Silence" & q & " r", "  play " & q & "boing" & q & "c d e", "end mouseUp") into tScript
+   TestAssert "T35: play's notes after a sound in quotes, after then", line 2 of tScript \
+         is "  if qq > 1 then play " & q & "Harpsichord" & q && q & "g3q d4 e ch" & q
+   TestAssert "T35: play's notes after a sound in parentheses", line 3 of tScript \
+         is "  play (field " & q & "Name" & q & ") tempo 220 " & q & "cq e f gw" & q
+   TestAssert "T35: a sound named step", line 4 of tScript is "  play " & q & "step" & q
+   TestAssert "T35: a sound named step, its tempo and notes", line 5 of tScript is "  play " & q & "step" & q & " tempo 200 " & q & "c d" & q
+   TestAssert "T35: play stop: unchanged", line 6 of tScript is "  if x then play stop"
+   TestAssert "T35: a variable after a sound in quotes: unchanged", line 8 of tScript is "  if x then play " & q & "boing" & q & " tNotes"
+   TestAssert "T35: it after a sound in quotes: unchanged", line 9 of tScript is "  play " & q & "Harpsichord" & q & " tempo 150 it"
+   TestAssert "T35: it after a voice: unchanged", line 10 of tScript is "  play harpsichord it"
+   TestAssert "T35: one note after a sound in quotes: unchanged", line 11 of tScript is "  if whatCharacter is space then play " & q & "Silence" & q & " r"
+   TestAssert "T35: notes against a sound in quotes, a space between", line 12 of tScript is "  play " & q & "boing" & q && q & "c d e" & q
+   TestAssert "T35: the play lines compile", _Compiles(tScript)
 end TestHyperCardScriptsT35
 
 on TestHyperCardScriptsT34
