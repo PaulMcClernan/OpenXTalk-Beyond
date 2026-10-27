@@ -1466,6 +1466,244 @@ on TestHyperCardScriptsT49
    _Close tStack
 end TestHyperCardScriptsT49
 
+on TestHyperCardScriptsT50
+   -- T50: a property of an object named by a chunk of a variable or of a
+   -- function's value, which HyperCard took as the object the chunk's
+   -- text names ("card field 1,card field 2"). This engine takes the
+   -- object the whole text names, with the chunk as text of it, and stops
+   -- with an error: the chunk in parentheses (Power Tools' buttons that
+   -- scroll several fields together, in 15 stacks)
+   local tScript, tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseDown", \
+         "  put the textHeight of item 1 of fieldList into baseLineSize", \
+         "  get (scroll of last item of theFields()) - baseLineSize", \
+         "  set scroll of item count of fieldList to it", \
+         "  if verticalSort then get top of item i of objectList", \
+         "  edit the script of item 1 of it", \
+         "  put the short name of item 2 of line 1 of tObjects into x", \
+         "end mouseDown") into tScript
+   TestAssert "T50: the textHeight of an item of a variable", line 2 of tScript is "  put the textHeight of (item 1 of fieldList) into baseLineSize"
+   TestAssert "T50: without the, the last item of a function's value", \
+         line 3 of tScript is "  get (scroll of (last item of theFields())) - baseLineSize"
+   TestAssert "T50: set, the item numbered by a variable", line 4 of tScript is "  set scroll of (item count of fieldList) to it"
+   TestAssert "T50: after then", line 5 of tScript is "  if verticalSort then get top of (item i of objectList)"
+   TestAssert "T50: of it", line 6 of tScript is "  edit the script of (item 1 of it)"
+   TestAssert "T50: the short name, a chunk of a chunk", line 7 of tScript is "  put the short name of (item 2 of line 1 of tObjects) into x"
+   TestAssert "T50: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a chunk of an object, a property of text, a count, a
+   -- range, a property's name as a chunk's number, a function
+   put _Rewrite("on mouseDown", \
+         "  put the textHeight of line 1 of me into x", \
+         "  put the textStyle of word 2 of tField into x", \
+         "  put the number of items of fieldList into n", \
+         "  put the scroll of item 1 to 2 of fieldList into x", \
+         "  put item family of line 2 of tList into x", \
+         "  put the length of item 1 of fieldList into n", \
+         "  put the textHeight of item 1 of card field 2 into x", \
+         "end mouseDown") into tScript
+   TestAssert "T50: a chunk of an object: unchanged", line 2 of tScript is "  put the textHeight of line 1 of me into x"
+   TestAssert "T50: a property of text: unchanged", line 3 of tScript is "  put the textStyle of word 2 of tField into x"
+   TestAssert "T50: a count: unchanged", line 4 of tScript is "  put the number of items of fieldList into n"
+   TestAssert "T50: a range: unchanged", line 5 of tScript is "  put the scroll of item 1 to 2 of fieldList into x"
+   TestAssert "T50: a property's name as a chunk's number: unchanged", line 6 of tScript is "  put item family of line 2 of tList into x"
+   TestAssert "T50: a function: unchanged", line 7 of tScript is "  put the length of item 1 of fieldList into n"
+   TestAssert "T50: a chunk of a field: unchanged", line 8 of tScript is "  put the textHeight of item 1 of card field 2 into x"
+
+   -- in a script that compiles: the objects the items name, where this
+   -- engine stopped with "error in object expression"
+   put "HCScriptsT50" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create field "A"
+   set the textHeight of field "A" to 17
+   create field "B"
+   create button "Scroll"
+   set the script of button "Scroll" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put theFields() into fieldList", \
+         "  put the textHeight of item 1 of fieldList into gHCScriptsTest", \
+         "  put comma & the short name of last item of theFields() after gHCScriptsTest", \
+         "end mouseUp", \
+         "function theFields", \
+         "  return " & q & "card field 1,card field 2" & q, \
+         "end theFields")
+   unlock messages
+   TestAssert "T50: the script compiles here as it is", _Compiles(the script of button "Scroll" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T50: in a script that compiles", line 4 to 5 of the script of button "Scroll" of card 1 of stack tStack \
+         is _Lines("  put the textHeight of (item 1 of fieldList) into gHCScriptsTest", \
+         "  put comma & the short name of (last item of theFields()) after gHCScriptsTest")
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Scroll" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T50: the fields the items name, as in HyperCard", gHCScriptsTest is "17,B"
+   _Close tStack
+end TestHyperCardScriptsT50
+
+on TestHyperCardScriptsT51
+   -- T51: a textFont set to a font named in several words not in quotes,
+   -- which HyperCard took as the text it was. This engine sets the font
+   -- to the first word and runs the rest as a command it cannot find:
+   -- the name in quotes (9 stacks)
+   local tScript, tStack, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  set the textfont to New York", \
+         "  set textfont of me to new century schlbk", \
+         "  set textfont of cd btn " & q & "Cancel" & q & " to chicago gray", \
+         "  if tDim then set the textfont of the target to New Chicago", \
+         "  set the textFont of char 1 to 3 of fld 1 to Cooper Black", \
+         "end mouseUp") into tScript
+   TestAssert "T51: the textFont", line 2 of tScript is "  set the textfont to " & q & "New York" & q
+   TestAssert "T51: of me, three words", line 3 of tScript is "  set textfont of me to " & q & "new century schlbk" & q
+   TestAssert "T51: of a button", line 4 of tScript is "  set textfont of cd btn " & q & "Cancel" & q & " to " & q & "chicago gray" & q
+   TestAssert "T51: after then", line 5 of tScript is "  if tDim then set the textfont of the target to " & q & "New Chicago" & q
+   TestAssert "T51: the value after the last to, of a chunk's range", line 6 of tScript is "  set the textFont of char 1 to 3 of fld 1 to " & q & "Cooper Black" & q
+   TestAssert "T51: the script compiles", _Compiles(tScript)
+
+   -- unchanged: an object, a chunk, an expression, one word, a variable
+   put _Rewrite("on mouseUp", \
+         "  set textFont to bg field FontName", \
+         "  set textfont of fld 1 to line Keuze of fonts", \
+         "  set textFont to any item of pictureFonts", \
+         "  set the textFont of cd fld 2 to the textFont of fld 1", \
+         "  set the textFont to Geneva", \
+         "  set the textFont of me to tFont & tStyle", \
+         "  set the textFont to it", \
+         "end mouseUp") into tScript
+   TestAssert "T51: an object: unchanged", line 2 of tScript is "  set textFont to bg field FontName"
+   TestAssert "T51: a chunk: unchanged", line 3 of tScript is "  set textfont of fld 1 to line Keuze of fonts"
+   TestAssert "T51: any item: unchanged", line 4 of tScript is "  set textFont to any item of pictureFonts"
+   TestAssert "T51: a property: unchanged", line 5 of tScript is "  set the textFont of cd fld 2 to the textFont of fld 1"
+   TestAssert "T51: one word: unchanged", line 6 of tScript is "  set the textFont to Geneva"
+   TestAssert "T51: an expression: unchanged", line 7 of tScript is "  set the textFont of me to tFont & tStyle"
+   TestAssert "T51: it: unchanged", line 8 of tScript is "  set the textFont to it"
+
+   -- in a script that compiles: the font's whole name, where this engine
+   -- stopped with "can't find handler" at its second word
+   put "HCScriptsT51" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Font"
+   set the script of button "Font" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  set the textFont to New York", \
+         "  set the textFont of me to New Century Schlbk", \
+         "  put the textFont of me into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T51: the script compiles here as it is", _Compiles(the script of button "Font" of card 1 of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Font" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T51: as it is, it stops before the font is set", gHCScriptsTest is empty
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T51: in a script that compiles", line 3 to 4 of the script of button "Font" of card 1 of stack tStack \
+         is _Lines("  set the textFont to " & q & "New York" & q, \
+         "  set the textFont of me to " & q & "New Century Schlbk" & q)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Font" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T51: the font's whole name, as in HyperCard", gHCScriptsTest is "New Century Schlbk"
+   _Close tStack
+end TestHyperCardScriptsT51
+
+on TestHyperCardScriptsT52
+   -- T52: the showPict of a card or a background, which this engine reads
+   -- as true and sets to nothing, and the picture of a card or a
+   -- background named, which stops with an error here: the library's
+   -- hcShowPict and hcShowPicture (34 stacks read or set the showPict, 7
+   -- show or hide the picture of a card they name)
+   local tScript, tStack, q, tBgImage, tCardImage
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  if the showPict of this cd is true then hide pict of this cd", \
+         "  else show pict of this cd", \
+         "  put the showPict of this bg into PictShown", \
+         "  set the showPict of this card to not boolean", \
+         "  set showpict of card id 2946 to false", \
+         "  set the showPict of card " & q & "Keywords" & q & " to not(the showPict of card " & q & "Keywords" & q & ")", \
+         "  if showpict of this cd then nextOnThisCd", \
+         "  hide picture of prev card", \
+         "  show picture of bg 2", \
+         "end mouseUp") into tScript
+   TestAssert "T52: read, and the picture of this card hidden", line 2 of tScript is "  if hcShowPict(" & q & "card" & q & ", the long id of this cd) is true then hcShowPicture " & q & "card" & q & ", false, the long id of this cd"
+   TestAssert "T52: shown after else", line 3 of tScript is "  else hcShowPicture " & q & "card" & q & ", true, the long id of this cd"
+   TestAssert "T52: of a background", line 4 of tScript is "  put hcShowPict(" & q & "background" & q & ", the long id of this bg) into PictShown"
+   TestAssert "T52: set", line 5 of tScript is "  hcShowPicture " & q & "card" & q & ", not boolean, the long id of this card"
+   TestAssert "T52: set without the, a card by id", line 6 of tScript is "  hcShowPicture " & q & "card" & q & ", false, the long id of card id 2946"
+   TestAssert "T52: set to its own read", line 7 of tScript is "  hcShowPicture " & q & "card" & q & ", not(hcShowPict(" & q & "card" & q & ", the long id of card " & q & "Keywords" & q & ")), the long id of card " & q & "Keywords" & q
+   TestAssert "T52: read without the", line 8 of tScript is "  if hcShowPict(" & q & "card" & q & ", the long id of this cd) then nextOnThisCd"
+   TestAssert "T52: the picture of the previous card", line 9 of tScript is "  hcShowPicture " & q & "card" & q & ", false, the long id of prev card"
+   TestAssert "T52: the picture of a background", line 10 of tScript is "  hcShowPicture " & q & "background" & q & ", true, the long id of bg 2"
+   TestAssert "T52: the script compiles", _Compiles(tScript)
+
+   -- unchanged: a handler of that name, a card of another stack, text
+   put _Rewrite("on mouseUp", \
+         "  showPict", \
+         "  put the showPict of card 1 of stack " & q & "Other" & q & " into x", \
+         "  put " & q & "the showPict of this cd" & q & " into x", \
+         "end mouseUp", \
+         "on showPict", \
+         "  beep", \
+         "end showPict") into tScript
+   TestAssert "T52: a handler's call: unchanged", line 2 of tScript is "  showPict"
+   TestAssert "T52: a card of another stack: unchanged", line 3 of tScript is "  put the showPict of card 1 of stack " & q & "Other" & q & " into x"
+   TestAssert "T52: text: unchanged", line 4 of tScript is "  put " & q & "the showPict of this cd" & q & " into x"
+   TestAssert "T52: a handler: unchanged", line 6 of tScript is "on showPict"
+
+   -- run: a card's picture (an image with no name) and its background's,
+   -- read, hidden and shown as the script says
+   put "HCScriptsT52" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create group "Bg"
+   set the backgroundBehavior of group "Bg" to true
+   create image in group "Bg"
+   put it into tBgImage
+   create image
+   put it into tCardImage
+   create button "Pict"
+   set the script of button "Pict" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put the showPict of this card & comma & the showPict of this bg into gHCScriptsTest", \
+         "  hide pict of this cd", \
+         "  hide bg pict", \
+         "  put comma & the showPict of this card & comma & the showPict of this bg after gHCScriptsTest", \
+         "  set the showPict of this card to true", \
+         "  put comma & showpict of this cd after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Pict" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T52: as it is, the picture is always shown and hiding it stops", gHCScriptsTest is "true,true"
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T52: in a script that compiles", _Compiles(the script of button "Pict" of card 1 of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Pict" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T52: read, hidden, read, shown, as in HyperCard", gHCScriptsTest is "true,true,false,false,true"
+   TestAssert "T52: the card's picture shown at the end, the background's hidden", \
+         the visible of tCardImage and not the visible of tBgImage
+   _Close tStack
+end TestHyperCardScriptsT52
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line

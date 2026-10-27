@@ -36,7 +36,7 @@ which is every <stack> unless a <script> sets it. File > Import Stack
 sets it for each <stack> it imports, unless File > Import Stack >
 HyperCard Message Order is turned off.
 
-When it is true, thirteen things are as they were in <HyperCard>, for the
+When it is true, sixteen things are as they were in <HyperCard>, for the
 <stack> and for its substacks:
 
 - A message that a <control> of a <background> group does not handle
@@ -152,7 +152,11 @@ When it is true, thirteen things are as they were in <HyperCard>, for the
   message after, while the <handler|handlers> that are running go on to
   their end as they were. Otherwise setting such a <script> is an
   error, as setting the <script> of a <behavior> whose <handler> is
-  running is in any <stack>.
+  running is in any <stack>. It is an error in these <stack|stacks>
+  too while the <preserveVariables> is true, for an <object> whose
+  <script> has script <local|locals>: the new <script> would start
+  without their values, which the <preserveVariables> keeps where the
+  <object> is not running. <HyperCard> had neither.
 - The <ID> of a <card> is its abbreviated ID, "card id" and its number,
   as in <HyperCard>, where otherwise it is the number: a <script> that
   puts the id of this card into a variable, goes to other
@@ -161,6 +165,37 @@ When it is true, thirteen things are as they were in <HyperCard>, for the
   <card> whose short ID is 3058. The short ID of a <card>, and the
   <ID> of a <background>, a <button> or a <field>, are numbers either
   way, as they were in <HyperCard>.
+- The <userLevel> is at most 5, <HyperCard|HyperCard's> highest level
+  (scripting), where otherwise it is 8 until a <script> sets it: a
+  <stack> that tests whether it is 5 (if the userLevel is 5 then pass
+  doMenu), or names a <button> by it ("UserLevel" && the userLevel),
+  finds what it found in <HyperCard> at that level. One set to 5 or less
+  is as it was set, and one set above 5 is kept as it was set, as a
+  <stack> without the <property> reads it.
+- The <play> <command> plays the sound that a <field> or a <button> of a
+  <card> or a <background> names, with card or background before it, in
+  a <script> and in text run by <do>, as <HyperCard> did: play card
+  field "Sound" of card "Settings" plays the sound that field names.
+  Otherwise the word card or background there is read as the kind of
+  <player>, and the <field> or <button> is looked for without it: with
+  the <HCAddressing> true, as File > Import Stack sets it, a <field> of
+  the <background>, so that no such object stops the <script> where the
+  <field> is the <card|card's>. File > Import Stack puts such a <field>
+  or <button> in parentheses in the <script|scripts> it imports, unless
+  it is one of another <card>, and every <stack> reads those as
+  <HyperCard> did.
+- A <script> can call one of <HyperCard|HyperCard's> own messages, or
+  <send> it, where no <handler> takes it or the last one to take it
+  <pass|passes> it, and go on, as in <HyperCard>, where the message went
+  on to <HyperCard> at the end of the <message path> and ended there: a
+  <script> calls openCard to run its <card|card's> <openCard> <handler>
+  again, or sends <mouseUp> or <idle> to an <object> with no
+  <handler> for it. Otherwise it stops the <script> with can't find
+  handler. These are the messages <HyperCard> sent when something
+  happened: the open, close, new, delete and mouse messages, exitField,
+  idle, startUp, suspend, resume, suspendStack, resumeStack, sizeWindow
+  and moveWindow. One whose end <HyperCard> acted on, such as <tabKey>
+  or <help>, and one that is not <HyperCard|HyperCard's>, still stop it.
 
 File > Import Stack keeps the <doMenu> <handler|handlers> of a <stack>
 it imports with the <hyperTalkCompatible> true, and gives the <stack>
@@ -191,7 +226,10 @@ show groups (command), hide groups (command),
 round (function), statRound (function), seconds (function),
 convert (command), numToChar (function), charToNum (function),
 numToByte (function), script (property), behavior (property),
-ID (property),
+ID (property), userLevel (property), preserveVariables (property),
+play (command), do (command), local (command), send (command),
+pass (control structure), mouseUp (message), idle (message),
+tabKey (message), help (message),
 go (command), div (operator), mod (operator),
 openCard (message), closeCard (message), doMenu (command),
 import (command), stack (object), card (object), button (object),

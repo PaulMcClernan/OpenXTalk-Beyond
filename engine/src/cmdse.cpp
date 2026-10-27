@@ -860,6 +860,7 @@ void MCMove::exec_ctxt(MCExecContext &ctxt)
 MCMM::~MCMM()
 {
 	delete clip;
+	delete hcclip;
 	delete stack;
 	delete tempo;
 	delete loc;
@@ -924,10 +925,39 @@ Parse_stat MCMM::parse(MCScriptPoint &sp)
 		audio = True;
 	if (sp.skip_token(SP_PLAY, TT_UNDEFINED, PP_VIDEO_CLIP) == PS_NORMAL)
 		video = True;
+	// OXT-Beyond: HyperCard played the sound its first argument named, so
+	//   "play card field "x" of card "y"" played the one that field of
+	//   card "y" names. This engine takes a "card" or "background" after
+	//   play for its own, a player's ("play card player "Movie""), and
+	//   looks the field up without it: in a stack from HyperCard
+	//   (HCAddressing), one of the background, so no such object where the
+	//   field is the card's. Where a field or a button follows the word,
+	//   the clip is read again from it, as that object (hcclip), which a
+	//   HyperCard stack plays (exec_ctxt). The importer's rule T49 puts
+	//   the card's own fields and buttons in parentheses in a script; this
+	//   reaches the ones of another card it leaves as they are, and text
+	//   run by "do" (Christmas Carols plays each carol with do fld "song")
+	MCScriptPoint t_object_sp(sp);
+	t_object_sp . restore(sp);
+	bool t_object = false;
 	if (sp.skip_token(SP_SHOW, TT_UNDEFINED, SO_BACKGROUND) == PS_NORMAL)
+	{
 		ptype = CT_BACKGROUND;
+		t_object = true;
+	}
 	if (sp.skip_token(SP_SHOW, TT_UNDEFINED, SO_CARD) == PS_NORMAL)
+	{
 		ptype = CT_CARD;
+		t_object = true;
+	}
+	if (t_object)
+	{
+		if (sp.skip_token(SP_FACTOR, TT_CHUNK, CT_FIELD) == PS_NORMAL
+		        || sp.skip_token(SP_FACTOR, TT_CHUNK, CT_BUTTON) == PS_NORMAL)
+			sp.backup();
+		else
+			t_object = false;
+	}
 	if (sp.skip_token(SP_PLAY, TT_UNDEFINED, PP_PLAYER) == PS_NORMAL)
 		player = True;
 	if (sp.skip_token(SP_FACTOR, TT_PROPERTY, P_ID) == PS_NORMAL)
@@ -950,6 +980,24 @@ Parse_stat MCMM::parse(MCScriptPoint &sp)
 		return PS_ERROR;
 	}
 	MCerrorlock--;
+	// OXT-Beyond: the clip as the object (above), kept only where it reads
+	//   to where the clip does, so that the rest of the statement is read
+	//   as it was; a sound's only, as HyperCard's play had no other
+	if (t_object && !video && !player)
+	{
+		MCScriptPoint t_clip_end(sp);
+		t_clip_end . restore(sp);
+		sp . restore(t_object_sp);
+		MCerrorlock++;
+		if (sp.parseexp(False, True, &hcclip) != PS_NORMAL
+		        || sp . getcurptr() != t_clip_end . getcurptr())
+		{
+			delete hcclip;
+			hcclip = NULL;
+		}
+		MCerrorlock--;
+		sp . restore(t_clip_end);
+	}
 	if (sp.skip_token(SP_FACTOR, TT_OF) == PS_NORMAL)
 	{
 		stack = new (nothrow) MCChunk(False);
@@ -1112,8 +1160,13 @@ void MCMM::exec_ctxt(MCExecContext &ctxt)
                 return;
 			}
 		}
+		// OXT-Beyond: in a HyperCard stack, the sound the field or button
+		//   names, with the "card" or "background" before it (MCMM::parse)
+		MCExpression *t_clip = clip;
+		if (hcclip != NULL && ctxt . IsHyperTalkCompatible())
+			t_clip = hcclip;
 		MCAutoStringRef t_clip_name;
-        if (!ctxt . EvalExprAsStringRef(clip, EE_PLAY_BADCLIP, &t_clip_name))
+        if (!ctxt . EvalExprAsStringRef(t_clip, EE_PLAY_BADCLIP, &t_clip_name))
             return;
 
 		if (player)

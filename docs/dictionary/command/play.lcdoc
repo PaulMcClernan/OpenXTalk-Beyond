@@ -109,6 +109,16 @@ or `b`, an optional octave (`c4` is middle C) and an optional duration
 (100 when it is left out, as in HyperCard). With any other sound the tempo and the notes
 are ignored, as in LiveCode.
 
+In a <stack> whose <hyperTalkCompatible> is true, as File > Import Stack
+sets it for a <stack> imported from <HyperCard>,
+`play card field "Sound"` and `play background button 1`, and the same
+of another <card> (`play card field "Sound" of card "Settings"`), play
+the sound that the <field> or <button> names, in a <script> and in text
+run by <do>, as in <HyperCard>. Elsewhere, card or background before a
+<field> or a <button> is read as the kind of <player>, as in
+`play card player "Movie"`, and the <field> or <button> is looked for
+without it.
+
 > *Note:* The type of audio and video clip formats supported
 > by the <play> command is limited. See the entries for <audioClip>
 > and <videoClip> for details. To play a wider variety of formats,
@@ -129,6 +139,7 @@ playLoudness (property), playRate (property), playStarted (message),
 playStopped (message), prepare (command), QTVersion (function),
 QuickTime (glossary), result (function), return (glossary),
 revStopAnimation (command), showSelection (property), sound (function),
-start (command), stop (command), Unix (glossary), videoClip (object)
+start (command), stop (command), Unix (glossary), videoClip (object),
+hyperTalkCompatible (property), do (command), HyperCard (glossary)
 
 Tags: multimedia

@@ -2001,27 +2001,54 @@ end flash
 -- of the card or of its background, which the import makes an image
 -- with no name, the first on the card or in the background
 on hcShowPicture pWhich, pShow, pObject
-   local tOwner, i, tImage
+   local tOwner, tImage
+   put _HCPictureOwner(pWhich, pObject) into tOwner
+   if tOwner is empty then return "No background picture"
+   put _HCPictureIn(tOwner) into tImage
+   if tImage is not empty then set the visible of tImage to (pShow is true)
+   return empty
+end hcShowPicture
+
+-- the showPict of a card or a background (rule T52): whether its
+-- picture, as hcShowPicture finds it, is shown; true where it has none,
+-- as for a new card in HyperCard
+function hcShowPict pWhich, pObject
+   local tOwner, tImage
+   put _HCPictureOwner(pWhich, pObject) into tOwner
+   if tOwner is not empty then put _HCPictureIn(tOwner) into tImage
+   if tImage is empty then return true
+   return the visible of tImage
+end hcShowPict
+
+-- The card or background whose picture hcShowPicture and hcShowPict
+-- take: pObject (this card if empty), or with pWhich "background" the
+-- background of the card pObject. Empty if that card has none. (This
+-- engine counts no backgrounds of a card, and its "background 1 of"
+-- a card is the stack's first: the card's are its backgroundIDs)
+private function _HCPictureOwner pWhich, pObject
+   local tId
    if pObject is empty then put the long id of this card into pObject
-   put pObject into tOwner
    if pWhich is "background" and word 1 of the long name of pObject is "card" then
-      put empty into tOwner
-      repeat with i = 1 to the number of backgrounds of pObject
-         put the long id of background i of pObject into tOwner
-         exit repeat
-      end repeat
-      if tOwner is empty then return "No background picture"
+      put line 1 of the backgroundIDs of pObject into tId
+      if tId is empty then return empty
+      return the long id of background id tId of pObject
    end if
-   repeat with i = 1 to the number of images of tOwner
-      put the long id of image i of tOwner into tImage
+   return pObject
+end _HCPictureOwner
+
+-- The picture of the card or background pOwner: the image with no name
+-- the import made of its paint, the first in it. Empty if it has none
+private function _HCPictureIn pOwner
+   local i, tImage
+   repeat with i = 1 to the number of images of pOwner
+      put the long id of image i of pOwner into tImage
       -- (an image with no name is called by its id)
-      if the long id of the owner of tImage is the long id of tOwner and the short name of tImage ends with "image id" && the id of tImage then
-         set the visible of tImage to (pShow is true)
-         return empty
+      if the long id of the owner of tImage is the long id of pOwner and the short name of tImage ends with "image id" && the id of tImage then
+         return tImage
       end if
    end repeat
    return empty
-end hcShowPicture
+end _HCPictureIn
 
 -- HyperCard's own windows, which this engine does not have: their
 -- properties as scripts set them (rule T28), and whether they are shown

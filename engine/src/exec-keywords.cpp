@@ -180,8 +180,33 @@ void MCKeywordsExecTeardownCommandOrFunction(MCParameter *params)
     }
 }
 
+// OXT-Beyond: the messages HyperCard sent that did nothing when they came
+//   to the end of its message path, HyperCard itself: a script could call
+//   one, or send it, whether or not a handler took it ("send mouseUp to bg
+//   btn 3", "openCard" to run the card's openCard again, "send idle to me").
+//   The messages whose end HyperCard acted on (tabKey, returnKey, arrowKey,
+//   doMenu, help...) are not here
+static bool MCKeywordsIsHyperCardMessage(MCNameRef p_name)
+{
+	static const char * const s_messages[] =
+	{
+		"closeBackground", "closeCard", "closeField", "closePalette",
+		"closePicture", "closeStack", "deleteBackground", "deleteButton",
+		"deleteCard", "deleteField", "deleteStack", "exitField", "idle",
+		"mouseDown", "mouseEnter", "mouseLeave", "mouseStillDown", "mouseUp",
+		"mouseWithin", "moveWindow", "newBackground", "newButton", "newCard",
+		"newField", "newStack", "openBackground", "openCard", "openField",
+		"openPalette", "openPicture", "openStack", "resume", "resumeStack",
+		"sizeWindow", "startUp", "suspend", "suspendStack",
+	};
+	for (uindex_t i = 0; i < sizeof(s_messages) / sizeof(s_messages[0]); i++)
+		if (MCStringIsEqualToCString(MCNameGetString(p_name), s_messages[i], kMCCompareCaseless))
+			return true;
+	return false;
+}
+
 void MCKeywordsExecCommandOrFunction(MCExecContext& ctxt, MCHandler *handler, MCParameter *params, MCNameRef name, uint2 line, uint2 pos, bool global_handler, bool is_function)
-{    
+{
 	if (MCscreen->abortkey())
 	{
 		ctxt . LegacyThrow(EE_HANDLER_ABORT);
@@ -269,6 +294,20 @@ void MCKeywordsExecCommandOrFunction(MCExecContext& ctxt, MCHandler *handler, MC
                     case ES_NOT_FOUND:
                     case ES_NOT_HANDLED:
                     case ES_PASS:
+                        // OXT-Beyond: in a stack whose hyperTalkCompatible
+                        //   is true, one of HyperCard's own messages that no
+                        //   handler takes, or that the last one passes, ends
+                        //   there, as it did at the end of HyperCard's path,
+                        //   where it stops the script otherwise. This is the
+                        //   statement and, through domess, send. An error in
+                        //   a handler that took it is still an error
+                        if (stat != ES_ERROR && !global_handler &&
+                                MCKeywordsIsHyperCardMessage(name) &&
+                                ctxt . IsHyperTalkCompatible())
+                        {
+                            stat = ES_NORMAL;
+                            break;
+                        }
                         if (!global_handler)
                         {
                             MCeerror->add(EE_STATEMENT_BADCOMMAND, line, pos, name);

@@ -20,9 +20,15 @@ one; the seconds, and dates converted to and from seconds, count from
 1904 in local time; numToChar and charToNum number the characters as
 HyperCard did, by the Mac's character set with the return as 13; a
 script can set the script of an object whose handler runs, which takes
-it at once while that handler goes on; and the id of a card is "card id"
-and its number, which a script can go back to. Each test checks the
-stack with the property off too.
+it at once while that handler goes on (unless it has script locals and
+the preserveVariables is true); the id of a card is "card id" and its
+number, which a script can go back to; the userLevel is at most 5,
+HyperCard's highest; play plays the sound a field or a button names
+with card or background before it, as HyperCard did, of another card too
+and in text run by do; and a script can call or send one of HyperCard's
+own messages (openCard, mouseUp, idle...) that no handler takes, or that
+the last one passes, and go on. Each test checks the stack with the
+property off too.
 */
 
 local sStack
@@ -1096,6 +1102,61 @@ on TestHyperTalkCompatibleSetScript
    _DeleteStack
 end TestHyperTalkCompatibleSetScript
 
+-- A button "L" whose script has a script local, and a button "N" whose
+-- script has none, each with an hcSetOwn that sets the script of its
+-- button to the script it has, with the preserveVariables pPreserve:
+-- what each logged, one a line, "set" or "error" and its number
+private function _PreserveLog pPreserve
+   global gHCLog
+   local tHandler, tWas
+   set the defaultStack to sStack
+   put "on hcSetOwn" & return & "global gHCLog" & return & "local tError" & return \
+         & "try" & return & "set the script of me to the script of me" & return \
+         & "put " & quote & "set" & quote & " & return after gHCLog" & return \
+         & "catch tError" & return \
+         & "put " & quote & "error " & quote & " & item 1 of line 1 of tError & return after gHCLog" & return \
+         & "end try" & return & "end hcSetOwn" into tHandler
+   create button "L"
+   set the script of button "L" of stack sStack to "local sKept = 1" & return & tHandler
+   create button "N"
+   set the script of button "N" of stack sStack to tHandler
+   put the preserveVariables into tWas
+   set the preserveVariables to pPreserve
+   put empty into gHCLog
+   send "hcSetOwn" to button "L" of stack sStack
+   send "hcSetOwn" to button "N" of stack sStack
+   set the preserveVariables to tWas
+   return gHCLog
+end _PreserveLog
+
+on TestHyperTalkCompatibleSetScriptPreserveOff
+   local tLog
+   _MakeStack false
+   put _PreserveLog(true) into tLog
+   TestAssert "off: with the preserveVariables true, a running object's script is not set", \
+         line 1 of tLog is "error 360" and line 2 of tLog is "error 360"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScriptPreserveOff
+
+-- With the preserveVariables true, setting a script carries the object's
+-- script locals into the new one, which a running object's new script,
+-- compiled apart from the one its handlers run in, would start without:
+-- that set is refused as before. HyperCard had neither
+on TestHyperTalkCompatibleSetScriptPreserve
+   local tLog
+   _MakeStack true
+   put _PreserveLog(true) into tLog
+   TestAssert "on: with the preserveVariables true, a running object with script locals keeps its script", \
+         line 1 of tLog is "error 360"
+   TestAssert "on: one without script locals takes the new one", line 2 of tLog is "set"
+   _DeleteStack
+   _MakeStack true
+   put _PreserveLog(false) into tLog
+   TestAssert "on: with the preserveVariables false, both take the new one", \
+         line 1 of tLog is "set" and line 2 of tLog is "set"
+   _DeleteStack
+end TestHyperTalkCompatibleSetScriptPreserve
+
 -- The id of the stack's card, its short id, the id of its background
 -- group and of a button, whether the card's id is "card id" and its short
 -- id, and its abbreviated id, one a line
@@ -1155,3 +1216,166 @@ on TestHyperTalkCompatibleCardId
    TestAssert "on: a handler that goes to a card's id goes back to it", _GoBackToId() is 1
    _DeleteStack
 end TestHyperTalkCompatibleCardId
+
+-- The userLevel as the stack's script reads it, then after it sets it to
+-- 3, and to 8, and whether it is 5 then, one a line
+private function _UserLevelValues
+   return _Values("put the userLevel into tValue" & return \
+         & "set the userLevel to 3; put the userLevel into tValue" & return \
+         & "set the userLevel to 8; put the userLevel into tValue" & return \
+         & "put the userLevel is 5 into tValue")
+end _UserLevelValues
+
+on TestHyperTalkCompatibleUserLevelOff
+   local tValues
+   _MakeStack false
+   put _UserLevelValues() into tValues
+   TestAssert "off: the userLevel is 8", line 1 of tValues is 8
+   TestAssert "off: as a script sets it", line 2 of tValues is 3 and line 3 of tValues is 8
+   TestAssert "off: so it is not 5", line 4 of tValues is "false"
+   _DeleteStack
+end TestHyperTalkCompatibleUserLevelOff
+
+-- HyperCard's userLevel went from 1 (browsing) to 5 (scripting), and its
+-- stacks test for 5 ("if the userLevel is 5 then pass doMenu") or name a
+-- button by it ("UserLevel" && the userLevel)
+on TestHyperTalkCompatibleUserLevel
+   local tValues
+   _MakeStack true
+   put _UserLevelValues() into tValues
+   TestAssert "on: the userLevel is HyperCard's highest, 5", line 1 of tValues is 5
+   TestAssert "on: one set below it is as it is set", line 2 of tValues is 3
+   TestAssert "on: one set above it reads as 5", line 3 of tValues is 5 and line 4 of tValues is "true"
+   TestAssert "on: and is kept as it was set, as a stack without the property reads it", the userLevel is 8
+   _DeleteStack
+end TestHyperTalkCompatibleUserLevel
+
+-- A stack from HyperCard (HCAddressing) with a card field "Here" on card
+-- 1 and a card field "Sound" on card 2, each naming a sound the stack
+-- does not have, and a button "P" whose hcPlay plays card 2's from its
+-- script, putting played or error into gHCPlayed
+private command _MakePlayStack pCompatible
+   local q
+   put quote into q
+   _MakeStack pCompatible
+   set the HCAddressing of stack sStack to true
+   create field "Here"
+   put "HCPlayNoSuchSound" into card field "Here" of card 1 of stack sStack
+   create button "P"
+   set the script of button "P" of stack sStack to "on hcPlay" & return \
+         & "global gHCPlayed" & return & "local tError" & return & "try" & return \
+         & "play card field " & q & "Sound" & q & " of card 2" & return \
+         & "put " & q & "played" & q & " into gHCPlayed" & return \
+         & "catch tError" & return & "put " & q & "error" & q & " into gHCPlayed" & return \
+         & "end try" & return & "play stop" & return & "end hcPlay"
+   create card
+   create field "Sound"
+   put "HCPlayNoSuchSound" into card field "Sound" of card 2 of stack sStack
+   go card 1 of stack sStack
+end _MakePlayStack
+
+-- play with a field of another card, the card's own field, a field the
+-- background does not have, a sound by its name, another card's field
+-- with a tempo and notes, and play stop, run by do, one a line: 7 where
+-- it played, error where it stopped; then hcPlay's, from a script
+private function _PlayValues
+   global gHCPlayed
+   local q, tValues
+   put quote into q
+   put _Values("play card field " & q & "Sound" & q & " of card 2" & return \
+         & "play cd fld " & q & "Here" & q & return \
+         & "play bg fld " & q & "Here" & q & return \
+         & "play " & q & "HCPlayNoSuchSound" & q & return \
+         & "play card field " & q & "Sound" & q & " of card 2 tempo 120 " & q & "c d e" & q & return \
+         & "play stop") into tValues
+   put empty into gHCPlayed
+   send "hcPlay" to button "P" of stack sStack
+   return tValues & gHCPlayed
+end _PlayValues
+
+on TestHyperTalkCompatiblePlayFieldOff
+   local tValues
+   _MakePlayStack false
+   put _PlayValues() into tValues
+   TestAssert "off: a field of another card is the background's, so no such object", line 1 of tValues is "error"
+   TestAssert "off: and so is a field of the card", line 2 of tValues is "error"
+   TestAssert "off: a field the background does not have is no such object", line 3 of tValues is "error"
+   TestAssert "off: a sound by its name plays", line 4 of tValues is 7
+   TestAssert "off: a field of another card with a tempo and notes is the background's", line 5 of tValues is "error"
+   TestAssert "off: play stop", line 6 of tValues is 7
+   TestAssert "off: in a script too", line 7 of tValues is "error"
+   _DeleteStack
+end TestHyperTalkCompatiblePlayFieldOff
+
+-- HyperCard played the sound its first argument named, so "play card
+-- field "x" of card "y"" played the one that card's field named (Christmas
+-- Carols plays each carol with do fld "song", whose text is such a play)
+on TestHyperTalkCompatiblePlayField
+   local tValues
+   _MakePlayStack true
+   put _PlayValues() into tValues
+   TestAssert "on: the sound a field of another card names plays", line 1 of tValues is 7
+   TestAssert "on: and the one a field of the card names", line 2 of tValues is 7
+   TestAssert "on: a field the background does not have is no such object", line 3 of tValues is "error"
+   TestAssert "on: a sound by its name plays", line 4 of tValues is 7
+   TestAssert "on: with a tempo and notes after the field", line 5 of tValues is 7
+   TestAssert "on: play stop", line 6 of tValues is 7
+   TestAssert "on: in a script too", line 7 of tValues is "played"
+   _DeleteStack
+end TestHyperTalkCompatiblePlayField
+
+-- Run by do, one a line, 7 where the script went on and error where it
+-- stopped: openCard, which no handler takes; idle sent to button "C",
+-- and mouseUp to button "B", which have no handler for them; moveWindow,
+-- which the stack's handler passes, putting passed into gHCMoved;
+-- closeField, whose handler in the background stops with an error; a
+-- message no handler takes that is not HyperCard's; and help, whose end
+-- HyperCard acted on
+private function _MessageValues
+   local q
+   put quote into q
+   set the script of stack sStack to the script of stack sStack & return & "on moveWindow" & return \
+         & "global gHCMoved" & return & "put " & q & "passed" & q & " into gHCMoved" & return \
+         & "pass moveWindow" & return & "end moveWindow"
+   set the script of group "BG" of stack sStack to the script of group "BG" of stack sStack & return \
+         & "on closeField" & return & "throw " & q & "hcThrown" & q & return & "end closeField"
+   return _Values("openCard" & return & "send " & q & "idle" & q & " to me" & return \
+         & "send " & q & "mouseUp" & q & " to button " & q & "B" & q & " of stack " & q & sStack & q & return \
+         & "moveWindow" & return & "closeField" & return & "hcNoSuchMessage" & return & "help")
+end _MessageValues
+
+on TestHyperTalkCompatibleMessagesOff
+   global gHCMoved
+   local tValues
+   _MakeStack false
+   put empty into gHCMoved
+   put _MessageValues() into tValues
+   TestAssert "off: openCard with no handler for it stops the script", line 1 of tValues is "error"
+   TestAssert "off: and so does idle sent with none", line 2 of tValues is "error"
+   TestAssert "off: and mouseUp sent to a button with none", line 3 of tValues is "error"
+   TestAssert "off: and moveWindow that the stack's handler passes", line 4 of tValues is "error" and gHCMoved is "passed"
+   TestAssert "off: an error in a handler that takes one stops it", line 5 of tValues is "error"
+   TestAssert "off: a message no handler takes", line 6 of tValues is "error"
+   TestAssert "off: and help", line 7 of tValues is "error"
+   _DeleteStack
+end TestHyperTalkCompatibleMessagesOff
+
+-- HyperCard's own messages went on to HyperCard at the end of the message
+-- path, which did nothing with them, so a script could call openCard to
+-- run the card's openCard again, or send mouseUp to a button, whether or
+-- not a handler took it
+on TestHyperTalkCompatibleMessages
+   global gHCMoved
+   local tValues
+   _MakeStack true
+   put empty into gHCMoved
+   put _MessageValues() into tValues
+   TestAssert "on: openCard with no handler for it ends there", line 1 of tValues is 7
+   TestAssert "on: and so does idle sent with none", line 2 of tValues is 7
+   TestAssert "on: and mouseUp sent to a button with none", line 3 of tValues is 7
+   TestAssert "on: and moveWindow that the stack's handler passes", line 4 of tValues is 7 and gHCMoved is "passed"
+   TestAssert "on: an error in a handler that takes one still stops it", line 5 of tValues is "error"
+   TestAssert "on: a message no handler takes that is not HyperCard's still stops it", line 6 of tValues is "error"
+   TestAssert "on: and so does help, which HyperCard acted on", line 7 of tValues is "error"
+   _DeleteStack
+end TestHyperTalkCompatibleMessages

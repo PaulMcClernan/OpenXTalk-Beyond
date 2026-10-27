@@ -8,9 +8,13 @@ script "HyperCardSweep"
 --   HC_OUT   the log file
 --   HC_LIB   the folder of the HyperCard libraries to load
 --            (ide/Toolset/libraries in a checkout)
+--   HC_ICONS the IDE's revicons.rev, with HyperCard's brushes and
+--            patterns (ide/Toolset/palettes in a checkout), or empty
 --   HC_MODE  "fix" to stop after the scripts are fixed; "run" to go on
 --            and open the stack, go to its first 40 cards and click up to
 --            20 buttons on each of the first 20, the way a person would
+--   HC_IMAGE and HC_IMAGEPATH  (or empty) the disk image the stack came
+--            from and its path on that image, Volume:Folder:Stack
 --
 -- The log's lines: IMPORTED name cards; NOIMPORT error; FIX summary;
 -- LEFT name error text (a handler left out, its text in base64); LINE
@@ -20,7 +24,7 @@ script "HyperCardSweep"
 -- by the sweep, the name base64); OPENED; DONE. Text that may hold
 -- returns is base64 so a line stays a line.
 
-local sDone, sOut, sModal
+local sDone, sOut, sModal, sTour
 
 on openStack
    if the short name of the owner of the target is not "HyperCardSweep" then pass openStack
@@ -35,6 +39,13 @@ command sweepRun
    global gSweepPhase
    put $HC_OUT into sOut
    start using stack ($HC_LIB & "/revhypercardscriptlibrary.livecodescript")
+   -- as in the IDE, which keeps revIcons in memory: HyperCard's brushes
+   -- and patterns (images 101 to 136, and 137 on, of its substacks), so
+   -- that a "set the pattern to 12" or a "reset paint" finds them. The
+   -- stack is loaded, not opened, so it is not among the openStacks
+   if $HC_ICONS is not empty and there is a file $HC_ICONS then
+      get the short name of stack $HC_ICONS
+   end if
    -- errors while running come here instead of a dialog
    create invisible stack "HyperCardSweepErrors"
    set the script of stack "HyperCardSweepErrors" to "on errorDialog pError" & return \
@@ -47,7 +58,7 @@ command sweepRun
    put the result into tLine
    unlock messages
    repeat for each line tLine in the openStacks
-      if tLine is not among the items of "HyperCardSweep,HyperCardSweepErrors,revHyperCardScriptLibrary,revHyperCardMACELibrary" \
+      if tLine is not among the items of "HyperCardSweep,HyperCardSweepErrors,revHyperCardScriptLibrary,revHyperCardMACELibrary,revHyperCardDiskImageLibrary" \
             and not (tLine begins with "revHyperCardProbe") then
          put the long id of stack tLine into tStack
          exit repeat
@@ -59,6 +70,18 @@ command sweepRun
    end if
    sweepLog "IMPORTED" & tab & the short name of tStack & tab & the number of cards of tStack
 
+   -- From a disk image, as File > Import Stack does: where on the image the
+   -- stack came from, so that a "go" or a "start using" finds a stack
+   -- beside it there (the HyperCard Library's hcStackName). The stacks
+   -- folder names its files by number, so beside a stack there, no stack
+   -- is found by its name
+   if $HC_IMAGE is not empty then
+      if there is a file ($HC_LIB & "/revhypercarddiskimagelibrary.livecodescript") then
+         start using stack ($HC_LIB & "/revhypercarddiskimagelibrary.livecodescript")
+      end if
+      set the uHyperCard["image"] of tStack to $HC_IMAGE
+      set the uHyperCard["imagepath"] of tStack to $HC_IMAGEPATH
+   end if
    -- as File > Import Stack does: HyperCard's message order (HC_ORDER=1,
    -- on an engine that has hyperTalkCompatible), the scripts, the MACE
    -- sounds and the classic look
@@ -131,49 +154,80 @@ command sweepRun
    sweepFlush
    sweepLog "OPENED"
    sweepTour tStack
-   sweepLog "DONE"
-   quit
 end sweepRun
 
 -- Go to the stack's first 40 cards, and on each of the first 20 click up
--- to 20 buttons, back on the card before each click
+-- to 20 buttons, back on the card before each click. One visit or one
+-- click to a message, as a person does one thing at a time: the engine
+-- starts each message afresh, as it starts each of a person's clicks,
+-- with no screen or messages left locked and no dynamic path (after a
+-- "go", a message of that handler goes on to the card it went to as well
+-- as through its own stack), and the stack's own idle and timer messages
+-- come between them. In one long handler, a button's "go home" that
+-- opened another stack once left the stack's own handlers unanswered for
+-- the rest of the tour, when the engine sent such a handler's messages to
+-- the other stack in place of its own
 command sweepTour pStack
-   local tCards, tCard, tButtons, tButton, tCardId, tError
+   put pStack into sTour["stack"]
+   put min(40, the number of cards of pStack) into sTour["cards"]
+   put 0 into sTour["card"]
+   put 0 into sTour["button"]
+   put 0 into sTour["buttons"]
+   send "sweepTourStep" to me in 0 milliseconds
+end sweepTour
+
+-- The tour's next click on this card, or else its next card
+command sweepTourStep
+   local tStack, tCardId, tError
    global gSweepPhase
-   put min(40, the number of cards of pStack) into tCards
-   repeat with tCard = 1 to tCards
-      put "card" && tCard into gSweepPhase
+   put sTour["stack"] into tStack
+   if there is not a tStack then
+      sweepTourDone
+   else if sTour["button"] < sTour["buttons"] then
+      add 1 to sTour["button"]
+      put "click" && sTour["card"] & "," & sTour["button"] into gSweepPhase
+      put sTour["cardid"] into tCardId
       try
-         do "go to card" && tCard && "of" && pStack
+         if exists(tCardId) and the long id of this card of tStack is not tCardId then
+            lock messages
+            do "go to" && tCardId
+            unlock messages
+         end if
+         if exists(tCardId) and the number of buttons of tCardId >= sTour["button"] then
+            dispatch "mouseDown" to button sTour["button"] of tCardId
+            dispatch "mouseUp" to button sTour["button"] of tCardId
+         end if
       catch tError
          sweepLog "THROW" & tab & gSweepPhase & tab & sweepBase64(tError) & tab & sweepBase64(sweepSource(tError))
       end try
       sweepFlush
-      if there is not a pStack then exit repeat
-      if tCard > 20 then next repeat
-      put the long id of card tCard of pStack into tCardId
-      put min(20, the number of buttons of tCardId) into tButtons
-      repeat with tButton = 1 to tButtons
-         put "click" && tCard & "," & tButton into gSweepPhase
-         try
-            if exists(tCardId) and the long id of this card of pStack is not tCardId then
-               lock messages
-               do "go to" && tCardId
-               unlock messages
-            end if
-            if exists(tCardId) and the number of buttons of tCardId >= tButton then
-               dispatch "mouseDown" to button tButton of tCardId
-               dispatch "mouseUp" to button tButton of tCardId
-            end if
-         catch tError
-            sweepLog "THROW" & tab & gSweepPhase & tab & sweepBase64(tError) & tab & sweepBase64(sweepSource(tError))
-         end try
-         sweepFlush
-         if there is not a pStack then exit repeat
-      end repeat
-      if there is not a pStack then exit repeat
-   end repeat
-end sweepTour
+      send "sweepTourStep" to me in 0 milliseconds
+   else if sTour["card"] < sTour["cards"] then
+      add 1 to sTour["card"]
+      put "card" && sTour["card"] into gSweepPhase
+      try
+         do "go to card" && sTour["card"] && "of" && tStack
+      catch tError
+         sweepLog "THROW" & tab & gSweepPhase & tab & sweepBase64(tError) & tab & sweepBase64(sweepSource(tError))
+      end try
+      sweepFlush
+      -- its buttons, on the first 20 cards
+      put 0 into sTour["button"]
+      put 0 into sTour["buttons"]
+      if there is a tStack and sTour["card"] <= 20 then
+         put the long id of card sTour["card"] of tStack into sTour["cardid"]
+         put min(20, the number of buttons of sTour["cardid"]) into sTour["buttons"]
+      end if
+      send "sweepTourStep" to me in 0 milliseconds
+   else
+      sweepTourDone
+   end if
+end sweepTourStep
+
+command sweepTourDone
+   sweepLog "DONE"
+   quit
+end sweepTourDone
 
 -- A modal window (a list dialog of the HyperCard library, a stack's own
 -- modal stack) waits until a person closes it, and nobody is there to:
