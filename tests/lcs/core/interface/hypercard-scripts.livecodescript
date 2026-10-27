@@ -211,12 +211,32 @@ on TestHyperCardScriptsRules
    put _Rewrite("on mouseUp", "  set the visible of tool window to not the visible of tool window", "  if the visible of the message watcher then beep", "end mouseUp") into tScript
    TestAssert "T28: HyperCard's own windows: set", line 2 of tScript is "  hcSetWindow " & quote & "visible" & quote & ", " & quote & "tool" & quote & ", not hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "tool" & quote & ")"
    TestAssert "T28: the message watcher is not the message box", line 3 of tScript is "  if hcWindowProperty(" & quote & "visible" & quote & ", " & quote & "message watcher" & quote & ") then beep"
+
+   -- T2: a variable named len or offset before of, which HyperCard had no
+   -- function of ("char stop to stop + len of field "Text"", Jargon's;
+   -- "character charNo + offset of field ...", Cipher's); and the format
+   -- of a convert, which is not the variable named seconds (On This
+   -- Date's), where the variable after to is
+   put _Rewrite("on mouseUp", "  put 1 into len", "  put 2 into offset", "  put 3 into seconds", \
+         "  delete char stop to stop + len of field " & quote & "Text" & quote, \
+         "  put character charNo + offset of field 1 after x", \
+         "  if len > 0 then convert t to seconds", \
+         "  add 1 to seconds", \
+         "  put the length of x into len", \
+         "end mouseUp") into tScript
+   TestAssert "T2: len before of", line 5 of tScript is "  delete char stop to stop + hc_len of field " & quote & "Text" & quote
+   TestAssert "T2: offset before of", line 6 of tScript is "  put character charNo + hc_offset of field 1 after x"
+   TestAssert "T2: the format of a convert: unchanged", line 7 of tScript is "  if hc_len > 0 then convert t to seconds"
+   TestAssert "T2: the variable after to", line 8 of tScript is "  add 1 to hc_seconds"
+   TestAssert "T2: the length of: unchanged", line 9 of tScript is "  put the length of x into hc_len"
+   TestAssert "T2: those compile", _Compiles(tScript)
 end TestHyperCardScriptsRules
 
 on TestHyperCardScriptsRulesForAll
    -- the rules that apply to every script, compiling or not: each takes
    -- a statement that stops with an error here where HyperCard went on
-   local tScript, q
+   local tScript, q, tStack, tError
+   global gHCScriptsTest
    put quote into q
    put _Rewrite("on mouseUp", "  go to stack " & q & "Other" & q, "  if x then go to card 2 of stack tName in a new window else beep", "  go to card 3", "  go to this card of stack " & q & "Addresses" & q & " -- c", "end mouseUp") into tScript
    TestAssert "T16: go to a stack", line 2 of tScript is "  do hcGo(" & q & "go to stack tHCStack" & q & ", quote & " & q & "Other" & q & " & quote)"
@@ -345,6 +365,57 @@ on TestHyperCardScriptsRulesForAll
    TestAssert "T12: group after a comma in a text style is kept, quoted", line 2 of tScript is "  set textStyle of it to hcTextStyle(bold," & q & "group" & q & ")"
    TestAssert "T12: and with HyperCard's other styles", line 3 of tScript is "  set the textStyle of the foundChunk to hcTextStyle(bold, condense, " & q & "group" & q & ")"
    TestAssert "T12: the handler compiles", _Compiles(tScript)
+
+   -- T32: the style after the "to" that is not a range's, where a range
+   -- of chunks has one too (Cool Address Book's, the Dock stacks')
+   put _Rewrite("on mouseUp", "  set the textStyle of word 1 to 2 of me to " & q & "Bold,Condense" & q, \
+         "  set the textstyle of word sw+1 to slw of fld " & q & "situation" & q & " to " & q & "group" & q, \
+         "  set the textStyle of char (item 1 of x) to (item 2 of x) of line 1 of fld 1 to " & q & "Group" & q, \
+         "  set the textStyle of word 2 of fld 1 to item 1 to 2 of " & q & "shadow,outline,bold" & q, \
+         "  set the textStyle of word 1 to 2 of line 2 to 3 of fld 1 to " & q & "extend" & q, \
+         "end mouseUp") into tScript
+   TestAssert "T32: a range of words", line 2 of tScript is "  set the textStyle of word 1 to 2 of me to hcTextStyle(" & q & "Bold,Condense" & q & ")"
+   TestAssert "T32: a range by expressions", line 3 of tScript \
+         is "  set the textstyle of word sw+1 to slw of fld " & q & "situation" & q & " to hcTextStyle(" & q & "group" & q & ")"
+   TestAssert "T32: a range in parentheses", line 4 of tScript \
+         is "  set the textStyle of char (item 1 of x) to (item 2 of x) of line 1 of fld 1 to hcTextStyle(" & q & "Group" & q & ")"
+   TestAssert "T32: a range in the style", line 5 of tScript \
+         is "  set the textStyle of word 2 of fld 1 to hcTextStyle(item 1 to 2 of " & q & "shadow,outline,bold" & q & ")"
+   TestAssert "T32: two ranges", line 6 of tScript \
+         is "  set the textStyle of word 1 to 2 of line 2 to 3 of fld 1 to hcTextStyle(" & q & "extend" & q & ")"
+   TestAssert "T32: those compile", _Compiles(tScript)
+
+   -- ... in a script that compiles, which stopped there ("condense" is
+   -- no style here), where the rule took the range's "to" for the value's,
+   -- did not compile, and was left out
+   put "HCScriptsT32" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create field "f"
+   put "alpha beta gamma" into field "f"
+   create button "Style"
+   set the script of button "Style" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  set the textStyle of word 1 to 2 of field " & q & "f" & q & " to " & q & "Bold,Condense" & q, \
+         "  put the textStyle of word 2 of field " & q & "f" & q & " & comma & the textStyle of word 3 of field " & q & "f" & q & " into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Style" of stack tStack
+   catch tError
+   end try
+   TestAssert "T32: as it is, a range of words set to HyperCard's styles stops", gHCScriptsTest is empty
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Style" of stack tStack
+   catch tError
+   end try
+   -- (a word with no style of its own has an empty textStyle in a stack
+   -- whose hyperTalkCompatible is false, as this one's)
+   TestAssert "T32: the range of words set, the word after it not", gHCScriptsTest is "bold,condensed,"
+   _Close tStack
 end TestHyperCardScriptsRulesForAll
 
 on TestHyperCardScriptsMoreForms
@@ -696,7 +767,7 @@ on TestHyperCardScriptsT39
    set the defaultStack to tStack
    create button "B"
    set the script of button "B" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put " & q & "a" & q & " into gHCScriptsTest", \
-         "  set selectedChunk of window " & q & "W" & q & " to " & q & "1,2" & q, "  put " & q & "b" & q & " after gHCScriptsTest", "end mouseUp", \
+         "  put 1 +* into y", "  put " & q & "b" & q & " after gHCScriptsTest", "end mouseUp", \
          "on mouseDown", "  global gHCScriptsTest", "  put " & q & "c" & q & " into gHCScriptsTest", "  repeat until gHCScriptsTest is " & q & "cdd" & q, \
          "    put " & q & "d" & q & " after gHCScriptsTest", "    put 1 +* into x", "  end repeat", "end mouseDown", \
          "on mouseEnter", "  global gHCScriptsTest", "  put empty into gHCScriptsTest", "  repeat with i = 1 to 3", "    put i after gHCScriptsTest", \
@@ -715,7 +786,7 @@ on TestHyperCardScriptsT39
    get revHyperCardFixScripts(tStack)
    put the script of button "B" of stack tStack into tScript
    TestAssert "T39: the script compiles", _Compiles(tScript)
-   TestAssert "T39: the line left out, a comment", line 4 of tScript is "  -- HyperCard import: left out, it does not compile here: set selectedChunk of window " & q & "W" & q & " to " & q & "1,2" & q
+   TestAssert "T39: the line left out, a comment", line 4 of tScript is "  -- HyperCard import: left out, it does not compile here: put 1 +* into y"
    TestAssert "T39: in a repeat that a condition ends, a throw", line 12 of tScript is "    throw " & q & "HyperCard import: a line that does not compile here: put 1 +* into x" & q
    TestAssert "T39: in a repeat with, left out", line 20 of tScript is "    -- HyperCard import: left out, it does not compile here: put 1 +* into x"
    TestAssert "T39: a statement over two lines, both", line 26 to 27 of tScript is _Lines("  -- HyperCard import: left out, it does not compile here: put 1 + \", "  -- +* 2 into x")
@@ -2202,6 +2273,348 @@ on TestHyperCardScriptsT56
          gHCScriptsTest is "a1,a2 b1R,b2" & return & "c1,c2 d1,d2" & return & "e1,e2 Q,f2"
    _Close tStack
 end TestHyperCardScriptsT56
+
+on TestHyperCardScriptsT57
+   -- T57: a put into a variable named in quotes ("Put 29.95 into
+   -- "Price"", Type & Graphics Preview's), which HyperCard put into the
+   -- variable of that name and this engine refuses: the name without its
+   -- quotes (4 corpus stacks: Type & Graphics Preview, MENDELIAN GENETICS
+   -- I, MathAttack and TwinPeaksTrivia)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  Put 29.95 into " & q & "Price" & q, \
+         "  put the value of card field F3 into " & q & "bagone" & q, \
+         "  if KFL = " & q & "Y" & q & " then put " & q & "N" & q & " into " & q & "KFL" & q & " else put " & q & "Y" & q & " into " & q & "KFL" & q, \
+         "  put " & q & "x" & q & " after " & q & "Product" & q, \
+         "end mouseUp") into tScript
+   TestAssert "T57: into a variable named in quotes", line 2 of tScript is "  Put 29.95 into Price"
+   TestAssert "T57: the value of an expression", line 3 of tScript is "  put the value of card field F3 into bagone"
+   TestAssert "T57: after then and after else", line 4 of tScript \
+         is "  if KFL = " & q & "Y" & q & " then put " & q & "N" & q & " into KFL else put " & q & "Y" & q & " into KFL"
+   TestAssert "T57: after", line 5 of tScript is "  put " & q & "x" & q & " after Product"
+   TestAssert "T57: the script compiles", _Compiles(tScript)
+
+   -- unchanged: not a name, the message box, a word of the grammar, a
+   -- string as the value
+   put _Rewrite("on mouseUp", \
+         "  put 1 into " & q & "two words" & q, \
+         "  put 2 into " & q & "msg" & q, \
+         "  put 3 into " & q & "in" & q, \
+         "  put " & q & "Price" & q & " into p", \
+         "end mouseUp") into tScript
+   TestAssert "T57: not a name: unchanged", line 2 of tScript is "  put 1 into " & q & "two words" & q
+   TestAssert "T57: the message box's name: unchanged", line 3 of tScript is "  put 2 into " & q & "msg" & q
+   TestAssert "T57: a word of the grammar: unchanged", line 4 of tScript is "  put 3 into " & q & "in" & q
+   TestAssert "T57: a string as the value: unchanged", line 5 of tScript is "  put " & q & "Price" & q & " into p"
+
+   -- in a stack: the global a later line reads, as HyperCard set it
+   put "HCScriptsT57" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Order"
+   set the script of button "Order" to _Lines("on mouseUp", "  global gHCScriptsTest, Price, KFL", \
+         "  put 0.0 into " & q & "Price" & q, \
+         "  Put 29.95 into " & q & "Price" & q, \
+         "  if KFL is empty then put " & q & "N" & q & " into " & q & "KFL" & q, \
+         "  put Price & comma & KFL into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T57: as it is, the script does not compile", not _Compiles(the script of button "Order" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T57: the script compiles", _Compiles(the script of button "Order" of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Order" of stack tStack
+   catch tError
+   end try
+   TestAssert "T57: the variables named in quotes, read after", gHCScriptsTest is "29.95,N"
+   _Close tStack
+end TestHyperCardScriptsT57
+
+on TestHyperCardScriptsT58
+   -- T58: find in the marked cards, which HyperCard searched alone and
+   -- this engine refuses: hcFindMarkedBegin sets the dontSearch of the
+   -- cards that are not marked, and in a field, of the other fields of the
+   -- marked cards, the engine's find searches, and hcFindMarkedEnd sets
+   -- them back and gives back the find's result (5 corpus stacks:
+   -- GuessWords, Recipe, Hyper-Ref and HyperStacks B&W and Color)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  find string searchStr of marked cards", \
+         "  find string findString in bkgnd field " & q & "alpha pool" & q & " of marked cards", \
+         "  find whole firstTerm in field " & q & "Record" & q & " of marked cds", \
+         "  if x then find (cd fld " & q & "Key Word2" & q & " of cd Browse) of marked cards", \
+         "  find string searchStr", \
+         "end mouseUp") into tScript
+   TestAssert "T58: find in the marked cards", line 2 of tScript \
+         is "  hcFindMarkedBegin; find string searchStr; hcFindMarkedEnd the result"
+   TestAssert "T58: in a field", line 3 of tScript \
+         is "  hcFindMarkedBegin the long id of bkgnd field " & q & "alpha pool" & q & "; find string findString; hcFindMarkedEnd the result"
+   TestAssert "T58: whole, in a field of marked cds", line 4 of tScript \
+         is "  hcFindMarkedBegin the long id of field " & q & "Record" & q & "; find whole firstTerm; hcFindMarkedEnd the result"
+   TestAssert "T58: after then, a do", line 5 of tScript \
+         is "  if x then do " & q & "hcFindMarkedBegin; find (cd fld " & q & " & quote & " & q & "Key Word2" & q & " & quote & " & q & " of cd Browse); hcFindMarkedEnd the result" & q
+   TestAssert "T58: a find of all the cards: unchanged", line 6 of tScript is "  find string searchStr"
+   TestAssert "T58: the script compiles", _Compiles(tScript)
+
+   -- in a stack: four cards, the last two marked, apple in field f of
+   -- the first, second and fourth, and in field g of the third
+   put "HCScriptsT58" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the name of card 1 of stack tStack to "C1"
+   create group "G"
+   set the backgroundBehavior of group "G" to true
+   create field "f" in group "G"
+   create field "g" in group "G"
+   create card "C2"
+   create card "C3"
+   create card "C4"
+   put "apple" into field "f" of card "C1"
+   put "apple" into field "f" of card "C2"
+   put "pear" into field "f" of card "C3"
+   put "apple" into field "g" of card "C3"
+   put "apple" into field "f" of card "C4"
+   set the mark of card "C3" to true
+   set the mark of card "C4" to true
+   go to card "C1"
+   create button "Find" in group "G"
+   set the script of button "Find" of card "C1" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put empty into gHCScriptsTest", \
+         "  find string " & q & "apple" & q & " of marked cards", \
+         "  put the result & comma & the short name of this card & comma after gHCScriptsTest", \
+         "  go to card 1", \
+         "  find string " & q & "apple" & q & " in field " & q & "f" & q & " of marked cards", \
+         "  put the result & comma & the short name of this card & comma after gHCScriptsTest", \
+         "  if gHCScriptsTest is not empty then find " & q & "pear" & q & " in bkgnd field " & q & "g" & q & " of marked cards", \
+         "  put the result & comma & the short name of this card & comma after gHCScriptsTest", \
+         "  put the dontSearch of card 1 & the dontSearch of card 2 & the dontSearch of field " & q & "g" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T58: as it is, the script does not compile", not _Compiles(the script of button "Find" of card "C1" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T58: the script compiles", _Compiles(the script of button "Find" of card "C1" of stack tStack)
+   go to card "C1" of stack tStack
+   set the defaultStack to tStack
+   try
+      send "mouseUp" to button "Find" of card "C1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T58: the marked cards alone, the field alone, not found, and the dontSearch set back", \
+         gHCScriptsTest is ",C3,,C4,not found,C4,falsefalsefalse"
+   _Close tStack
+end TestHyperCardScriptsT58
+
+on TestHyperCardScriptsT3Grammar
+   -- T3: a word of the grammar as an object's name, which HyperCard took
+   -- for the name where nothing else could follow the object, and this
+   -- engine refuses: a preposition after a field whose name it ends
+   -- (Logo's field TO, Order Form's By, Thermo's BY), and after the card
+   -- of a go that it ends, a preposition, a part of a card or an
+   -- object's word (ChemElements' cards named for the elements, Runes'
+   -- card "characters", Canary's card "buttons")
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  get bg fld toName && bg fld to", \
+         "  if line i of fld to is empty then show field TO", \
+         "  put fld By into theitems", \
+         "  hide cd fld BY", \
+         "  go card At", \
+         "  go cd characters", \
+         "  go to card buttons", \
+         "  if x then go card In else beep", \
+         "end mouseUp") into tScript
+   TestAssert "T3: a preposition that ends a field's name", line 2 to 3 of tScript \
+         is _Lines("  get bg fld toName && bg fld " & q & "to" & q, "  if line i of fld " & q & "to" & q & " is empty then show field " & q & "TO" & q)
+   TestAssert "T3: before into, and a card field", line 4 to 5 of tScript is _Lines("  put fld " & q & "By" & q & " into theitems", "  hide cd fld " & q & "BY" & q)
+   TestAssert "T3: the card of a go: a preposition, a part of a card, an object's word", line 6 to 8 of tScript \
+         is _Lines("  go card " & q & "At" & q, "  go cd " & q & "characters" & q, "  go to card " & q & "buttons" & q)
+   TestAssert "T3: the card of a go before else", line 9 of tScript is "  if x then go card " & q & "In" & q & " else beep"
+   TestAssert "T3: those compile", _Compiles(tScript)
+
+   -- unchanged: the next card in a new window, and a word that does not
+   -- end the go (in a script with a line that does not compile: one that
+   -- compiles is not rewritten line by line)
+   put _Rewrite("on mouseUp", \
+         "  go next card in a new window", \
+         "  go to card id 3", \
+         "  hide cd fld BY", \
+         "end mouseUp") into tScript
+   TestAssert "T3: the next card in a new window: unchanged", line 2 of tScript is "  go next card in a new window"
+   TestAssert "T3: a go to a card id: unchanged", line 3 of tScript is "  go to card id 3"
+
+   -- in a stack: the card named In, the field named TO
+   put "HCScriptsT3" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the name of card 1 of stack tStack to "C1"
+   create field "TO"
+   create card "In"
+   go to card "C1"
+   create button "Go"
+   set the script of button "Go" of card "C1" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "z" & q & " into field TO", \
+         "  put field " & q & "TO" & q & " into gHCScriptsTest", \
+         "  go card In", \
+         "  put comma & the short name of this card after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T3: as it is, the script does not compile", not _Compiles(the script of button "Go" of card "C1" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T3: the script compiles", _Compiles(the script of button "Go" of card "C1" of stack tStack)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Go" of card "C1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T3: the field named TO, the card named In", gHCScriptsTest is "z,In"
+   _Close tStack
+end TestHyperCardScriptsT3Grammar
+
+on TestHyperCardScriptsT59
+   -- T59: a card named by an expression not in parentheses, which HyperCard
+   -- took for the card the whole expression names or numbers, as both take
+   -- it in a go, and this engine refuses, as it takes the card "Div-" and
+   -- then cannot place the operator: the expression in parentheses, in a
+   -- put's destination, a set's object and a mark (1040A's cards
+   -- "Div-"&c, SalesWriter's "order"&sheet, Yeast Collection's "Liste" &&
+   -- Hunderter, StackTools' mark card it + 1)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  put empty into field i of card " & q & "Div-" & q & "&c", \
+         "  put empty into line count of Field " & q & "price" & q & " of card " & q & "order" & q & "&sheet", \
+         "  set lockText of field " & q & "Liste" & q & " of card " & q & "Liste" & q & " && Hunderter to true", \
+         "  put field " & q & "Liste" & q & " of card " & q & "Liste" & q & " && Karte of background " & q & "Stammlisten" & q & " into field " & q & "Lager" & q, \
+         "  mark card it + 1", \
+         "  if x then put empty into field 2 of card " & q & "b" & q & "&c else beep", \
+         "end mouseUp") into tScript
+   TestAssert "T59: a put's destination", line 2 to 3 of tScript is _Lines("  put empty into field i of card (" & q & "Div-" & q & "&c)", \
+         "  put empty into line count of Field " & q & "price" & q & " of card (" & q & "order" & q & "&sheet)")
+   TestAssert "T59: a set's object, to the set's to", line 4 of tScript \
+         is "  set lockText of field " & q & "Liste" & q & " of card (" & q & "Liste" & q & " && Hunderter) to true"
+   TestAssert "T59: before of a background, one word", line 5 of tScript \
+         is "  put field " & q & "Liste" & q & " of card (" & q & "Liste" & q & " && Karte) of background " & q & "Stammlisten" & q & " into field " & q & "Lager" & q
+   TestAssert "T59: a mark", line 6 of tScript is "  mark card (it + 1)"
+   TestAssert "T59: a put after then, to else", line 7 of tScript is "  if x then put empty into field 2 of card (" & q & "b" & q & "&c) else beep"
+   TestAssert "T59: those compile", _Compiles(tScript)
+
+   -- unchanged: a value, which compiles here as it is, and a go (in a
+   -- script with a line that does not compile: one that compiles is not
+   -- rewritten line by line)
+   put _Rewrite("on mouseUp", \
+         "  put field 1 of card " & q & "a" & q & " & x into y", \
+         "  get line 1 of field " & q & "Liste" & q & " of card " & q & "Liste" & q & " && Hunderter", \
+         "  go to card " & q & "order" & q & "&sheet", \
+         "  mark card it + 1", \
+         "end mouseUp") into tScript
+   TestAssert "T59: a value, and a go: unchanged", line 2 to 4 of tScript is _Lines("  put field 1 of card " & q & "a" & q & " & x into y", \
+         "  get line 1 of field " & q & "Liste" & q & " of card " & q & "Liste" & q & " && Hunderter", "  go to card " & q & "order" & q & "&sheet")
+
+   -- in a stack: cards C1, Div-2 and order3 with a background field f
+   put "HCScriptsT59" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the name of card 1 of stack tStack to "C1"
+   create group "G"
+   set the backgroundBehavior of group "G" to true
+   create field "f" in group "G"
+   create card "Div-2"
+   create card "order3"
+   go to card "C1"
+   create button "Cards"
+   set the script of button "Cards" of card "C1" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put 2 into c", \
+         "  put " & q & "x" & q & " into field " & q & "f" & q & " of card " & q & "Div-" & q & "&c", \
+         "  put 3 into sheet", \
+         "  put " & q & "y" & q & " into line 2 of field " & q & "f" & q & " of card " & q & "order" & q & "&sheet", \
+         "  set the lockText of field " & q & "f" & q & " of card " & q & "Div-" & q & " & c to true", \
+         "  mark card c + 1", \
+         "  put field " & q & "f" & q & " of card 2 & comma & line 2 of field " & q & "f" & q & " of card 3 into gHCScriptsTest", \
+         "  put comma & the lockText of field " & q & "f" & q & " & comma & the mark of card 3 & comma & the mark of card 2 after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T59: as it is, the script does not compile", not _Compiles(the script of button "Cards" of card "C1" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T59: the script compiles", _Compiles(the script of button "Cards" of card "C1" of stack tStack)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Cards" of card "C1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T59: the cards the expressions name and number", gHCScriptsTest is "x,y,true,true,false"
+   _Close tStack
+end TestHyperCardScriptsT59
+
+on TestHyperCardScriptsT60
+   -- T60: a property this engine has for no object, of the window of an
+   -- external (Development Library's scrollbar, Listoid's selectedLine,
+   -- QuickTime Tools' currTime, Chiclette's Btn1Name), which HyperCard
+   -- handed to the external and this engine refuses (a get compiles, as
+   -- a get and a call of a handler "of", which fails when it runs): the
+   -- library's, as for HyperCard's own windows (T28). No external runs
+   -- here, so its window is never open: a set leaves "No such window" in
+   -- the result, and a read gives empty. Only revHyperCardFixScripts
+   -- (with its probes) finds them: a property or a function of this
+   -- engine's, and a property it takes for a custom property ("the def of
+   -- window w"), are left as they are
+   local tStack, q, tScript, tError, tKept
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT60" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Window"
+   set the script of button "Window" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  set the scrollbar of window " & q & "Message Crate" & q & " to 8", \
+         "  put the result into gHCScriptsTest", \
+         "  set selectedLine of window " & q & "TheList" & q & " to random(20)", \
+         "  put comma & the result after gHCScriptsTest", \
+         "  put Btn1Name of window " & q & "Chiclette Editor" & q & " into windName", \
+         "  put comma & windName after gHCScriptsTest", \
+         "  get currTime of window " & q & "Movie" & q, \
+         "  put comma & it after gHCScriptsTest", \
+         "  if the current of window " & q & "Clipboard" & q & " is empty then put comma & " & q & "none" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Kept"
+   put _Lines("on mouseUp", "  set the def of window " & q & "Editor" & q & " to 1", "  get selectedLine of window " & q & "TheList" & q, \
+         "  put the name of window 1 into x", "end mouseUp") into tKept
+   set the script of button "Kept" to tKept
+   unlock messages
+   TestAssert "T60: as it is, the script does not compile", not _Compiles(the script of button "Window" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "Window" of stack tStack into tScript
+   TestAssert "T60: a set", line 3 of tScript is "  hcSetWindow " & q & "scrollbar" & q & ", " & q & "Message Crate" & q & ", 8"
+   TestAssert "T60: a set without the, of a function's name", line 5 of tScript is "  hcSetWindow " & q & "selectedline" & q & ", " & q & "TheList" & q & ", random(20)"
+   TestAssert "T60: a read without the, in a put and in a get", line 7 of tScript is "  put hcWindowProperty(" & q & "btn1name" & q & ", " & q & "Chiclette Editor" & q & ") into windName" \
+         and line 9 of tScript is "  get hcWindowProperty(" & q & "currtime" & q & ", " & q & "Movie" & q & ")"
+   TestAssert "T60: a read with the", line 11 of tScript \
+         is "  if hcWindowProperty(" & q & "current" & q & ", " & q & "Clipboard" & q & ") is empty then put comma & " & q & "none" & q & " after gHCScriptsTest"
+   TestAssert "T60: the script compiles", _Compiles(tScript)
+   TestAssert "T60: a custom property, a function and a property of this engine's: unchanged", line 1 to 5 of the script of button "Kept" of stack tStack is tKept
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Window" of stack tStack
+   catch tError
+   end try
+   TestAssert "T60: no such window for a set, empty for a read", gHCScriptsTest is "No such window,No such window,,,none"
+   _Close tStack
+end TestHyperCardScriptsT60
 
 on TestHyperCardScriptsT22Names
    -- T22: a menu or a menu item named by one word this engine does not

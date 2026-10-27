@@ -220,6 +220,12 @@ constant kObjectWords = "field fld button btn card cd background bkgnd bg stack 
 -- Functions HyperTalk let a script write without "the", as "length of x"
 constant kOneArgFunctions = "length random abs atan chartonum cos exp exp1 exp2 ln ln1 log2 numtochar round sin sqrt tan trunc value"
 
+-- Variables' names this engine refuses that HyperTalk had no function or
+-- property of, before "of" too (T2): "char stop to stop + len of field
+-- "Text"" (Jargon), "character charNo + offset of field "Decoded Text""
+-- (Cipher), where HyperCard's offset took two values in parentheses
+constant kOfVariables = "len offset"
+
 -- Functions with no arguments that HyperTalk let a script write without
 -- "the" or "()", as "if optionKey is down" (T33); the sweep of 2026-10-23
 constant kBareFunctions = "mouse mouseloc mouseh mousev clickloc clickh clickv optionkey commandkey cmdkey shiftkey capslockkey"
@@ -308,6 +314,7 @@ local sVariableRefused
 local sHandlerRefused
 local sNameRefused
 local sParameterRefused
+local sWindowPropertyRefused
 
 -- The object probes compile on, and the stack being fixed
 local sProbe
@@ -1693,6 +1700,19 @@ private function _StatementStart pTokens, pCode, pIndex
    return _Lower(pTokens[tPrev]["t"]) is among the words of "then else"
 end _StatementStart
 
+-- The first word of the statement the token at pIndex is in, lower case:
+-- the first code token of its line, or the one after its then or else
+private function _StatementVerb pTokens, pCode, pIndex
+   local tItem, tVerb, tStart
+   put true into tStart
+   repeat for each item tItem in pCode
+      if tStart then put _Lower(pTokens[tItem]["t"]) into tVerb
+      if tItem = pIndex then exit repeat
+      put _Lower(pTokens[tItem]["t"]) is among the words of "then else" into tStart
+   end repeat
+   return tVerb
+end _StatementVerb
+
 private function _PrevCode pCode, pIndex
    local tItem, tPrev
    repeat for each item tItem in pCode
@@ -1831,6 +1851,37 @@ private function _CountOfObjects pTokens, pCode, pOf
    return _T(pTokens, tAt) is among the words of "fields flds buttons btns cards cds"
 end _CountOfObjects
 
+-- T3: a word of the grammar as an object's name, which HyperCard took for
+-- the name where nothing else could follow the object: a preposition
+-- after a field or a button whose name it ends ("show field TO", "if
+-- line i of fld to is empty", Logo's; "put fld By into theitems", Order
+-- Form's; "hide cd fld BY", Thermo's), and after the card of a go that it
+-- ends, a preposition, an object's word or a part of a card ("go card
+-- At", "go card In", "go card Cd", ChemElements' cards named for the
+-- elements; "go cd characters", Runes'; "go to card buttons", Canary's).
+-- Not after "the", "this", "next" or an ordinal ("go next card in a new
+-- window"), and not a card's "next" or "prev"
+private function _GrammarName pTokens, pCode, pIndex, pPrev, pNext
+   local tWord, tObject, tBefore
+   put _T(pTokens, pIndex) into tWord
+   put _T(pTokens, pPrev) into tObject
+   put _PrevCode(pCode, pPrev) into tBefore
+   if tBefore is not empty and (_T(pTokens, tBefore) is among the words of "the this next prev previous" \
+         or _T(pTokens, tBefore) is among the words of kChunkOrdinals) then
+      return false
+   end if
+   if tObject is among the words of "field fld button btn" then
+      return tWord is among the words of "to into in by from at with" and _NameEnds(pTokens, pCode, pNext)
+   end if
+   if tObject is not among the words of "card cd" or tBefore is empty then return false
+   if pNext is not empty and _T(pTokens, pNext) is not "else" then return false
+   if _T(pTokens, tBefore) is not "go" and not (_T(pTokens, tBefore) is "to" and _T(pTokens, _PrevCode(pCode, tBefore)) is "go") then
+      return false
+   end if
+   return tWord is among the words of "to into in by from at with" or tWord is among the words of kObjectWords \
+         or (tWord is among the words of kNeverNamesAfterCard and tWord is not among the words of "next prev previous")
+end _GrammarName
+
 -- The rules that work on one line of a handler (pContinued: the line
 -- goes on with the statement of the line before; pThen: the line ends
 -- with \, and this is the first code token of the next, as _FirstCode
@@ -1934,11 +1985,14 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
             next repeat
          end if
       else if pRename[tWord] is true then
-         -- (T34: not "the long date", nor "the number of items in it")
+         -- (T34: not "the long date", nor "the number of items in it";
+         -- nor the format of a convert, "convert now to seconds" in a
+         -- handler with a variable named seconds, On This Date's)
          if _T(tTokens, tPrev) is not among the words of "the set long short abbreviated abbrev abbr english" \
                and not (_T(tTokens, tPrev) is "of" and _T(tTokens, tNext) is "in") \
                and not (_T(tTokens, tNext) is "of" and _T(tTokens, tPrev) is not among the words of "char character word item line to into" \
-               and _T(tTokens, tPrev) is not among the words of kObjectWords) then
+               and _T(tTokens, tPrev) is not among the words of kObjectWords and tWord is not among the words of kOfVariables) \
+               and not (_T(tTokens, tPrev) is "to" and tWord is "seconds" and _StatementVerb(tTokens, tCode, tIndex) is "convert") then
             put "hc_" & tTokens[tIndex]["t"] into tTokens[tIndex]["t"]
             _Fire "T2 variable named like a keyword"
             next repeat
@@ -1967,6 +2021,14 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
             or (_T(tTokens, tPrev) is among the words of "card cd background bkgnd bg" and tWord is not among the words of kObjectWords \
             and tWord is not among the words of kNeverNamesAfterCard)) \
             and _NameEnds(tTokens, tCode, tNext) and _NameRefused(tWord) then
+         put quote & tTokens[tIndex]["t"] & quote into tTokens[tIndex]["t"]
+         put "s" into tTokens[tIndex]["k"]
+         _Fire "T3 object name that is a keyword quoted"
+         next repeat
+      end if
+      -- ... and a word of the grammar, which kNeverNames keeps from the
+      -- names above, where it can be nothing else (_GrammarName)
+      if tPrev is not empty and not pVars[tWord] and _GrammarName(tTokens, tCode, tIndex, tPrev, tNext) then
          put quote & tTokens[tIndex]["t"] & quote into tTokens[tIndex]["t"]
          put "s" into tTokens[tIndex]["k"]
          _Fire "T3 object name that is a keyword quoted"
@@ -3023,6 +3085,81 @@ private function _ChunkObjectEnd pTokens, pIdx, pAt, pEnd
    return j
 end _ChunkObjectEnd
 
+-- T59: a card named by an expression not in parentheses ("put empty into
+-- field i of card "Div-"&c", 1040A's; "put empty into line count of
+-- field "price" of card "order"&sheet", SalesWriter's; "set lockText of
+-- field "Liste" of card "Liste" && Hunderter to true", and "put field
+-- "Liste" of card "Liste" && Karte of background "Stammlisten" into
+-- field "Lager"", Yeast Collection's; "mark card it + 1", StackTools'),
+-- which HyperCard took for the card that the whole expression names or
+-- numbers, as both take it in a go ("go to card "order"&sheet"), and
+-- this engine refuses, as it takes the card "Div-" and then cannot place
+-- the operator. Where the card, at pAt, is a put's destination's (after
+-- its into, before or after) or a mark's, the expression goes on to the
+-- end of the statement; a set's, to the set's "to"; and before an "of"
+-- and a background or a stack, it is one word after the operator. The
+-- index of its last token, or 0. The expression's first token is a
+-- string, a number or a variable's name, and an operator follows it
+private function _CardNameEnd pTokens, pIdx, pAt, pCount
+   local tStart, tEnd, tVerb, j, k, tDepth
+   put pAt into tStart
+   repeat while tStart > 1 and _T(pTokens, pIdx[tStart - 1]) is not among the words of "then else"
+      subtract 1 from tStart
+   end repeat
+   put pCount into tEnd
+   repeat with k = pAt + 1 to pCount
+      if _T(pTokens, pIdx[k]) is "else" then
+         put k - 1 into tEnd
+         exit repeat
+      end if
+   end repeat
+   put _T(pTokens, pIdx[tStart]) into tVerb
+   put pAt + 1 into j
+   if j + 2 > tEnd or pTokens[pIdx[j]]["k"] is not among the items of "s,n,w" then return 0
+   if pTokens[pIdx[j]]["k"] is "w" and _T(pTokens, pIdx[j]) is not "it" and (_T(pTokens, pIdx[j]) is among the words of kNeverNames \
+         or _T(pTokens, pIdx[j]) is among the words of kObjectWords or _T(pTokens, pIdx[j]) is among the words of kChunkOrdinals \
+         or _T(pTokens, pIdx[j]) is among the words of kNeverNamesAfterCard) then
+      return 0
+   end if
+   if pTokens[pIdx[j + 1]]["t"] is not among the items of "&,+,-,*,/" then return 0
+   -- (the operand after the operator, past the second "&" of "&&")
+   put j + 2 into k
+   if pTokens[pIdx[j + 1]]["t"] is "&" and pTokens[pIdx[k]]["t"] is "&" then add 1 to k
+   if k > tEnd then return 0
+   -- (not a property without "the": "card "A" & name of bkgnd 1")
+   if k + 2 <= tEnd and pTokens[pIdx[k]]["k"] is "w" and _T(pTokens, pIdx[k + 1]) is "of" \
+         and _T(pTokens, pIdx[k + 2]) is among the words of "background bkgnd bg stack" \
+         and _T(pTokens, pIdx[pAt - 1]) is "of" and _T(pTokens, pIdx[k]) is not among the words of kChunkObjectProperties \
+         and _T(pTokens, pIdx[k]) is not among the words of kNotPlain and _T(pTokens, pIdx[k]) is not "number" then
+      return k
+   end if
+   switch tVerb
+      case "mark"
+      case "unmark"
+         if pAt = tStart + 1 then return tEnd
+         break
+      case "put"
+         if _T(pTokens, pIdx[pAt - 1]) is not "of" then return 0
+         put 0 into tDepth
+         repeat with k = tStart + 1 to pAt - 1
+            if pTokens[pIdx[k]]["t"] is "(" then add 1 to tDepth
+            if pTokens[pIdx[k]]["t"] is ")" then subtract 1 from tDepth
+            if tDepth = 0 and _T(pTokens, pIdx[k]) is among the words of "into before after" then return tEnd
+         end repeat
+         break
+      case "set"
+         if _T(pTokens, pIdx[pAt - 1]) is not "of" then return 0
+         put 0 into tDepth
+         repeat with k = j + 2 to tEnd - 1
+            if pTokens[pIdx[k]]["t"] is "(" then add 1 to tDepth
+            if pTokens[pIdx[k]]["t"] is ")" then subtract 1 from tDepth
+            if tDepth = 0 and _T(pTokens, pIdx[k]) is "to" then return k - 1
+         end repeat
+         break
+   end switch
+   return 0
+end _CardNameEnd
+
 -- T9, T16 to T30 and T32: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
@@ -3135,6 +3272,18 @@ private function _HyperCardRules pLine, pCompiled, pElse
          end if
       end if
 
+      -- T59: a card named by an expression not in parentheses, in a
+      -- script that does not compile (_CardNameEnd)
+      if not pCompiled and i > 1 and tWord is among the words of "card cd" then
+         put _CardNameEnd(tTokens, tIdx, i, n) into j
+         if j > 0 then
+            put "(" before tTokens[tIdx[i + 1]]["t"]
+            put ")" after tTokens[tIdx[j]]["t"]
+            _Fire "T59 a card named by an expression"
+            next repeat
+         end if
+      end if
+
       if i > 1 and _T(tTokens, tIdx[i - 1]) is not among the words of "then else" then next repeat
       -- the statement: to the end of the line, or to an else
       put n into tEnd
@@ -3180,9 +3329,13 @@ private function _HyperCardRules pLine, pCompiled, pElse
          case "sort"
             put _SortCards(tTokens, tIdx, i, tEnd, n) into tNew
             break
+         case "find"
+            put _FindMarked(tTokens, tIdx, i, tEnd, n) into tNew
+            break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty and not pCompiled then put _PutChunkOrder(tTokens, tIdx, i, tEnd, n) into tNew
+            if tNew is empty and not pCompiled then put _PutIntoQuoted(tTokens, tIdx, i, tEnd) into tNew
             break
          case "enable"
          case "disable"
@@ -4136,6 +4289,30 @@ private function _HyperCardWindows pLine
             put _Span(tTokens, tIdx, j + 1, k) into tName
          end if
          _Fire "T46 HyperCard's windows"
+      else if _T(tTokens, tIdx[j]) is "window" and j < n and _MessageBoxRef(tTokens, tIdx, j) = 0 \
+            and tProperty is not among the words of kWindowProperties and _WindowPropertyRefused(tProperty, tStart < i - 1, tSet) then
+         -- T60: a property this engine has for no window, of the window of
+         -- an external ("set the scrollbar of window "Message Crate" to
+         -- 8", Development Library's; "set selectedLine of window
+         -- "TheList" to x", Listoid's; "put currTime of window
+         -- demoMovieName into MovieCurrTime", QuickTime Tools'; "put
+         -- Btn1Name of window "Chiclette Editor" into windName",
+         -- Chiclette's), which HyperCard handed to the external and this
+         -- engine refuses (the import left the line or its handler out),
+         -- or in a get takes for a get and a call that fails each time it
+         -- runs (_WindowPropertyRefused): the library's, as for
+         -- HyperCard's own windows. No external runs
+         -- here, so its window is never open: a set leaves "No such
+         -- window" in the result, as HyperCard did for a window that was
+         -- not, and a read gives empty
+         put _WindowRef(tTokens, tIdx, j + 1, n) into k
+         if k is empty then next repeat
+         if k = j + 1 then
+            put _PlainName(tTokens, tIdx, k, k, false) into tName
+         else
+            put _Span(tTokens, tIdx, j + 1, k) into tName
+         end if
+         _Fire "T60 the properties of an external's window"
       end if
       if tName is empty then next repeat
       if tSet and _T(tTokens, tIdx[k + 1]) is "to" and k + 1 < n then
@@ -4180,6 +4357,41 @@ private function _WindowRef pTokens, pIdx, pFrom, pTo
    end repeat
    return empty
 end _WindowRef
+
+-- T60: whether this engine refuses the property pProp of a window (a
+-- stack here), read (or with pSet set) with "the" or, without pThe, with
+-- none, by a probe of that form: one that is no property of an object of
+-- this engine's ("scrollbar", "current", a function's name as
+-- "selectedLine" for a set), or that it takes for a property only with
+-- "the" ("currTime of window x"). A property of this engine's objects
+-- (kChunkObjectProperties), a chunk's word or a word of the grammar is
+-- left to the other rules, and with no probe (outside
+-- revHyperCardFixScripts) none is refused. A read is probed in a put:
+-- "get currTime of window x" compiles here, as "get currTime" and a call
+-- of a handler "of" with the window as its parameter, which fails each
+-- time it runs (a window is no container), so a get is fixed with the
+-- rest
+private function _WindowPropertyRefused pProp, pThe, pSet
+   local tKey, tForm
+   put _Lower(pProp) into pProp
+   if sProbe is empty or not _IsName(pProp) or pProp is among the words of kNotPlain \
+         or pProp is among the words of kChunkWords or pProp is among the words of kNeverNames or pProp is "number" \
+         or pProp is among the words of kChunkObjectProperties then
+      return false
+   end if
+   put pProp & comma & pThe & comma & pSet into tKey
+   if sWindowPropertyRefused[tKey] is empty then
+      put pProp && "of stack 1" into tForm
+      if pThe then put "the" && tForm into tForm
+      if pSet then
+         put "set" && tForm && "to 1" into tForm
+      else
+         put "put" && tForm && "into tValue" into tForm
+      end if
+      put not _Compiles("on hcProbe" & return & tForm & return & "end hcProbe") into sWindowPropertyRefused[tKey]
+   end if
+   return sWindowPropertyRefused[tKey]
+end _WindowPropertyRefused
 
 -- T29: HyperCard, the application, as an object: "the long name of
 -- HyperCard" (its path, which scripts take apart for the folder of their
@@ -4247,12 +4459,30 @@ end _FindWord
 -- this engine's names for condense, extend and group and leaves out
 -- outline and shadow
 private function _SetCardAndStyle pTokens, pIdx, pAt, pEnd
-   local j, k, tProperty, tTo, tObject, tValue, tNeeded, tWord
+   local j, k, tProperty, tTo, tObject, tValue, tNeeded, tWord, tDepth, tFrom
    put pAt + 1 into j
    if _T(pTokens, pIdx[j]) is "the" then add 1 to j
    put _T(pTokens, pIdx[j]) into tProperty
    if _T(pTokens, pIdx[j + 1]) is not "of" then return empty
-   put _FindWord(pTokens, pIdx, j + 2, pEnd, "to", empty) into tTo
+   -- the value follows the first "to" outside parentheses that is not a
+   -- chunk's range's, which follows a chunk and its number after "of"
+   -- ("set the textStyle of word 1 to 2 of me to "Bold,Condense"", Cool
+   -- Address Book's; "of word sw+1 to slw of fld "situation" to
+   -- "group"", the Dock stacks'), as the value can have a range of its
+   -- own ("to item 1 to 2 of tStyles")
+   put empty into tTo
+   put 0 into tDepth
+   put j + 2 into tFrom
+   repeat with k = j + 2 to pEnd
+      if _T(pTokens, pIdx[k]) is "(" then add 1 to tDepth
+      if _T(pTokens, pIdx[k]) is ")" then subtract 1 from tDepth
+      if tDepth is not 0 then next repeat
+      if _T(pTokens, pIdx[k]) is "of" then put k + 1 into tFrom
+      if _T(pTokens, pIdx[k]) is "to" and _T(pTokens, pIdx[tFrom]) is not among the words of "char character word item line" then
+         put k into tTo
+         exit repeat
+      end if
+   end repeat
    if tTo is empty or tTo = pEnd then return empty
    if tProperty is among the words of "rect rectangle" then
       put _Lower(_Span(pTokens, pIdx, j + 2, tTo - 1)) into tObject
@@ -4809,6 +5039,67 @@ private function _PutChunkOrder pTokens, pIdx, pAt, pEnd, pCount
    if pAt = 1 and pEnd = pCount then return tPut
    return "do" && _Literal(tPut)
 end _PutChunkOrder
+
+-- T57: a put into a variable named in quotes ("Put 29.95 into "Price"",
+-- Type & Graphics Preview's; "put the value of card field F3 into
+-- "bagone"", MENDELIAN GENETICS I's; "put empty into "fire"",
+-- MathAttack's; "put "N" into "KFL"", TwinPeaksTrivia's), which HyperCard
+-- put into the variable of that name, as these stacks read it after
+-- ("global Product,Price", "put bagone into card field "CLASS1"") and
+-- this engine refuses ("bad destination": the import left the line or
+-- its handler out): the name without its quotes, a name this engine
+-- takes for a variable; a name it refuses, or one that is the message
+-- box here, is left as it is
+private function _PutIntoQuoted pTokens, pIdx, pAt, pEnd
+   local tPrep, tName
+   put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "into before after", empty) into tPrep
+   if tPrep is empty or tPrep <> pEnd - 1 or pTokens[pIdx[pEnd]]["k"] is not "s" then return empty
+   put pTokens[pIdx[pEnd]]["t"] into tName
+   if the number of chars of tName < 3 or char -1 of tName is not quote then return empty
+   put char 2 to -2 of tName into tName
+   if not _IsName(tName) or _Lower(tName) is among the words of kStructural \
+         or _Lower(tName) is among the words of "msg message" or _VariableRefused(tName) then
+      return empty
+   end if
+   _Fire "T57 a variable named in quotes"
+   return _Span(pTokens, pIdx, pAt, tPrep) && tName
+end _PutIntoQuoted
+
+-- T58: find in the marked cards ("find string searchStr of marked cards",
+-- HyperStacks'; "find string (cd fld "Key Word" of card index) of marked
+-- cards", Recipe's; "find whole firstTerm in field "Record" of marked
+-- cards", Hyper-Ref's), which HyperCard searched alone and this engine
+-- refuses (the import left the line out, or made it the throw of a line
+-- that does not compile, which stopped the handler): the library's
+-- hcFindMarkedBegin sets the dontSearch of the cards that are not
+-- marked, which this engine's find passes over, the find searches the
+-- others by the script's own form and text, and hcFindMarkedEnd sets
+-- them back and gives back the find's result ("not found"), which the
+-- script reads after. This engine's find in a field searches it whatever
+-- a card's dontSearch, so the field goes to hcFindMarkedBegin instead,
+-- which leaves it alone to be searched on the marked cards ("find string
+-- findString in bkgnd field "alpha pool" of marked cards", GuessWords':
+-- "hcFindMarkedBegin the long id of bkgnd field "alpha pool"; find
+-- string findString; hcFindMarkedEnd the result"). That is three
+-- statements; after "then" or "else", a do of them (as T54's)
+private function _FindMarked pTokens, pIdx, pAt, pEnd, pCount
+   local tIn, tFind
+   if pEnd - pAt < 4 or _T(pTokens, pIdx[pEnd]) is not among the words of "cards cds" \
+         or _T(pTokens, pIdx[pEnd - 1]) is not "marked" or _T(pTokens, pIdx[pEnd - 2]) is not "of" then
+      return empty
+   end if
+   put _FindWord(pTokens, pIdx, pAt + 2, pEnd - 3, "in", empty) into tIn
+   if tIn is not empty and (tIn = pEnd - 3 or _T(pTokens, pIdx[tIn + 1]) is not among the words of kObjectWords) then return empty
+   _Fire "T58 find in the marked cards"
+   if tIn is empty then
+      put "hcFindMarkedBegin;" && _Span(pTokens, pIdx, pAt, pEnd - 3) into tFind
+   else
+      put "hcFindMarkedBegin the long id of" && _Span(pTokens, pIdx, tIn + 1, pEnd - 3) & ";" && _Span(pTokens, pIdx, pAt, tIn - 1) into tFind
+   end if
+   put ";" && "hcFindMarkedEnd the result" after tFind
+   if pAt = 1 and pEnd = pCount then return tFind
+   return "do" && _Literal(tFind)
+end _FindMarked
 
 -- T54: sort the cards of a background ("sort cards of this bg by field
 -- "Name"", "sort bkgnd "Data" numeric by line 1 of field f", "sort this
