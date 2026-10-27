@@ -141,7 +141,12 @@ stacks HyperCard's text properties, text styles, round, characters and
 card ids, and their controls their own Inspector and right-click menu,
 imports HyperCard stacks from disk images again, and lets scripts write
 literal arrays, as in LiveCode 10 (see
-[0.2.7-rc.6.6](#027-rc66-the-bug-hunt-round-six));
+[0.2.7-rc.6.6](#027-rc66-the-bug-hunt-round-six)), and 0.2.7-rc.6.7
+lays out right-to-left and mixed text in the order ICU gives, ends a
+crash on the next background of a card with none, keeps the web IDE in
+the browser between visits, and runs many more of imported HyperCard
+stacks' scripts (see
+[0.2.7-rc.6.7](#027-rc67-the-bug-hunt-round-seven));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1611,6 +1616,91 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.7: the Bug Hunt, round seven
+
+OXT-Beyond 0.2.7-rc.6.7 has everything in 0.2.7-rc.6.6. In the spirit of
+the Bug Hunt, here is every change since then, each listed as the bug it
+squashes:
+
+- **Right-to-left text in the wrong order.** In a right-to-left
+  paragraph, the text after an embedding or an isolate that had closed
+  was laid out at the level of left-to-right text, so it came out in the
+  wrong order (stam66). Fields now order right-to-left and mixed text as
+  the Unicode bidirectional algorithm and ICU do, in that case and the
+  others where they differed: a "$", "%" or "#" goes with the number
+  beside it and nothing more, so a Hebrew or Arabic word between "$100"
+  and "$200" is no longer laid out backwards, and "50%" in right-to-left
+  text no longer reads "%50"; a ZWNJ, ZWJ or soft hyphen no longer
+  splits a word of the other direction into pieces in the wrong order;
+  an empty embedding no longer changes the text around it; and the text
+  either side of an isolate is resolved as one. What a script sees: in
+  those cases the runs of a field's `styledText` fall where the new
+  levels change. Its text, styles, `htmlText` and `rtfText` are as
+  before, and so is the layout of text with no right-to-left letters,
+  Arabic digits or right-to-left marks in a field whose `textDirection`
+  is "ltr" or "auto" (#269).
+- **A crash on the next background of a card with none.** Asking for
+  the next or the previous background of a card that has no background
+  (`the short name of next background`, `go to card 1 of prev bkgnd`)
+  crashed the engine. The chunk stops with "Chunk: can't find
+  background", and the go goes to that card of the stack, as for a
+  background that is not there (#273).
+- **A web IDE that downloaded itself on every visit.** The web IDE
+  downloaded its engine and the IDE, about 62 MB, each time it was
+  opened. The browser now keeps a copy, so a visit after the first opens
+  without downloading them, and the engine compiles while it downloads.
+  A browser that cannot keep a copy loads the IDE as before, and the
+  loading bar no longer miscounts on a server that compresses (#265).
+- **HyperCard stacks that stopped or took the wrong turn.** In a stack
+  whose `hyperTalkCompatible` is true (File > Import Stack sets it), a
+  `userLevel` above 5 reads as 5, HyperCard's highest, so a stack that
+  checks for the scripting level finds it; `play` takes the sound a
+  field or a button of another card names; and a script can call or
+  send one of HyperCard's own messages (`openCard`, `idle`, ...) that no
+  handler takes, and go on, where it stopped with "can't find handler"
+  (#263). After a `go` to another stack, the menu items a `doMenu`
+  chooses act on that stack's card, as in HyperCard, so `go home` and
+  then `doMenu "Paste Button"` pastes the button on Home's card (#266).
+  One change goes the other way: setting the script of an object whose
+  handler is running, which rc.6.6 allowed in such a stack (#262), is
+  refused again, with "can't set script while it is executing", while
+  the `preserveVariables` is true and the object's script has script
+  locals, whose values the new script would lose (#263). Every other
+  stack is as before.
+- **A HyperCard stack that quit as it opened.** HyperCard's `ask
+  password` put into `it` a number it made from the reply, and stacks
+  kept that number and compared a later reply's with it. This engine's
+  gives the reply as it was typed, which no such number matches, so
+  Jerome's Journal quit as it opened, whatever was typed. In an imported
+  stack, `ask password` gives HyperCard's number, made as HyperCard 2.2's
+  code makes it, and nothing, with "Cancel" in the result, when the
+  dialog is cancelled; `ask password clear` gives the reply as typed, as
+  before (#275).
+- **HyperCard scripts that the import left out or misread.** File >
+  Import Stack has 24 new rules, T50 to T73, for HyperTalk this engine
+  refuses or reads differently, and many older rules take more: a
+  property of an object that a chunk names, a font named in several
+  words, a chunk of a chunk in any order, a variable named in quotes, a
+  find in the marked cards, a sort of one background's cards, a go to a
+  background, the showPict, the text tool's own text properties, a
+  stack's version, HyperCard 2.2's speech and its global properties,
+  `quit`, `help` and `answer program`, a stack that is not open,
+  `print` of an expression and the print text properties, a stack's own
+  functions named like this engine's, and `ask password` (#263, #264,
+  #266, #267, #268, #270, #271, #272, #273, #274, #275). The HyperCard
+  Library stands in for six more of the externals that stacks call:
+  FontName, available, IsFile, FileIsOpen and translit (#274), and
+  Dartmouth's Password, which stopped with an error (#275). The rules
+  change only the scripts of a stack as it is imported.
+
+Under the hood, the engine's tests check the direction runs of
+mixed-direction text in a field for each of the bidi fixes (#269) and
+ask for the next and the previous background of a card with none
+(#273); each import rule has its own tests, and the HyperCard sweep tool
+tours a stack on past a script's `exit to top`, logs each step and the
+line that failed inside a repeat or an if, and finds the stacks beside
+one on its disk image (#263, #268, #272).
 
 #### 0.2.7-rc.6.6: the Bug Hunt, round six
 
