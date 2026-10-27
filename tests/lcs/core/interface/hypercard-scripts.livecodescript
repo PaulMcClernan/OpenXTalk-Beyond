@@ -157,6 +157,11 @@ on TestHyperCardScriptsRules
    TestAssert "T10: the heapSpace", line 2 of tScript is "  if hcHeapSpace() < 1321000 then beep"
    TestAssert "T10: heapSpace()", line 3 of tScript is "  put hcHeapSpace() into x"
 
+   -- the short version of HyperCard, which this engine refuses
+   put _Rewrite("on mouseUp", "  if the short version of HyperCard < 1.2 then beep", "  if short version of hypercard > 2.2 then beep", "end mouseUp") into tScript
+   TestAssert "T10: the short version of HyperCard, with the and without", line 2 to 3 of tScript is _Lines("  if hcVersion() < 1.2 then beep", "  if hcVersion() > 2.2 then beep")
+   TestAssert "T10: those compile", _Compiles(tScript)
+
    put _Rewrite("junk before", "on mouseUp", "  put 1 into x", "end mouseUp", "junk after") into tScript
    TestAssert "T0: text outside handlers", tScript is _Lines("-- junk before", "on mouseUp", "  put 1 into x", "end mouseUp", "-- junk after")
 
@@ -2615,6 +2620,346 @@ on TestHyperCardScriptsT60
    TestAssert "T60: no such window for a set, empty for a read", gHCScriptsTest is "No such window,No such window,,,none"
    _Close tStack
 end TestHyperCardScriptsT60
+
+on TestHyperCardScriptsT61
+   -- T61: HyperCard 2.2's speech ("if the speech is not done then stop
+   -- speech", "get line 1 of the voices" and "speak (item 4 of
+   -- pasteList) with voice it", Spooky Pictures'; "if voices() is
+   -- empty"), which this engine has not: the library's hcSpeech(),
+   -- hcVoices() and hcStopSpeech, by the speech SpeakString and Say use,
+   -- and its Speak for a speak with a voice. A variable named speech, a
+   -- property of an object and a stack's own function voices are left as
+   -- they are
+   local tScript, tStack, tError, q
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  if the speech is not done then stop speech", \
+         "  get line 1 of the voices", \
+         "  if voices() is empty then beep", \
+         "  put the speech into x", \
+         "  stop speech", \
+         "  speak (item 4 of pasteList) with voice it", \
+         "  if x then speak " & q & "Hello" & q & " & who with female voice -- a voice", \
+         "end mouseUp") into tScript
+   TestAssert "T61: the speech, and stop speech after then", line 2 of tScript is "  if hcSpeech() is not done then hcStopSpeech"
+   TestAssert "T61: the voices", line 3 of tScript is "  get line 1 of hcVoices()"
+   TestAssert "T61: voices()", line 4 of tScript is "  if hcVoices() is empty then beep"
+   TestAssert "T61: the speech in a put, and stop speech alone", line 5 to 6 of tScript is _Lines("  put hcSpeech() into x", "  hcStopSpeech")
+   TestAssert "T61: speak with a voice, and with a gender's after then", line 7 to 8 of tScript \
+         is _Lines("  Speak (item 4 of pasteList)", "  if x then Speak " & q & "Hello" & q & " & who -- a voice")
+   TestAssert "T61: those compile", _Compiles(tScript)
+
+   put _Rewrite("on mouseUp", "  put speech into x", "  get voices()", "  put the speech of me into y", "  put 1 +* into q", "end mouseUp", \
+         "function voices", "  return 1", "end voices") into tScript
+   TestAssert "T61: a variable, a property of an object and the stack's own function: unchanged", \
+         line 2 to 4 of tScript is _Lines("  put speech into x", "  get voices()", "  put the speech of me into y")
+
+   -- in a stack, where nothing is spoken
+   put "HCScriptsT61" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Speech"
+   set the script of button "Speech" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  if the speech is not done then stop speech", \
+         "  put the speech into gHCScriptsTest", \
+         "  put comma & (the number of lines of the voices >= 0) after gHCScriptsTest", \
+         "  stop speech", \
+         "  put comma & the speech after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T61: as it is, the script does not compile", not _Compiles(the script of button "Speech" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T61: the script compiles", _Compiles(the script of button "Speech" of stack tStack)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Speech" of stack tStack
+   catch tError
+   end try
+   TestAssert "T61: the speech done, the voices a list, stop speech with nothing spoken", tError is empty and gHCScriptsTest is "done,true,done"
+   _Close tStack
+end TestHyperCardScriptsT61
+
+on TestHyperCardScriptsT62
+   -- T62: a function of the stack named like a constant, a property or an
+   -- operator of this engine (SalesWriter's comma, Power Tools' colors,
+   -- Stack Dumper's Visible, Ship Shape's wrap), whose calls this engine
+   -- takes for that word ("put comma(hold) into hold" does not compile,
+   -- "fileName(it)" stops with an error when it runs), where HyperCard
+   -- called the handler: the function and its calls renamed, as T1
+   -- renames a handler whose name is refused. In a script that compiles
+   -- too, where T1's functions are now renamed as well ("select line
+   -- clickLine() of me", where the stack's clickLine gives a line's
+   -- number and this engine's a chunk). Only a call that reaches the
+   -- function from every card is renamed: one from another card, or from
+   -- a background's field, still reaches this engine's own function, as
+   -- HyperCard's went on to its own where no handler was
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("function comma n", "  if n is empty then exit comma", "  return n & " & q & "," & q, "end comma", \
+         "function Visible place, object, n", "  pass Visible", "end Visible", \
+         "on mouseUp", "  put comma(hold) into hold", "  put Visible(1, 2, 3) & the visible of me into v", "  put comma into c", "end mouseUp") into tScript
+   TestAssert "T62: a function named like a constant, its exit and end", line 1 to 4 of tScript \
+         is _Lines("function hc_comma n", "  if n is empty then exit hc_comma", "  return n & " & q & "," & q, "end hc_comma")
+   TestAssert "T62: named like a property, its pass", line 5 to 7 of tScript is _Lines("function hc_visible place, object, n", "  pass hc_visible", "end hc_visible")
+   TestAssert "T62: the calls", line 9 of tScript is "  put hc_comma(hold) into hold" \
+         and line 10 of tScript is "  put hc_visible(1, 2, 3) & the visible of me into v"
+   TestAssert "T62: the constant and the property: unchanged", line 11 of tScript is "  put comma into c"
+   TestAssert "T62: those compile", _Compiles(tScript)
+
+   -- in a stack with HyperCard's addressing, as an imported one: the
+   -- stack's functions comma, wrap and clickLine, card 1's colors and
+   -- round; calls from card 1's button (whose script does not compile)
+   -- and field (whose script does), card 2's button and a background's
+   -- field
+   put "HCScriptsT62" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the script of stack tStack to _Lines("function comma n", "  return n & " & q & "," & q, "end comma", \
+         "function wrap s", "  return " & q & "[" & q & " & s & " & q & "]" & q, "end wrap", \
+         "function clickLine", "  return 2", "end clickLine")
+   set the name of card 1 of stack tStack to "C1"
+   set the script of card "C1" to _Lines("function round x", "  return " & q & "mine" & q, "end round", \
+         "function colors", "  return " & q & "red" & q, "end colors")
+   create group "G"
+   set the backgroundBehavior of group "G" to true
+   create field "Shared" in group "G"
+   set the script of field "Shared" to _Lines("on mouseUp", "  global gHCScriptsTest", "  put round(2.6) into gHCScriptsTest", "end mouseUp")
+   create button "Calls"
+   set the script of button "Calls" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put comma(5) into gHCScriptsTest", \
+         "  put wrap(" & q & "a" & q & ") & colors() & round(2.6) after gHCScriptsTest", \
+         "end mouseUp")
+   create field "Compiled"
+   set the script of field "Compiled" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put line clickLine() of (" & q & "a" & q & " & return & " & q & "b" & q & ") into gHCScriptsTest", \
+         "  put comma & round(2.6) & comma & the round of 2.6 after gHCScriptsTest", \
+         "end mouseUp")
+   create card "C2"
+   create button "Other"
+   set the script of button "Other" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put round(2.6) & comma & line clickLine() of (" & q & "a" & q & " & return & " & q & "b" & q & ") into gHCScriptsTest", \
+         "end mouseUp")
+   go to card "C1"
+   set the HCAddressing of stack tStack to true
+   unlock messages
+   TestAssert "T62: as it is, the script of the button does not compile", not _Compiles(the script of control "Calls" of card "C1" of stack tStack)
+   TestAssert "T62: as it is, the field's does", _Compiles(the script of control "Compiled" of card "C1" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put the script of control "Calls" of card "C1" of stack tStack into tScript
+   TestAssert "T62: the calls of the stack's functions and the card's", line 3 to 4 of tScript is _Lines("  put hc_comma(5) into gHCScriptsTest", \
+         "  put hc_wrap(" & q & "a" & q & ") & hc_colors() & hc_round(2.6) after gHCScriptsTest")
+   put the script of control "Compiled" of card "C1" of stack tStack into tScript
+   TestAssert "T62: in a script that compiles, T1's functions too; the round of: unchanged", line 3 to 4 of tScript \
+         is _Lines("  put line hc_clickline() of (" & q & "a" & q & " & return & " & q & "b" & q & ") into gHCScriptsTest", \
+         "  put comma & hc_round(2.6) & comma & the round of 2.6 after gHCScriptsTest")
+   TestAssert "T62: from card 2, card 1's function: unchanged; the stack's: renamed", line 3 of the script of control "Other" of card "C2" of stack tStack \
+         is "  put round(2.6) & comma & line hc_clickline() of (" & q & "a" & q & " & return & " & q & "b" & q & ") into gHCScriptsTest"
+   TestAssert "T62: from a background's field, card 1's function: unchanged", line 3 of the script of control "Shared" of card "C1" of stack tStack \
+         is "  put round(2.6) into gHCScriptsTest"
+   TestAssert "T62: the scripts compile", _Compiles(the script of stack tStack) and _Compiles(the script of card "C1" of stack tStack) \
+         and _Compiles(the script of control "Calls" of card "C1" of stack tStack)
+
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to control "Calls" of card "C1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T62: the stack's functions and the card's called", gHCScriptsTest is "5,[a]redmine"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to control "Compiled" of card "C1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T62: the stack's clickLine and the card's round, and this engine's round of", gHCScriptsTest is "b,mine,3"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to control "Other" of card "C2" of stack tStack
+   catch tError
+   end try
+   TestAssert "T62: from card 2, this engine's round and the stack's clickLine", gHCScriptsTest is "3,b"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to control "Shared" of card "C1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T62: from a background's field, this engine's round", gHCScriptsTest is "3"
+   _Close tStack
+end TestHyperCardScriptsT62
+
+on TestHyperCardScriptsT63
+   -- T63: a mark of punctuation alone as a value, which HyperCard took as
+   -- the text it was ("set the itemDelimiter to :", "if theKey = . then",
+   -- "digest sd,sc,sb,.,se", "put the round of x &% into ...", "put
+   -- ~&it into ...") and this engine refuses (and takes # for the start
+   -- of a comment): in quotes. A mark that touches a number or a word is
+   -- left as it is
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  set the itemDelimiter to :", \
+         "  if theKey = . then beep", \
+         "  digest sb,.,sa", \
+         "  put the round of x &% into field " & q & "score" & q, \
+         "  put ~&it into field " & q & "images" & q, \
+         "  put x & # into y", \
+         "  if x is ! then beep", \
+         "end mouseUp") into tScript
+   TestAssert "T63: a set's value", line 2 of tScript is "  set the itemDelimiter to " & q & ":" & q
+   TestAssert "T63: after an operator", line 3 of tScript is "  if theKey = " & q & "." & q & " then beep"
+   TestAssert "T63: between commas", line 4 of tScript is "  digest sb," & q & "." & q & ",sa"
+   TestAssert "T63: touching the operator before and after", line 5 to 6 of tScript \
+         is _Lines("  put the round of x &" & q & "%" & q & " into field " & q & "score" & q, "  put " & q & "~" & q & "&it into field " & q & "images" & q)
+   TestAssert "T63: a hash sign, and an exclamation mark", line 7 to 8 of tScript is _Lines("  put x & " & q & "#" & q & " into y", "  if x is " & q & "!" & q & " then beep")
+   TestAssert "T63: those compile", _Compiles(tScript)
+
+   put _Rewrite("on mouseUp", "  put .5 into z", "  put 10:30 into w", "  put x.y into v", "  put 1 +* into q", "end mouseUp") into tScript
+   TestAssert "T63: a mark that touches a number or a word: unchanged", line 2 to 4 of tScript is _Lines("  put .5 into z", "  put 10:30 into w", "  put x.y into v")
+
+   -- in a stack
+   put "HCScriptsT63" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Marks"
+   set the script of button "Marks" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  set the itemDelimiter to :", \
+         "  put item 2 of " & q & "a:b" & q & " into gHCScriptsTest", \
+         "  set the itemDelimiter to comma", \
+         "  put comma & (" & q & "." & q & " is .) after gHCScriptsTest", \
+         "  put comma & 5 &% after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T63: as it is, the script does not compile", not _Compiles(the script of button "Marks" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T63: the script compiles", _Compiles(the script of button "Marks" of stack tStack)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Marks" of stack tStack
+   catch tError
+   end try
+   TestAssert "T63: the item delimiter, and the marks as text", gHCScriptsTest is "b,true,5%"
+   _Close tStack
+end TestHyperCardScriptsT63
+
+on TestHyperCardScriptsT64
+   -- T64: HyperCard's global properties that this engine has not
+   -- ("set dialingTime to 180", Phone Dialer's; "put the language into
+   -- oldlanguage" and "set language to oldlanguage", HyperBibTeX's), which
+   -- it refuses to read and to set: the library's hcProperty() and
+   -- hcSetProperty, which keep what a script set, and before it give
+   -- HyperCard's own value. A variable of such a name, and a property of
+   -- an object, are left as they are
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  set the dialingTime to 600", \
+         "  set language to oldLanguage", \
+         "  put the dialingTime into t", \
+         "  put the LANGUAGE into oldlanguage", \
+         "  if the scriptEditor is " & q & "ScriptEditor" & q & " then beep", \
+         "  set the variableWatcher to " & q & "VW" & q & " -- a watcher", \
+         "end mouseUp") into tScript
+   TestAssert "T64: a set, with the and without", line 2 to 3 of tScript \
+         is _Lines("  hcSetProperty " & q & "dialingTime" & q & ", 600", "  hcSetProperty " & q & "language" & q & ", oldLanguage")
+   TestAssert "T64: a read, the name as the library takes it", line 4 to 5 of tScript \
+         is _Lines("  put hcProperty(" & q & "dialingTime" & q & ") into t", "  put hcProperty(" & q & "language" & q & ") into oldlanguage")
+   TestAssert "T64: a read in a condition", line 6 of tScript is "  if hcProperty(" & q & "scriptEditor" & q & ") is " & q & "ScriptEditor" & q & " then beep"
+   TestAssert "T64: a set, its comment kept", line 7 of tScript is "  hcSetProperty " & q & "variableWatcher" & q & ", " & q & "VW" & q & " -- a watcher"
+   TestAssert "T64: those compile", _Compiles(tScript)
+
+   put _Rewrite("on mouseUp", "  put language into x", "  put the language of me into y", "  set the language of me to 1", "  put 1 +* into q", "end mouseUp") into tScript
+   TestAssert "T64: a variable and an object's property: unchanged", line 2 to 4 of tScript \
+         is _Lines("  put language into x", "  put the language of me into y", "  set the language of me to 1")
+
+   -- in a stack
+   put "HCScriptsT64" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Properties"
+   set the script of button "Properties" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put the dialingTime into gHCScriptsTest", \
+         "  set the dialingTime to 600", \
+         "  put comma & the dialingTime after gHCScriptsTest", \
+         "  put comma & the language after gHCScriptsTest", \
+         "  set language to " & q & "French" & q, \
+         "  put comma & the language after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T64: as it is, the script does not compile", not _Compiles(the script of button "Properties" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T64: the script compiles", _Compiles(the script of button "Properties" of stack tStack)
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Properties" of stack tStack
+   catch tError
+   end try
+   TestAssert "T64: HyperCard's values, then what the script set", gHCScriptsTest is "180,600,English,French"
+   _Close tStack
+end TestHyperCardScriptsT64
+
+on TestHyperCardScriptsT2Me
+   -- T2 with revHyperCardFixScripts' probe, which finds me refused as a
+   -- parameter's name: in a field's script (one T2 rewrites), "put mPP -
+   -- 15 into me" and "add 5 to me" put into the field, as in HyperCard.
+   -- The import took me for a variable and renamed it hc_me, so the field
+   -- never changed. In a card's script, where me is no container, it is
+   -- the variable still ("put (userName contains "Ari Halberstadt") into
+   -- me", a stack's openStack)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT2Me" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the script of this card of stack tStack to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put 2 into result", \
+         "  put (result is 2) into me", \
+         "  if me then put " & q & "card" & q & " into gHCScriptsTest", \
+         "end mouseUp")
+   create field "Score"
+   set the script of field "Score" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put 2 into result", \
+         "  put result into me", \
+         "  add 5 to me", \
+         "  if me is 7 then put the number of lines of me into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T2: as it is, the script does not compile", not _Compiles(the script of field "Score" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put the script of field "Score" of stack tStack into tScript
+   TestAssert "T2: the variable renamed, me kept", line 3 to 6 of tScript is _Lines("  put 2 into hc_result", "  put hc_result into me", \
+         "  add 5 to me", "  if me is 7 then put the number of lines of me into gHCScriptsTest")
+   TestAssert "T2: the script compiles", _Compiles(tScript)
+   put the script of this card of stack tStack into tScript
+   TestAssert "T2: in a card's script, me the variable: unchanged", line 4 to 5 of tScript \
+         is _Lines("  put (hc_result is 2) into hc_me", "  if hc_me then put " & q & "card" & q & " into gHCScriptsTest")
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to field "Score" of stack tStack
+   catch tError
+   end try
+   TestAssert "T2: the field's text set and read", tError is empty and the text of field "Score" of stack tStack is "7" and gHCScriptsTest is "1"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to this card of stack tStack
+   catch tError
+   end try
+   TestAssert "T2: the card's variable", tError is empty and gHCScriptsTest is "card"
+   _Close tStack
+end TestHyperCardScriptsT2Me
 
 on TestHyperCardScriptsT22Names
    -- T22: a menu or a menu item named by one word this engine does not
