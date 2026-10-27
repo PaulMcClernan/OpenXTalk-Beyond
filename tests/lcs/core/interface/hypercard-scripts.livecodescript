@@ -3288,10 +3288,13 @@ on TestHyperCardScriptsRulesFixed
    local tScript, q
    put quote into q
    put _Rewrite("on mouseUp", "  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
-         "  if the short name of this stack is in fld 1 then beep", "  get fld Notes in card 2", "  get the name of card it in bkgnd " & q & "BBS" & q, "end mouseUp") into tScript
+         "  if the short name of this stack is in fld 1 then beep", "  get fld Notes in card 2", "  get the name of card it in bkgnd " & q & "BBS" & q, \
+         "  find cd fld " & q & "name" & q & " in cd fld " & q & "names" & q, "  find word the short name of bkgnd btn id 122 in bkgnd field kk", "end mouseUp") into tScript
    TestAssert "T11: is in after a card, as it was", line 2 to 3 of tScript is _Lines("  if the short name of this cd is in cd fld " & q & "Index" & q & " of cd 1 then beep", \
          "  if the short name of this stack is in fld 1 then beep")
    TestAssert "T11: in for of after an object's name still", line 4 to 5 of tScript is _Lines("  get fld Notes of card 2", "  get the name of card it of bkgnd " & q & "BBS" & q)
+   TestAssert "T11: find's in, before the field it looks in, as it was", line 6 to 7 of tScript is _Lines("  find cd fld " & q & "name" & q & " in cd fld " & q & "names" & q, \
+         "  find word the short name of bkgnd btn id 122 in bkgnd field kk")
    TestAssert "T11: those compile", _Compiles(tScript)
 
    put _Rewrite("on mouseUp", "  put 1 into this", "  if this = 1 or this \", "  = 2 then beep", "  get the name of this \", "  card", "end mouseUp") into tScript
@@ -5021,6 +5024,7 @@ on TestHyperCardScriptsT11In
          "  put comma & the number of card fields in card 2 after gHCScriptsTest", \
          "  put comma & word 1 in field " & q & "Words" & q & " of card 2 after gHCScriptsTest", \
          "  if " & q & "x" & q & " is in field " & q & "Words" & q & " of card 2 then put comma & " & q & "is in" & q & " after gHCScriptsTest", \
+         "  find the short name of bg btn " & q & "Next" & q & " in bkgnd field " & q & "Notes" & q, \
          "end mouseUp") into tScript
    set the script of button "In" to tScript
    unlock messages
@@ -5037,6 +5041,8 @@ on TestHyperCardScriptsT11In
          "  put comma & the number of card fields in card 2 after gHCScriptsTest", \
          "  put comma & word 1 in field " & q & "Words" & q & " of card 2 after gHCScriptsTest", \
          "  if " & q & "x" & q & " is in field " & q & "Words" & q & " of card 2 then put comma & " & q & "is in" & q & " after gHCScriptsTest")
+   TestAssert "T11: find's in, before the field it looks in, as it was", \
+         line 14 of tScript is "  find the short name of bg btn " & q & "Next" & q & " in bkgnd field " & q & "Notes" & q
    put empty into gHCScriptsTest
    set the defaultStack to tStack
    try

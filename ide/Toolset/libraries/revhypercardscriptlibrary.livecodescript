@@ -2536,8 +2536,10 @@ private function _PhraseRules pLine, pThen
       -- "of" after an object, before the card or background it is on
       -- ("the name of card it in bkgnd 2" too); not the operator "is in"
       -- after one ("if the short name of this cd is in cd fld "Index"",
-      -- which "of" made a line that does not compile)
+      -- which "of" made a line that does not compile), nor find's "in"
+      -- before the field it looks in (_FindsIn)
       if tWord is "in" and tNext is among the words of "card cd bkgnd bg background stack" and i > 2 \
+            and not _FindsIn(tTokens, tIdx, i) \
             and (tPrev is among the words of kObjectWords \
             or (tTokens[tIdx[i - 1]]["k"] is among the items of "s,n,w" and tPrev is not "is" \
             and _T(tTokens, tIdx[i - 2]) is among the words of kObjectWords) \
@@ -5097,15 +5099,16 @@ end _NamedByAName
 -- card, background or stack it is on (T11): after an object's type
 -- ("first card in bkgnd 2"), its name or number ("fld "Notes" in card
 -- "Menu"") or its id ("btn id 3 in card 2"), before "card", "bkgnd",
--- "stack", or "this" and one of them. Never the operator "is in", nor a
+-- "stack", or "this" and one of them. Never the operator "is in", a
 -- count's "in" ("the number of card fields in card 2"), which this
--- engine takes
+-- engine takes, nor find's (_FindsIn)
 private function _InForOf pTokens, pIdx, pAt
    local tPrev, tNext
    if pAt < 3 then return false
    put _T(pTokens, pIdx[pAt + 1]) into tNext
    if tNext is "this" then put _T(pTokens, pIdx[pAt + 2]) into tNext
    if tNext is not among the words of "card cd bkgnd bg background stack" then return false
+   if _FindsIn(pTokens, pIdx, pAt) then return false
    put _T(pTokens, pIdx[pAt - 1]) into tPrev
    if tPrev is among the words of kObjectWords then return true
    if pTokens[pIdx[pAt - 1]]["k"] is not among the items of "s,n,w" or tPrev is "is" \
@@ -5113,6 +5116,16 @@ private function _InForOf pTokens, pIdx, pAt
    if _T(pTokens, pIdx[pAt - 2]) is among the words of kObjectWords then return true
    return pAt > 3 and _T(pTokens, pIdx[pAt - 2]) is "id" and _T(pTokens, pIdx[pAt - 3]) is among the words of kObjectWords
 end _InForOf
+
+-- Whether the "in" at pAt is find's, before the field it looks in
+-- ("find word the short name of bkgnd btn id 122 in bkgnd field kk",
+-- MacSUNRISE; "find cd fld "name" in cd fld "names"", Lesson 1 Severn
+-- Ojibwe), which T11 does not take for "of" after the object that ends
+-- the text to find
+private function _FindsIn pTokens, pIdx, pAt
+   return _T(pTokens, pIdx[pAt + 2]) is among the words of "field fld" \
+         and _StatementWord(pTokens, pIdx, pAt) is "find"
+end _FindsIn
 
 -- T45: whether the word home at pAt, not in quotes, names HyperCard's
 -- Home stack: the stack of a send ("send startup to home"), or what has
