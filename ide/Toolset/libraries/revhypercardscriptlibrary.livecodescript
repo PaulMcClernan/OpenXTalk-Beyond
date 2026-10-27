@@ -314,6 +314,7 @@ local sVariableRefused
 local sHandlerRefused
 local sNameRefused
 local sParameterRefused
+local sWindowPropertyRefused
 
 -- The object probes compile on, and the stack being fixed
 local sProbe
@@ -1850,6 +1851,37 @@ private function _CountOfObjects pTokens, pCode, pOf
    return _T(pTokens, tAt) is among the words of "fields flds buttons btns cards cds"
 end _CountOfObjects
 
+-- T3: a word of the grammar as an object's name, which HyperCard took for
+-- the name where nothing else could follow the object: a preposition
+-- after a field or a button whose name it ends ("show field TO", "if
+-- line i of fld to is empty", Logo's; "put fld By into theitems", Order
+-- Form's; "hide cd fld BY", Thermo's), and after the card of a go that it
+-- ends, a preposition, an object's word or a part of a card ("go card
+-- At", "go card In", "go card Cd", ChemElements' cards named for the
+-- elements; "go cd characters", Runes'; "go to card buttons", Canary's).
+-- Not after "the", "this", "next" or an ordinal ("go next card in a new
+-- window"), and not a card's "next" or "prev"
+private function _GrammarName pTokens, pCode, pIndex, pPrev, pNext
+   local tWord, tObject, tBefore
+   put _T(pTokens, pIndex) into tWord
+   put _T(pTokens, pPrev) into tObject
+   put _PrevCode(pCode, pPrev) into tBefore
+   if tBefore is not empty and (_T(pTokens, tBefore) is among the words of "the this next prev previous" \
+         or _T(pTokens, tBefore) is among the words of kChunkOrdinals) then
+      return false
+   end if
+   if tObject is among the words of "field fld button btn" then
+      return tWord is among the words of "to into in by from at with" and _NameEnds(pTokens, pCode, pNext)
+   end if
+   if tObject is not among the words of "card cd" or tBefore is empty then return false
+   if pNext is not empty and _T(pTokens, pNext) is not "else" then return false
+   if _T(pTokens, tBefore) is not "go" and not (_T(pTokens, tBefore) is "to" and _T(pTokens, _PrevCode(pCode, tBefore)) is "go") then
+      return false
+   end if
+   return tWord is among the words of "to into in by from at with" or tWord is among the words of kObjectWords \
+         or (tWord is among the words of kNeverNamesAfterCard and tWord is not among the words of "next prev previous")
+end _GrammarName
+
 -- The rules that work on one line of a handler (pContinued: the line
 -- goes on with the statement of the line before; pThen: the line ends
 -- with \, and this is the first code token of the next, as _FirstCode
@@ -1989,6 +2021,14 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
             or (_T(tTokens, tPrev) is among the words of "card cd background bkgnd bg" and tWord is not among the words of kObjectWords \
             and tWord is not among the words of kNeverNamesAfterCard)) \
             and _NameEnds(tTokens, tCode, tNext) and _NameRefused(tWord) then
+         put quote & tTokens[tIndex]["t"] & quote into tTokens[tIndex]["t"]
+         put "s" into tTokens[tIndex]["k"]
+         _Fire "T3 object name that is a keyword quoted"
+         next repeat
+      end if
+      -- ... and a word of the grammar, which kNeverNames keeps from the
+      -- names above, where it can be nothing else (_GrammarName)
+      if tPrev is not empty and not pVars[tWord] and _GrammarName(tTokens, tCode, tIndex, tPrev, tNext) then
          put quote & tTokens[tIndex]["t"] & quote into tTokens[tIndex]["t"]
          put "s" into tTokens[tIndex]["k"]
          _Fire "T3 object name that is a keyword quoted"
@@ -3045,6 +3085,81 @@ private function _ChunkObjectEnd pTokens, pIdx, pAt, pEnd
    return j
 end _ChunkObjectEnd
 
+-- T59: a card named by an expression not in parentheses ("put empty into
+-- field i of card "Div-"&c", 1040A's; "put empty into line count of
+-- field "price" of card "order"&sheet", SalesWriter's; "set lockText of
+-- field "Liste" of card "Liste" && Hunderter to true", and "put field
+-- "Liste" of card "Liste" && Karte of background "Stammlisten" into
+-- field "Lager"", Yeast Collection's; "mark card it + 1", StackTools'),
+-- which HyperCard took for the card that the whole expression names or
+-- numbers, as both take it in a go ("go to card "order"&sheet"), and
+-- this engine refuses, as it takes the card "Div-" and then cannot place
+-- the operator. Where the card, at pAt, is a put's destination's (after
+-- its into, before or after) or a mark's, the expression goes on to the
+-- end of the statement; a set's, to the set's "to"; and before an "of"
+-- and a background or a stack, it is one word after the operator. The
+-- index of its last token, or 0. The expression's first token is a
+-- string, a number or a variable's name, and an operator follows it
+private function _CardNameEnd pTokens, pIdx, pAt, pCount
+   local tStart, tEnd, tVerb, j, k, tDepth
+   put pAt into tStart
+   repeat while tStart > 1 and _T(pTokens, pIdx[tStart - 1]) is not among the words of "then else"
+      subtract 1 from tStart
+   end repeat
+   put pCount into tEnd
+   repeat with k = pAt + 1 to pCount
+      if _T(pTokens, pIdx[k]) is "else" then
+         put k - 1 into tEnd
+         exit repeat
+      end if
+   end repeat
+   put _T(pTokens, pIdx[tStart]) into tVerb
+   put pAt + 1 into j
+   if j + 2 > tEnd or pTokens[pIdx[j]]["k"] is not among the items of "s,n,w" then return 0
+   if pTokens[pIdx[j]]["k"] is "w" and _T(pTokens, pIdx[j]) is not "it" and (_T(pTokens, pIdx[j]) is among the words of kNeverNames \
+         or _T(pTokens, pIdx[j]) is among the words of kObjectWords or _T(pTokens, pIdx[j]) is among the words of kChunkOrdinals \
+         or _T(pTokens, pIdx[j]) is among the words of kNeverNamesAfterCard) then
+      return 0
+   end if
+   if pTokens[pIdx[j + 1]]["t"] is not among the items of "&,+,-,*,/" then return 0
+   -- (the operand after the operator, past the second "&" of "&&")
+   put j + 2 into k
+   if pTokens[pIdx[j + 1]]["t"] is "&" and pTokens[pIdx[k]]["t"] is "&" then add 1 to k
+   if k > tEnd then return 0
+   -- (not a property without "the": "card "A" & name of bkgnd 1")
+   if k + 2 <= tEnd and pTokens[pIdx[k]]["k"] is "w" and _T(pTokens, pIdx[k + 1]) is "of" \
+         and _T(pTokens, pIdx[k + 2]) is among the words of "background bkgnd bg stack" \
+         and _T(pTokens, pIdx[pAt - 1]) is "of" and _T(pTokens, pIdx[k]) is not among the words of kChunkObjectProperties \
+         and _T(pTokens, pIdx[k]) is not among the words of kNotPlain and _T(pTokens, pIdx[k]) is not "number" then
+      return k
+   end if
+   switch tVerb
+      case "mark"
+      case "unmark"
+         if pAt = tStart + 1 then return tEnd
+         break
+      case "put"
+         if _T(pTokens, pIdx[pAt - 1]) is not "of" then return 0
+         put 0 into tDepth
+         repeat with k = tStart + 1 to pAt - 1
+            if pTokens[pIdx[k]]["t"] is "(" then add 1 to tDepth
+            if pTokens[pIdx[k]]["t"] is ")" then subtract 1 from tDepth
+            if tDepth = 0 and _T(pTokens, pIdx[k]) is among the words of "into before after" then return tEnd
+         end repeat
+         break
+      case "set"
+         if _T(pTokens, pIdx[pAt - 1]) is not "of" then return 0
+         put 0 into tDepth
+         repeat with k = j + 2 to tEnd - 1
+            if pTokens[pIdx[k]]["t"] is "(" then add 1 to tDepth
+            if pTokens[pIdx[k]]["t"] is ")" then subtract 1 from tDepth
+            if tDepth = 0 and _T(pTokens, pIdx[k]) is "to" then return k - 1
+         end repeat
+         break
+   end switch
+   return 0
+end _CardNameEnd
+
 -- T9, T16 to T30 and T32: statements that stop with an error here where
 -- HyperCard went on, or that do something else here; in every script,
 -- compiling or not, one statement a line at most (a statement continued
@@ -3153,6 +3268,18 @@ private function _HyperCardRules pLine, pCompiled, pElse
             put "(" before tTokens[tIdx[i + 2]]["t"]
             put ")" after tTokens[tIdx[j]]["t"]
             _Fire "T50 an object named by a chunk of a variable"
+            next repeat
+         end if
+      end if
+
+      -- T59: a card named by an expression not in parentheses, in a
+      -- script that does not compile (_CardNameEnd)
+      if not pCompiled and i > 1 and tWord is among the words of "card cd" then
+         put _CardNameEnd(tTokens, tIdx, i, n) into j
+         if j > 0 then
+            put "(" before tTokens[tIdx[i + 1]]["t"]
+            put ")" after tTokens[tIdx[j]]["t"]
+            _Fire "T59 a card named by an expression"
             next repeat
          end if
       end if
@@ -4162,6 +4289,30 @@ private function _HyperCardWindows pLine
             put _Span(tTokens, tIdx, j + 1, k) into tName
          end if
          _Fire "T46 HyperCard's windows"
+      else if _T(tTokens, tIdx[j]) is "window" and j < n and _MessageBoxRef(tTokens, tIdx, j) = 0 \
+            and tProperty is not among the words of kWindowProperties and _WindowPropertyRefused(tProperty, tStart < i - 1, tSet) then
+         -- T60: a property this engine has for no window, of the window of
+         -- an external ("set the scrollbar of window "Message Crate" to
+         -- 8", Development Library's; "set selectedLine of window
+         -- "TheList" to x", Listoid's; "put currTime of window
+         -- demoMovieName into MovieCurrTime", QuickTime Tools'; "put
+         -- Btn1Name of window "Chiclette Editor" into windName",
+         -- Chiclette's), which HyperCard handed to the external and this
+         -- engine refuses (the import left the line or its handler out),
+         -- or in a get takes for a get and a call that fails each time it
+         -- runs (_WindowPropertyRefused): the library's, as for
+         -- HyperCard's own windows. No external runs
+         -- here, so its window is never open: a set leaves "No such
+         -- window" in the result, as HyperCard did for a window that was
+         -- not, and a read gives empty
+         put _WindowRef(tTokens, tIdx, j + 1, n) into k
+         if k is empty then next repeat
+         if k = j + 1 then
+            put _PlainName(tTokens, tIdx, k, k, false) into tName
+         else
+            put _Span(tTokens, tIdx, j + 1, k) into tName
+         end if
+         _Fire "T60 the properties of an external's window"
       end if
       if tName is empty then next repeat
       if tSet and _T(tTokens, tIdx[k + 1]) is "to" and k + 1 < n then
@@ -4206,6 +4357,41 @@ private function _WindowRef pTokens, pIdx, pFrom, pTo
    end repeat
    return empty
 end _WindowRef
+
+-- T60: whether this engine refuses the property pProp of a window (a
+-- stack here), read (or with pSet set) with "the" or, without pThe, with
+-- none, by a probe of that form: one that is no property of an object of
+-- this engine's ("scrollbar", "current", a function's name as
+-- "selectedLine" for a set), or that it takes for a property only with
+-- "the" ("currTime of window x"). A property of this engine's objects
+-- (kChunkObjectProperties), a chunk's word or a word of the grammar is
+-- left to the other rules, and with no probe (outside
+-- revHyperCardFixScripts) none is refused. A read is probed in a put:
+-- "get currTime of window x" compiles here, as "get currTime" and a call
+-- of a handler "of" with the window as its parameter, which fails each
+-- time it runs (a window is no container), so a get is fixed with the
+-- rest
+private function _WindowPropertyRefused pProp, pThe, pSet
+   local tKey, tForm
+   put _Lower(pProp) into pProp
+   if sProbe is empty or not _IsName(pProp) or pProp is among the words of kNotPlain \
+         or pProp is among the words of kChunkWords or pProp is among the words of kNeverNames or pProp is "number" \
+         or pProp is among the words of kChunkObjectProperties then
+      return false
+   end if
+   put pProp & comma & pThe & comma & pSet into tKey
+   if sWindowPropertyRefused[tKey] is empty then
+      put pProp && "of stack 1" into tForm
+      if pThe then put "the" && tForm into tForm
+      if pSet then
+         put "set" && tForm && "to 1" into tForm
+      else
+         put "put" && tForm && "into tValue" into tForm
+      end if
+      put not _Compiles("on hcProbe" & return & tForm & return & "end hcProbe") into sWindowPropertyRefused[tKey]
+   end if
+   return sWindowPropertyRefused[tKey]
+end _WindowPropertyRefused
 
 -- T29: HyperCard, the application, as an object: "the long name of
 -- HyperCard" (its path, which scripts take apart for the folder of their
