@@ -1778,7 +1778,8 @@ on TestHyperCardScriptsT54
    -- T54: the cards of a background sorted, which this engine refuses
    -- ("sort: error sorting"), and sort this stack, which here is "sort
    -- cards": the background's cards sorted among the places they had,
-   -- by the script's own expression (84 statements in 41 corpus stacks)
+   -- by the script's own expression, after "then" or "else" in a do (88
+   -- statements in 43 corpus stacks)
    local tScript, tStack, q, tError
    global gHCScriptsTest, gHCScriptsCards
    put quote into q
@@ -1802,23 +1803,37 @@ on TestHyperCardScriptsT54
    TestAssert "T54: stack", line 7 of tScript is "  sort cards by field FontNameSize"
    TestAssert "T54: the script compiles", _Compiles(tScript)
 
-   -- unchanged: a field's lines, this engine's own sorts, a sort after
-   -- then (three statements cannot go there), a background of another
-   -- stack
+   -- after then or else, or before an else, where one statement goes: a
+   -- do of the three, which runs them in the handler (Software
+   -- Librarian's, Book Reporter's Guild's)
+   put _Rewrite("on mouseUp", \
+         "  if x then sort this bg by fld 1", \
+         "  else sort cards of bkgnd " & q & "A" & q & " by bg field " & q & "Name" & q, \
+         "  if y then sort this bg by fld 1 else beep", \
+         "end mouseUp") into tScript
+   TestAssert "T54: after then, a do", line 2 of tScript \
+         is "  if x then do " & q & "hcSortBegin the long id of this bg, false; sort marked cards by fld 1; hcSortEnd" & q
+   TestAssert "T54: after else, a do with the quotes of the statement", line 3 of tScript \
+         is "  else do " & q & "hcSortBegin the long id of bkgnd " & q & " & quote & " & q & "A" & q & " & quote & " & q \
+         & ", false; sort marked cards by bg field " & q & " & quote & " & q & "Name" & q & " & quote & " & q & "; hcSortEnd" & q
+   TestAssert "T54: before an else, a do", line 4 of tScript \
+         is "  if y then do " & q & "hcSortBegin the long id of this bg, false; sort marked cards by fld 1; hcSortEnd" & q & " else beep"
+   TestAssert "T54: the script with the dos compiles", _Compiles(tScript)
+
+   -- unchanged: a field's lines, this engine's own sorts, a background
+   -- of another stack
    put _Rewrite("on mouseUp", \
          "  sort bg fld " & q & "gobg" & q, \
          "  sort cards by fld 1", \
          "  sort marked cards descending by fld 1", \
          "  sort lines of fld 1 descending", \
-         "  if x then sort this bg by fld 1", \
          "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1", \
          "end mouseUp") into tScript
    TestAssert "T54: a background field's lines: unchanged", line 2 of tScript is "  sort bg fld " & q & "gobg" & q
    TestAssert "T54: sort cards: unchanged", line 3 of tScript is "  sort cards by fld 1"
    TestAssert "T54: sort marked cards: unchanged", line 4 of tScript is "  sort marked cards descending by fld 1"
    TestAssert "T54: sort lines: unchanged", line 5 of tScript is "  sort lines of fld 1 descending"
-   TestAssert "T54: after then: unchanged", line 6 of tScript is "  if x then sort this bg by fld 1"
-   TestAssert "T54: another stack's background: unchanged", line 7 of tScript is "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1"
+   TestAssert "T54: another stack's background: unchanged", line 6 of tScript is "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1"
 
    -- in a script that compiles: five cards, of backgrounds A and B in
    -- turn, the A cards sorted by a field of theirs named in a variable,
@@ -1865,6 +1880,18 @@ on TestHyperCardScriptsT54
          "  end repeat", \
          "  put tNames & the mark of card " & q & "B1" & q & " & comma & the mark of card " & q & "A1" & q & " into gHCScriptsTest", \
          "end mouseUp")
+   -- and after then, descending, in a do that reads the handler's variable
+   create button "SortThen" in group "B"
+   set the script of button "SortThen" of card "B1" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  local tField, tNames, i", \
+         "  put " & q & "Key" & q & " into tField", \
+         "  put empty into gHCScriptsTest", \
+         "  if tField is not empty then sort cards of bkgnd " & q & "A" & q & " descending by bg field tField", \
+         "  repeat with i = 1 to the number of cards", \
+         "    put the short name of card i & comma after tNames", \
+         "  end repeat", \
+         "  put tNames into gHCScriptsTest", \
+         "end mouseUp")
    unlock messages
    set the defaultStack to tStack
    try
@@ -1872,6 +1899,11 @@ on TestHyperCardScriptsT54
    catch tError
    end try
    TestAssert "T54: as it is, the sort stops", gHCScriptsTest is empty
+   try
+      send "mouseUp" to button "SortThen" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: as it is, the sort after then stops", gHCScriptsTest is empty
    get revHyperCardFixScripts(tStack)
    TestAssert "T54: in a script that compiles", _Compiles(the script of button "Sort" of card "B1" of stack tStack)
    go to card "B2" of stack tStack
@@ -1886,6 +1918,14 @@ on TestHyperCardScriptsT54
    TestAssert "T54: on the first card, as this engine's sort ends", the short name of this card of stack tStack is "A2"
    TestAssert "T54: closeCard to the card it began on, openCard to the first, no other card", \
          gHCScriptsCards is "close B2,open A2,"
+   put "b" into field "Key" of card "A3" of stack tStack
+   set the defaultStack to tStack
+   try
+      send "mouseUp" to button "SortThen" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: after then, in a do by the handler's variable: the A cards descending, in their places", \
+         gHCScriptsTest is "A1,B1,A3,B2,A2,"
    _Close tStack
 end TestHyperCardScriptsT54
 

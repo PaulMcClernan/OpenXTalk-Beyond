@@ -146,11 +146,12 @@ script "revHyperCardScriptLibrary"
 -- bkgnd "Data" numeric by ..."), which this engine refuses, and "sort
 -- this stack", which is its "sort cards": the background's cards are
 -- marked, sorted as marked cards and put back in the places they had
--- (the library's hcSortBegin and hcSortEnd). T55 takes the version of a
--- stack ("item 4 of the version of this stack"), which this engine
--- takes for its own version followed by "of": a script with one does
--- not compile, and "get the version of this stack" stops ("source is
--- not a container"): the library's hcStackVersion.
+-- (the library's hcSortBegin and hcSortEnd; after "then" or "else", a
+-- do of the three statements). T55 takes the version of a stack ("item 4
+-- of the version of this stack"), which this engine takes for its own
+-- version followed by "of": a script with one does not compile, and "get
+-- the version of this stack" stops ("source is not a container"): the
+-- library's hcStackVersion.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -4485,10 +4486,10 @@ end _SetPaintText
 -- them (with "marked", the ones of them that are marked), this
 -- engine's "sort marked cards" sorts them, and hcSortEnd puts them back
 -- in their places, in their new order, and the marks back as they were.
--- That is three statements, so a sort of a background alone on its line
--- only (a sort after "then" is left as it is)
+-- That is three statements, which a sort of a background alone on its
+-- line becomes; after "then" or "else", a do of them
 private function _SortCards pTokens, pIdx, pAt, pEnd, pCount
-   local j, k, tMarked, tRefEnd, tBy
+   local j, k, tMarked, tRefEnd, tBy, tSort
    put pAt + 1 into j
    if _T(pTokens, pIdx[j]) is "this" and _T(pTokens, pIdx[j + 1]) is "stack" then add 1 to j
    if _T(pTokens, pIdx[j]) is "stack" then
@@ -4522,10 +4523,15 @@ private function _SortCards pTokens, pIdx, pAt, pEnd, pCount
       end if
       if _T(pTokens, pIdx[k]) is not among the words of "ascending descending text numeric international datetime" then return empty
    end repeat
-   if tBy = 0 or tBy = pEnd or pAt > 1 or pEnd < pCount then return empty
+   if tBy = 0 or tBy = pEnd then return empty
    _Fire "T54 sort a background's cards, and this stack"
-   return "hcSortBegin the long id of" && _Span(pTokens, pIdx, j, tRefEnd) & comma && tMarked & ";" \
-         && "sort marked cards" && _Span(pTokens, pIdx, tRefEnd + 1, pEnd) & ";" && "hcSortEnd"
+   put "hcSortBegin the long id of" && _Span(pTokens, pIdx, j, tRefEnd) & comma && tMarked & ";" \
+         && "sort marked cards" && _Span(pTokens, pIdx, tRefEnd + 1, pEnd) & ";" && "hcSortEnd" into tSort
+   if pAt = 1 and pEnd = pCount then return tSort
+   -- after a then or an else, or before an else, where one statement
+   -- goes: a do of the three, which runs them in the handler, its
+   -- variables and all (as T42's do)
+   return "do" && _Literal(tSort)
 end _SortCards
 
 -- T19: show and hide card picture, background picture (which this engine
