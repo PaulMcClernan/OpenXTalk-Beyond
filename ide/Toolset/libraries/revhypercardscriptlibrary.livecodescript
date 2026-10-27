@@ -1599,8 +1599,9 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       -- Only what changes what a script that compiles does, to what it did
       -- in HyperCard: the doMenu routing (in a stack without HyperCard's
       -- message order), HyperCard's version, the stack's functions that
-      -- are renamed (T62), and the statements that stop with an error here
-      -- where HyperCard went on (_HyperCardRules)
+      -- are renamed (T62), the statements that stop with an error here
+      -- where HyperCard went on (_HyperCardRules), and the loops that
+      -- wait for a colon that no path has here (T74)
       repeat with i = 1 to tCount
          if tRenameHandlers["domenu"] is not empty then put _RouteDoMenu(tLines[i]) into tLines[i]
          put _VersionRule(tLines[i]) into tLines[i]
@@ -1609,6 +1610,7 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       end repeat
       repeat with i = 1 to tSpanCount
          _HyperCardRulesLines tLines, tSpans[i]["start"], tSpans[i]["end"], true
+         _ColonLoops tLines, tSpans[i]["start"], tSpans[i]["end"]
       end repeat
       return _JoinLines(tLines, tCount)
    end if
@@ -1653,6 +1655,7 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
       _ContinuedCommands tLines, tSpans[i]["start"], tSpans[i]["end"], tVars
       _HyperCardRulesLines tLines, tSpans[i]["start"], tSpans[i]["end"], false
       _ExitPassNames tLines, tSpans[i]["start"], tSpans[i]["end"]
+      _ColonLoops tLines, tSpans[i]["start"], tSpans[i]["end"]
    end repeat
    return _JoinLines(tLines, tCount)
 end _Rewrite
@@ -1744,6 +1747,178 @@ private function _GlobalNames pLine
    if tTokens[tTokens["count"]]["k"] is "c" then put space & tTokens[tTokens["count"]]["t"] after tOut
    return tOut
 end _GlobalNames
+
+-- T74: a loop that takes a path back to its folder one character at a
+-- time, until its last character is a colon ("repeat until the last char
+-- of it is ":"" and "delete the last char of it", on the long name of
+-- the stack, Star Trek-DS9 Guide's). In HyperCard a stack's long name and
+-- a file's path always had one ("Disk:Folder:Stack"); here a path has
+-- none ("/Users/me/Stack") but for a Windows drive's ("C:/Users/me"), and
+-- a stack not saved has its name alone, so the loop never ended. It ends
+-- now when the text is empty, which is where it got to with no colon
+-- left in it: the loop's head gets "or <text> is empty" ("and <text> is
+-- not empty" after "while"). With a colon in the text it ends where it
+-- did, as the text is never empty before it gets to it. Only a loop
+-- whose every line is one of these is taken, so that once the text is
+-- empty it could do nothing but go round: the text's last character
+-- deleted ("delete last char of TEMP", "delete char length (PathName) of
+-- PathName", "get char 1 to length(it)-1 of it"), put into the variable
+-- the loop waits on, when it waits on one ("put last character of
+-- stackFolder into lastChar", "get the last char of process"), and a put
+-- of a value that calls no handler into another variable ("if it is not
+-- ":" then put it before char 1 of holdPictName"). In a script that
+-- compiles too
+private command _ColonLoops @pLines, pStart, pEnd
+   local i, k, n, tHead, tCode, tLine, tLines, tText, tWait, tOk, tEnded, tDeletes, tReads, tTokens, tAt
+   repeat with i = pStart + 1 to pEnd - 1
+      if quote & ":" & quote is not in pLines[i] then next repeat
+      put _ColonLoopHead(pLines[i]) into tHead
+      if tHead is empty then next repeat
+      -- the loop's lines, to its end repeat
+      put 0 into n
+      put true into tOk
+      put false into tEnded
+      put tHead["text"] into tText
+      put tHead["wait"] into tWait
+      repeat with k = i + 1 to pEnd - 1
+         put _CodeText(pLines[k]) into tCode
+         if _Lower(word 1 of tCode) is "end" and _Lower(word 2 of tCode) is "repeat" then
+            put true into tEnded
+            exit repeat
+         end if
+         put _ColonLoopLine(pLines[k]) into tLine
+         if tLine is empty then
+            put false into tOk
+            exit repeat
+         end if
+         add 1 to n
+         put tLine into tLines[n]
+         -- (the text, when the loop waits on a variable: the one whose
+         -- last character it deletes)
+         if tText is empty and tLine["kind"] is "delete" then put tLine["text"] into tText
+      end repeat
+      if not tOk or not tEnded or not _LoopVariable(tText) then next repeat
+      if tWait is not empty and (not _LoopVariable(tWait) or _Lower(tWait) is _Lower(tText)) then next repeat
+      -- nothing but a delete writes the text, and nothing but a put of
+      -- its last character the variable waited on
+      put 0 into tDeletes
+      put 0 into tReads
+      repeat with k = 1 to n
+         switch tLines[k]["kind"]
+            case "delete"
+               if _Lower(tLines[k]["text"]) is not _Lower(tText) then put false into tOk
+               add 1 to tDeletes
+               break
+            case "read"
+               if _Lower(tLines[k]["into"]) is _Lower(tText) then put false into tOk
+               if _Lower(tLines[k]["into"]) is _Lower(tWait) then
+                  if _Lower(tLines[k]["text"]) is not _Lower(tText) then put false into tOk
+                  add 1 to tReads
+               end if
+               break
+            case "put"
+               if _Lower(tLines[k]["into"]) is _Lower(tText) or _Lower(tLines[k]["into"]) is _Lower(tWait) then put false into tOk
+               break
+         end switch
+      end repeat
+      if not tOk or tDeletes = 0 or (tWait is not empty and tReads = 0) then next repeat
+      put _Tokens(pLines[i]) into tTokens
+      put item -1 of _Code(tTokens) into tAt
+      if tHead["until"] then
+         put " or" && tText && "is empty" after tTokens[tAt]["t"]
+      else
+         put " and" && tText && "is not empty" after tTokens[tAt]["t"]
+      end if
+      put _Join(tTokens) into pLines[i]
+      _Fire "T74 a loop that waits for a colon"
+   end repeat
+end _ColonLoops
+
+-- T74: the head of a loop that waits for a colon at the end of a text,
+-- "repeat until E is ":"" (or "= ":"") or "repeat while E is not ":"" (or
+-- "<> ":""): ["until"] true for until, and in ["text"] the variable E is
+-- the last character of ("the last char of it", "char length (PathName)
+-- of PathName"), or in ["wait"] E itself, a variable the loop puts that
+-- character into ("lastChar"). Empty for any other line
+private function _ColonLoopHead pLine
+   local tCode, tKind, tE, tOperator, tA, tB, tC, tHead
+   put _CodeSpaced(pLine) into tCode
+   if not matchText(tCode, "(?i)^repeat (until|while) (.+) (is not|is|=|< >) " & quote & ":" & quote & "$", tKind, tE, tOperator) then return empty
+   put _Lower(tKind) is "until" into tHead["until"]
+   if tHead["until"] is not (_Lower(tOperator) is among the items of "is,=") then return empty
+   if matchText(tE, "(?i)^(the )?last (char|character) of ([^ ]+)$", tA, tB, tC) then
+      put tC into tHead["text"]
+   else if matchText(tE, "(?i)^(char|character) length \( ([^ ]+) \) of ([^ ]+)$", tA, tB, tC) and _Lower(tB) is _Lower(tC) then
+      put tC into tHead["text"]
+   else if _IsName(tE) then
+      put tE into tHead["wait"]
+   else
+      return empty
+   end if
+   return tHead
+end _ColonLoopHead
+
+-- T74: a line of a loop that waits for a colon, as _ColonLoops takes it:
+-- ["kind"] "delete" for a delete of the last character of the variable
+-- in ["text"], "read" for a put of that character into the variable in
+-- ["into"] (a get, into "it"), "put" for a put of a value that calls no
+-- handler into the variable in ["into"] or a chunk of it, after "if ...
+-- then" or not, and "none" for a line with no code. Empty for any other
+private function _ColonLoopLine pLine
+   local tCode, tA, tB, tC, tD, tE, tLine, tWord, tPuts
+   put _CodeSpaced(pLine) into tCode
+   if tCode is empty then
+      put "none" into tLine["kind"]
+   else if matchText(tCode, "(?i)^delete (the )?last (char|character) of ([^ ]+)$", tA, tB, tC) then
+      put "delete" into tLine["kind"]
+      put tC into tLine["text"]
+   else if matchText(tCode, "(?i)^delete (char|character) length \( ([^ ]+) \) of ([^ ]+)$", tA, tB, tC) and _Lower(tB) is _Lower(tC) then
+      put "delete" into tLine["kind"]
+      put tC into tLine["text"]
+   else if matchText(tCode, "(?i)^get (char|character) 1 to length \( it \) - 1 of it$", tA) then
+      put "delete" into tLine["kind"]
+      put "it" into tLine["text"]
+   else if matchText(tCode, "(?i)^put (the )?last (char|character) of ([^ ]+) into ([^ ]+)$", tA, tB, tC, tD) then
+      put "read" into tLine["kind"]
+      put tC into tLine["text"]
+      put tD into tLine["into"]
+   else if matchText(tCode, "(?i)^get (the )?last (char|character) of ([^ ]+)$", tA, tB, tC) then
+      put "read" into tLine["kind"]
+      put tC into tLine["text"]
+      put "it" into tLine["into"]
+   else
+      -- (one put, and no else or call)
+      put 0 into tPuts
+      repeat for each word tWord in tCode
+         if _Lower(tWord) is "put" then add 1 to tPuts
+         if _Lower(tWord) is "else" then add 2 to tPuts
+      end repeat
+      if tPuts is not 1 or "(" is in tCode then return empty
+      if not matchText(tCode, "(?i)^(if .+ then )?put .+ (before|after|into) ((char|character|word|item|line) [0-9]+ of )?([^ ]+)$", tA, tB, tC, tD, tE) then return empty
+      if not _IsName(tE) then return empty
+      put "put" into tLine["kind"]
+      put tE into tLine["into"]
+   end if
+   return tLine
+end _ColonLoopLine
+
+-- T74: whether pWord can be the variable of a loop that waits for a
+-- colon: a name that is no word of the grammar for an object or a value
+-- ("me", "the target", "msg")
+private function _LoopVariable pWord
+   return _IsName(pWord) and _Lower(pWord) is not among the words of (kStructural && "msg message empty")
+end _LoopVariable
+
+-- The code tokens of a line, one space between each (strings as they are)
+private function _CodeSpaced pLine
+   local tTokens, tItem, tText
+   put _Tokens(pLine) into tTokens
+   repeat for each item tItem in _Code(tTokens)
+      if tText is not empty then put space after tText
+      put tTokens[tItem]["t"] after tText
+   end repeat
+   return tText
+end _CodeSpaced
 
 -- The commands of _LineCommands on a statement continued over lines (a
 -- \ at the end of a line, HyperCard's option-return): the statement is

@@ -5626,6 +5626,125 @@ on TestHyperCardScriptsSystemExternals
    _Close tStack
 end TestHyperCardScriptsSystemExternals
 
+on TestHyperCardScriptsT74
+   -- T74: a loop that takes a path back to its folder until its last
+   -- character is a colon, which HyperCard's paths always had and this
+   -- engine's never have ("repeat until the last char of it is ":"", Star
+   -- Trek-DS9 Guide's, on the stack's long name): it ends when the text
+   -- is empty too. A loop with another way out, another line, or another
+   -- text, is left as it is
+   local tScript, q, tStack, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  get the long name of this stack", \
+         "  repeat until the last char of it is " & q & ":" & q, \
+         "    delete the last char of it", \
+         "  end repeat", \
+         "  repeat while last char of TEMP is not " & q & ":" & q & " -- the folder", \
+         "    delete last char of TEMP", \
+         "  end repeat", \
+         "  Repeat While Last Char Of it <> " & q & ":" & q, \
+         "    get char 1 to length(it)-1 of it", \
+         "  end repeat", \
+         "  repeat until char length (PathName) of PathName = " & q & ":" & q, \
+         "    delete char length (PathName) of PathName", \
+         "  end repeat", \
+         "  put " & q & q & " into lastChar", \
+         "  repeat until lastChar = " & q & ":" & q, \
+         "    delete last character of stackFolder", \
+         "    put last character of stackFolder into lastChar", \
+         "  end repeat", \
+         "  repeat until it is " & q & ":" & q, \
+         "    get the last char of process", \
+         "    if it is not " & q & ":" & q & " then put it before char 1 of holdPictName", \
+         "    -- (and so on)", \
+         "    delete the last char of process", \
+         "  end repeat", \
+         "  repeat until last char of pref is " & q & ":" & q & " or pref is empty", \
+         "    delete last char of pref", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & "/" & q, \
+         "    delete the last char of x", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "    add 1 to n", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of y", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "    put y into x", \
+         "  end repeat", \
+         "  repeat until lastChar is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    if x is empty then exit repeat", \
+         "    delete the last char of x", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "    put shortName(x) after tNames", \
+         "  end repeat", \
+         "end mouseUp") into tScript
+   TestAssert "T74: until, the last char of it", line 3 of tScript is "  repeat until the last char of it is " & q & ":" & q & " or it is empty"
+   TestAssert "T74: while, a comment kept at the end", \
+         line 6 of tScript is "  repeat while last char of TEMP is not " & q & ":" & q & " and TEMP is not empty -- the folder"
+   TestAssert "T74: <>, in any case, and get of all but the last char", \
+         line 9 of tScript is "  Repeat While Last Char Of it <> " & q & ":" & q & " and it is not empty"
+   TestAssert "T74: char length (x) of x", \
+         line 12 of tScript is "  repeat until char length (PathName) of PathName = " & q & ":" & q & " or PathName is empty"
+   TestAssert "T74: a variable the last character is put into", \
+         line 16 of tScript is "  repeat until lastChar = " & q & ":" & q & " or stackFolder is empty"
+   TestAssert "T74: got into it, and put before another variable after then", \
+         line 20 of tScript is "  repeat until it is " & q & ":" & q & " or process is empty"
+   TestAssert "T74: a loop that ends on empty already, unchanged", \
+         line 26 of tScript is "  repeat until last char of pref is " & q & ":" & q & " or pref is empty"
+   TestAssert "T74: a loop for another character, unchanged", line 29 of tScript is "  repeat until the last char of x is " & q & "/" & q
+   TestAssert "T74: a loop with another statement, unchanged", line 32 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop that deletes from another variable, unchanged", line 36 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop that puts into the text, unchanged", line 39 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop on a variable nothing puts into, unchanged", line 43 of tScript is "  repeat until lastChar is " & q & ":" & q
+   TestAssert "T74: a loop with an exit, unchanged", line 46 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop that calls a handler, unchanged", line 50 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: those compile", _Compiles(tScript)
+
+   -- In a script that compiles as it is, run: a path with colons gives
+   -- its folder, as in HyperCard, and one without gives none, and ends
+   put "HCColonLoops" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Folder"
+   set the script of button "Folder" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put folderOf(" & q & "Disk:Folder:Stack" & q & ") & " & q & "|" & q & " & folderOf(" & q & "/Users/me/Stack" & q & ") into gHCScriptsTest", \
+         "end mouseUp", \
+         "function folderOf pPath", \
+         "  get pPath", \
+         "  repeat until the last char of it is " & q & ":" & q, \
+         "    delete the last char of it", \
+         "  end repeat", \
+         "  return it", \
+         "end folderOf")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put line 7 of the script of button "Folder" of stack tStack into tScript
+   TestAssert "T74: in a script that compiles too", tScript is "  repeat until the last char of it is " & q & ":" & q & " or it is empty"
+   -- (without it the loop would not end)
+   if tScript ends with "or it is empty" then
+      put empty into gHCScriptsTest
+      try
+         send "mouseUp" to button "Folder" of stack tStack
+      catch tError
+      end try
+      TestAssert "T74: the folder of a path with colons, and none of one without", gHCScriptsTest is "Disk:Folder:|"
+   end if
+   _Close tStack
+end TestHyperCardScriptsT74
+
 on TestHyperCardScriptsT11In
    -- T11's "in" for "of" between an object and the card, background or
    -- stack it is on, in a script that compiles here as it is ("hide card
