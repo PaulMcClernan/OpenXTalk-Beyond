@@ -14,13 +14,13 @@ for more details.
 You should have received a copy of the GNU General Public License
 along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 
-/* The xTalk Suite's native libraries in the web IDE (EXPERIMENTAL).
+/* The xTalk Suite's native libraries on the web (EXPERIMENTAL).
  *
  * On the desktop an LCB extension that binds to "c:sodiumxt>sxt_hash" makes
  * the engine open code/<platform>/sodiumxt.dll (.so, .dylib). A browser
- * opens no library, so the web IDE's engine (engine.gyp's development-web,
- * and only it: the web standalone engine does not compile this file) links
- * the libraries into itself and registers each one here under the name
+ * opens no library, so both web engines (engine.gyp's development-web, the
+ * web IDE's, and standalone, which every HTML5 standalone and the Stack
+ * Player are built on) link the libraries into themselves and registers each one here under the name
  * the extension loads it by, as em-externals.cpp registers revXML and the
  * other externals. libfoundation/src/system-library-emscripten.hpp then
  * finds "sodiumxt" by that name, and its symbols in its table.
@@ -37,12 +37,12 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
  * archives, makes every other symbol of each object local (so two members
  * that carry the same vendored code, trezor-crypto's in SodiumXT and
  * CoinXT, cannot clash), and util/emscripten-javascriptify.py links the
- * objects into the web IDE's engine.
+ * objects into both engines.
  *
  * The functions are declared weak: an engine linked without a library (a
  * local build that did not fetch them) has a null address for its function,
  * and that library is simply not registered, so its extension's first call
- * fails as it does in the released web IDE. The table's layout is
+ * fails as it did before the libraries were linked. The table's layout is
  * MCSLibraryStaticExport's: { symbol, address } pairs, ended by a null
  * symbol. */
 

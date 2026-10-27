@@ -45,8 +45,10 @@ members that carry the same vendored code (trezor-crypto's SHA-3 and
 memzero are in both SodiumXT and CoinXT, and libsodium and trezor-crypto
 both define blake2b) then link into one engine without clashing.
 util/emscripten-javascriptify.py links DIR's objects into the web IDE's
-engine (--xtalk-objects, which engine.gyp's javascriptify-development
-passes); the web standalone engine links none.
+engine and the web standalone engine (--xtalk-objects, which engine.gyp's
+javascriptify-development and javascriptify pass; tools/ci/build-web-ide.sh
+and tools/ci/build-web.sh fetch them), so HTML5 standalones and the Stack
+Player have them too.
 
 --local SUITE takes the archives from a checkout of the xTalk Suite instead
 (SUITE/<path>, where <path> is the pinned path), for trying a library
