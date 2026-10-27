@@ -3213,6 +3213,7 @@ private function _VersionRule pLine
    local tTokens, tCode, tIdx, n, tItem, i, tWord, tAt, tStart
    if "heapspace" is in pLine then put _HeapSpaceRule(pLine) into pLine
    if "userlevel" is in pLine then put _UserLevelRule(pLine) into pLine
+   if "systemversion" is in pLine then put _SystemVersionRule(pLine) into pLine
    if "version" is not in pLine then return pLine
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -3281,6 +3282,43 @@ private function _HeapSpaceRule pLine
    end repeat
    return _Join(tTokens)
 end _HeapSpaceRule
+
+-- T10: the systemVersion (or systemVersion()), the Mac's System, which
+-- stacks compare with a number ("if the systemVersion < 7 then",
+-- Finder Cleaner's): this engine's is the host's ("NT 10.0", "14.5.0"),
+-- which such a comparison takes as text, and on macOS "14.5.0" is less
+-- than 7. It goes to the library's hcSystemVersion(), the System's
+-- version as HyperCard gave it ("7.55"), and so does value("the
+-- systemVersion"), which stacks wrote for a HyperCard before 2, where
+-- the systemVersion was not (HyperBattleship!'s)
+private function _SystemVersionRule pLine
+   local tTokens, tCode, tIdx, n, tItem, i
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = 1 to n
+      if _T(tTokens, tIdx[i]) is "value" and _T(tTokens, tIdx[i + 1]) is "(" and _T(tTokens, tIdx[i + 3]) is ")" \
+            and _T(tTokens, tIdx[i + 2]) is quote & "the systemversion" & quote then
+         _Replace tTokens, tIdx, i, i + 3, "hcSystemVersion()"
+         _Fire "T10 HyperCard's version"
+         next repeat
+      end if
+      if _T(tTokens, tIdx[i]) is not "systemversion" or tTokens[tIdx[i]]["k"] is not "w" then next repeat
+      if i > 1 and _T(tTokens, tIdx[i - 1]) is "the" and _T(tTokens, tIdx[i + 1]) is not "of" then
+         _Replace tTokens, tIdx, i - 1, i, "hcSystemVersion()"
+         _Fire "T10 HyperCard's version"
+      else if _T(tTokens, tIdx[i + 1]) is "(" and _T(tTokens, tIdx[i + 2]) is ")" and not sStackFunctions["systemversion"] \
+            and _T(tTokens, tIdx[i - 1]) is not among the words of "the function on end" then
+         _Replace tTokens, tIdx, i, i + 2, "hcSystemVersion()"
+         _Fire "T10 HyperCard's version"
+      end if
+   end repeat
+   return _Join(tTokens)
+end _SystemVersionRule
 
 -- T10: the userLevel, which in HyperCard is 1 (browsing) to 5
 -- (scripting), and here 8 until a script sets it, so that "if the

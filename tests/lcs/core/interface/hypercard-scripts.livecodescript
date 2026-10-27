@@ -5484,6 +5484,148 @@ on TestHyperCardScriptsPasswords
    _Close "Ask Dialog"
 end TestHyperCardScriptsPasswords
 
+on TestHyperCardScriptsSystemVersion
+   -- T10: the systemVersion, which stacks compare with 7 ("if the
+   -- systemVersion < 7 then", Finder Cleaner's), and which here is the
+   -- host's ("NT 10.0", "14.5.0"), text to such a comparison: the
+   -- library's hcSystemVersion(), "7.55" as HyperCard 2.2 gave System
+   -- 7.5.5; value("the systemVersion") too (HyperBattleship!'s). Not in a
+   -- string or a comment, nor a call of the stack's own function
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  if the systemVersion < 7 then beep", \
+         "  if ((the SystemVersion)>=7) then beep", \
+         "  put systemVersion() into x", \
+         "  if (value (" & q & "the systemVersion" & q & ") < 7 ) then beep", \
+         "  put " & q & "the systemVersion" & q & " into x -- the systemVersion", \
+         "end mouseUp") into tScript
+   TestAssert "T10: the systemVersion", line 2 of tScript is "  if hcSystemVersion() < 7 then beep"
+   TestAssert "T10: the systemVersion in parentheses, in any case", line 3 of tScript is "  if ((hcSystemVersion())>=7) then beep"
+   TestAssert "T10: systemVersion()", line 4 of tScript is "  put hcSystemVersion() into x"
+   TestAssert "T10: value of the systemVersion", line 5 of tScript is "  if (hcSystemVersion() < 7 ) then beep"
+   TestAssert "T10: the systemVersion in a string and a comment, as it is", line 6 of tScript is "  put " & q & "the systemVersion" & q & " into x -- the systemVersion"
+   TestAssert "T10: those compile", _Compiles(tScript)
+   put _Rewrite("on mouseUp", "  put systemVersion() into x", "  put the systemVersion into y", "end mouseUp", \
+         "function systemVersion", "  return 6", "end systemVersion") into tScript
+   TestAssert "T10: the stack's own systemVersion function, called with parentheses; the systemVersion, HyperCard's", \
+         line 2 of tScript is "  put hc_systemversion() into x" and line 3 of tScript is "  put hcSystemVersion() into y"
+
+   put "HCSystemVersion" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "System"
+   set the script of button "System" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put the systemVersion into gHCScriptsTest", \
+         "  if the systemVersion < 7 then put comma & " & q & "System 6" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "System" of stack tStack
+   catch tError
+   end try
+   TestAssert "T10: HyperCard's systemVersion for System 7.5.5, and so System 7", gHCScriptsTest is "7.55"
+   _Close tStack
+end TestHyperCardScriptsSystemVersion
+
+on TestHyperCardScriptsSystemExternals
+   -- the stand-ins for the externals that ask about the Mac, as their
+   -- code gives the Mac the library describes (System 7.5.5, a model the
+   -- externals do not know, a 68040 and its coprocessor, Color
+   -- QuickDraw, an Apple Extended Keyboard, no AppleTalk): SysEnv (The
+   -- Critical Eye, Doctor Who), the SysEnvirons function (Stack Starter)
+   -- and command (CoinMaster) and MacType (Scan Calculator, GetDInfo)
+   local tStack, tTab, q, tError, tReport
+   global gHCScriptsTest
+   put quote into q
+   put numToChar(9) into tTab
+   put "HCSystemExternals" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the uHyperCard["imagepath"] of stack tStack to "Old Disk:Stacks:Main"
+   set the uHyperCard["externals"] of stack tStack to _Lines("XFCN" & tTab & "SysEnv", "XCMD" & tTab & "SysEnvirons", "XFCN" & tTab & "MacType")
+   set the uHyperCard["resources"] of stack tStack to _Lines("XFCN" & tTab & "1" & tTab & "2722" & tTab & "SysEnv", \
+         "XCMD" & tTab & "926" & tTab & "3486" & tTab & "SysEnvirons", "XFCN" & tTab & "816" & tTab & "2704" & tTab & "MacType")
+   set the defaultStack to tStack
+   create button "SysEnv"
+   set the script of button "SysEnv" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put SysEnv() into gHCScriptsTest", \
+         "  put return & SysEnv(1) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Fields"
+   set the script of button "Fields" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  repeat with i = 1 to 9", \
+         "    put SysEnvirons(i) & comma after gHCScriptsTest", \
+         "  end repeat", \
+         "  put SysEnvirons(" & q & "x" & q & ") & comma & SysEnvirons(10) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Globals"
+   set the script of button "Globals" to _Lines("on mouseUp", \
+         "  global machineType, systemVersion, processor, hasFPU, hasColorQD", \
+         "  global atDrvrVersNum, keyBoardType, systemFolder, gHCScriptsTest", \
+         "  SysEnvirons", \
+         "  put machineType & " & q & "|" & q & " & systemVersion & " & q & "|" & q & " & processor & " & q & "|" & q & " & hasFPU into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & hasColorQD & " & q & "|" & q & " & atDrvrVersNum & " & q & "|" & q & " & keyBoardType & " & q & "|" & q & " & systemFolder after gHCScriptsTest", \
+         "end mouseUp")
+   create button "MacType"
+   set the script of button "MacType" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put MacType() & " & q & "|" & q & " & MacType(" & q & "?" & q & ") & " & q & "|" & q & " & MacType(" & q & "=" & q & ") & " & q & "|" & q & " & MacType(" & q & "!" & q & ") into gHCScriptsTest", \
+         "  get item 2 of MacType()", \
+         "  delete last char of it", \
+         "  delete last char of it", \
+         "  if it < 7.0", \
+         "  then put 2 into FNb", \
+         "  else put 3 into FNb", \
+         "  put " & q & "|" & q & " & FNb after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put revHyperCardFixScripts(tStack) into tReport
+   TestAssert "the fix: no stand-in for the SysEnvirons command, the library's", "do nothing when called" is not in tReport
+
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "SysEnv" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnv: the Mac as its line, the minor version times 16, then the screen's depth and colour; a parameter refused", \
+         gHCScriptsTest is "unknown,7.80.5,Motorola 68040,true,true,Apple Extended keyboard,0,-1" & return & the screenDepth & ",Color" \
+         & return & "SysEnv expects no parameters."
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Fields" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnvirons(n): each field of the record, any other parameter as it is", gHCScriptsTest is "1,0,0755,5,true,true,4,0,-1,x,10"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Globals" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnvirons: the record in the script's globals, the System Folder on HyperCard's disk", \
+         gHCScriptsTest is "Unknown Machine|7.5.5|68040|true|true|0|Extended ADB Keyboard|Old Disk:System Folder:"
+   set the uHyperCard["resources"] of stack tStack to "XCMD" & tTab & "926" & tTab & "3190" & tTab & "SysEnvirons"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Globals" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnvirons, its later version: the System's name for the model, none", char 1 to 7 of gHCScriptsTest is "|7.5.5|"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "MacType" of stack tStack
+   catch tError
+   end try
+   TestAssert "MacType: the Mac, its syntax, what it gives, its version; the System for 7.0 and later (GetDInfo's)", \
+         gHCScriptsTest is "Unknown CPU,7.5.5,MC68040,true,true,Apple Extended keyboard|MacType()|<CPU>,<System>,<Processor>,<HasFPU>,<HasColorQD>,<keyboard>|Version 1.3," \
+         && numToCodepoint(169) && "Frederic RINALDI 1989,1990,1991|3"
+   _Close tStack
+end TestHyperCardScriptsSystemExternals
+
 on TestHyperCardScriptsT11In
    -- T11's "in" for "of" between an object and the card, background or
    -- stack it is on, in a script that compiles here as it is ("hide card
