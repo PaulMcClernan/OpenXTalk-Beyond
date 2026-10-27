@@ -15,7 +15,7 @@ git grep -n -I -i -w -E 'FIXME|TODO|HACK' -- . ':!thirdparty' ':!prebuilt/fetche
 | --- | --- |
 | [FIXME](#fixme) | 64 |
 | [HACK](#hack) | 32 |
-| [TODO](#todo) | 429 |
+| [TODO](#todo) | 428 |
 
 ## FIXME
 
@@ -217,9 +217,9 @@ Workarounds their authors were not happy with. 32 notes, by part of the reposito
 
 ## TODO
 
-Work left for later. 429 notes, by part of the repository:
+Work left for later. 428 notes, by part of the repository:
 
-[engine](#todo-engine) (261), [libfoundation](#todo-libfoundation) (47), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [stack-scripts](#todo-stack-scripts) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
+[engine](#todo-engine) (261), [libfoundation](#todo-libfoundation) (46), [revbrowser](#todo-revbrowser) (19), [toolchain](#todo-toolchain) (14), [ide](#todo-ide) (13), [tests](#todo-tests) (13), [libgraphics](#todo-libgraphics) (12), [libbrowser](#todo-libbrowser) (10), [libscript](#todo-libscript) (8), [stack-scripts](#todo-stack-scripts) (8), [builder](#todo-builder) (5), [(top level)](#todo-top-level) (3), [revmobile](#todo-revmobile) (3), [revxml](#todo-revxml) (3), [prebuilt](#todo-prebuilt) (2), [revdb](#todo-revdb) (2), [config](#todo-config) (1), [extensions](#todo-extensions) (1), [lcidlc](#todo-lcidlc) (1), [revspeech](#todo-revspeech) (1), [revvideograbber](#todo-revvideograbber) (1), [tools](#todo-tools) (1)
 
 <a id="todo-engine"></a>
 
@@ -395,13 +395,13 @@ Work left for later. 429 notes, by part of the repository:
 - [engine/src/module-engine.cpp:527](engine/src/module-engine.cpp#L527) TODO[C++11] This should be "static" but MSVC2010 doesn't support
 - [engine/src/object.cpp:676](engine/src/object.cpp#L676) TODO: filter out the C1 control codes too
 - [engine/src/object.cpp:1135](engine/src/object.cpp#L1135) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/object.h:1756](engine/src/object.h#L1756) TODO[C++11] uint32_t m_part_id = 0;
-- [engine/src/object.h:1759](engine/src/object.h#L1759) TODO[2017-04-27] These constructors should be constexpr
-- [engine/src/object.h:1760](engine/src/object.h#L1760) TODO[C++11] constexpr MCObjectPartHandle() = default;
-- [engine/src/object.h:1765](engine/src/object.h#L1765) TODO[C++11] MCObjectPartHandle(const MCObjectPartHandle&) = default;
-- [engine/src/object.h:1768](engine/src/object.h#L1768) TODO[C++11] MCObjectPartHandle(MCObjectPartHandle&& other) = deafult;
-- [engine/src/object.h:1779](engine/src/object.h#L1779) TODO[C++11] MCObjectPartHandle& operator=(const MCObjectPartHandle&) = default;
-- [engine/src/object.h:1786](engine/src/object.h#L1786) TODO[C++11] MCObjectPartHandle& operator=(MCObjectPartHandle&&) = default;
+- [engine/src/object.h:1758](engine/src/object.h#L1758) TODO[C++11] uint32_t m_part_id = 0;
+- [engine/src/object.h:1761](engine/src/object.h#L1761) TODO[2017-04-27] These constructors should be constexpr
+- [engine/src/object.h:1762](engine/src/object.h#L1762) TODO[C++11] constexpr MCObjectPartHandle() = default;
+- [engine/src/object.h:1767](engine/src/object.h#L1767) TODO[C++11] MCObjectPartHandle(const MCObjectPartHandle&) = default;
+- [engine/src/object.h:1770](engine/src/object.h#L1770) TODO[C++11] MCObjectPartHandle(MCObjectPartHandle&& other) = deafult;
+- [engine/src/object.h:1781](engine/src/object.h#L1781) TODO[C++11] MCObjectPartHandle& operator=(const MCObjectPartHandle&) = default;
+- [engine/src/object.h:1788](engine/src/object.h#L1788) TODO[C++11] MCObjectPartHandle& operator=(MCObjectPartHandle&&) = default;
 - [engine/src/paragraf.cpp:168](engine/src/paragraf.cpp#L168) TODO: trunctation
 - [engine/src/paragraf.cpp:2243](engine/src/paragraf.cpp#L2243) TODO: truncation if the paragraph would be too long
 - [engine/src/paragraf.cpp:2401](engine/src/paragraf.cpp#L2401) TODO: find out if ICU break iterator makes this redundant
@@ -489,7 +489,7 @@ Work left for later. 429 notes, by part of the repository:
 
 <a id="todo-libfoundation"></a>
 
-### TODO: libfoundation (47)
+### TODO: libfoundation (46)
 
 - [libfoundation/include/foundation-locale.h:138](libfoundation/include/foundation-locale.h#L138) TODO: explain the pattern syntax for number formatting
 - [libfoundation/include/foundation-span.h:47](libfoundation/include/foundation-span.h#L47) TODO[C++14] Some of the constexpr methods in MCSpan use assertions,
@@ -502,8 +502,7 @@ Work left for later. 429 notes, by part of the repository:
 - [libfoundation/include/foundation.h:789](libfoundation/include/foundation.h#L789) TODO: re-write when we adopt C++11
 - [libfoundation/include/foundation.h:797](libfoundation/include/foundation.h#L797) TODO: re-write when we adopt C++11
 - [libfoundation/src/foundation-array.cpp:937](libfoundation/src/foundation-array.cpp#L937) if defined(__ARM__) && 0 // TODO
-- [libfoundation/src/foundation-bidi.cpp:380](libfoundation/src/foundation-bidi.cpp#L380) TODO
-- [libfoundation/src/foundation-bidi.cpp:789](libfoundation/src/foundation-bidi.cpp#L789) TODO: figure out WTH TR9 is going on about here. Somewhat unclear...
+- [libfoundation/src/foundation-bidi.cpp:395](libfoundation/src/foundation-bidi.cpp#L395) TODO
 - [libfoundation/src/foundation-data.cpp:894](libfoundation/src/foundation-data.cpp#L894) TODO: Shrink the buffer if its too big.
 - [libfoundation/src/foundation-foreign.cpp:967](libfoundation/src/foundation-foreign.cpp#L967) TODO[C++17] Some of the fields in here are left empty, and
 - [libfoundation/src/foundation-foreign.cpp:1010](libfoundation/src/foundation-foreign.cpp#L1010) TODO[C++17] We need to use the setup_optional() and
