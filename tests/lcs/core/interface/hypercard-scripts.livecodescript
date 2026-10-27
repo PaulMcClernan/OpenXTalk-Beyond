@@ -1085,6 +1085,13 @@ on TestHyperCardScriptsT44
          "  add 1 to fld " & q & "Plus" & q, "  set the loc of bg btn " & q & "help" & q & " to 437,323")
    TestAssert "T44: a value that is no object's name: unchanged", line 6 of tScript is "  put help into x"
    TestAssert "T44: a variable so named (T2) names its field still", line 9 to 10 of tScript is _Lines("  put " & q & "F1" & q & " into hc_help", "  put 1 into fld hc_help")
+   -- an object called home, which this engine reads as the "home" of "go
+   -- home" (Zaum Gadget's card Home); a variable called home, which
+   -- HyperCard took first
+   put _Rewrite("on mouseUp", "  go to card home", "  hide bg btn Home", "end mouseUp", "on mouseDown", "  put 2 into home", "  go to card home", "end mouseDown") into tScript
+   TestAssert "T44: an object called home, in quotes", line 2 to 3 of tScript is _Lines("  go to card " & q & "home" & q, "  hide bg btn " & q & "Home" & q)
+   TestAssert "T44: a variable called home names its card still", line 7 of tScript is "  go to card (home)"
+   TestAssert "T44: those compile", _Compiles(tScript)
 
    -- and in a script that compiles, where "fld help" was field 15
    put "HCScriptsT44" & the milliseconds into tStack
@@ -1099,7 +1106,12 @@ on TestHyperCardScriptsT44
    put 1 into field "Plus"
    create button "Names"
    set the script of button "Names" to _Lines("on mouseUp", "  put " & q & "x" & q & " into cd fld help", "  add 1 to fld Plus", "end mouseUp")
+   create button "Go"
+   set the script of button "Go" to _Lines("on mouseUp", "  go to card home", "end mouseUp")
+   create card "Home"
+   go to card 1 of stack tStack
    unlock messages
+   TestAssert "T44: go to card home does not compile here as it is", not _Compiles(the script of button "Go" of card 1 of stack tStack)
    TestAssert "T44: the script compiles here as it is", _Compiles(the script of button "Names" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
    TestAssert "T44: in a script that compiles", line 2 to 3 of the script of button "Names" of card 1 of stack tStack \
@@ -1108,6 +1120,9 @@ on TestHyperCardScriptsT44
    send "mouseUp" to button "Names" of card 1 of stack tStack
    TestAssert "T44: the fields named, as in HyperCard, and not fields 15 and 13", field "help" of card 1 of stack tStack is "x" \
          and field "Plus" of card 1 of stack tStack is 2 and field "F15" of card 1 of stack tStack is empty and field "F13" of card 1 of stack tStack is empty
+   go to card 1 of stack tStack
+   send "mouseUp" to button "Go" of card 1 of stack tStack
+   TestAssert "T44: go to card home: the card called Home", the short name of this card of stack tStack is "Home"
    _Close tStack
 end TestHyperCardScriptsT44
 
@@ -1123,6 +1138,18 @@ on TestHyperCardScriptsT45
          "  if x then send " & q & "startUp" & q & " to stack hcHome()")
    TestAssert "T45: a go home, another stack: unchanged", line 5 to 6 of tScript is _Lines("  hcGoHome", "  get the script of stack " & q & "Homer" & q)
    TestAssert "T45: those compile", _Compiles(tScript)
+   -- Home named without "stack": a send's stack, and what has a property
+   -- or a card; a variable called home: unchanged
+   put _Rewrite("on mouseUp", "  if the cantmodify of home then beep", "  get the value of word 2 of the long name of home", "  send startup to Home", \
+         "  go to card " & q & "Reset BBS" & q & " of home", "  get the number of cards of home", "  go to card 1 of home", "end mouseUp", \
+         "on mouseDown", "  put 1 into home", "  put word 2 of home into x", "  put the length of home into x", "  add 1 to home", "end mouseDown") into tScript
+   TestAssert "T45: Home named without stack", line 2 to 6 of tScript is _Lines("  if the cantmodify of stack hcHome() then beep", \
+         "  get the value of word 2 of the long name of stack hcHome()", "  send startup to stack hcHome()", \
+         "  go to card " & q & "Reset BBS" & q & " of stack hcHome()", "  get the number of cards of stack hcHome()")
+   TestAssert "T45: its first card, T9's", line 7 of tScript is "  hcGoHome"
+   TestAssert "T45: a variable called home: unchanged", line 10 to 13 of tScript \
+         is _Lines("  put 1 into home", "  put word 2 of home into x", "  put the length of home into x", "  add 1 to home")
+   TestAssert "T45: those compile too", _Compiles(tScript)
 
    -- and run, in a script that compiles, with a stack called "home" in
    -- memory as the IDE's is: its script stays as it was
@@ -1142,8 +1169,12 @@ on TestHyperCardScriptsT45
          "  put the script of stack " & q & "Home" & q & " into gHCScriptsTest", "end mouseUp")
    create button "Start"
    set the script of button "Start" to _Lines("on mouseUp", "  global gHCScriptsTest", "  send startUp to stack " & q & "Home" & q, "  put " & q & "started" & q & " into gHCScriptsTest", "end mouseUp")
+   create button "Bare"
+   set the script of button "Bare" to _Lines("on mouseUp", "  global gHCScriptsTest", "  send startup to home", \
+         "  if not the cantmodify of home then put the long name of home into gHCScriptsTest", "end mouseUp")
    unlock messages
    TestAssert "T45: the script compiles here as it is", _Compiles(the script of button "Install" of card 1 of stack tStack)
+   TestAssert "T45: Home without stack compiles here as it is", _Compiles(the script of button "Bare" of card 1 of stack tStack)
    get revHyperCardFixScripts(tStack)
    set the defaultStack to tStack
    put empty into gHCScriptsTest
@@ -1161,6 +1192,9 @@ on TestHyperCardScriptsT45
    end try
    TestAssert "T45: startUp sent to the stand-in goes on, as it did to Home", gHCScriptsTest is "started"
    TestAssert "T45: and the IDE's home is still as it was", the script of stack "home" is tScript
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Bare" of card 1 of stack tStack
+   TestAssert "T45: Home without stack, in a script that compiles: the stand-in", gHCScriptsTest is the long name of stack "HyperCard Home"
    _Close tStack
 
    -- the stand-in's library when the stack it was made for has gone: the

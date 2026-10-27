@@ -2173,6 +2173,24 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
          end if
       end if
 
+      -- T44: an object called home, its name not in quotes ("go to card
+      -- home", Zaum Gadget's, whose card is called Home; "hide bg btn
+      -- home"), which this engine reads as the "home" of "go home" and
+      -- refuses: in quotes, as HyperCard took it, or the value of the
+      -- handler's variable called home, which HyperCard took first (a
+      -- stack called home is HyperCard's Home: T45)
+      if tWord is "home" and _T(tTokens, tPrev) is among the words of "field fld button btn card cd background bkgnd bg" \
+            and _T(tTokens, tNext) is not "(" then
+         if pVars["home"] then
+            put "(" & tTokens[tIndex]["t"] & ")" into tTokens[tIndex]["t"]
+         else
+            put quote & tTokens[tIndex]["t"] & quote into tTokens[tIndex]["t"]
+            put "s" into tTokens[tIndex]["k"]
+         end if
+         _Fire "T44 object name that is a constant here"
+         next repeat
+      end if
+
       -- T13: an external named like a keyword (but a function's call
       -- reaches the stack's own function of that name, T47)
       if pExternals[tWord] and tWord is not among the words of kHyperTalkCommands \
@@ -3583,6 +3601,19 @@ private function _HyperCardRules pLine, pCompiled, pElse
             and _StatementWord(tTokens, tIdx, i) is not "go" then
          put "hcHome()" into tTokens[tIdx[i + 1]]["t"]
          put "w" into tTokens[tIdx[i + 1]]["k"]
+         _Fire "T45 HyperCard's Home stack"
+         next repeat
+      end if
+      -- T45: and Home named without "stack" ("get the long name of home",
+      -- Lab Logger's; "if the cantmodify of home then", Color Tools';
+      -- "send startup to home", DevStackFix's), which compiles here as the
+      -- "home" of "go home" and stops ("error in object expression"), or
+      -- in a go does not compile ("go to card "Reset BBS" of home",
+      -- HyperBBS's; T9 takes "go home" and "go to card 1 of home" to
+      -- hcGoHome): Home's stack, not a variable called home
+      -- (_HomeNamed)
+      if tWord is "home" and _HomeNamed(tTokens, tIdx, i) then
+         put "stack hcHome()" into tTokens[tIdx[i]]["t"]
          _Fire "T45 HyperCard's Home stack"
          next repeat
       end if
@@ -5007,6 +5038,26 @@ private function _NamedByAName pLine
    if not tChanged then return pLine
    return _Join(tTokens)
 end _NamedByAName
+
+-- T45: whether the word home at pAt, not in quotes, names HyperCard's
+-- Home stack: the stack of a send ("send startup to home"), or what has
+-- a property ("the long name of home"), cards ("the number of cards of
+-- home") or a card ("card "Reset BBS" of home", "last card of home"), as
+-- against a chunk of a variable called home ("word 2 of home", "the
+-- length of home")
+private function _HomeNamed pTokens, pIdx, pAt
+   local tBefore, tOwner
+   if pAt < 3 or pTokens[pIdx[pAt]]["k"] is not "w" or _T(pTokens, pIdx[pAt + 1]) is "(" then return false
+   put _T(pTokens, pIdx[pAt - 1]) into tBefore
+   if tBefore is "to" then return _StatementWord(pTokens, pIdx, pAt) is "send"
+   if tBefore is not "of" then return false
+   put _T(pTokens, pIdx[pAt - 2]) into tOwner
+   if pTokens[pIdx[pAt - 2]]["k"] is "w" and (tOwner is among the words of kChunkObjectProperties \
+         or tOwner is among the words of "name script cards cds backgrounds bkgnds bgs card cd background bkgnd bg") then return true
+   -- (a card or a background by its name, number or id)
+   if pAt > 3 and _T(pTokens, pIdx[pAt - 3]) is among the words of "card cd background bkgnd bg" then return true
+   return pAt > 4 and _T(pTokens, pIdx[pAt - 3]) is "id" and _T(pTokens, pIdx[pAt - 4]) is among the words of "card cd background bkgnd bg"
+end _HomeNamed
 
 -- Whether the code tokens pFrom to pTo, a stack's name, are one T65
 -- takes: not Home (T45's, which here is the IDE's own) nor a word that
