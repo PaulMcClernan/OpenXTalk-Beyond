@@ -328,7 +328,9 @@ command sweepFlush
    put empty into gSweepErrors
 end sweepFlush
 
--- The line of script an error names, and its object
+-- The line of script an error names, and its object: the statement that
+-- failed, which in a repeat or an if is the line inside it (the error's
+-- first line), not the repeat's or the if's (its line in the handler)
 function sweepSource pError
    local tLine, tNumber, tObject
    put 0 into tNumber
@@ -341,7 +343,9 @@ function sweepSource pError
             end if
          catch tLine
          end try
-      else if item 2 of tLine is an integer and item 2 of tLine > 0 then
+         -- (an object that is gone: the line of the handler that called)
+         put 0 into tNumber
+      else if tNumber is 0 and item 2 of tLine is an integer and item 2 of tLine > 0 then
          put item 2 of tLine into tNumber
       end if
    end repeat
