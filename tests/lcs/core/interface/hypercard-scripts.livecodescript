@@ -103,6 +103,31 @@ private function _Kept pObject
    return tSet["script"]
 end _Kept
 
+-- The pages pObject's mouseUp prints in a job printing to the PDF pFile
+-- (0 when it writes none): what the job's PDF names a page ("/Type
+-- /Page", the pages' list "/Type /Pages" aside)
+private function _PrintedPages pObject, pFile
+   local tError, tData, tAt, tFound, tPages
+   if there is a file pFile then delete file pFile
+   open printing to pdf pFile
+   try
+      send "mouseUp" to pObject
+   catch tError
+   end try
+   close printing
+   if there is not a file pFile then return 0
+   put URL ("binfile:" & pFile) into tData
+   put 0 into tPages
+   put 0 into tAt
+   repeat
+      put offset("/Type /Page", tData, tAt) into tFound
+      if tFound is 0 then exit repeat
+      add tFound to tAt
+      if char tAt + 11 of tData is not "s" then add 1 to tPages
+   end repeat
+   return tPages
+end _PrintedPages
+
 on TestHyperCardScriptsRules
    -- each rule, on a script that does not compile; strings and comments
    -- are left alone
@@ -748,6 +773,51 @@ on TestHyperCardScriptsT37Probed
    TestAssert "T37: else alone, every line of its block", gHCScriptsTest is "other!"
    _Close tStack
 end TestHyperCardScriptsT37Probed
+
+on TestHyperCardScriptsT37Compiled
+   -- T37 in a script that compiles too: a word alone as an argument that
+   -- this engine takes for an object it cannot find ("can't find card"),
+   -- and stops, where HyperCard passed its text: an external's (Color
+   -- Tools' "AddColor enableObject,cd,2"), one of the stack's handlers'
+   -- (Instance Variables' "putVar cd, myID, ..."), a command this engine
+   -- does not have (StackTools' "toggleProperty cantDelete,card,...")
+   local tStack, tScript, tOriginal, q, tTab
+   global gHCScriptsTest
+   put quote into q
+   put tab into tTab
+   put "HCScriptsT37Compiled" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the uHyperCard["externals"] of stack tStack to "XCMD" & tTab & "AddColor"
+   set the script of stack tStack to _Lines("on putVar pWhere, pName, pValue", "  global gHCScriptsTest", \
+         "  put pWhere & colon & pName & " & q & "=" & q & " & pValue & comma after gHCScriptsTest", "end putVar", \
+         "function getVar pWhere, pName", "  return pWhere & colon & pName & comma", "end getVar")
+   create button "B"
+   put _Lines("on mouseUp", "  global gHCScriptsTest", "  AddColor enableObject,cd,2", \
+         "  putVar cd, " & q & "x" & q & ", 5", "  if true then putVar bkgnd, " & q & "y" & q & ", 6", \
+         "  put getVar(card, " & q & "z" & q & ") after gHCScriptsTest", "  putVar " & q & "stack" & q & ", " & q & "w" & q & ", 7", \
+         "  put 1 into x", "  putVar x, menu, 8", "end mouseUp", \
+         "on other", "  toggleProperty cantDelete,card," & q & "CantDelete" & q, "  putVar cd 1, x, 2", "  putVar x, off, 2", "end other") into tOriginal
+   set the script of button "B" to tOriginal
+   unlock messages
+   TestAssert "T37: the script compiles as it is", _Compiles(tOriginal)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "B" of stack tStack into tScript
+   TestAssert "T37: an external's argument, compiled", line 3 of tScript is "  AddColor enableObject," & q & "cd" & q & ",2"
+   TestAssert "T37: a handler of the stack's argument, compiled", line 4 of tScript is "  putVar " & q & "cd" & q & ", " & q & "x" & q & ", 5"
+   TestAssert "T37: after then", line 5 of tScript is "  if true then putVar " & q & "bkgnd" & q & ", " & q & "y" & q & ", 6"
+   TestAssert "T37: a function of the stack's argument, compiled", line 6 of tScript is "  put getVar(" & q & "card" & q & ", " & q & "z" & q & ") after gHCScriptsTest"
+   TestAssert "T37: after a variable", line 9 of tScript is "  putVar x, " & q & "menu" & q & ", 8"
+   TestAssert "T37: a command this engine does not have, compiled", line 12 of tScript is "  toggleProperty cantDelete," & q & "card" & q & "," & q & "CantDelete" & q
+   TestAssert "T37: in quotes already, an object named, a variable, off: unchanged", \
+         line 7 of tScript is line 7 of tOriginal and line 13 to 14 of tScript is line 13 to 14 of tOriginal
+   TestAssert "T37: the script still compiles", _Compiles(tScript)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "T37: the words as their own text, as in HyperCard", gHCScriptsTest is "cd:x=5,bkgnd:y=6,card:z,stack:w=7,1:menu=8,"
+   _Close tStack
+end TestHyperCardScriptsT37Compiled
 
 on TestHyperCardScriptsT38
    -- exit and pass with another handler's name: the handler's own
@@ -1951,7 +2021,8 @@ on TestHyperCardScriptsT53
    TestAssert "T53: the reads compile", _Compiles(tScript)
 
    -- unchanged: the style of an object or a chunk, set or read, the
-   -- textHeight of a field, reset printing
+   -- textHeight of a field; and reset printing is no reset of the paint
+   -- text (T72's, the print text's)
    put _Rewrite("on mouseUp", \
          "  set the textStyle of fld 1 to bold", \
          "  set the textAlign of cd btn 2 to center", \
@@ -1965,7 +2036,7 @@ on TestHyperCardScriptsT53
    TestAssert "T53: of a chunk: unchanged", line 4 of tScript is "  set textStyle of word 1 of fld 1 to italic"
    TestAssert "T53: a chunk's read: unchanged", line 5 of tScript is "  get the textStyle of word 1 of fld 1"
    TestAssert "T53: a field's read: unchanged", line 6 of tScript is "  put the textHeight of fld 2 into h"
-   TestAssert "T53: reset printing: unchanged", line 7 of tScript is "  reset printing"
+   TestAssert "T53: reset printing: not the paint text's", line 7 of tScript is "  hcResetPrinting"
 
    -- in a script that compiles: it goes on past the sets, where this
    -- engine stopped at the first, and reads back what a script set, or
@@ -3749,6 +3820,78 @@ on TestHyperCardScriptsTextExternals
    _Close tStack
 end TestHyperCardScriptsTextExternals
 
+on TestHyperCardScriptsResourceExternals
+   -- the library's FontName, available, IsFile, FileIsOpen and translit,
+   -- for the externals of those names (the fonts; the stack's resources,
+   -- from the import's list of its resource fork; a file there, or open;
+   -- characters changed, taken out, or all but some taken out)
+   local tStack, tTab, tFolder, tFile, q, tExpected
+   global gHCScriptsTest
+   put quote into q
+   put tab into tTab
+   put "HCScriptsResources" & the milliseconds into tStack
+   put the tempName into tFolder
+   create folder tFolder
+   put tFolder & "/Notes" into tFile
+   put "x" into URL ("file:" & tFile)
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the uHyperCard["resources"] of stack tStack to _Lines("Xdna" & tTab & "128" & tTab & "40" & tTab & "Yeast", \
+         "XDNA" & tTab & "129" & tTab & "40" & tTab & "Upper", "Xdna" & tTab & "130" & tTab & "40" & tTab, \
+         "PICT" & tTab & "200" & tTab & "900" & tTab & "Chart", "Xdna" & tTab & "131" & tTab & "40" & tTab & "Plant")
+   set the uHyperCard["file"] of stack tStack to tFolder & "/Stack"
+   create button "Fonts"
+   set the script of button "Fonts" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put (FontName() is replaceText(the fontNames, return, comma)) & comma into gHCScriptsTest", \
+         "  put (available(" & q & "fonts" & q & ") is the fontNames) & comma after gHCScriptsTest", \
+         "  if the fontNames is empty then put true after gHCScriptsTest else put available(font, line -1 of the fontNames) after gHCScriptsTest", \
+         "  put comma & available(font, " & q & "No Font Called This" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Resources"
+   set the script of button "Resources" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put available(" & q & "Xdna" & q & ") & " & q & "|" & q & " & available(" & q & "pict" & q & ") & " & q & "|" & q & " & available(" & q & "types" & q & ") into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & available(" & q & "Xdna" & q & ", " & q & "Plant" & q & ") & " & q & "|" & q & " & available(" & q & "soun" & q & ") & " & q & "|" & q & " & available(" & q & "Xdna" & q & ", empty, " & q & "Other" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Files"
+   set the script of button "Files" to _Lines("on mouseUp pFile", "  global gHCScriptsTest", \
+         "  put IsFile(pFile) & comma & IsFile(pFile & " & q & "2" & q & ") & comma & IsFile(" & q & "Notes" & q & ") into gHCScriptsTest", \
+         "  put comma & FileIsOpen(pFile) after gHCScriptsTest", "  open file pFile", \
+         "  put comma & FileIsOpen(pFile) & comma & FileIsOpen(" & q & "Notes" & q & ") after gHCScriptsTest", "  close file pFile", \
+         "  put comma & FileIsOpen(pFile) & comma & FileIsOpen(empty) after gHCScriptsTest", "end mouseUp")
+   create button "Translit"
+   set the script of button "Translit" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put translit(" & q & "ATGC" & q & ", " & q & "TACG" & q & ", " & q & "AATTGGCC" & q & ") into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "atugcATUGC" & q & ", " & q & "TAACGTAACG" & q & ", " & q & "aTgx" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "m" & q & ", " & q & q & ", " & q & "mmol" & q & ") & " & q & "|" & q & " & translit(" & q & "ab" & q & ", " & q & "x" & q & ", " & q & "abc" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & length(translit(" & q & "\Aa" & q & ", " & q & q & ", " & q & "AaTGaC" & q & ")) after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\ATUGC.N*" & q & ", " & q & " " & q & ", " & q & "AT1G-C" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\t" & q & ", " & q & "," & q & ", " & q & "a" & q & " & tab & " & q & "b" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\r" & q & ", " & q & q & ", " & q & "a" & q & " & return & " & q & "b" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(" & q & "\n" & q & ", " & q & q & ", " & q & "a" & q & " & numToChar(13) & return & " & q & "b" & q & ") after gHCScriptsTest", \
+         "  put " & q & "|" & q & " & translit(comma, return, " & q & "a,b" & q & ") after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Fonts" of stack tStack
+   TestAssert "FontName: the fonts, by commas; available: the fonts, and whether there is one", gHCScriptsTest is "true,true,true,false"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Resources" of stack tStack
+   put "Yeast" & return & "Plant|Chart|Xdna" & return & "XDNA" & return & "PICT|true||" into tExpected
+   TestAssert "available: the stack's named resources of a type, its case counting; PICT; the types; one by name; no sounds; none in a file", gHCScriptsTest is tExpected
+   put empty into gHCScriptsTest
+   send "mouseUp" && quote & tFile & quote to button "Files" of stack tStack
+   TestAssert "IsFile and FileIsOpen, by path and by a name alone in the stack's folder", gHCScriptsTest is "true,false,true,false,true,true,false,Error : Missing or empty parameter"
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Translit" of stack tStack
+   put "TTAACCGG|TACx|ol|xxc|3|AT G C|a,b|ab|a" & return & "b|a" & return & "b" into tExpected
+   TestAssert "translit: characters changed, its case counting, taken out, to the last of to; all but some; tab, return and line feed", gHCScriptsTest is tExpected
+   _Close tStack
+   delete file tFile
+   delete folder tFolder
+end TestHyperCardScriptsResourceExternals
+
 on TestHyperCardScriptsDialogs
    -- the library's list dialogs, Promptoid and picture windows, which it
    -- makes hidden so that they are not seen being made, are shown, and a
@@ -4988,6 +5131,220 @@ on TestHyperCardScriptsT70
    _Close tOther
    _Close tStack
 end TestHyperCardScriptsT70
+
+on TestHyperCardScriptsT71
+   -- T71: print of an expression, which HyperCard printed as its text
+   -- ("print it", "print allHelp", "print "Index" & return & temp", 30
+   -- corpus stacks). This engine prints cards: it stops at such a print
+   -- ("error in object expression") and does not compile one of strings
+   -- joined with "&". The library's hcPrint prints the text, and its
+   -- hcPrintDocument a document of text that HyperCard had an
+   -- application print ("print temp with "teachText"")
+   local tScript, tCards, q, i
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  print it", \
+         "  print allHelp", \
+         "  print " & q & "Index" & q & " & return & recfile & return & the long date", \
+         "  print (bg field id 5)", \
+         "  print fld " & q & "scripter1" & q & " & return & fld " & q & "scripter2" & q, \
+         "  if the number of chars of allHelp > 28800 then print allHelp", \
+         "  print temp with " & q & "teachText" & q, \
+         "  print thisFile with TeachText", \
+         "  print the short name of this cd with GraphicsP", \
+         "end mouseUp") into tScript
+   TestAssert "T71: print of a variable", line 2 of tScript is "  hcPrint it"
+   TestAssert "T71: print of another", line 3 of tScript is "  hcPrint allHelp"
+   TestAssert "T71: print of strings joined", line 4 of tScript is "  hcPrint " & q & "Index" & q & " & return & recfile & return & the long date"
+   TestAssert "T71: print of a field in parentheses", line 5 of tScript is "  hcPrint (bg field id 5)"
+   TestAssert "T71: print of fields joined, which is no field alone", \
+         line 6 of tScript is "  hcPrint fld " & q & "scripter1" & q & " & return & fld " & q & "scripter2" & q
+   TestAssert "T71: print after then", line 7 of tScript is "  if the number of chars of allHelp > 28800 then hcPrint allHelp"
+   TestAssert "T71: a document with an application", line 8 of tScript is "  hcPrintDocument temp, " & q & "teachText" & q
+   TestAssert "T71: an application not in quotes", line 9 of tScript is "  hcPrintDocument thisFile, TeachText"
+   TestAssert "T71: a document named by an expression", line 10 of tScript is "  hcPrintDocument the short name of this cd, GraphicsP"
+   TestAssert "T71: those compile", _Compiles(tScript)
+
+   -- unchanged: the cards this engine prints as HyperCard did, and its own
+   -- forms; a field alone is T24's
+   put _Lines("on mouseUp", \
+         "  print card", \
+         "  print this card", \
+         "  print 6 cards", \
+         "  print it cards", \
+         "  print marked cards", \
+         "  print all cds", \
+         "  print cd 3", \
+         "  print first card of bg " & q & "PPRINT" & q, \
+         "  print this card from 0,84 to 506,1274", \
+         "  print marked cards from 0,0 to 512,342", \
+         "  print the next card", \
+         "  print break", \
+         "  print card field " & q & "Notes" & q, \
+         "end mouseUp") into tCards
+   put revHyperCardRewriteScript(tCards) into tScript
+   repeat with i = 2 to 13
+      TestAssert "T71: a card's print: unchanged:" && word 2 to -1 of line i of tCards, line i of tScript is line i of tCards
+   end repeat
+   TestAssert "T24: a field alone", line 14 of tScript is "  PrintField the long id of card field " & q & "Notes" & q
+end TestHyperCardScriptsT71
+
+on TestHyperCardScriptsT72
+   -- T72: HyperCard's printTextFont, printTextSize, printTextHeight,
+   -- printTextStyle and printTextAlign, which print of an expression
+   -- printed in (T71), set and read ("set printTextFont to bg field
+   -- FontName", "put the printTextFont into savedPrintFont"; 9 corpus
+   -- stacks), and reset printing. This engine sets them to nothing and
+   -- reads them as empty: the library's hcSetPrintText and hcPrintText,
+   -- which keep them for hcPrint, and hcResetPrinting
+   local tScript, q
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  set the printTextFont to " & q & "Courier" & q, \
+         "  set printtextfont to palatino", \
+         "  set PrintTextSize to 24", \
+         "  set printTextHeight to 32", \
+         "  set the printTextStyle to bold,italic", \
+         "  set the printTextAlign to right", \
+         "  set the printTextFont to New York", \
+         "  set printTextFont to bg field FontName", \
+         "end mouseUp") into tScript
+   TestAssert "T72: the printTextFont", line 2 of tScript is "  hcSetPrintText " & q & "printTextFont" & q & ", " & q & "Courier" & q
+   TestAssert "T72: without the, in any case", line 3 of tScript is "  hcSetPrintText " & q & "printTextFont" & q & ", palatino"
+   TestAssert "T72: the printTextSize", line 4 of tScript is "  hcSetPrintText " & q & "printTextSize" & q & ", 24"
+   TestAssert "T72: the printTextHeight", line 5 of tScript is "  hcSetPrintText " & q & "printTextHeight" & q & ", 32"
+   TestAssert "T72: a list of styles", line 6 of tScript is "  hcSetPrintText " & q & "printTextStyle" & q & ", bold,italic"
+   TestAssert "T72: the printTextAlign", line 7 of tScript is "  hcSetPrintText " & q & "printTextAlign" & q & ", right"
+   TestAssert "T72: a font of several words", line 8 of tScript is "  hcSetPrintText " & q & "printTextFont" & q & ", " & q & "New York" & q
+   TestAssert "T72: a font in a field", line 9 of tScript is "  hcSetPrintText " & q & "printTextFont" & q & ", bg field FontName"
+   TestAssert "T72: those compile", _Compiles(tScript)
+
+   -- read, set to its own read, reset printing; the printMargins, which
+   -- this engine has, unchanged
+   put _Rewrite("on mouseUp", \
+         "  put the printTextFont into savedPrintFont", \
+         "  set the printTextFont to savedPrintFont", \
+         "  set the printTextSize to the printTextSize + 2", \
+         "  reset printing", \
+         "  if x then reset printing else beep", \
+         "  set PrintMargins to 50,40,40,40", \
+         "  get the printMargins", \
+         "end mouseUp") into tScript
+   TestAssert "T72: a read", line 2 of tScript is "  put hcPrintText(" & q & "printTextFont" & q & ") into savedPrintFont"
+   TestAssert "T72: set to what was read", line 3 of tScript is "  hcSetPrintText " & q & "printTextFont" & q & ", savedPrintFont"
+   TestAssert "T72: set to its own read", line 4 of tScript is "  hcSetPrintText " & q & "printTextSize" & q & ", hcPrintText(" & q & "printTextSize" & q & ") + 2"
+   TestAssert "T72: reset printing", line 5 of tScript is "  hcResetPrinting"
+   TestAssert "T72: reset printing after then", line 6 of tScript is "  if x then hcResetPrinting else beep"
+   TestAssert "T72: the printMargins set: unchanged", line 7 of tScript is "  set PrintMargins to 50,40,40,40"
+   TestAssert "T72: the printMargins read: unchanged", line 8 of tScript is "  get the printMargins"
+   TestAssert "T72: the reads compile", _Compiles(tScript)
+end TestHyperCardScriptsT72
+
+on TestHyperCardScriptsT71Printed
+   -- T71 and T72 in a stack's scripts once fixed, printed to a PDF (never
+   -- to a printer): the text of an expression on as many pages as it
+   -- takes in the print text, more of them in a larger one, the defaults
+   -- back after reset printing, a document of text as its text; and the
+   -- scripts go on past the prints where this engine stopped at them
+   TestSkipIfNot "external", "revpdfprinter"
+   local tStack, q, tError, tFile, tDoc, tLong, tPages, tSized, tBig, tText, i
+   global gHCScriptsTest, gHCScriptsPrintFile
+   put quote into q
+   put TestGetTestBuildFolder() & slash & "test-hc-print.pdf" into tFile
+   put "HCScriptsT71" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the script of stack tStack to _Lines("function longText", "  local x, i", \
+         "  repeat with i = 1 to 120", \
+         "    put " & q & "Line" & q & " && i && " & q & "of the text that print printed" & q & " & return after x", \
+         "  end repeat", "  return x", "end longText")
+   create button "It"
+   set the script of button "It" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put 1 into gHCScriptsTest", "  get " & q & "Hello" & q, "  print it", \
+         "  put 2 into gHCScriptsTest", "end mouseUp")
+   create button "Joined"
+   set the script of button "Joined" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  print " & q & "Hello" & q & " & return & " & q & "World" & q, \
+         "  put 3 into gHCScriptsTest", "end mouseUp")
+   create button "Long"
+   set the script of button "Long" to _Lines("on mouseUp", "  print longText()", "end mouseUp")
+   create button "Sized"
+   set the script of button "Sized" to _Lines("on mouseUp", "  set the printTextSize to 16", "  print longText()", "end mouseUp")
+   create button "Big"
+   set the script of button "Big" to _Lines("on mouseUp", "  set the printTextFont to " & q & "Courier" & q, \
+         "  set printTextSize to 24", "  set printTextHeight to 32", \
+         "  set the printTextStyle to bold,italic", "  set the printTextAlign to center", \
+         "  print longText()", "end mouseUp")
+   create button "Read"
+   set the script of button "Read" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put the printTextFont & comma & the printTextSize & comma & the printTextHeight & comma & the printTextStyle & comma & the printTextAlign into gHCScriptsTest", \
+         "end mouseUp")
+   create button "Reset"
+   set the script of button "Reset" to _Lines("on mouseUp", "  reset printing", "end mouseUp")
+   create button "Document"
+   set the script of button "Document" to _Lines("on mouseUp", "  global gHCScriptsTest, gHCScriptsPrintFile", \
+         "  print gHCScriptsPrintFile with " & q & "TeachText" & q, \
+         "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "Missing"
+   set the script of button "Missing" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  print " & q & "No such document" & q & " with TeachText", \
+         "  put the result into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "It" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T71: as it is, it stops at the print", gHCScriptsTest is 1
+   TestAssert "T71: as it is, strings joined do not compile", not _Compiles(the script of button "Joined" of card 1 of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T71: strings joined compile once fixed", _Compiles(the script of button "Joined" of card 1 of stack tStack)
+
+   put _PrintedPages(the long id of button "It" of card 1 of stack tStack, tFile) into tPages
+   TestAssert "T71: it goes on past the print, as in HyperCard", gHCScriptsTest is 2
+   TestAssert "T71: a word of text on a page", tPages is 1
+   put _PrintedPages(the long id of button "Joined" of card 1 of stack tStack, tFile) into tPages
+   TestAssert "T71: strings joined on a page, and on past them", tPages is 1 and gHCScriptsTest is 3
+   TestAssert "T71: no stack of the library's left", "revHyperCardPrint" is not in the openStacks
+   TestAssert "T71: the defaultStack as it was", the short name of the defaultStack is tStack
+
+   send "mouseUp" to button "Read" of card 1 of stack tStack
+   TestAssert "T72: HyperCard's print text", gHCScriptsTest is "Geneva,10,13,plain,left"
+   put _PrintedPages(the long id of button "Long" of card 1 of stack tStack, tFile) into tLong
+   TestDiagnostic "120 lines in Geneva 10, 13 a line:" && tLong && "pages"
+   TestAssert "T71: 120 lines on more pages than one", tLong > 1
+   put _PrintedPages(the long id of button "Sized" of card 1 of stack tStack, tFile) into tSized
+   send "mouseUp" to button "Read" of card 1 of stack tStack
+   TestAssert "T72: a size alone, the height that follows it", gHCScriptsTest is "Geneva,16,21,plain,left"
+   TestDiagnostic "in 16, 21 a line:" && tSized && "pages"
+   TestAssert "T72: on more pages in a larger size", tSized > tLong
+   put _PrintedPages(the long id of button "Big" of card 1 of stack tStack, tFile) into tBig
+   send "mouseUp" to button "Read" of card 1 of stack tStack
+   TestAssert "T72: what a script set, the styles in HyperCard's order", gHCScriptsTest is "Courier,24,32,bold,italic,center"
+   TestDiagnostic "in Courier 24, 32 a line:" && tBig && "pages"
+   TestAssert "T72: on more pages with taller lines", tBig > tSized
+   send "mouseUp" to button "Reset" of card 1 of stack tStack
+   send "mouseUp" to button "Read" of card 1 of stack tStack
+   TestAssert "T72: reset printing, to HyperCard's print text", gHCScriptsTest is "Geneva,10,13,plain,left"
+   put _PrintedPages(the long id of button "Long" of card 1 of stack tStack, tFile) into tPages
+   TestAssert "T72: after reset printing, the pages there were", tPages is tLong
+
+   -- a document of text, and one that is not there
+   put TestGetTestBuildFolder() & slash & "test-hc-print.txt" into tDoc
+   repeat with i = 1 to 120
+      put "Line" && i && "of the text that print printed" & return after tText
+   end repeat
+   put tText into URL ("file:" & tDoc)
+   put tDoc into gHCScriptsPrintFile
+   put _PrintedPages(the long id of button "Document" of card 1 of stack tStack, tFile) into tPages
+   TestAssert "T71: a document of text, as its text", tPages is tLong and gHCScriptsTest is empty
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "Missing" of card 1 of stack tStack
+   TestAssert "T71: a document that is not there", gHCScriptsTest is "Couldn't print that document."
+   delete file tDoc
+   _Close tStack
+end TestHyperCardScriptsT71Printed
 
 on TestHyperCardScriptsT11In
    -- T11's "in" for "of" between an object and the card, background or

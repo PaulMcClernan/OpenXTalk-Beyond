@@ -2076,35 +2076,40 @@ constant kHCPaintTextStyles = "bold italic underline outline shadow condense ext
 -- value HyperCard would have refused is kept as it is, as no script
 -- stops here for it
 on hcSetPaintText pProperty, pValue
-   local i, tStyle, tStyles, tOthers
+   local i
    if pProperty is "textStyle" then
       repeat with i = 3 to paramCount()
          put comma & param(i) after pValue
       end repeat
-      -- (each style once, in HyperCard's order; plain is no style)
-      repeat for each item tStyle in pValue
-         put word 1 to -1 of tStyle into tStyle
-         if tStyle is among the words of kHCPaintTextStyles then
-            put true into tStyles[tStyle]
-         else if tStyle is not "plain" and tStyle is not empty then
-            put comma & tStyle after tOthers
-         end if
-      end repeat
-      put empty into pValue
-      repeat for each word tStyle in kHCPaintTextStyles
-         if tStyles[tStyle] then put comma & tStyle after pValue
-      end repeat
-      put tOthers after pValue
-      delete char 1 of pValue
-      if pValue is empty then
-         put "plain" into pValue
-      end if
+      put _HCStyleList(pValue) into pValue
    else if pProperty is "textAlign" then
       put toLower(word 1 to -1 of pValue) into pValue
    end if
    put pValue into sHCPaintText[pProperty]
    if pProperty is "textSize" then put empty into sHCPaintText["textHeight"]
 end hcSetPaintText
+
+-- A list of text styles as HyperCard kept one it was set to (rules T53
+-- and T72): each style once, in HyperCard's order, those it had not
+-- after them, and plain, which is no style, when there is none
+private function _HCStyleList pValue
+   local tStyle, tStyles, tOthers, tList
+   repeat for each item tStyle in pValue
+      put word 1 to -1 of tStyle into tStyle
+      if tStyle is among the words of kHCPaintTextStyles then
+         put true into tStyles[tStyle]
+      else if tStyle is not "plain" and tStyle is not empty then
+         put comma & tStyle after tOthers
+      end if
+   end repeat
+   repeat for each word tStyle in kHCPaintTextStyles
+      if tStyles[tStyle] then put comma & tStyle after tList
+   end repeat
+   put tOthers after tList
+   delete char 1 of tList
+   if tList is empty then return "plain"
+   return tList
+end _HCStyleList
 
 -- the textFont, the textSize, the textHeight, the textStyle or the
 -- textAlign read with no object (rule T53): as hcSetPaintText kept it,
@@ -2143,6 +2148,222 @@ on hcResetPaint
    catch tError
    end try
 end hcResetPaint
+
+/*
+print of an expression (rule T71): HyperCard printed the text of any
+expression ("print it", "print allHelp", "print "Index" & return &
+temp"), with no dialog, in the print text below, inside the
+printMargins, on as many pages as the text took. This engine prints
+cards: it stops at such a print, which names none ("error in object
+expression"), and does not compile one of strings joined with "&". The
+text goes in a field the width of
+the page inside the margins, on the card of a hidden stack as tall as
+the page inside them, and the card is printed once for each page of the
+field (its pageHeights), scrolled to that page. The engine lays out each
+on a page of its own, as the card fills one, and after what a script
+printed on the page before. Printing is opened and closed around the
+pages, unless a script has it open already ("open printing", "print
+printdump", "close printing", PowerNotes'): then they go in that job,
+with no open and close of their own, which would end a job printing to
+a PDF there and then. The result is printing's ("printing failed" where
+there is no printer to print on)
+*/
+on hcPrint pText
+   local tDefault, tLocked, tStack, tResult, tError
+   put the defaultStack into tDefault
+   put the lockMessages into tLocked
+   -- (named here, so that it is deleted however far the printing got)
+   put "revHyperCardPrint" && the milliseconds into tStack
+   lock messages
+   try
+      _HCPrintStack tStack, pText
+      put _HCPrintPages(tStack) into tResult
+   catch tError
+      put "printing failed" into tResult
+   end try
+   if there is a stack tStack then
+      delete stack tStack
+   end if
+   set the defaultStack to tDefault
+   set the lockMessages to tLocked
+   return tResult
+end hcPrint
+
+-- The hidden stack pStack hcPrint prints, the size of the page inside
+-- the printMargins, with pText in its field in the print text (a value
+-- this engine refuses is HyperCard's default). The field shows nothing
+-- but the text, from the card's left and top, which are the margins': a
+-- field draws its first line a little above and to the left of its
+-- margins (2 points and 6 on Linux), so its margins are what puts that
+-- line's top left at the card's. Its bottom margin is its top one, so
+-- that its formattedHeight reaches the last line's bottom: a field
+-- scrolls no further than that, and the last page scrolls to it
+private command _HCPrintStack pStack, pText
+   local tMargins, tPaper, tWidth, tHeight, tSize, tStyle, tAlign, tError, tLeft, tTop
+   put the printMargins into tMargins
+   put the printPaperRectangle into tPaper
+   put max(72, item 3 of tPaper - item 1 of tPaper - item 1 of tMargins - item 3 of tMargins) into tWidth
+   put max(72, item 4 of tPaper - item 2 of tPaper - item 2 of tMargins - item 4 of tMargins) into tHeight
+   get _HCNewHiddenStack(pStack)
+   set the defaultStack to pStack
+   -- (text laid out as it prints, as the IDE's revPrintText lays out its
+   -- own)
+   if the printerName is not "pdf" then
+      set the formatForPrinting of stack pStack to true
+   end if
+   set the backColor of stack pStack to "white"
+   set the width of stack pStack to tWidth
+   set the height of stack pStack to tHeight
+   create field "Text"
+   set the showBorder of field "Text" to false
+   set the borderWidth of field "Text" to 0
+   set the opaque of field "Text" to false
+   set the threeD of field "Text" to false
+   set the showFocusBorder of field "Text" to false
+   set the margins of field "Text" to 0
+   set the lockText of field "Text" to true
+   set the dontWrap of field "Text" to false
+   set the rect of field "Text" to 0, 0, tWidth, tHeight
+   set the textFont of field "Text" to hcPrintText("printTextFont")
+   put hcPrintText("printTextSize") into tSize
+   if tSize is not a number or tSize < 1 then put 10 into tSize
+   set the textSize of field "Text" to tSize
+   get hcPrintText("printTextHeight")
+   if it is not a number or it < 1 then put tSize + tSize div 3 into it
+   set the fixedLineHeight of field "Text" to true
+   set the textHeight of field "Text" to it
+   put hcTextStyle(hcPrintText("printTextStyle")) into tStyle
+   try
+      set the textStyle of field "Text" to tStyle
+   catch tError
+   end try
+   set the text of field "Text" to "X"
+   get the formattedRect of line 1 of field "Text"
+   put max(0, 0 - item 1 of it) into tLeft
+   put max(0, 0 - item 2 of it) into tTop
+   set the margins of field "Text" to tLeft, tTop, tLeft, tTop
+   put hcPrintText("printTextAlign") into tAlign
+   if tAlign is not among the words of "left center right" then put "left" into tAlign
+   set the textAlign of field "Text" to tAlign
+   -- (empty lines at the end print nothing, and a page of them none)
+   repeat while the last char of pText is return
+      delete the last char of pText
+   end repeat
+   set the text of field "Text" to pText
+end _HCPrintStack
+
+-- Print the field of pStack (_HCPrintStack's, the defaultStack), a page
+-- at a time: the field as tall as the page's text, scrolled to it. A job
+-- is open while the printPageNumber is not empty
+private function _HCPrintPages pStack
+   local tHeights, tPage, tScroll, tWidth, tOpen, tResult
+   put the pageHeights of field "Text" into tHeights
+   put the width of field "Text" into tWidth
+   put 0 into tScroll
+   put the printPageNumber is empty into tOpen
+   if tOpen then
+      open printing
+   end if
+   repeat for each line tPage in tHeights
+      set the rect of field "Text" to 0, 0, tWidth, tPage
+      set the vScroll of field "Text" to tScroll
+      print this card
+      put the result into tResult
+      add tPage to tScroll
+   end repeat
+   if tOpen then
+      close printing
+      put the result into tResult
+   end if
+   return tResult
+end _HCPrintPages
+
+/*
+print <document> with <application> (rule T71): HyperCard had the
+application print the document ("print temp with "teachText"", a file of
+text the script had just written; "print thisFile with TeachText"). A
+document of text is printed here as print prints an expression: its
+text, in the print text, where TeachText printed it in its own. Any
+other, which only its application can print, is not printed, and leaves
+"Couldn't print that document." in the result, as a document that is not
+there does. The document is found as "open" finds one (_HCDocument)
+*/
+on hcPrintDocument pDocument, pApplication
+   local tPath, tText
+   put _HCDocument(pDocument) into tPath
+   if there is not a file tPath then return "Couldn't print that document."
+   put URL ("file:" & tPath) into tText
+   if numToChar(0) is in tText then return "Couldn't print that document."
+   hcPrint tText
+   return the result
+end hcPrintDocument
+
+/*
+The print text (rule T72): HyperCard's printTextFont, printTextSize,
+printTextHeight, printTextStyle and printTextAlign, which print of an
+expression printed in (hcPrint). This engine keeps none of them: it sets
+them to nothing and reads them as empty. They are kept here as a script
+set them, by name, as the paint text is (rule T53); one not set is as
+HyperCard had it (its reference: Geneva, 10, a printTextHeight of 13,
+plain and left). The printTextHeight follows a printTextSize a script
+sets until a script sets it, as the paint text's does: 13 is 10 and a
+third of it, and stacks set the size alone (Book Reporter's Guild's 16)
+*/
+local sHCPrintText
+
+-- set the printTextFont, the printTextSize, the printTextHeight, the
+-- printTextStyle or the printTextAlign (rule T72), kept for hcPrintText
+-- and hcPrint: a list of styles ("bold,italic") comes as several
+-- parameters, and a printTextSize set takes the printTextHeight back to
+-- its default, which follows the size
+on hcSetPrintText pProperty, pValue
+   local i
+   if pProperty is "printTextStyle" then
+      repeat with i = 3 to paramCount()
+         put comma & param(i) after pValue
+      end repeat
+      put _HCStyleList(pValue) into pValue
+   else if pProperty is "printTextAlign" then
+      put toLower(word 1 to -1 of pValue) into pValue
+   end if
+   put pValue into sHCPrintText[pProperty]
+   if pProperty is "printTextSize" then put empty into sHCPrintText["printTextHeight"]
+end hcSetPrintText
+
+-- the printTextFont, the printTextSize, the printTextHeight, the
+-- printTextStyle or the printTextAlign read (rule T72): as
+-- hcSetPrintText kept it, else HyperCard's default
+function hcPrintText pProperty
+   local tSize
+   if sHCPrintText[pProperty] is not empty then return sHCPrintText[pProperty]
+   switch pProperty
+      case "printTextFont"
+         return "Geneva"
+      case "printTextSize"
+         return 10
+      case "printTextHeight"
+         put hcPrintText("printTextSize") into tSize
+         if tSize is not a number then return 13
+         return tSize + tSize div 3
+      case "printTextStyle"
+         return "plain"
+      case "printTextAlign"
+         return "left"
+   end switch
+   return empty
+end hcPrintText
+
+-- reset printing (rule T72): HyperCard's took the print text back to its
+-- defaults with the rest, as this engine's takes its own settings back
+-- (the printMargins among them). In a script's own "open printing", this
+-- engine's cancels the job, and the pages printed with it: there the
+-- print text alone goes back
+on hcResetPrinting
+   put empty into sHCPrintText
+   if the printPageNumber is empty then
+      reset printing
+   end if
+end hcResetPrinting
 
 -- sort the cards of a background (rule T54): HyperCard sorted the cards
 -- of one background among the places they had and left the stack's
@@ -4347,6 +4568,154 @@ end ChangeFileType
 on SetFInfo pFile
    return empty
 end SetFInfo
+
+-- FontName() (4 stacks, in their openStack), Guy de Picciotto's XFCN:
+-- the fonts there are, separated by commas, as the stacks read them
+-- ("put item it of fonts" after a PopUpMenu of them, Stack Analyzer)
+function FontName
+   local tFonts
+   put the fontNames into tFonts
+   replace return with comma in tFonts
+   return tFonts
+end FontName
+
+-- available(type[, name[, file]]) (7 stacks), Nigel Perry's XFCN: the
+-- names of the resources of a type that are open, one a line, or with a
+-- name whether there is one of that name ("if not available(font,
+-- "Palatino") then"). "font" or "fonts": the fonts there are; "soun" or
+-- "sounds": the stack's sounds, which play names; "type" or "types":
+-- the types of the stack's resources; "pict", "curs", "icon" or a type
+-- of four characters ("Xdna", its case significant): the names of the
+-- stack's resources of that type, from the import's list of its
+-- resource fork. A file's (the third parameter) are not read here: none
+function available pType, pName, pFile
+   local tList
+   if pFile is empty then put _HCAvailable(pType) into tList
+   if the paramCount < 2 or pName is empty then return tList
+   return pName is among the lines of tList
+end available
+
+private function _HCAvailable pType
+   local tSet, tLine, tList, tTypes, tSeen, i
+   if pType is among the words of "font fonts" then return the fontNames
+   if pType is among the words of "soun sounds" then
+      repeat with i = 1 to the number of audioClips of me
+         put the short name of audioClip i of me & return after tList
+      end repeat
+      delete the last char of tList
+      return tList
+   end if
+   put pType is among the words of "type types" into tTypes
+   switch pType
+      case "pict"
+      case "pictures"
+         put "PICT" into pType
+         break
+      case "curs"
+      case "cursors"
+         put "CURS" into pType
+         break
+      case "icon"
+      case "icons"
+         put "ICON" into pType
+         break
+   end switch
+   put the customProperties["uHyperCard"] of me into tSet
+   set the itemDelimiter to tab
+   set the caseSensitive to true
+   repeat for each line tLine in tSet["resources"]
+      if tTypes then
+         if tSeen[item 1 of tLine] is empty then
+            put true into tSeen[item 1 of tLine]
+            put item 1 of tLine & return after tList
+         end if
+      else if item 1 of tLine is pType and item 4 of tLine is not empty then
+         put item 4 of tLine & return after tList
+      end if
+   end repeat
+   delete the last char of tList
+   return tList
+end _HCAvailable
+
+-- IsFile(path) (6 stacks), Frederic Rinaldi's XFCN: whether there is
+-- such a file, a name alone in the stack's folder (a path here, not a
+-- Mac path with colons)
+function IsFile pPath
+   if pPath is empty then return false
+   return there is a file _HCBesideStack(pPath)
+end IsFile
+
+-- FileIsOpen(path) (8 stacks), Frederic Rinaldi's XFCN: whether open
+-- file opened the file and close file has not closed it, a name alone
+-- in the stack's folder ("if fileIsOpen(exportFile) is true then close
+-- file exportFile", HyperBibTeX)
+function FileIsOpen pPath
+   if pPath is empty then return "Error : Missing or empty parameter"
+   return pPath is among the lines of the openFiles or _HCBesideStack(pPath) is among the lines of the openFiles
+end FileIsOpen
+
+-- A file's name alone, as Rinaldi's externals took it: the file of that
+-- name in the folder of the stack (where it is now, else where it was
+-- imported from); a path as it is
+private function _HCBesideStack pPath
+   local tFolder, tSet
+   if slash is in pPath then return pPath
+   set the itemDelimiter to slash
+   put item 1 to -2 of (the effective filename of me) into tFolder
+   if tFolder is empty then
+      put the customProperties["uHyperCard"] of me into tSet
+      put item 1 to -2 of tSet["file"] into tFolder
+   end if
+   if tFolder is empty then return pPath
+   return tFolder & slash & pPath
+end _HCBesideStack
+
+-- translit(from, to, text) (8 stacks), Nigel Perry's XFCN: the text
+-- with each character of from in it changed to the character of to at
+-- the same place ("translit("ATGC", "TACG", primer)", a sequence's
+-- complement), to the last of to past its end, and taken out when to is
+-- empty ("translit("m", "", units)"). The case of a character counts.
+-- As the stacks use it: a backslash before from means every character
+-- but its own ("length(translit("\Aa", "", seq))", the number of A's),
+-- and from "\t" alone is a tab ("translit("\t", ",", header)"), "\r"
+-- a return, the end of a line, and "\n" a line feed, which ended no
+-- line in HyperCard's text: here, where a return is a line feed, a
+-- carriage return
+function translit pFrom, pTo, pText
+   local tExcept, tOut, tChar, tAt
+   set the caseSensitive to true
+   switch pFrom
+      case "\t"
+         put tab into pFrom
+         break
+      case "\r"
+         put return into pFrom
+         break
+      case "\n"
+         put numToChar(13) into pFrom
+         break
+      default
+         if char 1 of pFrom is "\" then
+            put true into tExcept
+            delete char 1 of pFrom
+         end if
+   end switch
+   repeat for each char tChar in pText
+      put offset(tChar, pFrom) into tAt
+      if tExcept is true then
+         if tAt > 0 then
+            put tChar after tOut
+         else if pTo is not empty then
+            put char -1 of pTo after tOut
+         end if
+      else if tAt = 0 then
+         put tChar after tOut
+      else if pTo is not empty then
+         put char min(tAt, the number of chars of pTo) of pTo after tOut
+      end if
+   end repeat
+   return tOut
+end translit
 
 /*
 DialogDisplay(id, button 1, button 2, button 3, text 1, ..., text 4,
