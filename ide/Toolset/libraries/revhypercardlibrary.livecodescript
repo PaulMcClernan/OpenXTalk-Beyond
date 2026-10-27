@@ -2035,6 +2035,80 @@ on hcSortEnd
    put empty into sHCSort
 end hcSortEnd
 
+-- find in the marked cards (rule T58): HyperCard's "find ... of marked
+-- cards" searched the marked cards alone. This engine's find has no such
+-- form, but passes over a card or a field whose dontSearch is true, so
+-- the rule writes "hcFindMarkedBegin; find ...; hcFindMarkedEnd the
+-- result": hcFindMarkedBegin sets the dontSearch of each card of the
+-- stack that is not marked, the engine's find searches the others, by
+-- the script's own form and text, and hcFindMarkedEnd sets back what
+-- hcFindMarkedBegin set and gives back the find's result ("not found",
+-- or empty when it found the text), which the script reads after it.
+-- The engine's find in a field searches it on every card, a card's
+-- dontSearch or not, so a find in a field ("find string x in bkgnd
+-- field "alpha pool" of marked cards") is written "hcFindMarkedBegin the
+-- long id of bkgnd field "alpha pool"; find string x; ...": on the
+-- marked cards, hcFindMarkedBegin sets the dontSearch of the fields that
+-- are not one of that name, of a background if it is (of the card if
+-- not), so that the find searches that field alone, as HyperCard did.
+-- Only what was not set already is set, and set back; a find that
+-- stopped the script before hcFindMarkedEnd has it set back by the next
+-- hcFindMarkedBegin
+local sHCFindMarked
+
+on hcFindMarkedBegin pField
+   local tStack, tId, tName, tKind, i, tField
+   _HCFindMarkedRestore
+   put the long id of stack (the defaultStack) into tStack
+   put tStack into sHCFindMarked["stack"]
+   if pField is not empty then
+      put the short name of pField into tName
+      put word 1 of the long id of the owner of pField into tKind
+   end if
+   repeat for each line tId in the cardIDs of tStack
+      if not the mark of card id tId of tStack then
+         if not the dontSearch of card id tId of tStack then
+            set the dontSearch of card id tId of tStack to true
+            put true into sHCFindMarked["cards"][tId]
+         end if
+         next repeat
+      end if
+      if pField is empty then next repeat
+      repeat with i = 1 to the number of fields of card id tId of tStack
+         put the short id of field i of card id tId of tStack into tField
+         if sHCFindMarked["fields"][tField] is not empty or the dontSearch of field i of card id tId of tStack then next repeat
+         if the short name of field i of card id tId of tStack is tName \
+               and word 1 of the long id of the owner of field i of card id tId of tStack is tKind then
+            next repeat
+         end if
+         set the dontSearch of field i of card id tId of tStack to true
+         put tId into sHCFindMarked["fields"][tField]
+      end repeat
+   end repeat
+end hcFindMarkedBegin
+
+on hcFindMarkedEnd pResult
+   _HCFindMarkedRestore
+   return pResult
+end hcFindMarkedEnd
+
+private command _HCFindMarkedRestore
+   local tStack, tId, tField
+   put sHCFindMarked["stack"] into tStack
+   if tStack is not empty and exists(tStack) then
+      repeat for each key tId in sHCFindMarked["cards"]
+         if there is a card id tId of tStack then set the dontSearch of card id tId of tStack to false
+      end repeat
+      repeat for each key tField in sHCFindMarked["fields"]
+         put sHCFindMarked["fields"][tField] into tId
+         if there is a field id tField of card id tId of tStack then
+            set the dontSearch of field id tField of card id tId of tStack to false
+         end if
+      end repeat
+   end if
+   put empty into sHCFindMarked
+end _HCFindMarkedRestore
+
 -- choose tool N (rule T30): HyperCard's tools by their numbers in the
 -- tools palette (1 browse to 18 polygon), or by a name with or without
 -- "tool" after it; this engine's "choose tool x" stops with an error
