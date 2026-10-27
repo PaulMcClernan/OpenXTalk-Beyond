@@ -627,6 +627,16 @@ function hcSuspended
    return false
 end hcSuspended
 
+-- HyperCard's userLevel, 1 (browsing) to 5 (scripting), which scripts
+-- compare and show ("if the userLevel is 5", HyperCard's Home stack's
+-- arrow at its button "UserLevel 5"): this engine's is 8 until a script
+-- sets it, more than any of HyperCard's, so it is 5, the level at which
+-- everything could be done. What a script set is given back
+function hcUserLevel
+   if the userLevel is a number and the userLevel > 5 then return 5
+   return the userLevel
+end hcUserLevel
+
 -- HyperCard's global properties that this engine has not (rule T64:
 -- "set the dialingTime to 600", "put the language into oldlanguage"):
 -- what a script set, else HyperCard's own value. They change nothing
@@ -725,6 +735,12 @@ on hcSendToHyperCard pMessage
       -- (HyperCard's own menu items: not doMenu, which in a stack with
       -- HyperCard's message order would reach the stack's handlers again)
       hcMenuChoice tItem, tMenu, tWithout
+      return the result
+   end if
+   -- (help: HyperCard's own Help stack, not a handler of the stack's,
+   -- which "do" would reach first)
+   if word 1 to -1 of pMessage is "help" then
+      hcHelp
       return the result
    end if
    try
@@ -971,6 +987,13 @@ scripts fixed; else, in the IDE, the file the user gives when asked
 "Where is ...?", as HyperCard asked (once a name). Empty if none.
 */
 function hcStackName pStack
+   return _HCFindStack(pStack, true, false)
+end hcStackName
+
+-- hcStackName's stack, with "Where is ...?" asked when pAsk is true, and
+-- with pNear only beside this stack or at the path pStack, not anywhere
+-- on its disk image (_HCFindSibling)
+private function _HCFindStack pStack, pAsk, pNear
    local tName, tFile, tStack
    if pStack is empty then return empty
    put _HCLastPart(pStack) into tName
@@ -982,14 +1005,53 @@ function hcStackName pStack
    else if tName is not pStack and there is a stack tName then
       return tName
    end if
-   put _HCFindSibling(pStack, tName) into tFile
-   if tFile is empty then put _HCWhereIs(tName) into tFile
+   put _HCFindSibling(pStack, tName, pNear) into tFile
+   if tFile is empty and pAsk then put _HCWhereIs(tName) into tFile
    if tFile is empty then return empty
    put _HCImport(tFile) into tStack
    if tStack is empty then return empty
    if tName is not "Home" and there is a stack pStack then return pStack
    return tStack
-end hcStackName
+end _HCFindStack
+
+/*
+Whether there is the stack pStack (rule T65: "if there is a stack "Audio
+Help" then"): one that is open or in memory, as "there is a stack" here
+says; else, as HyperCard looked for a stack that was not open, a
+HyperCard stack of that name beside the file this stack was imported
+from, or in its folder on the disk image it came from, or at the HFS
+path pStack (from that folder when it begins with a colon, ":Support
+Files:Pictoid XCMD"), which is imported, with its scripts fixed, as a
+"go" imports one; nothing is asked. True when the stack is then one
+that "stack pStack" names here, so that what the script does with it
+next finds it: by its name, not by an HFS path (a "go" or a "send" to
+the stack of that name finds the stack imported). Home is the IDE's, as
+it was
+*/
+function hcThereIsStack pStack
+   if pStack is empty then return false
+   if there is a stack pStack then return true
+   if _HCLastPart(pStack) is "Home" then return false
+   get _HCFindStack(pStack, false, true)
+   return there is a stack pStack
+end hcThereIsStack
+
+/*
+The stack a "send" names (rule T65: "send "startSound" to stack "Audio
+Help""), as "stack" takes it: pStack itself where there is such a stack,
+or where none is found, as the send stopped here; else the stack found
+as hcStackName finds the stack of a "go", without asking where it is,
+imported with its scripts fixed (HyperCard sent the message to a stack
+that was not open, found where it looked for one). Home is the IDE's,
+as it was
+*/
+function hcSendStack pStack
+   local tStack
+   if pStack is empty or there is a stack pStack or _HCLastPart(pStack) is "Home" then return pStack
+   put _HCFindStack(pStack, false, false) into tStack
+   if tStack is empty then return pStack
+   return tStack
+end hcSendStack
 
 -- Whether the stack of that name is one imported from HyperCard
 private function _HCIsHyperCardStack pName
@@ -1006,15 +1068,38 @@ private function _HCLastPart pPath
    return the last item of pPath
 end _HCLastPart
 
--- A HyperCard stack named pName (or at the HFS path pStack) beside the
+-- A HyperCard stack named pName (or at the HFS path pStack; from this
+-- stack's folder where it begins with a colon, ":Support Files:Pictoid
+-- XCMD", each colon more going up a folder, "::Stacks:Index") beside the
 -- file this stack was imported from, or on the disk image it came from:
--- the path of a copy that can be imported, or empty
-private function _HCFindSibling pStack, pName
-   local tSet, tFolder, tFile, tStacks, tLine, tPath, tHFSFolder, tAny
+-- the path of a copy that can be imported, or empty. On the disk image,
+-- else a stack of that name anywhere on it, as a person would answer
+-- "Where is ...?", unless pNear: only where HyperCard looked without
+-- asking
+private function _HCFindSibling pStack, pName, pNear
+   local tSet, tFolder, tFile, tStacks, tLine, tPath, tHFSFolder, tAny, tRelative, tUp, tSub
    put the customProperties["uHyperCard"] of me into tSet
+   put 0 into tUp
+   if char 1 of pStack is ":" then
+      put char 2 to -1 of pStack into tRelative
+      repeat while char 1 of tRelative is ":"
+         add 1 to tUp
+         delete char 1 of tRelative
+      end repeat
+      if char -1 of tRelative is ":" then delete char -1 of tRelative
+   end if
    if tSet["file"] is not empty then
       set the itemDelimiter to slash
       put item 1 to -2 of tSet["file"] into tFolder
+      if tRelative is not empty then
+         if tUp > 0 then put item 1 to -(tUp + 1) of tFolder into tFolder
+         set the itemDelimiter to ":"
+         if the number of items of tRelative > 1 then
+            put item 1 to -2 of tRelative into tSub
+            replace ":" with slash in tSub
+            put tFolder & slash & tSub into tFolder
+         end if
+      end if
       repeat for each line tFile in files(tFolder)
          if char 1 to 2 of tFile is "._" or tFile ends with ".rsrc" then next repeat
          set the itemDelimiter to "."
@@ -1032,6 +1117,11 @@ private function _HCFindSibling pStack, pName
    end try
    set the itemDelimiter to ":"
    put item 1 to -2 of tSet["imagepath"] into tHFSFolder
+   if tRelative is not empty then
+      if tUp > 0 then put item 1 to -(tUp + 1) of tHFSFolder into tHFSFolder
+      put tHFSFolder & ":" & item 1 to -2 of tRelative into tHFSFolder
+      if char -1 of tHFSFolder is ":" then delete char -1 of tHFSFolder
+   end if
    repeat for each line tLine in tStacks
       set the itemDelimiter to tab
       put item 1 of tLine into tLine
@@ -1042,7 +1132,7 @@ private function _HCFindSibling pStack, pName
       end if
       if tAny is empty and the last item of tLine is pName then put tLine into tAny
    end repeat
-   if tPath is empty then put tAny into tPath
+   if tPath is empty and not pNear then put tAny into tPath
    if tPath is empty then return empty
    put the temporary folder & "/oxt-hypercard-" & the milliseconds into tFolder
    create folder tFolder
@@ -1152,6 +1242,23 @@ end hcDial
 on dial pNumber
    return "dial is not supported"
 end dial
+
+/*
+answer program (rule T67): HyperCard 2.1's choice of a program on another
+Macintosh, to send messages to, from the list its PPC Browser showed
+under the prompt pPrompt; the choice went into it, and nothing when the
+choice was cancelled. Here no program can be chosen: the prompt is shown
+with a word that says so and a Cancel button, and the value is empty,
+which the rewritten statement ("get hcAnswerProgram(...)") puts into it,
+as HyperCard's cancelled choice did
+*/
+function hcAnswerProgram pPrompt
+   local tText
+   put "No program on another computer can be chosen here." into tText
+   if pPrompt is not empty then put pPrompt & return & return before tText
+   answer tText with "Cancel"
+   return empty
+end hcAnswerProgram
 
 -- start using and stop using a stack (rule T23), found as hcStackName
 -- finds the stack of a "go": a library stack beside this one, or on its
@@ -2170,6 +2277,8 @@ end hcChooseTool
 -- below; a handler of the message that sends it again gets the key's
 -- action, not its own message (HyperCard would have looped)
 local sHCInKey
+-- (and the result the handler that took the message left)
+local sHCKeyResult
 
 on hcTabKey
    if _HCKeyHandled("tabKey") then exit hcTabKey
@@ -2234,16 +2343,47 @@ on hcFunctionKey pKey
    end try
 end hcFunctionKey
 
-private function _HCKeyHandled pMessage, pParameter
+-- help as a command (rule T18): HyperCard sent the message from the
+-- object whose script ran it, as any command, and went to its Help
+-- stack if no handler took it (Home's Help button, the Help menu's
+-- item). Here the message goes from that object, pObject, the same way
+-- (a stack's own "on help" takes it, and "pass help" goes on), and then
+-- to a stack "HyperCard Help" found as a "go" finds one, without asking
+-- where it is. None found leaves "No such card" in the result, as a "go"
+-- does, where this engine stopped with "can't find handler" (10 stacks
+-- of the corpus call help with no handler of their own). With no pObject
+-- it is HyperCard's own handler ("send help to HyperCard", rule T29).
+-- The library has no handler of help itself, so the message this engine
+-- sends for the F1 and Help keys goes where it went
+on hcHelp pObject
+   local tStack
+   if pObject is not empty then
+      if _HCKeyHandled("help", empty, pObject) then return sHCKeyResult
+   end if
+   put _HCFindStack("HyperCard Help", false, false) into tStack
+   if tStack is empty then return "No such card"
+   if word 1 of tStack is "stack" then
+      go to tStack
+   else
+      go to stack tStack
+   end if
+   return the result
+end hcHelp
+
+-- (pTarget: the object the message goes to, this card if it is empty)
+private function _HCKeyHandled pMessage, pParameter, pTarget
    local tHandled
    if sHCInKey[pMessage] then return false
    put true into sHCInKey[pMessage]
    try
-      if pParameter is empty then
+      if pTarget is not empty then
+         dispatch pMessage to pTarget
+      else if pParameter is empty then
          dispatch pMessage to this card
       else
          dispatch pMessage to this card with pParameter
       end if
+      put the result into sHCKeyResult
       put it into tHandled
    catch tError
       put false into sHCInKey[pMessage]

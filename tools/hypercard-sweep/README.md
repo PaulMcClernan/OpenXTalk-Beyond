@@ -172,7 +172,7 @@ following lines are written:
 | `LINE` | handler, line in it, `skipped` or `stops`, compile error, the line's HyperTalk |
 | `AT` | phase: a step of the run as it starts (`open`, `card N`, `click N,M`) |
 | `OPENED` | none |
-| `ERR` or `THROW` | phase, error, the script line and its object |
+| `ERR` or `THROW` | phase, error, the script line that failed (in a repeat or an if, the line inside it) and its object |
 | `ABORT` | phase: a step a script ended with `exit to top`, after which the tour went on |
 | `MODAL` | phase, the name of a modal window the sweep closed |
 | `DONE` | none |
