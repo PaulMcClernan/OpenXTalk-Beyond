@@ -608,6 +608,25 @@ function hcLongVersion
    return "02418000"
 end hcLongVersion
 
+-- The Mac that the systemVersion and the externals that ask about the
+-- Mac (SysEnv, SysEnvirons, MacType) describe: System 7.5.5, of
+-- HyperCard 2.4's years, on a model none of those externals knows by
+-- name, with a 68040 and its math coprocessor, Color QuickDraw, an
+-- Apple Extended Keyboard and no AppleTalk. Stacks check for System 7
+-- or later, and for a 68030 or later (Doctor Who's "if DWcpu >= 68030")
+constant kHCSystem = "7.5.5"
+
+-- the systemVersion (rule T10): the System's version as HyperCard 2.2's
+-- code makes it, the major version, a period, then the minor and bug-fix
+-- digits ("7.55" for 7.5.5), which scripts compare with numbers ("if the
+-- systemVersion < 7 then", Finder Cleaner's). This engine's is the
+-- host's ("NT 10.0", "14.5.0"), which such a comparison takes as text:
+-- on macOS "14.5.0" is less than 7
+function hcSystemVersion
+   set the itemDelimiter to "."
+   return item 1 of kHCSystem & "." & item 2 of kHCSystem & item 3 of kHCSystem
+end hcSystemVersion
+
 -- the version of a stack (rule T55): in HyperCard five items, the
 -- versions of HyperCard that made the stack, last compacted it, first
 -- changed it after that and last changed it, each as the long version
@@ -4871,6 +4890,114 @@ function hcX_Password pPrompt, pCaseSensitive
    end if
    return tSum
 end hcX_Password
+
+/*
+SysEnv() (6 stacks), the XFCN: the Mac that kHCSystem describes as its
+SysEnvirons record, a line of its model ("unknown", one the external
+does not know), System, processor, whether it has a math coprocessor and
+Color QuickDraw (true or false), keyboard, AppleTalk driver's version (0,
+none) and System's volume reference number, between commas, then a line
+of the main screen's depth and "Color" (or "B&W"). Read from the
+external's code (2722 bytes, 5 of the stacks): the minor version of the
+System is its digit times 16 there ("7.80.5" for 7.5.5), and stacks
+read the first character of it ("if char 1 of theSystem contains "7"",
+Doctor Who's) or the depth ("if item 1 of line 2 of mySys > 1", The
+Critical Eye's); with a parameter it gives "SysEnv expects no
+parameters." Its other version (2330 bytes, one stack, which no script
+calls) said "processor unknown" for a 68040
+*/
+function SysEnv
+   local tSystem
+   if the paramCount > 0 then return "SysEnv expects no parameters."
+   set the itemDelimiter to "."
+   put item 1 of kHCSystem & "." & (item 2 of kHCSystem) * 16 into tSystem
+   if item 3 of kHCSystem > 0 then put "." & item 3 of kHCSystem after tSystem
+   return "unknown," & tSystem & ",Motorola 68040,true,true,Apple Extended keyboard,0,-1" & return & MaxDepth() & ",Color"
+end SysEnv
+
+/*
+SysEnvirons(n) (2 stacks), the XFCN: field n of the Mac's SysEnvirons
+record, as the external gives it (read from its code, 1448 bytes) for
+the Mac that kHCSystem describes: 1 the record's version (1), 2 the
+model (0, one the System does not know), 3 the System in four hex
+digits ("0755"), 4 the processor (5, a 68040), 5 and 6 whether it has a
+math coprocessor and Color QuickDraw (true), 7 the keyboard (4, an
+Apple Extended Keyboard), 8 the AppleTalk driver's version (0, none)
+and 9 the System's volume reference number (-1); any other parameter as
+it is. Stack Starter adds to its FastMac for a coprocessor ("if
+SysEnvirons(5) then add 1 to FastMac")
+*/
+function SysEnvirons pWhich
+   local tSystem
+   if pWhich is not an integer or pWhich < 1 or pWhich > 9 then return pWhich
+   set the itemDelimiter to "."
+   put char -2 to -1 of ("0" & item 1 of kHCSystem) & item 2 of kHCSystem & item 3 of kHCSystem into tSystem
+   set the itemDelimiter to comma
+   return item pWhich of ("1,0," & tSystem & ",5,true,true,4,0,-1")
+end SysEnvirons
+
+/*
+SysEnvirons (13 stacks), Jon Pugh's XCMD: the Mac's SysEnvirons record
+in globals, as text, for the Mac that kHCSystem describes: machineType
+its model, systemVersion its System ("7.5.5"), processor ("68040"),
+hasFPU and hasColorQD (true), atDrvrVersNum the AppleTalk driver's
+version (0, none), keyBoardType ("Extended ADB Keyboard") and
+systemFolder the System Folder's path, a Mac path on the disk of
+HyperCard (hcHyperCardName). Read from the external's code: the model is
+"Unknown Machine" (3486 bytes, 11 of the stacks, CoinMaster's), one it
+does not know; its later version (3190 bytes) gives the System's name
+for the model, and the System had none for one it did not know. A
+script's globals systemVersion, processor and keyBoardType are named
+hc_systemVersion, hc_processor and hc_keyBoardType after the import (rule
+T2: this engine refuses those names for variables), and so they are here
+*/
+on SysEnvirons
+   global machineType, hc_systemVersion, hc_processor, hasFPU, hasColorQD
+   global atDrvrVersNum, hc_keyBoardType, systemFolder
+   local tSet, tLine
+   put "Unknown Machine" into machineType
+   put the customProperties["uHyperCard"] of me into tSet
+   set the itemDelimiter to tab
+   repeat for each line tLine in tSet["resources"]
+      if item 1 of tLine is "XCMD" and item 4 of tLine is "SysEnvirons" and item 3 of tLine is 3190 then put empty into machineType
+   end repeat
+   put kHCSystem into hc_systemVersion
+   put "68040" into hc_processor
+   put true into hasFPU
+   put true into hasColorQD
+   put 0 into atDrvrVersNum
+   put "Extended ADB Keyboard" into hc_keyBoardType
+   set the itemDelimiter to ":"
+   put item 1 of hcHyperCardName("long") & ":System Folder:" into systemFolder
+end SysEnvirons
+
+/*
+MacType() (12 stacks), Frederic Rinaldi's XFCN: the Mac that kHCSystem
+describes, its model, System, processor, whether it has a math
+coprocessor and Color QuickDraw, and its keyboard, between commas, as
+version 1.3 gives them (read from its code, 2704 bytes, 9 of the
+stacks): "Unknown CPU", a model it cannot name, "7.5.5", "MC68040",
+true, true, "Apple Extended keyboard". "?" gives its syntax, "!" its
+version and "=" what it gives. Stacks take the System from item 2 ("get
+item 2 of MacType()", then "if it < 7.0", GetDInfo's) or the model from
+item 1. Its versions 2.x (3 stacks) add the memory and the clock speed
+and name the model, processor and keyboard more briefly ("Quadra 950",
+"68040", "Extended ADB", by their documentation), with the System the
+same
+*/
+function MacType pWhich
+   if the paramCount = 1 then
+      switch pWhich
+         case "?"
+            return "MacType()"
+         case "!"
+            return "Version 1.3," && numToCodepoint(169) && "Frederic RINALDI 1989,1990,1991"
+         case "="
+            return "<CPU>,<System>,<Processor>,<HasFPU>,<HasColorQD>,<keyboard>"
+      end switch
+   end if
+   return "Unknown CPU," & kHCSystem & ",MC68040,true,true,Apple Extended keyboard"
+end MacType
 
 /*
 DialogDisplay(id, button 1, button 2, button 3, text 1, ..., text 4,

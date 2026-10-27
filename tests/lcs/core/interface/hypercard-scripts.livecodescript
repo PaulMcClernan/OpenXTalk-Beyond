@@ -5484,6 +5484,267 @@ on TestHyperCardScriptsPasswords
    _Close "Ask Dialog"
 end TestHyperCardScriptsPasswords
 
+on TestHyperCardScriptsSystemVersion
+   -- T10: the systemVersion, which stacks compare with 7 ("if the
+   -- systemVersion < 7 then", Finder Cleaner's), and which here is the
+   -- host's ("NT 10.0", "14.5.0"), text to such a comparison: the
+   -- library's hcSystemVersion(), "7.55" as HyperCard 2.2 gave System
+   -- 7.5.5; value("the systemVersion") too (HyperBattleship!'s). Not in a
+   -- string or a comment, nor a call of the stack's own function
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  if the systemVersion < 7 then beep", \
+         "  if ((the SystemVersion)>=7) then beep", \
+         "  put systemVersion() into x", \
+         "  if (value (" & q & "the systemVersion" & q & ") < 7 ) then beep", \
+         "  put " & q & "the systemVersion" & q & " into x -- the systemVersion", \
+         "end mouseUp") into tScript
+   TestAssert "T10: the systemVersion", line 2 of tScript is "  if hcSystemVersion() < 7 then beep"
+   TestAssert "T10: the systemVersion in parentheses, in any case", line 3 of tScript is "  if ((hcSystemVersion())>=7) then beep"
+   TestAssert "T10: systemVersion()", line 4 of tScript is "  put hcSystemVersion() into x"
+   TestAssert "T10: value of the systemVersion", line 5 of tScript is "  if (hcSystemVersion() < 7 ) then beep"
+   TestAssert "T10: the systemVersion in a string and a comment, as it is", line 6 of tScript is "  put " & q & "the systemVersion" & q & " into x -- the systemVersion"
+   TestAssert "T10: those compile", _Compiles(tScript)
+   put _Rewrite("on mouseUp", "  put systemVersion() into x", "  put the systemVersion into y", "end mouseUp", \
+         "function systemVersion", "  return 6", "end systemVersion") into tScript
+   TestAssert "T10: the stack's own systemVersion function, called with parentheses; the systemVersion, HyperCard's", \
+         line 2 of tScript is "  put hc_systemversion() into x" and line 3 of tScript is "  put hcSystemVersion() into y"
+
+   put "HCSystemVersion" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "System"
+   set the script of button "System" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put the systemVersion into gHCScriptsTest", \
+         "  if the systemVersion < 7 then put comma & " & q & "System 6" & q & " after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "System" of stack tStack
+   catch tError
+   end try
+   TestAssert "T10: HyperCard's systemVersion for System 7.5.5, and so System 7", gHCScriptsTest is "7.55"
+   _Close tStack
+end TestHyperCardScriptsSystemVersion
+
+on TestHyperCardScriptsSystemExternals
+   -- the stand-ins for the externals that ask about the Mac, as their
+   -- code gives the Mac the library describes (System 7.5.5, a model the
+   -- externals do not know, a 68040 and its coprocessor, Color
+   -- QuickDraw, an Apple Extended Keyboard, no AppleTalk): SysEnv (The
+   -- Critical Eye, Doctor Who), the SysEnvirons function (Stack Starter)
+   -- and command (CoinMaster) and MacType (Scan Calculator, GetDInfo)
+   local tStack, tTab, q, tError, tReport
+   global gHCScriptsTest
+   put quote into q
+   put numToChar(9) into tTab
+   put "HCSystemExternals" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the uHyperCard["imagepath"] of stack tStack to "Old Disk:Stacks:Main"
+   set the uHyperCard["externals"] of stack tStack to _Lines("XFCN" & tTab & "SysEnv", "XCMD" & tTab & "SysEnvirons", "XFCN" & tTab & "MacType")
+   set the uHyperCard["resources"] of stack tStack to _Lines("XFCN" & tTab & "1" & tTab & "2722" & tTab & "SysEnv", \
+         "XCMD" & tTab & "926" & tTab & "3486" & tTab & "SysEnvirons", "XFCN" & tTab & "816" & tTab & "2704" & tTab & "MacType")
+   set the defaultStack to tStack
+   create button "SysEnv"
+   set the script of button "SysEnv" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put SysEnv() into gHCScriptsTest", \
+         "  put return & SysEnv(1) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Fields"
+   set the script of button "Fields" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  repeat with i = 1 to 9", \
+         "    put SysEnvirons(i) & comma after gHCScriptsTest", \
+         "  end repeat", \
+         "  put SysEnvirons(" & q & "x" & q & ") & comma & SysEnvirons(10) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Globals"
+   set the script of button "Globals" to _Lines("on mouseUp", \
+         "  global machineType, systemVersion, processor, hasFPU, hasColorQD", \
+         "  global atDrvrVersNum, keyBoardType, systemFolder, gHCScriptsTest", \
+         "  SysEnvirons", \
+         "  put machineType & " & q & "|" & q & " & systemVersion & " & q & "|" & q & " & processor & " & q & "|" & q & " & hasFPU into gHCScriptsTest", \
+         "  put " & q & "|" & q & " & hasColorQD & " & q & "|" & q & " & atDrvrVersNum & " & q & "|" & q & " & keyBoardType & " & q & "|" & q & " & systemFolder after gHCScriptsTest", \
+         "end mouseUp")
+   create button "MacType"
+   set the script of button "MacType" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put MacType() & " & q & "|" & q & " & MacType(" & q & "?" & q & ") & " & q & "|" & q & " & MacType(" & q & "=" & q & ") & " & q & "|" & q & " & MacType(" & q & "!" & q & ") into gHCScriptsTest", \
+         "  get item 2 of MacType()", \
+         "  delete last char of it", \
+         "  delete last char of it", \
+         "  if it < 7.0", \
+         "  then put 2 into FNb", \
+         "  else put 3 into FNb", \
+         "  put " & q & "|" & q & " & FNb after gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put revHyperCardFixScripts(tStack) into tReport
+   TestAssert "the fix: no stand-in for the SysEnvirons command, the library's", "do nothing when called" is not in tReport
+
+   set the defaultStack to tStack
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "SysEnv" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnv: the Mac as its line, the minor version times 16, then the screen's depth and colour; a parameter refused", \
+         gHCScriptsTest is "unknown,7.80.5,Motorola 68040,true,true,Apple Extended keyboard,0,-1" & return & the screenDepth & ",Color" \
+         & return & "SysEnv expects no parameters."
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Fields" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnvirons(n): each field of the record, any other parameter as it is", gHCScriptsTest is "1,0,0755,5,true,true,4,0,-1,x,10"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Globals" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnvirons: the record in the script's globals, the System Folder on HyperCard's disk", \
+         gHCScriptsTest is "Unknown Machine|7.5.5|68040|true|true|0|Extended ADB Keyboard|Old Disk:System Folder:"
+   set the uHyperCard["resources"] of stack tStack to "XCMD" & tTab & "926" & tTab & "3190" & tTab & "SysEnvirons"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Globals" of stack tStack
+   catch tError
+   end try
+   TestAssert "SysEnvirons, its later version: the System's name for the model, none", char 1 to 7 of gHCScriptsTest is "|7.5.5|"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "MacType" of stack tStack
+   catch tError
+   end try
+   TestAssert "MacType: the Mac, its syntax, what it gives, its version; the System for 7.0 and later (GetDInfo's)", \
+         gHCScriptsTest is "Unknown CPU,7.5.5,MC68040,true,true,Apple Extended keyboard|MacType()|<CPU>,<System>,<Processor>,<HasFPU>,<HasColorQD>,<keyboard>|Version 1.3," \
+         && numToCodepoint(169) && "Frederic RINALDI 1989,1990,1991|3"
+   _Close tStack
+end TestHyperCardScriptsSystemExternals
+
+on TestHyperCardScriptsT74
+   -- T74: a loop that takes a path back to its folder until its last
+   -- character is a colon, which HyperCard's paths always had and this
+   -- engine's never have ("repeat until the last char of it is ":"", Star
+   -- Trek-DS9 Guide's, on the stack's long name): it ends when the text
+   -- is empty too. A loop with another way out, another line, or another
+   -- text, is left as it is
+   local tScript, q, tStack, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  get the long name of this stack", \
+         "  repeat until the last char of it is " & q & ":" & q, \
+         "    delete the last char of it", \
+         "  end repeat", \
+         "  repeat while last char of TEMP is not " & q & ":" & q & " -- the folder", \
+         "    delete last char of TEMP", \
+         "  end repeat", \
+         "  Repeat While Last Char Of it <> " & q & ":" & q, \
+         "    get char 1 to length(it)-1 of it", \
+         "  end repeat", \
+         "  repeat until char length (PathName) of PathName = " & q & ":" & q, \
+         "    delete char length (PathName) of PathName", \
+         "  end repeat", \
+         "  put " & q & q & " into lastChar", \
+         "  repeat until lastChar = " & q & ":" & q, \
+         "    delete last character of stackFolder", \
+         "    put last character of stackFolder into lastChar", \
+         "  end repeat", \
+         "  repeat until it is " & q & ":" & q, \
+         "    get the last char of process", \
+         "    if it is not " & q & ":" & q & " then put it before char 1 of holdPictName", \
+         "    -- (and so on)", \
+         "    delete the last char of process", \
+         "  end repeat", \
+         "  repeat until last char of pref is " & q & ":" & q & " or pref is empty", \
+         "    delete last char of pref", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & "/" & q, \
+         "    delete the last char of x", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "    add 1 to n", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of y", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "    put y into x", \
+         "  end repeat", \
+         "  repeat until lastChar is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    if x is empty then exit repeat", \
+         "    delete the last char of x", \
+         "  end repeat", \
+         "  repeat until the last char of x is " & q & ":" & q, \
+         "    delete the last char of x", \
+         "    put shortName(x) after tNames", \
+         "  end repeat", \
+         "end mouseUp") into tScript
+   TestAssert "T74: until, the last char of it", line 3 of tScript is "  repeat until the last char of it is " & q & ":" & q & " or it is empty"
+   TestAssert "T74: while, a comment kept at the end", \
+         line 6 of tScript is "  repeat while last char of TEMP is not " & q & ":" & q & " and TEMP is not empty -- the folder"
+   TestAssert "T74: <>, in any case, and get of all but the last char", \
+         line 9 of tScript is "  Repeat While Last Char Of it <> " & q & ":" & q & " and it is not empty"
+   TestAssert "T74: char length (x) of x", \
+         line 12 of tScript is "  repeat until char length (PathName) of PathName = " & q & ":" & q & " or PathName is empty"
+   TestAssert "T74: a variable the last character is put into", \
+         line 16 of tScript is "  repeat until lastChar = " & q & ":" & q & " or stackFolder is empty"
+   TestAssert "T74: got into it, and put before another variable after then", \
+         line 20 of tScript is "  repeat until it is " & q & ":" & q & " or process is empty"
+   TestAssert "T74: a loop that ends on empty already, unchanged", \
+         line 26 of tScript is "  repeat until last char of pref is " & q & ":" & q & " or pref is empty"
+   TestAssert "T74: a loop for another character, unchanged", line 29 of tScript is "  repeat until the last char of x is " & q & "/" & q
+   TestAssert "T74: a loop with another statement, unchanged", line 32 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop that deletes from another variable, unchanged", line 36 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop that puts into the text, unchanged", line 39 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop on a variable nothing puts into, unchanged", line 43 of tScript is "  repeat until lastChar is " & q & ":" & q
+   TestAssert "T74: a loop with an exit, unchanged", line 46 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: a loop that calls a handler, unchanged", line 50 of tScript is "  repeat until the last char of x is " & q & ":" & q
+   TestAssert "T74: those compile", _Compiles(tScript)
+
+   -- In a script that compiles as it is, run: a path with colons gives
+   -- its folder, as in HyperCard, and one without gives none, and ends
+   put "HCColonLoops" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Folder"
+   set the script of button "Folder" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put folderOf(" & q & "Disk:Folder:Stack" & q & ") & " & q & "|" & q & " & folderOf(" & q & "/Users/me/Stack" & q & ") into gHCScriptsTest", \
+         "end mouseUp", \
+         "function folderOf pPath", \
+         "  get pPath", \
+         "  repeat until the last char of it is " & q & ":" & q, \
+         "    delete the last char of it", \
+         "  end repeat", \
+         "  return it", \
+         "end folderOf")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put line 7 of the script of button "Folder" of stack tStack into tScript
+   TestAssert "T74: in a script that compiles too", tScript is "  repeat until the last char of it is " & q & ":" & q & " or it is empty"
+   -- (without it the loop would not end)
+   if tScript ends with "or it is empty" then
+      put empty into gHCScriptsTest
+      try
+         send "mouseUp" to button "Folder" of stack tStack
+      catch tError
+      end try
+      TestAssert "T74: the folder of a path with colons, and none of one without", gHCScriptsTest is "Disk:Folder:|"
+   end if
+   _Close tStack
+end TestHyperCardScriptsT74
+
 on TestHyperCardScriptsT11In
    -- T11's "in" for "of" between an object and the card, background or
    -- stack it is on, in a script that compiles here as it is ("hide card
