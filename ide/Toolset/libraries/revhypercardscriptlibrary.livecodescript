@@ -3630,6 +3630,19 @@ private function _HyperCardRules pLine, pCompiled, pElse
          next repeat
       end if
 
+      -- T11: "in" for "of" after an object, before the card, background
+      -- or stack it is on, in a script that compiles too ("hide card field
+      -- "Sentence" in card 2", Teaching to Read; "get the id of first card
+      -- in bkgnd id 2618", RefStak 88; "btn 1 in this card"): this engine
+      -- reads such an "in" as a text chunk's and stops with "source is not
+      -- a container" (_InForOf; _PhraseRules takes the same in a script
+      -- that does not compile)
+      if tWord is "in" and _InForOf(tTokens, tIdx, i) then
+         put "of" into tTokens[tIdx[i]]["t"]
+         _Fire "T11 HyperCard object words"
+         next repeat
+      end if
+
       -- T50: a property of an object named by a chunk of a variable or of
       -- a function's value ("the textHeight of item 1 of fieldList",
       -- "scroll of last item of theFields()", "top of item i of
@@ -5079,6 +5092,27 @@ private function _NamedByAName pLine
    if not tChanged then return pLine
    return _Join(tTokens)
 end _NamedByAName
+
+-- Whether the "in" at pAt is HyperCard's "of" between an object and the
+-- card, background or stack it is on (T11): after an object's type
+-- ("first card in bkgnd 2"), its name or number ("fld "Notes" in card
+-- "Menu"") or its id ("btn id 3 in card 2"), before "card", "bkgnd",
+-- "stack", or "this" and one of them. Never the operator "is in", nor a
+-- count's "in" ("the number of card fields in card 2"), which this
+-- engine takes
+private function _InForOf pTokens, pIdx, pAt
+   local tPrev, tNext
+   if pAt < 3 then return false
+   put _T(pTokens, pIdx[pAt + 1]) into tNext
+   if tNext is "this" then put _T(pTokens, pIdx[pAt + 2]) into tNext
+   if tNext is not among the words of "card cd bkgnd bg background stack" then return false
+   put _T(pTokens, pIdx[pAt - 1]) into tPrev
+   if tPrev is among the words of kObjectWords then return true
+   if pTokens[pIdx[pAt - 1]]["k"] is not among the items of "s,n,w" or tPrev is "is" \
+         or tPrev is among the words of kNeverNamesAfterCard then return false
+   if _T(pTokens, pIdx[pAt - 2]) is among the words of kObjectWords then return true
+   return pAt > 3 and _T(pTokens, pIdx[pAt - 2]) is "id" and _T(pTokens, pIdx[pAt - 3]) is among the words of kObjectWords
+end _InForOf
 
 -- T45: whether the word home at pAt, not in quotes, names HyperCard's
 -- Home stack: the stack of a send ("send startup to home"), or what has

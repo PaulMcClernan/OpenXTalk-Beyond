@@ -4986,6 +4986,70 @@ on TestHyperCardScriptsT70
    _Close tStack
 end TestHyperCardScriptsT70
 
+on TestHyperCardScriptsT11In
+   -- T11's "in" for "of" between an object and the card, background or
+   -- stack it is on, in a script that compiles here as it is ("hide card
+   -- field "Sentence" in card 2", Teaching to Read; "get the id of first
+   -- card in bkgnd id 2618", RefStak 88), where this engine stopped with
+   -- "source is not a container"; and the "in"s it runs as they are: a
+   -- count's, a text chunk's, the operator "is in"
+   local tStack, tBg, tScript, tError, tFirst, q
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT11In" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create field "Notes"
+   create button "Next"
+   group field "Notes" and button "Next"
+   set the backgroundBehavior of group 1 to true
+   set the name of group 1 to "Bg"
+   put the id of group 1 into tBg
+   put the id of card 1 into tFirst
+   create card "Two"
+   create field "Words"
+   create card "Three"
+   go to card 1 of stack tStack
+   create button "In"
+   put _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "x" & q & " into field " & q & "Words" & q & " in card 2", \
+         "  hide card field " & q & "Words" & q & " in card 2", \
+         "  get the short name of bg btn " & q & "Next" & q & " in this bkgnd", "  put it into gHCScriptsTest", \
+         "  get the id of first card in bkgnd id " & tBg, "  put comma & it after gHCScriptsTest", \
+         "  get the short name of card " & q & "Three" & q & " in this stack", "  put comma & it after gHCScriptsTest", \
+         "  put comma & the number of card fields in card 2 after gHCScriptsTest", \
+         "  put comma & word 1 in field " & q & "Words" & q & " of card 2 after gHCScriptsTest", \
+         "  if " & q & "x" & q & " is in field " & q & "Words" & q & " of card 2 then put comma & " & q & "is in" & q & " after gHCScriptsTest", \
+         "end mouseUp") into tScript
+   set the script of button "In" to tScript
+   unlock messages
+   TestAssert "T11: an object in a card compiles here as it is", _Compiles(tScript)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "In" of card 1 of stack tStack into tScript
+   TestAssert "T11: in for of before a card, in a script that compiles", line 3 to 4 of tScript is _Lines( \
+         "  put " & q & "x" & q & " into field " & q & "Words" & q & " of card 2", "  hide card field " & q & "Words" & q & " of card 2")
+   TestAssert "T11: in for of before this background, a background's id and this stack", line 5 to 9 of tScript is _Lines( \
+         "  get the short name of bg btn " & q & "Next" & q & " of this bkgnd", "  put it into gHCScriptsTest", \
+         "  get the id of first card of bkgnd id " & tBg, "  put comma & it after gHCScriptsTest", \
+         "  get the short name of card " & q & "Three" & q & " of this stack")
+   TestAssert "T11: a count's in, a text chunk's and is in, as they were", line 11 to 13 of tScript is _Lines( \
+         "  put comma & the number of card fields in card 2 after gHCScriptsTest", \
+         "  put comma & word 1 in field " & q & "Words" & q & " of card 2 after gHCScriptsTest", \
+         "  if " & q & "x" & q & " is in field " & q & "Words" & q & " of card 2 then put comma & " & q & "is in" & q & " after gHCScriptsTest")
+   put empty into gHCScriptsTest
+   set the defaultStack to tStack
+   try
+      send "mouseUp" to button "In" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T11: the objects in a card, a background and a stack are found", tError is empty \
+         and gHCScriptsTest is "Next," & tFirst & ",Three,1,x,is in"
+   TestAssert "T11: the field in card 2 filled and hidden", field "Words" of card 2 of stack tStack is "x" \
+         and the visible of field "Words" of card 2 of stack tStack is false
+   _Close tStack
+end TestHyperCardScriptsT11In
+
 on TestHyperCardScriptsBuiltIns
    -- HyperCard's commands this engine does not have, as the rewritten
    -- scripts call them: cursors, key commands, card pictures, picture
