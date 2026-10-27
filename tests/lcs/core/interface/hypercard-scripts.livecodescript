@@ -4867,6 +4867,43 @@ on TestHyperCardScriptsT69
    _Close tStack
 end TestHyperCardScriptsT69
 
+on TestHyperCardScriptsT16Names
+   -- T16: a go to a stack named by several words not in quotes, which
+   -- HyperCard took as the text they were ("go to stack flood control";
+   -- "go stack the stack you wish to process", whose "Where is ...?" asked
+   -- for a stack): in quotes, where the probe finds no expression. A name
+   -- that is an expression is kept
+   local tStack, tTarget, q, tScript, tError
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT16" & the milliseconds into tStack
+   put "HCScripts Flood Control" into tTarget
+   lock messages
+   create invisible stack tTarget
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Go"
+   set the script of button "Go" to _Lines("on mouseUp", "  global gHCScriptsTest", "  go to stack HCScripts Flood Control", "  put the result into gHCScriptsTest", "end mouseUp")
+   create button "Ask"
+   set the script of button "Ask" to _Lines("on mouseUp", "  go stack the stack you wish to process", "  go to card " & q & "Player" & q & " of stack Chess Library", \
+         "  go to stack short name of me", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put the script of button "Ask" of card 1 of stack tStack into tScript
+   TestAssert "T16: a name of several words, in quotes", line 2 to 3 of tScript is _Lines("  do hcGo(" & q & "go stack tHCStack" & q & ", quote & " & q & "the stack you wish to process" & q & " & quote)", \
+         "  do hcGo(" & q & "go to card " & q & " & quote & " & q & "Player" & q & " & quote & " & q & " of stack tHCStack" & q & ", quote & " & q & "Chess Library" & q & " & quote)")
+   TestAssert "T16: an expression: kept (T66's the)", line 4 of tScript is "  do hcGo(" & q & "go to stack tHCStack" & q & ", " & q & "the short name of me" & q & ")"
+   set the defaultStack to tStack
+   put "none" into gHCScriptsTest
+   try
+      send "mouseUp" to button "Go" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T16: went to the stack named by several words", tError is empty and gHCScriptsTest is empty and the short name of this stack is tTarget
+   _Close tTarget
+   _Close tStack
+end TestHyperCardScriptsT16Names
+
 on TestHyperCardScriptsBuiltIns
    -- HyperCard's commands this engine does not have, as the rewritten
    -- scripts call them: cursors, key commands, card pictures, picture

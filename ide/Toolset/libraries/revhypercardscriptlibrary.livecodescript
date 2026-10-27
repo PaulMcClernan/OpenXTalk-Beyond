@@ -4073,10 +4073,17 @@ end _Literal
 -- "No such card" in the result; this engine stops with an error. The
 -- statement is run by the library's hcGo, which finds the stack first
 -- (the files beside the one imported, the disk image it came from) and
--- runs it with the stack expression in the variable tHCStack. pStackAt:
--- where a stack named without the word "stack" starts (T43, _GoStackAt)
+-- runs it with the stack expression in the variable tHCStack. A name of
+-- several words that the probe finds is no expression here, which
+-- HyperCard took as the text it was ("go to stack flood control", "go to
+-- card "Player" of stack Chess Library"; "go stack the stack you wish to
+-- process", Script Changer's, which made HyperCard ask "Where is the
+-- stack you wish to process?"), is that text in quotes: as an
+-- expression, the statement hcGo makes did not compile and stopped the
+-- handler. pStackAt: where a stack named without the word "stack" starts
+-- (T43, _GoStackAt)
 private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
-   local j, k, tLast, tFirst, tCard, tStack
+   local j, k, tLast, tFirst, tCard, tStack, tName
    if pStackAt is empty then
       repeat with j = pAt + 1 to pEnd
          if _T(pTokens, pIdx[j]) is "stack" and _T(pTokens, pIdx[j - 1]) is not "this" then
@@ -4103,7 +4110,12 @@ private function _GoStack pTokens, pIdx, pAt, pEnd, pStackAt
       _Fire "T43 go to a card of a stack"
    end if
    _Fire "T16 go to a stack not open"
-   return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[tFirst] - 1) & tCard & _Raw(pTokens, pIdx[tFirst], pIdx[pStackAt] - 1) & tStack & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(_Span(pTokens, pIdx, pStackAt, tLast)) & ")"
+   put _Span(pTokens, pIdx, pStackAt, tLast) into tName
+   if pStackAt < tLast and sProbe is not empty and not _Compiles("on hcProbe" & return & "get (" & tName & ")" & return & "end hcProbe") then
+      put _Literal(tName) into tName
+      _Fire "T33 more forms HyperCard took"
+   end if
+   return "do hcGo(" & _Literal(_Raw(pTokens, pIdx[pAt], pIdx[tFirst] - 1) & tCard & _Raw(pTokens, pIdx[tFirst], pIdx[pStackAt] - 1) & tStack & "tHCStack" & _Raw(pTokens, pIdx[tLast] + 1, pIdx[pEnd])) & ", " & _Literal(tName) & ")"
 end _GoStack
 
 -- T69: a "go" to a background without a card ("go to background
