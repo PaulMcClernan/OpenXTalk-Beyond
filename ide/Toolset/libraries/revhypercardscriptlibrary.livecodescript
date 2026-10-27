@@ -330,6 +330,7 @@ local sNameRefused
 local sParameterRefused
 local sWindowPropertyRefused
 local sCallRefused, sCallCompiles
+local sValueRefused
 
 -- The object probes compile on, and the stack being fixed
 local sProbe
@@ -344,6 +345,10 @@ local sHyperTalk
 -- The stack's own handlers a statement can call by name (lower case,
 -- true), for _ExternalArguments (T37)
 local sCallees
+
+-- The stack's externals (lower case, true), for _ExternalArguments in a
+-- script that compiles (_HyperCardRules, T37)
+local sExternals
 
 -- The stack's own functions (lower case, true), and the handlers renamed
 -- because this engine refuses their names (lower case, the new name), for
@@ -1576,6 +1581,7 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
    -- T37: the stack's own handlers, whose arguments are taken as an
    -- external's are (_ExternalArguments)
    put empty into sCallees
+   put pExternals into sExternals
    repeat for each key tWord in pDefines
       if tRenameHandlers[tWord] is empty and _IsName(tWord) and tWord is not among the words of kCommands \
             and tWord is not among the words of kHyperTalkCommands then
@@ -3081,7 +3087,11 @@ end _ParserForms
 -- Outcome", 5,"), after which HyperCard passed an empty argument, gets
 -- that argument. (pContinued: the line goes on with the statement of the
 -- line before, so its first word starts none: "with optionKey")
-private function _ExternalArguments pLine, pVars, pExternals, pContinued
+-- pCompiled: the script compiles as it is, where only a word this engine
+-- takes there for an object ("AddColor enableObject,cd,2": "can't find
+-- card") or for something else ("url") goes in quotes; "on" and a comma
+-- at the end never compile there, and every other word is its own text
+private function _ExternalArguments pLine, pVars, pExternals, pContinued, pCompiled
    local tTokens, tCode, tIdx, n, tItem, i, j, tWord, tName, tDepth, tStart, tInCall, tStop, tRule, tLast, tCommand
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -3137,13 +3147,13 @@ private function _ExternalArguments pLine, pVars, pExternals, pContinued
          if j < n and _T(tTokens, tIdx[j + 1]) is not "," and _T(tTokens, tIdx[j + 1]) is not ")" \
                and not (not tInCall and _T(tTokens, tIdx[j + 1]) is among the words of "then else") then next repeat
          if pVars[tWord] then next repeat
-         if tWord is among the words of "on off" or _ValueRefused(tWord) then
+         if (tWord is among the words of "on off" and pCompiled is not true) or _ValueRefused(tWord) then
             put quote & tTokens[tIdx[j]]["t"] & quote into tTokens[tIdx[j]]["t"]
             put "s" into tTokens[tIdx[j]]["k"]
             _Fire tRule
          end if
       end repeat
-      if not tInCall and tLast > tStart and _T(tTokens, tIdx[tLast]) is "," then
+      if not tInCall and tLast > tStart and _T(tTokens, tIdx[tLast]) is "," and pCompiled is not true then
          put ", empty" into tTokens[tIdx[tLast]]["t"]
          _Fire tRule
       end if
@@ -3524,6 +3534,16 @@ private function _HyperCardRules pLine, pCompiled, pElse
    if pCompiled and pElse is not true then put _PlayNotes(pLine) into pLine
    if char -1 of word 1 to -1 of _CodeText(pLine) is "\" then return pLine
    if pElse is not true then
+      -- T37: in a script that compiles too, a word alone as an argument of
+      -- an external, of one of the stack's handlers or of a command this
+      -- engine does not have, which HyperCard passed as its text and this
+      -- engine takes for an object it cannot find ("AddColor
+      -- enableObject,cd,2", Color Tools; "putVar cd, myID, ...", Instance
+      -- Variables; "toggleProperty cantDelete,card,..."), and stops: in
+      -- quotes (_ExternalArguments, which a script that does not compile
+      -- went through already). Such a word compiles there only before a
+      -- comma
+      if pCompiled and comma is in pLine then put _ExternalArguments(pLine, empty, sExternals, false, true) into pLine
       put _MenuItemProperties(pLine) into pLine
       put _MenuReads(pLine) into pLine
       put _CardWindow(pLine) into pLine
@@ -4381,7 +4401,10 @@ end _PlainName
 -- with a probe, as a word that is a value is a variable or the text it is
 private function _ValueRefused pName
    if sProbe is empty or not _IsName(pName) then return false
-   return not _Compiles("on hcProbe" & return & "get" && pName & return & "end hcProbe")
+   if sValueRefused[pName] is empty then
+      put not _Compiles("on hcProbe" & return & "get" && pName & return & "end hcProbe") into sValueRefused[pName]
+   end if
+   return sValueRefused[pName]
 end _ValueRefused
 
 -- The first word of the statement code token pAt is in: the line's,

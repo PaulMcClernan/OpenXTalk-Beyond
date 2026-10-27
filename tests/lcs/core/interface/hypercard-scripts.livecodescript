@@ -749,6 +749,51 @@ on TestHyperCardScriptsT37Probed
    _Close tStack
 end TestHyperCardScriptsT37Probed
 
+on TestHyperCardScriptsT37Compiled
+   -- T37 in a script that compiles too: a word alone as an argument that
+   -- this engine takes for an object it cannot find ("can't find card"),
+   -- and stops, where HyperCard passed its text: an external's (Color
+   -- Tools' "AddColor enableObject,cd,2"), one of the stack's handlers'
+   -- (Instance Variables' "putVar cd, myID, ..."), a command this engine
+   -- does not have (StackTools' "toggleProperty cantDelete,card,...")
+   local tStack, tScript, tOriginal, q, tTab
+   global gHCScriptsTest
+   put quote into q
+   put tab into tTab
+   put "HCScriptsT37Compiled" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the uHyperCard["externals"] of stack tStack to "XCMD" & tTab & "AddColor"
+   set the script of stack tStack to _Lines("on putVar pWhere, pName, pValue", "  global gHCScriptsTest", \
+         "  put pWhere & colon & pName & " & q & "=" & q & " & pValue & comma after gHCScriptsTest", "end putVar", \
+         "function getVar pWhere, pName", "  return pWhere & colon & pName & comma", "end getVar")
+   create button "B"
+   put _Lines("on mouseUp", "  global gHCScriptsTest", "  AddColor enableObject,cd,2", \
+         "  putVar cd, " & q & "x" & q & ", 5", "  if true then putVar bkgnd, " & q & "y" & q & ", 6", \
+         "  put getVar(card, " & q & "z" & q & ") after gHCScriptsTest", "  putVar " & q & "stack" & q & ", " & q & "w" & q & ", 7", \
+         "  put 1 into x", "  putVar x, menu, 8", "end mouseUp", \
+         "on other", "  toggleProperty cantDelete,card," & q & "CantDelete" & q, "  putVar cd 1, x, 2", "  putVar x, off, 2", "end other") into tOriginal
+   set the script of button "B" to tOriginal
+   unlock messages
+   TestAssert "T37: the script compiles as it is", _Compiles(tOriginal)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "B" of stack tStack into tScript
+   TestAssert "T37: an external's argument, compiled", line 3 of tScript is "  AddColor enableObject," & q & "cd" & q & ",2"
+   TestAssert "T37: a handler of the stack's argument, compiled", line 4 of tScript is "  putVar " & q & "cd" & q & ", " & q & "x" & q & ", 5"
+   TestAssert "T37: after then", line 5 of tScript is "  if true then putVar " & q & "bkgnd" & q & ", " & q & "y" & q & ", 6"
+   TestAssert "T37: a function of the stack's argument, compiled", line 6 of tScript is "  put getVar(" & q & "card" & q & ", " & q & "z" & q & ") after gHCScriptsTest"
+   TestAssert "T37: after a variable", line 9 of tScript is "  putVar x, " & q & "menu" & q & ", 8"
+   TestAssert "T37: a command this engine does not have, compiled", line 12 of tScript is "  toggleProperty cantDelete," & q & "card" & q & "," & q & "CantDelete" & q
+   TestAssert "T37: in quotes already, an object named, a variable, off: unchanged", \
+         line 7 of tScript is line 7 of tOriginal and line 13 to 14 of tScript is line 13 to 14 of tOriginal
+   TestAssert "T37: the script still compiles", _Compiles(tScript)
+   put empty into gHCScriptsTest
+   send "mouseUp" to button "B" of stack tStack
+   TestAssert "T37: the words as their own text, as in HyperCard", gHCScriptsTest is "cd:x=5,bkgnd:y=6,card:z,stack:w=7,1:menu=8,"
+   _Close tStack
+end TestHyperCardScriptsT37Compiled
+
 on TestHyperCardScriptsT38
    -- exit and pass with another handler's name: the handler's own
    local tScript, q
