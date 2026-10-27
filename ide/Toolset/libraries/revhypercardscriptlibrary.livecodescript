@@ -271,6 +271,11 @@ constant kMessageBoxProperties = "visible loc location rect rectangle top left b
 -- names the library's hcSetPaintText and hcPaintText take (T53)
 constant kPaintText = "textFont textSize textHeight textStyle textAlign"
 
+-- HyperCard's global properties that this engine has not, which it
+-- refuses to read or set ("set the dialingTime to 600"), by the names the
+-- library's hcProperty and hcSetProperty take (T64)
+constant kHyperCardProperties = "dialingTime dialingVolume language messageWatcher variableWatcher scriptEditor debugger"
+
 -- HyperCard's own windows by the names scripts gave them in quotes
 -- ("the visible of window "Scroll""), which are no stacks here (T46);
 -- the library's kHCOwnWindows
@@ -315,6 +320,7 @@ local sHandlerRefused
 local sNameRefused
 local sParameterRefused
 local sWindowPropertyRefused
+local sCallRefused, sCallCompiles
 
 -- The object probes compile on, and the stack being fixed
 local sProbe
@@ -334,6 +340,11 @@ local sCallees
 -- because this engine refuses their names (lower case, the new name), for
 -- T47 and T13
 local sStackFunctions, sRenameHandlers
+
+-- T62: the objects that define each of the stack's functions (by name,
+-- then by _PathId, true), and those on the message path of every call
+-- the script being fixed makes (by _PathId, true: _AlwaysOnPath)
+local sFunctionDefiners, sReached
 
 -- Each rule's count for the object being fixed, and for the whole stack
 local sFired
@@ -417,13 +428,17 @@ function revHyperCardFixScripts pStack
    put _Objects(sStack) into tObjects
    -- First pass: the handlers the stack defines (for the renamed ones, a
    -- call anywhere in the stack is renamed too), which of them are
-   -- functions, and its externals
+   -- functions (and where, T62), and its externals
    put empty into sStackFunctions
+   put empty into sFunctionDefiners
    repeat for each line tObject in tObjects
       repeat for each line tLine in the script of tObject
          if word 1 of tLine is among the items of "on,function" then
             put true into tDefines[_Lower(_Word2(tLine))]
-            if word 1 of tLine is "function" then put true into sStackFunctions[_Lower(_Word2(tLine))]
+            if word 1 of tLine is "function" then
+               put true into sStackFunctions[_Lower(_Word2(tLine))]
+               put true into sFunctionDefiners[_Lower(_Word2(tLine))][_PathId(tObject)]
+            end if
          end if
       end repeat
    end repeat
@@ -445,6 +460,7 @@ function revHyperCardFixScripts pStack
       if tOriginal is empty then next repeat
       put _Compiles(tOriginal) into tCompiled
       put tObject into sObject
+      put _AlwaysOnPath(tObject) into sReached
       put empty into sFired
       put _Rewrite(tOriginal, tDefines, tExternals, tCompiled) into tNew
       put empty into tNote
@@ -528,6 +544,8 @@ function revHyperCardRewriteScript pScript, pExternals, pHyperTalk
    put pHyperTalk is true into sHyperTalk
    put empty into sFired
    put empty into sStackFunctions
+   put empty into sFunctionDefiners
+   put empty into sObject
    return _Rewrite(pScript, empty, tExternals, false)
 end revHyperCardRewriteScript
 
@@ -1150,6 +1168,126 @@ private function _HandlerRefused pName
    return sHandlerRefused[pName]
 end _HandlerRefused
 
+-- T62: whether this engine takes a call "pName(...)" of the stack's
+-- function pName for something else: one of its constants ("comma(hold)",
+-- SalesWriter's), properties ("colors()", "Visible(place, object, i)",
+-- "fileName(it)", which compile with an argument and stop with an error
+-- each time they run) or functions ("selectedButton(1)", "round(x)",
+-- which HyperCard sent to the stack's handler first, as it did every call
+-- with parentheses, and only "the" form went straight to its own), or a
+-- word a call of which compiles in neither form ("wrap(string)", an
+-- operator). (A call that compiles of another word reaches the handler,
+-- as in HyperCard, also from a "do" or a "value", which renaming it would
+-- break)
+private function _CallRefused pName
+   put _Lower(pName) into pName
+   if not _IsName(pName) or pName is among the words of kNotPlain then return false
+   if sCallRefused[pName] is empty then
+      put pName is among the lines of the constantNames or pName is among the lines of the propertyNames \
+            or pName is among the lines of the functionNames into sCallRefused[pName]
+   end if
+   if sCallRefused[pName] or sProbe is empty then return sCallRefused[pName]
+   if sCallCompiles[pName] is empty then
+      put _Compiles("on hcProbe" & return & "put" && pName & "() into tValue" & return & "end hcProbe") \
+            or _Compiles("on hcProbe" & return & "put" && pName & "(1) into tValue" & return & "end hcProbe") into sCallCompiles[pName]
+   end if
+   return not sCallCompiles[pName]
+end _CallRefused
+
+-- T62: in a script that compiles, the stack's functions that are renamed
+-- (pRename: T1's and T62's, by their old names), where the line defines
+-- one (its function, end, exit or pass) or calls one with parentheses
+-- that reaches it (_Reached), which here reached this engine's own
+-- function, property or constant of that name and in HyperCard the
+-- stack's handler ("select line clickLine() of me", where the stack's
+-- clickLine gives a line's number). (A function named like a command is
+-- T47's.)
+private function _RenamedFunctions pLine, pRename
+   local tTokens, tCode, tIndex, tFirst, tWord, tPrev, tNext, tChanged
+   -- (a line that names none of them, as most do, as it is)
+   repeat for each key tWord in pRename
+      if sStackFunctions[tWord] and tWord is in pLine then put true into tChanged
+   end repeat
+   if not tChanged then return pLine
+   put false into tChanged
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put item 1 of tCode into tFirst
+   repeat for each item tIndex in tCode
+      if tTokens[tIndex]["k"] is not "w" then next repeat
+      put _T(tTokens, tIndex) into tWord
+      if pRename[tWord] is empty or not sStackFunctions[tWord] or tWord is among the words of kCommands then next repeat
+      put _PrevCode(tCode, tIndex) into tPrev
+      put _NextCode(tCode, tIndex) into tNext
+      if (_T(tTokens, tPrev) is among the words of "on function end pass exit" \
+            and (tPrev = tFirst or _T(tTokens, tPrev) is among the words of "pass exit")) \
+            or (_T(tTokens, tNext) is "(" and _T(tTokens, tPrev) is not "the" and _Reached(tWord)) then
+         put pRename[tWord] into tTokens[tIndex]["t"]
+         put true into tChanged
+         if _HandlerRefused(tWord) then
+            _Fire "T1 handler named like a keyword"
+         else
+            _Fire "T62 a function named like a word of this engine"
+         end if
+      end if
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _RenamedFunctions
+
+-- T62: whether every call of the stack's function pName that the script
+-- being fixed makes reaches a definition of it: one in a script on the
+-- message path of all its calls (sReached), its own included. Only such
+-- a call is renamed to the new name of the function: HyperCard sent a
+-- call that found no handler of the stack's on to its own function (a
+-- card's function called from another card), which the call that is not
+-- renamed still reaches here, and the new name would reach nothing. (A
+-- script in no stack, revHyperCardRewriteScript's, defines what it
+-- calls)
+private function _Reached pName
+   local tId
+   if sFunctionDefiners[pName] is not an array then return true
+   repeat for each key tId in sFunctionDefiners[pName]
+      if sReached[tId] is true then return true
+   end repeat
+   return false
+end _Reached
+
+-- T62: pObject, the object of a script of the stack, as _AlwaysOnPath
+-- and sFunctionDefiners name it: "stack" for the stack, else its id
+private function _PathId pObject
+   if word 1 of pObject is "stack" then return "stack"
+   return the id of pObject
+end _PathId
+
+-- T62: the objects whose scripts are on the message path of every call
+-- pObject's script makes (by _PathId, true): pObject, the groups and the
+-- card it is on, that card's backgrounds, and the stack. A background
+-- and its controls are on every card of it, so no card is. (In a stack
+-- with HyperCard's addressing a control's long id begins "card button"
+-- or "bkgnd field", and a card's still "card id")
+private function _AlwaysOnPath pObject
+   local tPath, tObject, tShared, tId, n
+   put true into tPath["stack"]
+   put pObject into tObject
+   repeat with n = 1 to 20
+      if tObject is empty or word 1 of tObject is "stack" then exit repeat
+      if word 1 to 2 of tObject is "card id" then
+         if not tShared then
+            put true into tPath[the id of tObject]
+            repeat for each line tId in the backgroundIDs of tObject
+               put true into tPath[tId]
+            end repeat
+         end if
+         exit repeat
+      end if
+      put true into tPath[the id of tObject]
+      if word 1 of tObject is "group" and the backgroundBehavior of tObject then put true into tShared
+      put the long id of the owner of tObject into tObject
+   end repeat
+   return tPath
+end _AlwaysOnPath
+
 -- Whether this engine refuses pName as a parameter's name ("on choose
 -- tool, n", "on fill f, invisible"), which a variable of that name is
 -- not always refused as
@@ -1355,23 +1493,26 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
    end repeat
 
    -- The handlers that are renamed: those defined anywhere in the stack
-   -- (or in this script) whose names this engine refuses
+   -- (or in this script) whose names this engine refuses, and (T62) the
+   -- stack's functions it takes a call of for something else
+   -- (_CallRefused). T47 and T62: the stack's functions, this script's
+   -- too
    repeat with i = 1 to tSpanCount
       put true into pDefines[tSpans[i]["name"]]
+      if word 1 of _CodeText(tLines[tSpans[i]["start"]]) is "function" then put true into sStackFunctions[tSpans[i]["name"]]
    end repeat
    repeat for each key tWord in pDefines
-      if _HandlerRefused(tWord) then put _NewHandlerName(tWord) into tRenameHandlers[tWord]
+      if _HandlerRefused(tWord) or (sStackFunctions[tWord] and _CallRefused(tWord)) then
+         put _NewHandlerName(tWord) into tRenameHandlers[tWord]
+      end if
    end repeat
    -- T15: without HyperCard's message order, every doMenu goes to
    -- hcDoMenu, the stack's own (its "on doMenu", renamed) and then the
    -- library's, which does what HyperCard's menu items did; with it,
    -- doMenu is a message that reaches them as it is
    if not sHyperTalk then put "hcDoMenu" into tRenameHandlers["domenu"]
-   -- T47: the new names, and the stack's functions, this script's too
+   -- T47: the new names
    put tRenameHandlers into sRenameHandlers
-   repeat with i = 1 to tSpanCount
-      if word 1 of _CodeText(tLines[tSpans[i]["start"]]) is "function" then put true into sStackFunctions[tSpans[i]["name"]]
-   end repeat
    -- T37: the stack's own handlers, whose arguments are taken as an
    -- external's are (_ExternalArguments)
    put empty into sCallees
@@ -1385,11 +1526,13 @@ private function _Rewrite pScript, pDefines, pExternals, pCompiled
    if pCompiled then
       -- Only what changes what a script that compiles does, to what it did
       -- in HyperCard: the doMenu routing (in a stack without HyperCard's
-      -- message order), HyperCard's version, and the statements that stop
-      -- with an error here where HyperCard went on (_HyperCardRules)
+      -- message order), HyperCard's version, the stack's functions that
+      -- are renamed (T62), and the statements that stop with an error here
+      -- where HyperCard went on (_HyperCardRules)
       repeat with i = 1 to tCount
          if tRenameHandlers["domenu"] is not empty then put _RouteDoMenu(tLines[i]) into tLines[i]
          put _VersionRule(tLines[i]) into tLines[i]
+         put _RenamedFunctions(tLines[i], tRenameHandlers) into tLines[i]
       end repeat
       repeat with i = 1 to tSpanCount
          _HyperCardRulesLines tLines, tSpans[i]["start"], tSpans[i]["end"], true
@@ -1797,6 +1940,12 @@ private function _HandlerVariables pLines, pStart, pEnd
             -- "into field x", "into line 2 of x": not a variable ("into
             -- card" alone is one)
             if _T(tTokens, tNext) is among the words of kObjectWords and tAfter is not empty and _T(tTokens, tAfter) is not "else" then next repeat
+            -- "into me" in a field's or a button's script: the control, in
+            -- HyperCard as here ("put mPP - 15 into me", a field's), not a
+            -- variable. (Elsewhere, where it is no container, it is the
+            -- variable T2 renames, as it was: "put (userName contains
+            -- "Ari Halberstadt") into me", a stack's openStack)
+            if _T(tTokens, tNext) is "me" and _MeIsControl() then next repeat
             if _T(tTokens, tAfter) is "of" then next repeat
             if tAfter is not empty and tTokens[tAfter]["k"] is "n" then next repeat
             if tAfter is not empty and _T(tTokens, tAfter) is among the words of kObjectWords then next repeat
@@ -1806,6 +1955,15 @@ private function _HandlerVariables pLines, pStart, pEnd
    end repeat
    return tVars
 end _HandlerVariables
+
+-- Whether the script being fixed is a field's or a button's, whose "me"
+-- is the control's text, here as in HyperCard: its long id begins "field
+-- id" or "button id" ("card field id", "bkgnd button id" with HyperCard's
+-- addressing). (revHyperCardRewriteScript's script is no object's)
+private function _MeIsControl
+   if word 1 of sObject is among the words of "card bkgnd" then return word 2 of sObject is among the words of "field button"
+   return word 1 of sObject is among the words of "field button"
+end _MeIsControl
 
 -- Whether pWord, a variable of the handler named like a word of the
 -- grammar (kRenamedWhereVariable), stands here where a variable stands:
@@ -1917,21 +2075,29 @@ private function _RewriteLine pLine, pVars, pRename, pExternals, pRenameHandlers
       put _NextCode(tCode, tIndex) into tNext
 
       -- T1: a handler whose name is refused, its end, its pass and exit,
-      -- and calls to it
+      -- and calls to it (T62: a function of the stack that this engine
+      -- takes a call of for something else, and its calls)
       if pRenameHandlers[tWord] is not empty then
          if _T(tTokens, tPrev) is among the words of "on function end pass exit" \
                and (tPrev = tFirst or _T(tTokens, tPrev) is among the words of "pass exit") then
             put pRenameHandlers[tWord] into tTokens[tIndex]["t"]
-            _Fire "T1 handler named like a keyword"
+            if _HandlerRefused(tWord) then
+               _Fire "T1 handler named like a keyword"
+            else
+               _Fire "T62 a function named like a word of this engine"
+            end if
             next repeat
          end if
          if tWord is "domenu" or tWord is not among the words of kCommands then
-            if _StatementStart(tTokens, tCode, tIndex) or (_T(tTokens, tNext) is "(" and _T(tTokens, tPrev) is not "the") then
+            if (_StatementStart(tTokens, tCode, tIndex) and _HandlerRefused(tWord)) \
+                  or (_T(tTokens, tNext) is "(" and _T(tTokens, tPrev) is not "the" and (_HandlerRefused(tWord) or _Reached(tWord))) then
                put pRenameHandlers[tWord] into tTokens[tIndex]["t"]
                if tWord is "domenu" then
                   _Fire "T15 doMenu to hcDoMenu"
-               else
+               else if _HandlerRefused(tWord) then
                   _Fire "T1 handler named like a keyword"
+               else
+                  _Fire "T62 a function named like a word of this engine"
                end if
                next repeat
             end if
@@ -2068,6 +2234,24 @@ private function _PhraseRules pLine
       put _T(tTokens, tIdx[i + 2]) into tNext2
       put _T(tTokens, tIdx[i - 1]) into tPrev
 
+      -- T63: a mark of punctuation alone as a value ("set the itemDelimiter
+      -- to :", "if theKey = . then", "digest sb,.,sa", "put the round of
+      -- x &% into field score", "put ~&it into field "images""), which
+      -- HyperCard took as the text it was, like a word not in quotes, and
+      -- this engine refuses (# starts a comment here): in quotes. Not one
+      -- that touches a word or a number ("5.", "10:30", "Stack.Name"), nor
+      -- one that is not between an operator or a statement's verb and the
+      -- end of a value
+      if tTokens[tIdx[i]]["k"] is "p" and tWord is among the words of ". : % ~ ! #" \
+            and tTokens[tIdx[i] - 1]["k"] is not among the words of "w n" and tTokens[tIdx[i] + 1]["k"] is not among the words of "w n" \
+            and tPrev is among the words of "( , & + - * / = < > ^ is put return to and or not contains then else get with" \
+            and (tNext is empty or tNext is among the words of kAfterValue) then
+         put quote & tTokens[tIdx[i]]["t"] & quote into tTokens[tIdx[i]]["t"]
+         put "s" into tTokens[tIdx[i]]["k"]
+         _Fire "T63 a mark of punctuation as a value"
+         next repeat
+      end if
+
       -- T4: the message box, the msg, the message window
       if tWord is among the words of "message msg" and tNext is among the words of "box window" then
          if tPrev is "the" then put empty into tTokens[tIdx[i - 1]]["t"]
@@ -2150,6 +2334,47 @@ private function _PhraseRules pLine
       if tWord is "suspended" and tPrev is "the" then
          _Replace tTokens, tIdx, i - 1, i, "hcSuspended()"
          _Fire "T10 HyperCard's version"
+         next repeat
+      end if
+      -- (and "the short version of HyperCard", which this engine refuses,
+      -- HyperCard's version: "if short version of hypercard > 2.2 then"
+      -- too)
+      if tWord is "version" and tPrev is "short" and tNext is "of" and tNext2 is "hypercard" then
+         if _T(tTokens, tIdx[i - 2]) is "the" then
+            _Replace tTokens, tIdx, i - 2, i + 2, "hcVersion()"
+         else
+            _Replace tTokens, tIdx, i - 1, i + 2, "hcVersion()"
+         end if
+         _Fire "T10 HyperCard's version"
+         next repeat
+      end if
+
+      -- T61: HyperCard 2.2's speech functions ("if the speech is not done
+      -- then stop speech", "get line 1 of the voices", "if voices() is
+      -- empty"), which this engine has not: the library's hcSpeech() and
+      -- hcVoices(); with parentheses, unless the stack has a function of
+      -- that name. (Stop speech: _HyperCardRules)
+      if tWord is among the words of "speech voices" and tTokens[tIdx[i]]["k"] is "w" \
+            and ((tPrev is "the" and tNext is not "of") \
+            or (tNext is "(" and tNext2 is ")" and not sStackFunctions[tWord] and tPrev is not among the words of "the function on end")) then
+         if tPrev is "the" then
+            _Replace tTokens, tIdx, i - 1, i, "hc" & toUpper(char 1 of tWord) & char 2 to -1 of tWord & "()"
+         else
+            _Replace tTokens, tIdx, i, i + 2, "hc" & toUpper(char 1 of tWord) & char 2 to -1 of tWord & "()"
+         end if
+         _Fire "T61 HyperCard's speech"
+         next repeat
+      end if
+
+      -- T64: HyperCard's global properties this engine has not, read ("put
+      -- the dialingTime into SaveDialingTime", "put the language into
+      -- oldlanguage"), which it does not compile: the library's
+      -- hcProperty(), which gives back what a script set (a set is
+      -- _SetHyperCardProperty's) or HyperCard's own value
+      if tWord is among the words of kHyperCardProperties and tPrev is "the" and tNext is not "of" \
+            and _T(tTokens, tIdx[i - 2]) is not "set" then
+         _Replace tTokens, tIdx, i - 1, i, "hcProperty(" & quote & _HyperCardPropertyName(tWord) & quote & ")"
+         _Fire "T64 HyperCard's global properties"
          next repeat
       end if
 
@@ -3323,6 +3548,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             -- (T53 before T51, which takes a font of several words with no
             -- object too: "set the textFont to New York")
             if tNew is empty then put _SetPaintText(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetHyperCardProperty(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetTextFont(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetShowPict(tTokens, tIdx, i, tEnd) into tNew
             break
@@ -3364,6 +3590,27 @@ private function _HyperCardRules pLine, pCompiled, pElse
                   put "hcStopUsing" && _Span(tTokens, tIdx, i + 3, tEnd) into tNew
                end if
             end if
+            -- T61: stop speech, HyperCard 2.2's, which this engine refuses
+            -- ("bad action"): the library's hcStopSpeech
+            if tWord is "stop" and _T(tTokens, tIdx[i + 1]) is "speech" and i + 1 = tEnd then
+               _Fire "T61 HyperCard's speech"
+               put "hcStopSpeech" into tNew
+            end if
+            break
+         case "speak"
+            -- T61: speak with a voice, HyperCard 2.2's ("speak (item 4 of
+            -- pasteList) with voice it", "speak x with female voice"),
+            -- which this engine refuses: the library's Speak, which
+            -- speaks the text (in the voice speech has here). The speak
+            -- without one is a call of the library's Speak as it is
+            repeat with j = i + 2 to tEnd - 1
+               if _T(tTokens, tIdx[j]) is "with" and (_T(tTokens, tIdx[j + 1]) is "voice" \
+                     or (_T(tTokens, tIdx[j + 1]) is among the words of "male female neuter robotic" and _T(tTokens, tIdx[j + 2]) is "voice")) then
+                  _Fire "T61 HyperCard's speech"
+                  put "Speak" && _Span(tTokens, tIdx, i + 1, j - 1) into tNew
+                  exit repeat
+               end if
+            end repeat
             break
          case "choose"
             -- T30: choose tool 4, choose tool x, choose btn tool: this
@@ -4827,6 +5074,33 @@ private function _PaintTextName pWord
    end repeat
    return pWord
 end _PaintTextName
+
+-- T64: HyperCard's global properties that this engine has not, set ("set
+-- the dialingTime to 600", "set language to oldlanguage"), which it
+-- refuses ("set: no property specified"): the library's hcSetProperty,
+-- which keeps the value for hcProperty() to give back (a read is
+-- _PhraseRules')
+private function _SetHyperCardProperty pTokens, pIdx, pAt, pEnd
+   local tProperty
+   put pAt + 1 into tProperty
+   if _T(pTokens, pIdx[tProperty]) is "the" then add 1 to tProperty
+   if _T(pTokens, pIdx[tProperty]) is not among the words of kHyperCardProperties \
+         or _T(pTokens, pIdx[tProperty + 1]) is not "to" or tProperty + 1 >= pEnd then
+      return empty
+   end if
+   _Fire "T64 HyperCard's global properties"
+   return "hcSetProperty" && quote & _HyperCardPropertyName(_T(pTokens, pIdx[tProperty])) & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
+end _SetHyperCardProperty
+
+-- HyperCard's global property pWord, a word of kHyperCardProperties in
+-- any case, by the name the library takes ("dialingtime": "dialingTime")
+private function _HyperCardPropertyName pWord
+   local tName
+   repeat for each word tName in kHyperCardProperties
+      if tName is pWord then return tName
+   end repeat
+   return pWord
+end _HyperCardPropertyName
 
 -- T53: the paint text's textFont, textSize, textHeight, textStyle or
 -- textAlign read with no object ("put the textHeight div 2 into h", "if

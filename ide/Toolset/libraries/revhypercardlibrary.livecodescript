@@ -627,6 +627,39 @@ function hcSuspended
    return false
 end hcSuspended
 
+-- HyperCard's global properties that this engine has not (rule T64:
+-- "set the dialingTime to 600", "put the language into oldlanguage"):
+-- what a script set, else HyperCard's own value. They change nothing
+-- here: no modem is dialed for the dialingTime (in ticks) and the
+-- dialingVolume to time and sound, scripts read in English whatever the
+-- language, and the watchers and the script editor and debugger
+-- (HyperCard's XCMDs for them, named by these) are the IDE's
+local sHCProperties
+
+function hcProperty pName
+   if pName is among the keys of sHCProperties then return sHCProperties[pName]
+   switch pName
+      case "dialingTime"
+         return 180
+      case "dialingVolume"
+         return 7
+      case "language"
+         return "English"
+      case "messageWatcher"
+         return "MessageWatcher"
+      case "variableWatcher"
+         return "VariableWatcher"
+      case "scriptEditor"
+      case "debugger"
+         return "ScriptEditor"
+   end switch
+   return empty
+end hcProperty
+
+on hcSetProperty pName, pValue
+   put pValue into sHCProperties[pName]
+end hcSetProperty
+
 -- HyperCard's name (rule T29): "HyperCard", or with pForm "long" its
 -- path as HyperCard gave it, a Mac path with colons. Scripts take the
 -- folder from it and add a stack's name, so it is put in the folder the
@@ -4428,9 +4461,13 @@ private function _HCPopUp pText, pTop, pLeft
    return tChosen
 end _HCPopUp
 
+-- The text _HCSpeak last spoke, for hcSpeech
+local sHCSpeechText
+
 -- In a browser (the Stack Player) by the page's speech synthesis, else
--- by revSpeak
+-- by revSpeak. The text is kept for hcSpeech
 private function _HCSpeak pText
+   put pText into sHCSpeechText
    if the platform is "web" then
       try
          do "window.speechSynthesis.speak(new SpeechSynthesisUtterance(" & _HCJavaScriptString(pText) & "))" as "javascript"
@@ -4446,6 +4483,38 @@ private function _HCSpeak pText
    end try
    return the result
 end _HCSpeak
+
+-- HyperCard 2.2's speech functions and stop speech (rule T61), by
+-- revSpeech, which speaks in the browser too: the text being spoken, or
+-- "done" when none is (the speech); the voices, one a line, empty where
+-- there is no speech (the voices). "stop speech" stops what is being
+-- spoken
+function hcSpeech
+   local tSpeaking
+   put false into tSpeaking
+   try
+      put revIsSpeaking() is true into tSpeaking
+   catch tError
+   end try
+   if tSpeaking then return sHCSpeechText
+   return "done"
+end hcSpeech
+
+function hcVoices
+   local tVoices
+   try
+      put revSpeechVoices() into tVoices
+   catch tError
+   end try
+   return tVoices
+end hcVoices
+
+on hcStopSpeech
+   try
+      revStopSpeech
+   catch tError
+   end try
+end hcStopSpeech
 
 -- pText as a JavaScript string literal. (Its carriage returns are
 -- numToCodepoint(13): this library runs in the imported stack, where
