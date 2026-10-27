@@ -194,3 +194,39 @@ end TestGoRegularOnVisibleScriptOnly
 on TestGoRegularOnInvisibleScriptOnly
    _TestGoInvisibleVisibleStack "", "script only", "invisible"
 end TestGoRegularOnInvisibleScriptOnly
+
+on TestGoNextBackgroundFromCardWithNone
+   -- the next or the previous background of a card with no background:
+   -- none, which a chunk names with an error and a go goes past (this
+   -- engine crashed looking for it)
+   local tStack, tName, tError
+   create stack
+   put the short name of it into tStack
+   set the defaultStack to tStack
+   create card
+   create group "Bg"
+   set the backgroundBehavior of group "Bg" to true
+   go to card 1 of stack tStack
+
+   try
+      put the short name of next background into tName
+   catch tError
+   end try
+   TestAssert "the next background of a card with none is an error", tError is not empty
+
+   put empty into tError
+   try
+      put the short name of prev background into tName
+   catch tError
+   end try
+   TestAssert "the previous background of a card with none is an error", tError is not empty
+
+   put empty into tError
+   try
+      go to card 1 of next background
+   catch tError
+   end try
+   TestAssert "a go to a card of the next background from a card with none goes on", tError is empty
+
+   delete stack tStack
+end TestGoNextBackgroundFromCardWithNone
