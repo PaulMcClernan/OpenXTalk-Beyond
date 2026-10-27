@@ -488,6 +488,21 @@ on TestHyperCardScriptsT34
    TestAssert "T34: the line it continued on, left empty", line 12 of tScript is empty
    TestAssert "T34: the script compiles", _Compiles(tScript)
 
+   -- the number's field on a card the line names, when the chunk's own
+   -- "of" follows (Helter Skelter's)
+   put _Rewrite("on mouseUp", \
+         "  put x after line cd fld " & q & "N" & q & " of cd " & q & "Main Menu" & q & " of cd fld " & q & "List" & q, \
+         "  get line cd fld " & q & "N" & q & " of card id 2881 of cd fld " & q & "List" & q & " of card id 2881", \
+         "  put x into line cd fld " & q & "N" & q & " of cd fld " & q & "List" & q & " of cd " & q & "Dial" & q, \
+         "end mouseUp") into tScript
+   TestAssert "T34: a field on a card as a line's number", line 2 of tScript \
+         is "  put x after line (cd fld " & q & "N" & q & " of cd " & q & "Main Menu" & q & ") of cd fld " & q & "List" & q
+   TestAssert "T34: on a card by id", line 3 of tScript \
+         is "  get line (cd fld " & q & "N" & q & " of card id 2881) of cd fld " & q & "List" & q & " of card id 2881"
+   TestAssert "T34: the card of the list: not the number's", line 4 of tScript \
+         is "  put x into line (cd fld " & q & "N" & q & ") of cd fld " & q & "List" & q & " of cd " & q & "Dial" & q
+   TestAssert "T34: the script with them compiles", _Compiles(tScript)
+
    -- unchanged: a line's number that is not an object, the number of a
    -- chunk, a variable named like a function in the external's place
    put _Rewrite("on mouseUp", "  put 1 into line 2 of fld 3", "  put the number of lines of the windows into n", "end mouseUp") into tScript
@@ -2081,6 +2096,112 @@ on TestHyperCardScriptsT55
    TestAssert "T55: five items, HyperCard's long version first", gHCScriptsTest is "5,02418000,true"
    _Close tStack
 end TestHyperCardScriptsT55
+
+on TestHyperCardScriptsT56
+   -- T56: a chunk of a chunk no larger than itself, which HyperCard took
+   -- chunk by chunk from the container in and this engine refuses ("bad
+   -- chunk order"): as a value, the part from the first chunk out of
+   -- order on in parentheses; as the destination of a put, the larger
+   -- chunk through a variable (20 statements in 9 corpus stacks: Aligner,
+   -- GenChart, Import SYLK, HyperBattleship, Battleships, DragTracer, Mews,
+   -- and Telling Tools and its help stack)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  if item 2 of word 1 of line j of fld seqNames <> " & q & q & " then beep", \
+         "  get char 3 of line n of line n of tRow", \
+         "  put line a of item n of linkLists into destination", \
+         "  put item 2 of word 1 of it & " & q & "." & q & " & item 3 of word 1 of it into t", \
+         "  animateHit x, word 2 of char p to (p + 50) of shipList", \
+         "  get the second item of the last word of fld 1", \
+         "  put item 1 of word 1 of line 2 of field " & q & "Card Id" & q & " of card id 5 into hx", \
+         "end mouseUp") into tScript
+   TestAssert "T56: in a condition, the part from the word on", line 2 of tScript \
+         is "  if item 2 of (word 1 of line j of fld seqNames) <> " & q & q & " then beep"
+   TestAssert "T56: a line of the same line", line 3 of tScript is "  get char 3 of line n of (line n of tRow)"
+   TestAssert "T56: a line of an item", line 4 of tScript is "  put line a of (item n of linkLists) into destination"
+   TestAssert "T56: two on a line", line 5 of tScript \
+         is "  put item 2 of (word 1 of it) & " & q & "." & q & " & item 3 of (word 1 of it) into t"
+   TestAssert "T56: a word of a range of chars", line 6 of tScript is "  animateHit x, word 2 of (char p to (p + 50) of shipList)"
+   TestAssert "T56: with ordinals", line 7 of tScript is "  get the second item of (the last word of fld 1)"
+   TestAssert "T56: a field of a card", line 8 of tScript \
+         is "  put item 1 of (word 1 of line 2 of field " & q & "Card Id" & q & " of card id 5) into hx"
+   TestAssert "T56: the script compiles", _Compiles(tScript)
+
+   -- the destination of a put: the larger chunk into hcChunk, the value
+   -- into its chunk, and back; after then or else, a do of the three
+   put _Rewrite("on mouseUp", \
+         "  put x into item 1 of word 1 of line 2 of field " & q & "Card Id" & q, \
+         "  put " & q & "another" & q & " into second word of line 1 of item 1 of card field " & q & "narration" & q, \
+         "  if x then put y after item 1 of word 2 of z", \
+         "  put item 2 of word 1 of a into item 1 of word 2 of b", \
+         "end mouseUp") into tScript
+   TestAssert "T56: into an item of a word", line 2 of tScript \
+         is "  put word 1 of line 2 of field " & q & "Card Id" & q & " into hcChunk; put x into item 1 of hcChunk; put hcChunk into word 1 of line 2 of field " & q & "Card Id" & q
+   TestAssert "T56: into a word of a line of an item", line 3 of tScript \
+         is "  put item 1 of card field " & q & "narration" & q & " into hcChunk; put " & q & "another" & q & " into second word of line 1 of hcChunk; put hcChunk into item 1 of card field " & q & "narration" & q
+   TestAssert "T56: after then, a do", line 4 of tScript \
+         is "  if x then do " & q & "put word 2 of z into hcChunk; put y after item 1 of hcChunk; put hcChunk into word 2 of z" & q
+   TestAssert "T56: the value too", line 5 of tScript \
+         is "  put word 2 of b into hcChunk; put item 2 of (word 1 of a) into item 1 of hcChunk; put hcChunk into word 2 of b"
+   TestAssert "T56: the script with them compiles", _Compiles(tScript)
+
+   -- unchanged: chunks in order, a chunk of a property, what a delete
+   -- or an add takes, a destination with two chunks out of order
+   put _Rewrite("on mouseUp", \
+         "  put item 2 of line 3 of x into word 1 of line 2 of y", \
+         "  set the textStyle of item 2 of word 1 of fld 1 to bold", \
+         "  delete item 2 of word 1 of x", \
+         "  add 1 to item 2 of word 1 of x", \
+         "  put 1 into item 1 of word 2 of char 3 to 9 of y", \
+         "end mouseUp") into tScript
+   TestAssert "T56: chunks in order: unchanged", line 2 of tScript is "  put item 2 of line 3 of x into word 1 of line 2 of y"
+   TestAssert "T56: a chunk of a property: unchanged", line 3 of tScript is "  set the textStyle of item 2 of word 1 of fld 1 to bold"
+   TestAssert "T56: what a delete takes: unchanged", line 4 of tScript is "  delete item 2 of word 1 of x"
+   TestAssert "T56: what an add takes: unchanged", line 5 of tScript is "  add 1 to item 2 of word 1 of x"
+   TestAssert "T56: two chunks out of order: unchanged", line 6 of tScript is "  put 1 into item 1 of word 2 of char 3 to 9 of y"
+
+   -- in a stack: the values HyperCard gave, and a field's text changed
+   -- where it did
+   put "HCScriptsT56" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create field "Seq"
+   put "a1,a2 b1,b2" & return & "c1,c2 d1,d2" & return & "e1,e2 f1,f2" into field "Seq"
+   create button "Read"
+   set the script of button "Read" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "x y" & q & " & return & " & q & "p q r" & q & " into tRow", \
+         "  put item 2 of word 1 of line 2 of fld " & q & "Seq" & q & " & comma & word 2 of line 1 of line 2 of tRow" \
+         & " & comma & the second item of the last word of fld " & q & "Seq" & q & " into gHCScriptsTest", \
+         "end mouseUp")
+   create button "Write"
+   set the script of button "Write" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put " & q & "Q" & q & " into item 1 of word 2 of line 3 of fld " & q & "Seq" & q, \
+         "  if fld " & q & "Seq" & q & " is not empty then put " & q & "R" & q & " after second word of line 1 of item 2 of fld " & q & "Seq" & q, \
+         "  put fld " & q & "Seq" & q & " into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T56: as it is, the script does not compile", not _Compiles(the script of button "Read" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T56: the scripts compile", _Compiles(the script of button "Read" of stack tStack) \
+         and _Compiles(the script of button "Write" of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Read" of stack tStack
+   catch tError
+   end try
+   TestAssert "T56: an item of a word of a line, a word of a line of a line, with ordinals", gHCScriptsTest is "c2,q,f2"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Write" of stack tStack
+   catch tError
+   end try
+   TestAssert "T56: into an item of a word of a line, after a word of a line of an item in a do", \
+         gHCScriptsTest is "a1,a2 b1R,b2" & return & "c1,c2 d1,d2" & return & "e1,e2 Q,f2"
+   _Close tStack
+end TestHyperCardScriptsT56
 
 on TestHyperCardScriptsT22Names
    -- T22: a menu or a menu item named by one word this engine does not

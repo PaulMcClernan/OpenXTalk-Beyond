@@ -2191,7 +2191,7 @@ end _PhraseRules
 -- by statement (a statement starts a line, or follows "then" or "else");
 -- pVars: the handler's variables
 private function _ParserForms pLine, pVars
-   local tTokens, tCode, tIdx, n, tItem, i, j, k, tEnd, tWord, tDepth, tAt, tTypes, tBefore, tLength
+   local tTokens, tCode, tIdx, n, tItem, i, j, k, tEnd, tWord, tDepth, tAt, tTypes, tBefore, tLength, tCard
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
    put 0 into n
@@ -2636,7 +2636,9 @@ private function _ParserForms pLine, pVars
 
       -- T34: a field or button as a chunk's number ("line bg fld "N" of
       -- bg fld "List"", which HyperCard took as the line the field's text
-      -- numbers): the object in parentheses
+      -- numbers): the object in parentheses, with the card it is on when
+      -- another "of" follows that ("line cd fld "N" of cd "Main" of cd
+      -- fld "List"": no chunk is of a card)
       repeat with j = i to tEnd - 3
          if _T(tTokens, tIdx[j]) is not among the words of "char character word item line" then next repeat
          if j > 1 and _T(tTokens, tIdx[j - 1]) is "the" then next repeat
@@ -2647,6 +2649,14 @@ private function _ParserForms pLine, pVars
          if _T(tTokens, tIdx[k]) is "id" then add 1 to k
          if k >= tEnd or _T(tTokens, tIdx[k + 1]) is not "of" then next repeat
          if tTokens[tIdx[k]]["k"] is not among the items of "s,n,w" then next repeat
+         if _T(tTokens, tIdx[k + 2]) is among the words of "card cd" \
+               and _T(tTokens, tIdx[k + 3]) is not among the words of "field fld button btn" then
+            put k + 3 into tCard
+            if _T(tTokens, tIdx[tCard]) is "id" then add 1 to tCard
+            if tCard < tEnd and _T(tTokens, tIdx[tCard + 1]) is "of" and tTokens[tIdx[tCard]]["k"] is among the items of "s,n,w" then
+               put tCard into k
+            end if
+         end if
          put "(" before tTokens[tIdx[j + 1]]["t"]
          put ")" after tTokens[tIdx[k]]["t"]
          _Fire "T34 more forms HyperCard took"
@@ -3031,6 +3041,8 @@ private function _HyperCardRules pLine, pCompiled, pElse
       put _HyperCardObject(pLine) into pLine
       put _PictureProperties(pLine) into pLine
       put _PaintTextReads(pLine) into pLine
+      -- (T56's chunks never compile here as they are)
+      if not pCompiled then put _ChunkOrder(pLine) into pLine
    end if
    put _Tokens(pLine) into tTokens
    put _Code(tTokens) into tCode
@@ -3170,6 +3182,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty and not pCompiled then put _PutChunkOrder(tTokens, tIdx, i, tEnd, n) into tNew
             break
          case "enable"
          case "disable"
@@ -4616,6 +4629,186 @@ private function _PaintTextReads pLine
    if not tChanged then return pLine
    return _Join(tTokens)
 end _PaintTextReads
+
+-- T56: a chunk of a chunk no larger than itself ("item 2 of word 1 of
+-- line j of fld seqNames", Aligner's; "char 3 of line n of line n of
+-- tRow", Import SYLK's; "line a of item n of linkLists", Telling
+-- Tools'), which HyperCard took in any order, chunk by chunk from the
+-- container in, and this engine refuses ("bad chunk order": the import
+-- left the line or its handler out). As a value, the part from the first
+-- chunk out of order on goes in parentheses, which this engine reads as
+-- HyperCard did, and the part within them is taken again. The
+-- destination of a put is _PutChunkOrder's; a chunk out of order of a
+-- property ("the textStyle of item 2 of word 1 of fld 1"), and one to
+-- delete or select, are left as they are. (A chunk numbered by a field,
+-- "item field CurrentChoice of line 4 of field VolTable", is T34's.)
+private function _ChunkOrder pLine
+   local tNew, i
+   repeat with i = 1 to 20
+      put _ChunkOrderOnce(pLine) into tNew
+      if tNew is pLine then exit repeat
+      put tNew into pLine
+   end repeat
+   return pLine
+end _ChunkOrder
+
+-- T56: the line with its first chunk out of order put right
+-- (_ChunkOrder); else as it is
+private function _ChunkOrderOnce pLine
+   local tTokens, tCode, tIdx, n, tItem, i, j, p, tPhrases, tStart, tPrev, tVerb
+   if " of " is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = 1 to n - 2
+      -- where a chunk expression starts, not within one
+      if _T(tTokens, tIdx[i]) is among the words of kChunkOrdinals then
+         put i into tStart
+         if i > 1 and _T(tTokens, tIdx[i - 1]) is "the" then
+            put i - 1 into tStart
+         end if
+      else if _T(tTokens, tIdx[i]) is among the words of kChunkWords \
+            and (i = 1 or _T(tTokens, tIdx[i - 1]) is not among the words of kChunkOrdinals) then
+         put i into tStart
+      else
+         next repeat
+      end if
+      if tStart = 1 or _T(tTokens, tIdx[tStart - 1]) is "of" then next repeat
+      put _ChunkPhrases(tTokens, tIdx, tStart, n) into tPhrases
+      put _ChunkBreak(tPhrases, 1) into p
+      if p = 0 then next repeat
+      -- as a value only: not the destination of a put, an add or a
+      -- subtract, nor an object's name, nor what a delete, a select or a
+      -- sort takes (j: the statement's first token)
+      put _T(tTokens, tIdx[tStart - 1]) into tPrev
+      put tStart - 1 into j
+      repeat while j > 1 and _T(tTokens, tIdx[j - 1]) is not among the words of "then else"
+         subtract 1 from j
+      end repeat
+      put _T(tTokens, tIdx[j]) into tVerb
+      if tPrev is among the words of "then else into before after" or tPrev is among the words of kObjectWords \
+            or (tPrev is among the words of "to from" and tVerb is among the words of "add subtract") \
+            or (j = tStart - 1 and tVerb is among the words of "delete select multiply divide sort find mark") then
+         next repeat
+      end if
+      put "(" before tTokens[tIdx[tPhrases[p]["at"]]]["t"]
+      put ")" after tTokens[tIdx[tPhrases["end"]]]["t"]
+      _Fire "T56 a chunk of a smaller chunk"
+      return _Join(tTokens)
+   end repeat
+   return pLine
+end _ChunkOrderOnce
+
+-- T56: the chunk expression from the code token pAt to pEnd at most
+-- ("item 2 of word 1 of x", "the second word of line 1 of fld 2"): its
+-- phrases (["count"]; for each, its first token ["at"] and the size of
+-- its chunk ["rank"], 1 a char to 4 a line), and the last token of its
+-- container (["end"]); a count of 0 if no chunk of a container starts
+-- there
+private function _ChunkPhrases pTokens, pIdx, pAt, pEnd
+   local tPhrases, tCount, j, k, tOf, tWord, tDepth, tLast
+   put 0 into tCount
+   put pAt into j
+   repeat while j < pEnd
+      put empty into tWord
+      put empty into tOf
+      if _T(pTokens, pIdx[j]) is "the" and _T(pTokens, pIdx[j + 1]) is among the words of kChunkOrdinals \
+            and _T(pTokens, pIdx[j + 2]) is among the words of kChunkWords then
+         put _T(pTokens, pIdx[j + 2]) into tWord
+         put j + 3 into tOf
+      else if _T(pTokens, pIdx[j]) is among the words of kChunkOrdinals and _T(pTokens, pIdx[j + 1]) is among the words of kChunkWords then
+         put _T(pTokens, pIdx[j + 1]) into tWord
+         put j + 2 into tOf
+      else if _T(pTokens, pIdx[j]) is among the words of kChunkWords then
+         -- its number or its range ("char x to x + 50"), to the "of"
+         -- after it
+         put _T(pTokens, pIdx[j]) into tWord
+         put 0 into tDepth
+         repeat with k = j + 1 to pEnd
+            if _T(pTokens, pIdx[k]) is "(" then add 1 to tDepth
+            if _T(pTokens, pIdx[k]) is ")" then subtract 1 from tDepth
+            if tDepth < 0 then exit repeat
+            if tDepth = 0 and k > j + 1 and _T(pTokens, pIdx[k]) is "of" then
+               put k into tOf
+               exit repeat
+            end if
+            if tDepth = 0 and _T(pTokens, pIdx[k]) is among the words of "then else into before after with for until by , of" then
+               exit repeat
+            end if
+         end repeat
+      end if
+      if tWord is empty or tOf is empty or tOf >= pEnd or _T(pTokens, pIdx[tOf]) is not "of" then exit repeat
+      add 1 to tCount
+      put j into tPhrases[tCount]["at"]
+      if tWord is "character" then put "char" into tWord
+      put itemOffset(tWord, "char,word,item,line") into tPhrases[tCount]["rank"]
+      put tOf + 1 into j
+   end repeat
+   put 0 into tPhrases["count"]
+   if tCount = 0 then return tPhrases
+   -- the container: to the first word or sign outside parentheses that
+   -- ends a value
+   put 0 into tDepth
+   put pEnd into tLast
+   repeat with k = j to pEnd
+      if _T(pTokens, pIdx[k]) is "(" then
+         add 1 to tDepth
+      else if _T(pTokens, pIdx[k]) is ")" then
+         if tDepth = 0 then
+            put k - 1 into tLast
+            exit repeat
+         end if
+         subtract 1 from tDepth
+      else if tDepth = 0 and (pTokens[pIdx[k]]["k"] is "p" \
+            or _T(pTokens, pIdx[k]) is among the words of "then else into before after to from with without for until by at and or is contains div mod in within among not") then
+         put k - 1 into tLast
+         exit repeat
+      end if
+   end repeat
+   if tLast < j or tDepth > 0 then return tPhrases
+   put tCount into tPhrases["count"]
+   put tLast into tPhrases["end"]
+   return tPhrases
+end _ChunkPhrases
+
+-- T56: the first of the phrases pFrom on (_ChunkPhrases) whose chunk is no
+-- larger than the one before it, or 0
+private function _ChunkBreak pPhrases, pFrom
+   local p
+   repeat with p = max(pFrom, 2) to pPhrases["count"]
+      if pPhrases[p]["rank"] <= pPhrases[p - 1]["rank"] then return p
+   end repeat
+   return 0
+end _ChunkBreak
+
+-- T56: put V into (before, after) a chunk of a chunk no larger than
+-- itself ("put x into item 1 of word 1 of line 2 of field "Card Id"",
+-- GenChart's; "put "another" into second word of line 1 of item 1 of card
+-- field "narration"", DragTracer's), which HyperCard put into the chunk
+-- within the chunk: the three statements that do that here, the larger
+-- chunk into a variable (hcChunk), V into its chunk, and the variable
+-- back; after a then or an else, a do of the three (as T54's). A
+-- destination with two chunks out of order is left as it is
+private function _PutChunkOrder pTokens, pIdx, pAt, pEnd, pCount
+   local tPrep, tPhrases, p, tChunk, tLarger, tPut
+   put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "into before after", empty) into tPrep
+   if tPrep is empty or tPrep >= pEnd then return empty
+   put _ChunkPhrases(pTokens, pIdx, tPrep + 1, pEnd) into tPhrases
+   if tPhrases["end"] <> pEnd then return empty
+   put _ChunkBreak(tPhrases, 1) into p
+   if p = 0 or _ChunkBreak(tPhrases, p + 1) <> 0 then return empty
+   put _Span(pTokens, pIdx, tPhrases[1]["at"], tPhrases[p]["at"] - 1) into tChunk
+   put _Span(pTokens, pIdx, tPhrases[p]["at"], pEnd) into tLarger
+   _Fire "T56 a chunk of a smaller chunk"
+   put "put" && tLarger && "into hcChunk;" && "put" && _Span(pTokens, pIdx, pAt + 1, tPrep - 1) && pTokens[pIdx[tPrep]]["t"] \
+         && tChunk && "hcChunk;" && "put hcChunk into" && tLarger into tPut
+   if pAt = 1 and pEnd = pCount then return tPut
+   return "do" && _Literal(tPut)
+end _PutChunkOrder
 
 -- T54: sort the cards of a background ("sort cards of this bg by field
 -- "Name"", "sort bkgnd "Data" numeric by line 1 of field f", "sort this
