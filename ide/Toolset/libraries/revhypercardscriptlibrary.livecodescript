@@ -1774,11 +1774,30 @@ end _GlobalNames
 -- the loop waits on, when it waits on one ("put last character of
 -- stackFolder into lastChar", "get the last char of process"), and a put
 -- of a value that calls no handler into another variable ("if it is not
--- ":" then put it before char 1 of holdPictName"). In a script that
--- compiles too
+-- ":" then put it before char 1 of holdPictName"). A loop with no
+-- condition ("repeat", "repeat forever") that waits for the colon in an
+-- if of its own (_ColonLoopForever: Script Manager's "if last char of
+-- filename is ":" then exit repeat", the HyperTextBooks' "if last char
+-- of manx <> ":" then delete last char of manx" and "else", "delete last
+-- char of manx", "exit repeat") gets "until <text> is empty" in its
+-- head, as "forever". In a script that compiles too
 private command _ColonLoops @pLines, pStart, pEnd
    local i, k, n, tHead, tCode, tLine, tLines, tText, tWait, tOk, tEnded, tDeletes, tReads, tTokens, tAt
    repeat with i = pStart + 1 to pEnd - 1
+      if _Lower(word 1 of pLines[i]) is "repeat" and _Lower(_CodeSpaced(pLines[i])) is among the items of "repeat,repeat forever" then
+         put _ColonLoopForever(pLines, i, pEnd) into tText
+         if tText is empty then next repeat
+         put _Tokens(pLines[i]) into tTokens
+         put _Code(tTokens) into tAt
+         if the number of items of tAt is 1 then
+            put " until" && tText && "is empty" after tTokens[item 1 of tAt]["t"]
+         else
+            put "until" && tText && "is empty" into tTokens[item 2 of tAt]["t"]
+         end if
+         put _Join(tTokens) into pLines[i]
+         _Fire "T74 a loop that waits for a colon"
+         next repeat
+      end if
       if quote & ":" & quote is not in pLines[i] then next repeat
       put _ColonLoopHead(pLines[i]) into tHead
       if tHead is empty then next repeat
@@ -1841,6 +1860,102 @@ private command _ColonLoops @pLines, pStart, pEnd
       _Fire "T74 a loop that waits for a colon"
    end repeat
 end _ColonLoops
+
+-- T74: the text of a loop with no condition, its head pLines[pAt]
+-- ("repeat" or "repeat forever"), that waits for a colon at the end of
+-- the text in an if of its own, or empty. Each of its lines is one that
+-- _ColonLoopLine takes, or an if that tests the text's last character
+-- for a colon (_ColonTest), on one line or with its else and end if, one
+-- at a time, or an exit (exit repeat, or exit or return with a name or
+-- none) only where the text ends with a colon: after then when the if
+-- tests that it does, after else when it tests that it does not. So
+-- with the text empty nothing leaves the loop. And it has at least one
+-- of each: a delete of the text's last character, a test and an exit
+private function _ColonLoopForever @pLines, pAt, pEnd
+   local k, tCode, tText, tState, tColon, tTest, tA, tB, tStatement, tExitHere, tLine, tInto, tCount
+   put 0 into tCount["test"]
+   put 0 into tCount["delete"]
+   put 0 into tCount["exit"]
+   repeat with k = pAt + 1 to pEnd - 1
+      put _CodeSpaced(pLines[k]) into tCode
+      put empty into tStatement
+      put empty into tB
+      if _Lower(tCode) is "end repeat" then
+         if tState is among the words of "then else" then return empty
+         if tCount["test"] = 0 or tCount["delete"] = 0 or tCount["exit"] = 0 then return empty
+         -- (and nothing puts into the text)
+         repeat for each key tA in tInto
+            if _Lower(tA) is _Lower(tText) then return empty
+         end repeat
+         return tText
+      else if matchText(tCode, "(?i)^if (.+) then(?: (.+))?$", tA, tB) and _ColonTest(tA) is not empty then
+         if tState is among the words of "then else" then return empty
+         put _ColonTest(tA) into tTest
+         if not _ColonLoopText(tText, tTest["text"]) then return empty
+         add 1 to tCount["test"]
+         put tTest["colon"] into tColon
+         put tColon into tExitHere
+         put tB into tStatement
+         -- (an if on one line may have its else on the next)
+         if tStatement is empty then
+            put "then" into tState
+         else
+            put "single" into tState
+         end if
+      else if matchText(tCode, "(?i)^else(?: (.+))?$", tB) then
+         if tState is not among the words of "then single" then return empty
+         put not tColon into tExitHere
+         put tB into tStatement
+         if tStatement is empty then
+            put "else" into tState
+         else
+            put empty into tState
+         end if
+      else if _Lower(tCode) is "end if" then
+         if tState is not among the words of "then else" then return empty
+         put empty into tState
+      else
+         if tState is "single" then put empty into tState
+         put (tState is "then" and tColon) or (tState is "else" and not tColon) into tExitHere
+         put tCode into tStatement
+      end if
+      if tStatement is empty then next repeat
+      if matchText(tStatement, "(?i)^(exit [^ ]+|return( [^ ]+)?)$") then
+         if not tExitHere then return empty
+         add 1 to tCount["exit"]
+      else
+         put _ColonLoopLine(tStatement) into tLine
+         if tLine is empty then return empty
+         if tLine["kind"] is "delete" then
+            if not _ColonLoopText(tText, tLine["text"]) then return empty
+            add 1 to tCount["delete"]
+         else if tLine["into"] is not empty then
+            put true into tInto[tLine["into"]]
+         end if
+      end if
+   end repeat
+   return empty
+end _ColonLoopForever
+
+-- T74: a test of the last character of a variable for a colon, "the last
+-- char of x is ":"" (or "= ":"", and "is not" or "<>" for one that it is
+-- not): ["text"] the variable, ["colon"] true for a test that it is one.
+-- Empty for any other
+private function _ColonTest pCode
+   local tA, tB, tC, tOperator, tTest
+   if not matchText(pCode, "(?i)^(the )?last (char|character) of ([^ ]+) (is not|is|=|< >) " & quote & ":" & quote & "$", tA, tB, tC, tOperator) then return empty
+   put tC into tTest["text"]
+   put _Lower(tOperator) is among the items of "is,=" into tTest["colon"]
+   return tTest
+end _ColonTest
+
+-- T74: whether pName is the text of a loop, pText, which the first name
+-- given it becomes when it has none
+private function _ColonLoopText @pText, pName
+   if not _LoopVariable(pName) then return false
+   if pText is empty then put pName into pText
+   return _Lower(pName) is _Lower(pText)
+end _ColonLoopText
 
 -- T74: the head of a loop that waits for a colon at the end of a text,
 -- "repeat until E is ":"" (or "= ":"") or "repeat while E is not ":"" (or

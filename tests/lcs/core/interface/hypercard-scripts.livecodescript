@@ -5884,6 +5884,129 @@ on TestHyperCardScriptsT74
    _Close tStack
 end TestHyperCardScriptsT74
 
+on TestHyperCardScriptsT74Repeat
+   -- T74: a loop with no condition that waits for the colon in an if of
+   -- its own (Script Manager's folderName, the HyperTextBooks' button that
+   -- reads text files, Gophers Helper's head()): "until <text> is empty"
+   -- in its head. A loop that could leave with the text empty, or does
+   -- anything more, is left as it is
+   local tScript, q, tStack, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  repeat", \
+         "    if last char of pathName is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of pathName", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of manx <> " & q & ":" & q & " then delete last char of manx", \
+         "    else", \
+         "      delete last char of manx", \
+         "      exit repeat", \
+         "    end if", \
+         "  end repeat", \
+         "  Repeat Forever -- to the folder", \
+         "    delete the last character of r", \
+         "    if the last character of r = " & q & ":" & q & " then", \
+         "      return r", \
+         "    end if", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit mouseUp", \
+         "    if x is " & q & "Disk" & q & " then put 1 into y", \
+         "    delete last char of x", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is not " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "    add 1 to n", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of y", \
+         "  end repeat", \
+         "  repeat", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "    put y into x", \
+         "  end repeat", \
+         "  repeat", \
+         "    delete last char of x", \
+         "    if last char of x is " & q & ":" & q & " then put x into y", \
+         "  end repeat", \
+         "  repeat", \
+         "    exit repeat", \
+         "    delete last char of x", \
+         "    if last char of x is " & q & ":" & q & " then put x into y", \
+         "  end repeat", \
+         "  repeat while x is not empty", \
+         "    if last char of x is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of x", \
+         "  end repeat", \
+         "end mouseUp") into tScript
+   TestAssert "T74 repeat: an exit at the colon, then the delete", line 2 of tScript is "  repeat until pathName is empty"
+   TestAssert "T74 repeat: <>, a delete after then, and the exit after else", line 6 of tScript is "  repeat until manx is empty"
+   TestAssert "T74 repeat: forever, in any case, the delete first, and a return; a comment kept", \
+         line 13 of tScript is "  Repeat until r is empty -- to the folder"
+   TestAssert "T74 repeat: exit from the handler, and a put into another variable", line 19 of tScript is "  repeat until x is empty"
+   TestAssert "T74 repeat: an exit where there is no colon, unchanged", line 24 of tScript is "  repeat"
+   TestAssert "T74 repeat: another statement, unchanged", line 28 of tScript is "  repeat"
+   TestAssert "T74 repeat: a delete from another variable, unchanged", line 33 of tScript is "  repeat"
+   TestAssert "T74 repeat: a put into the text, unchanged", line 37 of tScript is "  repeat"
+   TestAssert "T74 repeat: no exit, unchanged", line 42 of tScript is "  repeat"
+   TestAssert "T74 repeat: an exit that is not in the if, unchanged", line 46 of tScript is "  repeat"
+   TestAssert "T74 repeat: a loop with a condition, unchanged", line 51 of tScript is "  repeat while x is not empty"
+   TestAssert "T74 repeat: those compile", _Compiles(tScript)
+
+   -- In a script that compiles as it is, run: a path with colons gives
+   -- its folder, as in HyperCard, and one without gives none, and ends
+   put "HCColonRepeats" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Folder"
+   set the script of button "Folder" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put folderName(" & q & "Disk:Folder:Stack" & q & ") & " & q & "|" & q & " & folderName(" & q & "/Users/me/Stack" & q & ") & " & q & "|" & q & \
+         " & head(" & q & "Disk:Folder:Stack" & q & ") & " & q & "|" & q & " & head(" & q & "/Users/me/Stack" & q & ") into gHCScriptsTest", \
+         "end mouseUp", \
+         "function folderName pPath", \
+         "  repeat", \
+         "    if last char of pPath is " & q & ":" & q & " then exit repeat", \
+         "    delete last char of pPath", \
+         "  end repeat", \
+         "  delete last char of pPath", \
+         "  return pPath", \
+         "end folderName", \
+         "function head r", \
+         "  repeat forever", \
+         "    delete last char of r", \
+         "    if last char of r is " & q & ":" & q & " then", \
+         "      return r", \
+         "    end if", \
+         "  end repeat", \
+         "end head")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put line 6 of the script of button "Folder" of stack tStack into tScript
+   put return & line 14 of the script of button "Folder" of stack tStack after tScript
+   TestAssert "T74 repeat: in a script that compiles too", \
+         tScript is "  repeat until pPath is empty" & return & "  repeat until r is empty"
+   -- (without it the loops would not end)
+   if tScript is "  repeat until pPath is empty" & return & "  repeat until r is empty" then
+      put empty into gHCScriptsTest
+      try
+         send "mouseUp" to button "Folder" of stack tStack
+      catch tError
+      end try
+      TestAssert "T74 repeat: the folder of a path with colons, and none of one without", gHCScriptsTest is "Disk:Folder||Disk:Folder:|"
+   end if
+   _Close tStack
+end TestHyperCardScriptsT74Repeat
+
 on TestHyperCardScriptsT75
    -- T75: a select of the object or the chunk a value names, in
    -- parentheses or from a function of the stack, which HyperCard
