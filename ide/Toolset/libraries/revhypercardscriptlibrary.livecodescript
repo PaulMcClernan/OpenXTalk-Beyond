@@ -275,6 +275,12 @@ constant kMessageBoxProperties = "visible loc location rect rectangle top left b
 -- names the library's hcSetPaintText and hcPaintText take (T53)
 constant kPaintText = "textFont textSize textHeight textStyle textAlign"
 
+-- HyperCard's properties of the text that "print" of an expression
+-- printed in ("set the printTextFont to "Courier"", "put the
+-- printTextFont into savedPrintFont"), by the names the library's
+-- hcSetPrintText and hcPrintText take (T72)
+constant kPrintText = "printTextFont printTextSize printTextHeight printTextStyle printTextAlign"
+
 -- HyperCard's global properties that this engine has not, which it
 -- refuses to read or set ("set the dialingTime to 600"), by the names the
 -- library's hcProperty and hcSetProperty take (T64)
@@ -3554,6 +3560,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
       put _NamedByAName(pLine) into pLine
       put _PictureProperties(pLine) into pLine
       put _PaintTextReads(pLine) into pLine
+      put _PrintTextReads(pLine) into pLine
       -- (T56's chunks never compile here as they are)
       if not pCompiled then put _ChunkOrder(pLine) into pLine
    end if
@@ -3737,6 +3744,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             -- (T53 before T51, which takes a font of several words with no
             -- object too: "set the textFont to New York")
             if tNew is empty then put _SetPaintText(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetPrintText(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetHyperCardProperty(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetTextFont(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetShowPict(tTokens, tIdx, i, tEnd) into tNew
@@ -3765,6 +3773,12 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if _T(tTokens, tIdx[i + 1]) is "paint" and i + 1 = tEnd then
                _Fire "T53 the paint text's properties"
                put "hcResetPaint" into tNew
+            end if
+            -- T72: reset printing, which HyperCard's print text went back
+            -- to its defaults with too: the library's hcResetPrinting
+            if _T(tTokens, tIdx[i + 1]) is "printing" and i + 1 = tEnd then
+               _Fire "T72 the print text's properties"
+               put "hcResetPrinting" into tNew
             end if
             break
          case "start"
@@ -3872,14 +3886,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             end if
             break
          case "print"
-            -- T24: print a field, which HyperCard printed and this engine
-            -- does not (it prints cards): the library's PrintField
-            put i + 1 into j
-            if _T(tTokens, tIdx[j]) is among the words of "card cd background bkgnd bg" then add 1 to j
-            if _T(tTokens, tIdx[j]) is among the words of "field fld" and j < tEnd then
-               _Fire "T24 print a field"
-               put "PrintField the long id of" && _Span(tTokens, tIdx, i + 1, tEnd) into tNew
-            end if
+            put _Print(tTokens, tIdx, i, tEnd) into tNew
             break
          case "play"
             -- T49: a sound named in a field or button of the card or the
@@ -4350,6 +4357,62 @@ private function _OpenName pTokens, pIdx, pFrom, pTo
    if sProbe is not empty and not _Compiles("on hcProbe" & return & "get (" & tSpan & ")" & return & "end hcProbe") then return _Literal(tSpan)
    return tSpan
 end _OpenName
+
+-- T24 and T71: print. HyperCard printed cards ("print card", "print this
+-- card", "print 6 cards", "print it cards", "print marked cards", "print
+-- first card of bg "PPRINT"", "print card from 0,84 to 506,1274"), as
+-- this engine does, and the text of any expression (T71: "print it",
+-- "print allHelp", "print "Index" & return & temp", "print (bg field id
+-- 5)"), which this engine stops at ("error in object expression") or
+-- does not compile ("print "a" & b"): the library's hcPrint, which prints
+-- the text as HyperCard did. A field alone (T24: "print card field
+-- "Notes"") goes to the library's PrintField; one joined with more text
+-- ("print fld "scripter1" & return & fld "scripter2"") is an expression.
+-- "print <document> with <application>" ("print temp with "teachText"",
+-- a file of text a script wrote), which HyperCard had the application
+-- print: the library's hcPrintDocument, the names as T40's ("open tDoc
+-- with tApp"). This engine's own forms ("print break", "print anchor")
+-- are left as they are
+private function _Print pTokens, pIdx, pAt, pEnd
+   local j, tFirst, tDepth, tJoined, tLast
+   if pAt >= pEnd then return empty
+   put _T(pTokens, pIdx[pAt + 1]) into tFirst
+   if tFirst is among the words of "break anchor link bookmark unicode" then return empty
+   -- (cards: a number of cards, or a card, with "the", "this" or a place,
+   -- each with "from" a point "to" a point after it or not)
+   repeat with j = pAt + 1 to pEnd
+      if _T(pTokens, pIdx[j]) is among the words of "cards cds" \
+            and (j = pEnd or _T(pTokens, pIdx[j + 1]) is "from") then
+         return empty
+      end if
+   end repeat
+   put pAt + 1 into j
+   if tFirst is "the" then add 1 to j
+   if _T(pTokens, pIdx[j]) is among the words of "this next prev previous first second third fourth fifth sixth seventh eighth ninth tenth last middle any recent" then add 1 to j
+   if _T(pTokens, pIdx[j]) is among the words of "card cd" and _T(pTokens, pIdx[j + 1]) is not among the words of "field fld" then return empty
+   -- (an "&" outside parentheses joins more text to a field)
+   put 0 into tDepth
+   put false into tJoined
+   repeat with j = pAt + 1 to pEnd
+      if _T(pTokens, pIdx[j]) is "(" then add 1 to tDepth
+      if _T(pTokens, pIdx[j]) is ")" then subtract 1 from tDepth
+      if tDepth = 0 and _T(pTokens, pIdx[j]) is "&" then put true into tJoined
+   end repeat
+   put pAt + 1 into j
+   if tFirst is among the words of "card cd background bkgnd bg" then add 1 to j
+   if _T(pTokens, pIdx[j]) is among the words of "field fld" and j < pEnd and not tJoined then
+      _Fire "T24 print a field"
+      return "PrintField the long id of" && _Span(pTokens, pIdx, pAt + 1, pEnd)
+   end if
+   put _ExpressionEnd(pTokens, pIdx, pAt + 1, pEnd, "with") into tLast
+   if tLast = pEnd - 1 then return empty
+   if tLast < pEnd then
+      _Fire "T71 print a document with an application"
+      return "hcPrintDocument" && _OpenName(pTokens, pIdx, pAt + 1, tLast) & ", " & _OpenName(pTokens, pIdx, tLast + 2, pEnd)
+   end if
+   _Fire "T71 print an expression"
+   return "hcPrint" && _Span(pTokens, pIdx, pAt + 1, pEnd)
+end _Print
 
 -- T42: do with a statement not in quotes ("do go cd id 13086", "do put
 -- offset(x, y) into z"), which HyperCard ran as the statement it was.
@@ -5639,6 +5702,70 @@ private function _PaintTextReads pLine
    if not tChanged then return pLine
    return _Join(tTokens)
 end _PaintTextReads
+
+-- T72: the printTextFont, the printTextSize, the printTextHeight, the
+-- printTextStyle or the printTextAlign set ("set the printTextFont to
+-- "Courier"", "set printtextfont to palatino", "set PrintTextSize to
+-- 24", "set the printTextStyle to "plain""), HyperCard's for the text
+-- print of an expression printed (T71), which this engine sets to
+-- nothing: the library's hcSetPrintText, which keeps the value as it was
+-- (a list of styles is its parameters), for hcPrint to print in and
+-- hcPrintText to give back. A font named in several words not in quotes
+-- is the text it was (T51: "set the printTextFont to New York")
+private function _SetPrintText pTokens, pIdx, pAt, pEnd
+   local tProperty, tValue
+   put pAt + 1 into tProperty
+   if _T(pTokens, pIdx[tProperty]) is "the" then add 1 to tProperty
+   if _T(pTokens, pIdx[tProperty]) is not among the words of kPrintText \
+         or _T(pTokens, pIdx[tProperty + 1]) is not "to" or tProperty + 1 >= pEnd then
+      return empty
+   end if
+   put _Span(pTokens, pIdx, tProperty + 2, pEnd) into tValue
+   if _T(pTokens, pIdx[tProperty]) is "printtextfont" then
+      get _FontLiteral(pTokens, pIdx, tProperty + 2, pEnd)
+      if it is not empty then put it into tValue
+   end if
+   _Fire "T72 the print text's properties"
+   return "hcSetPrintText" && quote & _PrintTextName(_T(pTokens, pIdx[tProperty])) & quote & comma && tValue
+end _SetPrintText
+
+-- The print text's property pWord, a word of kPrintText in any case, by
+-- the name the library takes ("printtextsize": "printTextSize")
+private function _PrintTextName pWord
+   local tName
+   repeat for each word tName in kPrintText
+      if tName is pWord then return tName
+   end repeat
+   return pWord
+end _PrintTextName
+
+-- T72: the print text's printTextFont, printTextSize, printTextHeight,
+-- printTextStyle or printTextAlign read ("put the printTextFont into
+-- savedPrintFont", Internet Gopher's, which sets it back after printing
+-- in Courier), as a script set it or as HyperCard had it (Geneva, 10, a
+-- printTextHeight of 13, plain and left): the library's hcPrintText.
+-- This engine reads them as empty. The one a set sets ("set the
+-- printTextSize to 12", _SetPrintText's) is not taken
+private function _PrintTextReads pLine
+   local tTokens, tCode, tIdx, n, tItem, i, tChanged
+   if "printtext" is not in pLine then return pLine
+   put _Tokens(pLine) into tTokens
+   put _Code(tTokens) into tCode
+   put 0 into n
+   repeat for each item tItem in tCode
+      add 1 to n
+      put tItem into tIdx[n]
+   end repeat
+   repeat with i = n down to 2
+      if _T(tTokens, tIdx[i]) is not among the words of kPrintText or _T(tTokens, tIdx[i - 1]) is not "the" then next repeat
+      if _T(tTokens, tIdx[i - 2]) is "set" then next repeat
+      _Replace tTokens, tIdx, i - 1, i, "hcPrintText(" & quote & _PrintTextName(_T(tTokens, tIdx[i])) & quote & ")"
+      _Fire "T72 the print text's properties"
+      put true into tChanged
+   end repeat
+   if not tChanged then return pLine
+   return _Join(tTokens)
+end _PrintTextReads
 
 -- T56: a chunk of a chunk no larger than itself ("item 2 of word 1 of
 -- line j of fld seqNames", Aligner's; "char 3 of line n of line n of
