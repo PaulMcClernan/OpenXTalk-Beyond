@@ -1981,6 +1981,89 @@ on TestHyperCardScriptsT55
    _Close tStack
 end TestHyperCardScriptsT55
 
+on TestHyperCardScriptsT22Names
+   -- T22: a menu or a menu item named by one word this engine does not
+   -- take as a value ("create menu Control", FontCard's: an object type
+   -- here), which HyperCard took as its text: the word in quotes, where
+   -- revHyperCardFixScripts' probe finds it refused. A word this engine
+   -- takes as a value, and a variable, as they were, a variable named by
+   -- such a word too (which T2 renames before T12 and T22 read it)
+   local tStack, q, tScript, tError
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT22" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Menus"
+   set the script of button "Menus" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  create menu Control", \
+         "  put " & q & "Set Spaces,Image,-,Show Palette" & q & " into menu Control", \
+         "  disable menuItem 4 of menu Control", \
+         "  set the checkMark of menuItem Image of menu Control to true", \
+         "  if there is a menu Control then put true into gHCScriptsTest", \
+         "  put comma & the enabled of menuItem 4 of menu Control after gHCScriptsTest", \
+         "  put comma & the checkMark of menuItem Image of menu Control after gHCScriptsTest", \
+         "  put " & q & "Again" & q & " after menu Control with menuMsg doAgain", \
+         "  put comma & the number of menuItems of menu Control after gHCScriptsTest", \
+         "  delete menu Control -- gone", \
+         "  put comma & (there is a menu Control) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Values"
+   set the script of button "Values" to _Lines("on mouseUp", "  global gHCScriptsTest", "  local tMenu", \
+         "  put " & q & "Tools" & q & " into tMenu", \
+         "  create menu Apple", \
+         "  create menu tMenu", \
+         "  put " & q & "About" & q & " into menu Apple with menuMsg doAbout", \
+         "  put " & q & "Extras" & q & " into control", \
+         "  create menu control", \
+         "  put (there is a menu " & q & "Apple" & q & ") & comma & (there is a menu " & q & "Tools" & q & ") & comma & (there is a menu " & q & "Extras" & q & ") into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T22: as it is, the script does not compile", not _Compiles(the script of button "Menus" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "Menus" of stack tStack into tScript
+   TestAssert "T22: create menu named by an object type", line 3 of tScript is "  hcCreateMenu " & q & "Control" & q
+   TestAssert "T22: put into it", line 4 of tScript \
+         is "  hcPutIntoMenu " & q & "Set Spaces,Image,-,Show Palette" & q & ", " & q & "into" & q & ", " & q & "Control" & q & ", empty, empty"
+   TestAssert "T22: disable a menuItem of it", line 5 of tScript is "  hcEnableMenu false, " & q & "Control" & q & ", 4"
+   TestAssert "T22: set the checkMark of a menuItem named by an object type", line 6 of tScript \
+         is "  hcSetMenuItem " & q & "checkmark" & q & ", " & q & "Control" & q & ", " & q & "Image" & q & ", true"
+   TestAssert "T48: there is a menu named by an object type", line 7 of tScript is "  if hcThereIsMenu(" & q & "Control" & q & ") then put true into gHCScriptsTest"
+   TestAssert "T22: a menuItem's property, of a menu named by an object type", line 8 of tScript \
+         is "  put comma & hcMenuItem(" & q & "enabled" & q & ", " & q & "Control" & q & ", 4) after gHCScriptsTest"
+   TestAssert "T22: of a menuItem named by an object type", line 9 of tScript \
+         is "  put comma & hcMenuItem(" & q & "checkmark" & q & ", " & q & "Control" & q & ", " & q & "Image" & q & ") after gHCScriptsTest"
+   -- (T12's forms, which take a whole line: with menuMsg, delete menu)
+   TestAssert "T22: put after it with a menu message", line 10 of tScript \
+         is "  hcPutIntoMenu " & q & "Again" & q & ", " & q & "after" & q & ", " & q & "Control" & q & ", doAgain"
+   TestAssert "T48: the number of its menuItems", line 11 of tScript is "  put comma & hcMenuItemCount(" & q & "Control" & q & ") after gHCScriptsTest"
+   TestAssert "T22: delete it, its comment kept", line 12 of tScript is "  hcDeleteMenu " & q & "Control" & q & " -- gone"
+   TestAssert "T22: the script compiles", _Compiles(tScript)
+   put the script of button "Values" of stack tStack into tScript
+   TestAssert "T22: a word this engine takes as a value: as it was", line 5 of tScript is "  hcCreateMenu Apple"
+   TestAssert "T22: a variable: as it was", line 6 of tScript is "  hcCreateMenu tMenu"
+   TestAssert "T22: with a menu message: as it was", line 7 of tScript \
+         is "  hcPutIntoMenu " & q & "About" & q & ", " & q & "into" & q & ", Apple, doAbout"
+   -- (a variable named like an object type, which T2 renames first)
+   TestAssert "T22: a variable named by an object type: renamed, as it was", line 9 of tScript is "  hcCreateMenu hc_control"
+
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Menus" of stack tStack
+   catch tError
+   end try
+   TestAssert "T22: the menu made, its item disabled and checked, an item put after, the menu deleted", \
+         gHCScriptsTest is "true,false,true,5,false"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Values" of stack tStack
+   catch tError
+   end try
+   TestAssert "T22: the menus named by a value and by two variables made", gHCScriptsTest is "true,true,true"
+   _Close tStack
+end TestHyperCardScriptsT22Names
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line

@@ -151,7 +151,9 @@ script "revHyperCardScriptLibrary"
 -- of the version of this stack"), which this engine takes for its own
 -- version followed by "of": a script with one does not compile, and "get
 -- the version of this stack" stops ("source is not a container"): the
--- library's hcStackVersion.
+-- library's hcStackVersion. T22 takes a menu or a menu item named by one
+-- word that this engine does not take as a value ("create menu Control",
+-- an object type here) as that word in quotes, the name HyperCard took.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -3672,7 +3674,7 @@ private function _MenuItemProperties pLine
             and _T(tTokens, tIdx[i + 1]) is among the words of kMenuProperties \
             and _T(tTokens, tIdx[i + 2]) is "of" and _T(tTokens, tIdx[i + 3]) is "menuitem" \
             and _T(tTokens, tIdx[i + 5]) is among the words of "of in" and _T(tTokens, tIdx[i + 6]) is "menu" then
-         _Replace tTokens, tIdx, i, i + 7, "hcMenuItem(" & quote & _T(tTokens, tIdx[i + 1]) & quote & comma && tTokens[tIdx[i + 7]]["t"] & comma && tTokens[tIdx[i + 4]]["t"] & ")"
+         _Replace tTokens, tIdx, i, i + 7, "hcMenuItem(" & quote & _T(tTokens, tIdx[i + 1]) & quote & comma && _MenuName(tTokens, tIdx, i + 7, i + 7) & comma && _MenuName(tTokens, tIdx, i + 4, i + 4) & ")"
          _Fire "T22 HyperCard menus"
          put true into tChanged
       end if
@@ -3684,7 +3686,7 @@ private function _MenuItemProperties pLine
             and tTokens[tIdx[i]]["k"] is "w" \
             and _T(tTokens, tIdx[i + 1]) is "of" and _T(tTokens, tIdx[i + 2]) is "menuitem" \
             and _T(tTokens, tIdx[i + 4]) is among the words of "of in" and _T(tTokens, tIdx[i + 5]) is "menu" then
-         _Replace tTokens, tIdx, i, i + 6, "hcMenuItem(" & quote & _T(tTokens, tIdx[i]) & quote & comma && tTokens[tIdx[i + 6]]["t"] & comma && tTokens[tIdx[i + 3]]["t"] & ")"
+         _Replace tTokens, tIdx, i, i + 6, "hcMenuItem(" & quote & _T(tTokens, tIdx[i]) & quote & comma && _MenuName(tTokens, tIdx, i + 6, i + 6) & comma && _MenuName(tTokens, tIdx, i + 3, i + 3) & ")"
          _Fire "T22 HyperCard menus"
          put true into tChanged
       end if
@@ -3822,7 +3824,7 @@ private function _MenuRef pTokens, pIdx, pAt, pTo
       put _MenuOperandEnd(pTokens, pIdx, j + 1, pTo) into tEnd
       if tEnd is empty then return empty
       put "menu" into tRef["kind"]
-      put _Span(pTokens, pIdx, j + 1, tEnd) into tRef["menu"]
+      put _MenuName(pTokens, pIdx, j + 1, tEnd) into tRef["menu"]
       put "empty" into tRef["item"]
       put tEnd into tRef["end"]
       return tRef
@@ -3842,7 +3844,7 @@ private function _MenuRef pTokens, pIdx, pAt, pTo
             if _T(pTokens, pIdx[k]) is among the words of kMenuItemStops or _T(pTokens, pIdx[k]) is among the items of "=,<,>" then return empty
          end repeat
       end if
-      put _Span(pTokens, pIdx, j + 1, tEnd) into tRef["item"]
+      put _MenuName(pTokens, pIdx, j + 1, tEnd) into tRef["item"]
       put tEnd + 1 into j
    else
       return empty
@@ -3851,7 +3853,7 @@ private function _MenuRef pTokens, pIdx, pAt, pTo
    put _MenuOperandEnd(pTokens, pIdx, j + 2, pTo) into tEnd
    if tEnd is empty then return empty
    put "item" into tRef["kind"]
-   put _Span(pTokens, pIdx, j + 2, tEnd) into tRef["menu"]
+   put _MenuName(pTokens, pIdx, j + 2, tEnd) into tRef["menu"]
    put tEnd into tRef["end"]
    return tRef
 end _MenuRef
@@ -3881,6 +3883,31 @@ private function _MenuOperandEnd pTokens, pIdx, pFrom, pTo
    end repeat
    return empty
 end _MenuOperandEnd
+
+-- The name or number of a menu or a menu item, the code tokens pFrom to
+-- pTo, as the library's handlers take it: one word that this engine does
+-- not take as a value ("create menu Control", "Control" an object type
+-- here; only with a probe) in quotes, the text HyperCard took it for;
+-- anything else as it is, a variable's name too
+private function _MenuName pTokens, pIdx, pFrom, pTo
+   if pFrom = pTo and pTokens[pIdx[pFrom]]["k"] is "w" and _ValueRefused(pTokens[pIdx[pFrom]]["t"]) then
+      return _Literal(pTokens[pIdx[pFrom]]["t"])
+   end if
+   return _Span(pTokens, pIdx, pFrom, pTo)
+end _MenuName
+
+-- _MenuName for the text of a menu's name that T12 takes from a line
+-- ("create menu Control", "delete menu 5 -- Tools"): its one code token
+-- in quotes if it is a word this engine does not take as a value
+private function _MenuNameText pText
+   local tTokens, tCode
+   put _Tokens(pText) into tTokens
+   put _Code(tTokens) into tCode
+   if tCode is not an integer then return pText
+   if tTokens[tCode]["k"] is not "w" or not _ValueRefused(tTokens[tCode]["t"]) then return pText
+   put _Literal(tTokens[tCode]["t"]) into tTokens[tCode]["t"]
+   return _Join(tTokens)
+end _MenuNameText
 
 -- Whether the menu or menu item named from pStart is what its statement
 -- changes, T22's: after into, after or before (put), create, delete,
@@ -4226,7 +4253,7 @@ private function _SetMenuItem pTokens, pIdx, pAt, pEnd
    if _T(pTokens, pIdx[j + 2]) is "menuitem" then
       put _FindWord(pTokens, pIdx, j + 3, tTo, "of in", "menu") into tMenu
       if tMenu is empty or tMenu = j + 3 or tMenu + 2 > tTo - 1 then return empty
-      put _Span(pTokens, pIdx, j + 3, tMenu - 1) into tItem
+      put _MenuName(pTokens, pIdx, j + 3, tMenu - 1) into tItem
       add 2 to tMenu
    else if _T(pTokens, pIdx[tOrdinal]) is among the words of kMenuOrdinals and _T(pTokens, pIdx[tOrdinal + 1]) is "menuitem" then
       -- set the checkMark of [the] last menuItem of menu M
@@ -4241,7 +4268,7 @@ private function _SetMenuItem pTokens, pIdx, pAt, pEnd
       return empty
    end if
    _Fire "T22 HyperCard menus"
-   return "hcSetMenuItem" && quote & tProperty & quote & comma && _Span(pTokens, pIdx, tMenu, tTo - 1) & comma && tItem & comma && _Span(pTokens, pIdx, tTo + 1, pEnd)
+   return "hcSetMenuItem" && quote & tProperty & quote & comma && _MenuName(pTokens, pIdx, tMenu, tTo - 1) & comma && tItem & comma && _Span(pTokens, pIdx, tTo + 1, pEnd)
 end _SetMenuItem
 
 -- put E into (after, before) menu M [with menuMsg(s) X], put E into
@@ -4275,15 +4302,15 @@ private function _PutIntoMenu pTokens, pIdx, pAt, pEnd
    if _T(pTokens, pIdx[tPrep + 1]) is "menuitem" then
       put _FindWord(pTokens, pIdx, tPrep + 2, pEnd, "of in", "menu") into tMenu
       if tMenu is empty or tMenu = tPrep + 2 or tMenu + 2 > pEnd then return empty
-      put _Span(pTokens, pIdx, tPrep + 2, tMenu - 1) into tItem
-      put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
+      put _MenuName(pTokens, pIdx, tPrep + 2, tMenu - 1) into tItem
+      put _MenuName(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else if tOrdinal is not empty then
       put _FindWord(pTokens, pIdx, tOrdinal + 2, pEnd, "of in", "menu") into tMenu
       if tMenu is not tOrdinal + 2 or tMenu + 2 > pEnd then return empty
       put quote & _T(pTokens, pIdx[tOrdinal]) & quote into tItem
-      put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
+      put _MenuName(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else
-      put _Span(pTokens, pIdx, tPrep + 2, pEnd) into tMenu
+      put _MenuName(pTokens, pIdx, tPrep + 2, pEnd) into tMenu
    end if
    if tWith is not empty then put _MenuMessages(pTokens, pIdx, tWith + 2, tLast) into tMessages
    _Fire "T22 HyperCard menus"
@@ -4374,21 +4401,21 @@ private function _MenuCommand pTokens, pIdx, pAt, pEnd
    put pAt + 1 into tOrdinal
    if _T(pTokens, pIdx[tOrdinal]) is "the" then add 1 to tOrdinal
    if _T(pTokens, pIdx[pAt + 1]) is "menu" then
-      put _Span(pTokens, pIdx, pAt + 2, pEnd) into tMenu
+      put _MenuName(pTokens, pIdx, pAt + 2, pEnd) into tMenu
       put "empty" into tItem
    else if _T(pTokens, pIdx[pAt + 1]) is "menuitem" and tVerb is not "create" then
       put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "of in", "menu") into tMenu
       if tMenu is empty and tVerb is "delete" then put _FindWord(pTokens, pIdx, pAt + 2, pEnd, "from", "menu") into tMenu
       if tMenu is empty or tMenu = pAt + 2 or tMenu + 2 > pEnd then return empty
-      put _Span(pTokens, pIdx, pAt + 2, tMenu - 1) into tItem
-      put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
+      put _MenuName(pTokens, pIdx, pAt + 2, tMenu - 1) into tItem
+      put _MenuName(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else if _T(pTokens, pIdx[tOrdinal]) is among the words of kMenuOrdinals and _T(pTokens, pIdx[tOrdinal + 1]) is "menuitem" \
          and tVerb is not "create" then
       -- disable [the] last menuItem of menu M
       put _FindWord(pTokens, pIdx, tOrdinal + 2, pEnd, "of in from", "menu") into tMenu
       if tMenu is not tOrdinal + 2 or tMenu + 2 > pEnd then return empty
       put quote & _T(pTokens, pIdx[tOrdinal]) & quote into tItem
-      put _Span(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
+      put _MenuName(pTokens, pIdx, tMenu + 2, pEnd) into tMenu
    else
       return empty
    end if
@@ -4761,6 +4788,7 @@ private function _LineCommands pLine
       put sMatch[3] into tRest
       if _Lower(word 1 of tRest) is not among the words of "item items" then
          _Fire "T12 HyperCard command to the library"
+         put _MenuNameText(tRest) into tRest
          if _Lower(a) is "create" then return tIndent & "hcCreateMenu" && tRest
          return tIndent & "hcDeleteMenu" && tRest
       end if
@@ -4785,7 +4813,7 @@ private function _LineCommands pLine
       put sMatch[4] into c
       put sMatch[5] into d
       _Fire "T12 HyperCard command to the library"
-      return tIndent & "hcPutIntoMenu" && a & comma && quote & b & quote & comma && c & comma && _MenuMessagesText(d)
+      return tIndent & "hcPutIntoMenu" && a & comma && quote & b & quote & comma && _MenuNameText(c) & comma && _MenuMessagesText(d)
    end if
    if _Match(pLine, "(?i)^(\s*(?:(?:then|else)\s+)?)palette\s+(.+?,.+)$") then
       put sMatch[1] into tIndent
