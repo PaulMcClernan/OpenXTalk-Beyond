@@ -144,8 +144,8 @@ literal arrays, as in LiveCode 10 (see
 [0.2.7-rc.6.6](#027-rc66-the-bug-hunt-round-six)), and 0.2.7-rc.6.7
 lays out right-to-left and mixed text in the order ICU gives, ends a
 crash on the next background of a card with none, keeps the web IDE in
-the browser between visits, and runs many more of imported HyperCard
-stacks' scripts (see
+the browser between visits, draws the modern Tools palette's buttons as
+buttons, and runs many more of imported HyperCard stacks' scripts (see
 [0.2.7-rc.6.7](#027-rc67-the-bug-hunt-round-seven));
 0.2.6 stays the main download until it has held up.
 
@@ -1652,6 +1652,15 @@ squashes:
   without downloading them, and the engine compiles while it downloads.
   A browser that cannot keep a copy loads the IDE as before, and the
   loading bar no longer miscounts on a server that compresses (#265).
+- **Tools palette buttons that did not look like buttons.** With Drawn
+  Icons on, the modern Tools palette drew its buttons as an empty box
+  with a dash, and the Label Field as a "T", which is the text tool in
+  GIMP and Inkscape (richmond62). The buttons now have a shaded face
+  with "OK" on it, the Label Field is the text "Ab" with no box, the Tab
+  Panel three tabs with the first open, the Popup Menu a menu open at
+  the pointer, and the Player a movie with its play button and
+  controller bar. Only the pictures change: Drawn Icons off and the
+  classic look are as before (#276).
 - **HyperCard stacks that stopped or took the wrong turn.** In a stack
   whose `hyperTalkCompatible` is true (File > Import Stack sets it), a
   `userLevel` above 5 reads as 5, HyperCard's highest, so a stack that
