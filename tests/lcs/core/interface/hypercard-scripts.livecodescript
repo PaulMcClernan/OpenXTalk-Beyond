@@ -5346,6 +5346,144 @@ on TestHyperCardScriptsT71Printed
    _Close tStack
 end TestHyperCardScriptsT71Printed
 
+on TestHyperCardScriptsT73
+   -- T73: ask password, which HyperCard answered with a number made from
+   -- the reply, kept and compared by scripts ("if it = 2170878455", Sword
+   -- Play's; 14 corpus stacks), where this engine gives the reply: the
+   -- library's hcAskPassword, which puts that number into it. ask
+   -- password clear, the reply as typed here too, is left as it is
+   local tScript, q
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  ask password " & q & "Enter Password" & q, \
+         "  Ask Password " & q & "Old" & q & " & " & q & " password" & q & " with " & q & "x" & q, \
+         "  ask password " & q & "Please type your password below." & q & " &return \", \
+         "  &" & q & "(If you have forgotten your password, see your owner's manual.)" & q, \
+         "  if the hilite of me then ask password tPrompt else beep", \
+         "  ask password (tPrompt) with (tDefault)", \
+         "  ask password clear " & q & "Enter the password:" & q, \
+         "  ask " & q & "password" & q, \
+         "  ask password", \
+         "end mouseUp") into tScript
+   TestAssert "T73: ask password", line 2 of tScript is "  hcAskPassword it, " & q & "Enter Password" & q
+   TestAssert "T73: an expression, in any case, with a reply given", \
+         line 3 of tScript is "  hcAskPassword it, " & q & "Old" & q & " & " & q & " password" & q & ", " & q & "x" & q
+   TestAssert "T73: continued over lines, on the first", \
+         line 4 of tScript begins with "  hcAskPassword it, " & q & "Please type your password below." & q \
+         and line 4 of tScript ends with "&" & q & "(If you have forgotten your password, see your owner's manual.)" & q \
+         and line 5 of tScript is empty
+   TestAssert "T73: after then", line 6 of tScript is "  if the hilite of me then hcAskPassword it, tPrompt else beep"
+   TestAssert "T73: in parentheses", line 7 of tScript is "  hcAskPassword it, (tPrompt), (tDefault)"
+   TestAssert "T73: ask password clear: unchanged", line 8 of tScript is "  ask password clear " & q & "Enter the password:" & q
+   TestAssert "T73: ask of a string: unchanged", line 9 of tScript is "  ask " & q & "password" & q
+   TestAssert "T73: ask password alone: unchanged", line 10 of tScript is "  ask password"
+   delete line 10 of tScript
+   TestAssert "T73: those compile", _Compiles(tScript)
+end TestHyperCardScriptsT73
+
+on TestHyperCardScriptsPasswords
+   -- T73's hcAskPassword and hcPasswordNumber, and the stand-in for
+   -- Dartmouth's Password XFCN (hcX_Password, called so by T13), in a
+   -- stack's scripts once fixed. The dialog is a stand-in for the IDE's
+   -- Ask Dialog, which keeps what it was asked and gives the reply in
+   -- gHCScriptsReply (a nul is Cancel)
+   local tStack, q, tSecret
+   global gHCScriptsTest, gHCScriptsSeen, gHCScriptsReply
+   put quote into q
+   if there is a stack "Ask Dialog" then
+      TestSkip "ask password and Password", "an Ask Dialog stack is already open"
+      exit TestHyperCardScriptsPasswords
+   end if
+   put "HCPasswords" & the milliseconds into tStack
+   lock messages
+   create invisible stack "Ask Dialog"
+   set the script of stack "Ask Dialog" to _Lines("on openStack", "  global gHCScriptsSeen, gHCScriptsReply", \
+         "  put the dialogData & numToChar(1) after gHCScriptsSeen", \
+         "  set the dialogData to gHCScriptsReply", "  close this stack", "end openStack")
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the uHyperCard["externals"] of stack tStack to "XFCN" & tab & "Password"
+   set the uHyperCard["resources"] of stack tStack to "XFCN" & tab & "17958" & tab & "2242" & tab & "Password"
+   create button "Ask"
+   set the script of button "Ask" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  ask password " & q & "Old Password" & q, \
+         "  put it & " & q & "|" & q & " & the result into gHCScriptsTest", \
+         "end mouseUp")
+   create button "Dartmouth"
+   set the script of button "Dartmouth" to _Lines("on mouseUp pCase", "  global gHCScriptsTest", \
+         "  if pCase is empty then", \
+         "    put password() into gHCScriptsTest", \
+         "  else", \
+         "    get password (" & q & "Type your password here!" & q & ", pCase)", \
+         "    put it into gHCScriptsTest", \
+         "  end if", \
+         "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   TestAssert "the fix: hcAskPassword and hcX_Password", "hcAskPassword it," is in the script of button "Ask" of stack tStack \
+         and "put hcX_Password() into" is in the script of button "Dartmouth" of stack tStack \
+         and "get hcX_Password (" is in the script of button "Dartmouth" of stack tStack
+   -- (set after the fix, which leaves them as they are)
+   set the script of button "Ask" of stack tStack to the script of button "Ask" of stack tStack & return & _Lines("on numbers", "  global gHCScriptsTest", \
+         "  put hcPasswordNumber(empty) & comma & hcPasswordNumber(" & q & "journal" & q & ") & comma & hcPasswordNumber(" & q & "JOURNAL" & q & ") into gHCScriptsTest", \
+         "  put comma & hcPasswordNumber(" & q & "secret" & q & ") & comma & hcPasswordNumber(space) & comma & hcPasswordNumber(" & q & "test" & q & ") after gHCScriptsTest", \
+         "  put comma & hcPasswordNumber(" & q & "debyeh" & q & " & numToCodepoint(252) & " & q & "ckel" & q & ") & comma & hcPasswordNumber(numToCodepoint(711)) after gHCScriptsTest", \
+         "end numbers")
+
+   -- the numbers stacks keep: an empty reply's ("Bill"), If Monks Had
+   -- Macs' Journal's "journal", in any case, Lab Logger's "secret",
+   -- Internet Local Info's space, MediaTalk's "test", BufferStack's
+   -- "debyehuckel" with its accent, and a caron (255 in Mac Roman), whose
+   -- seed is 0
+   put empty into gHCScriptsTest
+   send "numbers" to button "Ask" of stack tStack
+   TestAssert "hcPasswordNumber: the numbers HyperCard gave", gHCScriptsTest is "1114205292,1342878572,1342878572,1309466871,2007844881,3932165314,3246591934,1114205292"
+
+   set the defaultStack to tStack
+   put "journal" into gHCScriptsReply
+   put empty into gHCScriptsSeen
+   send "mouseUp" to button "Ask" of stack tStack
+   TestAssert "ask password: the reply's number in it, and the prompt shown, the reply hidden", gHCScriptsTest is "1342878572|" \
+         and gHCScriptsSeen is ("ask clear" & numToChar(0) & numToChar(0) & "Old Password" & numToChar(0) & numToChar(1))
+   put empty into gHCScriptsReply
+   send "mouseUp" to button "Ask" of stack tStack
+   TestAssert "ask password: an empty reply's number", gHCScriptsTest is "1114205292|"
+   put numToChar(0) into gHCScriptsReply
+   send "mouseUp" to button "Ask" of stack tStack
+   TestAssert "ask password: cancelled, nothing, and Cancel in the result", gHCScriptsTest is "|Cancel"
+
+   -- Dartmouth's: Encrypt of the reply in capitals, unless the second
+   -- parameter is true; Cancel
+   put "Secret" into gHCScriptsReply
+   put empty into gHCScriptsSeen
+   send "mouseUp" to button "Dartmouth" of stack tStack
+   put gHCScriptsTest into tSecret
+   send "mouseUp true" to button "Dartmouth" of stack tStack
+   put comma & gHCScriptsTest after tSecret
+   send "mouseUp false" to button "Dartmouth" of stack tStack
+   put comma & gHCScriptsTest after tSecret
+   TestAssert "Password: the reply's number in capitals (SECRET), as typed with true", tSecret is "6627,26079,6627"
+   TestAssert "Password: its own prompt, and the one given", "Please enter your password:" is in gHCScriptsSeen and "Type your password here!" is in gHCScriptsSeen
+   put empty into gHCScriptsReply
+   send "mouseUp" to button "Dartmouth" of stack tStack
+   put gHCScriptsTest into tSecret
+   put numToChar(0) into gHCScriptsReply
+   send "mouseUp" to button "Dartmouth" of stack tStack
+   TestAssert "Password: an empty reply 0, cancelled Cancel", tSecret & comma & gHCScriptsTest is "0,Cancel"
+
+   -- its first version, 1684 bytes: the reply as typed, nothing when
+   -- cancelled
+   set the uHyperCard["resources"] of stack tStack to "XFCN" & tab & "17958" & tab & "1684" & tab & "Password"
+   put "Secret" into gHCScriptsReply
+   send "mouseUp" to button "Dartmouth" of stack tStack
+   put gHCScriptsTest into tSecret
+   put numToChar(0) into gHCScriptsReply
+   send "mouseUp" to button "Dartmouth" of stack tStack
+   TestAssert "Password, its first version: the reply as typed, nothing when cancelled", tSecret & comma & gHCScriptsTest is "Secret,"
+   _Close tStack
+   _Close "Ask Dialog"
+end TestHyperCardScriptsPasswords
+
 on TestHyperCardScriptsT11In
    -- T11's "in" for "of" between an object and the card, background or
    -- stack it is on, in a script that compiles here as it is ("hide card
