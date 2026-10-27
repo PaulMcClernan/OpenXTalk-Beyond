@@ -2910,15 +2910,22 @@ end TestHyperCardScriptsT64
 
 on TestHyperCardScriptsT2Me
    -- T2 with revHyperCardFixScripts' probe, which finds me refused as a
-   -- parameter's name: in a field's script (one T2 rewrites), "put mPP -
-   -- 15 into me" and "add 5 to me" put into the field, as in HyperCard.
-   -- The import took me for a variable and renamed it hc_me, so the field
-   -- never changed. In a card's script, where me is no container, it is
-   -- the variable still ("put (userName contains "Ari Halberstadt") into
-   -- me", a stack's openStack)
-   local tScript, tStack, q, tError
+   -- parameter's name: in a field's script (one T2 rewrites), a card's
+   -- field or a background's, "put mPP - 15 into me" and "add 5 to me" put
+   -- into the field, as in HyperCard. The import took me for a variable
+   -- and renamed it hc_me, so the field never changed. In a card's script,
+   -- where me is no container, it is the variable still ("put (userName
+   -- contains "Ari Halberstadt") into me", a stack's openStack). In a
+   -- stack with HyperCard's addressing, as an imported one has
+   local tScript, tStack, q, tError, tField
    global gHCScriptsTest
    put quote into q
+   put _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put 2 into result", \
+         "  put result into me", \
+         "  add 5 to me", \
+         "  if me is 7 then put the number of lines of me after gHCScriptsTest", \
+         "end mouseUp") into tScript
    put "HCScriptsT2Me" & the milliseconds into tStack
    lock messages
    create invisible stack tStack
@@ -2928,30 +2935,34 @@ on TestHyperCardScriptsT2Me
          "  put (result is 2) into me", \
          "  if me then put " & q & "card" & q & " into gHCScriptsTest", \
          "end mouseUp")
+   create group "G"
+   set the backgroundBehavior of group "G" to true
+   create field "Shared" in group "G"
+   set the script of field "Shared" to tScript
    create field "Score"
-   set the script of field "Score" to _Lines("on mouseUp", "  global gHCScriptsTest", \
-         "  put 2 into result", \
-         "  put result into me", \
-         "  add 5 to me", \
-         "  if me is 7 then put the number of lines of me into gHCScriptsTest", \
-         "end mouseUp")
+   set the script of field "Score" to tScript
+   set the HCAddressing of stack tStack to true
    unlock messages
-   TestAssert "T2: as it is, the script does not compile", not _Compiles(the script of field "Score" of stack tStack)
+   TestAssert "T2: as it is, the script does not compile", not _Compiles(tScript)
    get revHyperCardFixScripts(tStack)
-   put the script of field "Score" of stack tStack into tScript
-   TestAssert "T2: the variable renamed, me kept", line 3 to 6 of tScript is _Lines("  put 2 into hc_result", "  put hc_result into me", \
-         "  add 5 to me", "  if me is 7 then put the number of lines of me into gHCScriptsTest")
-   TestAssert "T2: the script compiles", _Compiles(tScript)
+   repeat for each item tField in "Score,Shared"
+      put the script of control tField of this card of stack tStack into tScript
+      TestAssert "T2: the variable renamed, me kept, in field" && tField, line 3 to 6 of tScript is _Lines("  put 2 into hc_result", "  put hc_result into me", \
+            "  add 5 to me", "  if me is 7 then put the number of lines of me after gHCScriptsTest")
+      TestAssert "T2: the script compiles, in field" && tField, _Compiles(tScript)
+   end repeat
    put the script of this card of stack tStack into tScript
    TestAssert "T2: in a card's script, me the variable: unchanged", line 4 to 5 of tScript \
          is _Lines("  put (hc_result is 2) into hc_me", "  if hc_me then put " & q & "card" & q & " into gHCScriptsTest")
    set the defaultStack to tStack
    put empty into gHCScriptsTest
    try
-      send "mouseUp" to field "Score" of stack tStack
+      send "mouseUp" to control "Score" of this card of stack tStack
+      send "mouseUp" to control "Shared" of this card of stack tStack
    catch tError
    end try
-   TestAssert "T2: the field's text set and read", tError is empty and the text of field "Score" of stack tStack is "7" and gHCScriptsTest is "1"
+   TestAssert "T2: the fields' text set and read", tError is empty and gHCScriptsTest is "11" \
+         and the text of control "Score" of this card of stack tStack is "7" and the text of control "Shared" of this card of stack tStack is "7"
    put empty into gHCScriptsTest
    try
       send "mouseUp" to this card of stack tStack
