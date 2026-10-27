@@ -284,6 +284,13 @@ void MCLegacyExecDoMenu(MCExecContext& ctxt, MCStringRef p_option)
 	//   which, unlike message, does not stop at the lock), and the handlers
 	//   run with messages still locked, as HyperCard ran them; the
 	//   dispatch command would unlock them for its handlers.
+	//   And they run with the default stack as it is, as a command's
+	//   message runs: HyperCard's menu items acted on the card a script had
+	//   gone to ("go home", then "doMenu "Paste Button"" put the button it
+	//   had copied on Home's card), where a dispatch that made the
+	//   script's own stack the default, as send does, had the HyperCard
+	//   Library's doMenu paste it, or make a "New Button", on the script's
+	//   own card instead.
 	MCObject *t_object = ctxt . GetObject();
 	if (t_object != nil && t_object -> getstack() -> ishypertalkcompatible())
 	{
@@ -304,7 +311,7 @@ void MCLegacyExecDoMenu(MCExecContext& ctxt, MCStringRef p_option)
 			t_stat = ES_ERROR;
 		}
 		else if (!MCexitall)
-			t_stat = t_object -> dispatch(HT_MESSAGE, MCNAME("doMenu"), &t_item);
+			t_stat = t_object -> dispatch(HT_MESSAGE, MCNAME("doMenu"), &t_item, false);
 		if (t_added)
 			MCnexecutioncontexts--;
 

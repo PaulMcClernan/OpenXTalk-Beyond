@@ -1778,7 +1778,8 @@ on TestHyperCardScriptsT54
    -- T54: the cards of a background sorted, which this engine refuses
    -- ("sort: error sorting"), and sort this stack, which here is "sort
    -- cards": the background's cards sorted among the places they had,
-   -- by the script's own expression (84 statements in 41 corpus stacks)
+   -- by the script's own expression, after "then" or "else" in a do (88
+   -- statements in 43 corpus stacks)
    local tScript, tStack, q, tError
    global gHCScriptsTest, gHCScriptsCards
    put quote into q
@@ -1802,23 +1803,37 @@ on TestHyperCardScriptsT54
    TestAssert "T54: stack", line 7 of tScript is "  sort cards by field FontNameSize"
    TestAssert "T54: the script compiles", _Compiles(tScript)
 
-   -- unchanged: a field's lines, this engine's own sorts, a sort after
-   -- then (three statements cannot go there), a background of another
-   -- stack
+   -- after then or else, or before an else, where one statement goes: a
+   -- do of the three, which runs them in the handler (Software
+   -- Librarian's, Book Reporter's Guild's)
+   put _Rewrite("on mouseUp", \
+         "  if x then sort this bg by fld 1", \
+         "  else sort cards of bkgnd " & q & "A" & q & " by bg field " & q & "Name" & q, \
+         "  if y then sort this bg by fld 1 else beep", \
+         "end mouseUp") into tScript
+   TestAssert "T54: after then, a do", line 2 of tScript \
+         is "  if x then do " & q & "hcSortBegin the long id of this bg, false; sort marked cards by fld 1; hcSortEnd" & q
+   TestAssert "T54: after else, a do with the quotes of the statement", line 3 of tScript \
+         is "  else do " & q & "hcSortBegin the long id of bkgnd " & q & " & quote & " & q & "A" & q & " & quote & " & q \
+         & ", false; sort marked cards by bg field " & q & " & quote & " & q & "Name" & q & " & quote & " & q & "; hcSortEnd" & q
+   TestAssert "T54: before an else, a do", line 4 of tScript \
+         is "  if y then do " & q & "hcSortBegin the long id of this bg, false; sort marked cards by fld 1; hcSortEnd" & q & " else beep"
+   TestAssert "T54: the script with the dos compiles", _Compiles(tScript)
+
+   -- unchanged: a field's lines, this engine's own sorts, a background
+   -- of another stack
    put _Rewrite("on mouseUp", \
          "  sort bg fld " & q & "gobg" & q, \
          "  sort cards by fld 1", \
          "  sort marked cards descending by fld 1", \
          "  sort lines of fld 1 descending", \
-         "  if x then sort this bg by fld 1", \
          "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1", \
          "end mouseUp") into tScript
    TestAssert "T54: a background field's lines: unchanged", line 2 of tScript is "  sort bg fld " & q & "gobg" & q
    TestAssert "T54: sort cards: unchanged", line 3 of tScript is "  sort cards by fld 1"
    TestAssert "T54: sort marked cards: unchanged", line 4 of tScript is "  sort marked cards descending by fld 1"
    TestAssert "T54: sort lines: unchanged", line 5 of tScript is "  sort lines of fld 1 descending"
-   TestAssert "T54: after then: unchanged", line 6 of tScript is "  if x then sort this bg by fld 1"
-   TestAssert "T54: another stack's background: unchanged", line 7 of tScript is "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1"
+   TestAssert "T54: another stack's background: unchanged", line 6 of tScript is "  sort cards of bkgnd 1 of stack " & q & "Other" & q & " by fld 1"
 
    -- in a script that compiles: five cards, of backgrounds A and B in
    -- turn, the A cards sorted by a field of theirs named in a variable,
@@ -1865,6 +1880,18 @@ on TestHyperCardScriptsT54
          "  end repeat", \
          "  put tNames & the mark of card " & q & "B1" & q & " & comma & the mark of card " & q & "A1" & q & " into gHCScriptsTest", \
          "end mouseUp")
+   -- and after then, descending, in a do that reads the handler's variable
+   create button "SortThen" in group "B"
+   set the script of button "SortThen" of card "B1" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  local tField, tNames, i", \
+         "  put " & q & "Key" & q & " into tField", \
+         "  put empty into gHCScriptsTest", \
+         "  if tField is not empty then sort cards of bkgnd " & q & "A" & q & " descending by bg field tField", \
+         "  repeat with i = 1 to the number of cards", \
+         "    put the short name of card i & comma after tNames", \
+         "  end repeat", \
+         "  put tNames into gHCScriptsTest", \
+         "end mouseUp")
    unlock messages
    set the defaultStack to tStack
    try
@@ -1872,6 +1899,11 @@ on TestHyperCardScriptsT54
    catch tError
    end try
    TestAssert "T54: as it is, the sort stops", gHCScriptsTest is empty
+   try
+      send "mouseUp" to button "SortThen" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: as it is, the sort after then stops", gHCScriptsTest is empty
    get revHyperCardFixScripts(tStack)
    TestAssert "T54: in a script that compiles", _Compiles(the script of button "Sort" of card "B1" of stack tStack)
    go to card "B2" of stack tStack
@@ -1886,6 +1918,14 @@ on TestHyperCardScriptsT54
    TestAssert "T54: on the first card, as this engine's sort ends", the short name of this card of stack tStack is "A2"
    TestAssert "T54: closeCard to the card it began on, openCard to the first, no other card", \
          gHCScriptsCards is "close B2,open A2,"
+   put "b" into field "Key" of card "A3" of stack tStack
+   set the defaultStack to tStack
+   try
+      send "mouseUp" to button "SortThen" of card "B1" of stack tStack
+   catch tError
+   end try
+   TestAssert "T54: after then, in a do by the handler's variable: the A cards descending, in their places", \
+         gHCScriptsTest is "A1,B1,A3,B2,A2,"
    _Close tStack
 end TestHyperCardScriptsT54
 
@@ -1940,6 +1980,89 @@ on TestHyperCardScriptsT55
    TestAssert "T55: five items, HyperCard's long version first", gHCScriptsTest is "5,02418000,true"
    _Close tStack
 end TestHyperCardScriptsT55
+
+on TestHyperCardScriptsT22Names
+   -- T22: a menu or a menu item named by one word this engine does not
+   -- take as a value ("create menu Control", FontCard's: an object type
+   -- here), which HyperCard took as its text: the word in quotes, where
+   -- revHyperCardFixScripts' probe finds it refused. A word this engine
+   -- takes as a value, and a variable, as they were, a variable named by
+   -- such a word too (which T2 renames before T12 and T22 read it)
+   local tStack, q, tScript, tError
+   global gHCScriptsTest
+   put quote into q
+   put "HCScriptsT22" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Menus"
+   set the script of button "Menus" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  create menu Control", \
+         "  put " & q & "Set Spaces,Image,-,Show Palette" & q & " into menu Control", \
+         "  disable menuItem 4 of menu Control", \
+         "  set the checkMark of menuItem Image of menu Control to true", \
+         "  if there is a menu Control then put true into gHCScriptsTest", \
+         "  put comma & the enabled of menuItem 4 of menu Control after gHCScriptsTest", \
+         "  put comma & the checkMark of menuItem Image of menu Control after gHCScriptsTest", \
+         "  put " & q & "Again" & q & " after menu Control with menuMsg doAgain", \
+         "  put comma & the number of menuItems of menu Control after gHCScriptsTest", \
+         "  delete menu Control -- gone", \
+         "  put comma & (there is a menu Control) after gHCScriptsTest", \
+         "end mouseUp")
+   create button "Values"
+   set the script of button "Values" to _Lines("on mouseUp", "  global gHCScriptsTest", "  local tMenu", \
+         "  put " & q & "Tools" & q & " into tMenu", \
+         "  create menu Apple", \
+         "  create menu tMenu", \
+         "  put " & q & "About" & q & " into menu Apple with menuMsg doAbout", \
+         "  put " & q & "Extras" & q & " into control", \
+         "  create menu control", \
+         "  put (there is a menu " & q & "Apple" & q & ") & comma & (there is a menu " & q & "Tools" & q & ") & comma & (there is a menu " & q & "Extras" & q & ") into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   TestAssert "T22: as it is, the script does not compile", not _Compiles(the script of button "Menus" of stack tStack)
+   get revHyperCardFixScripts(tStack)
+   put the script of button "Menus" of stack tStack into tScript
+   TestAssert "T22: create menu named by an object type", line 3 of tScript is "  hcCreateMenu " & q & "Control" & q
+   TestAssert "T22: put into it", line 4 of tScript \
+         is "  hcPutIntoMenu " & q & "Set Spaces,Image,-,Show Palette" & q & ", " & q & "into" & q & ", " & q & "Control" & q & ", empty, empty"
+   TestAssert "T22: disable a menuItem of it", line 5 of tScript is "  hcEnableMenu false, " & q & "Control" & q & ", 4"
+   TestAssert "T22: set the checkMark of a menuItem named by an object type", line 6 of tScript \
+         is "  hcSetMenuItem " & q & "checkmark" & q & ", " & q & "Control" & q & ", " & q & "Image" & q & ", true"
+   TestAssert "T48: there is a menu named by an object type", line 7 of tScript is "  if hcThereIsMenu(" & q & "Control" & q & ") then put true into gHCScriptsTest"
+   TestAssert "T22: a menuItem's property, of a menu named by an object type", line 8 of tScript \
+         is "  put comma & hcMenuItem(" & q & "enabled" & q & ", " & q & "Control" & q & ", 4) after gHCScriptsTest"
+   TestAssert "T22: of a menuItem named by an object type", line 9 of tScript \
+         is "  put comma & hcMenuItem(" & q & "checkmark" & q & ", " & q & "Control" & q & ", " & q & "Image" & q & ") after gHCScriptsTest"
+   -- (T12's forms, which take a whole line: with menuMsg, delete menu)
+   TestAssert "T22: put after it with a menu message", line 10 of tScript \
+         is "  hcPutIntoMenu " & q & "Again" & q & ", " & q & "after" & q & ", " & q & "Control" & q & ", doAgain"
+   TestAssert "T48: the number of its menuItems", line 11 of tScript is "  put comma & hcMenuItemCount(" & q & "Control" & q & ") after gHCScriptsTest"
+   TestAssert "T22: delete it, its comment kept", line 12 of tScript is "  hcDeleteMenu " & q & "Control" & q & " -- gone"
+   TestAssert "T22: the script compiles", _Compiles(tScript)
+   put the script of button "Values" of stack tStack into tScript
+   TestAssert "T22: a word this engine takes as a value: as it was", line 5 of tScript is "  hcCreateMenu Apple"
+   TestAssert "T22: a variable: as it was", line 6 of tScript is "  hcCreateMenu tMenu"
+   TestAssert "T22: with a menu message: as it was", line 7 of tScript \
+         is "  hcPutIntoMenu " & q & "About" & q & ", " & q & "into" & q & ", Apple, doAbout"
+   -- (a variable named like an object type, which T2 renames first)
+   TestAssert "T22: a variable named by an object type: renamed, as it was", line 9 of tScript is "  hcCreateMenu hc_control"
+
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Menus" of stack tStack
+   catch tError
+   end try
+   TestAssert "T22: the menu made, its item disabled and checked, an item put after, the menu deleted", \
+         gHCScriptsTest is "true,false,true,5,false"
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Values" of stack tStack
+   catch tError
+   end try
+   TestAssert "T22: the menus named by a value and by two variables made", gHCScriptsTest is "true,true,true"
+   _Close tStack
+end TestHyperCardScriptsT22Names
 
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
