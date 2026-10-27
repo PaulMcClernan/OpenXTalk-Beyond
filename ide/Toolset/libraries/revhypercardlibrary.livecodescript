@@ -2426,6 +2426,25 @@ on hcHelp pObject
    return the result
 end hcHelp
 
+-- quit as a command (rule T70): HyperCard had no quit command but sent
+-- the message quit as it quit, and a script that called quit sent that
+-- message as any command: a stack's own "on quit" took it (Preschool
+-- Primer's QUIT buttons, whose stack's "on quit" chooses Quit
+-- HyperCard; rule T1 names that handler hc_quit, as this engine takes no
+-- handler called quit), and HyperCard let it go if no handler did (NAIC
+-- Stack's "if it is "Cancel" then quit", Universal Card Copier's "quit
+-- mouseUp" after an error). This engine's quit quits at once, in the IDE
+-- the IDE itself, past the stack's handler. Here the message goes from
+-- the object whose script ran it, pObject, with pParameter if the script
+-- gave one, and ends there if no handler takes it
+on hcQuit pObject, pParameter
+   if the paramCount > 1 then
+      dispatch "hc_quit" to pObject with pParameter
+   else
+      dispatch "hc_quit" to pObject
+   end if
+end hcQuit
+
 -- (pTarget: the object the message goes to, this card if it is empty)
 private function _HCKeyHandled pMessage, pParameter, pTarget
    local tHandled

@@ -3787,6 +3787,22 @@ private function _HyperCardRules pLine, pCompiled, pElse
                put "hcHelp the long id of me" into tNew
             end if
             break
+         case "quit"
+            -- T70: quit, which was no command of HyperCard's but the
+            -- message it sent as it quit: a script that called it sent
+            -- the message, which a stack's own "on quit" took (renamed
+            -- hc_quit by T1) and HyperCard let go if none did ("if it is
+            -- "Cancel" then quit", "quit mouseUp" for an exit). This
+            -- engine's quit quits at once, the IDE itself in the IDE,
+            -- past the stack's handler: the library's hcQuit sends the
+            -- message from this object, as HyperCard did
+            _Fire "T70 quit"
+            if tEnd = i then
+               put "hcQuit the long id of me" into tNew
+            else
+               put "hcQuit the long id of me," && _Span(tTokens, tIdx, i + 1, tEnd) into tNew
+            end if
+            break
          case "choose"
             -- T30: choose tool 4, choose tool x, choose btn tool: this
             -- engine takes "choose button tool" alone, and stops with an

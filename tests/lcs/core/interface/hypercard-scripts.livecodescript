@@ -4920,6 +4920,65 @@ on TestHyperCardScriptsT16Names
    _Close tStack
 end TestHyperCardScriptsT16Names
 
+on TestHyperCardScriptsT70
+   -- T70: quit, which was no command of HyperCard's but the message it
+   -- sent as it quit: a stack's own "on quit" took it (Preschool
+   -- Primer's, renamed hc_quit by T1), and HyperCard let it go if none
+   -- did ("if it is "Cancel" then quit", NAIC Stack's). This engine's
+   -- quit quit at once, in the IDE the IDE itself: the library's hcQuit
+   local tScript, tStack, tOther, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  quit", \
+         "  if it is " & q & "Cancel" & q & " then quit", \
+         "  quit mouseUp", \
+         "  if x then quit else beep", \
+         "end mouseUp") into tScript
+   TestAssert "T70: quit alone", line 2 of tScript is "  hcQuit the long id of me"
+   TestAssert "T70: quit after then", line 3 of tScript is "  if it is " & q & "Cancel" & q & " then hcQuit the long id of me"
+   TestAssert "T70: quit with a parameter", line 4 of tScript is "  hcQuit the long id of me, mouseUp"
+   TestAssert "T70: quit before else", line 5 of tScript is "  if x then hcQuit the long id of me else beep"
+   TestAssert "T70: those compile", _Compiles(tScript)
+
+   -- the stack's own handler takes it, with its parameter
+   put "HCScriptsT70" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   set the script of stack tStack to _Lines("on quit pWhy", "  global gHCScriptsTest", \
+         "  put " & q & "quit" & q & " && pWhy after gHCScriptsTest", "end quit")
+   create button "Quit"
+   set the script of button "Quit" to _Lines("on mouseUp", "  quit", "  quit mouseUp", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Quit" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T70: the stack's own handler takes quit", tError is empty and gHCScriptsTest is "quit quit mouseUp"
+
+   -- and with no handler of it, nothing quits and the script goes on
+   put "HCScriptsT70None" & the milliseconds into tOther
+   lock messages
+   create invisible stack tOther
+   set the defaultStack to tOther
+   create button "Cancel"
+   set the script of button "Cancel" to _Lines("on mouseUp", "  global gHCScriptsTest", "  if true then quit", \
+         "  put " & q & "went on" & q & " into gHCScriptsTest", "end mouseUp")
+   unlock messages
+   get revHyperCardFixScripts(tOther)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Cancel" of card 1 of stack tOther
+   catch tError
+   end try
+   TestAssert "T70: with no handler of quit, nothing quits", tError is empty and gHCScriptsTest is "went on"
+   _Close tOther
+   _Close tStack
+end TestHyperCardScriptsT70
+
 on TestHyperCardScriptsBuiltIns
    -- HyperCard's commands this engine does not have, as the rewritten
    -- scripts call them: cursors, key commands, card pictures, picture
