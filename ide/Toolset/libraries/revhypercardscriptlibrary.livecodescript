@@ -3916,7 +3916,8 @@ private function _HyperCardRules pLine, pCompiled, pElse
             -- command: what no handler took, HyperCard took; here it is
             -- passed off the end of the message path, where this engine
             -- has no such command and stops with an error. Sent instead,
-            -- it goes the same way and ends quietly
+            -- it goes the same way and ends quietly, in the HyperCard
+            -- Library's handler of it, which passes it on
             if tEnd = i then
                _Fire "T35 more forms HyperCard took"
                put "send" && quote & tTokens[tIdx[i]]["t"] & quote && "to me" into tNew

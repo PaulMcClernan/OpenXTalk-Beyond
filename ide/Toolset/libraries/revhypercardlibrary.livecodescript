@@ -3185,6 +3185,74 @@ on startUp
    pass startUp
 end startUp
 
+-- The rest of the messages that rule T35 sends when a script calls one
+-- alone, as a command ("idle" in Script Printer's and Script Manager's
+-- handlers, "resume", "resumeStack", "newCard"), or that a script sends
+-- itself ("send "idle" to me", QTPlay): the same. A handler here does not
+-- make this engine send any of them more often: it sends idle,
+-- mouseWithin and mouseStillDown to an object only for a handler of its
+-- own script or of its own behavior, and this library is the stack's
+-- behavior
+on idle
+   pass idle
+end idle
+
+on resume
+   pass resume
+end resume
+
+on suspend
+   pass suspend
+end suspend
+
+on resumeStack
+   pass resumeStack
+end resumeStack
+
+on suspendStack
+   pass suspendStack
+end suspendStack
+
+on openField
+   pass openField
+end openField
+
+on closeField
+   pass closeField
+end closeField
+
+on exitField
+   pass exitField
+end exitField
+
+on mouseStillDown
+   pass mouseStillDown
+end mouseStillDown
+
+on mouseEnter
+   pass mouseEnter
+end mouseEnter
+
+on mouseLeave
+   pass mouseLeave
+end mouseLeave
+
+on mouseWithin
+   pass mouseWithin
+end mouseWithin
+
+on newCard
+   pass newCard
+end newCard
+
+on newBackground
+   pass newBackground
+end newBackground
+
+on newStack
+   pass newStack
+end newStack
+
 -- splashDialog id, seconds, ...: a splash screen while the stack starts,
 -- from a resource that is not imported; nothing is shown
 on splashDialog

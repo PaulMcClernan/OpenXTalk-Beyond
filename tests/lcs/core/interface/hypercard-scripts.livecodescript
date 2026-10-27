@@ -4008,6 +4008,17 @@ on TestHyperCardScriptsLibraryMessages
          "  send " & quote & "closeCard" & quote & " to this card", \
          "  put MultiFinder() & comma & FileExists(empty) & comma & (CapsLock() is among the words of " & quote & "true false" & quote & ") into gHCScriptsTest", \
          "end mouseUp")
+   -- the rest of HyperCard's messages, called alone (rule T35 sends them)
+   -- or sent: Script Printer's idle, SNOWBALL's resume, QuickTime Tools'
+   -- resumeStack, ExerciseLog's newCard
+   create field "F"
+   create button "C"
+   set the script of button "C" to _Lines("on mouseUp", "  idle", "  resumeStack", \
+         "  send " & quote & "resume" & quote & " to this card", \
+         "  send " & quote & "newCard" & quote & " to this card", \
+         "  send " & quote & "closeField" & quote & " to field " & quote & "F" & quote, \
+         "  send " & quote & "mouseWithin" & quote & " to button " & quote & "Quiet" & quote, \
+         "end mouseUp")
    unlock messages
    get revHyperCardFixScripts(tStack)
    put empty into gHCScriptsTest
@@ -4017,6 +4028,11 @@ on TestHyperCardScriptsLibraryMessages
    end try
    TestAssert "messages sent to no handler end in the library", tError is empty
    TestAssert "MultiFinder, FileExists and CapsLock answer", gHCScriptsTest is "true,false,true"
+   try
+      send "mouseUp" to button "C" of stack tStack
+   catch tError
+   end try
+   TestAssert "the rest of HyperCard's messages, called alone or sent to no handler, end in the library", tError is empty
    _Close tStack
 end TestHyperCardScriptsLibraryMessages
 
