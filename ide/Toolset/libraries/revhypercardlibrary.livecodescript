@@ -1316,6 +1316,119 @@ function hcAnswerProgram pPrompt
    return empty
 end hcAnswerProgram
 
+/*
+ask password (rule T73): HyperCard put into it, not the reply, the number
+it made from the reply (hcPasswordNumber), which scripts kept and
+compared a later reply's with; when the dialog was cancelled, nothing,
+and "Cancel" in the result. pIt is the caller's it
+*/
+on hcAskPassword @pIt, pPrompt, pDefault
+   ask password clear pPrompt with pDefault
+   if the result is "Cancel" then
+      put empty into pIt
+      return "Cancel"
+   end if
+   put hcPasswordNumber(it) into pIt
+   return empty
+end hcAskPassword
+
+-- The codes HyperCard's ask password took a reply's letters to: a capital
+-- to its small letter (65 to 90, by adding 32) and, from 128 on, as each
+-- pair here has it, a letter with an accent to its letter without one
+-- (HyperCard 2.2's own table, its code segment 42)
+constant kHCPasswordFolds = "128,97 129,97 130,99 131,101 132,110 133,111 134,117 135,97 136,97 137,97 138,97 139,97 140,97 141,99 142,101 143,101 144,101 145,101 146,105 147,105 148,105 149,105 150,110 151,111 152,111 153,111 154,111 155,111 156,117 157,117 158,117 159,117 174,97 175,111 187,97 188,111 190,97 191,111 197,5 203,97 204,97 205,111 206,111 207,111 216,121 217,121 229,97 230,101 231,97 232,101 233,101 234,105 235,105 236,105 237,105 238,111 239,111 241,111 242,117 243,117 244,117"
+
+/*
+The number HyperCard's ask password gave for the reply pText (rule T73),
+as HyperCard 2.2's code makes it: the reply in Mac Roman, at most 255
+characters, its letters small and without accents (kHCPasswordFolds); a
+seed of its first code (from -128 to 127) and its length; then, for each
+bit of the reply from the first code's highest on, the next seed of
+QuickDraw's Random (_HCRandom), added to the number when the bit is set.
+An empty reply, or a sum of 0, gave 1114205292, "Bill" in four bytes.
+The numbers stacks keep come out so: "journal" 1342878572 (If Monks Had
+Macs' Journal), "secret" 1309466871 (Lab Logger), "debyehuckel"
+3246591934 (BufferStack), an empty reply 1114205292 (Jerome's Journal)
+*/
+function hcPasswordNumber pText
+   local tFolds, tPair, tCodes, tCount, tSeed, tSum, tBit, i
+   repeat for each word tPair in kHCPasswordFolds
+      put item 2 of tPair into tFolds[item 1 of tPair]
+   end repeat
+   put _HCMacCodes(pText, false) into tCodes
+   put the number of elements of tCodes into tCount
+   if tCount = 0 then return 1114205292
+   repeat with i = 1 to tCount
+      if tCodes[i] >= 65 and tCodes[i] <= 90 then
+         add 32 to tCodes[i]
+      else if tFolds[tCodes[i]] is not empty then
+         put tFolds[tCodes[i]] into tCodes[i]
+      end if
+   end repeat
+   put tCodes[1] + tCount into tSeed
+   if tCodes[1] >= 128 then subtract 256 from tSeed
+   if tSeed < 0 then add 4294967296 to tSeed
+   put 0 into tSum
+   repeat with i = 1 to tCount
+      repeat with tBit = 7 down to 0
+         put _HCRandom(tSeed) into tSeed
+         if tCodes[i] div (2 ^ tBit) mod 2 = 1 then put (tSum + tSeed) mod 4294967296 into tSum
+      end repeat
+   end repeat
+   if tSum = 0 then return 1114205292
+   return tSum
+end hcPasswordNumber
+
+-- QuickDraw's Random: the seed after pSeed (from 0 to 4294967295),
+-- (pSeed * 16807) mod 2147483647 in the steps of its 68000 code (Apple's
+-- published source, Util.a), which give that for a seed from 1 to
+-- 2147483646 and their own for one a reply's first code made negative
+private function _HCRandom pSeed
+   local tLow, tHigh
+   put (pSeed mod 65536) * 16807 into tLow
+   put (pSeed div 65536) * 16807 + tLow div 65536 into tHigh
+   put (tLow mod 65536) - 2147483647 + (tHigh mod 32768) * 65536 + (2 * tHigh) div 65536 into pSeed
+   if pSeed < 0 then add 2147483647 to pSeed
+   return pSeed
+end _HCRandom
+
+-- The Unicode code points of Mac Roman's characters 128 to 255
+constant kHCMacRoman = "196 197 199 201 209 214 220 225 224 226 228 227 229 231 233 232 234 235 237 236 238 239 241 243 242 244 246 245 250 249 251 252 8224 176 162 163 167 8226 182 223 174 169 8482 180 168 8800 198 216 8734 177 8804 8805 165 181 8706 8721 8719 960 8747 170 186 937 230 248 191 161 172 8730 402 8776 8710 171 187 8230 160 192 195 213 338 339 8211 8212 8220 8221 8216 8217 247 9674 255 376 8260 8364 8249 8250 64257 64258 8225 183 8218 8222 8240 194 202 193 203 200 205 206 207 204 211 212 63743 210 218 219 217 305 710 732 175 728 729 730 184 733 731 711"
+
+-- The Mac Roman codes of the characters of pText, at most 255 (a Pascal
+-- string's), in an array from 1: 63, a question mark, for a character
+-- Mac Roman does not have. pUpper: small letters in capitals, as the
+-- Toolbox's UprString made them, a to z and those with accents to code
+-- 216 that Mac Roman has a capital of
+private function _HCMacCodes pText, pUpper
+   local tMac, tCodes, tCount, tPoint, tCode, tUpper, i
+   put 127 into i
+   repeat for each word tCode in kHCMacRoman
+      add 1 to i
+      put i into tMac[tCode]
+   end repeat
+   put 0 into tCount
+   repeat for each codepoint tPoint in normalizeText(pText, "NFC")
+      if tCount = 255 then exit repeat
+      put codepointToNum(tPoint) into tCode
+      if tCode >= 128 then
+         put tMac[tCode] into tCode
+         if tCode is empty then put 63 into tCode
+      end if
+      if pUpper and tCode >= 97 and tCode <= 122 then
+         subtract 32 from tCode
+      else if pUpper and tCode >= 128 and tCode <= 216 then
+         put toUpper(tPoint) into tUpper
+         if the number of codepoints of tUpper is 1 and tMac[codepointToNum(tUpper)] is not empty then
+            put tMac[codepointToNum(tUpper)] into tCode
+         end if
+      end if
+      add 1 to tCount
+      put tCode into tCodes[tCount]
+   end repeat
+   return tCodes
+end _HCMacCodes
+
 -- start using and stop using a stack (rule T23), found as hcStackName
 -- finds the stack of a "go": a library stack beside this one, or on its
 -- disk image; one that cannot be found leaves the result set, where this
@@ -4716,6 +4829,48 @@ function translit pFrom, pTo, pText
    end repeat
    return tOut
 end translit
+
+/*
+Password([prompt[, caseSensitive]]) (7 stacks), Kevin Calhoun's XFCN of
+Dartmouth College, whose Pascal source is in the Dartmouth XCMD's stack:
+asks for a password, with the prompt or "Please enter your password:",
+the reply hidden as it is typed, and gives "Cancel" when the dialog is
+cancelled, else a number made from the reply (its Encrypt): the sum of
+its codes (Mac Roman), then ten times that times 16381, plus 17, mod
+32761, plus 1; 0 for an empty reply. The reply is in capitals first,
+unless caseSensitive is true. Archivist keeps the number of the password
+a user set and compares a later reply's with it, so the number is the
+external's. Its first version (1684 bytes, by the import's list of the
+stack's resources: HyperFTP, HyperGCG, Mews) gave the reply as typed, and
+nothing when cancelled, which those stacks send to a server. Called as
+hcX_Password: this engine reads "password(" as its property (rule T13)
+*/
+function hcX_Password pPrompt, pCaseSensitive
+   local tSet, tLine, tFirst, tCodes, tSum, i
+   if the paramCount < 1 then put "Please enter your password:" into pPrompt
+   put the customProperties["uHyperCard"] of me into tSet
+   set the itemDelimiter to tab
+   repeat for each line tLine in tSet["resources"]
+      if item 1 of tLine is "XFCN" and item 4 of tLine is "Password" and item 3 of tLine is 1684 then put true into tFirst
+   end repeat
+   ask password clear pPrompt
+   if the result is "Cancel" then
+      if tFirst then return empty
+      return "Cancel"
+   end if
+   if tFirst then return char 1 to 255 of it
+   put _HCMacCodes(it, not (the paramCount > 1 and pCaseSensitive is true)) into tCodes
+   put 0 into tSum
+   repeat with i = 1 to the number of elements of tCodes
+      add tCodes[i] to tSum
+   end repeat
+   if the number of elements of tCodes > 0 then
+      repeat 10 times
+         put (tSum * 16381 + 17) mod 32761 + 1 into tSum
+      end repeat
+   end if
+   return tSum
+end hcX_Password
 
 /*
 DialogDisplay(id, button 1, button 2, button 3, text 1, ..., text 4,

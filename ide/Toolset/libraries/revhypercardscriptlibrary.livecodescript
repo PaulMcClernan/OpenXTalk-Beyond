@@ -3888,6 +3888,9 @@ private function _HyperCardRules pLine, pCompiled, pElse
          case "print"
             put _Print(tTokens, tIdx, i, tEnd) into tNew
             break
+         case "ask"
+            put _AskPassword(tTokens, tIdx, i, tEnd) into tNew
+            break
          case "play"
             -- T49: a sound named in a field or button of the card or the
             -- background ("play card field "sound"", "play cd fld x tempo
@@ -4413,6 +4416,30 @@ private function _Print pTokens, pIdx, pAt, pEnd
    _Fire "T71 print an expression"
    return "hcPrint" && _Span(pTokens, pIdx, pAt + 1, pEnd)
 end _Print
+
+-- T73: ask password, which HyperCard answered with a number it made from
+-- the reply, not with the reply. Scripts kept the number and compared a
+-- later reply's with it ("ask password "Enter Password"", then "if
+-- password <> passwordEntered then ... doMenu "Quit HyperCard"",
+-- Jerome's Journal, whose card keeps 1114205292, an empty reply's
+-- number), or with a number of their own ("if it = 2170878455", Sword
+-- Play's). This engine's ask password gives the reply as it was typed,
+-- which no number matches: the library's hcAskPassword, which puts
+-- HyperCard's number into it, and nothing when the dialog is cancelled.
+-- "ask password clear", the reply as typed, is the same here and is left
+-- as it is
+private function _AskPassword pTokens, pIdx, pAt, pEnd
+   local tLast
+   if pAt + 2 > pEnd or _T(pTokens, pIdx[pAt + 1]) is not "password" then return empty
+   if _T(pTokens, pIdx[pAt + 2]) is "clear" then return empty
+   put _ExpressionEnd(pTokens, pIdx, pAt + 2, pEnd, "with") into tLast
+   if tLast = pEnd - 1 then return empty
+   _Fire "T73 ask password"
+   if tLast < pEnd then
+      return "hcAskPassword it," && _Span(pTokens, pIdx, pAt + 2, tLast) & "," && _Span(pTokens, pIdx, tLast + 2, pEnd)
+   end if
+   return "hcAskPassword it," && _Span(pTokens, pIdx, pAt + 2, pEnd)
+end _AskPassword
 
 -- T42: do with a statement not in quotes ("do go cd id 13086", "do put
 -- offset(x, y) into z"), which HyperCard ran as the statement it was.
