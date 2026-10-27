@@ -136,7 +136,12 @@ script "revHyperCardScriptLibrary"
 -- picture of a card or a background it names ("hide picture of card
 -- "FX"", "show pict of this cd"), which stops with an error here: the
 -- library's hcShowPict and hcShowPicture, which read and set whether
--- the picture T19 shows and hides is shown.
+-- the picture T19 shows and hides is shown. T53 takes the textStyle and
+-- the textAlign set with no object ("set textstyle to plain", "set the
+-- textAlign to center"), HyperCard's style and alignment for the text
+-- its text tool painted, which this engine cannot set and stops at: the
+-- library's hcSetPaintText, which does nothing, as this engine's own
+-- textFont, textSize and textHeight set so do.
 -- A script whose rewrite would not compile when it did before is left as
 -- it was. Each object whose script changes keeps its HyperTalk in the
 -- custom property uHyperCard["script"], and the stack's
@@ -3076,6 +3081,7 @@ private function _HyperCardRules pLine, pCompiled, pElse
             if tNew is empty then put _SetCardAndStyle(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetTextFont(tTokens, tIdx, i, tEnd) into tNew
             if tNew is empty then put _SetShowPict(tTokens, tIdx, i, tEnd) into tNew
+            if tNew is empty then put _SetPaintText(tTokens, tIdx, i, tEnd) into tNew
             break
          case "put"
             put _PutIntoMenu(tTokens, tIdx, i, tEnd) into tNew
@@ -4410,6 +4416,29 @@ private function _SetTextFont pTokens, pIdx, pAt, pEnd
    _Fire "T51 a font name of several words not in quotes"
    return _Span(pTokens, pIdx, pAt, tTo) && _Literal(_Span(pTokens, pIdx, tTo + 1, pEnd))
 end _SetTextFont
+
+-- T53: set the textStyle or the textAlign with no object ("set textstyle
+-- to plain", "set the textAlign to "right"", "set the textStyle to
+-- bold,italic"), HyperCard's style and alignment for the text its text
+-- tool painted. This engine reads them as empty, but setting them stops
+-- the script ("can't find object", "no object to set property"), where
+-- its textFont, textSize and textHeight set so do nothing: the library's
+-- hcSetPaintText, which does nothing either, with the value as it was
+-- (a list of styles is its parameters)
+private function _SetPaintText pTokens, pIdx, pAt, pEnd
+   local tProperty
+   put pAt + 1 into tProperty
+   if _T(pTokens, pIdx[tProperty]) is "the" then add 1 to tProperty
+   if _T(pTokens, pIdx[tProperty]) is not among the words of "textstyle textalign" \
+         or _T(pTokens, pIdx[tProperty + 1]) is not "to" or tProperty + 1 >= pEnd then
+      return empty
+   end if
+   _Fire "T53 the paint text's textStyle and textAlign"
+   if _T(pTokens, pIdx[tProperty]) is "textstyle" then
+      return "hcSetPaintText" && quote & "textStyle" & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
+   end if
+   return "hcSetPaintText" && quote & "textAlign" & quote & comma && _Span(pTokens, pIdx, tProperty + 2, pEnd)
+end _SetPaintText
 
 -- T19: show and hide card picture, background picture (which this engine
 -- reads as a card named "picture"); T21: show, hide and close window,

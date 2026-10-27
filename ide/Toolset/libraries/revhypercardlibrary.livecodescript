@@ -1839,6 +1839,15 @@ function hcTextStyle
    return tOut
 end hcTextStyle
 
+-- set the textStyle or the textAlign with no object (rule T53):
+-- HyperCard's style and alignment for the text its text tool painted.
+-- This engine reads them as empty and stops a script that sets them,
+-- where its textFont, textSize and textHeight set so do nothing, as it
+-- paints no text with its text tool. This does nothing either; a list of
+-- styles ("bold,italic") comes as several parameters
+on hcSetPaintText pProperty, pValue
+end hcSetPaintText
+
 -- choose tool N (rule T30): HyperCard's tools by their numbers in the
 -- tools palette (1 browse to 18 polygon), or by a name with or without
 -- "tool" after it; this engine's "choose tool x" stops with an error

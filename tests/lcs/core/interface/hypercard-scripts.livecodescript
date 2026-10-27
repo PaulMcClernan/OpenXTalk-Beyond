@@ -1704,6 +1704,76 @@ on TestHyperCardScriptsT52
    _Close tStack
 end TestHyperCardScriptsT52
 
+on TestHyperCardScriptsT53
+   -- T53: the textStyle and the textAlign set with no object, HyperCard's
+   -- for the text its text tool painted, which this engine reads as empty
+   -- but stops at when a script sets them: the library's hcSetPaintText,
+   -- which does nothing, as this engine's textFont set so does (274
+   -- statements in 37 corpus stacks)
+   local tScript, tStack, q, tError
+   global gHCScriptsTest
+   put quote into q
+   put _Rewrite("on mouseUp", \
+         "  set textstyle to plain", \
+         "  set the textAlign to " & q & "right" & q, \
+         "  set the textStyle to bold,italic", \
+         "  if tCount > 10 then set textstyle to plain else set textstyle to bold", \
+         "  set textStyle to any item of theTextStyle", \
+         "end mouseUp") into tScript
+   TestAssert "T53: the textStyle", line 2 of tScript is "  hcSetPaintText " & q & "textStyle" & q & ", plain"
+   TestAssert "T53: the textAlign, with the", line 3 of tScript is "  hcSetPaintText " & q & "textAlign" & q & ", " & q & "right" & q
+   TestAssert "T53: a list of styles", line 4 of tScript is "  hcSetPaintText " & q & "textStyle" & q & ", bold,italic"
+   TestAssert "T53: after then and after else", line 5 of tScript \
+         is "  if tCount > 10 then hcSetPaintText " & q & "textStyle" & q & ", plain else hcSetPaintText " & q & "textStyle" & q & ", bold"
+   TestAssert "T53: an expression", line 6 of tScript is "  hcSetPaintText " & q & "textStyle" & q & ", any item of theTextStyle"
+   TestAssert "T53: the script compiles", _Compiles(tScript)
+
+   -- unchanged: the style of an object or a chunk, the textSize (which
+   -- this engine sets to nothing as it is), a read
+   put _Rewrite("on mouseUp", \
+         "  set the textStyle of fld 1 to bold", \
+         "  set the textAlign of cd btn 2 to center", \
+         "  set textStyle of word 1 of fld 1 to italic", \
+         "  set the textSize to 12", \
+         "  get the textStyle", \
+         "end mouseUp") into tScript
+   TestAssert "T53: of a field: unchanged", line 2 of tScript is "  set the textStyle of fld 1 to bold"
+   TestAssert "T53: of a button: unchanged", line 3 of tScript is "  set the textAlign of cd btn 2 to center"
+   TestAssert "T53: of a chunk: unchanged", line 4 of tScript is "  set textStyle of word 1 of fld 1 to italic"
+   TestAssert "T53: the textSize: unchanged", line 5 of tScript is "  set the textSize to 12"
+   TestAssert "T53: a read: unchanged", line 6 of tScript is "  get the textStyle"
+
+   -- in a script that compiles: it goes on past them, where this engine
+   -- stopped at the first
+   put "HCScriptsT53" & the milliseconds into tStack
+   lock messages
+   create invisible stack tStack
+   set the defaultStack to tStack
+   create button "Paint"
+   set the script of button "Paint" to _Lines("on mouseUp", "  global gHCScriptsTest", \
+         "  put 1 into gHCScriptsTest", \
+         "  set the textStyle to bold", \
+         "  set the textAlign to center", \
+         "  put 2 into gHCScriptsTest", \
+         "end mouseUp")
+   unlock messages
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Paint" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T53: as it is, it stops at the textStyle", gHCScriptsTest is 1
+   get revHyperCardFixScripts(tStack)
+   TestAssert "T53: in a script that compiles", _Compiles(the script of button "Paint" of card 1 of stack tStack)
+   put empty into gHCScriptsTest
+   try
+      send "mouseUp" to button "Paint" of card 1 of stack tStack
+   catch tError
+   end try
+   TestAssert "T53: it goes on, as in HyperCard", gHCScriptsTest is 2
+   _Close tStack
+end TestHyperCardScriptsT53
+
 on TestHyperCardScriptsRulesFixed
    -- two rules that broke a line HyperCard ran: T11's "in" for "of" in
    -- the operator "is in" after a card, and T2 at the end of a line
