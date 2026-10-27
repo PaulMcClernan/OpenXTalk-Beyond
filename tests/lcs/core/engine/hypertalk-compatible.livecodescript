@@ -4,7 +4,8 @@ OXT-Beyond: the hyperTalkCompatible of a stack, which File > Import Stack
 sets for a stack imported from HyperCard. Off, every message goes where
 it always went; on, a background part's message reaches the card before
 the background, a handler can be called doMenu, and doMenu is a message
-before it runs, even while messages are locked, as in HyperCard;
+before it runs, even while messages are locked, whose handlers act on
+the stack a script went to, as in HyperCard;
 lockRecent keeps no card of the stack out of the recent cards that go
 back goes through; a handler that went to another stack still reaches
 its own stack's script before the dynamic path, and one that went to
@@ -181,6 +182,71 @@ on TestHyperTalkCompatibleDoMenuLocked
    TestAssert "on: and the menu item runs after it", gHCResult contains "not implemented"
    _DeleteStack
 end TestHyperTalkCompatibleDoMenuLocked
+
+-- A second stack, and on the test's card a doMenu handler that logs the
+-- short name of this stack and makes a button for the item "Make Here",
+-- as the HyperCard Library's doMenu makes one for "New Button", and
+-- passes any other item on to the engine's own. Button "C" goes to the
+-- second stack and chooses pItem: what was logged ("there", once the
+-- button got to the second stack, and what the doMenu handler logged),
+-- "|", and how many buttons the test's card and the second stack's card
+-- gained, "0,1" for a button made on the card gone to
+private function _DoMenuAfterGoToOtherStack pItem
+   global gHCOrder
+   local tOther, tOwnCount, tOtherCount, tMade
+   put sStack & "Other" into tOther
+   create invisible stack tOther
+   set the script of card 1 of stack sStack to "on doMenu pItem" & return & "global gHCOrder" & return \
+         & "put the short name of this stack & comma after gHCOrder" & return \
+         & "if pItem is not " & quote & "Make Here" & quote & " then pass doMenu" & return \
+         & "create button" & return & "end doMenu"
+   set the script of button "C" of stack sStack to "on mouseUp pOther, pItem" & return & "global gHCOrder" & return \
+         & "go to stack pOther" & return \
+         & "if the short name of this stack is not pOther then exit mouseUp" & return \
+         & "put " & quote & "there," & quote & " after gHCOrder" & return \
+         & "doMenu pItem" & return & "end mouseUp"
+   put the number of buttons of card 1 of stack sStack into tOwnCount
+   put the number of buttons of card 1 of stack tOther into tOtherCount
+   put empty into gHCOrder
+   send "mouseUp" && quote & tOther & quote & comma & quote & pItem & quote to button "C" of stack sStack
+   put (the number of buttons of card 1 of stack sStack) - tOwnCount & comma \
+         & (the number of buttons of card 1 of stack tOther) - tOtherCount into tMade
+   delete stack tOther
+   return gHCOrder & "|" & tMade
+end _DoMenuAfterGoToOtherStack
+
+on TestHyperTalkCompatibleDoMenuStackOff
+   local tResult
+   _MakeStack false
+   put _DoMenuAfterGoToOtherStack("New Button") into tResult
+   if tResult begins with "|" then
+      TestSkip "off: doMenu after a go to another stack", "the go to the other stack did not get there"
+   else
+      TestAssert "off: after a go to another stack, doMenu makes the new button there", tResult is "there,|0,1"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDoMenuStackOff
+
+-- HyperCard's menu items acted on the card a script had gone to, where
+-- its doMenu handlers found themselves too: "go home", then "doMenu "New
+-- Button"" made the button on Home's card
+on TestHyperTalkCompatibleDoMenuStack
+   local tResult, tOther
+   _MakeStack true
+   put sStack & "Other" into tOther
+   put _DoMenuAfterGoToOtherStack("Make Here") into tResult
+   if tResult begins with "|" then
+      TestSkip "on: doMenu after a go to another stack", "the go to the other stack did not get there"
+   else
+      TestAssert "on: after a go to another stack, a doMenu handler runs in the stack gone to", \
+            item 1 to 2 of tResult is "there," & tOther
+      TestAssert "on: and makes its button there", tResult ends with "|0,1"
+      put _DoMenuAfterGoToOtherStack("New Button") into tResult
+      TestAssert "on: as does a menu item passed on to the engine's own", \
+            tResult is "there," & tOther & ",|0,1"
+   end if
+   _DeleteStack
+end TestHyperTalkCompatibleDoMenuStack
 
 -- Three cards, "one", "two" and "three"; then card "three" and card
 -- "one" visited, then card "two" with the lockRecent true, and go back:

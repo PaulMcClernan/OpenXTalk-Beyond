@@ -2283,7 +2283,7 @@ Exec_stat MCObject::conditionalmessage(uint32_t p_flag, MCNameRef p_message)
 	return ES_NORMAL;
 }
 
-Exec_stat MCObject::dispatch(Handler_type p_type, MCNameRef p_message, MCParameter *p_params)
+Exec_stat MCObject::dispatch(Handler_type p_type, MCNameRef p_message, MCParameter *p_params, bool p_change_default)
 {
 	// Fetch current default stack and target settings
 	MCStackHandle t_old_defaultstack = MCdefaultstackptr;
@@ -2295,7 +2295,11 @@ Exec_stat MCObject::dispatch(Handler_type p_type, MCNameRef p_message, MCParamet
 	t_this_stack = getstack();
 	
 	// Retarget this stack and the target to be relative to the target object
-	MCdefaultstackptr = t_this_stack;
+	// OXT-Beyond: unless the caller keeps the default stack, as a command's
+	//   message keeps it: a doMenu of a HyperCard stack, whose handlers act on
+	//   the stack its script went to ("go home", then "doMenu "Paste Button"")
+	if (p_change_default)
+		MCdefaultstackptr = t_this_stack;
     MCtargetptr = MCObjectPartHandle(this);
 
 
@@ -2324,7 +2328,9 @@ Exec_stat MCObject::dispatch(Handler_type p_type, MCNameRef p_message, MCParamet
 
 	// Reset the default stack pointer and target - note that we use 'send'esque
 	// semantics here. i.e. If the default stack has been changed, the change sticks.
-    if (MCdefaultstackptr == t_this_stack
+	// OXT-Beyond: (one that was kept was not changed here, so a handler's
+	//   change of it sticks whatever it is)
+    if (p_change_default && MCdefaultstackptr == t_this_stack
                 && t_old_defaultstack.IsValid())
         MCdefaultstackptr = t_old_defaultstack;
 	

@@ -1033,7 +1033,9 @@ public:
 	Exec_stat conditionalmessage(uint32_t p_flag, MCNameRef name);
 	
 	// MW-2009-08-26: Refactored method for dispatch - used by externals API.
-	Exec_stat dispatch(Handler_type type, MCNameRef name, MCParameter *params);
+	// OXT-Beyond: p_change_default false leaves the default stack as it is,
+	//   as a command's message does (HyperCard's doMenu, MCLegacyExecDoMenu)
+	Exec_stat dispatch(Handler_type type, MCNameRef name, MCParameter *params, bool p_change_default = true);
 
 	Exec_stat message(MCNameRef name, MCParameter *p = NULL, Boolean changedefault = True, Boolean send = False, Boolean p_force = False);
 	Exec_stat message_with_valueref_args(MCNameRef name, MCValueRef v1);
