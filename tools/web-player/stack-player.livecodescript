@@ -87,7 +87,8 @@ on openStack
    -- (a stack that plays and comes back here: what brought it, for the
    -- page check's report)
    if sCurrent is not empty then
-      playerLog "reopened while" && sCurrent && "plays; recent cards:" && the recentCards
+      playerLog "reopened while" && sCurrent && "plays, for" && the long name of the target & \
+            "; recent cards:" && the recentCards
    end if
    if not sStarted then
       put true into sStarted
