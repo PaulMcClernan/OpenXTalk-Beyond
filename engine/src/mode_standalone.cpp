@@ -56,6 +56,7 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "capsule.h"
 #include "player.h"
 #include "internal.h"
+#include "cardlst.h"
 
 #if defined(_WINDOWS_DESKTOP)
 #include "prefix.h"
@@ -129,12 +130,47 @@ MCObjectPropertyTable MCObject::kModePropertyTable =
 	nil,
 };
 
+#if defined(__EMSCRIPTEN__)
+// OXT-Beyond: the web Stack Player is a stack of its own, open beside the
+//   stack it plays, and its cards were in the recent cards: the up and
+//   down arrows that a stack passes, "go back" and "recent card" on the
+//   stack's first card went to the player, where the stack's own
+//   standalone has no card to go to. The player sets _ideOverride of its
+//   stack, as the IDE's stacks are kept out of the recent cards in the
+//   development engine, and that drops the cards already there. Only a
+//   web standalone has the property here, and only a script that sets it
+//   sees a change; the desktop standalones are as they were.
+MCPropertyInfo MCStack::kModeProperties[] =
+{
+	DEFINE_RW_OBJ_PROPERTY(P_IDE_OVERRIDE, Bool, MCStack, IdeOverride)
+};
+
+MCObjectPropertyTable MCStack::kModePropertyTable =
+{
+	nil,
+	sizeof(kModeProperties) / sizeof(kModeProperties[0]),
+	&kModeProperties[0],
+};
+
+void MCStack::GetIdeOverride(MCExecContext& ctxt, bool& r_value)
+{
+	r_value = m_is_ide_stack;
+}
+
+void MCStack::SetIdeOverride(MCExecContext& ctxt, bool p_value)
+{
+	m_is_ide_stack = p_value;
+	if (p_value)
+		MCrecent->deletestack(this);
+}
+#else
 MCObjectPropertyTable MCStack::kModePropertyTable =
 {
 	nil,
 	0,
 	nil,
 };
+#endif
 
 MCPropertyTable MCProperty::kModePropertyTable =
 {

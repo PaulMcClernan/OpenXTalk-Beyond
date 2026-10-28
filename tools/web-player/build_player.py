@@ -660,9 +660,10 @@ def check(site, samples, work):
                and all(abs(c[0] - 0xCC) < 24 and abs(c[1] - 0x33) < 24 and abs(c[2] - 0x66) < 24 for c in colours),
                ' | '.join(report + ['#%02X%02X%02X' % c for c in colours]))
         # The up and down arrows that a stack passes go back and forth
-        # through the cards it has shown, and the card before its first is
-        # the player's: the box2dxt platformer's ladder (UP climbs) took the
-        # player back to its library
+        # through the recent cards, which keep the player's out (its
+        # _ideOverride): before, the card before Mover's was the player's,
+        # and the box2dxt platformer's ladder (UP climbs) took the player
+        # back to its library
         before = len(third_lines)
         third.mouse.click(box['x'] + box['width'] // 2, box['y'] + box['height'] // 2)
         for key in ('ArrowUp', 'ArrowDown', 'ArrowUp'):
