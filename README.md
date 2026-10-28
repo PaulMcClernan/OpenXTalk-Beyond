@@ -146,7 +146,12 @@ lays out right-to-left and mixed text in the order ICU gives, ends a
 crash on the next background of a card with none, keeps the web IDE in
 the browser between visits, draws the modern Tools palette's buttons as
 buttons, and runs many more of imported HyperCard stacks' scripts (see
-[0.2.7-rc.6.7](#027-rc67-the-bug-hunt-round-seven));
+[0.2.7-rc.6.7](#027-rc67-the-bug-hunt-round-seven)), and 0.2.7-rc.6.8
+lets the Script Editor follow the dark appearance, makes the Project
+Browser's script counts and the Tools palette's icons easier to read,
+runs the xTalk Suite's libraries in web standalones and the Stack
+Player, and stops more imported HyperCard stacks from hanging (see
+[0.2.7-rc.6.8](#027-rc68-the-bug-hunt-round-eight));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1616,6 +1621,66 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.8: the Bug Hunt, round eight
+
+OXT-Beyond 0.2.7-rc.6.8 has everything in 0.2.7-rc.6.7. In the spirit of
+the Bug Hunt, here is every change since then, each listed as the bug it
+squashes:
+
+- **A Script Editor that stayed white in dark mode.** In the dark
+  appearance the Script Editor kept a white background and light-theme
+  colors. Preferences > Script Editor > Colorization Scheme now offers
+  Follow System Appearance: a dark background, light text and a dark
+  syntax scheme in the dark appearance, white in the light one, changing
+  while an editor is open, with the debugger's background following too.
+  A background you chose stays as you chose it, and an existing install
+  keeps its saved white until you pick Follow. The mode is saved as an
+  empty preference, which older builds read as their own default, so
+  going back to an earlier build still works (#281).
+- **Script counts that were hard to read.** The Project Browser's
+  script-count badges were white on light blue. They are white on dark
+  blue now, with one dark red for script errors, on every kind of row
+  and on a selected row (#281).
+- **Faint Tools palette icons.** With Drawn Icons on, the modern Tools
+  palette's icons are drawn stronger in both appearances, and the Label
+  Field is a caption reading "Label", drawn as shapes, so it needs no
+  font and stays sharp at both icon sizes. Drawn Icons off and the
+  classic look are as before (#281).
+- **Strips of old lines after scrolling.** A field with a hidden border
+  and both scrollbars, as the Script Editor has, could show a strip of
+  an earlier line at its edge after a scroll: the native scrollbar
+  strips on macOS, and one row on Windows. A scrolled field now redraws
+  all of itself, on every platform (#281).
+- **An invisible player in the web IDE.** A player's video is hidden
+  while you edit in the web IDE, so the player could not be seen. It
+  draws a grey box with a play triangle while you edit; in browse mode
+  players draw as before (#281).
+- **xTalk Suite extensions that stopped on the web.** An HTML5
+  standalone or the Stack Player that called sodiumxt, box2dxt, coinxt
+  or datachannelxt stopped with "unable to load foreign library". The
+  web standalone engine links them now, as the web IDE's does. A stack
+  that calls none of them runs as before; every standalone's `.wasm` is
+  larger (#280).
+- **A Stack Player that let arrow keys escape.** The up and down arrows
+  a played stack passed went back to the player's library. They stay in
+  the stack that plays; identical copies of a stack in the library are
+  merged, a stack opened again makes no copy, and the page's menu bar
+  buttons no longer take the keyboard focus (#280).
+- **HyperCard stacks that hung or said they needed System 7.** In an
+  imported stack, `the systemVersion` is "7.55", as on a Mac with
+  System 7.5.5, so the 19 stacks of the corpus that checked for System 7
+  find it, and the HyperCard Library stands in for the SysEnv,
+  SysEnvirons and MacType externals. A loop that walks a path back to
+  its folder looking for a colon ends when the path runs out, where it
+  hung at open (Anatomy HC, File Combiner, Script Manager, the Star
+  Trek guides and more). A stack with a comma in its name gets its
+  HyperCard Library, `select (theLine)` is imported, and a go to a
+  stack on a disk image takes the copy nearest the stack (#278, #279).
+- **A stack that lost count of its cards.** A `go` to a card of a
+  background that has none left the stack counting that background's
+  cards alone, so every later `go` by number or name failed. Where a
+  `go` goes is unchanged (#279).
 
 #### 0.2.7-rc.6.7: the Bug Hunt, round seven
 

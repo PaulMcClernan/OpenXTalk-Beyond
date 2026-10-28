@@ -124,7 +124,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12248](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12248) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12256](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12256) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -161,7 +161,7 @@ Workarounds their authors were not happy with. 32 notes, by part of the reposito
 - [ide/Toolset/palettes/extension manager/revideextensionmanagerstorebehavior.livecodescript:24](ide/Toolset/palettes/extension%20manager/revideextensionmanagerstorebehavior.livecodescript#L24) Hack to get round bug 18946
 - [ide/Toolset/palettes/reverrordisplay.livecodescript:571](ide/Toolset/palettes/reverrordisplay.livecodescript#L571) attempting to highlight the appropriate line number. This is a total hack, but there doensn't seem
 - [ide/Toolset/palettes/script editor/behaviors/revsecommoneditorbehavior.livecodescript:3590](ide/Toolset/palettes/script%20editor/behaviors/revsecommoneditorbehavior.livecodescript#L3590) First wrap the script to the required width, this is a total hack as doing it properly would take quite a while.
-- [ide/Toolset/palettes/script editor/behaviors/revseeditorbehavior.livecodescript:2247](ide/Toolset/palettes/script%20editor/behaviors/revseeditorbehavior.livecodescript#L2247) this is clearly a bit of a hack, but hopefully doing is this way will minimize the risk.
+- [ide/Toolset/palettes/script editor/behaviors/revseeditorbehavior.livecodescript:2253](ide/Toolset/palettes/script%20editor/behaviors/revseeditorbehavior.livecodescript#L2253) this is clearly a bit of a hack, but hopefully doing is this way will minimize the risk.
 - [ide/Toolset/palettes/script editor/behaviors/revsevariablespanebehavior.livecodescript:116](ide/Toolset/palettes/script%20editor/behaviors/revsevariablespanebehavior.livecodescript#L116) If the user chooses a large font, we need to increase the size of the template, for now we just hack this as
 
 <a id="hack-libfoundation"></a>
@@ -596,7 +596,7 @@ Work left for later. 428 notes, by part of the repository:
 - [ide/Toolset/palettes/revdatagridlibrary/behaviorsdatagridbuttonbehavior.livecodescript:63](ide/Toolset/palettes/revdatagridlibrary/behaviorsdatagridbuttonbehavior.livecodescript#L63) local sLockDrawing -- todo: add set/get. When locked we don't redraw when data is created, deleted, reordered or updated.
 - [ide/Toolset/palettes/revdatagridlibrary/behaviorsdatagridbuttonbehavior.livecodescript:2565](ide/Toolset/palettes/revdatagridlibrary/behaviorsdatagridbuttonbehavior.livecodescript#L2565) todo: can we only perform actions if visible of scrollbar is different than pBoolean?
 - [ide/Toolset/palettes/revdatagridlibrary/behaviorsdatagridbuttonbehavior.livecodescript:6638](ide/Toolset/palettes/revdatagridlibrary/behaviorsdatagridbuttonbehavior.livecodescript#L6638) todo: optimize so we don't toggle unless we need to
-- [ide/Toolset/palettes/script editor/behaviors/revseeditorbehavior.livecodescript:716](ide/Toolset/palettes/script%20editor/behaviors/revseeditorbehavior.livecodescript#L716) TODO remove use of revAvailableHandlers here (quite invasive)
+- [ide/Toolset/palettes/script editor/behaviors/revseeditorbehavior.livecodescript:722](ide/Toolset/palettes/script%20editor/behaviors/revseeditorbehavior.livecodescript#L722) TODO remove use of revAvailableHandlers here (quite invasive)
 - [ide/tests/_testrunner.livecodescript:307](ide/tests/_testrunner.livecodescript#L307) TODO Can't get exit status from open process
 
 <a id="todo-tests"></a>
