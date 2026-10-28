@@ -84,6 +84,11 @@ constant kFromImageSuffix = ".hcimage"
 ----------------------------------------------------------------
 
 on openStack
+   -- (a stack that plays and comes back here: what brought it, for the
+   -- page check's report)
+   if sCurrent is not empty then
+      playerLog "reopened while" && sCurrent && "plays; recent cards:" && the recentCards
+   end if
    if not sStarted then
       put true into sStarted
       send "playerStart" to me in 0 milliseconds
@@ -120,6 +125,8 @@ private command playerKeepOutOfRecent
    local tError
    try
       set the _ideOverride of me to true
+      playerLog "recent cards: the player's kept out (" & the _ideOverride of me & "," && \
+            the number of lines of the recentCards && "left)"
    catch tError
       -- an engine without it: the player's cards stay in the recent cards
       playerLog "recent cards: the player's own are kept (" & tError & ")"

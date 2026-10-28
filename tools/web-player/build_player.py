@@ -673,9 +673,11 @@ def check(site, samples, work):
         shot = third.screenshot(clip=box)
         colour = png_pixel(shot, int(box['width'] // 2), int(box['height'] // 3))
         came_back = [x for x in third_lines[before:] if x.startswith('PLAYER library')]
+        why = [x for x in third_lines if x.startswith('PLAYER recent cards')
+               or x.startswith('PLAYER reopened')]
         expect('arrows-stay-in-stack', not came_back
                and abs(colour[0] - 0xCC) < 24 and abs(colour[1] - 0x33) < 24 and abs(colour[2] - 0x66) < 24,
-               ' | '.join(came_back + ['#%02X%02X%02X' % colour]))
+               ' | '.join(came_back + ['#%02X%02X%02X' % colour] + (why[-4:] if came_back else [])))
         before = len(third_lines)
         third.click('#home')
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
