@@ -227,13 +227,21 @@ private command makePlayer
 
    makeHyperCardLibraries tStack
 
-   -- the back script for script errors (see playerInstallErrorHandler)
+   -- the back script for script errors, and for the up and down arrows
+   -- (see playerInstallErrorHandler and playerTrailKey)
    create invisible button "Error Handler"
    set the script of button "Error Handler" to \
          "on errorDialog pError" & return & \
          "   dispatch " & quote & "playerReportError" & quote & " to stack " & quote & kPlayerName & quote & \
          " with pError, the long name of the target" & return & \
-         "end errorDialog"
+         "end errorDialog" & return & \
+         "on arrowKey pKey" & return & \
+         "   if pKey is " & quote & "up" & quote & " or pKey is " & quote & "down" & quote & " then" & return & \
+         "      dispatch " & quote & "playerTrailKey" & quote & " to stack " & quote & kPlayerName & quote & " with pKey" & return & \
+         "      if the result is " & quote & "stay" & quote & " then exit arrowKey" & return & \
+         "   end if" & return & \
+         "   pass arrowKey" & return & \
+         "end arrowKey"
    save stack kPlayerName as (specialFolderPath("temporary") & "/StackPlayer.livecode")
 end makePlayer
 

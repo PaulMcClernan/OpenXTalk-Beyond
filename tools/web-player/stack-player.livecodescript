@@ -1123,6 +1123,30 @@ private command playerInstallErrorHandler
    end if
 end playerInstallErrorHandler
 
+-- The up and down arrows that a stack passes go back and forth through
+-- the cards shown (the recent cards: up goes to line 2 of them, down to
+-- the last, round the ring), and the player's own card is among them, so
+-- the box2dxt platformer's ladder (UP climbs, and the stack passes the
+-- key) took the player back to its library. "stay" keeps the arrow from
+-- leaving the stack that plays for a card of the player; any other move
+-- through its cards is as it was. (The back script's arrowKey asks.)
+command playerTrailKey pKey
+   local tCards, tCard
+   if sCurrent is empty then
+      return empty
+   end if
+   put the recentCards into tCards
+   if pKey is "up" then
+      put line 2 of tCards into tCard
+   else
+      put line -1 of tCards into tCard
+   end if
+   if tCard ends with (" of" && the long id of me) then
+      return "stay"
+   end if
+   return empty
+end playerTrailKey
+
 -- The engine's error lines ("code,line,char,hint") as text
 private function playerErrorText pError
    local tLine, tText, tMessage, tMessages
