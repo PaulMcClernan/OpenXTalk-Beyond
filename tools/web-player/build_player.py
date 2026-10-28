@@ -660,10 +660,9 @@ def check(site, samples, work):
                and all(abs(c[0] - 0xCC) < 24 and abs(c[1] - 0x33) < 24 and abs(c[2] - 0x66) < 24 for c in colours),
                ' | '.join(report + ['#%02X%02X%02X' % c for c in colours]))
         # The up and down arrows that a stack passes go back and forth
-        # through the recent cards, which keep the player's out (its
-        # _ideOverride): before, the card before Mover's was the player's,
-        # and the box2dxt platformer's ladder (UP climbs) took the player
-        # back to its library
+        # through the cards it has shown, and the card before its first is
+        # the player's: the box2dxt platformer's ladder (UP climbs) took the
+        # player back to its library
         before = len(third_lines)
         third.mouse.click(box['x'] + box['width'] // 2, box['y'] + box['height'] // 2)
         for key in ('ArrowUp', 'ArrowDown', 'ArrowUp'):
@@ -673,12 +672,9 @@ def check(site, samples, work):
         shot = third.screenshot(clip=box)
         colour = png_pixel(shot, int(box['width'] // 2), int(box['height'] // 3))
         came_back = [x for x in third_lines[before:] if x.startswith('PLAYER library')]
-        why = [x for x in third_lines if x.startswith('PLAYER recent cards')
-               or x.startswith('PLAYER reopened')]
         expect('arrows-stay-in-stack', not came_back
                and abs(colour[0] - 0xCC) < 24 and abs(colour[1] - 0x33) < 24 and abs(colour[2] - 0x66) < 24,
-               ' | '.join([x for x in why if x.startswith('PLAYER recent cards')][:1] +
-                          ['#%02X%02X%02X' % colour] + came_back[-1:] + (why[-1:] if came_back else [])))
+               ' | '.join(came_back + ['#%02X%02X%02X' % colour]))
         before = len(third_lines)
         third.click('#home')
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)

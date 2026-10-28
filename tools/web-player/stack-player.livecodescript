@@ -84,13 +84,6 @@ constant kFromImageSuffix = ".hcimage"
 ----------------------------------------------------------------
 
 on openStack
-   -- (a stack that plays and comes back here: what brought it, for the
-   -- page check's report)
-   if sCurrent is not empty then
-      playerLog "reopened while" && sCurrent && "plays, for" && the long id of the target & \
-            "; me=" & the long id of me & ", _ideOverride" && the _ideOverride of me & \
-            "; recent cards:" && line 1 to 3 of the recentCards
-   end if
    if not sStarted then
       put true into sStarted
       send "playerStart" to me in 0 milliseconds
@@ -109,32 +102,12 @@ command playerStart
    if sMode is not "window" then
       put "page" into sMode
    end if
-   playerKeepOutOfRecent
    playerInstallErrorHandler
    playerUseHyperCardLibraries
    playerDropDuplicates
    playerLog "ready" && the version && the platform && sMode
    playerTellPage "ready", the version
 end playerStart
-
--- The player's cards out of the recent cards, as the IDE's are: the
--- stack that plays goes back and forth through the cards it showed, as
--- in its own standalone. Before, its first card's "go back" or "recent
--- card", or an up or down arrow it passed, went to the player (the box2dxt
--- platformer's ladder, where UP climbs, took the player to its library).
--- The web engine drops the player's cards already there as it is set.
-private command playerKeepOutOfRecent
-   local tError
-   try
-      set the _ideOverride of me to true
-      playerLog "recent cards: the player's kept out (" & the _ideOverride of me & "," && \
-            the number of lines of the recentCards && "left:" && the recentCards & ")" && \
-            "me=" & the long id of me && "card 1=" & the long id of card 1 of me
-   catch tError
-      -- an engine without it: the player's cards stay in the recent cards
-      playerLog "recent cards: the player's own are kept (" & tError & ")"
-   end try
-end playerKeepOutOfRecent
 
 -- The IDE's HyperCard libraries, substacks of the player (see
 -- playerFixHyperCard and playerImageStacks): their handlers all begin
@@ -1149,6 +1122,30 @@ private command playerInstallErrorHandler
       insert the script of tButton into back
    end if
 end playerInstallErrorHandler
+
+-- The up and down arrows that a stack passes go back and forth through
+-- the cards shown (the recent cards: up goes to line 2 of them, down to
+-- the last, round the ring), and the player's own card is among them, so
+-- the box2dxt platformer's ladder (UP climbs, and the stack passes the
+-- key) took the player back to its library. "stay" keeps the arrow from
+-- leaving the stack that plays for a card of the player; any other move
+-- through its cards is as it was. (The back script's arrowKey asks.)
+command playerTrailKey pKey
+   local tCards, tCard
+   if sCurrent is empty then
+      return empty
+   end if
+   put the recentCards into tCards
+   if pKey is "up" then
+      put line 2 of tCards into tCard
+   else
+      put line -1 of tCards into tCard
+   end if
+   if tCard ends with (" of" && the long id of me) then
+      return "stay"
+   end if
+   return empty
+end playerTrailKey
 
 -- The engine's error lines ("code,line,char,hint") as text
 private function playerErrorText pError

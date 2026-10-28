@@ -1323,10 +1323,6 @@ public:
     void GetUnplacedGroupIds(MCExecContext& ctxt, uindex_t& r_count, uinteger_t*& r_ids);
     void GetIdeOverride(MCExecContext& ctxt, bool& r_value);
     void SetIdeOverride(MCExecContext& ctxt, bool p_value);
-#elif defined(MODE_STANDALONE) && defined(__EMSCRIPTEN__)
-    // OXT-Beyond: the web Stack Player's own stack (see mode_standalone.cpp)
-    void GetIdeOverride(MCExecContext& ctxt, bool& r_value);
-    void SetIdeOverride(MCExecContext& ctxt, bool p_value);
 #endif
     
 private:
