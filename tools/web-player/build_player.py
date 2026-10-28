@@ -580,6 +580,11 @@ def check(site, samples, work):
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
         expect('hyper-home', not any(x.startswith('PLAYER script error') for x in third_lines[before:]),
                ' | '.join(third_lines[before:][-3:]))
+        # the same file opened twice is one stack in the library, not
+        # "Hyper" and "Hyper 2"
+        library = [x for x in third_lines[before:] if x.startswith('PLAYER library')]
+        expect('reopen-no-duplicate', bool(library) and 'Hyper' in library[-1] and 'Hyper 2' not in library[-1],
+               library[-1] if library else '')
 
         # HyperCard: a stack file with no extension, imported and its
         # scripts fixed (revHyperCardFixScripts), and a disk image whose
