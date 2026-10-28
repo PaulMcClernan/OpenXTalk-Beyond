@@ -219,19 +219,20 @@ getProp dvRowControl
 end dvRowControl
 
 setProp dvHilite[pHiliteColor] pBoolean
+   -- OXT-Beyond: use the shared contrast-safe script badge palette.
    local tCPName
    if pBoolean then
       set the foregroundColor of field "type" of me to revIDEColor("dataView_TextHiliteColor")
       set the foregroundColor of field "name" of me to  revIDEColor("dataView_TextHiliteColor")
-      set the foregroundColor of field "scriptLines" of me to  revIDEColor("text_1")
-      set the backgroundColor of field "scriptLines" of me to  revIDEColor("dataView_TextHiliteColor")
+      set the foregroundColor of field "scriptLines" of me to  revIDEColor("dataView_scriptBadgeTextColor")
+      set the backgroundColor of field "scriptLines" of me to  revIDEColor("dataView_scriptBadgeBackgroundColor")
       repeat with i = 1 to 10
-         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("text_1")
+         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptBadgeTextColor")
          put ("cBehaviorLongID" & i) into tCPName
          if exists(the tCPName of me) then
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_TextHiliteColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptBadgeBackgroundColor")
          else
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptBadgeErrorBackgroundColor")
          end if
       end repeat
       set the colorOverlay["color"] of button "controlIcon" of me to revIDEColor("dataView_TextHiliteColor")
@@ -239,28 +240,28 @@ setProp dvHilite[pHiliteColor] pBoolean
    else
       set the foregroundColor of field "type" of me to revIDEColor("text_2")
       set the foregroundColor of field "name" of me to revIDEColor("text_1")
-      set the foregroundColor of field "scriptLines" of me to  revIDEColor("text_3")
+      set the foregroundColor of field "scriptLines" of me to  revIDEColor("dataView_scriptBadgeTextColor")
       repeat with i = 1 to 10
-         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to  revIDEColor("text_3")
-         set the backgroundColor of grc ("behaviorScriptLines" & i) of me to  revIDEColor("dataView_hiliteColor")
+         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to  revIDEColor("dataView_scriptBadgeTextColor")
+         set the backgroundColor of grc ("behaviorScriptLines" & i) of me to  revIDEColor("dataView_scriptBadgeBackgroundColor")
       end repeat
       
       if exists(the cObjectLongID of me) and the scriptStatus of the cObjectLongID of me is "error" then
-         set the backgroundColor of field "scriptLines" of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+         set the backgroundColor of field "scriptLines" of me to revIDEColor("dataView_scriptBadgeErrorBackgroundColor")
       else
-         set the backgroundColor of field "scriptLines" of me to revIDEColor("dataView_hiliteColor")
+         set the backgroundColor of field "scriptLines" of me to revIDEColor("dataView_scriptBadgeBackgroundColor")
       end if
       
       repeat with i = 1 to 10
          put ("cBehaviorLongID" & i) into tCPName
          if exists(the tCPName of me) and the scriptStatus of the tCPName of me is "error" then
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptBadgeErrorBackgroundColor")
          else if not (exists(the tCPName of me)) then --##
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptBadgeErrorBackgroundColor")
          else if not (exists(the tCPName of me)) then
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptBadgeErrorBackgroundColor")
          else
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_hiliteColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptBadgeBackgroundColor")
          end if
       end repeat
       

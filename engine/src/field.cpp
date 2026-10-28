@@ -1979,7 +1979,10 @@ Exec_stat MCField::hscroll(int4 offset, Boolean doredraw)
 	if (opened && doredraw)
 	{
 		// MW-2011-08-18: [[ Layers ]] Redraw the content area.
-		layer_redrawrect(t_redraw);
+		// OXT-Beyond: a hidden border and the scrollbars can leave a strip
+		// outside getfrect() stale (macOS overlay scrollbars, and one row on
+		// Windows), particularly in the Script Editor. Redraw the whole rect.
+		layer_redrawrect(rect);
 	}
 
 	signallisteners(P_HSCROLL);
@@ -2054,7 +2057,10 @@ Exec_stat MCField::vscroll(int4 offset, Boolean doredraw)
 	if (opened && doredraw)
 	{
 		// MW-2011-08-18: [[ Layers ]] Redraw the content area.
-		layer_redrawrect(t_redraw);
+		// OXT-Beyond: a hidden border and the scrollbars can leave a strip
+		// outside getfrect() stale (macOS overlay scrollbars, and one row on
+		// Windows), particularly in the Script Editor. Redraw the whole rect.
+		layer_redrawrect(rect);
 	}
 	
 	signallisteners(P_VSCROLL);

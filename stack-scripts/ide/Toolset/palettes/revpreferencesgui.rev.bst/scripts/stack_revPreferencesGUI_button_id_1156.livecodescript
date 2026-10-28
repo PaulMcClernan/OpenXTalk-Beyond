@@ -7,6 +7,26 @@ script "stack_revPreferencesGUI_button_id_1156"
 on menuPick pItemName
    lock screen
    close stack "CustomScriptCol"
+   -- OXT-Beyond: opt back into paired system themes without losing the
+   -- distinction between the default and an explicit white background.
+   if pItemName is "Follow System Appearance" then
+      revIDESetPreference "cScriptEditor,colorization,scheme", "default"
+      revIDESetPreference "cScriptEditor,colorization,schemedark", empty
+      -- Empty is readable by rc.6.7 and older builds on downgrade.
+      revIDESetPreference "cScriptEditor,editor,backgroundcolor", empty
+      revIDESetPreference "cScriptEditor,editor,debugBackgroundcolor", empty
+      if revIDEAppearanceIsDark() then
+         put "30,30,30" into tCustColor
+      else
+         put "255,255,255" into tCustColor
+      end if
+      set the cColor of button "Background Color" of card "Script Editor" of stack "revPreferencesGUI" to tCustColor
+      set the cColor of button "Debug Background Color" of card "Script Editor" of stack "revPreferencesGUI" to tCustColor
+      updateSwatches
+      updateOpenScriptEditors
+      unlock screen
+      exit menuPick
+   end if
    if pItemName is "Default" then
       put "255,255,255" into tCustColor
    end if
@@ -27,6 +47,8 @@ on menuPick pItemName
    end if
    if pItemName is "Custom" then
       doCustomPopup
+      unlock screen
+      exit menuPick
    end if
    
    

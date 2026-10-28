@@ -1,0 +1,14 @@
+# OXT-Beyond: opening Custom is not applying a scheme. Its popup writes
+# the chosen colors itself; do not clear an explicit background meanwhile.
+file: Toolset/palettes/revpreferencesgui.rev
+object: button "Colorization Scheme" of card "Script Editor"
+replace:
+|   if pItemName is "Custom" then|
+|      doCustomPopup|
+|   end if|
+with:
+|   if pItemName is "Custom" then|
+|      doCustomPopup|
+|      unlock screen|
+|      exit menuPick|
+|   end if|

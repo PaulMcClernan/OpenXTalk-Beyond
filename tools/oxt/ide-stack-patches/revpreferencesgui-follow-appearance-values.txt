@@ -1,0 +1,99 @@
+# OXT-Beyond: show an RGB swatch for the sentinel and name the active mode.
+file: Toolset/palettes/revpreferencesgui.rev
+object: group "Script Editor" of card "Script Editor"
+replace:
+|private command setValue pTarget, pValue|
+|   local tValue|
+|   if pValue is not empty then|
+|      put pValue into tValue|
+|   else|
+|      local tPref|
+|      put the cPref of pTarget into tPref|
+|      send "revSEGetDefaultPreference tPref" to revScriptEditorMain()|
+|      put the result into tValue|
+|   end if|
+|   |
+|   local tPropname|
+|   put the cProperty of pTarget into tPropname|
+|   |
+|   # Special case for button labels due to engine bug|
+|   if tPropname is "label" then|
+|      set the label of pTarget to "tempLabel"|
+|      if tValue is empty then|
+|         set the label of pTarget to "Default"|
+|      else|
+|         set the label of pTarget to tValue|
+|      end if|
+|      exit setValue|
+|   end if|
+|   |
+|   # Special case for radio buttons as all other radio buttons must be unhilited if grouped.|
+|   if tPropname is "hilite" and the style of pTarget is "radiobutton" then|
+|      if word 1 of the owner of pTarget is "group" then|
+|         if pValue is the short name of pTarget then|
+|            set the hilitedButtonName of the owner of pTarget to the short name of pTarget|
+|         end if|
+|      else|
+|         set the hilite of pTarget to tValue|
+|      end if|
+|      exit setValue|
+|   end if|
+|   |
+|   # Default case|
+|   set the tPropname of pTarget to tValue|
+|end setValue|
+with:
+|private command setValue pTarget, pValue|
+|   local tValue|
+|   if pValue is not empty then|
+|      put pValue into tValue|
+|   else|
+|      local tPref|
+|      put the cPref of pTarget into tPref|
+|      send "revSEGetDefaultPreference tPref" to revScriptEditorMain()|
+|      put the result into tValue|
+|   end if|
+|   |
+|   local tPropname|
+|   put the cProperty of pTarget into tPropname|
+|   |
+|   -- OXT-Beyond: the saved default is a mode, never a literal color.|
+|   if (the cPref of pTarget is "editor,backgroundcolor" or the cPref of pTarget is "editor,debugBackgroundcolor") and tValue is "default" then|
+|      -- Preferences is outside the editor utilities' message path.|
+|      if revIDEAppearanceIsDark() then|
+|         put "30,30,30" into tValue|
+|      else|
+|         put "255,255,255" into tValue|
+|      end if|
+|   end if|
+|   if the cPref of pTarget is "colorization,scheme" then|
+|      if revIDEGetPreference("cScriptEditor,editor,backgroundcolor") is among the items of ",default" then|
+|         put "Follow System Appearance" into tValue|
+|      end if|
+|   end if|
+|   # Work around the engine's button-label update bug.|
+|   if tPropname is "label" then|
+|      set the label of pTarget to "tempLabel"|
+|      if tValue is empty then|
+|         set the label of pTarget to "Default"|
+|      else|
+|         set the label of pTarget to tValue|
+|      end if|
+|      exit setValue|
+|   end if|
+|   |
+|   # Special case for radio buttons as all other radio buttons must be unhilited if grouped.|
+|   if tPropname is "hilite" and the style of pTarget is "radiobutton" then|
+|      if word 1 of the owner of pTarget is "group" then|
+|         if pValue is the short name of pTarget then|
+|            set the hilitedButtonName of the owner of pTarget to the short name of pTarget|
+|         end if|
+|      else|
+|         set the hilite of pTarget to tValue|
+|      end if|
+|      exit setValue|
+|   end if|
+|   |
+|   # Default case|
+|   set the tPropname of pTarget to tValue|
+|end setValue|

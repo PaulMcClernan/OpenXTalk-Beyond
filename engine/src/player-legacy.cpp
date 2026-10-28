@@ -1130,7 +1130,30 @@ void MCPlayer::draw(MCDC *dc, const MCRectangle& p_dirty, bool p_isolated, bool 
 	dc->fillrect(rect);
 	dc->setbackground(MCzerocolor);
 	dc->setfillstyle(FillSolid, nil, 0, 0);
-    
+
+#ifdef __EMSCRIPTEN__
+	// OXT-Beyond: the native video layer is hidden while editing. Draw a
+	// transport placeholder on the canvas instead of an empty rectangle.
+	// Browse-mode rendering remains unchanged for existing stacks.
+	if (getstack()->gettool(this) != T_BROWSE)
+	{
+		MCColor t_color;
+		t_color.red = t_color.green = t_color.blue = 0x6666;
+		dc->setforeground(t_color);
+		dc->fillrect(rect);
+		if (rect.width >= 24 && rect.height >= 24)
+		{
+			int2 t_x = rect.x + rect.width / 2;
+			int2 t_y = rect.y + rect.height / 2;
+			MCPoint t_play[3] = {{(int2)(t_x - 6), (int2)(t_y - 9)},
+			                      {(int2)(t_x - 6), (int2)(t_y + 9)},
+			                      {(int2)(t_x + 9), t_y}};
+			dc->setforeground(MCscreen->getwhite());
+			dc->fillpolygon(t_play, 3);
+		}
+	}
+#endif
+
 #ifdef X11
 	if (x11_hascontroller())
 		x11_drawcontroller(dc);

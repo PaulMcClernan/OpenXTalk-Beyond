@@ -105,7 +105,21 @@ private command setValue pTarget, pValue
    local tPropname
    put the cProperty of pTarget into tPropname
    
-   # Special case for button labels due to engine bug
+   -- OXT-Beyond: the saved default is a mode, never a literal color.
+   if (the cPref of pTarget is "editor,backgroundcolor" or the cPref of pTarget is "editor,debugBackgroundcolor") and tValue is "default" then
+      -- Preferences is outside the editor utilities' message path.
+      if revIDEAppearanceIsDark() then
+         put "30,30,30" into tValue
+      else
+         put "255,255,255" into tValue
+      end if
+   end if
+   if the cPref of pTarget is "colorization,scheme" then
+      if revIDEGetPreference("cScriptEditor,editor,backgroundcolor") is among the items of ",default" then
+         put "Follow System Appearance" into tValue
+      end if
+   end if
+   # Work around the engine's button-label update bug.
    if tPropname is "label" then
       set the label of pTarget to "tempLabel"
       if tValue is empty then

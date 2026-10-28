@@ -1,0 +1,13 @@
+# OXT-Beyond: make the appearance-following editor default selectable.
+file: Toolset/palettes/revpreferencesgui.rev
+object: button "Colorization Scheme" of card "Script Editor"
+property: text
+from: default\nrevolution classic\nvibrant\noxt lite light\noxt lite dark\ndark mode\n-\nCustom
+to: Follow System Appearance\n-\ndefault\nrevolution classic\nvibrant\noxt lite light\noxt lite dark\ndark mode\n-\nCustom
+# Setting menu text resets selection; initialize label and index together.
+property: label
+from: Follow System Appearance
+to: default
+property: menuHistory
+from: 1
+to: 3

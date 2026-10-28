@@ -402,6 +402,24 @@ end seSendCallbacks
 # Returns
 #   The value of the preference setting, or empty if not found.
 function sePrefGet pTag
+   -- OXT-Beyond: resolve the appearance-following default without saving
+   -- its current RGB value over the user's preference.
+   if (pTag is "editor,backgroundcolor" or pTag is "editor,debugBackgroundcolor") and sPrefs[pTag] is "default" then
+      if revIDEAppearanceIsDark() then return "30,30,30"
+      return "255,255,255"
+   end if
+   if pTag is "editor,textcolor" then
+      local tBackground
+      put sePrefGet("editor,backgroundcolor") into tBackground
+      if tBackground is a color then
+         -- Named colors are resolved by the field when applied; RGB
+         -- backgrounds (including the default) can be paired directly.
+         if the number of items in tBackground is 3 then
+            if item 1 of tBackground * 299 + item 2 of tBackground * 587 + item 3 of tBackground * 114 < 128000 then return "238,238,238"
+         end if
+      end if
+      return "0,0,0"
+   end if
    if pTag is "editor,font" and \
          sPrefs[pTag] is empty and \
          "Source Code Pro" is among the lines of the fontNames then
@@ -462,7 +480,17 @@ command sePrefInit
    end if
    
    # The colorization settings need to be loaded
-   seColorizationLoadScheme tPrefs["colorization,scheme"], tPrefs
+   -- OXT-Beyond: keep the light scheme preference intact when appearance
+   -- changes, and honor the formerly ignored schemedark preference.
+   local tScheme
+   put tPrefs["colorization,scheme"] into tScheme
+   if revIDEAppearanceIsDark() and \
+         (tPrefs["editor,backgroundcolor"] is "default" or \
+         revIDEGetPreference("cScriptEditor,colorization,schemedark") is not empty) then
+      put tPrefs["colorization,schemedark"] into tScheme
+      if tScheme is empty then put "dark mode" into tScheme
+   end if
+   seColorizationLoadScheme tScheme, tPrefs
    
    # Put the completed array into the script local sPrefs for use by the script editor.
    put tPrefs into sPrefs
@@ -480,7 +508,13 @@ command sePrefSave
    repeat for each key tKey in sPrefs
       put "cScriptEditor," & tKey into tPropname
       
-      revIDESetPreference tPropName, sPrefs[tKey]
+      -- OXT-Beyond: older IDEs accept an empty preference as their RGB
+      -- default. Keep the mode sentinel in memory only, for safe downgrades.
+      if (tKey is "editor,backgroundcolor" or tKey is "editor,debugBackgroundcolor") and sPrefs[tKey] is "default" then
+         revIDESetPreference tPropName, empty
+      else
+         revIDESetPreference tPropName, sPrefs[tKey]
+      end if
    end repeat
 end sePrefSave
 
@@ -570,6 +604,7 @@ command sePrefGetDefaults
    
    # Colorization preferences
    put "default" into tPrefs["colorization,scheme"]
+   put empty into tPrefs["colorization,schemedark"]
    seColorizationLoadScheme "default", tPrefs
    
    # Editor preferences
@@ -583,8 +618,9 @@ command sePrefGetDefaults
    put "alphabetical" into tPrefs["editor,sortHandlerList"]
    put 3 into tPrefs["editor,tabdepth"]
    put "166,202,240" into tPrefs["editor,selectbackgroundcolor"]
-   put "255,255,255" into tPrefs["editor,backgroundcolor"]
-   put "255,255,255" into tPrefs["editor,debugBackgroundcolor"]
+   -- OXT-Beyond: explicit saved RGB preferences are still read unchanged.
+   put "default" into tPrefs["editor,backgroundcolor"]
+   put "default" into tPrefs["editor,debugBackgroundcolor"]
    put "true" into tPrefs["editor,hscrollbar"]
    put "false" into tPrefs["editor,useInteractiveFind"]
    
