@@ -1134,8 +1134,8 @@ void MCPlayer::draw(MCDC *dc, const MCRectangle& p_dirty, bool p_isolated, bool 
 #ifdef __EMSCRIPTEN__
 	// OXT-Beyond: the native video layer is hidden while editing. Draw a
 	// transport placeholder on the canvas instead of an empty rectangle.
-	// This also identifies an unprepared player in browse mode.
-	if (getstack()->gettool(this) != T_BROWSE || !getstate(CS_PREPARED))
+	// Browse-mode rendering remains unchanged for existing stacks.
+	if (getstack()->gettool(this) != T_BROWSE)
 	{
 		MCColor t_color;
 		t_color.red = t_color.green = t_color.blue = 0x6666;

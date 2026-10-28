@@ -2611,9 +2611,14 @@ private function tmDrawnIconSvg pTypeID
                "<path d='M9 9V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3z' fill='@ink' fill-opacity='0.15'/>" & \
                "<path d='M15 9V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3z' fill='@ink' fill-opacity='0.15'/>"
       case "com.livecode.interface.classic.LabelField"
-         -- OXT-Beyond: retain the familiar classic label icon until the
-         -- replacement can be checked against the forum's visual feedback.
-         return empty
+         -- OXT-Beyond: an unboxed static caption reading "Label", outlined
+         -- as SVG paths so no font is needed. The editable field below
+         -- has a box and caret; this caption has neither.
+         return "<g transform='translate(1 6) scale(0.46)' stroke-width='3'>" & \
+               "<path d='M1 1v16h7M11 9c0-3 7-3 7 0v8M18 12h-4c-4 0-4 5 0 5h4'/>" & \
+               "<path d='M22 1v16M22 11c0-5 8-5 8 0v2c0 5-8 5-8 0'/>" & \
+               "<path d='M34 12h8v-1c0-6-8-6-8 0v2c0 5 6 5 8 2M46 1v16'/></g>" & \
+               "<path d='M2 18h20' stroke-width='1.5'/>"
       case "com.livecode.interface.classic.Field"
          return "<rect x='2' y='6' width='20' height='12' rx='2'/><path d='M6.5 9v6'/>"
       case "com.livecode.interface.classic.TextArea"

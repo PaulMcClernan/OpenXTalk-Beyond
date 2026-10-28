@@ -697,6 +697,12 @@ jobs:
           VERSION: ${{ steps.product.outputs.version }}
         run: ./tools/ci/ide-compile-check.ps1 -Root "dist/stage/OXT-Beyond-$env:VERSION" -LogFile "$env:RUNNER_TEMP\build-logs\ide-compile-check.log"
 
+      - name: Editor theme preferences and downgrade compatibility
+        timeout-minutes: 5
+        run: |
+          python -c "import subprocess, sys; sys.exit(subprocess.call(['win-x86_64-bin/LiveCode-Community.exe', '-ui', 'tools/ci/editor-theme-check.livecodescript']))"
+          if ($LASTEXITCODE -ne 0) { throw 'Editor theme preference checks failed' }
+
       # The engine test suites of tests/ (tools/ci/run_engine_tests.py): the
       # LiveCode Script tests of tests/lcs, each run on its own by the
       # build's standalone engine (win-x86_64-bin) with -ui and a time

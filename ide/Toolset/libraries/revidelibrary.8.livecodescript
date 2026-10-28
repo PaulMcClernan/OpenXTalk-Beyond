@@ -2730,6 +2730,14 @@ function revIDEColor pTag
       case "dataView_TextHiliteColor"
          return the accentColor
          break
+      -- OXT-Beyond: keep script badges contrast-safe in both appearances
+      -- and selection states; all Project Browser row types use this pair.
+      case "dataView_scriptBadgeTextColor"
+         return "255,255,255"
+      case "dataView_scriptBadgeBackgroundColor"
+         return "36,83,128"
+      case "dataView_scriptBadgeErrorBackgroundColor"
+         return "160,32,32"
       case "dataView_scriptBackgroundColor"
          return "34,154,206"
          break

@@ -58,9 +58,13 @@ with:
 |   put the cProperty of pTarget into tPropname|
 |   |
 |   -- OXT-Beyond: the saved default is a mode, never a literal color.|
-|   if the cPref of pTarget is "editor,backgroundcolor" and tValue is "default" then|
-|      sePrefInit|
-|      put sePrefGet("editor,backgroundcolor") into tValue|
+|   if (the cPref of pTarget is "editor,backgroundcolor" or the cPref of pTarget is "editor,debugBackgroundcolor") and tValue is "default" then|
+|      -- Preferences is outside the editor utilities' message path.|
+|      if revIDEAppearanceIsDark() then|
+|         put "30,30,30" into tValue|
+|      else|
+|         put "255,255,255" into tValue|
+|      end if|
 |   end if|
 |   if the cPref of pTarget is "colorization,scheme" then|
 |      if revIDEGetPreference("cScriptEditor,editor,backgroundcolor") is among the items of ",default" then|
