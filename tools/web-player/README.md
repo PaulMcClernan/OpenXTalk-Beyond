@@ -65,11 +65,16 @@ player's own folder, but has a link to each file and folder beside the
 stack while it is open (a name the player's own files have there,
 `DroidSansCombined.ttf` or an `extensionNN` folder, is not linked). A script error shows in a dialog with the object and the line.
 
-Not yet: extensions that are a layer over a native library (box2dxt's
-Box2D, so the platformer and the Box2D games; sodiumxt, coinxt, torrents,
-ENet, WebRTC data channels). They have no web build, so such a stack opens
-and stops where it first calls one, and the player names the extension
-instead of showing its error trace. Also opening a stack from a URL, and
+The xTalk Suite's native libraries that have a web build (box2dxt's
+Box2D, so the platformer and the Box2D games; sodiumxt, coinxt, and
+datachannelxt over the browser's own WebRTC) are linked into the web
+engine the player is built on, as into every HTML5 standalone's
+(EXPERIMENTAL; `engine/src/em-xtalk-web.cpp`).
+
+Not yet: extensions that are a layer over a native library with no web
+build (torrentxt's torrents, enetxt's ENet). Such a stack opens and stops
+where it first calls one, and the player names the extension instead of
+showing its error trace. Also opening a stack from a URL, and
 extensions that are not installed with OXT-Beyond.
 
 HyperCard stacks open as File > Import Stack opens them on the desktop.

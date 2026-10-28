@@ -162,7 +162,10 @@ jobs:
           echo "emscripten=$version" >> "$GITHUB_OUTPUT"
           sources=$(git ls-tree HEAD | awk -F '\t' '$2 !~ /^(ide|ide-support|docs|tests|tools|Installer|\.github|.*\.md)$/' |
                       sha256sum | cut -c1-16)
-          script=$(git rev-parse HEAD:tools/ci/build-web.sh | cut -c1-12)
+          # (with the xTalk Suite libraries the engine links: their pins and
+          # the tool that fetches them)
+          script=$(cat tools/ci/build-web.sh tools/oxt/xtalk-extensions.json \
+                       tools/web-ide/xtalk_web_libraries.py | sha256sum | cut -c1-12)
           echo "runtime=web-runtime-jammy-${sources}-${script}" >> "$GITHUB_OUTPUT"
           scripts=$(cat prebuilt/versions/* prebuilt/scripts/*.sh prebuilt/scripts/*.inc \
                         prebuilt/build-libraries.sh prebuilt/*.gyp config/*.gypi \

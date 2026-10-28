@@ -104,6 +104,7 @@ command playerStart
    end if
    playerInstallErrorHandler
    playerUseHyperCardLibraries
+   playerDropDuplicates
    playerLog "ready" && the version && the platform && sMode
    playerTellPage "ready", the version
 end playerStart
@@ -300,7 +301,7 @@ end dragDrop
 -- are copied into a new folder of the library, a zip archive unpacked
 -- there, and the stack among them opened (or, with several, listed)
 command playerTake pPaths
-   local tName, tFolder, tPath, tStacks, tExtensions
+   local tName, tFolder, tPath, tStacks, tExtensions, tSame
    set the itemDelimiter to slash
    put item -1 of line 1 of pPaths into tName
    set the itemDelimiter to "."
@@ -318,6 +319,14 @@ command playerTake pPaths
          put url ("binfile:" & tPath) into url ("binfile:" & tFolder & slash & item -1 of tPath)
       end if
    end repeat
+   -- the same files opened again (the same stack file chosen a second
+   -- time): the copy already in the library is the one opened, and no
+   -- "name 2" is made beside it
+   put playerSameFolder(tFolder) into tSame
+   if tSame is not empty then
+      playerRemoveFolder tFolder
+      put tSame into tFolder
+   end if
    put playerStacksIn(tFolder) into tStacks
    -- a Mac disk image: its HyperCard stacks, to choose from (one is
    -- copied out of it only once it is chosen: a CD can hold thousands)
@@ -409,6 +418,101 @@ private function playerNewLibraryFolder pName
    create folder tFolder
    return tFolder
 end playerNewLibraryFolder
+
+-- The name pName of a library folder has without the number
+-- playerNewLibraryFolder gave it ("platformer 3" -> "platformer")
+private function playerFolderBase pName
+   if the number of words of pName > 1 and the last word of pName is an integer then
+      delete the last word of pName
+   end if
+   return pName
+end playerFolderBase
+
+-- What pFolder holds, file by file (each one's path within it and the MD5
+-- of its bytes, sorted), to tell two folders with the same files apart
+private function playerFolderDigest pFolder, pWithin
+   local tFile, tSub, tList
+   repeat for each line tFile in files(pFolder)
+      put pWithin & tFile & tab & md5Digest(url ("binfile:" & pFolder & slash & tFile)) & return after tList
+   end repeat
+   repeat for each line tSub in folders(pFolder)
+      if tSub is not "." and tSub is not ".." then
+         put playerFolderDigest(pFolder & slash & tSub, pWithin & tSub & slash) & return after tList
+      end if
+   end repeat
+   filter tList without empty
+   sort lines of tList
+   return tList
+end playerFolderDigest
+
+-- Another folder of the library, of the same name (with or without its
+-- number), that holds exactly what pFolder holds; empty if none
+private function playerSameFolder pFolder
+   local tLibrary, tName, tBase, tSub, tDigest
+   put playerLibraryFolder() into tLibrary
+   set the itemDelimiter to slash
+   put item -1 of pFolder into tName
+   put playerFolderBase(tName) into tBase
+   repeat for each line tSub in folders(tLibrary)
+      if tSub is tName or tSub is "." or tSub is ".." or playerFolderBase(tSub) is not tBase then
+         next repeat
+      end if
+      if tDigest is empty then
+         put playerFolderDigest(pFolder, empty) into tDigest
+         if tDigest is empty then
+            return empty
+         end if
+      end if
+      if playerFolderDigest(tLibrary & slash & tSub, empty) is tDigest then
+         return tLibrary & slash & tSub
+      end if
+   end repeat
+   return empty
+end playerSameFolder
+
+-- Copies of one stack that the library kept more than once ("platformer",
+-- "platformer 2", ... with exactly the same files, as opening the same
+-- file again made them before playerSameFolder): the first is kept and
+-- the others go. A copy that differs (a stack that saved itself) stays.
+private command playerDropDuplicates
+   local tLibrary, tSub, tBase, tByBase, tList, tDigest, tDigests, tDropped
+   put playerLibraryFolder() into tLibrary
+   repeat for each line tSub in folders(tLibrary)
+      if tSub is not "." and tSub is not ".." then
+         put tSub & return after tByBase[playerFolderBase(tSub)]
+      end if
+   end repeat
+   repeat for each key tBase in tByBase
+      if the number of lines of tByBase[tBase] < 2 then
+         next repeat
+      end if
+      -- "platformer" before "platformer 2" before "platformer 10"
+      put tByBase[tBase] into tList
+      sort lines of tList numeric by playerFolderNumber(each)
+      delete variable tDigests
+      repeat for each line tSub in tList
+         put playerFolderDigest(tLibrary & slash & tSub, empty) into tDigest
+         if tDigest is not empty and tDigests[tDigest] is not empty then
+            playerRemoveFolder tLibrary & slash & tSub
+            put tSub & comma after tDropped
+         else
+            put tSub into tDigests[tDigest]
+         end if
+      end repeat
+   end repeat
+   if tDropped is not empty then
+      delete the last char of tDropped
+      playerLog "duplicates removed:" && tDropped
+   end if
+end playerDropDuplicates
+
+-- The number playerNewLibraryFolder gave a folder (1 for none)
+private function playerFolderNumber pName
+   if the number of words of pName > 1 and the last word of pName is an integer then
+      return the last word of pName
+   end if
+   return 1
+end playerFolderNumber
 
 -- The stack files in pFolder and the folders in it, by extension, one a
 -- line (the ones nearest the top first)
@@ -1019,6 +1123,30 @@ private command playerInstallErrorHandler
    end if
 end playerInstallErrorHandler
 
+-- The up and down arrows that a stack passes go back and forth through
+-- the cards shown (the recent cards: up goes to line 2 of them, down to
+-- the last, round the ring), and the player's own card is among them, so
+-- the box2dxt platformer's ladder (UP climbs, and the stack passes the
+-- key) took the player back to its library. "stay" keeps the arrow from
+-- leaving the stack that plays for a card of the player; any other move
+-- through its cards is as it was. (The back script's arrowKey asks.)
+command playerTrailKey pKey
+   local tCards, tCard
+   if sCurrent is empty then
+      return empty
+   end if
+   put the recentCards into tCards
+   if pKey is "up" then
+      put line 2 of tCards into tCard
+   else
+      put line -1 of tCards into tCard
+   end if
+   if tCard ends with (" of" && the long id of me) then
+      return "stay"
+   end if
+   return empty
+end playerTrailKey
+
 -- The engine's error lines ("code,line,char,hint") as text
 private function playerErrorText pError
    local tLine, tText, tMessage, tMessages
@@ -1049,10 +1177,11 @@ private function playerErrorText pError
    return tText
 end playerErrorText
 
--- An extension whose code is a native library (box2dxt's Box2D, sodiumxt,
--- coinxt...) has no build for the web: its first call fails with "unable to
--- load foreign library". That is said in plain words, with the library's
--- name, rather than as the extension's error trace.
+-- An extension whose code is a native library with no build for the web
+-- (torrentxt's libtorrent, enetxt's ENet; sodiumxt, coinxt, box2dxt and
+-- datachannelxt are linked into the web engine): its first call fails with
+-- "unable to load foreign library". That is said in plain words, with the
+-- library's name, rather than as the extension's error trace.
 private function playerNativeLibrary pError
    local tOffset, tName
    put offset("unable to load foreign library '", pError) into tOffset
@@ -1066,7 +1195,7 @@ end playerNativeLibrary
 
 private function playerNativeText pLibrary
    return "it uses" && pLibrary & ", an extension built from native code for" && \
-         "desktop computers. Native extensions do not run on the web yet."
+         "desktop computers that has no web build yet."
 end playerNativeText
 
 command playerReportError pError, pObject

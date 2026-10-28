@@ -1303,8 +1303,10 @@ jobs:
           status=0
           zip="$PACKAGE_ROOT-web-player.zip"
           "$RUNNER_TEMP/playwright/bin/python" tools/web-player/build_player.py --install "$OXT_ROOT" \
-            --platform "linux-$ARCH" --work "$RUNNER_TEMP/web-player" --zip "dist/$zip" --check || status=$?
+            --platform "linux-$ARCH" --work "$RUNNER_TEMP/web-player" --zip "dist/$zip" --check \
+            2>&1 | tee "$RUNNER_TEMP/web-player-output.txt" || status=$?
           mkdir -p "$RUNNER_TEMP/logs/web-player"
+          cp "$RUNNER_TEMP/web-player-output.txt" "$RUNNER_TEMP/logs/web-player/" 2> /dev/null || true
           cp "$RUNNER_TEMP"/web-player/*.txt "$RUNNER_TEMP"/web-player/check/* "$RUNNER_TEMP/logs/web-player/" 2> /dev/null || true
           if [ "$status" -ne 0 ]; then
             rm -f "dist/$zip"
@@ -1446,6 +1448,18 @@ jobs:
           retention-days: 30
           # The files are compressed already
           compression-level: 0
+
+      # The Stack Player's checks run before the screenshots, whose
+      # output is most of this job's log: a failed check is repeated here,
+      # at the end, where a reader of the log's tail finds it
+      - name: Repeat the Stack Player's failed checks
+        if: ${{ failure() && matrix.arch == 'x86_64' }}
+        run: |
+          out="$RUNNER_TEMP/web-player-output.txt"
+          [ -f "$out" ] || exit 0
+          grep -E '^ *FAIL |Traceback|Error' "$out" | cut -c1-600 || true
+          echo "--- the end of the check's output"
+          tail -n 40 "$out" | cut -c1-600
 
       - name: Upload logs
         if: always()

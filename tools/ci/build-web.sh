@@ -63,6 +63,9 @@
 #   WEB_JOBS  how many jobs make runs at once (default: the number of
 #             processors)
 #   EMSDK     the Emscripten SDK, when emcc is not on PATH
+#   NO_XTALK_WEB=1, XTALK_WEB_LOCAL=<xTalk Suite checkout>
+#             link none of the xTalk Suite's native libraries, or that
+#             checkout's instead of the pinned ones (step 5)
 
 set -euo pipefail
 
@@ -207,13 +210,30 @@ if [ -z "${OUT}" ] ; then
 	exit 0
 fi
 
-# 5. The engine: config-emscripten, then javascriptify, which links the
+# 5. The xTalk Suite's native libraries that the engine links into itself
+# (engine/src/em-xtalk-web.cpp), as the web IDE's does (build-web-ide.sh):
+# the archives pinned in tools/oxt/xtalk-extensions.json ("web_libraries"),
+# or with XTALK_WEB_LOCAL=<xTalk Suite checkout> that checkout's, written as
+# objects into build-emscripten/xtalk-web. NO_XTALK_WEB=1 links none (the
+# extensions then load and fail on their first call, as in earlier releases). The
+# linked engine is deleted, so that the link below runs again with what is
+# there now: its gyp inputs do not list the objects.
+cd "${REPO}"
+rm -rf build-emscripten/xtalk-web
+if [ "${NO_XTALK_WEB:-}" != 1 ] ; then
+	python3 "${REPO}/tools/web-ide/xtalk_web_libraries.py" fetch --out build-emscripten/xtalk-web \
+		${XTALK_WEB_LOCAL:+--local "${XTALK_WEB_LOCAL}"}
+fi
+rm -f build-emscripten/livecode/out/Release/standalone-community-*.js \
+	build-emscripten/livecode/out/Release/standalone-community-*.wasm
+
+# 6. The engine: config-emscripten, then javascriptify, which links the
 # engine's object with its JavaScript libraries into the .js and .wasm and
 # writes the page (engine/engine.gyp)
 make config-emscripten
 BUILDTYPE=Release emmake make -C build-emscripten/livecode javascriptify -j"${JOBS}"
 
-# 6. The runtime folder
+# 7. The runtime folder
 BUILT="${REPO}/build-emscripten/livecode/out/Release"
 mkdir -p "${OUT}"
 for EXT in js wasm html ; do

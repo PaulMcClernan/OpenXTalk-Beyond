@@ -281,6 +281,13 @@
 							'../revdb/revdb.gyp:dbsqlite-static',
 							'../revspeech/revspeech.gyp:external-revspeech-static',
 						],
+						# The xTalk Suite's native libraries (javascriptify's
+						# --xtalk-objects), as in the web IDE: their
+						# registration
+						'sources':
+						[
+							'src/em-xtalk-web.cpp',
+						],
 					},
 				],
 				[
@@ -841,6 +848,13 @@
 									'../util/emscripten-javascriptify.py',
 									'--input',
 									'<(PRODUCT_DIR)/standalone-community.o',
+									# The xTalk Suite's native libraries
+									# (src/em-xtalk-web.cpp), which
+									# tools/ci/build-web.sh fetches there
+									# (tools/web-ide/xtalk_web_libraries.py);
+									# none when the folder does not exist
+									'--xtalk-objects',
+									'../build-emscripten/xtalk-web',
 									'--output',
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).html',
 									'--shell-file',
@@ -911,8 +925,9 @@
 							# which the web IDE does not use
 							'src/dummystartupstack.cpp',
 							'src/main.cpp',
-							# The xTalk Suite's native libraries, which only
-							# the web IDE links (javascriptify-development's
+							# The xTalk Suite's native libraries, which the
+							# web IDE and the web standalone engine both link
+							# (javascriptify's and javascriptify-development's
 							# --xtalk-objects): their registration
 							'src/em-xtalk-web.cpp',
 						],
