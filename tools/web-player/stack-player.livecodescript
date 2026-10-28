@@ -87,8 +87,9 @@ on openStack
    -- (a stack that plays and comes back here: what brought it, for the
    -- page check's report)
    if sCurrent is not empty then
-      playerLog "reopened while" && sCurrent && "plays, for" && the long name of the target & \
-            "; recent cards:" && the recentCards
+      playerLog "reopened while" && sCurrent && "plays, for" && the long id of the target & \
+            "; me=" & the long id of me & ", _ideOverride" && the _ideOverride of me & \
+            "; recent cards:" && line 1 to 3 of the recentCards
    end if
    if not sStarted then
       put true into sStarted
@@ -127,7 +128,8 @@ private command playerKeepOutOfRecent
    try
       set the _ideOverride of me to true
       playerLog "recent cards: the player's kept out (" & the _ideOverride of me & "," && \
-            the number of lines of the recentCards && "left)"
+            the number of lines of the recentCards && "left:" && the recentCards & ")" && \
+            "me=" & the long id of me && "card 1=" & the long id of card 1 of me
    catch tError
       -- an engine without it: the player's cards stay in the recent cards
       playerLog "recent cards: the player's own are kept (" & tError & ")"
