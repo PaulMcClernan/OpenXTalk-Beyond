@@ -677,7 +677,8 @@ def check(site, samples, work):
                or x.startswith('PLAYER reopened')]
         expect('arrows-stay-in-stack', not came_back
                and abs(colour[0] - 0xCC) < 24 and abs(colour[1] - 0x33) < 24 and abs(colour[2] - 0x66) < 24,
-               ' | '.join(came_back + ['#%02X%02X%02X' % colour] + (why[-4:] if came_back else [])))
+               ' | '.join([x for x in why if x.startswith('PLAYER recent cards')][:1] +
+                          ['#%02X%02X%02X' % colour] + came_back[-1:] + (why[-1:] if came_back else [])))
         before = len(third_lines)
         third.click('#home')
         wait_for(third, lambda: any(x.startswith('PLAYER library') for x in third_lines[before:]), 'going home', 15)
