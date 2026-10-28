@@ -113,6 +113,8 @@ command initialize
    textInitialize
    call "initialize" to group "Gutter" of me
    
+   -- OXT-Beyond: pair unstyled text with the editor background too.
+   set the textColor of field "Script" of me to sePrefGet("editor,textcolor")
    set the backgroundColor of field "Script" of me to sePrefGet("editor,backgroundcolor")
    setHandlersFieldBackColor
    set the hScrollbar of field "Script" of me to (sePrefGet("editor,hscrollbar") is "true")
@@ -140,6 +142,8 @@ end initialize
 private command setHandlersFieldBackColor
    if there is a field "Handlers" of group "Left Handler List" of group "Left Bar" \
          of card "Main" of this stack then
+      set the textColor of field "Handlers" of group "Left Handler List" of group "Left Bar" \
+            of card "Main" of this stack to sePrefGet("editor,textcolor")
       set the backgroundColor of  field "Handlers" of group "Left Handler List" of group "Left Bar" \
             of card "Main" of this stack to sePrefGet("editor,backgroundcolor")
    end if
@@ -185,6 +189,8 @@ command reapplyPreferences
    colorizationUpdate
    scriptColorize "script"
    
+   -- OXT-Beyond: pair unstyled text with the editor background too.
+   set the textColor of field "Script" of me to sePrefGet("editor,textcolor")
    set the backgroundColor of field "Script" of me to sePrefGet("editor,backgroundcolor")
    setHandlersFieldBackColor
    set the hScrollbar of field "Script" of me to (sePrefGet("editor,hscrollbar") is "true")

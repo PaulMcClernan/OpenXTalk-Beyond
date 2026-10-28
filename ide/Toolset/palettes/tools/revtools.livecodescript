@@ -2422,7 +2422,8 @@ private function tmColor pName
          case "hiliteLine"
             return "167,139,250"
          case "icon"
-            return "203,213,225"
+            -- OXT-Beyond: stronger edges for small and retina icons.
+            return "255,255,255"
          case "accent"
             return "124,58,237"
       end switch
@@ -2455,7 +2456,7 @@ private function tmColor pName
          case "hiliteLine"
             return "124,58,237"
          case "icon"
-            return "71,85,105"
+            return "15,23,42"
          case "accent"
             return "124,58,237"
       end switch
@@ -2610,11 +2611,9 @@ private function tmDrawnIconSvg pTypeID
                "<path d='M9 9V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3z' fill='@ink' fill-opacity='0.15'/>" & \
                "<path d='M15 9V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3z' fill='@ink' fill-opacity='0.15'/>"
       case "com.livecode.interface.classic.LabelField"
-         -- (text with no box, as a label is: "Ab"; the field below is the
-         -- box a user types in. A "T" is the text tool in GIMP and
-         -- Inkscape: openxtalk.org, October 2026)
-         return "<path d='M2.5 18 7 6l4.5 12M4.2 14h5.6'/><path d='M15 6v12'/>" & \
-               "<circle cx='18.5' cy='14.5' r='3.5'/>"
+         -- OXT-Beyond: retain the familiar classic label icon until the
+         -- replacement can be checked against the forum's visual feedback.
+         return empty
       case "com.livecode.interface.classic.Field"
          return "<rect x='2' y='6' width='20' height='12' rx='2'/><path d='M6.5 9v6'/>"
       case "com.livecode.interface.classic.TextArea"

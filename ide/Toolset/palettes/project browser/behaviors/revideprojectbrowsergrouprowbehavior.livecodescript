@@ -242,20 +242,21 @@ end dvRowControl
 
 setProp dvHilite[pHiliteColor] pBoolean
    # Override basic hilite feature...
+   -- OXT-Beyond: script badges use a contrast-safe pair in both themes.
    local tCPName
    
    if pBoolean then
       set the foregroundColor of field "type" of me to revIDEColor("dataView_TextHiliteColor")
       set the foregroundColor of field "name" of me to  revIDEColor("dataView_TextHiliteColor")
-      set the foregroundColor of field "scriptLines" of me to  revIDEColor("text_1")
-      set the backgroundColor of field "scriptLines" of me to  revIDEColor("dataView_TextHiliteColor")
+      set the foregroundColor of field "scriptLines" of me to  "255,255,255"
+      set the backgroundColor of field "scriptLines" of me to  "36,83,128"
       repeat with i = 1 to 10
-         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("text_1")
+         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to "255,255,255"
          put ("cBehaviorLongID" & i) into tCPName
          if exists(the tCPName of me) then
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_TextHiliteColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to "36,83,128"
          else
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to "160,32,32"
          end if
       end repeat
       set the colorOverlay["color"] of image "groupIcon" of me to revIDEColor("dataView_TextHiliteColor")
@@ -264,26 +265,26 @@ setProp dvHilite[pHiliteColor] pBoolean
    else
       set the foregroundColor of field "type" of me to revIDEColor("text_2")
       set the foregroundColor of field "name" of me to revIDEColor("text_1")
-      set the foregroundColor of field "scriptLines" of me to  revIDEColor("text_3")
+      set the foregroundColor of field "scriptLines" of me to  "255,255,255"
       repeat with i = 1 to 10
-         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to  revIDEColor("text_3")
-         set the backgroundColor of grc ("behaviorScriptLines" & i) of me to  revIDEColor("dataView_hiliteColor")
+         set the foregroundColor of grc ("behaviorScriptLines" & i) of me to  "255,255,255"
+         set the backgroundColor of grc ("behaviorScriptLines" & i) of me to  "36,83,128"
       end repeat
       
       if exists(the cObjectLongID of me) and the scriptStatus of the cObjectLongID of me is "error" then
-         set the backgroundColor of field "scriptLines" of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+         set the backgroundColor of field "scriptLines" of me to "160,32,32"
       else
-         set the backgroundColor of field "scriptLines" of me to revIDEColor("dataView_hiliteColor")
+         set the backgroundColor of field "scriptLines" of me to "36,83,128"
       end if
       
       repeat with i = 1 to 10
          put ("cBehaviorLongID" & i) into tCPName
          if exists(the tCPName of me) and the scriptStatus of the tCPName of me is "error" then
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to "160,32,32"
          else if not (exists(the tCPName of me)) then
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_scriptErrorBackgroundColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to "160,32,32"
          else
-            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to revIDEColor("dataView_hiliteColor")
+            set the backgroundColor of grc ("behaviorScriptLines" & i) of me to "36,83,128"
          end if
       end repeat
       

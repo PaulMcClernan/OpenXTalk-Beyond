@@ -488,7 +488,11 @@ before then is not heard, although the stack is told that it played.
 (MP4, WebM and MP3 in current browsers), from the engine's file system or
 an address, with the browser's own controller. Its `timeScale` is 1000. A
 browser starts a movie with sound only once the user has clicked or typed
-in the page; a movie whose `playLoudness` is 0 starts at once.
+in the page; a movie whose `playLoudness` is 0 starts at once. In edit mode,
+the player shows a grey transport placeholder. Give it a direct media URL;
+a Vimeo or YouTube watch-page URL is an HTML page, which a video element
+cannot play. Show a provider's permitted embed URL in the browser widget
+instead (subject to that provider's embedding and privacy settings).
 * **The browser widget** shows a page of the stack's own web site, its
 `htmlText`, or a file of the engine's file system, with its messages, `do
 ... in widget` and the page's calls to its `javascriptHandlers`, as on the

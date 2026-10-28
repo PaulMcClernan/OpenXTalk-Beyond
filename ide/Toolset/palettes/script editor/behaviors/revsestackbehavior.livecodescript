@@ -2537,6 +2537,8 @@ command revSEInitialize pDontCheckTarget
    end if
    
    dispatch "ideSubscribe" to me with "idePreferenceChanged:cREVScriptDebugMode"
+   -- OXT-Beyond: recolor every open editor when the system theme changes.
+   dispatch "ideSubscribe" to me with "ideSystemAppearanceChanged"
    
    # Initialize the preferences
    sePrefInit
@@ -2591,6 +2593,10 @@ command revSEInitialize pDontCheckTarget
    
    set the showInvisibles of me to false
 end revSEInitialize
+
+on ideSystemAppearanceChanged
+   revSEUpdate true
+end ideSystemAppearanceChanged
 
 on idePreferenceChanged pPreference, pValue
    switch pPreference

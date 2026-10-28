@@ -2128,6 +2128,13 @@ on tour_field_scroll
    repeat with i = 1 to 3
       put tourFsCheck(tName, line i of tFields, i, i is 1, i is 3) after tFails
    end repeat
+   -- OXT-Beyond: the editor combines a hidden default-width border with
+   -- both scrollbars. Its bottom strip was absent from the original test.
+   set the borderWidth of tField to 2
+   set the showBorder of tField to false
+   set the hScrollbar of tField to true
+   set the scrollbarWidth of tField to 17
+   put tourFsCheck(tName, tField, 4, false, true) after tFails
    tourShotStack tName, "04d-field-scroll"
    lock messages
    if there is a stack tName then delete stack tName

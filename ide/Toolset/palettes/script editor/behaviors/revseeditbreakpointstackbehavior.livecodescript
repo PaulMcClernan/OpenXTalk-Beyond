@@ -9,6 +9,8 @@ local sOriginalType
 local sOriginalObject
 
 on preOpenCard
+   -- OXT-Beyond: the condition editor follows the same theme as scripts.
+   ideSubscribe "ideSystemAppearanceChanged"
    ideSubscribe "idePreferenceChanged:cScriptEditor,editor,backgroundcolor"
    ideSubscribe "idePreferenceChanged:cScriptEditor,editor,font"
    ideSubscribe "idePreferenceChanged:cScriptEditor,editor,fontSize"
@@ -377,8 +379,15 @@ private command __UpdateConditionFont
    set the textSize of field "condition" of me to tSize
 end __UpdateConditionFont
 
+on ideSystemAppearanceChanged
+   sePrefInit
+   __UpdateConditionColors
+end ideSystemAppearanceChanged
+
 private command __UpdateConditionColors
    local tColor
-   put revIDEGetPreference("cScriptEditor,editor,backgroundcolor") into tColor
+   -- OXT-Beyond: resolve the default sentinel before setting a color.
+   put sePrefGet("editor,backgroundcolor") into tColor
+   set the textColor of field "condition" of me to sePrefGet("editor,textcolor")
    set the backgroundColor of field "condition" of me to tColor
 end __UpdateConditionColors
