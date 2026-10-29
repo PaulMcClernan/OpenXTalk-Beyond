@@ -139,6 +139,10 @@ private function playerSettings pSettings
    put "StackPlayer" into pSettings["name"]
    put "Stack Player" into pSettings["emscripten,title"]
    put "select" into pSettings["inclusions"]
+   -- the web engine with the xTalk Suite's libraries, which a standalone
+   -- that uses none of them is built without: the player opens stacks
+   -- that may use them (revsaveasemscriptenstandalone's getEngineFiles)
+   put "always" into pSettings["emscripten,xtalklibraries"]
    -- the script libraries (revsblibrary's kScriptLibraries), then the
    -- titles of the externals that the web engine has
    -- (revsaveasemscriptenstandalone's kWebExternals)

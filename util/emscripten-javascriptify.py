@@ -11,6 +11,7 @@ from __future__ import print_function
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -116,14 +117,14 @@ asyncify_remove = [
     ]
 settings['ASYNCIFY_REMOVE'] = asyncify_remove
 
-# The xTalk Suite's native libraries, which only the web IDE's engine links
+# The xTalk Suite's native libraries, which both web engines link
 # (--xtalk-objects, below): pure computation over buffers, which calls no
 # script back (the suite's rule: no callback runs script), so the engine
 # never yields inside them. Their many calls through function pointers
 # (libsodium picks its implementations at run time, Box2D's solver calls
 # through tables) would otherwise make Asyncify instrument nearly all of
-# them. Added only when they are linked, so the web standalone engine's link
-# is unchanged.
+# them. Added only when they are linked, so the lean engine's link
+# (--lean-output) is as the web standalone engine's was before them.
 asyncify_remove_xtalk = [
     # SodiumXT: the shim and libsodium
     'sxt_*', 'crypto_*', '_crypto_*', 'sodium_*', 'randombytes*', 'argon2*',
@@ -201,7 +202,18 @@ for folder in options.get('xtalk-objects', []):
                                 if name.endswith('.o'))
 if xtalk_objects:
     print('Linking the xTalk Suite libraries: ' + ', '.join(os.path.basename(o) for o in xtalk_objects))
-    settings['ASYNCIFY_REMOVE'] = asyncify_remove + asyncify_remove_xtalk
+
+# --lean-output <page>: the same engine again without the xTalk Suite's
+# libraries, written beside the full one under the same file names in
+# another folder (engine.gyp's javascriptify: <PRODUCT_DIR>/lean). The web
+# builder gives a standalone that uses none of the libraries this engine
+# (getEngineFiles in ide-support/revsaveasemscriptenstandalone.livecodescript),
+# which is the engine every standalone had before the libraries were linked;
+# the Stack Player and a standalone that uses one get the full one. The
+# names are the same so that the .js finds its .wasm, and the page its .js,
+# wherever the builder copies them from. Without libraries to leave out, the
+# two engines would be the same, so the files are copied.
+lean_output = options.get('lean-output', [None])[0]
 
 for required in ['input', 'output']:
     if required not in options or len(options[required]) == 0:
@@ -222,34 +234,57 @@ settings['EXPORTED_FUNCTIONS'] = exported_functions
 # Construct emcc command line
 # ---------------------------
 
-command = emcc + optimisation_flags + cflags
+def link_command(objects, output):
+    link_settings = dict(settings)
+    if objects:
+        link_settings['ASYNCIFY_REMOVE'] = asyncify_remove + asyncify_remove_xtalk
 
-for input in options['input']:
-    command.append(input)
-command += xtalk_objects
+    command = emcc + optimisation_flags + cflags
 
-command += ['-o', options['output'][0]]
+    for input in options['input']:
+        command.append(input)
+    command += objects
 
-for setting in sorted(settings.keys()):
-    value = settings[setting]
-    if isinstance(value, list):
-        value = ','.join(value)
-    command += ['-s', '{}={}'.format(setting, value)]
+    command += ['-o', output]
 
-for option in ['pre-js', 'shell-file', 'js-library']:
-    if option in options:
-        for value in options[option]:
-            command += ['--' + option, value]
+    for setting in sorted(link_settings.keys()):
+        value = link_settings[setting]
+        if isinstance(value, list):
+            value = ','.join(value)
+        command += ['-s', '{}={}'.format(setting, value)]
 
-# The browser's storage (IndexedDB) as a file system, which keeps the home
-# folder between visits (em-system.js)
-command += ['-lidbfs.js']
+    for option in ['pre-js', 'shell-file', 'js-library']:
+        if option in options:
+            for value in options[option]:
+                command += ['--' + option, value]
+
+    # The browser's storage (IndexedDB) as a file system, which keeps the home
+    # folder between visits (em-system.js)
+    command += ['-lidbfs.js']
+    return command
 
 # Run emcc
 # --------
 
-if env_verbose.strip() != '0':
-    print(" ".join(command))
+def run(command):
+    if env_verbose.strip() != '0':
+        print(" ".join(command))
+    return subprocess.call(command)
 
-emcc_result = subprocess.call(command)
-sys.exit(emcc_result)
+output = options['output'][0]
+emcc_result = run(link_command(xtalk_objects, output))
+if emcc_result != 0 or not lean_output:
+    sys.exit(emcc_result)
+
+lean_folder = os.path.dirname(lean_output)
+if lean_folder and not os.path.isdir(lean_folder):
+    os.makedirs(lean_folder)
+if xtalk_objects:
+    print('Linking the lean engine, without the xTalk Suite libraries: ' + lean_output)
+    sys.exit(run(link_command([], lean_output)))
+
+base, lean_base = os.path.splitext(output)[0], os.path.splitext(lean_output)[0]
+for extension in ('.js', '.wasm', os.path.splitext(output)[1]):
+    shutil.copyfile(base + extension, lean_base + extension)
+print('No xTalk Suite libraries were linked: the lean engine is a copy, ' + lean_output)
+sys.exit(0)

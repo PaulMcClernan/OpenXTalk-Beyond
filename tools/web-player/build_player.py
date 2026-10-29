@@ -59,6 +59,7 @@ Screenshots go into <work>/check.
 
 import argparse
 import functools
+import glob
 import hashlib
 import http.server
 import json
@@ -159,6 +160,8 @@ def build(args, work):
             problems.append('the IDE\'s build %s' % status)
             for line in ui_tour.read_lines(os.path.join(work, 'ide-output.txt'))[-40:]:
                 log('  ide output: %s' % line)
+        if not problems:
+            problems += full_engine(lay.root, out)
         if problems:
             raise CheckError('; '.join(problems))
         log('The IDE built the player in %.0f s' % (time.time() - started))
@@ -168,6 +171,25 @@ def build(args, work):
     put_page(out)
     put_samples(out, samples)
     return out, samples
+
+
+def full_engine(root, site):
+    """Problems if the player did not get the web engine with the xTalk
+    Suite's libraries: the builder gives the others the lean one of the
+    runtime's lean/ (getEngineFiles in
+    ide-support/revsaveasemscriptenstandalone.livecodescript), and the
+    player asks for this one (build-player.livecodescript)."""
+    for wasm in glob.glob(os.path.join(glob.escape(site), 'standalone-community-*.wasm')):
+        name = os.path.basename(wasm)
+        for lean in glob.glob(os.path.join(glob.escape(root), '**', 'Emscripten', 'js', 'lean', name),
+                              recursive=True):
+            full = os.path.join(os.path.dirname(os.path.dirname(lean)), name)
+            with open(wasm, 'rb') as a, open(full, 'rb') as b:
+                if a.read() != b.read():
+                    return ['the player\'s %s is not the engine with the xTalk Suite libraries (%s)' % (name, full)]
+            log('The player has the engine with the xTalk Suite libraries (%.1f MB; %.1f MB without)' % (
+                os.path.getsize(full) / 1e6, os.path.getsize(lean) / 1e6))
+    return []
 
 
 def put_page(site):

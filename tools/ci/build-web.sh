@@ -31,6 +31,10 @@
 #   standalone-community-<version>.js, .wasm   the engine (WebAssembly that
 #                                              waits with Asyncify)
 #   standalone-community-<version>.html        the page
+#   lean/standalone-community-<version>.*      the same engine without the
+#                                              xTalk Suite's libraries (step
+#                                              5), for the standalones that
+#                                              use none of them
 #   emscripten-standalone-template/            the files every standalone
 #                                              gets (its font)
 #   emscripten-startup-template.livecodescript the startup script's template
@@ -226,6 +230,7 @@ if [ "${NO_XTALK_WEB:-}" != 1 ] ; then
 fi
 rm -f build-emscripten/livecode/out/Release/standalone-community-*.js \
 	build-emscripten/livecode/out/Release/standalone-community-*.wasm
+rm -rf build-emscripten/livecode/out/Release/lean
 
 # 6. The engine: config-emscripten, then javascriptify, which links the
 # engine's object with its JavaScript libraries into the .js and .wasm and
@@ -241,9 +246,20 @@ for EXT in js wasm html ; do
 	[ -s "${FILE}" ] || fail "the build wrote no ${FILE}"
 	cp "${FILE}" "${OUT}/"
 done
+# The lean engine, without the xTalk Suite's libraries, under the same
+# names in lean/ (engine.gyp's javascriptify), which the web builder gives
+# the standalones that use none of them
+mkdir -p "${OUT}/lean"
+for EXT in js wasm html ; do
+	FILE="${BUILT}/lean/standalone-community-${VERSION}.${EXT}"
+	[ -s "${FILE}" ] || fail "the build wrote no ${FILE}"
+	cp "${FILE}" "${OUT}/lean/"
+done
 # A WebAssembly module starts with "\0asm"
-[ "$(head -c 4 "${OUT}/standalone-community-${VERSION}.wasm" | od -An -c | tr -d ' ')" = '\0asm' ] ||
-	fail "standalone-community-${VERSION}.wasm is not WebAssembly"
+for WASM in "standalone-community-${VERSION}.wasm" "lean/standalone-community-${VERSION}.wasm" ; do
+	[ "$(head -c 4 "${OUT}/${WASM}" | od -An -c | tr -d ' ')" = '\0asm' ] ||
+		fail "${WASM} is not WebAssembly"
+done
 cp engine/rsrc/emscripten-startup-template.livecodescript "${OUT}/"
 cp -R engine/rsrc/emscripten-standalone-template "${OUT}/"
 # without the dotfiles (its .gitignore), which the IDE's builder would put

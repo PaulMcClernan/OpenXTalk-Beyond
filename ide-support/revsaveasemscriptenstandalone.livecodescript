@@ -61,6 +61,18 @@ command revSaveAsEmscriptenStandalone pStack, pOutputFolder, pSettings
    
    revSBUpdateSettingsForExtensions "emscripten", pSettings
    
+   -- OXT-Beyond: the engine with the xTalk Suite's libraries only for a
+   -- stack that uses one of them (usesXTalkWebLibraries), or when the
+   -- settings ask for it with "emscripten,xtalklibraries" set to "always"
+   -- (the Stack Player, which opens stacks that may use them:
+   -- tools/web-player/build-player.livecodescript)
+   local tLean
+   if pSettings["emscripten,xtalklibraries"] is "always" then
+      put false into tLean
+   else
+      put not usesXTalkWebLibraries(pSettings) into tLean
+   end if
+   
    local tResolvedFileData
    revSBResolveCopyFilesList tBaseFolder, "emscripten", pSettings, tResolvedFileData
    
@@ -136,7 +148,7 @@ command revSaveAsEmscriptenStandalone pStack, pOutputFolder, pSettings
       ---------- Copy the engine into the build folder
       revStandaloneProgress "Preparing engine files..."
       local tEngineFile
-      repeat for each element tEngineFile in getEngineFiles()
+      repeat for each element tEngineFile in getEngineFiles(tLean)
          logDebug "engine", "Copying" && tEngineFile
          revSBCopyFileToFolder tEngineFile, tBuildFolder, \
                "revStandaloneProgressCallback", the long id of me
@@ -683,19 +695,74 @@ private command scanFolder_recurse @xCount, @xFiles, pRelPath
 end scanFolder_recurse
 
 function revGetEmscriptenFiles
-   return getEngineFiles()
+   return getEngineFiles(false)
 end revGetEmscriptenFiles
 
 -- Return a number-indexed array of engine files that need to be
 -- copied into the standalone output folder: the engine of this
 -- version (the startup script checks that it is the IDE's), its
 -- JavaScript and the WebAssembly code that the JavaScript loads.
-private function getEngineFiles
-   local tFiles
-   put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".js") into tFiles[1]
-   put mapBinPath("standalone-" & getEngineType() & "-" & the version & ".wasm") into tFiles[2]
+--
+-- OXT-Beyond: the web engine links the xTalk Suite's native libraries
+-- (engine/src/em-xtalk-web.cpp), which the Stack Player needs, and the
+-- runtime has the same engine without them in lean/, under the same
+-- names (tools/ci/build-web.sh). With pLean true the files are the lean
+-- engine's, the engine every standalone had before the libraries were
+-- linked, and smaller; a runtime without lean/ (a build from before it)
+-- gives the engine it has.
+private function getEngineFiles pLean
+   local tFiles, tName
+   put "standalone-" & getEngineType() & "-" & the version into tName
+   if pLean then
+      put mapBinPath("lean/" & tName & ".js") into tFiles[1]
+      put mapBinPath("lean/" & tName & ".wasm") into tFiles[2]
+      if there is a file tFiles[1] and there is a file tFiles[2] then
+         logDebug "engine", "The lean engine, without the xTalk Suite libraries"
+         return tFiles
+      end if
+      logDebug "engine", "No lean engine in the runtime: the engine with the xTalk Suite libraries"
+   end if
+   put mapBinPath(tName & ".js") into tFiles[1]
+   put mapBinPath(tName & ".wasm") into tFiles[2]
    return tFiles
 end getEngineFiles
+
+-- OXT-Beyond: the extensions whose libraries the web engine links
+-- (engine/src/em-xtalk-web.cpp), each as its id: the LCB libraries of
+-- SodiumXT, Box2Dxt, CoinXT and DataChannelXT, and the script libraries
+-- that call them (tools/oxt/xtalk-extensions.json), NostrXT's included,
+-- which calls CoinXT and SodiumXT without naming them as needed.
+constant kXTalkWebExtensions = "org.openxtalk.library.sodium,org.openxtalk.box2dxt,org.openxtalk.library.coin,org.openxtalk.library.datachannel,coinxt,box2dxt-kit,dataChannelHelpers,nostrxt,nostr-relay"
+-- The names an LCB module binds those libraries by ("c:sodiumxt>sxt_hash")
+constant kXTalkWebLibraries = "sodiumxt,box2dxt,coinxt,datachannelxt"
+
+-- OXT-Beyond: true when the standalone includes an extension that uses
+-- the xTalk Suite's libraries: one of kXTalkWebExtensions, or any LCB
+-- module (another author's too) whose compiled module names one of
+-- kXTalkWebLibraries. Such a standalone gets the engine with the
+-- libraries, as every web standalone did in 0.2.7-rc.6.8; any other gets
+-- the lean engine.
+private function usesXTalkWebLibraries pSettings
+   local tExtensionA, tFileA, tModule, tLibrary
+   repeat for each element tExtensionA in pSettings["extensions_computed"]
+      if tExtensionA["id"] is among the items of kXTalkWebExtensions then
+         logDebug "engine", tExtensionA["id"] && "uses the xTalk Suite libraries"
+         return true
+      end if
+      put revIDEExtensionFileData(tExtensionA["id"]) into tFileA
+      if tFileA["type"] is not "lcb" or there is no file tFileA["file"] then
+         next repeat
+      end if
+      put url ("binfile:" & tFileA["file"]) into tModule
+      repeat for each item tLibrary in kXTalkWebLibraries
+         if tLibrary & ">" is in tModule then
+            logDebug "engine", tExtensionA["id"] && "binds to" && tLibrary
+            return true
+         end if
+      end repeat
+   end repeat
+   return false
+end usesXTalkWebLibraries
 
 -- Get the filename of the Emscripten standalone template folder.
 -- This is a folder that contains the default filesystem
