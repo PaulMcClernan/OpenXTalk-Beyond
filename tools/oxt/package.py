@@ -281,6 +281,10 @@ PACKAGED_EXTENSIONS = layout.REPO_BUILT_EXTENSIONS
 WEB_RUNTIME_ENV = 'OXT_WEB_RUNTIME'
 WEB_RUNTIME = 'Runtime/Emscripten/js/'
 WEB_ENGINE_FILES = tuple('standalone-community-%%s.%s' % ext for ext in ('js', 'wasm', 'html'))
+# The same engine without the xTalk Suite's libraries, under the same names
+# in a folder of its own (tools/ci/build-web.sh), which the builder gives the
+# standalones that use none of them
+WEB_LEAN_FOLDER = 'lean/'
 WEB_TEMPLATE_FOLDER = 'emscripten-standalone-template'
 WEB_STARTUP_TEMPLATE = 'emscripten-startup-template.livecodescript'
 
@@ -1244,6 +1248,13 @@ def plan_web(pl, web, version):
             pl.add(Item(folder + name, 'web', source=path, note='web engine %s' % version))
         else:
             pl.problems.append('web runtime: %s has no %s (the web engine of version %s)' % (web, name, version))
+        lean = WEB_LEAN_FOLDER + name
+        path = os.path.join(web, *lean.split('/'))
+        if os.path.isfile(path):
+            pl.add(Item(folder + lean, 'web', source=path,
+                        note='web engine %s without the xTalk Suite libraries' % version))
+        else:
+            pl.problems.append('web runtime: %s has no %s (the lean web engine of version %s)' % (web, lean, version))
     path = os.path.join(web, WEB_STARTUP_TEMPLATE)
     if os.path.isfile(path):
         pl.add(Item(folder + WEB_STARTUP_TEMPLATE, 'web', source=path, note='web standalones\' startup script'))

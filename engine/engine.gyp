@@ -841,6 +841,10 @@
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).js',
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).wasm',
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).html',
+									# The lean engine (--lean-output)
+									'<(PRODUCT_DIR)/lean/standalone-community-<(version_suffix).js',
+									'<(PRODUCT_DIR)/lean/standalone-community-<(version_suffix).wasm',
+									'<(PRODUCT_DIR)/lean/standalone-community-<(version_suffix).html',
 								],
 
 								'action':
@@ -857,6 +861,13 @@
 									'../build-emscripten/xtalk-web',
 									'--output',
 									'<(PRODUCT_DIR)/standalone-community-<(version_suffix).html',
+									# The same engine without those
+									# libraries, in lean/ under the same
+									# names, for the standalones that use
+									# none of them (the Stack Player and
+									# the others get the one above)
+									'--lean-output',
+									'<(PRODUCT_DIR)/lean/standalone-community-<(version_suffix).html',
 									'--shell-file',
 									'rsrc/emscripten-html-template.html',
 									'--pre-js',

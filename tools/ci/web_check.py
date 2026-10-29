@@ -195,6 +195,7 @@ for the browser, the Python package playwright with its browser
 """
 
 import argparse
+import glob
 import hashlib
 import http.server
 import json
@@ -633,6 +634,25 @@ def runtime_files(runtime):
     return version, files['js'], files['wasm'], files['html']
 
 
+def lean_engine(runtime, version, wasm):
+    """A line about the runtime's lean engine (lean/, which
+    tools/ci/build-web.sh writes): the same engine without the xTalk Suite's
+    libraries, under the same names, never larger than the full one."""
+    lean = os.path.join(runtime, 'lean', 'standalone-community-%s.' % version)
+    for ext in ('js', 'wasm', 'html'):
+        if not os.path.isfile(lean + ext):
+            raise CheckError('%s has no lean/standalone-community-%s.%s' % (runtime, version, ext))
+    with open(lean + 'wasm', 'rb') as f:
+        if f.read(4) != b'\0asm':
+            raise CheckError('%swasm is not WebAssembly' % lean)
+    full, small = os.path.getsize(wasm), os.path.getsize(lean + 'wasm')
+    if small > full:
+        raise CheckError('the lean engine (%d bytes) is larger than the one with the xTalk Suite libraries (%d)'
+                         % (small, full))
+    return 'lean engine: .wasm %.1f MB, %.1f MB less than with the xTalk Suite libraries' % (
+        small / 1e6, (full - small) / 1e6)
+
+
 def pinned_engine():
     """(version, url, sha256) of the engine that build_docs.sh pins."""
     with open(BUILD_DOCS, encoding='utf-8') as f:
@@ -861,6 +881,22 @@ def build_with_ide(args, work, timeout):
                 log('  ide output: %s' % line)
         else:
             lines.append('the IDE built the standalone in %.0f s' % (time.time() - started))
+            # The probe uses none of the xTalk Suite's libraries, so the
+            # builder gives it the lean engine of the runtime's lean/
+            # (getEngineFiles in revsaveasemscriptenstandalone), when the
+            # runtime has one
+            leans = glob.glob(os.path.join(glob.escape(lay.root), '**', 'Emscripten', 'js', 'lean',
+                                           'standalone-community-*.wasm'), recursive=True)
+            if leans:
+                version, _ = built_files(site)
+                built = os.path.join(site, 'standalone-community-%s.wasm' % version)
+                lean = [x for x in leans if os.path.basename(x) == os.path.basename(built)]
+                if lean and sha256_of(lean[0]) == sha256_of(built):
+                    lines.append('the builder gave the probe the lean engine (%.1f MB), without the xTalk Suite '
+                                 'libraries' % (os.path.getsize(built) / 1e6))
+                else:
+                    problems.append('the IDE\'s web build: the probe, which uses none of the xTalk Suite libraries, '
+                                    'did not get the lean engine of %s' % os.path.dirname(leans[0]))
     finally:
         for d in temp_dirs:
             shutil.rmtree(d, ignore_errors=True)
@@ -2020,6 +2056,7 @@ def main(argv=None):
             site = os.path.join(work, 'site')
             shutil.rmtree(site, ignore_errors=True)
             make_standalone(runtime, js, wasm, html, startup, site)
+            lines.append(lean_engine(runtime, version, wasm))
             url_path = 'engine'
             browser_widget = True
             lines.append('built without the IDE, from %s' % runtime)
