@@ -164,6 +164,21 @@ class TheTemplate(unittest.TestCase):
         for name in build_pages.BRAND:
             self.assertTrue(os.path.isfile(os.path.join(PAGES, 'brand', name)), name)
 
+    def test_the_parts_in_the_logos_look(self):
+        # The Web IDE's card is the wide one with the logo, moving (still
+        # for less motion), inside the IDE's part, so a site without the IDE
+        # loses it with the card; every card has its shine, hidden from
+        # screen readers; and every animation stops for less motion
+        start, end = self.text.index('<!-- @IDE@ -->\n      <section class="card featured">'), None
+        end = self.text.index('<!-- /@IDE@ -->', start)
+        ide = self.text[start:end]
+        self.assertIn('<source srcset="brand/logo.svg" media="(prefers-reduced-motion: reduce)">', ide)
+        self.assertIn('<img src="brand/logo-animated.svg" alt=""', ide)
+        self.assertEqual(self.text.count('<section class="card'),
+                         self.text.count('<span class="shine" aria-hidden="true"></span>'))
+        self.assertIn('*, *::before, *::after { animation: none !important; transition: none !important; }', self.text)
+        self.assertIn('Where will you go <span class="flame">Beyond</span>?', self.text)
+
     def test_the_web_stacks(self):
         # "Web Games" became "Web Stacks" (SVG Lab is no game); the folder
         # stays games/, so every link to it keeps working
