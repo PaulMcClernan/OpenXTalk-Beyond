@@ -3218,7 +3218,7 @@ end tourSvgMenuCopied
 -- with the picture, both, or nothing, and makes the same group, selected
 on tour_svg_import
    local tArea, tName, tDefault, tFile, tImage, tPicture, tDecoded, tMenuBar, tMenu, tGroup, tFails, tError
-   local tGroups
+   local tGroups, tMade, tResult
    local tRect, tImageShot, tGroupShot, tStats
    put "oxt_svg_import" into tName
    put line 1 of the working screenRects into tArea
@@ -3294,10 +3294,15 @@ on tour_svg_import
       revIDEDeselectAll
       delete tPicture
       tourShotStack tName, "04g2-svg-import"
-      -- converted
+      -- converted; tMade counts the groups it makes, the clip paths' groups
+      -- inside the one it returns among them
+      put the number of groups of card 1 of stack tName into tGroups
       put revIDEConvertDrawingToGraphics(tImage) into tGroup
-      if the result is not empty or tGroup is empty or there is not a tGroup then
-         put "Convert to Graphics failed:" && the result & return after tFails
+      put the result into tResult
+      put the number of groups of card 1 of stack tName - tGroups into tMade
+      tourRecord "INFO svg-import Convert to Graphics made" && tMade && "groups"
+      if tResult is not empty or tGroup is empty or there is not a tGroup then
+         put "Convert to Graphics failed:" && tResult & return after tFails
       else
          if the number of graphics of tGroup < 4 then
             put "Convert to Graphics made" && the number of graphics of tGroup && "graphics" & return after tFails
@@ -3315,18 +3320,19 @@ on tour_svg_import
          end if
          tourShotStack tName, "04g3-svg-convert"
          -- the menu bar's Object > Convert SVG Image to Graphics, with the
-         -- image selected: another such group, which it selects
+         -- image selected: another such group (as many groups, the clip
+         -- paths' among them, as Convert to Graphics made), which it selects
          show tImage
          put the number of groups of card 1 of stack tName into tGroups
          revIDESelectObjects tImage
          tourWait 200
          dispatch "revMenubarObjectMenuPick" to stack "revMenuBar" with "Convert SVG Image to Graphics"
          tourRecord "INFO svg-import Object > Convert SVG Image to Graphics selected:" && the selObj
-         if the number of groups of card 1 of stack tName is not tGroups + 1 then
+         if the number of groups of card 1 of stack tName is not tGroups + tMade then
             put "Object > Convert SVG Image to Graphics made" && \
-                  (the number of groups of card 1 of stack tName - tGroups) && "groups, not 1" & return after tFails
-         else if word 1 of the selObj is not "group" or the number of graphics of the selObj is not \
-               the number of graphics of tGroup then
+                  (the number of groups of card 1 of stack tName - tGroups) && "groups, not" && tMade & return after tFails
+         else if word 1 of the selObj is not "group" or word 1 of the long id of the owner of the selObj is not "card" \
+               or the number of graphics of the selObj is not the number of graphics of tGroup then
             put "Object > Convert SVG Image to Graphics selected" && quote & the selObj & quote & \
                   ", not a group of" && the number of graphics of tGroup && "graphics" & return after tFails
          end if
