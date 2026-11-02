@@ -41,8 +41,12 @@ CI = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 # MODE says what the page does: "pass" answers everything; "count",
 # "visible", "press" and "close" hang in locator.count(),
 # locator.is_visible(), keyboard.press() and browser.close() (calls that
-# Playwright gives no time limit); "silent" never answers a question,
-# which the soak's own time limit catches.
+# Playwright gives no time limit); "silent" answers until the IDE has
+# opened and then no question, which the soak's own time limit catches.
+# The browser's processes are the made-up browser's too, not the host's
+# (web_process): on the macos-15 runner each soak here took about 36
+# seconds, where 2 do on Linux, and the silent one more than 60, as if
+# the host's ps took half a minute (CI scripts on macos-15, #322).
 FAKE = r'''
 import os, sys, threading, time, types
 ci, mode, argv = sys.argv[1], sys.argv[2], sys.argv[3:]
@@ -96,7 +100,7 @@ class Page(object):
     def wait_for_function(self, expression, timeout=None):
         if not expression.startswith('() =>'):
             return Handle(True)
-        if mode == 'silent':
+        if mode == 'silent' and 'HEAPU8' in expression:
             time.sleep(timeout / 1000.0)
             raise TimeoutError('Timeout %dms exceeded.' % timeout)
         return Handle([None, 100 * 1048576] if 'HEAPU8' in expression else '')
@@ -133,6 +137,7 @@ sys.modules['playwright.sync_api'] = sync_api
 
 import web_ide_soak as soak
 soak.SAMPLE, soak.TURN, soak.REPORT = 0.05, 0, 0.5
+soak.web_process = lambda browser: (4242, 500.0)
 sys.argv = ['web_ide_soak.py'] + argv
 sys.exit(soak.main())
 '''
@@ -177,6 +182,7 @@ class WebIdeSoakTest(unittest.TestCase):
         self.assertGreater(len(self.read(self.out, 'memory.csv').splitlines()), 2)
         self.assertTrue(os.path.exists(os.path.join(self.out, 'last.png')))
         self.assertIn('Passed.', self.read(self.summary))
+        self.assertIn('web process, resident MB: 500 at the start', out)
 
     def test_a_page_that_stops_answering_questions_fails(self):
         # The soak's own time limit, which ask() has always had
