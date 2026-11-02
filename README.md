@@ -170,7 +170,12 @@ Academy and Learn into one Home window, opens more HyperCard stacks,
 imports SVGs with their colours and clip paths and turns them into
 graphics, and pastes Copy Graphics as SVG Paths into Illustrator as
 curves (see
-[0.2.7-rc.6.12](#027-rc612-the-bug-hunt-round-twelve));
+[0.2.7-rc.6.12](#027-rc612-the-bug-hunt-round-twelve)), and
+0.2.7-rc.6.13 sets the Menu Builder's controls out where none runs
+into another, ends a crash on the Mac when typed text is committed,
+puts the OXT-Beyond logo in Home's sidebar, and adds two preset sizes
+for new stacks (see
+[0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -1642,6 +1647,39 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.13: the Bug Hunt, round thirteen
+
+OXT-Beyond 0.2.7-rc.6.13 has everything in 0.2.7-rc.6.12. In the spirit
+of the Bug Hunt, here is every change since then, each listed as the bug
+it squashes:
+
+- **A Menu Builder that ran into itself.** On Linux the Menu Builder's
+  lists, buttons and check boxes ran into one another: "Disable Menu"
+  and "Menu Mnemonic" were drawn under the lists, "Item Mnemonic" over
+  "Mark:", Option, Command and Shift past the frame, and labels such as
+  "Delete Menu" were cut off. The IDE put back an older layout each time
+  the palette opened. Every control is where the palette's layout puts
+  it, on every platform, and every label is whole (#322).
+- **A crash on committing typed text.** On macOS, committing marked text
+  (an input method's composition, or the Accessibility Keyboard's) while
+  a field had the focus could crash; the composition ends and its text
+  is kept (#322).
+- **An old tile in Home.** Home's sidebar, in each of its places (Home,
+  the Academy, How-to, Guides and Examples), shows the OXT-Beyond logo
+  as the About window does; it showed the old orange tile with the
+  layers icon (#321).
+- **Too few sizes of new stack.** File > New Stack's preset sizes, which
+  Preferences shows with "Show a list of preset new stack sizes in File
+  menu > New Stack", include SVGA's 800 x 600 and three quarters of the
+  main screen's width and height (richmond62) (#322).
+
+Behind the scenes, the web standalone check compiles an SVG with the
+drawing library in the browser and checks that the IDE's web build
+carries the library's SVG specification; a Web IDE soak try that hangs
+is stopped and the next one runs, naming the step where the page
+stopped answering; and the IDE tour checks the Menu Builder's layout
+and the New Stack sizes (#322).
 
 #### 0.2.7-rc.6.12: the Bug Hunt, round twelve
 
