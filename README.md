@@ -1784,11 +1784,31 @@ it squashes:
   Library stands in for them (the Star Trek guides, SonnetFolio and BGC's
   stacks among them), and `card it-1` is the card before the last, as in
   HyperCard (#300).
+- **A crash on Apply.** On macOS, typing in the script editor with the
+  Accessibility Keyboard and pressing Apply no longer crashes: the
+  system's text input could call a window's view after the window was
+  gone (tperry2x) (#308).
+- **A toolbar that cut off its own words.** On Linux a toolbar toggle
+  that is on, such as Select Grouped, shows its whole label. A lit
+  button draws its label bold, and in DejaVu Sans eight of the eleven
+  were too narrow for it (#311).
+- **An arrow on the last letter.** On Linux, Preferences > Script
+  Editor's colour scheme menu keeps its words at its left, clear of the
+  arrow GTK draws over its right, which ran over the last "e" of
+  "Follow System Appearance" (#311).
+- **Notes missing the tops of their letters.** On Linux the first line
+  of each note in the xTalk Assistant's Settings shows its capitals
+  whole; their tops lost a row of pixels (#311).
+- **A menu you could not read.** On Windows and Linux the icon chooser's
+  Image library menu takes the theme's colour for its words; in the
+  dark appearance they were black on dark grey (#311).
 
 Behind the scenes, the project's web pages have a new front page with a
 Downloads section (#295) and a Web Stacks section (first called Web
 Games; its address is still games/) with Pixel Platformer Maker, a platformer and level maker written in xTalk with Box2Dxt
-physics, whose menus are now readable (#301, #303, #306); the HyperCard
+physics, whose menus are now readable (#301, #303, #306), and SVG Lab,
+every new SVG feature with its tests, opening with the logo as live SVG
+(#310, #312, #313, #314); the HyperCard
 sweep in CI answers dialogs as a person would and skips hidden buttons
 (#296); the revZip test stacks check every revZip command and find
 revzip wherever OXT-Beyond is (mwieder, from HyperXTalk) (#299); and the
