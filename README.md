@@ -1808,7 +1808,9 @@ Downloads section (#295) and a Web Stacks section (first called Web
 Games; its address is still games/) with Pixel Platformer Maker, a platformer and level maker written in xTalk with Box2Dxt
 physics, whose menus are now readable (#301, #303, #306), and SVG Lab,
 every new SVG feature with its tests, opening with the logo as live SVG
-(#310, #312, #313, #314); the HyperCard
+(#310, #312, #313, #314), now a gallery that shows the Stack Player's
+samples too, and the Stack Player opens a sample named in its address
+(`?play=<title>`) (#317); the HyperCard
 sweep in CI answers dialogs as a person would and skips hidden buttons
 (#296); the revZip test stacks check every revZip command and find
 revzip wherever OXT-Beyond is (mwieder, from HyperXTalk) (#299); and the
