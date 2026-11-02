@@ -6028,6 +6028,7 @@ on tour_home
    put tourNewStack(tBefore) into tNew
    if tNew is empty then throw "no Home window opened"
    tourShotStack tNew, "24a-home"
+   tourHomeMark tNew, "opened"
    put the rect of stack tNew into tRect
    set the rect of stack tNew to item 1 of tRect, item 2 of tRect, item 1 of tRect + 1200, item 2 of tRect + 760
    tourWait 1500
@@ -6035,11 +6036,37 @@ on tour_home
    -- (as the screen allowed it: a small screen keeps it smaller)
    put the rect of stack tNew into tRect
    tourRedrawCheck tNew, "hmAppearanceChanged", "24a-home-redrawn"
+   tourHomeMark tNew, "redrawn"
    if the rect of stack tNew is not tRect then
       throw "Home drawn again is not the size it was (" & the rect of stack tNew & ", was" && tRect & ")"
    end if
    close stack tNew
 end tour_home
+
+-- Home's mark, at the top of its sidebar in every place (Home, the
+-- Academy, How-to, Guides and Examples), is the OXT-Beyond logo, as the
+-- About window's is (seth, 2026-11-02: the new logo in all the branding):
+-- image "sideMark", a copy of the logo the answer and ask dialogs show,
+-- not the orange-to-pink tile with the "layers" icon it drew before (that
+-- stays only for when the icon stack is missing, which in the IDE it never
+-- is). Learn and the Academy opened on their own, outside Home, keep their
+-- own marks, so this looks at Home's window.
+on tourHomeMark pStack, pWhen
+   local tLogo
+   if there is a control "sideMarkIcon" of stack pStack or there is a graphic "sideMark" of stack pStack then
+      throw "Home's sidebar (" & pWhen & ") draws the old layers mark, not the logo"
+   end if
+   if there is not an image "sideMark" of stack pStack then
+      throw "Home's sidebar (" & pWhen & ") has no logo (image sideMark)"
+   end if
+   put the text of image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons" into tLogo
+   if tLogo is empty or the text of image "sideMark" of stack pStack is not tLogo then
+      throw "Home's sidebar mark (" & pWhen & ") is not the logo the dialogs show"
+   end if
+   if the rect of image "sideMark" of stack pStack is not "20,22,56,58" then
+      throw "Home's sidebar mark (" & pWhen & ") is at" && the rect of image "sideMark" of stack pStack & ", not 20,22,56,58"
+   end if
+end tourHomeMark
 
 -- A window that follows light and dark (#221) hears the IDE's
 -- ideSystemAppearanceChanged, and drawn again as a switch draws it (the
@@ -6112,6 +6139,7 @@ on tour_learn
       dispatch "leShowSection" to stack tWin with "lessons", 1
       tourWait 1500
       tourShotStack tWin, "24d-learn"
+      if tWin is kHub then tourHomeMark tWin, "the How-to"
       get tourSelectedLineInk(tWin, "the How-to")
       if it is not empty then throw it
       get tourHeroSparklesClear(tWin, "the How-to")
@@ -6143,6 +6171,7 @@ on tour_learn
          throw "Learn's Academy button (" & tRect & ") is cut off by the window (" & the width of stack tWin & "x" & the height of stack tWin & ")"
       end if
       tourRedrawCheck tWin, "lkAppearanceChanged", "24d-learn-redrawn"
+      if tWin is kHub then tourHomeMark tWin, "the How-to, redrawn"
       if there is not a group "p_heroB3" of this card of stack tWin or not the visible of group "p_heroB3" of this card of stack tWin then
          throw "Learn drawn again does not show its first page of the lessons"
       end if
@@ -6215,6 +6244,7 @@ on tour_academy
       dispatch "acGoTo" to stack tWin with "basics", 0
       tourWait 1500
       tourShotStack tWin, "24e-academy"
+      if tWin is kHub then tourHomeMark tWin, "the Academy"
       get tourSelectedLineInk(tWin, "the Academy")
       if it is not empty then throw it
       get tourHeroSparklesClear(tWin, "the Academy")
@@ -6267,6 +6297,7 @@ on tour_academy
       end if
       -- drawn again, the lesson, the playground and its output stay
       tourRedrawCheck tWin, "lkAppearanceChanged", "24e-academy-redrawn"
+      if tWin is kHub then tourHomeMark tWin, "the Academy, redrawn"
       if not (field "playWhat" of stack tWin begins with "An example from the lesson") \
             or line 1 of the text of field "out" of stack tWin is not "Hello, world!" \
             or field "outStatus" of stack tWin is not tStatus then
@@ -6440,6 +6471,7 @@ on tour_home_places
                tourRecord "INFO home-places:" && tPlace && tCount && "controls"
                if tPass is 1 then
                   tourShotStack kHub, "24g-hub-" & tPlace
+                  tourHomeMark kHub, tPlace
                end if
             else if tCount is not tCounts[tPlace] then
                throw "Home at" && tPlace && "has" && tCount && "controls, not" && tCounts[tPlace] && "as the first time"
@@ -6456,6 +6488,7 @@ on tour_home_places
          else
             tourRedrawCheck kHub, "lkAppearanceChanged", "24g-hub-" & tPlace & "-redrawn"
          end if
+         tourHomeMark kHub, tPlace & ", redrawn"
       end repeat
       -- the smallest window: every place's sidebar whole in it
       put the rect of stack kHub into tRect
