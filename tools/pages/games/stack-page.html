@@ -63,6 +63,8 @@ frame.addEventListener('load', function () {
     if (!d.body.classList.contains('playing')) return;
     clearInterval(wait);
     loading.style.display = 'none';
+    // as tall as the stack, so the frame has no scrollbar of its own
+    setTimeout(function () { document.getElementById('stack').style.height = d.documentElement.scrollHeight + 'px'; }, 300);
   }, 200);
 });
 </script>
