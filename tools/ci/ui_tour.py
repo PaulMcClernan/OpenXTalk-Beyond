@@ -116,7 +116,7 @@ def log(msg=''):
     # lines name fields by their words, the xTalk Assistant's mark is
     # U+2726, and Windows' console on CI writes cp1252. print() raised
     # UnicodeEncodeError there after every step had passed, and failed the
-    # run (#311); such a character is logged escaped (✦) instead.
+    # run (#311); such a character is logged escaped (\u2726) instead.
     try:
         print(msg)
     except UnicodeEncodeError:
