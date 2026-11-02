@@ -5250,7 +5250,15 @@ end tour_ext_mergjson
 -- nothing (in rc.6.3 it stopped halfway, on revSetEdited, a handler that
 -- does not exist: forum, tperry2x), and its lists of menus and items take
 -- their text colour from the appearance (rc.6.3 saved them black, which
--- could not be read on the dark appearance)
+-- could not be read on the dark appearance). Its buttons and check boxes
+-- show their words whole, and the lists, the check boxes under them and
+-- the frames around them do not run into one another as the window is
+-- laid out on opening (tourMbLayout): through rc.6.12 the Geometry
+-- Manager's saved settings put the lists over "Disabled" and "Item Tag",
+-- "Mnemonic" into "Mark:" and the frame of "Menu Items:" through Ctrl,
+-- Shift and Alt, and Linux's font cut off "Delete Menu", "Delete Item",
+-- "Auto Menu Bar Script" and "Mnemonic" (ide-stack-patches,
+-- revmenumanager-geometry-saved-layout.txt and revmenumanager-fit-linux.txt)
 on tour_menu_builder
    local tName, tMM, tFails, tError, tField
    put "OXT Tour Menus" into tName
@@ -5288,6 +5296,8 @@ on tour_menu_builder
             put "its list" && tField && "has the text colour" && the foregroundColor of field tField of stack tMM & return after tFails
          end if
       end repeat
+      put tourButtonsWhole(tMM) after tFails
+      put tourMbLayout(tMM) after tFails
    end if
    -- The Menu Builder is closed and the stack deleted however it went, so
    -- that a Menu Builder stopped halfway (rc.6.3) is not left open for the
@@ -5305,6 +5315,74 @@ on tour_menu_builder
    tourUnlockScreen "menu-builder"
    if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
 end tour_menu_builder
+
+-- The Menu Builder (the stack pStack) as it is laid out: every control
+-- that shows of the group of the menus' check boxes starts below the list
+-- of menus; every one of the items' check boxes, "Mark:" and its menu
+-- starts below the list of items; each ends above the bottom of the frame
+-- around its list ("Menus:", "Menu Items:"), whose line it would cross;
+-- and no two of one side overlap. Empty, or what is out of place
+function tourMbLayout pStack
+   local tDefault, tFails, tSide, tList, tFrame, tControls, tId, tOther, i, j
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   repeat for each item tSide in "menus,items"
+      if tSide is "menus" then
+         put the long id of field "Menu Buttons" of this card into tList
+         put the long id of group "Button Menus:" of this card into tFrame
+         put tourGroupShown(the long id of group "Menu Button Controls" of this card) into tControls
+      else
+         put the long id of field "Menu Items" of this card into tList
+         put the long id of group "Menu Items:" of this card into tFrame
+         put tourGroupShown(the long id of group "Menu Item Controls" of this card) into tControls
+         put the long id of field "Mark Label" of this card into tOther
+         if tourControlShown(tOther) then put tOther & return after tControls
+         put the long id of button "Item Style" of this card into tOther
+         if tourControlShown(tOther) then put tOther & return after tControls
+      end if
+      tourRecord "INFO" && pStack & ": the list of" && tSide && "ends at" && the bottom of tList & ", its frame at" && \
+            the bottom of tFrame & "; under them" && the number of lines of tControls && "controls"
+      if tControls is empty then
+         put "the Menu Builder shows nothing under its list of" && tSide & return after tFails
+         next repeat
+      end if
+      repeat with i = 1 to the number of lines of tControls
+         put line i of tControls into tId
+         if the top of tId < the bottom of tList then
+            put "the Menu Builder's" && the name of tId && "is under its list of" && tSide && "(it starts at" && \
+                  the top of tId & ", the list ends at" && the bottom of tList & ")" & return after tFails
+         end if
+         if the bottom of tId > the bottom of tFrame - 2 then
+            put "the Menu Builder's" && the name of tId && "runs into the frame of its" && tSide && "(it ends at" && \
+                  the bottom of tId & ", the frame at" && the bottom of tFrame & ")" & return after tFails
+         end if
+         repeat with j = i + 1 to the number of lines of tControls
+            put line j of tControls into tOther
+            if the left of tId < the right of tOther and the left of tOther < the right of tId and \
+                  the top of tId < the bottom of tOther and the top of tOther < the bottom of tId then
+               put "the Menu Builder's" && the name of tId && "(" & the rect of tId & ") and" && the name of tOther && \
+                     "(" & the rect of tOther & ") overlap" & return after tFails
+            end if
+         end repeat
+      end repeat
+   end repeat
+   set the defaultStack to tDefault
+   if tFails is empty then return empty
+   return tFails
+end tourMbLayout
+
+-- The long ids of the controls of the group pGroup, in groups in it too,
+-- that show (tourControlShown), a line each; a group itself is left out
+function tourGroupShown pGroup
+   local tShown, i
+   repeat with i = 1 to the number of controls of pGroup
+      if word 1 of the name of control i of pGroup is "group" then next repeat
+      if tourControlShown(the long id of control i of pGroup) then
+         put the long id of control i of pGroup & return after tShown
+      end if
+   end repeat
+   return tShown
+end tourGroupShown
 
 -- A stack of the user's with a menu bar of two menus, File and Edit, and
 -- the hcAddressing of a HyperCard stack
@@ -5489,6 +5567,10 @@ function tourButtonsWhole pStack
          next repeat
       end if
       if not tourControlShown(the long id of button i of this card) then next repeat
+      -- a check box or a radio button that shows no name has no words to
+      -- cut off (the Menu Builder's fold-out triangles, check boxes with
+      -- an icon)
+      if tKind is among the items of "check box,radio button" and not the showName of button i of this card then next repeat
       if tKind is among the items of "button,option menu" then
          if not the showName of button i of this card then next repeat
          if the showIcon of button i of this card and the icon of button i of this card is not 0 then next repeat
