@@ -82,7 +82,7 @@
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -1713,6 +1713,94 @@ on tour_menu_marks
    end if
    if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
 end tour_menu_marks
+
+-- File > New Stack's preset sizes, the ones Preferences lists with "Show a
+-- list of preset new stack sizes in File menu > New Stack": among them
+-- SVGA's 800 x 600 and three quarters of the main screen's width and
+-- height (richmond62, openxtalk.org p=25902), each making a stack of its
+-- size, and the sizes there were before; without the preference, none of
+-- them. The preference and the question that names a new stack are put
+-- back as they were, and the stacks made are deleted
+on tour_new_stack_sizes
+   local tMb, tPresets, tRename, tW, tH, tSizes, tFails, tWant, tBefore, tStack, tNew, tError
+   put "revMenuBar" into tMb
+   if there is not a stack tMb or there is not a button "File" of group "revMenuBar" of stack tMb then
+      throw "failed: the IDE has no File menu (button File of group revMenuBar of stack revMenubar)"
+   end if
+   put the cShowPresetSizes of stack "revPreferences" into tPresets
+   put the cAskForNewStackRename of stack "revPreferences" into tRename
+   put round((item 3 of the screenRect - item 1 of the screenRect) * 3 / 4) into tW
+   put round((item 4 of the screenRect - item 2 of the screenRect) * 3 / 4) into tH
+   try
+      set the cAskForNewStackRename of stack "revPreferences" to false
+      set the cShowPresetSizes of stack "revPreferences" to false
+      put tourNewStackSizes() into tSizes
+      tourRecord "INFO new-stack-sizes without the preference:" && tourJoin(tSizes)
+      if "Default Size" is not in line 1 of tSizes then
+         put "File > New Stack has no Default Size" & return after tFails
+      end if
+      if "SVGA (800x600)" is among the lines of tSizes or "Three Quarters" is in tSizes then
+         put "File > New Stack lists preset sizes when Preferences says not to" & return after tFails
+      end if
+      set the cShowPresetSizes of stack "revPreferences" to true
+      put tourNewStackSizes() into tSizes
+      tourRecord "INFO new-stack-sizes with the preference:" && tourJoin(tSizes)
+      repeat for each item tWant in "VGA (640x480),XGA (1024x768),WXGA HD 16:9 (1366x768),SVGA (800x600)"
+         if tWant is not among the lines of tSizes then
+            put "File > New Stack has no" && quote & tWant & quote & return after tFails
+         end if
+      end repeat
+      put "Three Quarters of the Screen (" & tW & "x" & tH & ")" into tWant
+      if tWant is not among the lines of tSizes then
+         put "File > New Stack has no" && quote & tWant & quote && "for the screenRect" && the screenRect & return after tFails
+      end if
+      -- each new size makes a stack of that size
+      repeat for each item tWant in "SVGA (800x600)," & "Three Quarters of the Screen (" & tW & "x" & tH & ")"
+         if tWant is not among the lines of tSizes then next repeat
+         put the mainStacks into tBefore
+         dispatch "revMenubarFileMenuPick" to stack tMb with "New Stack|" & tWant
+         tourWait 300
+         put empty into tNew
+         repeat for each line tStack in the mainStacks
+            if tStack is not among the lines of tBefore then put tStack & return after tNew
+         end repeat
+         put line 1 to -1 of tNew into tNew
+         if the number of lines of tNew is not 1 then
+            put "File > New Stack >" && tWant && "made" && the number of lines of tNew && "stacks:" && tourJoin(tNew) & return after tFails
+         else
+            tourRecord "INFO new-stack-sizes:" && tWant && "made" && quote & tNew & quote && \
+                  the width of stack tNew & "x" & the height of stack tNew
+            if the width of stack tNew & "x" & the height of stack tNew is not char 2 to -2 of the last word of tWant then
+               put "File > New Stack >" && tWant && "made a stack of" && the width of stack tNew & "x" & the height of stack tNew & return after tFails
+            end if
+         end if
+         repeat for each line tStack in tNew
+            delete stack tStack
+         end repeat
+      end repeat
+   catch tError
+   end try
+   set the cShowPresetSizes of stack "revPreferences" to tPresets
+   set the cAskForNewStackRename of stack "revPreferences" to tRename
+   dispatch "revMenubarBuildMenus" to stack tMb
+   if tError is not empty then throw tError
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_new_stack_sizes
+
+-- The items of File > New Stack, as the IDE's menu bar builds them now
+function tourNewStackSizes
+   local tLine, tIn, tSizes
+   dispatch "revMenubarBuildMenus" to stack "revMenuBar"
+   put false into tIn
+   repeat for each line tLine in the text of button "File" of group "revMenuBar" of stack "revMenuBar"
+      if char 1 of tLine is not tab then
+         put tLine contains "New Stack" into tIn
+      else if tIn then
+         put char 2 to -1 of tLine & return after tSizes
+      end if
+   end repeat
+   return line 1 to -1 of tSizes
+end tourNewStackSizes
 
 -- Opens the pop-up menu of the button pButton of the stack pStack where
 -- the step's snapshots are taken, takes the snapshot pFile while it is
