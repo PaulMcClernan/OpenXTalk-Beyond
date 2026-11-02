@@ -213,7 +213,7 @@ def put_page(site):
     built = os.path.join(site, BUILT_PAGE)
     if os.path.exists(built):
         os.remove(built)
-    # the page's logo, fonts and pictures
+    # the page's logo and pictures
     assets = os.path.join(site, 'assets')
     shutil.rmtree(assets, ignore_errors=True)
     shutil.copytree(os.path.join(HERE, 'assets'), assets)
