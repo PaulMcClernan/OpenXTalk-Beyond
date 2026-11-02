@@ -1,0 +1,1 @@
+- Home: the sidebar shows the OXT-Beyond logo, as the About window does, in Home and in each of its places (the Academy, How-to, Guides and Examples), not the old orange tile with the layers icon (#321)
