@@ -3164,10 +3164,12 @@ on tour_svg_menu
 end tour_svg_menu
 
 -- A line when the menu bar's Object menu, with the objects pObjects
--- selected (pWhat), does not show Copy Graphics as SVG Paths enabled when
--- pEnabled is true, or greyed out when it is false; else empty
-function tourSvgMenuCheck pWhat, pObjects, pEnabled
+-- selected (pWhat), does not show pItem (Copy Graphics as SVG Paths when
+-- empty) enabled when pEnabled is true, or greyed out when it is false;
+-- else empty
+function tourSvgMenuCheck pWhat, pObjects, pEnabled, pItem
    local tLine, tItem
+   if pItem is empty then put "Copy Graphics as SVG Paths" into pItem
    if pObjects is empty then
       revIDEDeselectAll
    else
@@ -3176,10 +3178,10 @@ function tourSvgMenuCheck pWhat, pObjects, pEnabled
    tourWait 200
    dispatch "revMenubarBuildMenus" to stack "revMenuBar"
    repeat for each line tLine in the text of button "Object" of group "revMenuBar" of stack "revMenuBar"
-      if tLine contains "Copy Graphics as SVG Paths" then put word 1 to -1 of tLine into tItem
+      if tLine contains pItem then put word 1 to -1 of tLine into tItem
    end repeat
    tourRecord "INFO svg-menu with" && pWhat && "selected:" && tItem
-   if tItem is empty then return "with" && pWhat && "selected, the Object menu has no Copy Graphics as SVG Paths" & return
+   if tItem is empty then return "with" && pWhat && "selected, the Object menu has no" && pItem & return
    if (char 1 of tItem is not "(") is not pEnabled then
       return "with" && pWhat && "selected, the Object menu has" && quote & tItem & quote & return
    end if
@@ -3210,9 +3212,13 @@ end tourSvgMenuCopied
 -- with drawingDecode, and the clip seen on screen), the image's right-click
 -- menu must have Convert to Graphics and a plain picture's must not, and
 -- the graphics must look like the image: fewer than 4% of their pixels
--- more than 64 apart in any channel, which antialiasing alone stays under
+-- more than 64 apart in any channel, which antialiasing alone stays under.
+-- The menu bar's Object > Convert SVG Image to Graphics (OpenXTalkPaul,
+-- openxtalk.org p=25900) is enabled with the SVG image selected alone, not
+-- with the picture, both, or nothing, and makes the same group, selected
 on tour_svg_import
    local tArea, tName, tDefault, tFile, tImage, tPicture, tDecoded, tMenuBar, tMenu, tGroup, tFails, tError
+   local tGroups
    local tRect, tImageShot, tGroupShot, tStats
    put "oxt_svg_import" into tName
    put line 1 of the working screenRects into tArea
@@ -3280,6 +3286,12 @@ on tour_svg_import
       if lineOffset("Convert to Graphics", tMenu) is not 0 then
          put "a picture's menu has Convert to Graphics" & return after tFails
       end if
+      put tourSvgMenuCheck("an SVG image", tImage, true, "Convert SVG Image to Graphics") after tFails
+      put tourSvgMenuCheck("a picture", tPicture, false, "Convert SVG Image to Graphics") after tFails
+      put tourSvgMenuCheck("an SVG image and a picture", tImage & return & tPicture, false, \
+            "Convert SVG Image to Graphics") after tFails
+      put tourSvgMenuCheck("nothing", empty, false, "Convert SVG Image to Graphics") after tFails
+      revIDEDeselectAll
       delete tPicture
       tourShotStack tName, "04g2-svg-import"
       -- converted
@@ -3302,6 +3314,23 @@ on tour_svg_import
             put "the graphics differ from the image:" && tStats & return after tFails
          end if
          tourShotStack tName, "04g3-svg-convert"
+         -- the menu bar's Object > Convert SVG Image to Graphics, with the
+         -- image selected: another such group, which it selects
+         show tImage
+         put the number of groups of card 1 of stack tName into tGroups
+         revIDESelectObjects tImage
+         tourWait 200
+         dispatch "revMenubarObjectMenuPick" to stack "revMenuBar" with "Convert SVG Image to Graphics"
+         tourRecord "INFO svg-import Object > Convert SVG Image to Graphics selected:" && the selObj
+         if the number of groups of card 1 of stack tName is not tGroups + 1 then
+            put "Object > Convert SVG Image to Graphics made" && \
+                  (the number of groups of card 1 of stack tName - tGroups) && "groups, not 1" & return after tFails
+         else if word 1 of the selObj is not "group" or the number of graphics of the selObj is not \
+               the number of graphics of tGroup then
+            put "Object > Convert SVG Image to Graphics selected" && quote & the selObj & quote & \
+                  ", not a group of" && the number of graphics of tGroup && "graphics" & return after tFails
+         end if
+         revIDEDeselectAll
       end if
    catch tError
       put tourJoin(tError) & return after tFails

@@ -23,6 +23,7 @@ words, is in the [README](README.md#the-ide) and on the
 - File > New Stack: the preset sizes (Preferences, "Show a list of preset new stack sizes in File menu > New Stack") include SVGA (800x600) and three quarters of the main screen's width and height (richmond62, openxtalk.org p=25902) (#322)
 - CI: the IDE tour checks File > New Stack's preset sizes, with the preference and without it, and that the new sizes make stacks of their size (#322)
 - CI: the Windows build's Cygwin and the CI checks' Python are set up with the actions' new major versions, cygwin-install-action v7 and setup-python v7 (Dependabot, #304) (#322)
+- Object menu: Convert SVG Image to Graphics does what an SVG image's right-click Convert to Graphics does, from the menu bar: it is enabled when the selection is one image made from an SVG, and selects the group of graphics it makes (OpenXTalkPaul, openxtalk.org p=25900). The IDE tour checks when it is enabled and that it makes and selects the group (#324)
 - Standalone runtimes for the other platforms (Windows x86 and x86-64, Linux x86 and x86-64) rebuilt from 0.2.7-rc.6.13's engine, so they carry its fixes: the asset `oxt-runtimes-0.2.7-rc.6.13` replaces `oxt-runtimes-0.2.7-rc.6.12c` (#324)
 
 ## 0.2.7-rc.6.12 (2026-11-01, pre-release)

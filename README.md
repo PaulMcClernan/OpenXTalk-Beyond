@@ -173,8 +173,9 @@ curves (see
 [0.2.7-rc.6.12](#027-rc612-the-bug-hunt-round-twelve)), and
 0.2.7-rc.6.13 sets the Menu Builder's controls out where none runs
 into another, ends a crash on the Mac when typed text is committed,
-puts the OXT-Beyond logo in Home's sidebar, and adds two preset sizes
-for new stacks (see
+puts the OXT-Beyond logo in Home's sidebar, adds two preset sizes for
+new stacks, and converts an SVG image to graphics from the Object menu
+(see
 [0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen));
 0.2.6 stays the main download until it has held up.
 
@@ -1672,15 +1673,19 @@ it squashes:
   Preferences shows with "Show a list of preset new stack sizes in File
   menu > New Stack", include SVGA's 800 x 600 and three quarters of the
   main screen's width and height (richmond62) (#322).
+- **An SVG you could convert only by right-clicking.** Object > Convert
+  SVG Image to Graphics, enabled when one image made from an SVG is
+  selected, makes and selects its group of graphics, as the image's
+  right-click Convert to Graphics does (OpenXTalkPaul) (#324).
 
 Behind the scenes, the web standalone check compiles an SVG with the
 drawing library in the browser and checks that the IDE's web build
 carries the library's SVG specification; a Web IDE soak try that hangs
 is stopped and the next one runs, naming the step where the page
-stopped answering; the IDE tour checks the Menu Builder's layout and
-the New Stack sizes; and the runtimes that every package carries for
-the other platforms are rebuilt from this release's engine (#322,
-#324).
+stopped answering; the IDE tour checks the Menu Builder's layout, the
+New Stack sizes and the new Object menu item; and the runtimes that
+every package carries for the other platforms are rebuilt from this
+release's engine (#322, #324).
 
 #### 0.2.7-rc.6.12: the Bug Hunt, round twelve
 
