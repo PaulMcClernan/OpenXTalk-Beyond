@@ -1,8 +1,8 @@
 <!doctype html>
 <!-- The web stacks gallery of OXT-Beyond's GitHub Pages site (games/, the
      address it kept when it was renamed). Three stacks run on their own pages
-     here (pixel-maker/, svg-lab/, waterwheel/); the Stack Player's sample stacks are
-     cards that open in the Stack Player (../player/?play=<title>), filled
+     here (pixel-maker/, svg-lab/, waterwheel/); the Stack Player's sample stacks each
+     get a page written from stack-page.html (<name>/), and cards here, filled
      in by tools/pages/build_pages.py from the player's samples/samples.json
      between the PLAYER_SAMPLES and PLAYER_LESSONS markers, so the gallery lists only the
      samples the player on the site has. The look is the logo's
@@ -238,7 +238,7 @@
 
   <!-- @PLAYER_SAMPLES@ -->
   <section class="shelf" aria-labelledby="player-stacks">
-    <h2 id="player-stacks">Small wonders <small>Each opens in the Stack Player</small></h2>
+    <h2 id="player-stacks">Small wonders <small>Each on a page of its own</small></h2>
     <div class="grid">
 @PLAYER_SAMPLES_LIST@
     </div>
@@ -247,7 +247,7 @@
 
   <!-- @PLAYER_LESSONS@ -->
   <section class="shelf" aria-labelledby="player-lessons">
-    <h2 id="player-lessons">Learn by playing <small>Tours and lessons, in the Stack Player</small></h2>
+    <h2 id="player-lessons">Learn by playing <small>Tours and lessons, each on a page of its own</small></h2>
     <div class="grid three">
 @PLAYER_LESSONS_LIST@
     </div>
