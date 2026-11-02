@@ -187,7 +187,7 @@ curves (see
   x86-64, macOS for Apple Silicon and Intel, Linux x86-64), and so are
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
-  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.12b.zip`)
+  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.12c.zip`)
   brings each platform's runtimes into the other packages. The web
   engine of HTML5 standalones, which every package carries, is built
   from this repository too (see [The engine](#the-engine)). The Android
@@ -323,8 +323,9 @@ OpenSSL 3 for DataChannelXT); see [macOS](#macos) and
 requirements too.
 
 Releases whose tags do not start with `v`, such as `prebuilts-v1`,
-`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.12` and
-`runtimes-0.2.7-rc.6.12b`, are not programs. They hold
+`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.12`,
+`runtimes-0.2.7-rc.6.12b` and `runtimes-0.2.7-rc.6.12c`, are not
+programs. They hold
 files that the build and the packager download: the prebuilt
 third-party libraries of earlier versions and the standalone runtimes
 for other platforms.
