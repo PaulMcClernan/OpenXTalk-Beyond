@@ -276,5 +276,55 @@ class SystemSwitch(unittest.TestCase):
         self.assertIn('item 1 of tSeen is not tTarget', step)
 
 
+class GtkTheme(unittest.TestCase):
+    """--gtk-theme: the tour under a GTK 2 theme a desktop ships, by its
+    name (the menus' marks under MATE's and Yaru's dark themes, tperry2x,
+    openxtalk.org p=25972), else Adwaita of the appearance or plain
+    colours, as before."""
+
+    def setUp(self):
+        self.work = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.work)
+        os.makedirs(os.path.join(self.work, 'themes', 'BlackMATE', 'gtk-2.0'))
+        with open(os.path.join(self.work, 'themes', 'BlackMATE', 'gtk-2.0', 'gtkrc'), 'w') as f:
+            f.write('# a theme\n')
+        patch = mock.patch.object(ui_tour, 'THEMES', os.path.join(self.work, 'themes'))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def gtkrc(self, *args):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return ui_tour.linux_gtkrc(*args)
+
+    def test_a_theme_by_its_name(self):
+        self.assertEqual(self.gtkrc('dark', self.work, 'BlackMATE'),
+                         os.path.join(self.work, 'themes', 'BlackMATE', 'gtk-2.0', 'gtkrc'))
+
+    def test_a_theme_not_installed_stops_the_run(self):
+        with self.assertRaises(ui_tour.rlc.CheckError):
+            self.gtkrc('dark', self.work, 'Yaru-dark')
+
+    def test_without_one_as_before(self):
+        with mock.patch.object(ui_tour, 'ADWAITA', {'dark': os.path.join(self.work, 'none')}):
+            path = self.gtkrc('dark', self.work)
+        self.assertEqual(path, os.path.join(self.work, 'gtkrc-dark'))
+        with open(path) as f:
+            self.assertIn('bg[NORMAL] = "#353535"', f.read())
+
+    def test_the_linux_package_runs_the_marks_under_them(self):
+        repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..')
+        with open(os.path.join(repo, '.github', 'workflows', 'build-linux.yml'), encoding='utf-8') as f:
+            text = f.read()
+        self.assertIn('mate-themes yaru-theme-gtk gtk2-engines-murrine', text)
+        step = text.split('- name: Menu marks, other dark GTK themes', 1)[1].split('\n      - name:', 1)[0]
+        self.assertIn('for theme in BlackMATE HighContrastInverse Yaru-dark; do', step)
+        self.assertIn('--appearance dark --gtk-theme "$theme" --only menu-marks', step)
+        self.assertIn('exit 1', step)
+        with open(TOUR, encoding='utf-8') as f:
+            tour = f.read()
+        steps = [line for line in tour.splitlines() if line.startswith('constant kSteps')][0]
+        self.assertIn('menu-marks', steps.split('"')[1].split(','))
+
+
 if __name__ == '__main__':
     unittest.main()
