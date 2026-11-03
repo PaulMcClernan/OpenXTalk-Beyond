@@ -19,7 +19,7 @@ script "OXTBuildExamples"
 -- script loads them from the install it runs in, as the IDE does.
 
 -- The examples, by their builders' file names in this folder
-constant kExamples = "animate-letter,quick-start,scroll-image,rss-reader,video-player,bouncing-balls,balloon-game,sqlite-tour,zip-archives,book-library,data-grid-tour,data-grid-table,sqlite-book-library,learn-box2d,learn-box2dxt-kit"
+constant kExamples = "animate-letter,quick-start,scroll-image,rss-reader,video-player,bouncing-balls,balloon-game,sqlite-tour,zip-archives,book-library,data-grid-tour,data-grid-table,sqlite-book-library,learn-box2d,learn-box2dxt-kit,learn-sodiumxt,learn-coinxt,learn-nostrxt,learn-enet,learn-datachannelxt,learn-torrentxt,learn-onionxt"
 
 on startup
    local tFolder, tRepo, tOut, tName, tError, tExamples
@@ -191,6 +191,16 @@ private function buildIsPage pObj, pLayout
    return word 1 of tObj is "group" and the short name of tObj is among the items of "Frame,Scripts,Focus"
 end buildIsPage
 
+-- The field pField (a long id) on the card whose id is pCardId, of its
+-- stack: "field id <id> of card id <id> of stack ...", which reads and
+-- sets its text on that card, where its long id reads the window's card
+private function buildFieldOn pField, pCardId
+   local tStack
+   put the long id of pField into tStack
+   put char offset(" of stack ", tStack) + 4 to -1 of tStack into tStack
+   return "field id" && the id of pField && "of card id" && pCardId && "of" && tStack
+end buildFieldOn
+
 -- The object of pStack with the id pId (a card, or a control)
 private function buildObjectById pId, pStack
    if there is a card id pId of pStack then
@@ -233,6 +243,14 @@ private command buildPairOne pL, pD, pCardId, @pLightA, @pDarkA
       end if
    end repeat
    if word 1 of pL is "field" then
+      -- (its text on that card: a field of a group placed on many cards
+      -- has a text on each, and its long id names the card the window is
+      -- on, whichever card it was asked of, so it is named by its id and
+      -- the card's)
+      if pCardId is not empty then
+         put buildFieldOn(pL, pCardId) into pL
+         put buildFieldOn(pD, pCardId) into pD
+      end if
       put the htmlText of pL into tL
       put the htmlText of pD into tD
       if tL is not tD and the text of pL is the text of pD then
@@ -270,8 +288,10 @@ end buildLog
 -- line, or the text a builder threw
 private function buildErrorText pError
    local tLine, tCode, tText
+   -- (a message of our own: all of it, as a list of what does not fit
+   -- names every problem on its own line)
    if item 1 of line 1 of pError is not an integer then
-      return line 1 of pError
+      return pError
    end if
    repeat for each line tLine in pError
       put item 1 of tLine into tCode
