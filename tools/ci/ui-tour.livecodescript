@@ -82,7 +82,7 @@
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -4257,6 +4257,121 @@ on tour_inspector_clear_colour
    if exists(tWidget) then delete tWidget
    if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
 end tour_inspector_clear_colour
+
+-- A button's background colour given in the inspector and then taken
+-- away with Reset to default (LittleNemo, openxtalk.org p=25968 and
+-- p=25970: in the web IDE and the IDE on a Raspberry Pi, the colour stayed
+-- until the window was closed). The swatch shows a colour picked in the
+-- colour dialog at once, but Reset only sets the property: the swatch
+-- shows it again when the engine tells the IDE that the property changed
+-- (its property listener, propertyChanged, then the IDE's
+-- idePropertyChanged). So: a colour given through the swatch, as the
+-- colour dialog gives it, is on the button and on the screen; after Reset
+-- the button has no colour of its own, the swatch no longer shows the
+-- colour and the screen shows the button without it; and a colour a
+-- script sets is shown by the swatch, and so is its removal
+on tour_inspector_reset_colour
+   local tButton, tPI, tEditor, tSwatch, tPoint, tCover, tPixel, tFails, tError
+   put tourSample("Push") into tButton
+   set the backgroundColor of tButton to empty
+   try
+      put tourInspect(tButton) into tPI
+      get tourInspectorSection(tPI, "Colors")
+      put tourInspectorEditor(tPI, "backgroundColor") into tEditor
+      if tEditor is empty then throw "the button's inspector has no Background fill"
+      put the long id of control 1 of tEditor into tSwatch
+      -- a point of the button's face, clear of its label, with no other
+      -- window over it (the inspector moved aside if it is), or none
+      put tourScreenLoc(tButton, kSample) into tPoint
+      put item 1 of tPoint - (the width of tButton div 2) + 10 into item 1 of tPoint
+      if tourCoverAt(tPoint, kSample) is tPI then
+         set the left of stack tPI to the right of stack kSample + 20
+         tourWait 500
+      end if
+      put tourCoverAt(tPoint, kSample) into tCover
+      if tCover is not empty then
+         tourRecord "INFO inspector-reset-colour the screen not read: the window of" && tCover && "is over the button"
+         put empty into tPoint
+      else
+         tourRecord "INFO inspector-reset-colour the button's face before:" && tourPixelAt(item 1 of tPoint, item 2 of tPoint)
+      end if
+      -- as the colour dialog's answer does (com.livecode.pi.color.behavior)
+      set the swatchColor of tSwatch to "0,160,0"
+      dispatch "valueChanged" to tEditor
+      tourWait 1000
+      if tPoint is not empty then put tourPixelAt(item 1 of tPoint, item 2 of tPoint) into tPixel
+      tourRecord "INFO inspector-reset-colour given 0,160,0: backgroundColor" && quote & the backgroundColor of tButton & quote && \
+            "swatch" && quote & the swatchColor of tSwatch & quote && "face" && tPixel
+      if the backgroundColor of tButton is not "0,160,0" then
+         put "the colour given through the swatch is not on the button:" && quote & the backgroundColor of tButton & quote & return after tFails
+      else if tPoint is not empty and not tourGreen(tPixel) then
+         put "the button given 0,160,0 is" && tPixel && "on the screen" & return after tFails
+      end if
+      -- as a pick of Reset to default in the swatch's menu (editorPopupMenu's button)
+      if there is not a button "inspectMenu" of tEditor then
+         create invisible button "inspectMenu" in tEditor
+      end if
+      dispatch "menuPick" to button "inspectMenu" of tEditor with "Reset to default"
+      repeat 30 times
+         if item 1 to 3 of the swatchColor of tSwatch is not "0,160,0" then exit repeat
+         tourWait 100
+      end repeat
+      tourWait 500
+      if tPoint is not empty then put tourPixelAt(item 1 of tPoint, item 2 of tPoint) into tPixel
+      tourRecord "INFO inspector-reset-colour after Reset: backgroundColor" && quote & the backgroundColor of tButton & quote && \
+            "swatch" && quote & the swatchColor of tSwatch & quote && "face" && tPixel
+      if the backgroundColor of tButton is not empty then
+         put "Reset left the backgroundColor" && the backgroundColor of tButton & return after tFails
+      end if
+      if item 1 to 3 of the swatchColor of tSwatch is "0,160,0" then
+         put "after Reset the swatch still shows 0,160,0" & return after tFails
+      end if
+      if tPoint is not empty and tourGreen(tPixel) then
+         put "after Reset the button is still green on the screen (" & tPixel & ")" & return after tFails
+      end if
+      -- a colour that a script sets, and takes away
+      set the backgroundColor of tButton to "0,0,200"
+      repeat 30 times
+         if item 1 to 3 of the swatchColor of tSwatch is "0,0,200" then exit repeat
+         tourWait 100
+      end repeat
+      tourRecord "INFO inspector-reset-colour a script set 0,0,200: swatch" && quote & the swatchColor of tSwatch & quote
+      if item 1 to 3 of the swatchColor of tSwatch is not "0,0,200" then
+         put "the swatch does not show 0,0,200 that a script set (it shows" && quote & the swatchColor of tSwatch & quote & ")" & return after tFails
+      end if
+      set the backgroundColor of tButton to empty
+      repeat 30 times
+         if item 1 to 3 of the swatchColor of tSwatch is not "0,0,200" then exit repeat
+         tourWait 100
+      end repeat
+      if item 1 to 3 of the swatchColor of tSwatch is "0,0,200" then
+         put "the swatch still shows 0,0,200 after a script took it away" & return after tFails
+      end if
+      tourShotStack tPI, "08-inspector-reset-colour"
+   catch tError
+      put tError & return after tFails
+   end try
+   set the backgroundColor of tButton to empty
+   tourCloseInspectors
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_inspector_reset_colour
+
+-- The first visible open stack but pStack whose window takes in the point
+-- pPoint of the screen, in front of pStack or behind it, or empty
+function tourCoverAt pPoint, pStack
+   local tStack
+   repeat for each line tStack in the openStacks
+      if tStack is pStack or not the visible of stack tStack then next repeat
+      if pPoint is within the effective rect of stack tStack then return tStack
+   end repeat
+   return empty
+end tourCoverAt
+
+-- Whether the red, green and blue pRGB are a clear green: the 0,160,0 the
+-- step above gives a button, however a theme shades its face
+function tourGreen pRGB
+   return item 2 of pRGB - max(item 1 of pRGB, item 3 of pRGB) >= 60
+end tourGreen
 
 on tour_inspector_multiple
    local tPI
