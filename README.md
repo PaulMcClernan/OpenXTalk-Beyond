@@ -170,7 +170,13 @@ Academy and Learn into one Home window, opens more HyperCard stacks,
 imports SVGs with their colours and clip paths and turns them into
 graphics, and pastes Copy Graphics as SVG Paths into Illustrator as
 curves (see
-[0.2.7-rc.6.12](#027-rc612-the-bug-hunt-round-twelve));
+[0.2.7-rc.6.12](#027-rc612-the-bug-hunt-round-twelve)), and
+0.2.7-rc.6.13 sets the Menu Builder's controls out where none runs
+into another, ends a crash on the Mac when typed text is committed,
+puts the OXT-Beyond logo in Home's sidebar, adds two preset sizes for
+new stacks, converts an SVG image to graphics from the Object menu, and
+brings Learn Box2D, thirteen live lessons in Box2D physics (see
+[0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -187,7 +193,7 @@ curves (see
   x86-64, macOS for Apple Silicon and Intel, Linux x86-64), and so are
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
-  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.12b.zip`)
+  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.13.zip`)
   brings each platform's runtimes into the other packages. The web
   engine of HTML5 standalones, which every package carries, is built
   from this repository too (see [The engine](#the-engine)). The Android
@@ -323,8 +329,8 @@ OpenSSL 3 for DataChannelXT); see [macOS](#macos) and
 requirements too.
 
 Releases whose tags do not start with `v`, such as `prebuilts-v1`,
-`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.12` and
-`runtimes-0.2.7-rc.6.12b`, are not programs. They hold
+`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.12c` and
+`runtimes-0.2.7-rc.6.13`, are not programs. They hold
 files that the build and the packager download: the prebuilt
 third-party libraries of earlier versions and the standalone runtimes
 for other platforms.
@@ -1642,6 +1648,55 @@ them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
 
+#### 0.2.7-rc.6.13: the Bug Hunt, round thirteen
+
+OXT-Beyond 0.2.7-rc.6.13 has everything in 0.2.7-rc.6.12. In the spirit
+of the Bug Hunt, here is every change since then, each listed as the bug
+it squashes:
+
+- **A Menu Builder that ran into itself.** On Linux the Menu Builder's
+  lists, buttons and check boxes ran into one another: "Disable Menu"
+  and "Menu Mnemonic" were drawn under the lists, "Item Mnemonic" over
+  "Mark:", Option, Command and Shift past the frame, and labels such as
+  "Delete Menu" were cut off. The IDE put back an older layout each time
+  the palette opened. Every control is where the palette's layout puts
+  it, on every platform, and every label is whole (#322).
+- **A crash on committing typed text.** On macOS, committing marked text
+  (an input method's composition, or the Accessibility Keyboard's) while
+  a field had the focus could crash; the composition ends and its text
+  is kept (#322).
+- **An old tile in Home.** Home's sidebar, in each of its places (Home,
+  the Academy, How-to, Guides and Examples), shows the OXT-Beyond logo
+  as the About window does; it showed the old orange tile with the
+  layers icon (#321).
+- **Too few sizes of new stack.** File > New Stack's preset sizes, which
+  Preferences shows with "Show a list of preset new stack sizes in File
+  menu > New Stack", include SVGA's 800 x 600 and three quarters of the
+  main screen's width and height (richmond62) (#322).
+- **An SVG you could convert only by right-clicking.** Object > Convert
+  SVG Image to Graphics, enabled when one image made from an SVG is
+  selected, makes and selects its group of graphics, as the image's
+  right-click Convert to Graphics does (OpenXTalkPaul) (#324).
+- **No way to learn Box2D by playing with it.** Learn Box2D, a new
+  example in Home's Examples under Tours, teaches Box2D in thirteen
+  lessons: the world, body types, shapes, materials, forces, hinges,
+  springs, sliders, wheels, dragging, contacts and sensors, ray casts,
+  and terrain and blasts. Each lesson is a live world to throw things
+  around in with the mouse (Reset, Pause and Step), with buttons that
+  run the card's own handlers, how it works, and every Box2D call the
+  card's script makes, each explained on a click; where Box2Dxt is not
+  loaded, each lesson says so (#323).
+
+Behind the scenes, the web standalone check compiles an SVG with the
+drawing library in the browser and checks that the IDE's web build
+carries the library's SVG specification; a Web IDE soak try that hangs
+is stopped and the next one runs, naming the step where the page
+stopped answering; the IDE tour checks the Menu Builder's layout, the
+New Stack sizes and the new Object menu item; the Linux package plays
+every Learn Box2D lesson and presses its buttons; and the runtimes that
+every package carries for the other platforms are rebuilt from this
+release's engine (#322, #323, #324).
+
 #### 0.2.7-rc.6.12: the Bug Hunt, round twelve
 
 OXT-Beyond 0.2.7-rc.6.12 has everything in 0.2.7-rc.6.11. In the spirit
@@ -1784,11 +1839,33 @@ it squashes:
   Library stands in for them (the Star Trek guides, SonnetFolio and BGC's
   stacks among them), and `card it-1` is the card before the last, as in
   HyperCard (#300).
+- **A crash on Apply.** On macOS, typing in the script editor with the
+  Accessibility Keyboard and pressing Apply no longer crashes: the
+  system's text input could call a window's view after the window was
+  gone (tperry2x) (#308).
+- **A toolbar that cut off its own words.** On Linux a toolbar toggle
+  that is on, such as Select Grouped, shows its whole label. A lit
+  button draws its label bold, and in DejaVu Sans eight of the eleven
+  were too narrow for it (#311).
+- **An arrow on the last letter.** On Linux, Preferences > Script
+  Editor's colour scheme menu keeps its words at its left, clear of the
+  arrow GTK draws over its right, which ran over the last "e" of
+  "Follow System Appearance" (#311).
+- **Notes missing the tops of their letters.** On Linux the first line
+  of each note in the xTalk Assistant's Settings shows its capitals
+  whole; their tops lost a row of pixels (#311).
+- **A menu you could not read.** On Windows and Linux the icon chooser's
+  Image library menu takes the theme's colour for its words; in the
+  dark appearance they were black on dark grey (#311).
 
 Behind the scenes, the project's web pages have a new front page with a
 Downloads section (#295) and a Web Stacks section (first called Web
 Games; its address is still games/) with Pixel Platformer Maker, a platformer and level maker written in xTalk with Box2Dxt
-physics, whose menus are now readable (#301, #303, #306); the HyperCard
+physics, whose menus are now readable (#301, #303, #306), and SVG Lab,
+every new SVG feature with its tests, opening with the logo as live SVG
+(#310, #312, #313, #314), now a gallery that shows the Stack Player's
+samples too, and the Stack Player opens a sample named in its address
+(`?play=<title>`) (#317); the HyperCard
 sweep in CI answers dialogs as a person would and skips hidden buttons
 (#296); the revZip test stacks check every revZip command and find
 revzip wherever OXT-Beyond is (mwieder, from HyperXTalk) (#299); and the

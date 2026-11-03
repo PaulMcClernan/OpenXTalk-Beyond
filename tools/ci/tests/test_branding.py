@@ -19,7 +19,8 @@ is made from SVG Lab's logo (tools/pages/games/svg-lab/beyond-logo.svg) as
 draw_branding.py makes it today, so a logo changed without running it
 fails here; the moving logo moves; and every copy elsewhere (the web
 pages' brand/ folder, the Stack Player's icon, the web IDE's favicon, the
-About window's images) is the file it was made from. CairoSVG is not
+About window's images) is the file it was made from. Home's sidebar, in
+every place, shows that logo as the About window does (TheSideMark). CairoSVG is not
 needed: only the drawings are compared, and the PNG files are compared
 byte for byte with their copies.
 
@@ -147,6 +148,73 @@ class TheCopies(unittest.TestCase):
                                   'Installer/oxt-beyond/branding/png/oxt-beyond-64.png'])
         for image, n in zip(images, (32, 64)):
             self.assertEqual(png_size(read(*image.split('/'), mode='rb')), (n, n))
+
+
+
+def handler(text, kind, name):
+    """The handler `name` of `text` (from its first line to its end line)."""
+    m = re.search(r'^(?:private )?%s %s\b.*?^end %s\b' % (kind, re.escape(name), re.escape(name)),
+                  text, re.M | re.S)
+    if m is None:
+        raise AssertionError('no %s %s' % (kind, name))
+    return m.group(0)
+
+
+class TheSideMark(unittest.TestCase):
+    """Home's sidebar, in every place, shows the logo as the About window
+    does: a copy of the 64-pixel logo of stack "revGeneralIcons" (the image
+    the About window and the answer and ask dialogs show), not the
+    orange-to-pink tile with the "layers" icon, which stays only for when
+    that stack is missing."""
+
+    HOME = ('ide', 'Toolset', 'palettes', 'web home', 'revwebhome.livecodescript')
+    KIT = ('ide', 'Toolset', 'palettes', 'learn', 'revlearnkit.livecodescript')
+    TOUR = ('tools', 'ci', 'ui-tour.livecodescript')
+    LOGO = 'image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons"'
+
+    def check_mark(self, mark, glow):
+        logo = mark.index('set the text of tObj to the text of ' + self.LOGO)
+        # the logo first, and the old mark only when there is none
+        self.assertLess(mark.index('there is an ' + self.LOGO + ' then'), logo)
+        self.assertLess(mark.index('create image "sideMark"'), logo)
+        self.assertIn('set the rect of tObj to "20,22,56,58"', mark)
+        self.assertIn('set the resizeQuality of tObj to "best"', mark)
+        self.assertIn(glow + ' tObj, "255,122,0", 12, 70', mark)
+        self.assertLess(logo, mark.index('exit '))
+        self.assertLess(mark.index('exit '), mark.index('"sideMarkIcon", "layers"'))
+
+    def test_homes_own_pages(self):
+        home = read(*self.HOME)
+        self.check_mark(handler(home, 'command', 'hmSideMark'), 'hmGlow')
+        # Home on its own and Home hosting its places draw the mark so,
+        # and nothing else draws the old one
+        for side in ('hmBuildSide', 'hmBuildHostedSide'):
+            self.assertIn('\n   hmSideMark\n', handler(home, 'command', side))
+        self.assertEqual(home.count('"sideMarkIcon", "layers"'), 1)
+
+    def test_the_academy_and_learn_in_home(self):
+        kit = read(*self.KIT)
+        self.check_mark(handler(kit, 'command', 'lkHubMark'), 'lkGlow')
+        self.assertIn('\n   lkHubMark\n', handler(kit, 'function', 'lkHubHead'))
+        self.assertEqual(kit.count('"sideMarkIcon", "layers"'), 1)
+
+    def test_the_tour_looks_at_it(self):
+        tour = read(*self.TOUR)
+        check = handler(tour, 'on', 'tourHomeMark')
+        self.assertIn('there is a control "sideMarkIcon" of stack pStack or there is a graphic "sideMark" of stack pStack', check)
+        self.assertIn('put the text of ' + self.LOGO + ' into tLogo', check)
+        self.assertIn('the text of image "sideMark" of stack pStack is not tLogo', check)
+        self.assertIn('the rect of image "sideMark" of stack pStack is not "20,22,56,58"', check)
+        home = handler(tour, 'on', 'tour_home')
+        self.assertLess(home.index('tourShotStack tNew, "24a-home"'), home.index('tourHomeMark tNew, "opened"'))
+        self.assertLess(home.index('"24a-home-redrawn"'), home.index('tourHomeMark tNew, "redrawn"'))
+        for step, place in (('tour_learn', 'the How-to'), ('tour_academy', 'the Academy')):
+            body = handler(tour, 'on', step)
+            self.assertIn('if tWin is kHub then tourHomeMark tWin, "%s"' % place, body)
+            self.assertIn('if tWin is kHub then tourHomeMark tWin, "%s, redrawn"' % place, body)
+        places = handler(tour, 'on', 'tour_home_places')
+        self.assertLess(places.index('tourShotStack kHub, "24g-hub-" & tPlace'), places.index('tourHomeMark kHub, tPlace\n'))
+        self.assertIn('tourHomeMark kHub, tPlace & ", redrawn"', places)
 
 
 if __name__ == '__main__':
