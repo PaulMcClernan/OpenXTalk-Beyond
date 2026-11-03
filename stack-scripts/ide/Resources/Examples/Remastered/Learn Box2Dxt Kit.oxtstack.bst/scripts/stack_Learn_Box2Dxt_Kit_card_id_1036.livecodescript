@@ -4,7 +4,7 @@ script "stack_Learn_Box2Dxt_Kit_card_id_1036"
 -- Made from the stack by tools/oxt/stack-scripts.sh; the stack holds
 -- the script that runs, so change it there, not here.
 
--- 01 Sprite Sheets: many pictures in one image
+-- 06 Sprite Sheets: many pictures in one image
 -- A sprite sheet is one image with many small pictures in it: every pose
 -- of a character, or every tile of a level. Games use them because one
 -- image is quicker to load and easier to keep than fifty. The Kit cuts a
@@ -69,23 +69,35 @@ end labStep
 -- Next picture: the next pose, by its name. b2kSpriteSetFrame stops an
 -- animation that is playing
 on nextPicture
+   if sheetShown() then
+      exit nextPicture
+   end if
    put sPose mod the number of items of sPoses + 1 into sPose
    b2kSpriteSetFrame sAlien, item sPose of sPoses
 end nextPicture
 
 -- Walk: the animation made in labBuild
 on walk
+   if sheetShown() then
+      exit walk
+   end if
    b2kSpritePlay sAlien, "walk"
 end walk
 
 -- Flip: the same pictures, mirrored, so the alien faces the other way
 on flipAlien
+   if sheetShown() then
+      exit flipAlien
+   end if
    b2kSpriteFlipH sAlien, not b2kSpriteFlipped(sAlien)
 end flipAlien
 
 -- Drop a crate: square 10 of the tile sheet (wooden planks), with a box
 -- body, from above the alien
 on dropCrate
+   if sheetShown() then
+      exit dropCrate
+   end if
    b2kSpriteNew "tiles", 10, random(300) + 320, 200
    b2kAddBox the result, true
 end dropCrate
@@ -179,6 +191,16 @@ on seeSheet
    labKeep tObj
    unlock screen
 end seeSheet
+
+-- While the sheet shows, the game's sprites are gone: a button that
+-- needs them says how to get them back instead
+private function sheetShown
+   if sSheet is empty then
+      return false
+   end if
+   labSay "The sheet is showing: press See the sheet again to go back to the game.", true
+   return true
+end sheetShown
 
 -- Where a frame is in the sheet: what labBuild gave b2kSheetAddFrame
 -- (the Kit keeps it to itself, so the lesson keeps a copy to draw)

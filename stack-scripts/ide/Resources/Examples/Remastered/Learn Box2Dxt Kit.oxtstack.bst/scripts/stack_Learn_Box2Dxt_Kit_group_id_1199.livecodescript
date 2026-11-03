@@ -40,16 +40,47 @@ local sSaidAt, sSaid
 local sForwarding
 -- The button of the card's that is lit for a moment (labShowButtons)
 local sFlashed, sLightTicks
+-- The card being opened, until labOpenNow makes its lesson
+local sOpening
 
 ########################################
 #
 # The card opens and closes
 #
 
+-- The card opens: the sign that the lesson is being made shows first,
+-- and the lesson is made a moment later, when the window has drawn the
+-- card and the sign. (Made at once, the card stays blank until it is
+-- ready.) A card left before then is not made
 on openCard
-   labOpen
+   labLoading true
+   put the long id of this card into sOpening
+   send "labOpenNow" to me in 20 milliseconds
    pass openCard
 end openCard
+
+command labOpenNow
+   if sOpening is not the long id of this card then
+      exit labOpenNow
+   end if
+   put empty into sOpening
+   labOpen
+   labLoading false
+end labOpenNow
+
+-- Shows, or takes away, the sign that the lesson is being made, with the
+-- busy pointer
+command labLoading pOn
+   if there is a group "LabLoading" then
+      set the visible of group "LabLoading" to pOn
+   end if
+   if pOn then
+      lock cursor
+      set the cursor to busy
+   else
+      unlock cursor
+   end if
+end labLoading
 
 on closeCard
    labClose
@@ -80,6 +111,9 @@ command labOpen
    put the top of graphic "Court" into tTop
    put the right of graphic "Court" into tRight
    put the bottom of graphic "Court" into tBottom
+   -- (locked while the card makes its game: a control is made before it
+   -- is sized and put in its place)
+   lock screen
    try
       -- A world, with gravity pulling down at 10 metres a second each
       -- second (y up, as Box2D counts), 40 pixels to a metre, and the
@@ -107,6 +141,7 @@ command labOpen
    catch tError
       labFail "labBuild", tError
    end try
+   unlock screen
 end labOpen
 
 -- True when the Kit is there to call: its b2kVersion() is 4
@@ -419,12 +454,17 @@ command labRun pHandler
    if not sReady then
       exit labRun
    end if
+   -- (the screen is locked while the button runs: a control is made
+   -- before it is sized and put in its place, and would flash at the
+   -- card's middle in the meantime)
+   lock screen
    try
       dispatch pHandler to sCard
    catch tError
       labFail pHandler, tError
    end try
    labShowButtons pHandler
+   unlock screen
 end labRun
 
 ########################################
@@ -527,6 +567,9 @@ command labRunCode
       exit labRunCode
    end if
    labPaintCode
+   -- (locked while the lines run: a control they make would flash at the
+   -- card's middle before it is put in its place)
+   lock screen
    try
       do field "TryCode"
       labSay "Ran your lines.", true
@@ -539,6 +582,7 @@ command labRunCode
          labSay "Your lines stopped: check the spelling and the commas.", true
       end if
    end try
+   unlock screen
 end labRunCode
 
 command labCopyCode

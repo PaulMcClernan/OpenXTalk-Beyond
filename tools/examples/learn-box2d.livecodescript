@@ -823,6 +823,9 @@ command labShow pBody, pColor
    repeat with tIndex = 1 to tCount
       put b2BodyShapeAt(tIndex) & comma after tShapes
    end repeat
+   -- (locked until the body is drawn where it is: a new graphic shows at
+   -- the card's middle until then)
+   lock screen
    lock messages
    repeat for each item tShape in tShapes
       put labShapePoints(tShape) into tPoints
@@ -837,6 +840,7 @@ command labShow pBody, pColor
    unlock messages
    put empty into sStill[pBody]
    labDrawBody pBody, true
+   unlock screen
 end labShow
 
 -- Takes a body out of the world, and its graphics off the card
@@ -1396,12 +1400,17 @@ command labRun pHandler
    if sWorld is empty and pHandler is not among the items of "labRestart,labTogglePause,labStepButton" then
       exit labRun
    end if
+   -- (the screen is locked while the button runs: a body's graphics are
+   -- made before they are put where the body is, and would flash at the
+   -- card's middle in the meantime)
+   lock screen
    try
       dispatch pHandler to sCard
    catch tError
       labFail pHandler, tError
    end try
    labShowButtons pHandler
+   unlock screen
 end labRun
 
 ########################################

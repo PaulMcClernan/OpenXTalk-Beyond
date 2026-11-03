@@ -43,6 +43,8 @@ local sBodies, sPoints, sStill, sColor
 local sJoints, sMarks, sFlash
 -- The button of the card's that is lit for a moment (labShowButtons)
 local sFlashed, sLightTicks
+-- The card being opened, until labOpenNow makes its lesson
+local sOpening
 -- The mouse joint that holds a body you drag, and the static body it is
 -- tied to
 local sDrag, sDragGround
@@ -59,10 +61,39 @@ local sOriginX, sOriginY
 # The card opens and closes
 #
 
+-- The card opens: the sign that the lesson is being made shows first,
+-- and the lesson is made a moment later, when the window has drawn the
+-- card and the sign. (Made at once, the card stays blank until it is
+-- ready.) A card left before then is not made
 on openCard
-   labOpen
+   labLoading true
+   put the long id of this card into sOpening
+   send "labOpenNow" to me in 20 milliseconds
    pass openCard
 end openCard
+
+command labOpenNow
+   if sOpening is not the long id of this card then
+      exit labOpenNow
+   end if
+   put empty into sOpening
+   labOpen
+   labLoading false
+end labOpenNow
+
+-- Shows, or takes away, the sign that the lesson is being made, with the
+-- busy pointer
+command labLoading pOn
+   if there is a group "LabLoading" then
+      set the visible of group "LabLoading" to pOn
+   end if
+   if pOn then
+      lock cursor
+      set the cursor to busy
+   else
+      unlock cursor
+   end if
+end labLoading
 
 on closeCard
    labClose
@@ -334,6 +365,9 @@ command labShow pBody, pColor
    repeat with tIndex = 1 to tCount
       put b2BodyShapeAt(tIndex) & comma after tShapes
    end repeat
+   -- (locked until the body is drawn where it is: a new graphic shows at
+   -- the card's middle until then)
+   lock screen
    lock messages
    repeat for each item tShape in tShapes
       put labShapePoints(tShape) into tPoints
@@ -348,6 +382,7 @@ command labShow pBody, pColor
    unlock messages
    put empty into sStill[pBody]
    labDrawBody pBody, true
+   unlock screen
 end labShow
 
 -- Takes a body out of the world, and its graphics off the card
@@ -907,12 +942,17 @@ command labRun pHandler
    if sWorld is empty and pHandler is not among the items of "labRestart,labTogglePause,labStepButton" then
       exit labRun
    end if
+   -- (the screen is locked while the button runs: a body's graphics are
+   -- made before they are put where the body is, and would flash at the
+   -- card's middle in the meantime)
+   lock screen
    try
       dispatch pHandler to sCard
    catch tError
       labFail pHandler, tError
    end try
    labShowButtons pHandler
+   unlock screen
 end labRun
 
 ########################################

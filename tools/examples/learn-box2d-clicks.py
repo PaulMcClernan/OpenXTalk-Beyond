@@ -340,21 +340,25 @@ def drag(run, name):
     # The bodies no joint holds go first, then the rest newest first: a
     # body on a hinge, a slider or a motor, such as a windmill's blade or a
     # lift, may not go where it is pulled. And a press lands where the body
-    # WAS when the state was read, so one still rolling (a ball the
-    # windmill knocked) is pressed beside it and the drag pulls nothing:
-    # the free bodies go stillest (then highest) first, measured over a
-    # quarter of a second, and are pressed where they are at the end of it
+    # WAS when the state was read, so one still rolling (a ball rolls on a
+    # flat floor for as long as nothing stops it) is pressed beside it and
+    # the drag pulls nothing: a free body counts as still when it moved
+    # under 3 pixels in a quarter of a second, and the test waits up to
+    # four seconds for one, then tries the stillest
     free = set(n for n in st.get('free', '').split(',') if n)
-    before = dict(dynamic(run, st))
-    time.sleep(0.25)
-    st = run.state()
-    bodies = list(reversed(dynamic(run, st)))
+    for _ in range(16):
+        before = dict(dynamic(run, st))
+        time.sleep(0.25)
+        st = run.state()
+        bodies = list(reversed(dynamic(run, st)))
 
-    def still(b):
-        was = before.get(b[0], (-999, -999))
-        return (((b[1][0] - was[0]) ** 2 + (b[1][1] - was[1]) ** 2) ** 0.5 // 4, b[1][1])
-    tries = (sorted([b for b in bodies if b[0] in free], key=still)
-             + [b for b in bodies if b[0] not in free])[:6]
+        def moved(b):
+            was = before.get(b[0], (-999, -999))
+            return ((b[1][0] - was[0]) ** 2 + (b[1][1] - was[1]) ** 2) ** 0.5
+        loose = sorted([b for b in bodies if b[0] in free], key=lambda b: (moved(b) // 3, b[1][1]))
+        if not loose or moved(loose[0]) < 3:
+            break
+    tries = (loose + [b for b in bodies if b[0] not in free])[:6]
     if not run.check(bool(tries), '%s: a body to drag' % name, 'none in the court'):
         return
     why = []

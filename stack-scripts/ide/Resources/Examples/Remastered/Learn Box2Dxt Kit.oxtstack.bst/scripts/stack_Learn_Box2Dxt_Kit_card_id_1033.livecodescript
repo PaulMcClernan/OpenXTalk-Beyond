@@ -14,7 +14,7 @@ script "stack_Learn_Box2Dxt_Kit_card_id_1033"
 -- and b2kSpin sets how fast it turns, in degrees a second. b2kExplode
 -- kicks everything near a point away from it. The surface a body has
 -- matters too: b2kSetBounce (how bouncy) and b2kSetFriction (how grippy).
--- Up is NEGATIVE y on the card: a push of 0, -400 goes up.
+-- Up is NEGATIVE y on the card: a push of 0, -450 goes up.
 
 local sBall, sBoxes, sBouncy, sMoon
 

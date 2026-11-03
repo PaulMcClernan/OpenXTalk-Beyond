@@ -4,7 +4,7 @@ script "stack_Learn_Box2Dxt_Kit_card_id_1039"
 -- Made from the stack by tools/oxt/stack-scripts.sh; the stack holds
 -- the script that runs, so change it there, not here.
 
--- Camera: a world bigger than the window
+-- 09 Camera: a world bigger than the window
 -- A level is often much wider than the window. The Kit's camera shows
 -- part of it, and scrolls to keep the player in view.
 --

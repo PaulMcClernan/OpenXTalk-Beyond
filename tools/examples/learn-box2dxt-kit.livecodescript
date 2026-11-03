@@ -638,7 +638,7 @@ Sprites|Drop a crate|dropCrate|Drop a crate: a picture from the tile sheet on a 
 Sprites|See the sheet|seeSheet|Show the whole sheet, with each named picture outlined|switch
 Anim|Hop|hop|Play the hop animation once, and jump
 Anim|Ouch|ouch|Play the ouch animation once
-Anim|Faster|faster|Double the walk's frames a second (back to 3 after 24)
+Anim|Faster|faster|Double the alien's frames a second, for every animation it plays (back to 3 after 24)
 Anim|Stop / go|stopGo|Stop both animations on the frame they show, or go on|switch
 Anim|From files|fromFiles|Write a PNG and an XML file, then load a sheet from them
 Player|Double jump|doubleJump|Allow one more jump in the air, or not|switch
@@ -772,6 +772,9 @@ command labOpen
    put the top of graphic "Court" into tTop
    put the right of graphic "Court" into tRight
    put the bottom of graphic "Court" into tBottom
+   -- (locked while the card makes its game: a control is made before it
+   -- is sized and put in its place)
+   lock screen
    try
       -- A world, with gravity pulling down at 10 metres a second each
       -- second (y up, as Box2D counts), 40 pixels to a metre, and the
@@ -799,6 +802,7 @@ command labOpen
    catch tError
       labFail "labBuild", tError
    end try
+   unlock screen
 end labOpen
 
 -- True when the Kit is there to call: its b2kVersion() is 4
@@ -1111,12 +1115,17 @@ command labRun pHandler
    if not sReady then
       exit labRun
    end if
+   -- (the screen is locked while the button runs: a control is made
+   -- before it is sized and put in its place, and would flash at the
+   -- card's middle in the meantime)
+   lock screen
    try
       dispatch pHandler to sCard
    catch tError
       labFail pHandler, tError
    end try
    labShowButtons pHandler
+   unlock screen
 end labRun
 
 ########################################
@@ -1219,6 +1228,9 @@ command labRunCode
       exit labRunCode
    end if
    labPaintCode
+   -- (locked while the lines run: a control they make would flash at the
+   -- card's middle before it is put in its place)
+   lock screen
    try
       do field "TryCode"
       labSay "Ran your lines.", true
@@ -1231,6 +1243,7 @@ command labRunCode
          labSay "Your lines stopped: check the spelling and the commas.", true
       end if
    end try
+   unlock screen
 end labRunCode
 
 command labCopyCode
@@ -1558,7 +1571,7 @@ b2kMoveTo the long id of graphic "Triangle", 450, 250, 180
 -- and b2kSpin sets how fast it turns, in degrees a second. b2kExplode
 -- kicks everything near a point away from it. The surface a body has
 -- matters too: b2kSetBounce (how bouncy) and b2kSetFriction (how grippy).
--- Up is NEGATIVE y on the card: a push of 0, -400 goes up.
+-- Up is NEGATIVE y on the card: a push of 0, -450 goes up.
 
 local sBall, sBoxes, sBouncy, sMoon
 
@@ -1959,7 +1972,7 @@ b2kSpawnCapsule 400, 300, 80, 40, "pink"
 @*/
 
 /*@ Sprites/card
--- 01 Sprite Sheets: many pictures in one image
+-- 06 Sprite Sheets: many pictures in one image
 -- A sprite sheet is one image with many small pictures in it: every pose
 -- of a character, or every tile of a level. Games use them because one
 -- image is quicker to load and easier to keep than fifty. The Kit cuts a
@@ -2024,23 +2037,35 @@ end labStep
 -- Next picture: the next pose, by its name. b2kSpriteSetFrame stops an
 -- animation that is playing
 on nextPicture
+   if sheetShown() then
+      exit nextPicture
+   end if
    put sPose mod the number of items of sPoses + 1 into sPose
    b2kSpriteSetFrame sAlien, item sPose of sPoses
 end nextPicture
 
 -- Walk: the animation made in labBuild
 on walk
+   if sheetShown() then
+      exit walk
+   end if
    b2kSpritePlay sAlien, "walk"
 end walk
 
 -- Flip: the same pictures, mirrored, so the alien faces the other way
 on flipAlien
+   if sheetShown() then
+      exit flipAlien
+   end if
    b2kSpriteFlipH sAlien, not b2kSpriteFlipped(sAlien)
 end flipAlien
 
 -- Drop a crate: square 10 of the tile sheet (wooden planks), with a box
 -- body, from above the alien
 on dropCrate
+   if sheetShown() then
+      exit dropCrate
+   end if
    b2kSpriteNew "tiles", 10, random(300) + 320, 200
    b2kAddBox the result, true
 end dropCrate
@@ -2135,6 +2160,16 @@ on seeSheet
    unlock screen
 end seeSheet
 
+-- While the sheet shows, the game's sprites are gone: a button that
+-- needs them says how to get them back instead
+private function sheetShown
+   if sSheet is empty then
+      return false
+   end if
+   labSay "The sheet is showing: press See the sheet again to go back to the game.", true
+   return true
+end sheetShown
+
 -- Where a frame is in the sheet: what labBuild gave b2kSheetAddFrame
 -- (the Kit keeps it to itself, so the lesson keeps a copy to draw)
 private function frameRect pPose
@@ -2177,7 +2212,7 @@ The alien and the tiles are small pictures cut out of two big images, called spr
 * A grid sheet's squares are numbered for you.
 * b2kSpriteNew puts a picture on the card.
 # Try
-Press See the sheet, then Next picture, Walk and Flip. Drop crates, and drag the alien.
+Press See the sheet, and again to go back to the game. Then Next picture, Walk and Flip. Drop crates, and drag the alien.
 @*/
 
 /*@ Sprites/try
@@ -2496,7 +2531,7 @@ b2kPlayerSet "wallJumpY", 450
 @*/
 
 /*@ Camera/card
--- Camera: a world bigger than the window
+-- 09 Camera: a world bigger than the window
 -- A level is often much wider than the window. The Kit's camera shows
 -- part of it, and scrolls to keep the player in view.
 --
