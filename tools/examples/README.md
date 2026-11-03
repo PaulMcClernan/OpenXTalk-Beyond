@@ -28,6 +28,7 @@ package.
 | Bouncing Balls | [bouncing-balls](bouncing-balls.livecodescript) | `sample_1/Balls.livecode` | LiveCode Ltd (then RunRev Ltd), 2011 |
 | Bookshelf | [book-library](book-library.livecodescript) | `sample_2/BookLibrary.livecode` | LiveCode Ltd, 2014 |
 | Balloon Game | [balloon-game](balloon-game.livecodescript) | `sample_4/balloon.livecode` | LiveCode Ltd (then RunRev Ltd), 2013 |
+| Learn Box2D | [learn-box2d](learn-box2d.livecodescript) | None: made here, in the same look | OXT-Beyond, 2026 |
 
 A remaster is a binary stack, `ide/Resources/Examples/Remastered/<name>.oxtstack`,
 and it is never edited by hand: a script here builds it, and the stack is
@@ -47,6 +48,70 @@ The builders also use the drawing handlers of Learn's kit
 `lkColor`, `lkBox`, `lkLabel`, `lkIcon` and the rest. What they draw is
 saved in the stack as graphics, fields and images, so a remaster does not
 need the kit to open.
+
+## Learn Box2D
+
+Learn Box2D is the one example here with no original: it was made in
+the remasters' look to teach Box2D, the physics engine built in as
+Box2Dxt. Each of its thirteen lessons (the world, body types, shapes,
+materials, forces, hinges, springs, sliders, wheels, dragging, contacts,
+ray casts and terrain) is a `wide` card with:
+
+- a live world in a court, drawn by the `Lab` background group's script
+  (`/*@ Lab` in the builder), which steps the world on a timer, draws
+  every body and joint, lets a body be thrown with the mouse, and gives
+  each card Reset, Pause and Step;
+- a row of buttons, each running a handler of the card's own script
+  (the builder's `buttons` block names them, and the build stops if one
+  is missing);
+- "How it works", and the list of every Box2D call the card's script
+  makes, read from the script when the stack is built: a click on one
+  says what it does (the builder's `docs` block, which must have a line
+  for every call).
+
+The card's script is the lesson, and the Scripts drawer shows it. Its
+`labBuild` makes the world and `labStep` runs after each step; the Lab's
+handlers (`labShow`, `labWalls`, `labMX`, ...) are the drawing and the
+unit changes, so the card's script is all Box2D.
+
+```sh
+xvfb-run -a <install>/OXT-Beyond -ui tools/examples/test-learn-box2d.livecodescript
+```
+
+runs every lesson of the built stack with Box2Dxt loaded from the
+install: each card runs for three seconds, each of its buttons is
+pressed, and the line at the court's top must not report an error; every
+body must be in the court; and a button on nine of the cards must do
+what its lesson says (gravity changes, a ball bounces, the motor speeds
+up, the car drives, contacts are counted, ...). First, the front page's
+banner must be running its toy: a little world of its own (the front
+card's script) that rains shapes onto a spinning paddle, and blasts them
+with b2WorldExplode where the banner is clicked. It ends with `DONE` or `FAILED`.
+`OXT_LEARN_BOX2D` names another copy of the stack, and
+`OXT_LEARN_BOX2D_SNAPS` a folder for a picture of each card.
+
+A script calling handlers is not a click, so
+
+```sh
+python3 tools/examples/learn-box2d-clicks.py --install <install> [--shots <folder>] [--only Rays]
+```
+
+clicks the stack with a real mouse, the way a user does: the install's
+standalone engine opens it in a window on an Xvfb screen of its own,
+with `learn-box2d-clicks.livecodescript` writing what the window shows
+to a file ten times a second, and xdotool (which it needs, with Xvfb)
+clicks. It clicks the toy, checks every tile opens its lesson, and on
+each lesson: the sidebar entry, every button, every call in the list
+(each must explain itself, scrolled to with the wheel where the list is
+longer than the panel), Pause (nothing moves), Step (it stays paused),
+Pause again, Reset, a body dragged with the mouse, the Scripts drawer,
+and a click on an empty court on Rays and Terrain; then the arrow keys,
+the car's on Wheels, and Back and Next. No click may raise a script
+error. It ends with `DONE` or `FAILED n`, and CI runs it after the test
+above.
+
+Where Box2Dxt is not loaded (the web IDE, for now), each lesson says so
+at the top of its court, and the rest of the stack still opens and reads.
 
 ## xTalk Suite demos
 
