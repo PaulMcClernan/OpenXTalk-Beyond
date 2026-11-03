@@ -1,2 +1,0 @@
-- IDE: a new splash screen in the look of the Web IDE's loading screen: the new logo centred over "OXT-Beyond" and the release's name, the version under it, and an orange loading bar that fills as the IDE starts, in light and dark. Nothing a script sees changes: the splash is the IDE's own window and the same status lines show
-- CI: the branding tests hold the splash's art and its script to the same places, and the loading bar to one step for each status the IDE shows
