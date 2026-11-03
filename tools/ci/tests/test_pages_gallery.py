@@ -98,6 +98,7 @@ class TheGallery(unittest.TestCase):
         # the big ones keep their own pages
         self.assertIn('href="pixel-maker/"', text)
         self.assertIn('href="svg-lab/"', text)
+        self.assertIn('href="waterwheel/"', text)
 
     def test_a_player_with_no_samples(self):
         # an older player (or none listed): the shelves are left out and
