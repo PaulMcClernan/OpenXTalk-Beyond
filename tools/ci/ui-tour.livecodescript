@@ -7891,6 +7891,7 @@ command tourShotStack pStack, pFile
    if pStack is empty or there is not a stack pStack then throw "no stack" && pStack
    if the mode of stack pStack is 0 or not the visible of stack pStack then throw "the stack" && pStack && "is not open"
    tourOnScreen pStack
+   tourInFront pStack
    -- with the title, which Linux in CI, with no window manager, doesn't show
    tourRecord "INFO" && pFile && "stack" && pStack && "rect" && the rect of stack pStack && "effective" && the effective rect of stack pStack && "title" && quote & the title of stack pStack & quote
    tourShotRect the effective rect of stack pStack, pFile
@@ -7929,6 +7930,50 @@ command tourOnScreen pStack
       end if
    end if
 end tourOnScreen
+
+-- The window photographed, in front of the tour's own windows: in the
+-- review of rc.6.13's snapshots the tour's window (oxt_ui_tour, hidden as
+-- the tour starts) was over the top left of the Extension Manager in
+-- 17-extension-manager-redrawn on the Apple silicon Mac, and on Windows
+-- the sample stack sat over the xTalk Assistant in 24f, in both
+-- appearances. The tour's window is hidden again; when the sample or the
+-- controls stack is over the window and in front of it (the openStacks
+-- list the frontmost first), the window is brought to the front, as
+-- going to it does, in the mode it has (a palette stays a palette), and
+-- the defaultStack is put back. A dialog (modal or a sheet) is left as
+-- it is, and only the tour's own windows are looked at: the IDE's, such
+-- as the Tools palette, are snapshot where they are
+command tourInFront pStack
+   local tName, tRect, tOther, tDefault, tFront
+   put the short name of stack pStack into tName
+   if tName is not "oxt_ui_tour" and there is a stack "oxt_ui_tour" \
+         and the mode of stack "oxt_ui_tour" is not 0 and the visible of stack "oxt_ui_tour" then
+      tourRecord "INFO the tour's own window was showing over the IDE's: hidden again"
+      hide stack "oxt_ui_tour"
+      tourWait 300
+   end if
+   if tName is kSample or tName is kControls then exit tourInFront
+   if the mode of stack pStack is not among the items of "1,2,3,4" then exit tourInFront
+   put the effective rect of stack pStack into tRect
+   repeat for each line tOther in the openStacks
+      if tOther is tName then exit repeat
+      if tOther is not kSample and tOther is not kControls then next repeat
+      if the mode of stack tOther is 0 or not the visible of stack tOther then next repeat
+      get the effective rect of stack tOther
+      if item 1 of it < item 3 of tRect and item 3 of it > item 1 of tRect \
+            and item 2 of it < item 4 of tRect and item 4 of it > item 2 of tRect then
+         put tOther into tFront
+         exit repeat
+      end if
+   end repeat
+   if tFront is empty then exit tourInFront
+   tourRecord "INFO" && tFront && "(" & the effective rect of stack tFront & ") was in front of" && tName && "(" & tRect & "): brought to the front"
+   tourUnlockScreen tName
+   put the defaultStack into tDefault
+   go stack pStack
+   if there is a stack tDefault then set the defaultStack to tDefault
+   tourWait 300
+end tourInFront
 
 -- A window as wide as the screen cannot move clear of the Tools palette
 -- (tourOnScreen): OXT-Beyond Home is 1024 wide on the Apple silicon Mac's
