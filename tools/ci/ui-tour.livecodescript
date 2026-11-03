@@ -85,6 +85,8 @@
 constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
+-- the card's own colour in the step controls (tourNearCardColour)
+constant kCardOwnColour = "60,170,90"
 -- The inspector's sections for a button, as the icons in its header name
 -- them (a section the object has not is skipped)
 constant kButtonSections = "Basic,Icons,Colors,Text,Position,Effects,Custom,Advanced"
@@ -2123,10 +2125,56 @@ on tour_controls
       tourCtlCheck false, "the useSystemWindowColor:" && tourJoin(tError)
    end try
    
+   -- A colour of the card's own (TerryL, openxtalk.org p=25957: "the
+   -- card's backgroundColor bleeds into buttons and the tab panel"; on
+   -- Windows, by tperry2x's reading of his picture, p=25982). A control
+   -- with no colour of its own takes its owner's, as in LiveCode, but one
+   -- a theme draws, such as a push button or a tab pane, has the theme's
+   -- face. A snapshot for the review, and what the standard button's face
+   -- and the tab panel's inside are drawn in, logged: measured, not held,
+   -- until the snapshots show which platform draws what
+   try
+      set the backgroundColor of card 1 of stack kControls to kCardOwnColour
+      tourWait 500
+      tourShotStack kControls, "04c-controls-card-color"
+      tourGrab "Tall"
+      put tourRgbAt(sPixWidth div 2, 6) into tOn
+      tourRecord "INFO controls: on a card of" && kCardOwnColour & ", the standard button's face is" && tOn && \
+            "(" & tourNearCardColour(tOn) & ")"
+      tourGrab "Tabs"
+      put tourRgbAt(sPixWidth div 2, sPixHeight - 12) into tOn
+      tourRecord "INFO controls: on a card of" && kCardOwnColour & ", the tab panel's inside is" && tOn && \
+            "(" & tourNearCardColour(tOn) & ")"
+      set the backgroundColor of card 1 of stack kControls to empty
+      tourWait 300
+   catch tError
+      tourCtlCheck false, "the card's own colour:" && tourJoin(tError)
+   end try
+   
    tourRecord "INFO controls:" && sCtlChecks && "checks," && the number of lines of sCtlFails && "failed"
    delete stack kControls
    if sCtlFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of sCtlFails)
 end tour_controls
+
+-- The colour of a point of the pixels tourGrab read (x and y from their
+-- top left), as red, green and blue
+function tourRgbAt pX, pY
+   local tAt
+   put max(0, min(pX, sPixWidth - 1)) into pX
+   put max(0, min(pY, sPixHeight - 1)) into pY
+   put (pY * sPixWidth + pX) * 4 into tAt
+   return byteToNum(byte tAt + 2 of sPixData) & comma & byteToNum(byte tAt + 3 of sPixData) & comma & byteToNum(byte tAt + 4 of sPixData)
+end tourRgbAt
+
+-- Whether the colour pRGB is the card's own colour of the step controls
+-- (within 24 in each of red, green and blue)
+function tourNearCardColour pRGB
+   local i
+   repeat with i = 1 to 3
+      if abs(item i of pRGB - item i of kCardOwnColour) > 24 then return "not the card's colour"
+   end repeat
+   return "the card's colour"
+end tourNearCardColour
 
 -- The most a point of the label of the button pName of the controls
 -- stack differs from the button's face: the face at pFace points in from

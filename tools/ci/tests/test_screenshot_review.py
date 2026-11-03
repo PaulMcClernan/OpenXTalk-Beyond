@@ -812,6 +812,27 @@ class TheWindowInFront(unittest.TestCase):
         self.assertNotIn('tourToolsAside', body)
 
 
+class TheCardsOwnColour(unittest.TestCase):
+    """TerryL (openxtalk.org p=25957): "the card's backgroundColor bleeds
+    into buttons and the tab panel", on Windows by tperry2x's reading of
+    the picture (p=25982). The step controls gives the card a colour of its
+    own, snapshots it for the review on every platform, and logs what the
+    standard button's face and the tab panel's inside are drawn in."""
+
+    def test_the_step_snapshots_it(self):
+        tour = read(TOUR)
+        step = handler(tour, 'on', 'tour_controls')
+        self.assertIn('set the backgroundColor of card 1 of stack kControls to kCardOwnColour', step)
+        self.assertLess(step.index('set the backgroundColor of card 1 of stack kControls to kCardOwnColour'),
+                        step.index('tourShotStack kControls, "04c-controls-card-color"'))
+        self.assertIn('tourGrab "Tall"', step)
+        self.assertIn('tourGrab "Tabs"', step)
+        self.assertIn('set the backgroundColor of card 1 of stack kControls to empty', step)
+        # the constant is declared before the step reads it (a name not yet
+        # declared is its own spelling)
+        self.assertLess(tour.index('\nconstant kCardOwnColour = "60,170,90"\n'), tour.index('\non tour_controls\n'))
+
+
 class TheToolsPalette(unittest.TestCase):
     """A check that reads a window's pixels off the screen reads that
     window's, not the Tools palette's over it."""
