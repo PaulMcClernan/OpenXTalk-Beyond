@@ -58,11 +58,17 @@ frame.addEventListener('load', function () {
   style.textContent = '.menubar{display:none!important}';
   d.head.appendChild(style);
   frame.style.visibility = 'visible';
-  // the player marks the page as playing once the stack is up
+  // the player marks the page as playing once the stack is up. If it
+  // cannot start the engine (its loading window's error) or open the
+  // sample (an error toast), the cover goes too, so its message shows.
   var wait = setInterval(function () {
-    if (!d.body.classList.contains('playing')) return;
+    var playing = d.body.classList.contains('playing');
+    var error = d.getElementById('loading-error');
+    var failed = (error && !error.hidden) || d.querySelector('#toasts .toast[data-tone="3"]');
+    if (!playing && !failed) return;
     clearInterval(wait);
     loading.style.display = 'none';
+    if (!playing) return;
     // as tall as the stack, so the frame has no scrollbar of its own
     setTimeout(function () { document.getElementById('stack').style.height = d.documentElement.scrollHeight + 'px'; }, 300);
   }, 200);
