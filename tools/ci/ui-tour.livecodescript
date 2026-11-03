@@ -7724,11 +7724,14 @@ function tourInspectorSection pStack, pSection
 end tourInspectorSection
 
 -- The push button's font and size in the Text section, which it takes
--- from the stack: inherited values, in grey italics that can be read on
--- the control they are drawn on, 170,170,170 with the system dark and
--- 100,100,100 with it light (richmond62 on rc.6.3: grey 100 on the dark
--- font menu). The appearance is the one ui_tour.py set; without it
--- nothing is checked. Returns what is wrong, or empty
+-- from the stack: inherited values, in italics. The size, in a field, is
+-- in a grey that can be read on the control it is drawn on, 170,170,170
+-- with the system dark and 100,100,100 with it light (richmond62 on
+-- rc.6.3: grey 100 on the dark font menu). The font, in a menu, is in the
+-- menu's own text colour (no textColor of its own), since on a menu grey
+-- reads as disabled (richmond62 on rc.6.13, OpenXTalkPaul's p=25953). The
+-- appearance is the one ui_tour.py set; without it nothing is checked.
+-- Returns what is wrong, or empty
 function tourInspectorInherited pStack
    local tWant, tProperty, tEditor, tControl, tShown, tFails
    switch $OXT_TOUR_APPEARANCE
@@ -7763,6 +7766,11 @@ function tourInspectorInherited pStack
             "effective" && the effective backgroundColor of tControl
       if the textStyle["italic"] of tControl is not true then
          put tProperty & ": not shown as inherited (not in italics)" & return after tFails
+      else if tProperty is "textFont" then
+         if the textColor of tControl is not empty then
+            put tProperty & ": the inherited font is in" && the textColor of tControl & \
+                  ", not the menu's own text colour, so the menu looks disabled" & return after tFails
+         end if
       else if the textColor of tControl is not tWant then
          put tProperty & ": the inherited value is" && the textColor of tControl & ", not" && tWant && \
                "(the system" && $OXT_TOUR_APPEARANCE & ")" & return after tFails

@@ -102,14 +102,94 @@ class TheDrawings(unittest.TestCase):
         finally:
             draw_branding.LOGO = here
 
-    def test_the_splash_keeps_off_the_version_line(self):
-        # The IDE writes the version at 1x 24,134 to 560,170 (field
-        # "moreinfo"): 268 and below at the drawing's 2x. The logo nested in
-        # the splash ends above it.
+
+class TheSplash(unittest.TestCase):
+    """The IDE's splash (from 0.2.7-rc.6.14 like the web IDE's loading
+    screen): the art and revsplashstackbehavior.livecodescript, which
+    writes the version line, the loading bar's fill and the status over
+    it, agree on where each goes, and none of them covers another."""
+
+    SCRIPT = ('ide', 'Toolset', 'palettes', 'splash', 'revsplashstackbehavior.livecodescript')
+
+    def script(self):
+        return read(*self.SCRIPT).lstrip('\ufeff')
+
+    def test_the_places_follow_one_another(self):
+        d = draw_branding
+        self.assertLessEqual(d.SPLASH_ART_BOTTOM, d.SPLASH_MOREINFO[1])
+        self.assertLessEqual(d.SPLASH_MOREINFO[3], d.SPLASH_TRACK[1])
+        self.assertLessEqual(d.SPLASH_TRACK[3], d.SPLASH_STATUS[1])
+        self.assertLessEqual(d.SPLASH_STATUS[3], 306)
+        for rect in (d.SPLASH_MOREINFO, d.SPLASH_TRACK, d.SPLASH_STATUS):
+            # centred on the 591-pixel splash
+            self.assertAlmostEqual(rect[0] + rect[2], 591, delta=1)
+
+    def test_the_art_ends_above_the_ides_lines(self):
+        bottom = 2 * draw_branding.SPLASH_ART_BOTTOM
         for dark in (True, False):
-            m = re.search(r'<svg x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"',
+            art = draw_branding.splash(dark)
+            m = re.search(r'<svg x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"', art)
+            self.assertLess(float(m.group(2)) + float(m.group(4)), bottom)
+            for y in re.findall(r'<text [^>]*\by="([\d.]+)"', art):
+                self.assertLess(float(y), bottom)
+            for y, h in re.findall(r'<rect x="[\d.]+" y="([\d.]+)" width="[\d.]+" height="([\d.]+)" rx="15"', art):
+                self.assertLess(float(y) + float(h), bottom)
+
+    def test_the_art_draws_the_track(self):
+        x1, y1, x2, y2 = (2 * n for n in draw_branding.SPLASH_TRACK)
+        for dark in (True, False):
+            self.assertIn('<rect x="%d" y="%d" width="%d" height="%d"' % (x1, y1, x2 - x1, y2 - y1),
                           draw_branding.splash(dark))
-            self.assertLess(float(m.group(2)) + float(m.group(4)), 268)
+
+    def test_the_art_names_the_release(self):
+        name = read('ide', '.codename').strip().upper()
+        self.assertTrue(name)
+        for dark in (True, False):
+            self.assertIn('>%s</text>' % name, draw_branding.splash(dark))
+
+    def test_the_art_is_rendered_at_both_sizes(self):
+        for base in ('splash', 'splash-light'):
+            for suffix, size in (('', (591, 306)), ('@extra-high', (1182, 612))):
+                data = read('ide', 'Toolset', 'resources', 'community', 'ideSkin', base + suffix + '.png', mode='rb')
+                self.assertEqual(png_size(data), size, base + suffix)
+
+    def test_the_script_writes_where_the_art_leaves_room(self):
+        script = self.script()
+        open_stack = handler(script, 'on', 'preOpenStack')
+        self.assertIn('set the rect of field "moreinfo" of me to %d,%d,%d,%d' % draw_branding.SPLASH_MOREINFO,
+                      open_stack)
+        self.assertIn('set the rect of field "Status" of me to %d,%d,%d,%d' % draw_branding.SPLASH_STATUS,
+                      open_stack)
+        for field in ('moreinfo', 'Status'):
+            self.assertIn('set the textAlign of field "%s" of me to "center"' % field, open_stack)
+            self.assertIn('set the dontWrap of field "%s" of me to true' % field, open_stack)
+        # What the splash said before stays: the version, then "Happy hunting!"
+        self.assertIn('put tVersion & "Happy hunting!" into field "moreinfo" of me', open_stack)
+        self.assertIn('hide field "Info" of me', open_stack)
+        self.assertLess(open_stack.index('put 0 into sSplashSteps'), open_stack.index('splashProgressBar'))
+
+    def test_the_bar_fills_the_track(self):
+        script = self.script()
+        x1, y1, x2, y2 = draw_branding.SPLASH_TRACK
+        bar = handler(script, 'command', 'splashProgressBar')
+        self.assertIn('set the rect of graphic "progress" of me to %d,%d,%d,%d' % (x1, y1, x1 + 3, y2), bar)
+        self.assertIn('create invisible graphic "progress"', bar)
+        self.assertIn('set the backgroundColor of graphic "progress" of me to 255,119,0', bar)  # ORANGE
+        status = handler(script, 'setProp', 'statusMessage')
+        self.assertIn('%d, %d, %d + max(3, round(%d * min(sSplashSteps, kSplashSteps) / kSplashSteps)), %d'
+                      % (x1, y1, x1, x2 - x1, y2), re.sub(r'\\\s*\n\s*', '', status))
+        # The status line is written first, and the bar can never stop the
+        # IDE starting: everything it does is inside try
+        self.assertLess(status.index('put pMessage into field "status" of me'), status.index('try'))
+        for body in (bar, status):
+            self.assertLess(body.index('try'), body.index('graphic "progress"'))
+            self.assertIn('catch tError', body)
+
+    def test_the_bar_has_a_step_for_each_status(self):
+        home = read('ide', 'Toolset', 'home.livecodescript')
+        steps = len(re.findall(r'^\s*revInternal__setSplashStatus "', home, re.M))
+        self.assertGreater(steps, 10)
+        self.assertIn('constant kSplashSteps = %d\n' % steps, self.script())
 
 
 class TheCopies(unittest.TestCase):
