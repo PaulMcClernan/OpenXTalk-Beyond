@@ -149,9 +149,16 @@ def descendants(root, proc='/proc'):
     return found
 
 
-def usage(pids, proc='/proc'):
+def usage(pids, proc='/proc', tick=None, page=None):
     """The CPU seconds the processes have used, and their memory in MB (the
-    sum of their Pss, or of their resident sets where Pss is not shown)."""
+    sum of their Pss, or of their resident sets where Pss is not shown).
+    tick (the clock's ticks a second) and page (the page size in bytes) are
+    the system's own unless given: a test gives them, since Windows has no
+    sysconf to ask."""
+    if tick is None:
+        tick = os.sysconf('SC_CLK_TCK')
+    if page is None:
+        page = os.sysconf('SC_PAGE_SIZE')
     ticks, kb = 0, 0
     for pid in pids:
         try:
@@ -170,12 +177,12 @@ def usage(pids, proc='/proc'):
                 pass
             if pss is None:
                 with open(os.path.join(proc, str(pid), 'statm')) as f:
-                    pss = int(f.read().split()[1]) * os.sysconf('SC_PAGE_SIZE') // 1024
+                    pss = int(f.read().split()[1]) * page // 1024
             kb += pss
         except (OSError, ValueError, IndexError):
             # (a process that ended between the two reads)
             continue
-    return ticks / os.sysconf('SC_CLK_TCK'), kb / 1024.0
+    return ticks / tick, kb / 1024.0
 
 
 def at_rest(before, after, seconds):

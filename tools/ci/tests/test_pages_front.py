@@ -352,8 +352,8 @@ class TheRestCheck(unittest.TestCase):
         return proc
 
     def test_the_browsers_processes(self):
-        tick = os.sysconf('SC_CLK_TCK')
-        page = os.sysconf('SC_PAGE_SIZE')
+        # (given, not asked of the system: Windows has no os.sysconf)
+        tick, page = 100, 4096
         proc = self.fake_proc({
             10: ('python3', 1, 0, 0, 0),
             11: ('node', 10, tick, 0, 2048),
@@ -364,11 +364,11 @@ class TheRestCheck(unittest.TestCase):
         })
         self.assertEqual(sorted(self.check.descendants(10, proc=proc)), [11, 12, 13])
         self.assertEqual(self.check.descendants(13, proc=proc), [])
-        cpu, mb = self.check.usage([11, 12, 13], proc=proc)
+        cpu, mb = self.check.usage([11, 12, 13], proc=proc, tick=tick, page=page)
         self.assertAlmostEqual(cpu, 6.0)
         self.assertAlmostEqual(mb, (2048 + 4096 + 256 * page // 1024) / 1024.0)
         # a process that ended between the list and the read is left out
-        self.assertEqual(self.check.usage([11, 99], proc=proc), (1.0, 2.0))
+        self.assertEqual(self.check.usage([11, 99], proc=proc, tick=tick, page=page), (1.0, 2.0))
 
     def test_at_rest(self):
         cpu, grown = self.check.at_rest((1.0, 500.0), (1.5, 504.0), 10.0)
