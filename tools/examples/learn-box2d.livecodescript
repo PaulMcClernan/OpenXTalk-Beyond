@@ -130,6 +130,10 @@ private command buildFront
       tip "Tip" & tIndex, tLeft, 500, tLeft + tWidth, kBottom, item 1 of line tIndex of tTips, item 2 of line tIndex of tTips
    end repeat
    set the itemDelimiter to comma
+   -- The way to the Kit's lessons, beside the last row of tiles
+   put exButton("OtherStack", 0, 442, 32, "Learn Box2Dxt Kit: games in pixels", "gamepad-2", "light", lkColor("teal"), empty, empty, 0) into tWidth
+   set the right of group "OtherStack" to kRight
+   set the toolTip of group "OtherStack" to "Open Learn Box2Dxt Kit, whose lessons make games with the Kit: pixels, sprites, players and sound"
 end buildFront
 
 private command tip pName, pLeft, pTop, pRight, pBottom, pIcon, pText
@@ -1537,13 +1541,32 @@ private command frontDraw
 end frontDraw
 
 -- A click in the banner: a blast where it is, which pushes every body
--- near it away
+-- near it away. "Learn Box2Dxt Kit" opens that example, which is beside
+-- this one
 on mouseUp pButton
+   if pButton is 1 and the long name of the target contains "group " & quote & "OtherStack" & quote then
+      openOther
+      exit mouseUp
+   end if
    if pButton is 1 and the mouseLoc is within the rect of group "hero" then
       frontBlast the mouseH, the mouseV
    end if
    pass mouseUp
 end mouseUp
+
+command openOther
+   local tPath
+   set the itemDelimiter to slash
+   put item 1 to -2 of the effective filename of this stack & "/Learn Box2Dxt Kit.oxtstack" into tPath
+   set the itemDelimiter to comma
+   if there is a file tPath then
+      go stack tPath
+   else if there is a stack "Learn Box2Dxt Kit" then
+      go stack "Learn Box2Dxt Kit"
+   else
+      answer "Learn Box2Dxt Kit is with the other examples: open it from Home, under Examples."
+   end if
+end openOther
 
 -- A blast at a point of the card: b2WorldExplode pushes every body within
 -- 3 metres of it away, hardest at the middle
