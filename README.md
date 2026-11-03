@@ -174,8 +174,8 @@ curves (see
 0.2.7-rc.6.13 sets the Menu Builder's controls out where none runs
 into another, ends a crash on the Mac when typed text is committed,
 puts the OXT-Beyond logo in Home's sidebar, adds two preset sizes for
-new stacks, and converts an SVG image to graphics from the Object menu
-(see
+new stacks, converts an SVG image to graphics from the Object menu, and
+brings Learn Box2D, thirteen live lessons in Box2D physics (see
 [0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen));
 0.2.6 stays the main download until it has held up.
 
@@ -1677,15 +1677,25 @@ it squashes:
   SVG Image to Graphics, enabled when one image made from an SVG is
   selected, makes and selects its group of graphics, as the image's
   right-click Convert to Graphics does (OpenXTalkPaul) (#324).
+- **No way to learn Box2D by playing with it.** Learn Box2D, a new
+  example in Home's Examples under Tours, teaches Box2D in thirteen
+  lessons: the world, body types, shapes, materials, forces, hinges,
+  springs, sliders, wheels, dragging, contacts and sensors, ray casts,
+  and terrain and blasts. Each lesson is a live world to throw things
+  around in with the mouse (Reset, Pause and Step), with buttons that
+  run the card's own handlers, how it works, and every Box2D call the
+  card's script makes, each explained on a click; where Box2Dxt is not
+  loaded, each lesson says so (#323).
 
 Behind the scenes, the web standalone check compiles an SVG with the
 drawing library in the browser and checks that the IDE's web build
 carries the library's SVG specification; a Web IDE soak try that hangs
 is stopped and the next one runs, naming the step where the page
 stopped answering; the IDE tour checks the Menu Builder's layout, the
-New Stack sizes and the new Object menu item; and the runtimes that
+New Stack sizes and the new Object menu item; the Linux package plays
+every Learn Box2D lesson and presses its buttons; and the runtimes that
 every package carries for the other platforms are rebuilt from this
-release's engine (#322, #324).
+release's engine (#322, #323, #324).
 
 #### 0.2.7-rc.6.12: the Bug Hunt, round twelve
 
