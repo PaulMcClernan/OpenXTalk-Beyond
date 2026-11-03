@@ -1489,6 +1489,32 @@ function lkHosted
    return the cHubPlaces of me is not empty
 end lkHosted
 
+-- Home's mark, at the top of the sidebar lkHubHead draws, at 20,22 and 36
+-- pixels square: image "sideMark", a copy of the OXT-Beyond logo in stack
+-- "revGeneralIcons" (its 64-pixel PNG, the one the About window and the
+-- answer and ask dialogs show, drawn at 36 with the best resizing), with
+-- the logo's own orange glow, as Home's hmSideMark draws it on its own
+-- pages. When that stack or image is not there, the mark is drawn as it
+-- was before the logo: an orange-to-pink tile with the "layers" icon on it.
+private command lkHubMark
+   local tObj
+   if there is a stack "revGeneralIcons" and \
+         there is an image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons" then
+      create image "sideMark"
+      put it into tObj
+      set the text of tObj to the text of image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons"
+      set the resizeQuality of tObj to "best"
+      set the lockLoc of tObj to true
+      set the rect of tObj to "20,22,56,58"
+      lkGlow tObj, "255,122,0", 12, 70
+      exit lkHubMark
+   end if
+   put lkBox("sideMark", "20,22,56,58", lkColor("orange"), 22, empty) into tObj
+   lkGradient tObj, "255,139,0|236,72,153", "20,22", "56,58"
+   lkGlow tObj, "255,139,0", 16, 110
+   get lkIcon("sideMarkIcon", "layers", "255,255,255", "28,30,48,50", empty)
+end lkHubMark
+
 -- The head of Home's sidebar, pSide wide: Home's mark, and the five
 -- places, each sending "hub <place>" (revHub's lkAction). It makes the
 -- highlight that slides to the place in front (graphics "navHi" and
@@ -1496,10 +1522,7 @@ end lkHosted
 -- places.
 function lkHubHead pSide
    local tObj, tY, tLine
-   put lkBox("sideMark", "20,22,56,58", lkColor("orange"), 22, empty) into tObj
-   lkGradient tObj, "255,139,0|236,72,153", "20,22", "56,58"
-   lkGlow tObj, "255,139,0", 16, 110
-   get lkIcon("sideMarkIcon", "layers", "255,255,255", "28,30,48,50", empty)
+   lkHubMark
    get lkLabel("sideTitle", lkR(66, 21, pSide - 8, 45), "OXT-Beyond", 19, "255,255,255", empty)
    get lkLabel("sideSub", lkR(66, 45, pSide - 8, 61), "Home: learn, explore, build", 11, lkColor("sideMuted"), empty)
    put lkBox("navHi", lkR(10, 84, pSide - 10, 116), lkColor("side2"), 16, empty) into tObj

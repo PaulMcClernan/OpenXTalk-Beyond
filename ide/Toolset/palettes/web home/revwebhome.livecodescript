@@ -1596,6 +1596,33 @@ end hmRoom
 # The sidebar
 #
 
+-- The mark at the top of Home's sidebar, at 20,22 and 36 pixels square:
+-- image "sideMark", a copy of the OXT-Beyond logo in stack
+-- "revGeneralIcons" (its 64-pixel PNG, the one the About window and the
+-- answer and ask dialogs show, drawn at 36 with the best resizing), with
+-- the logo's own orange glow. When that stack or image is not there, the
+-- mark is drawn as it was before the logo: an orange-to-pink tile with the
+-- "layers" icon on it. The kit's lkHubMark draws the same for the Academy
+-- and Learn in Home.
+private command hmSideMark
+   local tObj
+   if there is a stack "revGeneralIcons" and \
+         there is an image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons" then
+      create image "sideMark"
+      put it into tObj
+      set the text of tObj to the text of image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons"
+      set the resizeQuality of tObj to "best"
+      set the lockLoc of tObj to true
+      set the rect of tObj to "20,22,56,58"
+      hmGlow tObj, "255,122,0", 12, 70
+      exit hmSideMark
+   end if
+   put hmBox("sideMark", "20,22,56,58", hmColor("flame"), 22, empty) into tObj
+   hmGradient tObj, "255,139,0|236,72,153", "20,22", "56,58"
+   hmGlow tObj, "255,139,0", 16, 110
+   get hmIcon("sideMarkIcon", "layers", "255,255,255", "28,30,48,50", empty)
+end hmSideMark
+
 private command hmBuildSide
    local tObj, tY, tPage, tLook
    if hmHosted() then
@@ -1604,11 +1631,8 @@ private command hmBuildSide
    end if
    put hmBox("sideBg", "0,0,200,640", hmColor("side"), 0, empty) into tObj
    hmGradient tObj, "15,23,42|20,24,54|36,27,82", "0,0", "0,640"
-   -- The mark: the toolbar's stack icon on the web IDE's colours
-   put hmBox("sideMark", "20,22,56,58", hmColor("flame"), 22, empty) into tObj
-   hmGradient tObj, "255,139,0|236,72,153", "20,22", "56,58"
-   hmGlow tObj, "255,139,0", 16, 110
-   get hmIcon("sideMarkIcon", "layers", "255,255,255", "28,30,48,50", empty)
+   -- The mark: the OXT-Beyond logo (hmSideMark)
+   hmSideMark
    get hmLabel("sideTitle", "66,21,200,45", "OXT-Beyond", 19, "255,255,255", empty)
    if hmOnWeb() then
       get hmLabel("sideSub", "66,45,200,61", "Home, in your browser", 11, hmColor("sideMuted"), empty)
@@ -1683,10 +1707,7 @@ private command hmBuildHostedSide
    put hmSide() into tSide
    put hmBox("sideBg", hmR(0, 0, tSide, 640), hmColor("side"), 0, empty) into tObj
    hmGradient tObj, "15,23,42|20,24,54|36,27,82", "0,0", "0,640"
-   put hmBox("sideMark", "20,22,56,58", hmColor("flame"), 22, empty) into tObj
-   hmGradient tObj, "255,139,0|236,72,153", "20,22", "56,58"
-   hmGlow tObj, "255,139,0", 16, 110
-   get hmIcon("sideMarkIcon", "layers", "255,255,255", "28,30,48,50", empty)
+   hmSideMark
    get hmLabel("sideTitle", hmR(66, 21, tSide - 8, 45), "OXT-Beyond", 19, "255,255,255", empty)
    get hmLabel("sideSub", hmR(66, 45, tSide - 8, 61), "Home: learn, explore, build", 11, hmColor("sideMuted"), empty)
 
