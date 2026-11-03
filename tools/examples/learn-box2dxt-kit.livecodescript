@@ -157,7 +157,7 @@ private command buildFront
    end repeat
    set the itemDelimiter to comma
    -- The way to the other stack, beside the last row of tiles
-   put exButton("OtherStack", 0, 442, 32, "Learn Box2D: the physics underneath", "book-open", "light", lkColor("violet"), empty, empty, 0) into tWidth
+   put exButton("OtherStack", 0, 442, 32, "Learn Box2D: the physics underneath", "book-open", "ghost", lkColor("violet"), empty, empty, 0) into tWidth
    set the right of group "OtherStack" to kRight
    set the toolTip of group "OtherStack" to "Open Learn Box2D, whose lessons show the Box2D calls the Kit makes for you"
    set the script of this card to exScript("Start/card")

@@ -131,7 +131,7 @@ private command buildFront
    end repeat
    set the itemDelimiter to comma
    -- The way to the Kit's lessons, beside the last row of tiles
-   put exButton("OtherStack", 0, 442, 32, "Learn Box2Dxt Kit: games in pixels", "gamepad-2", "light", lkColor("teal"), empty, empty, 0) into tWidth
+   put exButton("OtherStack", 0, 442, 32, "Learn Box2Dxt Kit: games in pixels", "gamepad-2", "ghost", lkColor("teal"), empty, empty, 0) into tWidth
    set the right of group "OtherStack" to kRight
    set the toolTip of group "OtherStack" to "Open Learn Box2Dxt Kit, whose lessons make games with the Kit: pixels, sprites, players and sound"
 end buildFront
