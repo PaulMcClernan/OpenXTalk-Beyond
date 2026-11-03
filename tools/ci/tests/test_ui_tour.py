@@ -311,13 +311,28 @@ class GtkTheme(unittest.TestCase):
         with open(path) as f:
             self.assertIn('bg[NORMAL] = "#353535"', f.read())
 
+    def test_the_marks_on_a_windows_own_colours(self):
+        # a menu in a window with a colour of its own takes that colour:
+        # its marks must stand out from it, dark and light (until rc.6.14
+        # they were black on a dark one: tperry2x, p=25972)
+        with open(TOUR, encoding='utf-8') as f:
+            tour = f.read()
+        step = tour.split('on tour_menu_marks', 1)[1].split('end tour_menu_marks', 1)[0]
+        self.assertIn('put "48,52,58" & return & "236,236,236" into tColours', step)
+        self.assertIn('set the backgroundColor of stack tName to tColour', step)
+        self.assertIn('tourMarksCheck("03d-menu-marks-own-colour-" & tPass', step)
+        self.assertIn('tourMarksCheck("03b-menu-marks", "03c-menu-no-marks"', step)
+        check = tour.split('function tourMarksCheck', 1)[1].split('end tourMarksCheck', 1)[0]
+        self.assertIn('if item 6 of tGroup <= 127 then', check)
+        self.assertIn('if tMarks < 3 then', check)
+
     def test_the_linux_package_runs_the_marks_under_them(self):
         repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..')
         with open(os.path.join(repo, '.github', 'workflows', 'build-linux.yml'), encoding='utf-8') as f:
             text = f.read()
-        self.assertIn('mate-themes yaru-theme-gtk gtk2-engines-murrine', text)
+        self.assertIn('mate-themes ubuntu-mate-themes yaru-theme-gtk gtk2-engines-murrine', text)
         step = text.split('- name: Menu marks, other dark GTK themes', 1)[1].split('\n      - name:', 1)[0]
-        self.assertIn('for theme in BlackMATE HighContrastInverse Yaru-dark; do', step)
+        self.assertIn('for theme in Yaru-MATE-dark Yaru-dark HighContrastInverse; do', step)
         self.assertIn('--appearance dark --gtk-theme "$theme" --only menu-marks', step)
         self.assertIn('exit 1', step)
         with open(TOUR, encoding='utf-8') as f:

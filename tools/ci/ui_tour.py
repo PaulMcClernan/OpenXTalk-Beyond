@@ -39,7 +39,7 @@ and restored at the end:
   Linux    GTK2_RC_FILES: the Adwaita or Adwaita-dark GTK 2 theme when it
            is installed (gnome-themes-extra), else a gtkrc of plain light or
            dark colours, or the installed GTK 2 theme --gtk-theme names
-           (BlackMATE, Yaru-dark: a desktop's own); the engine runs under
+           (Yaru-MATE-dark, Yaru-dark: a desktop's own); the engine runs under
            xvfb-run when there is no DISPLAY
 
 The IDE follows the system's appearance (OpenXTalk Lite 1.15's dark mode on

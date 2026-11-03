@@ -1634,7 +1634,7 @@ end tourMbMacSettings
 constant kMarksRect = "600,400,900,640"
 
 on tour_menu_marks
-   local tName, tDefault, tGroups, tGroup, tMarks, tFails, tObject
+   local tName, tDefault, tFails, tObject, tColours, tColour, tPass
    if the platform is not "Linux" then
       tourRecord "INFO menu-marks: the engine draws its menus' marks so on Linux only"
       exit tour_menu_marks
@@ -1669,27 +1669,27 @@ on tour_menu_marks
    tourWait 800
    tourMarksPopup tName, "Marks", "03b-menu-marks"
    tourMarksPopup tName, "No marks", "03c-menu-no-marks"
+   put tourMarksCheck("03b-menu-marks", "03c-menu-no-marks", "the theme's colour") after tFails
+   -- The same menus in a window with a colour of its own, dark and then
+   -- light: a menu takes the first colour above its button, and its
+   -- marks must stand out from it. Until rc.6.14 a menu that took a
+   -- colour of its own kept black marks whatever the colour, so on a
+   -- dark one they could hardly be seen until the item was hovered
+   -- (tperry2x, openxtalk.org p=25972, MATE dark)
+   put "48,52,58" & return & "236,236,236" into tColours
+   put 0 into tPass
+   repeat for each line tColour in tColours
+      add 1 to tPass
+      set the backgroundColor of stack tName to tColour
+      tourWait 300
+      tourMarksPopup tName, "Marks", "03d-menu-marks-own-colour-" & tPass
+      tourMarksPopup tName, "No marks", "03e-menu-no-marks-own-colour-" & tPass
+      put tourMarksCheck("03d-menu-marks-own-colour-" & tPass, "03e-menu-no-marks-own-colour-" & tPass, \
+            "the window's own colour" && tColour) after tFails
+   end repeat
    -- (closed, not deleted: the engine holds on to the button whose menu
    -- was open until the step is over)
    close stack tName
-   put tourMarksGroups(sOut & "/03b-menu-marks.png", sOut & "/03c-menu-no-marks.png") into tGroups
-   -- a group of a few pixels is not a mark
-   put 0 into tMarks
-   repeat for each line tGroup in tGroups
-      if item 5 of tGroup < 4 then next repeat
-      add 1 to tMarks
-      tourRecord "INFO menu-marks: a mark at" && item 1 to 4 of tGroup & "," && item 5 of tGroup && \
-            "pixels, which differ from the menu by" && item 6 of tGroup && "in luma"
-      if item 6 of tGroup <= 127 then
-         put "the mark at" && item 1 to 4 of tGroup && "differs from the menu by" && item 6 of tGroup && \
-               "in luma (0 to 255)" & return after tFails
-      end if
-   end repeat
-   -- the tick, the dot and the arrow, and perhaps the submenu's name,
-   -- which may sit a pixel or two further right in a submenu's item
-   if tMarks < 3 then
-      put "the menus' snapshots differ in" && tMarks && "places, not in the tick, the dot and the arrow" & return after tFails
-   end if
    -- The IDE's own menus, File > Import Stack's HyperCard options among
    -- them, are drawn as this step's are only if they take the theme's
    -- colour too: the engine draws the marks white only when nothing from
@@ -1809,6 +1809,45 @@ end tourNewStackSizes
 -- needs its name's width and 16 more)
 local sMarksShot
 
+-- Empty if each mark in the snapshot pMarks (a menu with a tick, a dot
+-- and a submenu's arrow) stands out from the menu, by more than half the
+-- range of luma, against pNoMarks (the same menu without them), the
+-- menu's colour named pWhat; else a line for each that does not
+function tourMarksCheck pMarks, pNoMarks, pWhat
+   local tGroups, tGroup, tMarks, tFails
+   put tourMarksGroups(sOut & slash & pMarks & ".png", sOut & slash & pNoMarks & ".png") into tGroups
+   -- a group of a few pixels is not a mark
+   put 0 into tMarks
+   repeat for each line tGroup in tGroups
+      if item 5 of tGroup < 4 then next repeat
+      -- the submenu's name, a pixel or two further right in a submenu's
+      -- item: not a mark. Wider than any mark (the tick is 7 pixels, the
+      -- dot and the arrow 4), or in pieces where the menu without marks
+      -- shows its letters too. Its colour is the theme's text colour,
+      -- which can be close to a window's own colour: the theme's black on
+      -- a dark window in the light appearance, its white on a light one
+      -- in the dark appearance
+      if item 3 of tGroup - item 1 of tGroup >= 16 or item 7 of tGroup > 16 then
+         tourRecord "INFO menu-marks:" && pWhat & ": the submenu's name moved at" && item 1 to 4 of tGroup & \
+               ", not a mark (the menu without marks has text there)"
+         next repeat
+      end if
+      add 1 to tMarks
+      tourRecord "INFO menu-marks:" && pWhat & ": a mark at" && item 1 to 4 of tGroup & "," && item 5 of tGroup && \
+            "pixels, which differ from the menu by" && item 6 of tGroup && "in luma"
+      if item 6 of tGroup <= 127 then
+         put "on" && pWhat & ", the mark at" && item 1 to 4 of tGroup && "differs from the menu by" && \
+               item 6 of tGroup && "in luma (0 to 255)" & return after tFails
+      end if
+   end repeat
+   -- the tick, the dot and the arrow
+   if tMarks < 3 then
+      put "on" && pWhat & ", the menus' snapshots differ in" && tMarks && \
+            "places, not in the tick, the dot and the arrow" & return after tFails
+   end if
+   return tFails
+end tourMarksCheck
+
 command tourMarksPopup pStack, pButton, pFile
    set the defaultStack to pStack
    get shell("xdotool mousemove 340 240")
@@ -1838,11 +1877,14 @@ end tourMarksShot
 -- pixels that are not the same in both, in groups of neighbours (a pixel
 -- at most 2 away from one of a group is in it). Returns a line for each
 -- group: its left, top, right and bottom in the snapshots, its number of
--- pixels, and the largest difference in luma (Rec. 601, 0 to 255) of one
--- of its pixels between the two snapshots
+-- pixels, the largest difference in luma (Rec. 601, 0 to 255) of one of
+-- its pixels between the two snapshots, and how far apart in luma its
+-- pixels are in the second snapshot (0 where that one shows only the
+-- menu's own colour, as under a mark)
 function tourMarksGroups pFileA, pFileB
    local tDefault, tA, tB, tW, tH, tAt, tLumaA, tLumaB, tDiff, tKey, tSeen
    local tQueue, tHead, tTail, tPoint, tX, tY, tNext, tBounds, tCount, tMax, tGroups, tError, i, dx, dy
+   local tLumaOfB, tLeast, tMost
    if there is not a file pFileA or there is not a file pFileB then
       throw "there are not both snapshots," && pFileA && "and" && pFileB
    end if
@@ -1877,6 +1919,7 @@ function tourMarksGroups pFileA, pFileB
       put 299 * byteToNum(byte tAt + 2 of tA) + 587 * byteToNum(byte tAt + 3 of tA) + 114 * byteToNum(byte tAt + 4 of tA) into tLumaA
       put 299 * byteToNum(byte tAt + 2 of tB) + 587 * byteToNum(byte tAt + 3 of tB) + 114 * byteToNum(byte tAt + 4 of tB) into tLumaB
       put round(abs(tLumaA - tLumaB) / 1000) into tDiff[(i mod tW) & "," & (i div tW)]
+      put round(tLumaB / 1000) into tLumaOfB[(i mod tW) & "," & (i div tW)]
    end repeat
    repeat for each key tKey in tDiff
       if tSeen[tKey] is true then next repeat
@@ -1887,11 +1930,15 @@ function tourMarksGroups pFileA, pFileB
       put tKey & "," & tKey into tBounds
       put 0 into tCount
       put 0 into tMax
+      put 255 into tLeast
+      put 0 into tMost
       repeat while tHead <= tTail
          put tQueue[tHead] into tPoint
          add 1 to tHead
          add 1 to tCount
          put max(tMax, tDiff[tPoint]) into tMax
+         put min(tLeast, tLumaOfB[tPoint]) into tLeast
+         put max(tMost, tLumaOfB[tPoint]) into tMost
          put item 1 of tPoint into tX
          put item 2 of tPoint into tY
          put min(item 1 of tBounds, tX) into item 1 of tBounds
@@ -1909,7 +1956,7 @@ function tourMarksGroups pFileA, pFileB
          end repeat
       end repeat
       delete variable tQueue
-      put tBounds & "," & tCount & "," & tMax & return after tGroups
+      put tBounds & "," & tCount & "," & tMax & "," & (tMost - tLeast) & return after tGroups
    end repeat
    return line 1 to -1 of tGroups
 end tourMarksGroups
