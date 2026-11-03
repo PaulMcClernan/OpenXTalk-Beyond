@@ -38,6 +38,8 @@ local sKept
 local sSaidAt, sSaid
 -- True while a click in the court is handed to the card's mouseDown
 local sForwarding
+-- The button of the card's that is lit for a moment (labShowButtons)
+local sFlashed, sLightTicks
 
 ########################################
 #
@@ -101,6 +103,7 @@ command labOpen
       put true into sReady
       dispatch "labBuild" to sCard
       b2kStart
+      labShowButtons empty
    catch tError
       labFail "labBuild", tError
    end try
@@ -174,6 +177,12 @@ on b2kFrame
    catch tError
       labFail "labStep", tError
    end try
+   -- (the keys, and the lessons themselves, can switch things too: the
+   -- lights follow, five times a second)
+   add 1 to sLightTicks
+   if sLightTicks mod 12 is 0 then
+      labShowButtons empty
+   end if
 end b2kFrame
 
 -- The Reset button
@@ -415,7 +424,67 @@ command labRun pHandler
    catch tError
       labFail pHandler, tError
    end try
+   labShowButtons pHandler
 end labRun
+
+########################################
+#
+# The card's buttons light up
+#
+# A button that switches something on or off (its group's cSwitch is
+# true, from "switch" in the builder's buttons block) stays lit while
+# what it switches is on: the card's function labLit, given the
+# button's handler, says whether it is. Any other button lights up for
+# a moment when it runs. The light is the group's graphics "<name>_lit"
+# (a wash of the accent) and "<name>_ring" (its outline), hidden when
+# the button is not lit.
+
+-- After a button's handler ran (empty: after the lesson was made, or
+-- the Code tab's lines ran): puts every switch's light right, and
+-- flashes the button that ran, if it is not a switch
+command labShowButtons pHandler
+   local tIndex, tObj, tOn, tError
+   if sCard is empty then
+      exit labShowButtons
+   end if
+   repeat with tIndex = 1 to the number of groups of sCard
+      put the long id of group tIndex of sCard into tObj
+      if not (the short name of tObj begins with "Do") or the cDo of tObj is empty then
+         next repeat
+      end if
+      if the cSwitch of tObj is true then
+         put false into tOn
+         try
+            dispatch function "labLit" to sCard with the cDo of tObj
+            put (the result is true) into tOn
+         catch tError
+         end try
+         labLight tObj, tOn
+      else if pHandler is not empty and the cDo of tObj is pHandler then
+         labLight tObj, true
+         put tObj into sFlashed
+         send "labUnflash" to me in 180 milliseconds
+      end if
+   end repeat
+end labShowButtons
+
+-- The end of a button's flash
+command labUnflash
+   if sFlashed is not empty and exists(sFlashed) then
+      labLight sFlashed, false
+   end if
+   put empty into sFlashed
+end labUnflash
+
+-- Lights a button of the card's, or puts its light out
+command labLight pGroup, pOn
+   local tName
+   put the short name of pGroup into tName
+   if there is a graphic (tName & "_lit") of pGroup then
+      set the visible of graphic (tName & "_lit") of pGroup to pOn
+      set the visible of graphic (tName & "_ring") of pGroup to pOn
+   end if
+end labLight
 
 command labTabExplain
    labTab "Explain"
@@ -461,6 +530,7 @@ command labRunCode
    try
       do field "TryCode"
       labSay "Ran your lines.", true
+      labShowButtons empty
    catch tError
       put item 2 of line 1 of tError into tLine
       if tLine is an integer and tLine > 0 then

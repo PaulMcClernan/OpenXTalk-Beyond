@@ -128,3 +128,16 @@ on backToStart
    b2kCamFollow sPlayer
    b2kCamGoto 80, 189
 end backToStart
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "autoRun"
+         return sAuto
+      case "looseCamera"
+         return sLoose
+      case "deadZone"
+         return sDeadzone
+   end switch
+   return false
+end labLit

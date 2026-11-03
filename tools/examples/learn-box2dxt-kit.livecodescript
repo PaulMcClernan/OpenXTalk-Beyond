@@ -43,6 +43,7 @@ command exBuild pFolder
          "<path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/>"
    exAddIcon "play", "<polygon points='6 3 20 12 6 21 6 3'/>"
    exAddIcon "copy", "<rect width='14' height='14' x='8' y='8' rx='2' ry='2'/><path d='M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'/>"
+   exAddIcon "loader-circle", "<path d='M21 12a9 9 0 1 1-6.219-8.56'/>"
    exAddIcon "link", "<path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/>" & \
          "<path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/>"
    exAddIcon "gamepad-2", "<line x1='6' x2='10' y1='11' y2='11'/><line x1='8' x2='8' y1='9' y2='13'/>" & \
@@ -289,12 +290,21 @@ private command buildLab
    set the cDo of group "LabReset" to "labRestart"
    set the toolTip of group "LabReset" to "Start the lesson again from the beginning"
    set the sharedText of field "LabReset_label" to true
+   -- The sign that the lesson is being made: it shows in the court's
+   -- middle from when the card opens until its world is ready
+   put exButton("LabLoading", 0, item 2 of kCourt + 200, 40, "Getting the lesson ready...", "loader-circle", "dark", lkColor("violet"), "Lab", empty, 0) into tWidth
+   set the left of group "LabLoading" to (item 1 of kCourt + item 3 of kCourt - tWidth) div 2
+   set the sharedText of field "LabLoading_label" to true
+   hide group "LabLoading"
    set the script of group "Lab" to exScript("Lab")
    set the cDocs of group "Lab" to docs()
 end buildLab
 
 -- The card's own buttons, from the block "buttons" (card|label|handler|
--- tip), the first drawn as the main one, in a row from the left
+-- tip, and "switch" for one that switches something on and off), in a
+-- row from the left, all alike. Each has a light, hidden: a wash of the
+-- accent and its outline, which the Lab shows while a switch is on, or
+-- for a moment when a button runs (labShowButtons)
 private command lessonButtons pCard
    local tLine, tLeft, tWidth, tStyle, tName, tCount
    put kLeft + 14 into tLeft
@@ -305,14 +315,18 @@ private command lessonButtons pCard
          next repeat
       end if
       add 1 to tCount
-      if tCount is 1 then
-         put "primary" into tStyle
-      else
-         put "ghost" into tStyle
-      end if
+      put "ghost" into tStyle
       put "Do" & tCount into tName
       put exButton(tName, tLeft, kTop + 14, 34, item 2 of tLine, empty, tStyle, lkColor("violet"), empty, empty, 0) into tWidth
       set the cDo of group tName to item 3 of tLine
+      buttonLight tName, lkColor("violet")
+      if item 5 of tLine is "switch" then
+         set the cSwitch of group tName to true
+         if "labLit" is not among the words of scriptFunctionNames(the script of this card) then
+            set the itemDelimiter to comma
+            throw "the switch " & item 2 of tLine & " of " & pCard & " needs a function labLit on its card"
+         end if
+      end if
       set the toolTip of group tName to item 4 of tLine
       if item 4 of tLine is empty then
          set the itemDelimiter to comma
@@ -329,6 +343,29 @@ private command lessonButtons pCard
       throw "the buttons of " & pCard & " run past the stage"
    end if
 end lessonButtons
+
+-- A button's light: a wash of the accent over it and an outline in it,
+-- hidden (labLight shows them)
+private command buttonLight pName, pAccent
+   local tObj
+   put lkBox(pName & "_lit", the rect of group pName, pAccent, 34, pName) into tObj
+   set the blendLevel of tObj to 84
+   set the visible of tObj to false
+   put lkBox(pName & "_ring", the rect of group pName, empty, 34, pName) into tObj
+   set the lineSize of tObj to 2
+   set the foregroundColor of tObj to pAccent
+   set the visible of tObj to false
+end buttonLight
+
+private function scriptFunctionNames pScript
+   local tLine, tNames
+   repeat for each line tLine in pScript
+      if word 1 of tLine is "function" then
+         put word 2 of tLine & space after tNames
+      end if
+   end repeat
+   return tNames
+end scriptFunctionNames
 
 private function handlerNames pScript
    local tLine, tNames
@@ -576,55 +613,55 @@ Quick|Pill|addCapsule|Drop a capsule: a box with round ends
 Quick|Rain|rain|Drop ten shapes of every kind at once
 Quick|Clear|clearAll|Take away everything that moves (the walls stay)
 Controls|Lift them|liftThem|Put the button, field, ball and triangle back at the top
-Controls|Shelf moves|moveShelf|Make the shelf a kinematic body that slides, or static again
-Controls|Heavy ball|heavyBall|Make the ball ten times as dense, or light again
+Controls|Shelf moves|moveShelf|Make the shelf a kinematic body that slides, or static again|switch
+Controls|Heavy ball|heavyBall|Make the ball ten times as dense, or light again|switch
 Controls|Drop a box|dropBox|Drop a box onto the controls
 Moves|Jump|jump|Push the ball up: 450 pixels a second more
 Moves|Kick|kick|Kick every box with the same impulse
 Moves|Spin|spin|Spin the ball at 900 degrees a second
 Moves|Boom|boom|An explosion at the floor that blasts things away
-Moves|Bouncy|bouncy|Make the ball bouncy, or not
-Moves|Moon|moon|Moon gravity (a sixth of the Earth's), or Earth again
+Moves|Bouncy|bouncy|Make the ball bouncy, or not|switch
+Moves|Moon|moon|Moon gravity (a sixth of the Earth's), or Earth again|switch
 Joints|Faster|faster|Double the windmill motor's speed
-Joints|Reverse|reverse|Turn the windmill the other way
+Joints|Reverse|reverse|Turn the windmill the other way|switch
 Joints|Lift|liftUp|Drive the lift up, or back down
 Joints|Springy|springy|Make the rope stretch like a spring
 Joints|Cut rope|cutRope|Remove the rope joint, and let the weight fall
 Joints|Drive|drive|Turn the cart's wheel motors on: to the right, then back to the left
-Keys|Higher jumps|higher|Jump higher, or normally again
-Keys|Ice|ice|No friction: the hero slides
+Keys|Higher jumps|higher|Jump higher, or normally again|switch
+Keys|Ice|ice|No friction: the hero slides|switch
 Keys|Drop boxes|dropBoxes|Drop four boxes to climb on
 Sprites|Next picture|nextPicture|Show the alien's next picture from the sheet
 Sprites|Walk|walk|Play the walk pictures one after the other, as an animation
-Sprites|Flip|flipAlien|Turn the alien to face the other way
+Sprites|Flip|flipAlien|Turn the alien to face the other way|switch
 Sprites|Drop a crate|dropCrate|Drop a crate: a picture from the tile sheet on a box that falls
-Sprites|See the sheet|seeSheet|Show the whole sheet, with each named picture outlined
+Sprites|See the sheet|seeSheet|Show the whole sheet, with each named picture outlined|switch
 Anim|Hop|hop|Play the hop animation once, and jump
 Anim|Ouch|ouch|Play the ouch animation once
 Anim|Faster|faster|Double the walk's frames a second (back to 3 after 24)
-Anim|Stop / go|stopGo|Stop both animations on the frame they show, or go on
+Anim|Stop / go|stopGo|Stop both animations on the frame they show, or go on|switch
 Anim|From files|fromFiles|Write a PNG and an XML file, then load a sheet from them
-Player|Double jump|doubleJump|Allow one more jump in the air, or not
-Player|Faster|runFaster|Run at 340 pixels a second, or 220 again
+Player|Double jump|doubleJump|Allow one more jump in the air, or not|switch
+Player|Faster|runFaster|Run at 340 pixels a second, or 220 again|switch
 Player|Ouch|hurtPlayer|Hit the player from the right
 Player|Start again|startAgain|Put the player back where it started
-Camera|Run by itself|autoRun|Hold the right arrow key down for you, or let go of it
+Camera|Run by itself|autoRun|Hold the right arrow key down for you, or let go of it|switch
 Camera|Shake|shake|Shake the view for half a second
-Camera|Loose|looseCamera|Make the camera catch up slowly, or quickly again
-Camera|Dead zone|deadZone|Let the player move in a box in the middle before the camera moves, or not
+Camera|Loose|looseCamera|Make the camera catch up slowly, or quickly again|switch
+Camera|Dead zone|deadZone|Let the player move in a box in the middle before the camera moves, or not|switch
 Camera|Back to start|backToStart|Put the player and the view back at the start
 Sound|Coin|coin|Play the coin sound
 Sound|Jump|jumpAll|Play the jump sound, and make every ball jump
 Sound|Tune|tune|Play the tune over and over
 Sound|Stop|stopSound|Stop the sound that is playing
-Sound|Mute|muteSound|Turn every sound off, or on again
+Sound|Mute|muteSound|Turn every sound off, or on again|switch
 Contacts|Drop balls|dropBalls|Drop four balls that land on the boxes and take coins
 Contacts|Ghosts|ghosts|Drop four ghost balls that pass through the boxes
-Contacts|Solid boxes|boxesSolid|Put the boxes on layer 1, so ghosts land on them; press again to undo
+Contacts|Solid boxes|boxesSolid|Put the boxes on layer 1, so ghosts land on them; press again to undo|switch
 Terrain|Drop balls|dropBalls|Drop five balls on the hills
 Terrain|Drop boxes|dropBoxes|Drop three boxes on the hills
 Terrain|Who is near?|whoIsNear|Make everything in a circle in the middle jump
-Terrain|Laser|laser|Turn the laser off, or on again
+Terrain|Laser|laser|Turn the laser off, or on again|switch
 @*/
 
 /*@ Lab
@@ -662,16 +699,49 @@ local sKept
 local sSaidAt, sSaid
 -- True while a click in the court is handed to the card's mouseDown
 local sForwarding
+-- The button of the card's that is lit for a moment (labShowButtons)
+local sFlashed, sLightTicks
+-- The card being opened, until labOpenNow makes its lesson
+local sOpening
 
 ########################################
 #
 # The card opens and closes
 #
 
+-- The card opens: the sign that the lesson is being made shows first,
+-- and the lesson is made a moment later, when the window has drawn the
+-- card and the sign. (Made at once, the card stays blank until it is
+-- ready.) A card left before then is not made
 on openCard
-   labOpen
+   labLoading true
+   put the long id of this card into sOpening
+   send "labOpenNow" to me in 20 milliseconds
    pass openCard
 end openCard
+
+command labOpenNow
+   if sOpening is not the long id of this card then
+      exit labOpenNow
+   end if
+   put empty into sOpening
+   labOpen
+   labLoading false
+end labOpenNow
+
+-- Shows, or takes away, the sign that the lesson is being made, with the
+-- busy pointer
+command labLoading pOn
+   if there is a group "LabLoading" then
+      set the visible of group "LabLoading" to pOn
+   end if
+   if pOn then
+      lock cursor
+      set the cursor to busy
+   else
+      unlock cursor
+   end if
+end labLoading
 
 on closeCard
    labClose
@@ -725,6 +795,7 @@ command labOpen
       put true into sReady
       dispatch "labBuild" to sCard
       b2kStart
+      labShowButtons empty
    catch tError
       labFail "labBuild", tError
    end try
@@ -798,6 +869,12 @@ on b2kFrame
    catch tError
       labFail "labStep", tError
    end try
+   -- (the keys, and the lessons themselves, can switch things too: the
+   -- lights follow, five times a second)
+   add 1 to sLightTicks
+   if sLightTicks mod 12 is 0 then
+      labShowButtons empty
+   end if
 end b2kFrame
 
 -- The Reset button
@@ -1039,7 +1116,67 @@ command labRun pHandler
    catch tError
       labFail pHandler, tError
    end try
+   labShowButtons pHandler
 end labRun
+
+########################################
+#
+# The card's buttons light up
+#
+# A button that switches something on or off (its group's cSwitch is
+# true, from "switch" in the builder's buttons block) stays lit while
+# what it switches is on: the card's function labLit, given the
+# button's handler, says whether it is. Any other button lights up for
+# a moment when it runs. The light is the group's graphics "<name>_lit"
+# (a wash of the accent) and "<name>_ring" (its outline), hidden when
+# the button is not lit.
+
+-- After a button's handler ran (empty: after the lesson was made, or
+-- the Code tab's lines ran): puts every switch's light right, and
+-- flashes the button that ran, if it is not a switch
+command labShowButtons pHandler
+   local tIndex, tObj, tOn, tError
+   if sCard is empty then
+      exit labShowButtons
+   end if
+   repeat with tIndex = 1 to the number of groups of sCard
+      put the long id of group tIndex of sCard into tObj
+      if not (the short name of tObj begins with "Do") or the cDo of tObj is empty then
+         next repeat
+      end if
+      if the cSwitch of tObj is true then
+         put false into tOn
+         try
+            dispatch function "labLit" to sCard with the cDo of tObj
+            put (the result is true) into tOn
+         catch tError
+         end try
+         labLight tObj, tOn
+      else if pHandler is not empty and the cDo of tObj is pHandler then
+         labLight tObj, true
+         put tObj into sFlashed
+         send "labUnflash" to me in 180 milliseconds
+      end if
+   end repeat
+end labShowButtons
+
+-- The end of a button's flash
+command labUnflash
+   if sFlashed is not empty and exists(sFlashed) then
+      labLight sFlashed, false
+   end if
+   put empty into sFlashed
+end labUnflash
+
+-- Lights a button of the card's, or puts its light out
+command labLight pGroup, pOn
+   local tName
+   put the short name of pGroup into tName
+   if there is a graphic (tName & "_lit") of pGroup then
+      set the visible of graphic (tName & "_lit") of pGroup to pOn
+      set the visible of graphic (tName & "_ring") of pGroup to pOn
+   end if
+end labLight
 
 command labTabExplain
    labTab "Explain"
@@ -1085,6 +1222,7 @@ command labRunCode
    try
       do field "TryCode"
       labSay "Ran your lines.", true
+      labShowButtons empty
    catch tError
       put item 2 of line 1 of tError into tLine
       if tLine is an integer and tLine > 0 then
@@ -1374,6 +1512,17 @@ end heavyBall
 on dropBox
    b2kSpawnBox 360 + random(250), 220, 40, 40, "56,189,248"
 end dropBox
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "moveShelf"
+         return sMoving
+      case "heavyBall"
+         return b2kMass(sBall) >= 3
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Controls/explain
@@ -1477,6 +1626,17 @@ on moon
       b2kSetGravity 0, -10
    end if
 end moon
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "bouncy"
+         return sBouncy
+      case "moon"
+         return sMoon
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Moves/explain
@@ -1647,6 +1807,15 @@ on drive
       b2kWheelMotor tJoint, -600 * sDirection, 400
    end repeat
 end drive
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "reverse"
+         return sMillSpeed < 0
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Joints/explain
@@ -1755,6 +1924,17 @@ on dropBoxes
       b2kSpawnBox 320 + random(320), 220, 34, 34, "56,189,248"
    end repeat
 end dropBoxes
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "higher"
+         return sJump > 700
+      case "ice"
+         return sIce
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Keys/explain
@@ -1975,6 +2155,17 @@ private function frameRect pPose
          return "70,0,66,92"
    end switch
 end frameRect
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "flipAlien"
+         return b2kSpriteFlipped(sAlien)
+      case "seeSheet"
+         return sSheet is not empty
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Sprites/explain
@@ -2120,6 +2311,15 @@ on fromFiles
    end repeat
    put "   (read" && tCount && "frames from a PNG and an XML file)" into sFinished
 end fromFiles
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "stopGo"
+         return b2kSpriteAnim(sAlien) is empty
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Anim/explain
@@ -2261,6 +2461,17 @@ end hurtPlayer
 on startAgain
    b2kPlayerRespawn 470, 420
 end startAgain
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "doubleJump"
+         return sDouble
+      case "runFaster"
+         return sFast
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Player/explain
@@ -2409,6 +2620,19 @@ on backToStart
    b2kCamFollow sPlayer
    b2kCamGoto 80, 189
 end backToStart
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "autoRun"
+         return sAuto
+      case "looseCamera"
+         return sLoose
+      case "deadZone"
+         return sDeadzone
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Camera/explain
@@ -2503,6 +2727,15 @@ on muteSound
    put not sMuted into sMuted
    b2kSoundMute sMuted
 end muteSound
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "muteSound"
+         return sMuted
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Sound/explain
@@ -2630,6 +2863,15 @@ on boxesSolid
       b2kSetCategory tBox, sLayer
    end repeat
 end boxesSolid
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "boxesSolid"
+         return sLayer is 1
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Contacts/explain
@@ -2789,6 +3031,15 @@ end whoIsNear
 on laser
    put not sLaser into sLaser
 end laser
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "laser"
+         return sLaser
+   end switch
+   return false
+end labLit
 @*/
 
 /*@ Terrain/explain

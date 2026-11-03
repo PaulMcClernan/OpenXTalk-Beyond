@@ -127,3 +127,14 @@ end heavyBall
 on dropBox
    b2kSpawnBox 360 + random(250), 220, 40, 40, "56,189,248"
 end dropBox
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "moveShelf"
+         return sMoving
+      case "heavyBall"
+         return b2kMass(sBall) >= 3
+   end switch
+   return false
+end labLit

@@ -120,3 +120,14 @@ end hurtPlayer
 on startAgain
    b2kPlayerRespawn 470, 420
 end startAgain
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "doubleJump"
+         return sDouble
+      case "runFaster"
+         return sFast
+   end switch
+   return false
+end labLit

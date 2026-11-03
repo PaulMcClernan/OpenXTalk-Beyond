@@ -82,3 +82,14 @@ on moon
       b2kSetGravity 0, -10
    end if
 end moon
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "bouncy"
+         return sBouncy
+      case "moon"
+         return sMoon
+   end switch
+   return false
+end labLit

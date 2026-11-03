@@ -142,3 +142,12 @@ end whoIsNear
 on laser
    put not sLaser into sLaser
 end laser
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "laser"
+         return sLaser
+   end switch
+   return false
+end labLit

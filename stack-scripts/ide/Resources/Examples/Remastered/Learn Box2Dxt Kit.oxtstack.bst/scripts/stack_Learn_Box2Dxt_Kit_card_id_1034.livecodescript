@@ -151,3 +151,12 @@ on drive
       b2kWheelMotor tJoint, -600 * sDirection, 400
    end repeat
 end drive
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "reverse"
+         return sMillSpeed < 0
+   end switch
+   return false
+end labLit

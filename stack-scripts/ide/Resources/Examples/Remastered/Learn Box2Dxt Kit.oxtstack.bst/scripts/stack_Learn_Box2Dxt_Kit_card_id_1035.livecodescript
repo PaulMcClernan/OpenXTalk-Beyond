@@ -87,3 +87,14 @@ on dropBoxes
       b2kSpawnBox 320 + random(320), 220, 34, 34, "56,189,248"
    end repeat
 end dropBoxes
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "higher"
+         return sJump > 700
+      case "ice"
+         return sIce
+   end switch
+   return false
+end labLit

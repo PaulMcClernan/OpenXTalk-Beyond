@@ -200,3 +200,14 @@ private function frameRect pPose
          return "70,0,66,92"
    end switch
 end frameRect
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "flipAlien"
+         return b2kSpriteFlipped(sAlien)
+      case "seeSheet"
+         return sSheet is not empty
+   end switch
+   return false
+end labLit

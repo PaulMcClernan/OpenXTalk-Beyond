@@ -110,3 +110,12 @@ on boxesSolid
       b2kSetCategory tBox, sLayer
    end repeat
 end boxesSolid
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "boxesSolid"
+         return sLayer is 1
+   end switch
+   return false
+end labLit

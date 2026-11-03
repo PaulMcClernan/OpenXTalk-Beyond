@@ -76,3 +76,12 @@ on muteSound
    put not sMuted into sMuted
    b2kSoundMute sMuted
 end muteSound
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "muteSound"
+         return sMuted
+   end switch
+   return false
+end labLit

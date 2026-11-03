@@ -123,3 +123,12 @@ on fromFiles
    end repeat
    put "   (read" && tCount && "frames from a PNG and an XML file)" into sFinished
 end fromFiles
+
+-- Which of the switches is on (the Lab lights its button)
+function labLit pHandler
+   switch pHandler
+      case "stopGo"
+         return b2kSpriteAnim(sAlien) is empty
+   end switch
+   return false
+end labLit
