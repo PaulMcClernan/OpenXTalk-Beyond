@@ -75,8 +75,11 @@ release_sha256() {
 # which trixie's apt (sqv) refuses since 2026-02-01, so it is used only
 # through gpgv, to verify InRelease; InRelease's SHA256 then verifies the
 # Packages index, and that the package. Nothing is installed unverified.
+# The key is the anchor of all that, so it and the rest come over HTTPS:
+# over plain HTTP, whoever sat between could hand over a key, InRelease,
+# index and package that agree with one another.
 pi_archive_keyring() {
-  local release=$1 dir=$2 base=http://archive.raspberrypi.com/debian
+  local release=$1 dir=$2 base=https://archive.raspberrypi.com/debian
   local arch file sum sumgot packages index
   arch=$(dpkg --print-architecture)
   mkdir -p "$dir"
