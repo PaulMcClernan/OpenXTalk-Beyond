@@ -204,14 +204,19 @@ private function problem
 end problem
 
 -- Something moves, and everything that moves is in the court (with a
--- little room for one that is touching a wall)
+-- little room for one that is touching a wall). With the camera on
+-- (the Camera lesson), places are in its world, 1600 by 378 pixels
 private function wherever
    local tAll, tIn
    put b2kOverlapMoving(-100000, -100000, 100000, 100000) into tAll
    if tAll is empty then
       return "nothing moves"
    end if
-   put b2kOverlapMoving(250, 140, 700, 620) into tIn
+   if b2kCamIsOn() then
+      put b2kOverlapMoving(-20, -420, 1620, 400) into tIn
+   else
+      put b2kOverlapMoving(250, 140, 700, 620) into tIn
+   end if
    if the number of lines of tIn < the number of lines of tAll then
       return the number of lines of tAll - the number of lines of tIn && "of" && the number of lines of tAll && \
             "moving bodies are out of the court"
@@ -233,7 +238,8 @@ private function checks pCard
          "Joints|drive|1500|cart|>|40" & return & \
          "Sprites|dropCrate|300|sheet:|>|6" & return & \
          "Anim|fromFiles|500|(read|>|2" & return & \
-         "Contacts|dropBalls|3000|far:|>|3"
+         "Contacts|dropBalls|3000|far:|>|3" & return & \
+         "Camera|autoRun|2500|x|>|300"
       if item 1 of tLine is not pCard then
          next repeat
       end if

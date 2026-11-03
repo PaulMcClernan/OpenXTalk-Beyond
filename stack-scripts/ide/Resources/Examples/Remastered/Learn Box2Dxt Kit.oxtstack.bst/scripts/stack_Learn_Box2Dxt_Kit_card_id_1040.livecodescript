@@ -1,112 +1,78 @@
 script "stack_Learn_Box2Dxt_Kit_card_id_1040"
 -- Stack file: ide/Resources/Examples/Remastered/Learn Box2Dxt Kit.oxtstack
--- Object: stack "Learn Box2Dxt Kit" > card "Contacts" (id 1040)
+-- Object: stack "Learn Box2Dxt Kit" > card "Sound" (id 1040)
 -- Made from the stack by tools/oxt/stack-scripts.sh; the stack holds
 -- the script that runs, so change it there, not here.
 
--- 11 Contacts and Sensors: who touched what
--- Games need to know when things touch: the ball hit the target, the
--- player reached the coin. After each frame the Kit sends the card:
+-- 10 Sound: beeps and tunes, made by the script
+-- The Kit can make sounds without any sound files. b2kToneMake writes
+-- one from a list of notes, given as frequencies in hertz (440 is the
+-- A above middle C; 0 is a rest), how long each note lasts, how loud,
+-- and the shape of the wave: "sine" is soft, "square" is a retro beep.
+-- Then b2kSound plays it by its name. The engine plays one sound at a
+-- time: a new one cuts the one that is playing.
 --
---    b2kContact pA, pB         two bodies started touching
---    b2kSensorEnter pS, pV     something came into a sensor
---
--- A sensor (b2kAddSensor) is a body that nothing bumps into: it only
--- notices. Coins and finish lines are sensors.
---
--- Layers decide what bumps into what. Layers are numbered 1, 2, 4, 8 and
--- so on, and every body starts on layer 1. b2kSetCategory puts a body on
--- a layer; b2kSetMask says which layers it bumps into. The boxes here are
--- on layer 2. The ghost balls bump into layer 1 only: the walls and the
--- other balls, but not the boxes. (The Kit can name layers too, as
--- b2kSetCategory tSlime, "enemies" does: see the Reference.)
+-- The card plays a "tock" when two things hit each other hard: the Kit
+-- sends the card b2kContact when two bodies start to touch.
 
-local sTouches, sCoins, sGot, sTaken, sBoxes, sLayer
+local sLastTock, sMuted
 
 on labBuild
-   local tIndex, tObj
-   put 0 into sTouches
-   put 2 into sLayer
-   put 0 into sGot
-   put empty into sTaken
-   -- 1. Coins: yellow circles that are sensors
-   put empty into sCoins
-   repeat with tIndex = 1 to 5
-      create graphic ("coin" & tIndex)
-      put it into tObj
-      set the style of tObj to "oval"
-      set the opaque of tObj to true
-      set the lineSize of tObj to 0
-      set the backgroundColor of tObj to "250,204,21"
-      set the rect of tObj to 280 + tIndex * 62, 420, 304 + tIndex * 62, 444
-      labKeep tObj
-      b2kAddSensor tObj, "ball"
-      put tObj & return after sCoins
-   end repeat
-   -- 2. Boxes, on layer 2
-   put empty into sBoxes
-   repeat with tIndex = 0 to 3
-      b2kSpawnBox 360 + tIndex * 80, 560, 50, 50, "56,189,248"
-      put the result & return after sBoxes
-      b2kSetCategory line -1 of sBoxes, 2
+   local tIndex
+   -- 1. The sounds: a name, the notes, milliseconds each, loudness, wave
+   b2kToneMake "coin", "988,1319", 70, 50, "square"
+   b2kToneMake "jump", "392,523,659", 45, 50, "square"
+   b2kToneMake "tock", "220", 35, 40, "sine"
+   b2kToneMake "tune", "523,659,784,659,523,0,392,0", 140, 40, "sine"
+   put false into sMuted
+   b2kSoundMute false
+   put 0 into sLastTock
+   -- 2. Things to bump
+   repeat with tIndex = 1 to 4
+      b2kSpawnBall 320 + tIndex * 70, 250, 40, "250,204,21"
+      b2kSetBounce the result, 0.7
    end repeat
 end labBuild
 
--- Two bodies started touching: count it
-on b2kContact pA, pB
-   add 1 to sTouches
-end b2kContact
-
--- Something came into a sensor: if the sensor is a coin, it is taken.
--- (The coin goes in labStep: a control is not deleted while the Kit is
--- telling us about it)
-on b2kSensorEnter pSensor, pVisitor
-   if pSensor is among the lines of sCoins and pSensor is not among the lines of sTaken then
-      put pSensor & return after sTaken
-      add 1 to sGot
-   end if
-end b2kSensorEnter
-
 on labStep
-   local tCoin
-   repeat for each line tCoin in sTaken
-      if there is tCoin then
-         b2kRemove tCoin
-         delete tCoin
-      end if
-   end repeat
-   put empty into sTaken
-   labSay "touches so far:" && sTouches & "   touching this frame:" && b2kContactCount() & "   coins:" && sGot && "of 5"
+   if b2kSoundStatus() is empty then
+      labSay "sound: working" & "   muted:" && sMuted
+   else
+      labSay "sound: off on this computer (" & b2kSoundStatus() & ")"
+   end if
 end labStep
 
--- Drop balls: ordinary ones, which land on the boxes and take coins
-on dropBalls
-   local tIndex
-   repeat with tIndex = 1 to 4
-      b2kSpawnBall 320 + random(320), 230, 28, "251,146,60"
-   end repeat
-end dropBalls
-
--- Ghosts: balls whose mask is layer 1 only, so they fall through the
--- boxes, which are not on it
-on ghosts
-   local tIndex
-   repeat with tIndex = 1 to 4
-      b2kSpawnBall 340 + random(300), 230, 28, "196,181,253"
-      b2kSetMask the result, 1
-   end repeat
-end ghosts
-
--- Solid boxes: the boxes on layer 1, so ghosts land on them too; again,
--- back on layer 2
-on boxesSolid
-   local tBox
-   if sLayer is 1 then
-      put 2 into sLayer
-   else
-      put 1 into sLayer
+-- The Kit sends this when two bodies start to touch (an empty control
+-- is a wall). Not more than one tock every tenth of a second
+on b2kContact pA, pB
+   if the milliseconds - sLastTock > 100 then
+      put the milliseconds into sLastTock
+      b2kSound "tock"
    end if
-   repeat for each line tBox in sBoxes
-      b2kSetCategory tBox, sLayer
+end b2kContact
+
+on coin
+   b2kSound "coin"
+end coin
+
+on jumpAll
+   local tBall
+   b2kSound "jump"
+   repeat for each line tBall in b2kOverlapMoving(270, 162, 680, 602)
+      b2kPush tBall, 0, -500
    end repeat
-end boxesSolid
+end jumpAll
+
+-- The tune plays round and round until Stop or another sound
+on tune
+   b2kSoundLoop "tune"
+end tune
+
+on stopSound
+   b2kSoundStop
+end stopSound
+
+on muteSound
+   put not sMuted into sMuted
+   b2kSoundMute sMuted
+end muteSound

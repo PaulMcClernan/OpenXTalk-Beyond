@@ -2273,8 +2273,8 @@ private function leExampleTable
    put "|Learn Box2D|Thirteen lessons in Box2D physics, each a live world to play with, how it works and the calls " & \
          "it makes: bodies, shapes, forces, joints, contacts, ray casts and terrain.|OXT-Beyond, 2026, on Box2D 3.1 through Box2Dxt|tours|box|teal|" & \
          "box2d box2dxt physics joints game|Resources/Examples/Remastered/Learn Box2D.oxtstack|Learn Box2D" & return after tTable
-   put "|Learn Box2Dxt Kit|Eleven lessons in making games with the Box2Dxt Kit, in pixels: sprites, sprite sheets " & \
-         "and GIFs, a player to steer, sound, contacts, coins and terrain, with a Reference of every Kit call.|OXT-Beyond, 2026, on the Box2Dxt Kit|tours|gamepad-2|emerald|" & \
+   put "|Learn Box2Dxt Kit|Twelve lessons in making games with the Box2Dxt Kit, in pixels: sprites, sprite sheets " & \
+         "and GIFs, a player to steer and a camera to follow it, sound, contacts, coins and terrain, with a Reference of every Kit call.|OXT-Beyond, 2026, on the Box2Dxt Kit|tours|gamepad-2|emerald|" & \
          "box2d box2dxt kit physics game sprite spritesheet gif animation player|Resources/Examples/Remastered/Learn Box2Dxt Kit.oxtstack|Learn Box2Dxt Kit" & return after tTable
    put "Resources/Examples/SQLite Book Library.oxtstack|SQLite Book Library|A small catalogue of books in SQLite, shown in " & \
          "a Data Grid: list them, search them, add and delete them.|In OpenXTalk Lite's demo set; its author is not recorded|apps|library-big|emerald|" & \

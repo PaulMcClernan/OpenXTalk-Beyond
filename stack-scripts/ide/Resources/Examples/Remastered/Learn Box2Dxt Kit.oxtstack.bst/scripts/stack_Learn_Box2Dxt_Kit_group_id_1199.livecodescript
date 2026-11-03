@@ -1,6 +1,6 @@
-script "stack_Learn_Box2Dxt_Kit_group_id_1191"
+script "stack_Learn_Box2Dxt_Kit_group_id_1199"
 -- Stack file: ide/Resources/Examples/Remastered/Learn Box2Dxt Kit.oxtstack
--- Object: stack "Learn Box2Dxt Kit" > card "Quick" (id 1031) > group "Lab" (id 1191)
+-- Object: stack "Learn Box2Dxt Kit" > card "Quick" (id 1031) > group "Lab" (id 1199)
 -- Made from the stack by tools/oxt/stack-scripts.sh; the stack holds
 -- the script that runs, so change it there, not here.
 
@@ -124,6 +124,7 @@ command labClose
       try
          b2kRelease
          -- (the keyboard, if a lesson read it)
+         b2kInputInjectOff
          b2kInputOff
          -- (everything the Kit made that moves, then the world itself)
          b2kClear

@@ -64,6 +64,7 @@ command exBuild pFolder
          "Sprites|Sprite Sheets|Many pictures in one image: cut them out, name them, show them.|image|wide" & return & \
          "Anim|Animation & GIFs|Pictures that move by themselves: animations, GIFs, and sheets from files.|film|wide" & return & \
          "Player|A Player|A character that runs, jumps, climbs and swims, with the arrow keys.|footprints|wide keys" & return & \
+         "Camera|A Camera|A level wider than the window: the view follows the player.|eye|wide keys" & return & \
          "Sound|Sound|Beeps and tunes made by the script, and a sound when things hit.|volume-2|wide" & return & \
          "Contacts|Contacts & Sensors|Who touched what, coins that notice, and layers that pass through.|trophy|wide" & return & \
          "Terrain|Terrain & Rays|Hills, a pit, and a laser that sees what it hits.|map|wide" & return & \
@@ -107,6 +108,7 @@ private command buildArt
    art "Anim", "AlienArt", tFolder & "/alienGreen.png"
    art "Anim", "WalkGif", tFolder & "/alien-walk.gif"
    art "Player", "AlienArt", tFolder & "/alienGreen.png"
+   art "Camera", "AlienArt", tFolder & "/alienGreen.png"
 end buildArt
 
 private command art pCard, pName, pFile
@@ -560,6 +562,7 @@ Keyboard
 Sprites
 Animate
 Player
+Camera
 Sound
 Contacts
 Terrain
@@ -605,6 +608,11 @@ Player|Double jump|doubleJump|Allow one more jump in the air, or not
 Player|Faster|runFaster|Run at 340 pixels a second, or 220 again
 Player|Ouch|hurtPlayer|Hit the player from the right
 Player|Start again|startAgain|Put the player back where it started
+Camera|Run by itself|autoRun|Hold the right arrow key down for you, or let go of it
+Camera|Shake|shake|Shake the view for half a second
+Camera|Loose|looseCamera|Make the camera catch up slowly, or quickly again
+Camera|Dead zone|deadZone|Let the player move in a box in the middle before the camera moves, or not
+Camera|Back to start|backToStart|Put the player and the view back at the start
 Sound|Coin|coin|Play the coin sound
 Sound|Jump|jumpAll|Play the jump sound, and make every ball jump
 Sound|Tune|tune|Play the tune over and over
@@ -740,6 +748,7 @@ command labClose
       try
          b2kRelease
          -- (the keyboard, if a lesson read it)
+         b2kInputInjectOff
          b2kInputOff
          -- (everything the Kit made that moves, then the world itself)
          b2kClear
@@ -2275,6 +2284,151 @@ b2kPlayerSet "wallJumpX", 300
 b2kPlayerSet "wallJumpY", 450
 @*/
 
+/*@ Camera/card
+-- Camera: a world bigger than the window
+-- A level is often much wider than the window. The Kit's camera shows
+-- part of it, and scrolls to keep the player in view.
+--
+--    b2kCamOn      a viewport: the rectangle of the card that shows the world
+--    b2kCamBounds  how big the world is, so the camera stops at its edges
+--    b2kCamFollow  which control to keep in view, and how smoothly
+--    b2kCamShake   a shake, for a bump or a blast
+--
+-- With the camera on, places are places in the WORLD, not on the card.
+-- The world's 0,0 is the top left corner of the viewport, before it
+-- scrolls. This level is 1600 pixels wide and 378 high; the viewport
+-- (the court, below the line of words) is 410 by 378. b2kCamMouseX and
+-- b2kCamMouseY tell you where the mouse is in the world.
+
+local sPlayer, sLoose, sDeadzone, sAuto
+
+-- The Lab calls labWorld before labBuild. Handling it says "this card
+-- makes its own walls": the world here is bigger than the court
+on labWorld
+   -- 1. The camera: the court, below its line of words, shows the world
+   b2kCamOn "270,224,680,602"
+   b2kCamBounds 0, 0, 1600, 378
+   -- 2. The world's floor and its two ends: lines nothing passes through
+   b2kWall 0, 378, 1600, 378
+   b2kWall 0, -400, 0, 378
+   b2kWall 1600, -400, 1600, 378
+end labWorld
+
+on labBuild
+   local tIndex, tX
+   -- 3. The level: ledges, each with a crate on it
+   repeat for each line tIndex in "250,290,120" & return & "450,250,120" & return & "660,200,140" & return & \
+         "910,280,120" & return & "1130,210,120" & return & "1370,140,160"
+      b2kSpawnBox item 1 of tIndex, item 2 of tIndex, item 3 of tIndex, 16, "148,163,184"
+      b2kSetStatic the result
+      b2kSpawnBox item 1 of tIndex, item 2 of tIndex - 40, 30, 30, "180,120,60"
+   end repeat
+   -- (a marker every 200 pixels along the top, out of the player's
+   -- reach, so that you see the world scroll by)
+   repeat with tX = 200 to 1400 step 200
+      b2kSpawnBox tX, 10, 4, 20, "71,85,105"
+      b2kSetStatic the result
+   end repeat
+   -- 4. The player, as on the Player lesson, and the camera follows it
+   b2kSheetFromImage "hero", the long id of image "AlienArt", 0, 0
+   b2kSheetAddFrame "hero", "stand", 69, 379, 66, 92
+   b2kSheetAddFrame "hero", "walk1", 69, 193, 68, 93
+   b2kSheetAddFrame "hero", "walk2", 0, 0, 70, 96
+   b2kSheetAddFrame "hero", "jump", 69, 286, 67, 93
+   b2kSheetScale "hero", 0.6
+   b2kAnimDef "hero", "idle", "stand", 1, true
+   b2kAnimDef "hero", "run", "walk1,walk2", 8, true
+   b2kAnimDef "hero", "jump", "jump", 1, true
+   b2kPlayerMake 80, 320, 30, 54, "hero"
+   put the result into sPlayer
+   b2kPlayerAnims "idle", "run", "jump"
+   b2kCamFollow sPlayer
+   put false into sLoose
+   put false into sDeadzone
+   put false into sAuto
+   b2kInputInjectOff
+end labBuild
+
+on labStep
+   local tWhere, tView
+   -- (b2kCamStatus says what is wrong, if the camera could not start)
+   if b2kCamStatus() is not empty then
+      labSay "The camera did not start:" && b2kCamStatus()
+      exit labStep
+   end if
+   put b2kCamPos() into tView
+   put b2kPosition(sPlayer) into tWhere
+   labSay "the camera's middle: x" && item 1 of tView & ", y" && item 2 of tView & \
+         "   the player: x" && round(item 1 of tWhere) & ", y" && round(item 2 of tWhere) && "(in the world)"
+end labStep
+
+-- (the arrow keys are the player's, so the card keeps them)
+on arrowKey pKey
+end arrowKey
+
+on shake
+   b2kCamShake 14, 500
+end shake
+
+-- Loose: the camera catches up slowly (0.04 of the way each frame)
+on looseCamera
+   put not sLoose into sLoose
+   if sLoose then
+      b2kCamFollow sPlayer, 0.04
+   else
+      b2kCamFollow sPlayer, 0.15
+   end if
+end looseCamera
+
+-- Dead zone: the player can move about in a box in the middle before
+-- the camera moves
+on deadZone
+   put not sDeadzone into sDeadzone
+   if sDeadzone then
+      b2kCamDeadzone 200, 120
+   else
+      b2kCamDeadzone 0, 0
+   end if
+end deadZone
+
+-- Run by itself: the Kit can hold keys down for you (b2kInputInject),
+-- which is how a demo, or a test, plays a game
+on autoRun
+   put not sAuto into sAuto
+   if sAuto then
+      b2kInputInject "right"
+   else
+      b2kInputInjectOff
+   end if
+end autoRun
+
+on backToStart
+   put false into sAuto
+   b2kInputInjectOff
+   b2kPlayerRespawn 80, 320
+   b2kCamFollow sPlayer
+   b2kCamGoto 80, 189
+end backToStart
+@*/
+
+/*@ Camera/explain
+# What you see
+A level four times as wide as the court. Run right with the arrow keys (or press Run by itself): the camera follows the alien.
+# How
+* b2kCamOn makes the court a window on the world.
+* b2kCamBounds says how big the world is.
+* b2kCamFollow keeps the player in view.
+* b2kCamShake shakes it.
+Places are in the world: x goes from 0 to 1600 here, and 0,0 is the court's top left before it scrolls.
+# Try
+Run to the end. Then Loose, and Dead zone.
+@*/
+
+/*@ Camera/try
+-- Look at the far end of the level for a moment
+b2kCamUnfollow
+b2kCamGoto 1400, 189
+@*/
 
 /*@ Sound/card
 -- 10 Sound: beeps and tunes, made by the script
@@ -2884,7 +3038,7 @@ b2kPlayerInLadder|Tells you true when the player is on a ladder.
 b2kPlayerSet|Turns one of the player's knobs, such as moveSpeed or jumpSpeed. Empty puts it back.
 b2kPlayerHurt|Hurts the player: it jumps back, away from where the hit came from.
 b2kPlayerRespawn|Puts the player somewhere, standing still, as if the game had just begun.
-b2kCamOn|Turns the camera on: a rectangle of the card becomes a window on a bigger world.
+b2kCamOn|Turns the camera on: a rectangle of the card becomes a window on a bigger world, whose 0,0 is that rectangle's top left corner.
 b2kCamBounds|Tells the camera how big the world is, so that it stops at the edges.
 b2kCamAdopt|Puts a control of yours into the camera's world, so that it scrolls with it.
 b2kCamFollow|Makes the camera follow a control. A smaller number follows more slowly.
@@ -2921,6 +3075,8 @@ b2kRayHitX|Tells you across where the last ray hit, or empty when it hit nothing
 b2kRayHitY|Tells you how far down the last ray hit, or empty when it hit nothing.
 b2kRayDist|Tells you how far the last ray went before it hit, in pixels.
 b2kOverlapCircle|Tells you every body inside a circle, one a line.
+b2kInputInject|Holds keys down for you, as if they were pressed, until b2kInputInjectOff: for demos and tests.
+b2kInputInjectOff|Goes back to reading the real keyboard.
 @*/
 
 /*@ ref

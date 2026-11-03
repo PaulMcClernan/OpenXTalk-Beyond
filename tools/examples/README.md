@@ -121,7 +121,7 @@ Learn Box2Dxt Kit is Learn Box2D's other half, and each links to the
 other from its front page. Learn Box2D teaches Box2D's own calls, in
 metres; this one teaches the Box2Dxt Kit (`b2k...`), the script library
 that makes games with Box2D in pixels, with the screen's y going down
-and angles in degrees. Its eleven lessons, each a `wide` card with a
+and angles in degrees. Its twelve lessons, each a `wide` card with a
 live court, buttons, "How it works" and a Code tab of lines to run:
 
 - the basics (a ball, a box and a floor in a few lines), controls made
@@ -130,7 +130,9 @@ live court, buttons, "How it works" and a Code tab of lines to run:
   keyboard;
 - sprites from a sprite sheet, animation (frames, a GIF, and a sheet
   read from a PNG and Kenney's XML atlas), a player that runs, jumps,
-  climbs and swims, and sound;
+  climbs and swims, a camera that follows it through a level four
+  times as wide as the court (`b2kCamOn` on a viewport away from the
+  card's corner, which needs the Kit of 2026-11-03 or later), and sound;
 - contacts and sensors (coins, layers that pass through each other),
   and terrain (smooth ground, a pit, a ray cast, a kill floor).
 
@@ -150,9 +152,10 @@ runs every lesson of the built stack with Box2Dxt and the Kit loaded
 from the install: on each card it runs every button, the Code tab's
 lines, Step, Pause and Reset; the line at the court's top must never
 say the lesson or the lines stopped; everything that moves must be in
-the court; and, from a fresh Reset, a button on six of the cards must
+the court; and, from a fresh Reset, a button on seven of the cards must
 do what its lesson says (it rains, the ball jumps, the lift rises, the
-cart drives, a sheet's frames load, contacts are counted). The search
+cart drives, a sheet's frames load, the camera follows a player that
+runs by itself, contacts are counted). The search
 and an explanation are checked on the Reference card. It ends with
 `DONE` or `FAILED`; `OXT_LEARN_KIT` names another copy of the stack, and
 `OXT_LEARN_KIT_SNAPS` a folder for a picture of each card.

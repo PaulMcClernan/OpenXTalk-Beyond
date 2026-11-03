@@ -1,111 +1,144 @@
 script "stack_Learn_Box2Dxt_Kit_card_id_1042"
 -- Stack file: ide/Resources/Examples/Remastered/Learn Box2Dxt Kit.oxtstack
--- Object: stack "Learn Box2Dxt Kit" > card "Reference" (id 1042)
+-- Object: stack "Learn Box2Dxt Kit" > card "Terrain" (id 1042)
 -- Made from the stack by tools/oxt/stack-scripts.sh; the stack holds
 -- the script that runs, so change it there, not here.
 
--- Every handler in the Kit: type to find one, click it to read about it.
--- The words are kept in two custom properties of this card, made when
--- the stack was built: cRef holds each handler's usage, what it does
--- and its details, and cUsedIn the lessons that call it.
+-- 12 Terrain and Rays: hills, holes, and seeing what is there
+-- Ground in a game is rarely flat. b2kSmoothGround makes a smooth
+-- ground from a list of points: a chain of lines with no corners for
+-- fast things to catch on. It is invisible, so the card draws a graphic
+-- with the same points. A chain is solid on one side only: list the
+-- points from right to left, and the top is solid.
+--
+-- b2kKillFloor takes away what falls below a line: here, into the pit.
+-- The Kit sends b2kFell before it does.
+--
+-- A ray (b2kRayHit) is a line the world is asked about: what does it hit
+-- first, where, and how far away? Games use rays for lasers, line of
+-- sight, and whether a character stands on something. b2kOverlapCircle
+-- asks what is inside a circle.
 
-on openCard
-   refFilter
-   pass openCard
-end openCard
+local sFell, sLaser, sBeam, sDot
 
--- Each letter typed in the search box narrows the list
-on textChanged
-   if the short name of the target is "RefFind" then
-      refFilter
+on labBuild
+   local tRight, tLeft
+   -- 1. Two hills with a pit between them. Each list runs right to
+   --    left; its first and last lines are "ghosts" that only steer the
+   --    ends, so each runs one point past the ground you see
+   put "700,420" & return & "680,420" & return & "630,470" & return & "580,480" & return & \
+         "530,450" & return & "524,610" & return & "520,640" into tRight
+   put "470,640" & return & "466,610" & return & "460,440" & return & "400,470" & return & \
+         "340,450" & return & "290,450" & return & "270,450" & return & "250,450" into tLeft
+   b2kSmoothGround tRight
+   b2kSmoothGround tLeft
+   drawHill "HillRight", line 2 to -2 of tRight
+   drawHill "HillLeft", line 2 to -2 of tLeft
+   -- 2. Anything that falls below 570 (into the pit) goes
+   b2kKillFloor 570
+   put 0 into sFell
+   -- 3. The laser's beam and the dot where it hits
+   put true into sLaser
+   create graphic "Beam"
+   put it into sBeam
+   set the style of sBeam to "line"
+   set the foregroundColor of sBeam to "244,63,94"
+   set the lineSize of sBeam to 2
+   labKeep sBeam
+   create graphic "Dot"
+   put it into sDot
+   set the style of sDot to "oval"
+   set the opaque of sDot to true
+   set the lineSize of sDot to 0
+   set the backgroundColor of sDot to "244,63,94"
+   set the rect of sDot to 0, 0, 10, 10
+   labKeep sDot
+   dropBalls
+end labBuild
+
+-- A hill as a filled shape: its points, then down to the floor
+private command drawHill pName, pPoints
+   local tObj
+   create graphic pName
+   put it into tObj
+   set the style of tObj to "polygon"
+   set the opaque of tObj to true
+   set the lineSize of tObj to 0
+   set the backgroundColor of tObj to "52,211,153"
+   set the points of tObj to pPoints & return & item 1 of line -1 of pPoints & ",602" & return & \
+         item 1 of line 1 of pPoints & ",602" & return & line 1 of pPoints
+   labKeep tObj
+end drawHill
+
+-- Each frame: the laser, from the top left of the court towards the
+-- mouse (or down the slope, when the mouse is not in the court), and on
+-- for 1000 pixels
+on labStep
+   local tX, tY, tHit, tWords, tLength
+   if the mouseLoc is within the rect of graphic "Court" and the mouseLoc is not "290,240" then
+      put the mouseH into tX
+      put the mouseV into tY
+   else
+      put 640 into tX
+      put 560 into tY
    end if
-   pass textChanged
-end textChanged
-
-on mouseUp
-   if the short name of the target is "RefList" and the clickLine is not empty then
-      set the hilitedLine of field "RefList" to word 2 of the clickLine
-      refExplain the value of the clickLine
+   put sqrt((tX - 290) ^ 2 + (tY - 240) ^ 2) into tLength
+   put round(290 + (tX - 290) * 1000 / tLength) into tX
+   put round(240 + (tY - 240) * 1000 / tLength) into tY
+   if not sLaser then
+      set the points of sBeam to empty
+      hide sDot
+      labSay "fell into the pit:" && sFell
+      exit labStep
    end if
-   pass mouseUp
-end mouseUp
-
--- The wheel scrolls the list and the words (65308 down, 65309 up)
-on rawKeyDown pKey
-   local tField, tStep
-   if pKey is 65308 or pKey is 65309 then
-      repeat for each item tField in "RefList,RefDoc"
-         if the mouseLoc is within the rect of field tField then
-            put 54 into tStep
-            if pKey is 65309 then
-               put -tStep into tStep
-            end if
-            set the vScroll of field tField to max(0, the vScroll of field tField + tStep)
-         end if
-      end repeat
-      exit rawKeyDown
-   end if
-   pass rawKeyDown
-end rawKeyDown
-
--- Up and down choose in the list, while you type; the other arrow keys
--- go to the next or last card, unless you are typing
-on arrowKey pKey
-   local tLine
-   if pKey is "up" or pKey is "down" then
-      put the hilitedLine of field "RefList" into tLine
-      if tLine is empty then
-         put 0 into tLine
-      end if
-      if pKey is "down" then
-         put min(tLine + 1, the number of lines of field "RefList") into tLine
+   put b2kRayHit(290, 240, tX, tY) into tHit
+   if b2kRayHitX() is empty then
+      set the points of sBeam to "290,240" & return & tX & "," & tY
+      hide sDot
+      put "the laser hits nothing" into tWords
+   else
+      set the points of sBeam to "290,240" & return & b2kRayHitX() & "," & b2kRayHitY()
+      set the loc of sDot to b2kRayHitX(), b2kRayHitY()
+      show sDot
+      if tHit is empty then
+         put "the laser hits the ground or a wall" into tWords
       else
-         put max(tLine - 1, 1) into tLine
+         put "the laser hits a" && word 1 of tHit into tWords
       end if
-      if tLine > 0 then
-         set the hilitedLine of field "RefList" to tLine
-         refExplain line tLine of field "RefList"
-      end if
-   else if the selectedField is empty then
-      pass arrowKey
+      put " at" && b2kRayHitX() & "," & b2kRayHitY() & "," && round(b2kRayDist()) && "pixels away" after tWords
    end if
-end arrowKey
+   labSay tWords & "   fell into the pit:" && sFell
+end labStep
 
--- The handlers whose name or words have what is in the search box
-command refFilter
-   local tRef, tFind, tName, tShown, tCount
-   put the cRef of this card into tRef
-   put field "RefFind" into tFind
-   repeat for each line tName in the cNames of this card
-      if tFind is empty or tFind is in tName or tFind is in tRef[tName] then
-         put tName & return after tShown
-         add 1 to tCount
-      end if
+-- The Kit sends this just before it takes something below the kill
+-- floor away
+on b2kFell pControl
+   add 1 to sFell
+end b2kFell
+
+on dropBalls
+   local tIndex
+   repeat with tIndex = 1 to 5
+      b2kSpawnBall 300 + random(360), 240, 20 + random(16), "251,146,60"
    end repeat
-   delete the last char of tShown
-   put tShown into field "RefList"
-   put max(0, tCount) && "of" && the number of lines of the cNames of this card && "handlers" into field "RefCount"
-end refFilter
+end dropBalls
 
--- One handler: how to call it, what it does, its details, and which
--- lessons call it
-command refExplain pName
-   local tRef, tUsed, tDoc, tText
-   put the cRef of this card into tRef
-   put the cUsedIn of this card into tUsed
-   put tRef[pName] into tDoc
-   if tDoc is empty then
-      exit refExplain
-   end if
-   set the itemDelimiter to "|"
-   put item 1 of tDoc & return & item 2 of tDoc & return & return & item 3 to -1 of tDoc into tText
-   set the itemDelimiter to comma
-   replace "\n" with return in tText
-   if tUsed[pName] is not empty then
-      put return & return & "In the lessons:" && tUsed[pName] after tText
-   end if
-   put tText into field "RefDoc"
-   set the textStyle of line 1 of field "RefDoc" to "bold"
-   set the textFont of line 1 of field "RefDoc" to "Courier"
-   set the vScroll of field "RefDoc" to 0
-end refExplain
+on dropBoxes
+   local tIndex
+   repeat with tIndex = 1 to 3
+      b2kSpawnBox 300 + random(360), 240, 30, 30, "56,189,248"
+   end repeat
+end dropBoxes
+
+-- Who is near? Everything inside a circle in the middle of the court
+-- jumps
+on whoIsNear
+   local tObj
+   repeat for each line tObj in b2kOverlapCircle(475, 420, 110)
+      b2kPush tObj, 0, -400
+   end repeat
+end whoIsNear
+
+on laser
+   put not sLaser into sLaser
+end laser
