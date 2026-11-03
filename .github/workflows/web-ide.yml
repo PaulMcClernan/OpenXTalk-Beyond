@@ -876,7 +876,9 @@ jobs:
           "$RUNNER_TEMP/playwright/bin/python" tools/pages/check_front_page.py \
             --site "$RUNNER_TEMP/pages" --out "$RUNNER_TEMP/dictionary-shots"
 
+      # (whether or not Chromium's passed: each browser's result is its own)
       - name: The site's front page in Firefox
+        if: ${{ !cancelled() }}
         run: |
           mkdir -p "$RUNNER_TEMP/dictionary-shots/firefox"
           "$RUNNER_TEMP/playwright/bin/python" tools/pages/check_front_page.py --browser firefox \

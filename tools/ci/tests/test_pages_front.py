@@ -380,6 +380,8 @@ class TheRestCheck(unittest.TestCase):
         with open(os.path.join(REPO, '.github', 'workflows', 'web-ide.yml'), encoding='utf-8') as f:
             workflow = f.read()
         self.assertIn('-m playwright install --with-deps chromium firefox', workflow)
+        # run whether or not Chromium's check passed
+        self.assertIn("      - name: The site's front page in Firefox\n        if: ${{ !cancelled() }}\n", workflow)
         self.assertIn('tools/pages/check_front_page.py --browser firefox \\\n'
                       '            --site "$RUNNER_TEMP/pages"', workflow)
 
