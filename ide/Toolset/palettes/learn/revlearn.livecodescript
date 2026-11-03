@@ -613,6 +613,8 @@ private command leBuildSide
    put lkLabel("idx", lkR(8, 250 + tY, kSide - 8, kHeight - 116), empty, 13, lkColor("sideInk"), empty) into tObj
    set the listBehavior of tObj to true
    set the autoHilite of tObj to true
+   -- (its selected line white on the hilite, in the dark appearance too)
+   lkSelectedInk tObj, "255,255,255"
    set the dontWrap of tObj to true
    set the fixedLineHeight of tObj to true
    set the textHeight of tObj to kIndexLine
@@ -1997,6 +1999,8 @@ private command leHero pEyebrow, pTitle, pText, pCredit, pColors, pButton1, pBut
    set the rect of group "p_hero" to sX, tTop, sX + sColW, tBottom
    set the rect of tBg to sX, tTop, sX + sColW, tBottom
    lkGradient tBg, pColors, sX & "," & tTop, (sX + sColW) & "," & tBottom
+   -- (its words and buttons, which its sparkles keep off)
+   put lkTextZones(tBg, "p_heroEyebrow,p_heroTitle,p_heroText,p_heroCredit", "p_heroB1,p_heroB2,p_heroB3") into sHero["zones"]
    put lkNow() into sHero["start"]
    put tBottom + 30 into sY
    leHeroFrame
@@ -2024,6 +2028,8 @@ private command leHeroFrame
       put item 2 of tRect + tH * (item tIndex of "0.22,0.62,0.3,0.7,0.18,0.86") + 6 * sin(tT * 1.3 + tIndex) into tY
       set the loc of graphic tObj to round(tX), round(tY)
       set the blendLevel of graphic tObj to round(30 + 45 * (0.5 + 0.5 * sin(tT * 2.2 + tIndex * 1.9)))
+      -- (none on the hero's words or buttons)
+      set the visible of graphic tObj to not lkInZones(sHero["zones"], round(tX) - item 1 of tRect, round(tY) - item 2 of tRect, 8)
    end repeat
 end leHeroFrame
 
@@ -2244,7 +2250,9 @@ end leChapterIcon
 -- the remaster, and lists the original under Classic when it is there
 -- (the originals are not installed since 0.2.7-rc.6.12: tools/examples/
 -- originals keeps them for the builders). Two originals remade as one
--- remaster both name it, and after its title say what it does.
+-- remaster both name it, and after its title say what it does. An example
+-- made here, with no original, has no file of its own (item 1 is empty):
+-- the gallery opens its remaster, and Classic leaves it out.
 private function leExampleTable
    local tTable
    put "Resources/Examples/Quick Start.oxtstack|Quick Start|Six first lessons, read aloud by a narrator: the Tools palette, " & \
@@ -2262,6 +2270,9 @@ private function leExampleTable
    put "Resources/Examples/DataGrid Table.oxtstack|DataGrid Table|Five short lessons on the Data Grid table: edit one by " & \
          "hand and with code, add a column, make your own, paste one, and compare a field made into a table.|Terry Little, 2022|tours|sheet|teal|" & \
          "datagrid table field|Resources/Examples/Remastered/Data Grid Tables.oxtstack|Data Grid Tables" & return after tTable
+   put "|Learn Box2D|Thirteen lessons in Box2D physics, each a live world to play with, how it works and the calls " & \
+         "it makes: bodies, shapes, forces, joints, contacts, ray casts and terrain.|OXT-Beyond, 2026, on Box2D 3.1 through Box2Dxt|tours|box|teal|" & \
+         "box2d box2dxt physics joints game|Resources/Examples/Remastered/Learn Box2D.oxtstack|Learn Box2D" & return after tTable
    put "Resources/Examples/SQLite Book Library.oxtstack|SQLite Book Library|A small catalogue of books in SQLite, shown in " & \
          "a Data Grid: list them, search them, add and delete them.|In OpenXTalk Lite's demo set; its author is not recorded|apps|library-big|emerald|" & \
          "sqlite datagrid books database|Resources/Examples/Remastered/SQLite Books.oxtstack|SQLite Books" & return after tTable
@@ -2421,7 +2432,7 @@ private function leExampleGroups
          "text, graphics and timers, lists and data, each with a short script to read." & return & \
          "small|Small samples|Also from the Stack Player: games, music, live data, speech, notes and modern " & \
          "controls, each small enough to read in one sitting." & return & \
-         "tours|Tours|Guided tours of the Data Grid and of SQLite, a card at a time." & return & \
+         "tours|Tours|Guided tours of the Data Grid, of SQLite and of Box2D physics, a card at a time." & return & \
          "apps|Small apps to take apart|Each does one thing, in a few short scripts: open one, then read its scripts." & return & \
          "samples|Samples, remade|Three of LiveCode Community's samples in Home's look: a game, bouncing balls and a database of books."
 end leExampleGroups

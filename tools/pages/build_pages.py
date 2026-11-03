@@ -26,6 +26,7 @@ given.
       [--release TAG --release-assets FILE]
 
   DIR/index.html     the front page (tools/pages/index.html)
+  DIR/brand/         the logo it shows (tools/pages/brand)
   DIR/ide/           OXT-Beyond-<version>-web-ide.zip's site (tools/web-ide)
   DIR/player/        OXT-Beyond-<version>-web-player.zip's site
                      (tools/web-player)
@@ -63,6 +64,7 @@ build here, where the message says which file it is.
 
 import argparse
 import html
+import json
 import os
 import re
 import shutil
@@ -157,6 +159,73 @@ def check_sizes(folder):
                                  % (os.path.relpath(path, folder), os.path.getsize(path)))
 
 
+PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>'
+
+
+# The samples the gallery shows first, the first of them large
+SPOTLIGHT = ('Beat Box', 'Fireworks', 'Live Weather')
+
+
+def player_samples(player, featured=False):
+    """The Stack Player's sample stacks that have a picture, as its
+    samples/samples.json lists them: its featured lessons, or (featured
+    False) the rest, those named in SPOTLIGHT first; [] when it has none,
+    or none it can show."""
+    try:
+        with open(os.path.join(player, 'samples', 'samples.json'), encoding='utf-8') as f:
+            listed = json.load(f)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(listed, list):
+        return []
+    shown = [s for s in listed
+             if isinstance(s, dict) and isinstance(s.get('title'), str) and isinstance(s.get('image'), str)
+             and bool(s.get('featured')) == featured
+             and os.path.isfile(os.path.join(player, 'samples', s['image']))]
+    first = [t for t in SPOTLIGHT if any(s['title'] == t for s in shown)]
+    return ([s for t in first for s in shown if s['title'] == t]
+            + [s for s in shown if s['title'] not in first])
+
+
+def sample_card(s, spot=False):
+    tags = ''.join('<span class="tag">%s</span>' % html.escape(t) for t in s.get('tags') or [] if isinstance(t, str))
+    return ('      <a class="stack%s" href="../player/?play=%s">\n'
+            '        <div class="shot">\n'
+            '          <img src="../player/samples/%s" alt="">\n'
+            '          <span class="where">Stack Player</span>\n'
+            '          <span class="play">%sPlay</span>\n'
+            '        </div>\n'
+            '        <div class="words"><h3>%s</h3><p>%s</p><div class="tags">%s</div></div>\n'
+            '      </a>' % (' spot' if spot else '', html.escape(urllib.parse.quote(s['title'])),
+                             html.escape(urllib.parse.quote(s['image'])), PLAY_ICON, html.escape(s['title']),
+                             html.escape(str(s.get('description', ''))), tags))
+
+
+def gallery(page, player):
+    """Fills the web stacks page's blocks with a card for each of the Stack
+    Player's samples, each opening it in the player (?play=<title>):
+    PLAYER_SAMPLES (the first one large) and PLAYER_LESSONS (its featured
+    stacks). A block with no samples is left out; a page without the
+    blocks (an older one) is left as it is."""
+    if not os.path.isfile(page):
+        return
+    with open(page, encoding='utf-8') as f:
+        text = f.read()
+    for key, featured in (('PLAYER_SAMPLES', False), ('PLAYER_LESSONS', True)):
+        start, end = '<!-- @%s@ -->' % key, '<!-- /@%s@ -->' % key
+        if start not in text or end not in text:
+            continue
+        cards = [sample_card(s, spot=(i == 0 and not featured))
+                 for i, s in enumerate(player_samples(player, featured))]
+        at, stop = text.index(start), text.index(end) + len(end)
+        block = ''
+        if cards:
+            block = text[at:stop].replace('@%s_LIST@' % key, '\n'.join(cards)).replace(start, '').replace(end, '')
+        text = text[:at] + block + text[stop:]
+    with open(page, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(text)
+
+
 def games(source, target, player):
     """Copies tools/pages/games, each page told the engine's file in the player."""
     if not os.path.isdir(source):
@@ -166,6 +235,7 @@ def games(source, target, player):
         print('no games: the Stack Player has no engine for them')
         return False
     shutil.copytree(source, target)
+    gallery(os.path.join(target, 'index.html'), player)
     for root, _, names in os.walk(target):
         for name in names:
             if name == 'index.html':
@@ -175,6 +245,24 @@ def games(source, target, player):
                 with open(path, 'w', encoding='utf-8', newline='\n') as f:
                     f.write(page.replace('@ENGINE_JS@', engines[0]))
     return True
+
+
+# The logo the front page and the web stacks' page show (tools/pages/brand,
+# written by Installer/oxt-beyond/branding/draw_branding.py): its still and
+# moving SVG, the small icon (the favicon and the header's mark) and the
+# banner the page names for link previews (og:image)
+BRAND = ('icon.svg', 'logo.svg', 'logo-animated.svg', 'social.png')
+
+
+def brand(source, target):
+    """Copies the logo files beside the front page."""
+    missing = [n for n in BRAND if not os.path.isfile(os.path.join(source, n))]
+    if missing:
+        raise BuildError('tools/pages/brand has no %s: run Installer/oxt-beyond/branding/draw_branding.py'
+                         % ', '.join(missing))
+    os.makedirs(target)
+    for name in BRAND:
+        shutil.copyfile(os.path.join(source, name), os.path.join(target, name))
 
 
 def front_page(out, parts):
@@ -257,6 +345,7 @@ def build(args):
         else:
             print('no downloads: %s has none of the files the page links' % release)
     front_page(out, parts)
+    brand(os.path.join(HERE, 'brand'), os.path.join(out, 'brand'))
     check_sizes(out)
     for key, version in sorted((k, v) for k, v in parts.items() if k in PARTS):
         print('%s: %s' % (key.lower(), version or '(no version given)'))

@@ -1364,6 +1364,19 @@ jobs:
           /usr/bin/python3 tools/ci/appearance_check.py --engine "$OXT_ROOT/Runtime/Linux/$folder/Standalone" \
             --log "$RUNNER_TEMP/logs/appearance-check.log"
 
+      # Text measures the same after a font file is loaded and unloaded
+      # (start using font file, as the IDE does when Home and Learn open):
+      # up to 0.2.7-rc.6.12 the engine could measure a font with another
+      # font's cached widths, and drew the words of bold text against each
+      # other (tools/ci/fontfile_check.py)
+      - name: Font file check
+        if: ${{ !cancelled() && env.OXT_ROOT != '' }}
+        timeout-minutes: 5
+        run: |
+          case $ARCH in x86_64) folder=x86-64 ;; *) folder=$ARCH ;; esac
+          /usr/bin/python3 tools/ci/fontfile_check.py --engine "$OXT_ROOT/Runtime/Linux/$folder/Standalone" \
+            --log "$RUNNER_TEMP/logs/fontfile-check.log"
+
       # The standalone engine on an Xvfb screen at 1x (nothing changes) and
       # at a desktop scale of 2 (GDK_SCALE, then an XSETTINGS manager
       # publishing Gdk/WindowScalingFactor): the screenRect in points, the
@@ -1499,14 +1512,14 @@ jobs:
       # (tools/ci/print_images.py).
       - name: IDE screenshots, light
         if: ${{ !cancelled() && env.OXT_ROOT != '' }}
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           python3 tools/ci/ui_tour.py --install "$OXT_ROOT" --platform "linux-$ARCH" \
             --appearance light --out "$RUNNER_TEMP/logs/ui-tour/light"
 
       - name: IDE screenshots, dark
         if: ${{ !cancelled() && env.OXT_ROOT != '' }}
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           python3 tools/ci/ui_tour.py --install "$OXT_ROOT" --platform "linux-$ARCH" \
             --appearance dark --out "$RUNNER_TEMP/logs/ui-tour/dark"
@@ -1603,6 +1616,33 @@ jobs:
         run: |
           python3 tools/ci/test_linux_package.py --root "$OXT_ROOT" --require-desktop-tools \
             2>&1 | tee "$RUNNER_TEMP/logs/test-linux-package.log"
+
+      # Learn Box2D's lessons, run by the package's engine with the
+      # package's Box2Dxt: every lesson runs, every button works, and the
+      # behaviour checks in tools/examples/test-learn-box2d.livecodescript
+      # hold (it opens the committed stack)
+      - name: Learn Box2D lessons
+        if: ${{ !cancelled() && env.OXT_ROOT != '' && matrix.arch == 'x86_64' }}
+        timeout-minutes: 10
+        run: |
+          OXT_INSTALL="$OXT_ROOT" timeout 480 xvfb-run -a -s '-screen 0 1280x1024x24' \
+            "$OXT_ROOT/oxt-beyond" -ui tools/examples/test-learn-box2d.livecodescript \
+            2>&1 | tee "$RUNNER_TEMP/logs/learn-box2d.log"
+          tail -n 1 "$RUNNER_TEMP/logs/learn-box2d.log" | grep -qx DONE
+
+      # Learn Box2D again, clicked with a real mouse: the standalone engine
+      # opens it on its own Xvfb screen, xdotool clicks the toy, every
+      # tile, lesson, button, call, Pause, Step, Reset, Scripts and key,
+      # and drags a body, and the stack reports what each click did
+      # (tools/examples/learn-box2d-clicks.py)
+      - name: Learn Box2D clicks
+        if: ${{ !cancelled() && env.OXT_ROOT != '' && matrix.arch == 'x86_64' }}
+        timeout-minutes: 20
+        run: |
+          timeout 1080 python3 tools/examples/learn-box2d-clicks.py --install "$OXT_ROOT" \
+            --shots "$RUNNER_TEMP/logs/learn-box2d-clicks" \
+            2>&1 | tee "$RUNNER_TEMP/logs/learn-box2d-clicks.log"
+          tail -n 1 "$RUNNER_TEMP/logs/learn-box2d-clicks.log" | grep -qx DONE
 
       # The remastered examples, built from their builders in
       # tools/examples by the package's engine; then, opened by its

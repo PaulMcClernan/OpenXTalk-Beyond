@@ -124,7 +124,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12385](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12385) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12732](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12732) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -330,10 +330,10 @@ Work left for later. 428 notes, by part of the repository:
 - [engine/src/mac-surface.mm:219](engine/src/mac-surface.mm#L219) COCOA-TODO: Getting the height to flip round is dependent on a friend.
 - [engine/src/mac-surface.mm:261](engine/src/mac-surface.mm#L261) COCOA-TODO: Getting the height to flip round is dependent on a friend.
 - [engine/src/mac-surface.mm:294](engine/src/mac-surface.mm#L294) COCOA-TODO: Getting the height to flip round is dependent on a friend.
-- [engine/src/mac-window.mm:572](engine/src/mac-window.mm#L572) COCOA-TODO: Make sure this is necessary, apparantly things should
-- [engine/src/mac-window.mm:2007](engine/src/mac-window.mm#L2007) COCOA-TODO: Sort out changes that affect window type (not needed at the moment
-- [engine/src/mac-window.mm:2044](engine/src/mac-window.mm#L2044) COCOA-TODO: At the moment force a re-display here to stop redraw artifacts.
-- [engine/src/mac-window.mm:2334](engine/src/mac-window.mm#L2334) COCOA-TODO: Make display update more specific.
+- [engine/src/mac-window.mm:599](engine/src/mac-window.mm#L599) COCOA-TODO: Make sure this is necessary, apparantly things should
+- [engine/src/mac-window.mm:2054](engine/src/mac-window.mm#L2054) COCOA-TODO: Sort out changes that affect window type (not needed at the moment
+- [engine/src/mac-window.mm:2091](engine/src/mac-window.mm#L2091) COCOA-TODO: At the moment force a re-display here to stop redraw artifacts.
+- [engine/src/mac-window.mm:2381](engine/src/mac-window.mm#L2381) COCOA-TODO: Make display update more specific.
 - [engine/src/mblandroidad.cpp:171](engine/src/mblandroidad.cpp#L171) TODO - Should probably improve this to use a similar method to native controls.
 - [engine/src/mblandroidcalendar.cpp:79](engine/src/mblandroidcalendar.cpp#L79) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
 - [engine/src/mblandroidcalendar.cpp:92](engine/src/mblandroidcalendar.cpp#L92) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
@@ -461,8 +461,8 @@ Work left for later. 428 notes, by part of the repository:
 - [engine/src/w32dcw32.cpp:1076](engine/src/w32dcw32.cpp#L1076) TODO: pay attention to the CS_INSERTCHAR and CS_NOMOVECARET flags
 - [engine/src/w32dcw32.cpp:1458](engine/src/w32dcw32.cpp#L1458) TODO - look in to this further:
 - [engine/src/w32printer.cpp:539](engine/src/w32printer.cpp#L539) TODO - fix half pixels lost when insetting by odd integers
-- [engine/src/w32stack.cpp:471](engine/src/w32stack.cpp#L471) TODO - Windows 8 implementation will require getting the appropriate per-window value
-- [engine/src/w32stack.cpp:1152](engine/src/w32stack.cpp#L1152) TODO - Windows 8.1 per-monitor DPI-awareness may require the update region be in logical coords
+- [engine/src/w32stack.cpp:503](engine/src/w32stack.cpp#L503) TODO - Windows 8 implementation will require getting the appropriate per-window value
+- [engine/src/w32stack.cpp:1184](engine/src/w32stack.cpp#L1184) TODO - Windows 8.1 per-monitor DPI-awareness may require the update region be in logical coords
 - [engine/src/widget-events.cpp:190](engine/src/widget-events.cpp#L190) WIDGET-TODO: Reinstate FocusEnter
 - [engine/src/widget-events.cpp:202](engine/src/widget-events.cpp#L202) WIDGET-TODO: Reinstate FocusLeave
 - [engine/src/widget-events.cpp:206](engine/src/widget-events.cpp#L206) TODO: does the unfocus *always* happen before the next focus?
@@ -733,7 +733,7 @@ Work left for later. 428 notes, by part of the repository:
 
 ### TODO: extensions (1)
 
-- [extensions/script-libraries/drawing/drawing.livecodescript:2070](extensions/script-libraries/drawing/drawing.livecodescript#L2070) TODO: Handle unit in an appropriate way.
+- [extensions/script-libraries/drawing/drawing.livecodescript:2256](extensions/script-libraries/drawing/drawing.livecodescript#L2256) TODO: Handle unit in an appropriate way.
 
 <a id="todo-lcidlc"></a>
 

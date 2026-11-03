@@ -47,8 +47,9 @@ stack then takes the page (`?mode=window` opens it in a window of its own
 instead), and the bar above it has **Library** (back home), **Reload**
 (the stack again as it was saved), **Download copy** (the stack as it is
 now, as a download) and full screen. It follows the system's light or
-dark theme. The page wears openxtalk.org's look: its fonts (SIL Open Font
-License) and pictures are in `assets/`.
+dark theme. The page wears OXT-Beyond's own look, the site's front page
+and web stacks gallery's: the logo's night sky and its fire. Its logo and
+pictures are in `assets/`.
 
 What it carries, so that a stack finds what its own web standalone
 would: every script library (the Data Grid, Animation, Geometry, Internet,
@@ -109,7 +110,7 @@ own that holds nothing else of value.
 | `build-player.livecodescript` | run by the IDE: makes the player stack (and the sample stacks) and builds it with `revSaveAsEmscriptenStandalone` |
 | `index.html` | the page: the home, library, About panel and bar in HTML, and the engine's canvas for the stack; it writes the files it is given into the engine's `/uploads` and calls the player stack's `playerFromPage` |
 | `stacks/` | the three stacks the home page features and the small samples with a picture, each with a picture of its first card (`.webp`, 960 wide at most); every one carries the colourized Script Viewer as a substack |
-| `assets/` | the page's logo, fonts and pictures, copied beside it |
+| `assets/` | the page's logo and pictures, copied beside it |
 | `build_player.py` | starts the IDE with the script above, puts the page in place, packs the zip and, with `--check`, drives the player in headless Chromium |
 
 ## Building and checking it

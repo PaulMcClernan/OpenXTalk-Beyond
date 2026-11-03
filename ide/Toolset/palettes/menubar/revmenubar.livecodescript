@@ -1382,15 +1382,26 @@ function revMenubarButtonText pName, pHilited
    end switch
 end revMenubarButtonText
 
+-- OXT-Beyond: each label is measured plain and bold. setButtonHilite
+-- draws a lit button's label bold (a toggle that is on, such as Select
+-- Grouped, and any button while it is pressed), and a width measured from
+-- the plain label alone cut the bold one off where it was wider than the
+-- 64 pixels every button has: "Select Grouped" on Linux, in DejaVu Sans.
+-- The IDE tour's step menubar-modern measures every button's labels, bold.
 function __buttonMaxFormattedWidth pName
    lock screen
    lock messages
-   local tWidth, tOldLabel
+   local tWidth, tOldLabel, tOldStyle
    put the label of button pName of group "toolbar" of me into tOldLabel
+   put the textStyle of button pName of group "toolbar" of me into tOldStyle
    repeat for each item tHilite in "true,false"
       set the label of button pName of group "toolbar" of me to revMenubarButtonText(pName, tHilite)
-      put max(tWidth, the formattedwidth of button pName of group "toolbar" of me) into tWidth
+      repeat for each item tStyle in "plain,bold"
+         set the textStyle of button pName of group "toolbar" of me to tStyle
+         put max(tWidth, the formattedwidth of button pName of group "toolbar" of me) into tWidth
+      end repeat
    end repeat
+   set the textStyle of button pName of group "toolbar" of me to tOldStyle
    set the label of button pName of group "toolbar" of me to tOldLabel
    unlock messages
    unlock screen
@@ -1739,6 +1750,26 @@ function buildMenuContext  --returns array to build menus
       end switch
    end repeat
    
+   -- OXT-Beyond: Copy Graphics as SVG Paths copies the graphics of the
+   -- selection and leaves anything else out, so it is enabled when the
+   -- selection holds a graphic, whatever else it holds (OpenXTalkPaul,
+   -- openxtalk.org p=25841). The scan above stops at the first object
+   -- that is neither a graphic nor an image, so this one looks at all
+   local tAnyGraphic = false
+   repeat for each line l in tSelectedObject
+      if word 1 of l is "graphic" then
+         put true into tAnyGraphic
+         exit repeat
+      end if
+   end repeat
+   put tAnyGraphic into tContext["anyGraphic"]
+   -- OXT-Beyond: Object > Convert SVG Image to Graphics does what an SVG
+   -- image's right-click menu does (Convert to Graphics), from the menu bar
+   -- too (OpenXTalkPaul, openxtalk.org p=25900): enabled when the selection
+   -- is one image made from an SVG
+   put the number of lines of tSelectedObject is 1 and revIDEImageIsDrawing(line 1 of tSelectedObject) \
+         into tContext["oneDrawing"]
+   
    --build array used to build appropriate menus for the current selection(s)
    put tEnableFlipandRotate into tContext["enableFlipAndRotate"]
    put tSelectedObject into tContext["selectedObject"]
@@ -1761,6 +1792,15 @@ private function pIsThisAGif tSelectedObject
    else return false
 end pIsThisAGif
 
+-- OXT-Beyond: three quarters of the main screen's width and height, as
+-- "WxH", for File > New Stack's preset sizes
+private function revMenubarThreeQuartersOfTheScreen
+   local tRect
+   put the screenRect into tRect
+   return round((item 3 of tRect - item 1 of tRect) * 3 / 4) & "x" & \
+         round((item 4 of tRect - item 2 of tRect) * 3 / 4)
+end revMenubarThreeQuartersOfTheScreen
+
 private function revMenubarFileMenu pContext, tFile
    local tIsUserTarget, tIsScriptOnly, tCanSaveStack
    put the mode of the topStack is 1 into tIsUserTarget
@@ -1780,6 +1820,10 @@ private function revMenubarFileMenu pContext, tFile
       put tab & "Legal paper-portrait (612x1008)" & return after tFile
       put tab & "WVGA (768x480)" & return after tFile
       put tab & "Letter paper-landscape (792x612)" & return after tFile
+      -- OXT-Beyond: SVGA, and three quarters of the main screen's width
+      -- and height (richmond62, openxtalk.org p=25902); the size is read
+      -- from the label's "(WxH)" (revIDEActionNewMainstack)
+      put tab & "SVGA (800x600)" & return after tFile
       put tab & "Legal paper-landscape (1008x612)" & return after tFile
       put tab & "WSVGA (1024x600)" & return after tFile
       put tab & "XGA Tablet Portrait (768x1024)" & return after tFile
@@ -1787,6 +1831,7 @@ private function revMenubarFileMenu pContext, tFile
       put tab & "WXGA HDTV 16:9 (1280x720)" & return after tFile
       put tab & "SXGA 5:4 (1280x1024)" & return after tFile
       put tab & "WXGA HD 16:9 (1366x768)" & return after tFile
+      put tab & "Three Quarters of the Screen (" & revMenubarThreeQuartersOfTheScreen() & ")" & return after tFile
    end if
    put tab & "-" & return after tFile
    put tab & "Script Only Stack" & return after tFile
@@ -2117,30 +2162,30 @@ private function revMenubarObjectMenu pContext
       put "(Flip" into tFlipText
       put "(Rotate" into tRotateText
       put "(Reshape Graphic" into tReshapeText
-      put "(Copy Graphics as SVG Paths" into tCopySVGPathText
-      --revoxtIDEGraphicPointsToSVGPath
    else
       if pContext["allImages"] then
          put "Flip Image" into tFlipText
          put "Rotate Image" into tRotateText
          put "(Reshape Graphic" into tReshapeText
-         put "(Copy Graphics as SVG Paths" into tCopySVGPathText
       else if pContext["allGraphics"] then
          put "Flip Graphic" into tFlipText
          put "Rotate Graphic" into tRotateText
          if "revReshapeLibrary" is in revInternal__ListLoadedLibraries() then
             put "!cReshape Graphic" into tReshapeText
-            put "Copy Graphics as SVG Paths" into tCopySVGPathText
          else
             put "Reshape Graphic" into tReshapeText
-            put "Copy Graphics as SVG Paths" into tCopySVGPathText
          end if
       else
          put "(Flip Selected" into tFlipText
          put "(Rotate Selected" into tRotateText
          put "(Reshape Graphic" into tReshapeText
-         put "(Copy Graphics as SVG Paths" into tCopySVGPathText
       end if
+   end if
+   -- OXT-Beyond: enabled when the selection holds a graphic (buildMenuContext)
+   if pContext["anyGraphic"] is true then
+      put "Copy Graphics as SVG Paths" into tCopySVGPathText
+   else
+      put "(Copy Graphics as SVG Paths" into tCopySVGPathText
    end if
    --Flip with submenu, Rotate with submenu, Reshape graphic
    put tFlipText & return after tObject
@@ -2149,6 +2194,8 @@ private function revMenubarObjectMenu pContext
    put buildRotateSubmenu() & return after tObject
    put tReshapeText & return after tObject
    put tCopySVGPathText & return after tObject  --tp 24-4, add copy as SVG Path
+   -- OXT-Beyond: enabled when one SVG image is selected (buildMenuContext)
+   put enableMenuItem("Convert SVG Image to Graphics", pContext["oneDrawing"] is true) & return after tObject
    put "-" & return after tObject
    --align selected controls, with submenu
    put enableMenuItem("Align Selected Controls", the number of lines in (the selObj) >= 2) & return after tObject
@@ -3241,6 +3288,18 @@ on revMenubarObjectMenuPick pWhich
    switch item 1 of pWhich
       case "Copy Graphics as SVG Paths"
          revOXTIDEGraphicPointsToSVGPath the selobjs
+         break
+      case "Convert SVG Image to Graphics"
+         -- as the image's right-click menu does (revMenubarContextMenuPick)
+         local tDrawingImage, tConverted
+         put line 1 of the selobj into tDrawingImage
+         if not revIDEImageIsDrawing(tDrawingImage) then break
+         put revIDEConvertDrawingToGraphics(tDrawingImage) into tConverted
+         if the result is not empty then
+            answer error "Could not convert the image to graphics:" && the result
+         else if tConverted is not empty then
+            select tConverted
+         end if
          break
       case "Reshape Graphic"
          revIDEToggleReshapeGraphic
