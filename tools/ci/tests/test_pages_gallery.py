@@ -177,6 +177,34 @@ class TheGallery(unittest.TestCase):
         self.assertIn('@media (prefers-reduced-motion: reduce)', text)
 
 
+class TheStackPage(unittest.TestCase):
+    """A sample's own page covers the player with the sample's picture
+    until the stack plays. When the player cannot start the engine, or
+    cannot open the sample, the cover goes, so the player's own message
+    shows instead of "Loading..." for ever."""
+
+    def setUp(self):
+        self.text = read(os.path.join(PAGES, 'games', 'stack-page.html'))
+        body = re.search(r"frame\.addEventListener\('load', function \(\) \{(.*?)\n\}\);", self.text, re.S)
+        self.assertIsNotNone(body)
+        self.wait = body.group(1)
+
+    def test_the_cover_goes_when_the_stack_plays(self):
+        self.assertIn("d.body.classList.contains('playing')", self.wait)
+        self.assertIn("loading.style.display = 'none';", self.wait)
+
+    def test_the_cover_goes_when_the_player_fails(self):
+        # the engine that cannot start: the player's loading window says so
+        self.assertIn("d.getElementById('loading-error')", self.wait)
+        self.assertIn('!error.hidden', self.wait)
+        # the sample that cannot be opened: the player's error toast
+        self.assertIn("""d.querySelector('#toasts .toast[data-tone="3"]')""", self.wait)
+        # and the player's error says what the player's error tone is
+        player = read(os.path.join(PLAYER, 'index.html'))
+        self.assertIn("el.dataset.tone = kind == 'error' ? '3' : '2';", player)
+        self.assertIn('<div class="error" id="loading-error" hidden></div>', player)
+
+
 class ThePlayersDeepLink(unittest.TestCase):
     """?play=<title> opens a sample once the engine is ready; with none, or
     an unknown title, the player is as it was. Run against the real engine
