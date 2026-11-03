@@ -64,6 +64,20 @@ class Functions(unittest.TestCase):
         self.assertEqual(line, 'deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.pgp] '
                                'http://archive.raspberrypi.com/debian/ trixie main')
 
+    def test_the_archive_key_comes_over_https(self):
+        # The key that verifies InRelease, and so everything installed from
+        # the archive before its keyring package, is the trust anchor: over
+        # plain HTTP whoever sits between could hand over a key, InRelease,
+        # index and package that agree with one another (Codex, #309).
+        with open(SCRIPT, encoding='utf-8') as f:
+            text = f.read()
+        body = re.search(r'^pi_archive_keyring\(\) \{\n(.*?)^\}', text, re.S | re.M)
+        self.assertIsNotNone(body)
+        body = body.group(1)
+        self.assertIn('base=https://archive.raspberrypi.com/debian', body)
+        self.assertIn('"$base/raspberrypi.gpg.key"', body)
+        self.assertNotIn('http://', body)
+
     def test_packages_field(self):
         # one package's field from a Packages index, not a neighbour's
         index = ('Package: raspberrypi-archive-keyring-extra\nFilename: pool/x/extra.deb\nSHA256: 11\n\n'
