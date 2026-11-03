@@ -4293,13 +4293,21 @@ on tour_inspector_reset_colour
          tourRecord "INFO inspector-reset-colour the screen not read: the window of" && tCover && "is over the button"
          put empty into tPoint
       else
+         -- the screen unlocked before each read, as when the IDE is idle:
+         -- the Inspector leaves it locked, and a locked screen showed the
+         -- face the button had before (42,46,48 dark on Linux with
+         -- 0,160,0 set)
+         tourUnlockScreen "inspector-reset-colour"
          tourRecord "INFO inspector-reset-colour the button's face before:" && tourPixelAt(item 1 of tPoint, item 2 of tPoint)
       end if
       -- as the colour dialog's answer does (com.livecode.pi.color.behavior)
       set the swatchColor of tSwatch to "0,160,0"
       dispatch "valueChanged" to tEditor
       tourWait 1000
-      if tPoint is not empty then put tourPixelAt(item 1 of tPoint, item 2 of tPoint) into tPixel
+      if tPoint is not empty then
+         tourUnlockScreen "inspector-reset-colour"
+         put tourPixelAt(item 1 of tPoint, item 2 of tPoint) into tPixel
+      end if
       tourRecord "INFO inspector-reset-colour given 0,160,0: backgroundColor" && quote & the backgroundColor of tButton & quote && \
             "swatch" && quote & the swatchColor of tSwatch & quote && "face" && tPixel
       if the backgroundColor of tButton is not "0,160,0" then
@@ -4317,7 +4325,10 @@ on tour_inspector_reset_colour
          tourWait 100
       end repeat
       tourWait 500
-      if tPoint is not empty then put tourPixelAt(item 1 of tPoint, item 2 of tPoint) into tPixel
+      if tPoint is not empty then
+         tourUnlockScreen "inspector-reset-colour"
+         put tourPixelAt(item 1 of tPoint, item 2 of tPoint) into tPixel
+      end if
       tourRecord "INFO inspector-reset-colour after Reset: backgroundColor" && quote & the backgroundColor of tButton & quote && \
             "swatch" && quote & the swatchColor of tSwatch & quote && "face" && tPixel
       if the backgroundColor of tButton is not empty then
