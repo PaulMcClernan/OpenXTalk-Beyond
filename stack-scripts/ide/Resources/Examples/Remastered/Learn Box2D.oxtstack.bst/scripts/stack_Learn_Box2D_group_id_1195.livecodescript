@@ -1,6 +1,6 @@
-script "stack_Learn_Box2D_group_id_1191"
+script "stack_Learn_Box2D_group_id_1195"
 -- Stack file: ide/Resources/Examples/Remastered/Learn Box2D.oxtstack
--- Object: stack "Learn Box2D" > card "World" (id 1031) > group "Lab" (id 1191)
+-- Object: stack "Learn Box2D" > card "World" (id 1031) > group "Lab" (id 1195)
 -- Made from the stack by tools/oxt/stack-scripts.sh; the stack holds
 -- the script that runs, so change it there, not here.
 
