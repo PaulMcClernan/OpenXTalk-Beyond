@@ -2620,6 +2620,39 @@ function revIDEPlatformVersion
    return tSystemVersion
 end revIDEPlatformVersion
 
+-- OXT-Beyond: the colour for the text of a list row that is hilited in
+-- pHiliteColor (the row's background), for the Project Browser's rows. On
+-- Linux the hilite is the GTK theme's selection colour, which can be
+-- light or dark whatever the desktop (Ubuntu's yellow in its dark theme,
+-- its purple in the light one), and the accentColor as the text was
+-- unreadable on it (bwmilby, openxtalk.org p=25550): black or white,
+-- whichever stands out more (the WCAG relative luminance of the hilite).
+-- macOS and Windows keep revIDEColor("dataView_TextHiliteColor"), as do
+-- colours given by name.
+function revIDEHilitedTextColor pHiliteColor
+   local tLuminance, tChannel, tValue
+   if the platform is not "Linux" or the number of items of pHiliteColor is not 3 then
+      return revIDEColor("dataView_TextHiliteColor")
+   end if
+   put 0 into tLuminance
+   repeat with tChannel = 1 to 3
+      put item tChannel of pHiliteColor into tValue
+      if tValue is not an integer or tValue < 0 or tValue > 255 then
+         return revIDEColor("dataView_TextHiliteColor")
+      end if
+      put tValue / 255 into tValue
+      if tValue <= 0.03928 then
+         put tValue / 12.92 into tValue
+      else
+         put ((tValue + 0.055) / 1.055) ^ 2.4 into tValue
+      end if
+      add tValue * item tChannel of "0.2126,0.7152,0.0722" to tLuminance
+   end repeat
+   -- black on it, (L + 0.05) / 0.05, against white on it, 1.05 / (L + 0.05)
+   if tLuminance > 0.179 then return "0,0,0"
+   return "255,255,255"
+end revIDEHilitedTextColor
+
 -- OXT-Beyond: true when the desktop is dark, as the Tools palette and
 -- Learn's kit read it (revTools' tmGenerate, revLearnKit's
 -- lkReadAppearance): the systemAppearance on macOS and Windows, and on
@@ -4925,6 +4958,30 @@ function revIDEBrowserWidgetUnavailable
 end revIDEBrowserWidgetUnavailable
 
 /*
+Opens OXT-Beyond Home (palettes/home/revhub.livecodescript), the one window
+of the IDE's welcome, the xTalk Academy, the how-to lessons, the guides and
+the examples, at a place ("home", "academy", "howto", "guides" or
+"examples", or a name the IDE used before for one, such as "lessons" or
+"demos") and a page of it. Returns false when the IDE has no Home.
+
+pPlace (String): The place
+pPage (String): The page, or empty
+*/
+function revIDEOpenHome pPlace, pPage
+   local tPath, tError
+   put revIDESpecialFolderPath("Toolset") & "/palettes/home/revhub.livecodescript" into tPath
+   if there is no file tPath then
+      return false
+   end if
+   try
+      dispatch "revHubShow" to stack tPath with pPlace, pPage
+   catch tError
+      return false
+   end try
+   return it is "handled"
+end revIDEOpenHome
+
+/*
 Opens an IDE stack as a palette. In the future this should be changed so that
 palettes can decide what mode they ought to be opened in, i.e. this logic should
 be removed from the IDE library and be specific to the stack rather than the 
@@ -4938,6 +4995,16 @@ command revIDEOpenPalette pPaletteName
    
    local tStackName
    put revIDEPaletteToStackName(pPaletteName) into tStackName
+   
+   -- OXT-Beyond: LiveCode's Start Center and Welcome stacks are not
+   -- installed (OXT-Beyond Home took their place: palettes/home). Asked
+   -- for, Home opens at its welcome, so a script or a plugin that opened
+   -- them still opens a welcome.
+   if (pPaletteName is "start center" or pPaletteName is "welcome") and there is not a stack tStackName then
+      if revIDEOpenHome("home") then
+         return empty
+      end if
+   end if
    
    if there is not a stack tStackName then return __revIDEError("No such palette:" && pPaletteName)
    
@@ -6724,6 +6791,59 @@ command revIDESetScrollbarWidthProperty pObject, pProperty, pValue
    end if
 end revIDESetScrollbarWidthProperty
 
+-- The Inspector's Orientation of a scrollbar (a slider and a progress bar
+-- are scrollbars too). The engine has no setter for it: a scrollbar is
+-- horizontal when it is wider than it is tall, and vertical otherwise, as
+-- it reads its rect when it is drawn (scrollbardraw.cpp). So the Inspector
+-- showed it read only, and the only way to turn a scrollbar round was to
+-- drag its handles (TerryL, openxtalk.org p=25821). Choosing the other
+-- orientation swaps its width and height about its centre; a square one,
+-- which is vertical, is made a pixel wider to turn horizontal. Choosing the
+-- orientation it has changes nothing, and so does a value that is neither.
+-- An object that is not a scrollbar has its orientation set as a script
+-- sets it.
+--
+-- The Inspector reads the orientation through
+-- revIDEGetScrollbarOrientationProperty, from the rect as the engine works
+-- it out, because the orientation property catches up only when the
+-- scrollbar is next drawn: on macOS that is after the script has finished,
+-- so straight after a change the Inspector would show the old one.
+function revIDEGetScrollbarOrientationProperty pObject, pProperty
+   if word 1 of the name of pObject is not "scrollbar" then
+      return the pProperty of pObject
+   end if
+   if the width of pObject > the height of pObject then
+      return "horizontal"
+   end if
+   return "vertical"
+end revIDEGetScrollbarOrientationProperty
+
+command revIDESetScrollbarOrientationProperty pObject, pProperty, pValue
+   local tWidth, tHeight, tLoc
+   if word 1 of the name of pObject is not "scrollbar" then
+      set the pProperty of pObject to pValue
+      exit revIDESetScrollbarOrientationProperty
+   end if
+   if pValue is not among the items of "horizontal,vertical" then
+      exit revIDESetScrollbarOrientationProperty
+   end if
+   put the width of pObject into tWidth
+   put the height of pObject into tHeight
+   if (pValue is "horizontal") is (tWidth > tHeight) then
+      exit revIDESetScrollbarOrientationProperty
+   end if
+   put the loc of pObject into tLoc
+   lock screen
+   if tWidth = tHeight then
+      set the width of pObject to tWidth + 1
+   else
+      set the width of pObject to tHeight
+      set the height of pObject to tWidth
+   end if
+   set the loc of pObject to tLoc
+   unlock screen
+end revIDESetScrollbarOrientationProperty
+
 command revIDESetImageFilename pObjectID, pProperty, pFilename
    if revIDEGetPreference("cImageFileRelative") is not false then
       local tStackPath, tFilePath
@@ -8201,10 +8321,14 @@ on revIDEImportControl pType, pFileName, pReferenced
    switch pType
       case "image"
          if pFileName ends with ".svg" then
-            -- SVG files can't be referenced
+            -- SVG files can't be referenced. "all": every compile option
+            -- (the colours of the SVG's style sheet, its opacity, and ids
+            -- such as "grad-1"), which the compiler leaves out unless
+            -- asked, so an SVG saved by Illustrator, Inkscape or a minifier
+            -- does not come in black or opaque
             revIDECreateObject "com.livecode.interface.classic.image", tTargetStack, tCreatedControlLocation
             put the long id of the last control into tCreatedControlID
-            set the text of tCreatedControlID to drawingSvgCompileFile(pFileName)
+            set the text of tCreatedControlID to drawingSvgCompileFile(pFileName, "all")
          else if pReferenced is true then
             ## Create a classic image control with default properties
             ## Set the filename of the new image control to the referenced image
@@ -8257,6 +8381,315 @@ on revIDEImportControl pType, pFileName, pReferenced
    unlock screen
    return tCreatedControlID
 end revIDEImportControl
+
+##################################################
+#
+#          SVG IMAGES AS GRAPHICS
+#
+##################################################
+
+-- Whether the image pImage (any reference) shows a drawing, an SVG compiled
+-- by the drawing library, rather than a picture: its text then begins with
+-- the drawing's mark, LCD
+function revIDEImageIsDrawing pImage
+   if pImage is empty or not exists(pImage) then return false
+   if word 1 of the name of pImage is not "image" then return false
+   if the fileName of pImage is not empty then return false
+   return byte 1 to 3 of the text of pImage is "LCD"
+end revIDEImageIsDrawing
+
+-- Convert to Graphics, on the context menu of an image made from an SVG
+-- (richmond62, openxtalk.org p=25843): a group of polygon graphics, one for
+-- each shape of the image's drawing, over the image and the same size, with
+-- the shapes' colours, gradients, line widths, line styles and opacity.
+-- Curves, arcs and circles become polygons with a point every pixel or so
+-- (the drawing library's drawingFlatten), which can then be reshaped like
+-- any polygon. A shape whose fill and line have different opacities becomes
+-- two graphics, its fill under its line, since a graphic has one blendLevel.
+-- The image is left as it was, under the group. Returns the long id of the
+-- group, or empty with the result set to what went wrong
+function revIDEConvertDrawingToGraphics pImage
+   local tFlat, tRect, tScaleX, tScaleY, tScale, tShape, tGroup, tCount, tName
+   if not revIDEImageIsDrawing(pImage) then
+      return "not an image made from an SVG" for error
+   end if
+   put the long id of pImage into pImage
+   put the rect of pImage into tRect
+   put drawingFlatten(the text of pImage, 0.5) into tFlat
+   if the result is not empty then return the result for error
+   if tFlat["width"] <= 0 or tFlat["height"] <= 0 then return "the drawing has no size" for error
+   put (item 3 of tRect - item 1 of tRect) / tFlat["width"] into tScaleX
+   put (item 4 of tRect - item 2 of tRect) / tFlat["height"] into tScaleY
+   put sqrt(abs(tScaleX * tScaleY)) into tScale
+   -- a point every half drawing unit at the image's size is too fine for a
+   -- large image and too coarse for a small one: flatten again for about
+   -- half a pixel
+   if tScale > 0 and abs(tScale - 1) > 0.01 then
+      put drawingFlatten(the text of pImage, 0.5 / tScale) into tFlat
+   end if
+
+   put the short name of pImage into tName
+   local tDefault, tOwner
+   put the defaultStack into tDefault
+   put the long id of the owner of pImage into tOwner
+   lock screen
+   lock messages
+   try
+      -- made where the image is: in its group, or on its card, which is
+      -- the card on show when its context menu is
+      set the defaultStack to revTargetStack(pImage)
+      if word 1 of tOwner is "group" then
+         create group (tName && "graphics") in tOwner
+      else
+         create group (tName && "graphics")
+      end if
+      put the long id of it into tGroup
+      put 0 into tCount
+      -- a shape under a clip path goes in a group with lockLoc set, which
+      -- shows only what is inside its rect: the clip path's bounds, which
+      -- is the clip itself for a rectangle (a flag's edges) and the box
+      -- about it for any other shape
+      local tIndex, tClipKey, tClipGroup, tTarget
+      repeat with tIndex = 1 to the number of elements in tFlat["shapes"]
+         put tFlat["shapes"][tIndex] into tShape
+         put tGroup into tTarget
+         if tShape["clip"] is not empty then
+            if tShape["clip"] is not tClipKey then
+               put tShape["clip"] into tClipKey
+               put __revIDEDrawingClipGroup(tFlat, tClipKey, tGroup, item 1 of tRect, item 2 of tRect, tScaleX, tScaleY) into tClipGroup
+            end if
+            -- a clip with nothing in it hides the shape
+            if tClipGroup is empty then
+               next repeat
+            end if
+            put tClipGroup into tTarget
+         else
+            put empty into tClipKey
+         end if
+         __revIDEDrawingShapeToGraphics tShape, tTarget, item 1 of tRect, item 2 of tRect, tScaleX, tScaleY, pImage, tCount
+      end repeat
+   catch tError
+      if tGroup is not empty and exists(tGroup) then delete tGroup
+      set the defaultStack to tDefault
+      unlock messages
+      unlock screen
+      return "could not make the graphics:" && line 1 of tError for error
+   end try
+   set the defaultStack to tDefault
+   unlock messages
+   unlock screen
+   return tGroup for value
+end revIDEConvertDrawingToGraphics
+
+-- The graphics of the flattened shape pShape (drawingFlatten's) in the
+-- group pGroup, its points mapped from the drawing to the image's rect by
+-- pLeft, pTop, pScaleX and pScaleY. xCount counts the graphics made
+private command __revIDEDrawingShapeToGraphics pShape, pGroup, pLeft, pTop, pScaleX, pScaleY, pImage, @xCount
+   local tPoints, tLine, tFillOpacity, tStrokeOpacity, tHasFill, tHasStroke, tGraphic
+   repeat for each line tLine in pShape["points"]
+      if tLine is empty then
+         put return after tPoints
+      else
+         put round(pLeft + item 1 of tLine * pScaleX, 2) & comma & round(pTop + item 2 of tLine * pScaleY, 2) & return after tPoints
+      end if
+   end repeat
+   delete the last char of tPoints
+   if tPoints is empty then exit __revIDEDrawingShapeToGraphics
+
+   put pShape["fill"]["type"] is not "none" into tHasFill
+   put pShape["stroke"]["type"] is not "none" and pShape["stroke-width"] > 0 into tHasStroke
+   put __revIDEDrawingOpacity(pShape["fill"], pShape["fill-opacity"]) into tFillOpacity
+   put __revIDEDrawingOpacity(pShape["stroke"], pShape["stroke-opacity"]) into tStrokeOpacity
+   if tHasFill and tFillOpacity <= 0 then put false into tHasFill
+   if tHasStroke and tStrokeOpacity <= 0 then put false into tHasStroke
+   if not tHasFill and not tHasStroke then exit __revIDEDrawingShapeToGraphics
+
+   if tHasFill and tHasStroke and abs(tFillOpacity - tStrokeOpacity) > 0.004 then
+      -- the fill, then the line over it
+      __revIDEDrawingGraphic pShape, tPoints, pGroup, pScaleX, pScaleY, pImage, true, false, tFillOpacity, xCount
+      __revIDEDrawingGraphic pShape, tPoints, pGroup, pScaleX, pScaleY, pImage, false, true, tStrokeOpacity, xCount
+   else if tHasFill then
+      __revIDEDrawingGraphic pShape, tPoints, pGroup, pScaleX, pScaleY, pImage, true, tHasStroke, tFillOpacity, xCount
+   else
+      __revIDEDrawingGraphic pShape, tPoints, pGroup, pScaleX, pScaleY, pImage, false, true, tStrokeOpacity, xCount
+   end if
+end __revIDEDrawingShapeToGraphics
+
+-- A group in pGroup with lockLoc set and the rect of the clip paths pClips
+-- (drawingFlatten's clip numbers, a comma list, each inside the one before)
+-- on the card, or empty when they leave nothing to show
+private function __revIDEDrawingClipGroup pFlat, pClips, pGroup, pLeft, pTop, pScaleX, pScaleY
+   local tClip, tShape, tLine, tLeft, tTop, tRight, tBottom, tBox, tGroup
+   put empty into tBox
+   repeat for each item tClip in pClips
+      put empty into tLeft
+      repeat for each element tShape in pFlat["clips"][tClip]["shapes"]
+         repeat for each line tLine in tShape["points"]
+            if tLine is empty then
+               next repeat
+            end if
+            if tLeft is empty then
+               put item 1 of tLine into tLeft
+               put item 1 of tLine into tRight
+               put item 2 of tLine into tTop
+               put item 2 of tLine into tBottom
+            else
+               put min(tLeft, item 1 of tLine) into tLeft
+               put max(tRight, item 1 of tLine) into tRight
+               put min(tTop, item 2 of tLine) into tTop
+               put max(tBottom, item 2 of tLine) into tBottom
+            end if
+         end repeat
+      end repeat
+      if tLeft is empty then
+         return empty
+      end if
+      if tBox is empty then
+         put tLeft & comma & tTop & comma & tRight & comma & tBottom into tBox
+      else
+         put max(item 1 of tBox, tLeft) & comma & max(item 2 of tBox, tTop) & comma & \
+               min(item 3 of tBox, tRight) & comma & min(item 4 of tBox, tBottom) into tBox
+      end if
+   end repeat
+   put round(pLeft + item 1 of tBox * pScaleX) & comma & round(pTop + item 2 of tBox * pScaleY) & comma & \
+         round(pLeft + item 3 of tBox * pScaleX) & comma & round(pTop + item 4 of tBox * pScaleY) into tBox
+   if item 3 of tBox <= item 1 of tBox or item 4 of tBox <= item 2 of tBox then
+      return empty
+   end if
+   create group "clip" in pGroup
+   put the long id of it into tGroup
+   set the lockLoc of tGroup to true
+   set the margins of tGroup to 0
+   set the showBorder of tGroup to false
+   set the rect of tGroup to tBox
+   return tGroup
+end __revIDEDrawingClipGroup
+
+-- The opacity of a paint pPaint with the opacity pOpacity: a colour's own
+-- alpha is part of it
+private function __revIDEDrawingOpacity pPaint, pOpacity
+   if pOpacity is not a number then put 1 into pOpacity
+   if pPaint["type"] is "color" and item 4 of pPaint["color"] is a number then
+      multiply pOpacity by item 4 of pPaint["color"]
+   end if
+   return max(0, min(1, pOpacity))
+end __revIDEDrawingOpacity
+
+private command __revIDEDrawingGraphic pShape, pPoints, pGroup, pScaleX, pScaleY, pImage, pFill, pStroke, pOpacity, @xCount
+   local tGraphic, tScale, tWidth, tDash, tValue, tDashes
+   add 1 to xCount
+   create graphic ("shape" && xCount) in pGroup
+   put the long id of it into tGraphic
+   set the style of tGraphic to "polygon"
+   set the antialiased of tGraphic to true
+   set the points of tGraphic to pPoints
+   set the blendLevel of tGraphic to round((1 - pOpacity) * 100)
+   if pShape["fill-rule"] is "evenodd" then
+      set the fillRule of tGraphic to "evenodd"
+   else
+      set the fillRule of tGraphic to "nonzero"
+   end if
+   put sqrt(abs(pScaleX * pScaleY)) into tScale
+   if pFill then
+      set the filled of tGraphic to true
+      __revIDEDrawingPaint tGraphic, "fill", pShape["fill"], pScaleX, pScaleY, pImage
+   else
+      set the filled of tGraphic to false
+   end if
+   if pStroke then
+      put max(1, round(pShape["stroke-width"] * tScale)) into tWidth
+      set the lineSize of tGraphic to tWidth
+      __revIDEDrawingPaint tGraphic, "stroke", pShape["stroke"], pScaleX, pScaleY, pImage
+      if pShape["stroke-linejoin"] is among the items of "round,bevel,miter" then
+         set the joinStyle of tGraphic to pShape["stroke-linejoin"]
+      end if
+      if pShape["stroke-linecap"] is "square" then
+         set the capStyle of tGraphic to "square"
+      else if pShape["stroke-linecap"] is "round" then
+         set the capStyle of tGraphic to "round"
+      else
+         set the capStyle of tGraphic to "butt"
+      end if
+      if pShape["stroke-miterlimit"] is a number then
+         set the miterLimit of tGraphic to pShape["stroke-miterlimit"]
+      end if
+      if pShape["stroke-dasharray"] is not empty then
+         repeat for each item tValue in pShape["stroke-dasharray"]
+            put max(1, round(tValue * tScale)) & comma after tDashes
+         end repeat
+         delete the last char of tDashes
+         set the dashes of tGraphic to tDashes
+      end if
+   else
+      set the lineSize of tGraphic to 0
+   end if
+end __revIDEDrawingGraphic
+
+-- Sets the fill or the line (pWhich) of pGraphic to the paint pPaint: a
+-- colour, the image's foreground colour for SVG's currentColor, or a
+-- gradient, whose unit line (or circle) is mapped to the card
+private command __revIDEDrawingPaint pGraphic, pWhich, pPaint, pScaleX, pScaleY, pImage
+   local tColor, tGradient, tMatrix, tStop, tRamp, tLeft, tTop
+   switch pPaint["type"]
+      case "color"
+         put round(item 1 of pPaint["color"] * 255) & comma & round(item 2 of pPaint["color"] * 255) & comma & \
+               round(item 3 of pPaint["color"] * 255) into tColor
+         break
+      case "current"
+         put the effective foregroundColor of pImage into tColor
+         break
+      case "linear"
+      case "radial"
+      case "conical"
+         put pPaint["transform"] into tMatrix
+         put item 1 of the rect of pImage into tLeft
+         put item 2 of the rect of pImage into tTop
+         if pPaint["type"] is "linear" then
+            put "linear" into tGradient["type"]
+         else
+            put "radial" into tGradient["type"]
+         end if
+         put __revIDEDrawingPoint(tMatrix, 0, 0, tLeft, tTop, pScaleX, pScaleY) into tGradient["from"]
+         put __revIDEDrawingPoint(tMatrix, 1, 0, tLeft, tTop, pScaleX, pScaleY) into tGradient["to"]
+         put __revIDEDrawingPoint(tMatrix, 0, 1, tLeft, tTop, pScaleX, pScaleY) into tGradient["via"]
+         repeat for each line tStop in pPaint["stops"]
+            put item 1 of tStop & comma & round(item 2 of tStop * 255) & comma & round(item 3 of tStop * 255) & comma & \
+                  round(item 4 of tStop * 255) & comma & round(item 5 of tStop * 255) & return after tRamp
+         end repeat
+         delete the last char of tRamp
+         put tRamp into tGradient["ramp"]
+         put "good" into tGradient["quality"]
+         put pPaint["spread"] is not "pad" into tGradient["wrap"]
+         put pPaint["spread"] is "reflect" into tGradient["mirror"]
+         put 1 into tGradient["repeat"]
+         -- the first stop's colour, for anything that cannot show a gradient
+         put item 2 to 4 of line 1 of tRamp into tColor
+         break
+   end switch
+   if tColor is not empty then
+      if pWhich is "fill" then
+         set the backgroundColor of pGraphic to tColor
+      else
+         set the foregroundColor of pGraphic to tColor
+      end if
+   end if
+   if tGradient is an array then
+      if pWhich is "fill" then
+         set the fillGradient of pGraphic to tGradient
+      else
+         set the strokeGradient of pGraphic to tGradient
+      end if
+   end if
+end __revIDEDrawingPaint
+
+-- The card point of the drawing point pX,pY under the gradient transform
+-- pMatrix (a,b,c,d,e,f)
+private function __revIDEDrawingPoint pMatrix, pX, pY, pLeft, pTop, pScaleX, pScaleY
+   local tX, tY
+   put item 1 of pMatrix * pX + item 3 of pMatrix * pY + item 5 of pMatrix into tX
+   put item 2 of pMatrix * pX + item 4 of pMatrix * pY + item 6 of pMatrix into tY
+   return round(pLeft + tX * pScaleX) & comma & round(pTop + tY * pScaleY)
+end __revIDEDrawingPoint
 
 on revIDEImportSnapshot pScope, pObjectID
    if pScope is not among the items of "screen,object" then put "screen" into pScope
@@ -12031,6 +12464,43 @@ private function __webDocsInputsKey pInputs, pSourceAPI, pExtensionData
    return tHex
 end __webDocsInputsKey
 
+-- OXT-Beyond: the docs of the externals in the user's Externals folder
+-- (ideDocsUserExternalsDocs in revIDEDocumentationLibrary), added to
+-- xDataA as installed extensions' docs are (revIDEExtensionDocsData), for
+-- the xTalk Script API. Each .lcdoc is its own source, so it is read again
+-- when it changes, with no need to empty the docs cache, and its docs leave
+-- the cache with it (ideDocsNoteUserExternalsDocs). Without a .lcdoc there,
+-- nothing is added. Nothing here stops the docs of the extensions
+private command __addUserExternalsDocsData pAPI, @xDataA
+   if pAPI is not empty and pAPI is not "livecode_script" then
+      exit __addUserExternalsDocsData
+   end if
+   if revEnvironmentIsWeb() then
+      exit __addUserExternalsDocsData
+   end if
+   try
+      local tDocsA, tKeepTitles, tCount, tIndex, tExtension
+      put ideDocsUserExternalsDocs(revEnvironmentUserExternalsPath()) into tDocsA
+      repeat for each element tExtension in revIDEExtensionDocsData()
+         put tExtension["title"] & return after tKeepTitles
+      end repeat
+      ideDocsNoteUserExternalsDocs revEnvironmentUserDocsPath() & "/Externals", \
+            tDocsA, tKeepTitles
+
+      put the number of elements of xDataA into tCount
+      set the itemDelimiter to slash
+      repeat with tIndex = 1 to the number of elements of tDocsA
+         add 1 to tCount
+         put item 1 to -2 of tDocsA[tIndex]["file"] into xDataA[tCount]["folder"]
+         put item -1 of tDocsA[tIndex]["file"] into xDataA[tCount]["source_file"]
+         put tDocsA[tIndex]["file"] into xDataA[tCount]["api_file"]
+         put tDocsA[tIndex]["title"] into xDataA[tCount]["title"]
+         put "Externals/" & tDocsA[tIndex]["key"] into xDataA[tCount]["name"]
+      end repeat
+   catch tError
+   end try
+end __addUserExternalsDocsData
+
 -- (OXT-Beyond: with pDatabaseOnly true, the docs database is brought up to
 -- date while the browser Dictionary is off: revIDEUpdateExtensionDocsDatabase)
 private function revIDEGetExtensionDocsData pAPI, pDatabaseOnly
@@ -12039,6 +12509,8 @@ private function revIDEGetExtensionDocsData pAPI, pDatabaseOnly
    --
    local tExtensionDocsDataA
    put revIDEExtensionDocsData(pAPI) into tExtensionDocsDataA
+   -- OXT-Beyond: and the docs of the externals the user added
+   __addUserExternalsDocsData pAPI, tExtensionDocsDataA
 
    local tFolder, tCachedDataFolder
    set the itemdelimiter to slash
@@ -12073,6 +12545,10 @@ private function revIDEGetExtensionDocsData pAPI, pDatabaseOnly
       
       local tSourceAPI
       put tFolder & slash & "api.lcdoc" into tSourceAPI
+      -- (an external's .lcdoc is its own source: __addUserExternalsDocsData)
+      if tExtensionData["api_file"] is not empty then
+         put tExtensionData["api_file"] into tSourceAPI
+      end if
       
       local tAPIJS
       put tCachedDataFolder & "/api.js" into tAPIJS
@@ -12721,6 +13197,260 @@ function revIDERGBToNamedColor pColor
    
    return sColorsToNamesA[pColor]
 end revIDERGBToNamedColor
+
+##################################################
+#
+#          GRAPHICS AS SVG
+#
+##################################################
+
+-- The Object menu's Copy Graphics as SVG Paths: the clipboard's text
+-- becomes an SVG document with a path for each graphic of pObjects (an
+-- object a line, as the selObj gives them). The item is from
+-- OpenXTalkPaul's DPE IDE and came to OXT-Beyond with OpenXTalk Lite 1.01,
+-- which added the item and its call to this command, never the command,
+-- so the item did nothing (OpenXTalkPaul, openxtalk.org p=25819).
+--
+-- The same document also goes on the clipboard, in UTF-8, under the types
+-- Adobe Illustrator reads (kSVGClipboardTypes), so it pastes as vector
+-- paths into Illustrator or VectorCraft, as DPE's does (p=25820). The text
+-- is set first, which clears the clipboard, so the types join it as one
+-- item. Should the engine refuse a type, the text is still copied: the
+-- try keeps the clipboard from staying locked
+constant kSVGClipboardTypes = "com.adobe.illustrator.svg,com.adobe.illustrator.svgm,com.adobe.svg"
+
+command revOXTIDEGraphicPointsToSVGPath pObjects
+   local tSVG, tData, tType, tError
+   put revOXTIDEGraphicsToSVG(pObjects) into tSVG
+   if tSVG is empty then
+      exit revOXTIDEGraphicPointsToSVGPath
+   end if
+   put textEncode(tSVG, "UTF-8") into tData
+   lock the clipboard
+   set the clipboardData["text"] to tSVG
+   try
+      repeat for each item tType in kSVGClipboardTypes
+         set the rawClipboardData[tType] to tData
+      end repeat
+   catch tError
+   end try
+   unlock the clipboard
+end revOXTIDEGraphicPointsToSVGPath
+
+-- An SVG document with a path for each graphic of pObjects (an object a
+-- line; any other object is left out), in card coordinates: an oval, an
+-- arc of one or a rounded rectangle is the curves the engine draws for it
+-- (__revOXTIDESVGCurves), any other graphic its effective points. Its box
+-- holds every graphic's rect and half its line beyond, where SVG draws the
+-- line of a rectangle's edge. Empty when there is no graphic
+function revOXTIDEGraphicsToSVG pObjects
+   local tObject, tPaths, tRect, tPad, tLeft, tTop, tRight, tBottom
+   repeat for each line tObject in pObjects
+      if tObject is empty or not exists(tObject) then next repeat
+      put the long id of tObject into tObject
+      if word 1 of tObject is not "graphic" then next repeat
+      put __revOXTIDEGraphicToSVGPath(tObject) & return after tPaths
+      put the rect of tObject into tRect
+      put (the lineSize of tObject + 1) div 2 into tPad
+      put item 1 of tRect - tPad, item 2 of tRect - tPad, item 3 of tRect + tPad, item 4 of tRect + tPad into tRect
+      if tLeft is empty then
+         put item 1 of tRect into tLeft
+         put item 2 of tRect into tTop
+         put item 3 of tRect into tRight
+         put item 4 of tRect into tBottom
+      else
+         put min(tLeft, item 1 of tRect) into tLeft
+         put min(tTop, item 2 of tRect) into tTop
+         put max(tRight, item 3 of tRect) into tRight
+         put max(tBottom, item 4 of tRect) into tBottom
+      end if
+   end repeat
+   if tPaths is empty then return empty
+   return "<svg xmlns=" & quote & "http://www.w3.org/2000/svg" & quote && \
+         "width=" & quote & tRight - tLeft & quote && "height=" & quote & tBottom - tTop & quote && \
+         "viewBox=" & quote & tLeft && tTop && tRight - tLeft && tBottom - tTop & quote & ">" & return & \
+         tPaths & "</svg>" & return
+end revOXTIDEGraphicsToSVG
+
+-- A path element for the graphic pGraphic (its long id). A rectangle,
+-- rounded rectangle, regular polygon, oval, or filled arc is closed; a
+-- polygon, line or curve is open, as the engine draws it, except for each
+-- run of its points (an empty line between runs) that ends where it starts.
+-- An oval, an arc or a rounded rectangle is its curves when it has them
+private function __revOXTIDEGraphicToSVGPath pGraphic
+   local tStyle, tClosed, tData, tRun, tPoint, tAttributes
+   put __revOXTIDESVGCurves(pGraphic) into tData
+   if tData is empty then
+      put the style of pGraphic into tStyle
+      put tStyle is among the items of "rectangle,roundrect,regular" or \
+            (tStyle is "oval" and (the arcAngle of pGraphic >= 360 or the filled of pGraphic)) into tClosed
+      repeat for each line tPoint in the effective points of pGraphic
+         if tPoint is empty then
+            put __revOXTIDESVGRun(tRun, tClosed) after tData
+            put empty into tRun
+         else
+            put tPoint & return after tRun
+         end if
+      end repeat
+      put __revOXTIDESVGRun(tRun, tClosed) after tData
+   end if
+   if the filled of pGraphic then
+      put "fill=" & quote & __revOXTIDESVGColor(the effective backgroundColor of pGraphic, "255,255,255") & quote into tAttributes
+      if the fillRule of pGraphic is "evenodd" then
+         put " fill-rule=" & quote & "evenodd" & quote after tAttributes
+      end if
+   else
+      put "fill=" & quote & "none" & quote into tAttributes
+   end if
+   if the lineSize of pGraphic > 0 then
+      put " stroke=" & quote & __revOXTIDESVGColor(the effective foregroundColor of pGraphic, "0,0,0") & quote & \
+            " stroke-width=" & quote & the lineSize of pGraphic & quote after tAttributes
+   else
+      put " stroke=" & quote & "none" & quote after tAttributes
+   end if
+   if the blendLevel of pGraphic > 0 then
+      put " opacity=" & quote & (100 - the blendLevel of pGraphic) / 100 & quote after tAttributes
+   end if
+   return "<path d=" & quote & word 1 to -1 of tData & quote && tAttributes & "/>"
+end __revOXTIDEGraphicToSVGPath
+
+-- The path data of the graphic pGraphic (its long id) as the curves the
+-- engine draws (engine/src/graphicscontext.cpp), so that it pastes as an
+-- oval, an arc or a rounded rectangle and not as the polygon of its
+-- effective points (OpenXTalkPaul, openxtalk.org p=25837): cubic Beziers
+-- (C) in its rect, the box a rectangle's path has. An oval with an
+-- arcAngle under 360 is the arc from its startAngle, counterclockwise from
+-- 3 o'clock, closed through its centre when it is filled (a wedge, as the
+-- engine fills and draws it) and open when not. A rounded rectangle's
+-- corners are quarters of half its roundRadius, at most half its width
+-- and height, as the engine draws them (its effective points take the
+-- whole roundRadius). Empty for any other graphic, an oval whose arcAngle
+-- is 0, which the engine does not draw, a rounded rectangle whose
+-- roundRadius is 0, or an empty rect: their path is the effective points,
+-- as it was before 0.2.7-rc.6.12
+private function __revOXTIDESVGCurves pGraphic
+   local tStyle, tRect, tWidth, tHeight, tRadius, tRX, tRY, tK, tHK, tVK
+   local tLeft, tTop, tRight, tBottom, tL, tR, tT, tB, tCX, tCY, tArc, tData
+   put the style of pGraphic into tStyle
+   if tStyle is not among the items of "oval,roundrect" then return empty
+   put the rect of pGraphic into tRect
+   put item 3 of tRect - item 1 of tRect into tWidth
+   put item 4 of tRect - item 2 of tRect into tHeight
+   if tWidth <= 0 or tHeight <= 0 then return empty
+   put item 1 of tRect into tLeft
+   put item 2 of tRect into tTop
+   put item 3 of tRect into tRight
+   put item 4 of tRect into tBottom
+   if tStyle is "roundrect" then
+      put the roundRadius of pGraphic into tRadius
+      if tRadius <= 0 then return empty
+      put min(tWidth, tRadius) / 2 into tRX
+      put min(tHeight, tRadius) / 2 into tRY
+      put 4 / 3 * tan(pi / 8) into tK
+      put tRX * tK into tHK
+      put tRY * tK into tVK
+      -- the corners' centres; an edge between two is left out when they
+      -- meet, as when the roundRadius is the width or more
+      put tLeft + tRX into tL
+      put tRight - tRX into tR
+      put tTop + tRY into tT
+      put tBottom - tRY into tB
+      put " M" & __revOXTIDESVGPoint(tR, tTop) & " C" & __revOXTIDESVGPoint(tR + tHK, tTop) && \
+            __revOXTIDESVGPoint(tRight, tT - tVK) && __revOXTIDESVGPoint(tRight, tT) into tData
+      if tB > tT then put " L" & __revOXTIDESVGPoint(tRight, tB) after tData
+      put " C" & __revOXTIDESVGPoint(tRight, tB + tVK) && __revOXTIDESVGPoint(tR + tHK, tBottom) && \
+            __revOXTIDESVGPoint(tR, tBottom) after tData
+      if tL < tR then put " L" & __revOXTIDESVGPoint(tL, tBottom) after tData
+      put " C" & __revOXTIDESVGPoint(tL - tHK, tBottom) && __revOXTIDESVGPoint(tLeft, tB + tVK) && \
+            __revOXTIDESVGPoint(tLeft, tB) after tData
+      if tB > tT then put " L" & __revOXTIDESVGPoint(tLeft, tT) after tData
+      put " C" & __revOXTIDESVGPoint(tLeft, tT - tVK) && __revOXTIDESVGPoint(tL - tHK, tTop) && \
+            __revOXTIDESVGPoint(tL, tTop) & " Z" after tData
+      return tData
+   end if
+   put the arcAngle of pGraphic into tArc
+   if tArc <= 0 then return empty
+   put tWidth / 2 into tRX
+   put tHeight / 2 into tRY
+   put tLeft + tRX into tCX
+   put tTop + tRY into tCY
+   put __revOXTIDESVGArc(tCX, tCY, tRX, tRY, the startAngle of pGraphic, min(tArc, 360)) into tData
+   if tArc >= 360 then
+      put " Z" after tData
+   else if the filled of pGraphic then
+      put " L" & __revOXTIDESVGPoint(tCX, tCY) & " Z" after tData
+   end if
+   return tData
+end __revOXTIDESVGCurves
+
+-- The path data of the arc of pAngle degrees (1 to 360) of the ellipse
+-- centred on pCX,pCY with the radii pRX and pRY, from pStart degrees,
+-- counterclockwise from 3 o'clock, as the engine draws it
+-- (add_legacy_arc): a move to its first point, then a cubic for each part
+-- up to the next multiple of 90 degrees, with its control points along
+-- the tangents 4/3 tan(a/4) of the radius from its ends for a part of a
+-- degrees
+private function __revOXTIDESVGArc pCX, pCY, pRX, pRY, pStart, pAngle
+   local tFrom, tTo, tDelta, tK, tHK, tVK, tCA, tSA, tCB, tSB, tData
+   put pStart mod 360 into tFrom
+   put " M" & __revOXTIDESVGPoint(pCX + pRX * cos(pi * tFrom / 180), pCY - pRY * sin(pi * tFrom / 180)) into tData
+   repeat while pAngle > 0
+      put min(90 - tFrom mod 90, pAngle) into tDelta
+      put tFrom + tDelta into tTo
+      put 4 / 3 * tan(pi * tDelta / 720) into tK
+      put pRX * tK into tHK
+      put pRY * tK into tVK
+      put cos(pi * tFrom / 180) into tCA
+      put sin(pi * tFrom / 180) into tSA
+      put cos(pi * tTo / 180) into tCB
+      put sin(pi * tTo / 180) into tSB
+      put " C" & __revOXTIDESVGPoint(pCX + pRX * tCA - tHK * tSA, pCY - pRY * tSA - tVK * tCA) && \
+            __revOXTIDESVGPoint(pCX + pRX * tCB + tHK * tSB, pCY - pRY * tSB + tVK * tCB) && \
+            __revOXTIDESVGPoint(pCX + pRX * tCB, pCY - pRY * tSB) after tData
+      subtract tDelta from pAngle
+      put tTo into tFrom
+   end repeat
+   return tData
+end __revOXTIDESVGArc
+
+-- A point of a path's data: pX,pY to the hundredth
+private function __revOXTIDESVGPoint pX, pY
+   return round(pX, 2) & "," & round(pY, 2)
+end __revOXTIDESVGPoint
+
+-- The path data of the points pRun (a point a line): from the first to
+-- each in turn, and closed (Z) when pClosed or when the last is the first
+-- again, which is then left out
+private function __revOXTIDESVGRun pRun, pClosed
+   local tCount, tData, i
+   put the number of lines of pRun into tCount
+   if tCount is 0 then return empty
+   if tCount > 1 and line tCount of pRun is line 1 of pRun then
+      put true into pClosed
+      subtract 1 from tCount
+   end if
+   repeat with i = 1 to tCount
+      if i is 1 then
+         put " M" & line i of pRun after tData
+      else
+         put " L" & line i of pRun after tData
+      end if
+   end repeat
+   if pClosed then put " Z" after tData
+   return tData
+end __revOXTIDESVGRun
+
+-- A colour of an object (as r,g,b, #rrggbb or a name) as SVG writes it;
+-- pDefault (r,g,b) when it is empty
+private function __revOXTIDESVGColor pColor, pDefault
+   local tRGB
+   if pColor is empty then put pDefault into pColor
+   if char 1 of pColor is "#" then return pColor
+   if the number of items of pColor >= 3 then return "rgb(" & item 1 to 3 of pColor & ")"
+   put revIDENamedColorToRGB(pColor) into tRGB
+   if the number of items of tRGB >= 3 then return "rgb(" & item 1 to 3 of tRGB & ")"
+   return pColor
+end __revOXTIDESVGColor
 
 on ideCorePropertyInspectorRefreshPropertyLabels
    revIDESetPreference "idePropertyInspector_labels", the cLanguageNames of cd 1 of stack "revPreferences"
@@ -13636,7 +14366,10 @@ on revIDEFindMoreWidgets
 end revIDEFindMoreWidgets
 
 command ideShowUpgradeOptions
-   if ideCanShowUpgradeOptions() then
+   -- OXT-Beyond: the Start Center, which showed the upgrade's page, is not
+   -- installed since 0.2.7-rc.6.12, so without it the page opens in the
+   -- browser, as it does when it cannot be shown in the IDE
+   if ideCanShowUpgradeOptions() and there is a stack revIDEPaletteToStackName("start center") then
       lock screen
       if the mode of stack revIDEPaletteToStackName("start center") is 0 then
          revIDEOpenPalette "start center"

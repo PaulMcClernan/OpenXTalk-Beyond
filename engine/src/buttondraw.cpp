@@ -45,6 +45,52 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "context.h"
 #include "graphics_util.h"
 
+// OXT-Beyond: the colour of a disabled label on a background that the
+// theme makes dark. The Windows look draws a disabled label etched: once
+// a point down and right in the top colour, then in the bottom colour.
+// On Windows' dark mode those are the theme's white and grey, so a
+// disabled label read as a bold white one, as if enabled (the menu bar's
+// Group and Edit Group, every disabled check box of Preferences); on a
+// dark GTK theme they are a little lighter and darker than its dark
+// background, so the label all but vanished. On such a background the
+// label is drawn once, in the grey halfway from the background to white:
+// dimmer than an enabled label, and seen. A light theme, and a button,
+// group, card or stack with a background colour or pattern of its own,
+// keep the etched label, as before, and so does the web, whose dark theme
+// has edge colours of its own for it (em-theme.cpp). The background is the
+// one getforecolor gives the label, as MCButtonMenuItemIsOnDarkTheme reads it
+static bool MCButtonDisabledInkOnDarkTheme(MCButton *p_button, MCDC *p_dc, MCColor &r_ink)
+{
+#if defined(__EMSCRIPTEN__)
+	return false;
+#else
+	// The objects getforecolor looks to for the colour, in its order
+	for (MCObject *t_object = p_button; t_object != nil && t_object != MCdispatcher; t_object = t_object -> getparent())
+	{
+		uint2 t_index;
+		if (t_object -> getcindex(DI_BACK, t_index) || t_object -> getpindex(DI_BACK, t_index))
+			return false;
+	}
+
+	MCColor t_back;
+	MCPatternRef t_pattern = nil;
+	int2 t_x, t_y;
+	if (!p_button -> getforecolor(DI_BACK, False, False, t_back, t_pattern, t_x, t_y, p_dc -> gettype(), p_button))
+		return false;
+
+	// Rec. 601 luma, out of 65535
+	uint32_t t_luma;
+	t_luma = (299 * uint32_t(t_back . red) + 587 * uint32_t(t_back . green) + 114 * uint32_t(t_back . blue)) / 1000;
+	if (t_luma >= 32768)
+		return false;
+
+	r_ink . red = t_back . red + (0xFFFF - t_back . red) / 2;
+	r_ink . green = t_back . green + (0xFFFF - t_back . green) / 2;
+	r_ink . blue = t_back . blue + (0xFFFF - t_back . blue) / 2;
+	return true;
+#endif
+}
+
 // MW-2011-09-06: [[ Redraw ]] Added 'sprite' option - if true, ink and opacity are not set.
 void MCButton::draw(MCDC *dc, const MCRectangle& p_dirty, bool p_isolated, bool p_sprite)
 {
@@ -500,6 +546,14 @@ void MCButton::draw(MCDC *dc, const MCRectangle& p_dirty, bool p_isolated, bool 
 				icondrawed = True;
 			}
 			
+			// OXT-Beyond: a disabled label on a background the theme makes
+			// dark is drawn once, in a grey, not etched
+			// (MCButtonDisabledInkOnDarkTheme)
+			MCColor t_disabled_ink = {0, 0, 0};
+			bool t_flat_disabled;
+			t_flat_disabled = (flags & F_DISABLED) != 0 && !t_themed_menu && MClook == LF_WIN95
+			                  && MCButtonDisabledInkOnDarkTheme(this, dc, t_disabled_ink);
+
 			uindex_t t_totallen = 0;
 			for (t_line = 0 ; t_line < nlines ; t_line++)
 			{
@@ -558,7 +612,9 @@ void MCButton::draw(MCDC *dc, const MCRectangle& p_dirty, bool p_isolated, bool 
 				}
 				uint2 fontstyle;
 				fontstyle = gettextstyle();
-				if ((flags & F_DISABLED) != 0 && !t_themed_menu && MClook == LF_WIN95)
+				if (t_flat_disabled)
+					dc -> setforeground(t_disabled_ink);
+				else if ((flags & F_DISABLED) != 0 && !t_themed_menu && MClook == LF_WIN95)
 				{
 					drawlabel(dc, sx + 1 + loff, sy + 1 + loff, twidth, shadowrect, line, fontstyle, t_mnemonic);
 					if (getstyleint(flags) == F_MENU && menumode == WM_CASCADE)
@@ -576,10 +632,19 @@ void MCButton::draw(MCDC *dc, const MCRectangle& p_dirty, bool p_isolated, bool 
                 // FG-2014-10-29: [[ Bugfix 13842 ]] On Yosemite, glowing buttons
                 // should draw with white text.
                 // tperry 18th October 2025: Extended to handle default buttons with accent color
+                // OXT-Beyond: a hilited one only before macOS 11. From
+                // macOS 11 AppKit draws a hilited push button (setHighlighted,
+                // osxtheme.mm) a light grey in the light appearance, not in
+                // the accent colour, and a white label on it could hardly be
+                // seen (the Dictionary's chosen syntax, "xTalk Script"); it
+                // takes the label's own colour there, as an unhilited one
+                // does. A default button keeps its white label on the accent
+                // colour, and macOS 10.10 to 10.15 are as before
                 bool t_should_use_white_text = false;
                 if (IsMacLFAM() && MCmajorosversion >= MCOSVersionMake(10,10,0) && MCaqua
                     && !(flags & F_DISABLED) && isstdbtn && getstyleint(flags) == F_STANDARD
-                    && ((state & CS_HILITED) || (state & CS_SHOW_DEFAULT))
+                    && (((state & CS_HILITED) && MCmajorosversion < MCOSVersionMake(10,16,0))
+                        || (state & CS_SHOW_DEFAULT))
                     && rect.height <= 24 && MCappisactive)
                     t_should_use_white_text = true;
                 
@@ -804,6 +869,11 @@ static bool MCButtonMenuItemIsOnDarkTheme(MCButton *p_item, MCDC *p_dc)
 }
 #endif
 
+#if defined(__EMSCRIPTEN__)
+// em-theme.cpp: the colour of a check box's box in the dark appearance
+bool MCEmscriptenThemeGetCheckBoxColor(bool p_pressed, MCColor& r_color);
+#endif
+
 void MCButton::drawcheck(MCDC *dc, MCRectangle &srect, Boolean white)
 {
 	MCRectangle trect;
@@ -811,6 +881,11 @@ void MCButton::drawcheck(MCDC *dc, MCRectangle &srect, Boolean white)
 	trect.y = srect.y + ((srect.height - CHECK_SIZE) >> 1) + 1;
 	trect.width = trect.height = CHECK_SIZE;
 	uint2 index;
+#if defined(__EMSCRIPTEN__)
+	// True when the check box's box is filled white (or grey), its own
+	// colours having none, in the light appearance (LF_WIN95, below)
+	bool t_white_box = false;
+#endif
 	if (!(flags & F_AUTO_ARM) && MCcurtheme &&
 	        MCcurtheme->iswidgetsupported(WTHEME_TYPE_CHECKBOX))
 	{
@@ -910,11 +985,28 @@ void MCButton::drawcheck(MCDC *dc, MCRectangle &srect, Boolean white)
 				setforeground(dc, DI_BACK, False);
 			else
 			{
-				if (state & CS_MFOCUSED && !(state & CS_SELECTED)
-				        && MCU_point_in_rect(rect, mx, my))
-					dc->setforeground(dc->getgray());
+				bool t_pressed;
+				t_pressed = state & CS_MFOCUSED && !(state & CS_SELECTED)
+				            && MCU_point_in_rect(rect, mx, my);
+#if defined(__EMSCRIPTEN__)
+				// OXT-Beyond: on the web, in the dark appearance, the box is
+				// dark (em-theme.cpp), so an unticked box no longer looks
+				// ticked, and its tick is white (below). In the light
+				// appearance it is white, as before
+				MCColor t_box_color;
+				if (MCEmscriptenThemeGetCheckBoxColor(t_pressed, t_box_color))
+					dc->setforeground(t_box_color);
 				else
-					dc->setforeground(dc->getwhite());
+#endif
+				{
+#if defined(__EMSCRIPTEN__)
+					t_white_box = true;
+#endif
+					if (t_pressed)
+						dc->setforeground(dc->getgray());
+					else
+						dc->setforeground(dc->getwhite());
+				}
 				dc->setfillstyle(FillSolid, nil, 0, 0);
 			}
 			if (!(flags & F_DISABLED))
@@ -952,9 +1044,23 @@ void MCButton::drawcheck(MCDC *dc, MCRectangle &srect, Boolean white)
 #if defined(TARGET_PLATFORM_LINUX)
 				// OXT-Beyond: a menu item's tick, on Linux by the theme's
 				// menu (MCButtonMenuItemIsOnDarkTheme); a check box's stays
-				// black on its white box
-				if (MCButtonMenuItemIsOnDarkTheme(this, dc))
-					t_appearance = kMCSystemAppearanceDark;
+				// black on its white box. The theme alone decides, not the
+				// systemAppearance, which can say "dark" on a light GTK
+				// theme when a script follows the desktop's setting (the
+				// useDesktopAppearance)
+				t_appearance = MCButtonMenuItemIsOnDarkTheme(this, dc) ? kMCSystemAppearanceDark : kMCSystemAppearanceLight;
+#elif defined(__EMSCRIPTEN__)
+				// OXT-Beyond: a tick in a white box is always black. Until
+				// 0.2.7-rc.6.11 the box was white in the dark appearance too
+				// (a page that follows a dark browser: em-dc.cpp), and its
+				// tick white on white (the web IDE's Property Inspector
+				// showed every check box unticked); since rc.6.12 the box is
+				// dark there (above), so this keeps a white box's tick black
+				// whatever the appearance. A tick in the dark box, a menu
+				// item's tick and one in a box of a colour of its own are
+				// white in the dark appearance
+				if (t_white_box)
+					t_appearance = kMCSystemAppearanceLight;
 #endif
 				if (t_appearance == kMCSystemAppearanceDark)
 					dc->setforeground(dc->getwhite());
@@ -1389,10 +1495,9 @@ void MCButton::drawcascade(MCDC *dc, MCRectangle &srect)
 		MCSystemAppearance t_appearance;
 		MCscreen->getsystemappearance(t_appearance);
 #if defined(TARGET_PLATFORM_LINUX)
-		// OXT-Beyond: a submenu's arrow, on Linux by the theme's menu, as
-		// the tick in drawcheck (MCButtonMenuItemIsOnDarkTheme)
-		if (MCButtonMenuItemIsOnDarkTheme(this, dc))
-			t_appearance = kMCSystemAppearanceDark;
+		// OXT-Beyond: a submenu's arrow, on Linux by the theme's menu alone,
+		// as the tick in drawcheck (MCButtonMenuItemIsOnDarkTheme)
+		t_appearance = MCButtonMenuItemIsOnDarkTheme(this, dc) ? kMCSystemAppearanceDark : kMCSystemAppearanceLight;
 #endif
 		if (t_appearance == kMCSystemAppearanceDark)
 			dc->setforeground(dc->getwhite());

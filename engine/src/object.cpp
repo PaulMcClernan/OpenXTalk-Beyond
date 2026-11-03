@@ -1718,6 +1718,14 @@ Boolean MCObject::getforecolor(uint2 p_di, Boolean rev, Boolean hilite,
         if (t_style == F_MENU)
             t_skip_theme = false;
     }
+    // OXT-Beyond: nor a stack or card: drawn in the Mac's own window and
+    // text colours, as the appearance shows them now, the ones the
+    // effective backgroundColor and foregroundColor read (seth's choice 1A
+    // of 2026-10-31); before, a fixed 61,61,61 and white that a script
+    // could not read (bwmilby, openxtalk.org p=25665, p=25668). The
+    // legacy theme has no window colour, so it keeps 61,61,61 (below)
+    if (t_skip_theme && (o->gettype() == CT_STACK || o->gettype() == CT_CARD))
+        t_skip_theme = false;
     if (!t_skip_theme &&
 #else
     if (
@@ -1730,7 +1738,13 @@ Boolean MCObject::getforecolor(uint2 p_di, Boolean rev, Boolean hilite,
     {
         if (selected)
             t_control_state |= kMCPlatformControlStateSelected;
-        
+#if defined(_MACOSX) && !defined(_SERVER)
+        // OXT-Beyond: a stack or card printed takes the light appearance's
+        // colours, as the dark ones above leave the printer out
+        if (dc_type == CONTEXT_TYPE_PRINTER && (o->gettype() == CT_STACK || o->gettype() == CT_CARD))
+            t_control_state |= kMCPlatformControlStateLightAppearance;
+#endif
+
         if (MCPlatformGetControlThemePropColor(t_control_type, t_control_part, t_control_state, t_theme_prop, c))
             return True;
 #if defined(_MACOSX) /* OXT-TOM: macOS */
@@ -5802,6 +5816,8 @@ static MCDeletedObjectPool *MCdeletedobjectpool = nil;
 static MCDeletedObjectPool *MCrootdeletedobjectpool = nil;
 static uint32_t MCdeletedobjectpoolfreezedepth = 0;
 
+static void MCDeletedObjectsDrainPool(bool p_force);
+
 static bool MCDeletedObjectPoolCreate(MCDeletedObjectPool*& r_pool)
 {
     MCDeletedObjectPool *t_pool;
@@ -5927,7 +5943,7 @@ void MCDeletedObjectsTeardown(void)
 		MCDeletedObjectsLeaveWait(true);
 	
     // Ensure all objects in the pool are deleted.
-    MCDeletedObjectsDoDrain();
+    MCDeletedObjectsDrainPool(true);
     
     MCMemoryDelete(MCrootdeletedobjectpool);
     MCrootdeletedobjectpool = nil;
@@ -5997,6 +6013,16 @@ void MCDeletedObjectsLeaveWait(bool p_dispatching)
     t_pool = MCdeletedobjectpool;
     MCdeletedobjectpool = MCdeletedobjectpool -> parent;
     
+    // OXT-Beyond: objects still in use stay to be deleted; they go to the
+    // pool that is current now, because a defunct pool is destroyed
+    // without its objects.
+    while (t_pool -> to_delete != nil)
+    {
+        MCObject *t_object;
+        t_object = t_pool -> to_delete -> remove(t_pool -> to_delete);
+        t_object -> appendto(MCdeletedobjectpool -> to_delete);
+    }
+    
     // The previous pool is now defunct.
     MCDeletedObjectPoolMakeDefunct(t_pool);
     
@@ -6004,18 +6030,88 @@ void MCDeletedObjectsLeaveWait(bool p_dispatching)
     MCDeletedObjectsDoDrain();
 }
 
-void MCDeletedObjectsDoDrain(void)
+// OXT-Beyond: true if an object of the list (a group's controls, or a
+// stack's cards, controls or substacks), or one that it would destroy with
+// it, is in use (see MCDeletedObjectIsInUse).
+static bool MCDeletedObjectIsInUse(MCObject *p_object);
+template<typename T>
+static bool MCDeletedObjectListIsInUse(T *p_list)
+{
+    if (p_list == nil)
+        return false;
+    T *t_object = p_list;
+    do
+    {
+        if (MCDeletedObjectIsInUse(t_object))
+            return true;
+        t_object = t_object -> next();
+    }
+    while (t_object != p_list);
+    return false;
+}
+
+// OXT-Beyond: true if the object, or one that its destructor destroys with
+// it, is handling a message: MCObject::message suspends the deletion of its
+// object until the message is done. The object itself is safe already
+// (suspending moves it to its pool's parent, which is not drained until
+// the wait that holds the message ends), but a group's destructor deletes
+// its controls, and a stack's its cards, controls and substacks, whatever
+// they are doing. So a control whose message went on to a script that
+// deleted its group, made in the same wait, was freed under that message
+// and used after the free when it returned (mwieder and tperry2x,
+// openxtalk.org: rc.6.10 crashed on the Mac when a breakpoint was turned
+// off in the Script Editor's Breakpoints pane, whose click rebuilds the
+// pane; at a breakpoint the debugger freezes the pool, so the pane's
+// controls are all in the current one).
+static bool MCDeletedObjectIsInUse(MCObject *p_object)
+{
+    if (p_object -> getdeletionissuspended())
+        return true;
+
+    switch (p_object -> gettype())
+    {
+        case CT_GROUP:
+            return MCDeletedObjectListIsInUse(static_cast<MCGroup *>(p_object) -> getcontrols());
+
+        case CT_STACK:
+        {
+            MCStack *t_stack = static_cast<MCStack *>(p_object);
+            return MCDeletedObjectListIsInUse(t_stack -> getcards()) ||
+                   MCDeletedObjectListIsInUse(t_stack -> getcontrols()) ||
+                   MCDeletedObjectListIsInUse(t_stack -> getsubstacks());
+        }
+
+        default:
+            return false;
+    }
+}
+
+// Delete the objects in the current pool. An object in use (see above)
+// stays in the pool, to be deleted by a drain after its message is done
+// (MCDeletedObjectsOnObjectResumeDeletion schedules one), unless p_force:
+// the engine is shutting down, and deletes everything, as it always did.
+static void MCDeletedObjectsDrainPool(bool p_force)
 {
     if (MCdeletedobjectpool -> to_delete == nil)
         return;
     
     // Actually delete all objects from the pool.
+    MCObject *t_in_use = nil;
     while(MCdeletedobjectpool -> to_delete != nil)
     {
         MCObject *t_object;
         t_object = MCdeletedobjectpool -> to_delete -> remove(MCdeletedobjectpool -> to_delete);
-        delete t_object;
+        if (!p_force && MCDeletedObjectIsInUse(t_object))
+            t_object -> appendto(t_in_use);
+        else
+            delete t_object;
     }
+    MCdeletedobjectpool -> to_delete = t_in_use;
+}
+
+void MCDeletedObjectsDoDrain(void)
+{
+    MCDeletedObjectsDrainPool(false);
 }
 
 void MCDeletedObjectsOnObjectCreated(MCObject *p_object)
@@ -6099,6 +6195,11 @@ void MCDeletedObjectsOnObjectResumeDeletion(MCObject *p_object, void *p_deletion
 	}
 	
 	p_object -> setdeletionissuspended(false);
+	
+	// OXT-Beyond: a deleted object may have been left in the pool while this
+	// one was handling its message (MCDeletedObjectIsInUse); delete it now.
+	if (MCdeletedobjectpool -> to_delete != nil)
+		MCActionsSchedule(kMCActionsDrainDeletedObjects);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

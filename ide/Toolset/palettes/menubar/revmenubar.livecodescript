@@ -4,6 +4,8 @@
 local sMenuTarget, tPaletteList  --script locals
 -- OXT-Beyond: the toolbar's modern look (mbRefreshLook)
 local sMbAppearanceMsg, sMbAppearanceTries
+-- OXT-Beyond: what Help > Dictionary Online opens (tOpenOnlineDict)
+constant kOnlineDictionaryURL = "https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/dictionary/"
 
 on preOpenStack
    if the cREVLaunching of stack "Home" is true then set the blendlevel of this stack to 99  --tp 24-1
@@ -61,15 +63,24 @@ end preOpenStack
 -- opened, so a switch left it in the other appearance's colour)
 on menubarFollowAppearance
    -- OXT-Beyond: the modern look has colours of its own, light or dark
-   -- (mbRefreshLook, below layoutMenu)
+   -- (mbRefreshLook, below layoutMenu). The web IDE's toolbar has its own
+   -- pictures, which are drawn for the dark appearance (mbDrawImages);
+   -- revWebIDELibrary colours the rest of it
+   if revEnvironmentIsWeb() then
+      mbDrawImages
+      exit menubarFollowAppearance
+   end if
    if revMenubarIsModern() then
       mbDrawImages
       mbApplyColors
       exit menubarFollowAppearance
    end if
+   -- (OXT-Beyond: on macOS the engine draws a stack with no colour of its
+   -- own in the Mac's window colour, light or dark, since seth's choice
+   -- 1A of 2026-10-31; before, 61,61,61 in the dark, which this set to
+   -- match. Empty follows the engine, as every other palette does)
    if the platform contains "mac" then  --tp 26-4, ensure toolbar follows systemappearance 
-      if the systemappearance is "dark" then set the backgroundColor of me to "61,61,61"
-      else set the backgroundColor of me to ""
+      set the backgroundColor of me to ""
    end if
 end menubarFollowAppearance
 
@@ -1074,6 +1085,15 @@ command mbDrawImages
    local tModern, tID, tName, tItem, tStyle, tOffset
    put revMenubarIsModern() into tModern
    if tModern then mbReadAppearance
+   -- OXT-Beyond: the web IDE's pictures (images-web) are drawn in dark
+   -- ink for its light header, which a dark browser makes dark too
+   -- (revWebIDELibrary's styleMenubar): there the toolbar's pictures are
+   -- the modern look's, in its dark colours, and in light the web's own
+   -- again, as before
+   if revEnvironmentIsWeb() then
+      mbReadAppearance
+      put sMbDark is true into tModern
+   end if
    if there is a group "icons" of me then
       repeat for each line tID in the childControlIDs of group "icons" of me
          if word 1 of the name of control id tID of me is not "image" then next repeat
@@ -1106,8 +1126,8 @@ end mbDrawImages
 -- background, and the colour of its ticks and arrows, from the first
 -- object above its button that has one (the tour's menu-marks), so the
 -- menus and their row keep the theme's look. In the classic look none of
--- these are set, as the classic look always had them (on macOS, its dark
--- grey for the window)
+-- these are set, as the classic look always had them (on macOS, the
+-- window's own colour, light or dark, as the engine draws it)
 command mbApplyColors
    local tModern, tTop, tBack, tLocked, tCantModify
    put revMenubarIsModern() into tModern
@@ -1146,7 +1166,8 @@ command mbApplyColors
       if there is a graphic "mbBackground" of card 1 of me then
          delete graphic "mbBackground" of card 1 of me
       end if
-      if the platform contains "mac" and the systemappearance is "dark" then put "61,61,61" into tBack
+      -- (empty: on macOS too the window's own colour, light or dark,
+      -- as menubarFollowAppearance leaves it)
       set the backgroundColor of me to tBack
    end if
    if there is a group "toolbar" of me then
@@ -1361,15 +1382,26 @@ function revMenubarButtonText pName, pHilited
    end switch
 end revMenubarButtonText
 
+-- OXT-Beyond: each label is measured plain and bold. setButtonHilite
+-- draws a lit button's label bold (a toggle that is on, such as Select
+-- Grouped, and any button while it is pressed), and a width measured from
+-- the plain label alone cut the bold one off where it was wider than the
+-- 64 pixels every button has: "Select Grouped" on Linux, in DejaVu Sans.
+-- The IDE tour's step menubar-modern measures every button's labels, bold.
 function __buttonMaxFormattedWidth pName
    lock screen
    lock messages
-   local tWidth, tOldLabel
+   local tWidth, tOldLabel, tOldStyle
    put the label of button pName of group "toolbar" of me into tOldLabel
+   put the textStyle of button pName of group "toolbar" of me into tOldStyle
    repeat for each item tHilite in "true,false"
       set the label of button pName of group "toolbar" of me to revMenubarButtonText(pName, tHilite)
-      put max(tWidth, the formattedwidth of button pName of group "toolbar" of me) into tWidth
+      repeat for each item tStyle in "plain,bold"
+         set the textStyle of button pName of group "toolbar" of me to tStyle
+         put max(tWidth, the formattedwidth of button pName of group "toolbar" of me) into tWidth
+      end repeat
    end repeat
+   set the textStyle of button pName of group "toolbar" of me to tOldStyle
    set the label of button pName of group "toolbar" of me to tOldLabel
    unlock messages
    unlock screen
@@ -1555,10 +1587,15 @@ on revMenubarMenuButtonClicked pWhich
          revIDEToggle "Suppress Errors"
          break
       case "Sample Stacks"
-         send "tOpenNewGuides" to this stack  --tp 24-2, lessons
+         -- OXT-Beyond: Home's examples (it opened the lessons before Home)
+         send "tOpenDemos" to this stack
          break
       case "Tutorials"
-         revIDELaunchResource pWhich
+         -- OXT-Beyond: Home's Academy (it asked for a stack in
+         -- Resources/Examples before Home); with Home missing, as before
+         if not revMenubarOpenHub("academy") then
+            revIDELaunchResource pWhich
+         end if
          break
       case "Resources"
          revIDEOpenPalette "Resource Center"
@@ -1713,6 +1750,26 @@ function buildMenuContext  --returns array to build menus
       end switch
    end repeat
    
+   -- OXT-Beyond: Copy Graphics as SVG Paths copies the graphics of the
+   -- selection and leaves anything else out, so it is enabled when the
+   -- selection holds a graphic, whatever else it holds (OpenXTalkPaul,
+   -- openxtalk.org p=25841). The scan above stops at the first object
+   -- that is neither a graphic nor an image, so this one looks at all
+   local tAnyGraphic = false
+   repeat for each line l in tSelectedObject
+      if word 1 of l is "graphic" then
+         put true into tAnyGraphic
+         exit repeat
+      end if
+   end repeat
+   put tAnyGraphic into tContext["anyGraphic"]
+   -- OXT-Beyond: Object > Convert SVG Image to Graphics does what an SVG
+   -- image's right-click menu does (Convert to Graphics), from the menu bar
+   -- too (OpenXTalkPaul, openxtalk.org p=25900): enabled when the selection
+   -- is one image made from an SVG
+   put the number of lines of tSelectedObject is 1 and revIDEImageIsDrawing(line 1 of tSelectedObject) \
+         into tContext["oneDrawing"]
+   
    --build array used to build appropriate menus for the current selection(s)
    put tEnableFlipandRotate into tContext["enableFlipAndRotate"]
    put tSelectedObject into tContext["selectedObject"]
@@ -1735,6 +1792,15 @@ private function pIsThisAGif tSelectedObject
    else return false
 end pIsThisAGif
 
+-- OXT-Beyond: three quarters of the main screen's width and height, as
+-- "WxH", for File > New Stack's preset sizes
+private function revMenubarThreeQuartersOfTheScreen
+   local tRect
+   put the screenRect into tRect
+   return round((item 3 of tRect - item 1 of tRect) * 3 / 4) & "x" & \
+         round((item 4 of tRect - item 2 of tRect) * 3 / 4)
+end revMenubarThreeQuartersOfTheScreen
+
 private function revMenubarFileMenu pContext, tFile
    local tIsUserTarget, tIsScriptOnly, tCanSaveStack
    put the mode of the topStack is 1 into tIsUserTarget
@@ -1754,6 +1820,10 @@ private function revMenubarFileMenu pContext, tFile
       put tab & "Legal paper-portrait (612x1008)" & return after tFile
       put tab & "WVGA (768x480)" & return after tFile
       put tab & "Letter paper-landscape (792x612)" & return after tFile
+      -- OXT-Beyond: SVGA, and three quarters of the main screen's width
+      -- and height (richmond62, openxtalk.org p=25902); the size is read
+      -- from the label's "(WxH)" (revIDEActionNewMainstack)
+      put tab & "SVGA (800x600)" & return after tFile
       put tab & "Legal paper-landscape (1008x612)" & return after tFile
       put tab & "WSVGA (1024x600)" & return after tFile
       put tab & "XGA Tablet Portrait (768x1024)" & return after tFile
@@ -1761,6 +1831,7 @@ private function revMenubarFileMenu pContext, tFile
       put tab & "WXGA HDTV 16:9 (1280x720)" & return after tFile
       put tab & "SXGA 5:4 (1280x1024)" & return after tFile
       put tab & "WXGA HD 16:9 (1366x768)" & return after tFile
+      put tab & "Three Quarters of the Screen (" & revMenubarThreeQuartersOfTheScreen() & ")" & return after tFile
    end if
    put tab & "-" & return after tFile
    put tab & "Script Only Stack" & return after tFile
@@ -2091,30 +2162,30 @@ private function revMenubarObjectMenu pContext
       put "(Flip" into tFlipText
       put "(Rotate" into tRotateText
       put "(Reshape Graphic" into tReshapeText
-      put "(Copy Graphics as SVG Paths" into tCopySVGPathText
-      --revoxtIDEGraphicPointsToSVGPath
    else
       if pContext["allImages"] then
          put "Flip Image" into tFlipText
          put "Rotate Image" into tRotateText
          put "(Reshape Graphic" into tReshapeText
-         put "(Copy Graphics as SVG Paths" into tCopySVGPathText
       else if pContext["allGraphics"] then
          put "Flip Graphic" into tFlipText
          put "Rotate Graphic" into tRotateText
          if "revReshapeLibrary" is in revInternal__ListLoadedLibraries() then
             put "!cReshape Graphic" into tReshapeText
-            put "Copy Graphics as SVG Paths" into tCopySVGPathText
          else
             put "Reshape Graphic" into tReshapeText
-            put "Copy Graphics as SVG Paths" into tCopySVGPathText
          end if
       else
          put "(Flip Selected" into tFlipText
          put "(Rotate Selected" into tRotateText
          put "(Reshape Graphic" into tReshapeText
-         put "(Copy Graphics as SVG Paths" into tCopySVGPathText
       end if
+   end if
+   -- OXT-Beyond: enabled when the selection holds a graphic (buildMenuContext)
+   if pContext["anyGraphic"] is true then
+      put "Copy Graphics as SVG Paths" into tCopySVGPathText
+   else
+      put "(Copy Graphics as SVG Paths" into tCopySVGPathText
    end if
    --Flip with submenu, Rotate with submenu, Reshape graphic
    put tFlipText & return after tObject
@@ -2123,6 +2194,8 @@ private function revMenubarObjectMenu pContext
    put buildRotateSubmenu() & return after tObject
    put tReshapeText & return after tObject
    put tCopySVGPathText & return after tObject  --tp 24-4, add copy as SVG Path
+   -- OXT-Beyond: enabled when one SVG image is selected (buildMenuContext)
+   put enableMenuItem("Convert SVG Image to Graphics", pContext["oneDrawing"] is true) & return after tObject
    put "-" & return after tObject
    --align selected controls, with submenu
    put enableMenuItem("Align Selected Controls", the number of lines in (the selObj) >= 2) & return after tObject
@@ -2378,10 +2451,14 @@ private function revMenubarHelpMenu pContext
    put "User Guide PDF" & return after tHelp  --tl's version
    put "Data Grid Guide PDF" & return after tHelp  --tl's version
    put "-" & return after tHelp
-   put "Guides" & return after tHelp  --tp's 'allguides.oxtstack' version
-   put "Lessons" & return after tHelp  --tl's 'lessons.txt'
-   put "xTalk Academy" & return after tHelp  -- OXT-Beyond: learn to code (palettes/academy)
-   put "Demos" & return after tHelp
+   -- OXT-Beyond: the places of Home (palettes/home): the Academy, the
+   -- how-to lessons (tl's), the guides (tp's 'allguides.oxtstack') and the
+   -- examples. ("Lessons" and "Demos", their names before Home, still
+   -- work when a script picks them: revMenubarHelpMenuPick.)
+   put "xTalk Academy" & return after tHelp
+   put "How-to" & return after tHelp
+   put "Guides" & return after tHelp
+   put "Examples" & return after tHelp
    put "Forums" & return after tHelp
    put "-" & return after tHelp
    put "Release Notes" & return  after tHelp
@@ -2562,6 +2639,12 @@ function revMenubarContextMenu pType, pTarget
          put toggleMenuItem("Lock Location", the lockLoc of pTarget) & return after tText
          put enableMenuItem("Make Original Size", the formattedWidth of pTarget is not the width of pTarget \
                or the formattedHeight of pTarget is not the height of pTarget) & return after tText
+         -- an image made from an SVG can become graphics (revidelibrary's
+         -- revIDEConvertDrawingToGraphics); the item is only there for one
+         if revIDEImageIsDrawing(pTarget) then
+            put "-" & return after tText
+            put enableMenuItem("Convert to Graphics", tSelectable) & return after tText
+         end if
          break
       case "polygon"
          put "-" & return after tText
@@ -2861,6 +2944,15 @@ on revMenubarContextMenuPickTarget pWhich, pTarget
          break
       case "Make Original Size"
          revIDEMakeImageOriginalSize pTarget
+         break
+      case "Convert to Graphics"
+         local tGraphics
+         put revIDEConvertDrawingToGraphics(pTarget) into tGraphics
+         if the result is not empty then
+            answer error "Could not convert the image to graphics:" && the result
+         else if tGraphics is not empty then
+            select tGraphics
+         end if
          break
          ######## FIELD SPECIFIC #########
       case "Paste Text"
@@ -3196,6 +3288,18 @@ on revMenubarObjectMenuPick pWhich
    switch item 1 of pWhich
       case "Copy Graphics as SVG Paths"
          revOXTIDEGraphicPointsToSVGPath the selobjs
+         break
+      case "Convert SVG Image to Graphics"
+         -- as the image's right-click menu does (revMenubarContextMenuPick)
+         local tDrawingImage, tConverted
+         put line 1 of the selobj into tDrawingImage
+         if not revIDEImageIsDrawing(tDrawingImage) then break
+         put revIDEConvertDrawingToGraphics(tDrawingImage) into tConverted
+         if the result is not empty then
+            answer error "Could not convert the image to graphics:" && the result
+         else if tConverted is not empty then
+            select tConverted
+         end if
          break
       case "Reshape Graphic"
          revIDEToggleReshapeGraphic
@@ -3544,6 +3648,7 @@ on revMenubarHelpMenuPick pWhich
       case "User Guide PDF"
          revIDELaunchResource "User Guide"
          break
+      case "Examples"
       case "Demos"
          send "tOpenDemos" to this stack
          break
@@ -3562,6 +3667,7 @@ on revMenubarHelpMenuPick pWhich
       case "Data Grid Guide PDF"
          revIDELaunchResource "Data Grid Guide"
          break
+      case "How-to"
       case "Lessons"
          send "tOpenNewGuides" to this stack  --tp 23-1, changed to open lessons
          break
@@ -3834,6 +3940,10 @@ end tNavigatorPick
 -- it at startup when the user switched Home's "Show Home at startup" on
 on tOpenHome
    local tPath
+   -- (OXT-Beyond Home, the one window of Home, the Academy and Learn)
+   if revMenubarOpenHub("home") then
+      exit tOpenHome
+   end if
    if "revWebHome" is among the lines of the openStacks then
       go stack "revWebHome"
       exit tOpenHome
@@ -3884,7 +3994,13 @@ end revMenubarOpenAbout
 on tOpenOnlineDict  --tp 24-1, open online dictionary in default browser
    -- revGoURL "https://openxtalk-org.github.io/OpenXTalk_Syntax_Dictionary/" -- relocated to not use github.io
    -- (.io domains are commonly blocked as nuisance domains by various ISPs)
-   revGoURL "https://www.openxtalk.net/oxt/classic-dictionary/api.html"
+   -- revGoURL "https://www.openxtalk.net/oxt/classic-dictionary/api.html"
+   -- OXT-Beyond: this IDE's own Dictionary, xTalk Script and xTalk Builder,
+   -- on the project's web pages beside the web IDE (tools/pages/
+   -- build_dictionary.py makes it from each release's web IDE), instead of
+   -- the classic one, which calls itself the LiveCode Dictionary
+   -- (richmond62; seth's choice 12A of 2026-10-31)
+   revGoURL kOnlineDictionaryURL
 end tOpenOnlineDict
 
 on tOpenUnlock  --tp 07-06-2026, 'Unlock and Remove FX'
@@ -3892,13 +4008,20 @@ on tOpenUnlock  --tp 07-06-2026, 'Unlock and Remove FX'
 end tOpenUnlock
 
 on tOpenDemos  --tp 26-1, open 'Demos' stack
-   -- OXT-Beyond: the examples open in Learn (see revMenubarOpenLearn)
+   local tFilePath
+   -- OXT-Beyond: the examples open in Home (see revMenubarOpenLearn).
+   -- The classic 'Demos' stack is no longer installed: when it is there,
+   -- Option (Alt) opens it as before.
    if revMenubarOpenLearn("examples") then
       exit tOpenDemos
    end if
    set the itemdelimiter to slash
    put item 1 to -5 of the filename of stack "revMenubar" & slash & "Resources" & slash & "Examples" & slash & "demos.oxtstack" into tFilePath
    set the itemdelimiter to ","
+   if there is no file tFilePath then
+      get revMenubarOpenHub("examples")
+      exit tOpenDemos
+   end if
    open stack tFilePath
 end tOpenDemos
 
@@ -3907,6 +4030,9 @@ end tOpenDemos
 -- checks each challenge
 on tOpenAcademy
    local tPath
+   if revMenubarOpenHub("academy") then
+      exit tOpenAcademy
+   end if
    set the itemDelimiter to slash
    put item 1 to -3 of the filename of stack "revMenubar" & "/academy/revacademy.livecodescript" into tPath
    set the itemDelimiter to comma
@@ -3917,15 +4043,18 @@ on tOpenAcademy
 end tOpenAcademy
 
 -- OXT-Beyond: Learn (palettes/learn) shows the lessons, the guides and the
--- examples in one window, in the look of the web tour, and reads the
--- classic stacks without changing them. It opens at pSection ("lessons",
--- "guides" or "examples") and returns true; with the Option (Alt) key
--- down, or when Learn is missing or fails, it returns false and the
--- classic stack opens as it always did.
+-- examples, in the look of the web tour, and reads the classic stacks
+-- without changing them; it does so in Home (revMenubarOpenHub). It opens
+-- at pSection ("lessons", "guides" or "examples") and returns true; with
+-- the Option (Alt) key down, or when Learn is missing or fails, it
+-- returns false and the classic stack opens as it always did.
 private function revMenubarOpenLearn pSection
    local tPath, tError
    if the optionKey is down then
       return false
+   end if
+   if revMenubarOpenHub(pSection) then
+      return true
    end if
    set the itemDelimiter to slash
    put item 1 to -3 of the filename of stack "revMenubar" & "/learn/revlearn.livecodescript" into tPath
@@ -3939,6 +4068,27 @@ private function revMenubarOpenLearn pSection
    end try
    return it is "handled"
 end revMenubarOpenLearn
+
+-- OXT-Beyond Home (palettes/home/revhub.livecodescript): one window for
+-- Home's welcome and tour, the xTalk Academy, the how-to lessons, the
+-- guides and the examples. Opens it at pPlace (a place, or a name Help
+-- used for one: revHubPlace) and pPage, and returns true; false when the
+-- IDE has no Home, or it failed, and the caller opens what it did before.
+function revMenubarOpenHub pPlace, pPage
+   local tPath, tError
+   set the itemDelimiter to slash
+   put item 1 to -3 of the filename of stack "revMenubar" & "/home/revhub.livecodescript" into tPath
+   set the itemDelimiter to comma
+   if there is no file tPath then
+      return false
+   end if
+   try
+      dispatch "revHubShow" to stack tPath with pPlace, pPage
+   catch tError
+      return false
+   end try
+   return it is "handled"
+end revMenubarOpenHub
 
 on tMenuBar_WDdecorations  --tp 24-1, show revmenubar as standard window
    local tOldTop, tOldLeft, tCorrectMacOS

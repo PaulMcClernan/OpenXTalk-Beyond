@@ -602,7 +602,7 @@ from `thirdparty/libsqlite/include/sqlite3.h` (SQLite 3.51.1), and that
 The same checks by hand:
 
 ```bat
-findstr /M /C:"9.7.1-OXT" win-x86_64-bin\LiveCode-Community.exe
+findstr /M /C:"9.7.1-BeyondEngine" win-x86_64-bin\LiveCode-Community.exe
 findstr /M /C:"2025-11-28 17:28:25" win-x86_64-bin\dbsqlite.dll
 ```
 
@@ -928,10 +928,35 @@ neutral folder on an Apple Silicon and an Intel runner and run:
 ```sh
 codesign --verify --deep --strict --verbose=2 <folder>/OXT-Beyond.app
 python3 tools/ci/run_livecode_check.py smoke --install <folder> --platform mac-universal
-python3 tools/ci/check_native_deps.py --root <folder>/OXT-Beyond.app/Contents/Tools --platform mac --max-macos 15.0
+python3 tools/ci/check_native_deps.py --root <folder>/OXT-Beyond.app/Contents/Tools --platform mac --matrix mac-universal/extensions
+python3 tools/ci/check_macho_floor.py <folder>/OXT-Beyond.app --matrix mac-universal --arch arm64
 python3 tools/ci/run_livecode_check.py compile --install <folder> --platform mac-universal
 python3 tools/ci/standalone_check.py --install <folder> --platform mac-universal
 ```
+
+The two floor checks read the platform matrix,
+[`tools/ci/platform-matrix.json`](tools/ci/platform-matrix.json): the
+oldest system each part of a package must run on, as this file and
+README.md state them (macOS 10.13 on Intel and 11 on Apple Silicon; the
+bundled extensions' Intel slices 10.15; glibc 2.31 on Linux, with the
+32-bit extension libraries' higher floors as named exceptions). Each
+slice of a universal file is held to its own architecture's floor, and
+the Linux package (Build (Linux), "Check the package against the
+platform matrix") gets the same check over every ELF file it ships with
+`check_elf_floor.py --matrix linux-<arch>`. A floor changes in the
+matrix and README.md together; `tools/ci/tests/test_platform_matrix.py`
+fails when README.md no longer states one.
+
+Each platform's build also records where every binary of its package
+came from, with
+[`tools/ci/release_inventory.py`](tools/ci/release_inventory.py): path,
+size, SHA-256, format, architectures, floors and origin (built from the
+commit, the runtimes asset and the commit it was built from, the Android
+runtime carried over from 1.15, an xTalk Suite library and whether it
+is the pinned file, or CEF). The JSON is the artifact
+`release-inventory-<platform>` of the run; it is not a release asset.
+A binary of unknown origin is a warning (`--fail-on-unknown` makes it
+an error).
 
 `standalone_check.py` builds a Mac standalone from the packaged runtime
 with the engine's deploy command, signs it as the IDE does and runs it
@@ -956,17 +981,17 @@ asset is one zip archive with a fixed URL, size and SHA-256:
 | `rename` | Optional: members that go somewhere else, as `{"<path after strip>": "<path relative to dest>"}`. |
 | `description`, `licence`, `source` | Text for people and reports. |
 
-Today there is one asset, `oxt-runtimes-0.2.5-rc.2`: the Windows (x86-64
+Today there is one asset, `oxt-runtimes-0.2.7-rc.6.13`: the Windows (x86-64
 and x86) and Linux (x86-64 and x86) runtimes and the time zone library's
 code for them and its zoneinfo data, made from this repository's CI
 builds, with the Android runtime and its time zone library code carried
 over unchanged from the earlier asset `oxt-runtimes-1.15` (OpenXTalk
 Lite 1.15's files). Its `PROVENANCE.md` (installed as
-`PROVENANCE-oxt-runtimes-0.2.5-rc.2.md`) names the commit and the CI
+`PROVENANCE-oxt-runtimes-0.2.7-rc.6.13.md`) names the commit and the CI
 runs and lists every file; the 1.15 asset's provenance comes with it as
 `PROVENANCE-oxt-runtimes-1.15.md`. It is published as the file
-`oxt-runtimes-0.2.5-rc.2.zip` of this repository's release
-`runtimes-0.2.5-rc.2`. Each package leaves out the part its own build
+`oxt-runtimes-0.2.7-rc.6.13.zip` of this repository's release
+`runtimes-0.2.7-rc.6.13`. Each package leaves out the part its own build
 makes (the entry's `exclude`). The manifest names that release in this
 repository, so a fork downloads it from here too. To package
 without the external assets, for example while a new asset is not
@@ -1008,8 +1033,14 @@ It makes the archive with
 shows the manifest entry in its summary and, with `publish` and a
 commit on `main`, publishes the pre-release `runtimes-<label>`. Then pin
 that entry in `tools/oxt/external-assets.json` in a pull request. Make
-a new asset whenever the engine or the externals change, so that the
-other platforms' runtimes in the packages stay those of the release.
+a new asset for every release whose engine or externals changed, so that
+the other platforms' runtimes in the packages are those of the release
+(step 1 of [Making a release](#10-making-a-release)).
+[`tools/ci/runtimes_provenance.py`](tools/ci/runtimes_provenance.py)
+lists the commits since the pinned asset's that change the engine's
+source; the CI checks workflow shows the list in its summary with a
+warning, and "Tag a release" runs it with `--fail-on-stale`, so a
+release is not tagged until a current asset is pinned.
 
 `oxt-runtimes-1.15` was made differently, from an extracted OpenXTalk
 Lite release, taking only files that `layout.py` classes "external" (not
@@ -1422,6 +1453,21 @@ is `true`) and are skipped elsewhere unless you pass `--desktop-tests`.
 On Windows the tests run with `the hideConsoleWindows` set, so the
 commands they run open no console windows.
 
+The MySQL and PostgreSQL tests of `tests/lcs/core/database`
+(`server_databases.livecodescript` and `db_getters`) need servers, which
+they read from the environment: `OXT_TEST_MYSQL_HOST` (`host:port`),
+`OXT_TEST_MYSQL_DATABASE`, `OXT_TEST_MYSQL_USER`,
+`OXT_TEST_MYSQL_PASSWORD` and `OXT_TEST_MYSQL_TLS` (`true` when the
+server offers TLS), and the same with `POSTGRESQL`. Without them they are
+skipped, as they are in the build jobs. The Linux build's job "Databases
+linux-x86_64" starts MySQL 8.0 and PostgreSQL 16 containers with TLS and
+runs them with `--filter '^lcs: core/database/'`; its comment says how the
+servers are set up for the bundled client libraries. They pin what the
+drivers do today, including two things a script might not expect, each
+asserted as broken in the test: PostgreSQL's `revRollBackDatabase`
+commits (revdb's `REVDB_Rollback` calls `transCommit`), and the MySQL
+client speaks TLS 1.0 only, which current servers refuse.
+
 Every CI build runs the five suites after the IDE compile check: on
 Windows (x86-64 and x86), Linux (x86-64, arm64 and x86) and macOS
 (Apple Silicon and Intel). The job summary lists new failures, flaky
@@ -1441,7 +1487,23 @@ saves a one-handler stack and attaches it to a copy of a runtime with
 The standalone must be a file of the runtime's format and architecture;
 where this computer can run it, it is run without a user interface and
 must report the engine's version, its processor, its platform and the
-environment `command line`. Before that, the runtime's folder is
+environment `command line`, and then whether its engine has a few changes
+made since the runtimes asset was built that a script can see without a
+user interface (`featureProbes` in the deploy script: `the
+microseconds`, `matches wildcard` and `matches regex`, literal arrays).
+The layout's own runtime must have them all; a runtime from the runtimes
+asset (Windows' on a Linux or Mac layout, for one) is listed with its
+answers and does not fail the check, since rebuilding the asset is a
+decision of its own. Such a runtime may likewise report the version that
+the asset's `PROVENANCE-oxt-runtimes-<label>.md` in the layout records for
+it instead of the engine's, which is listed and does not fail: the asset's
+runtimes keep the version text of the commit they were built from, as
+Windows x86-32's said `9.7.1-OXT` after the engine's became
+`9.7.1-BeyondEngine` (0.2.7-rc.6.12). Any other version fails, and without
+that file every runtime must report the engine's. "Tag a release" refuses
+an asset older than the engine's source or the `version` file
+(`tools/ci/runtimes_provenance.py --fail-on-stale`), so a release never
+carries one. Before that, the runtime's folder is
 checked: its engine, its Support files and every external, database
 driver and (for the browser) CEF library that its lists name must be
 there, built for that runtime's architecture.
@@ -1740,7 +1802,13 @@ own files, and by hand. It builds the web IDE's engine from the checkout
 IDE's scripts alone builds nothing), makes the site from the Linux
 x86_64 package of the newest release (or the tag it is given) with the
 checkout's script-only IDE stacks over it, and uploads the screenshots
-as the artifact `web-ide-screenshots`, which its job summary links.
+as the artifact `web-ide-screenshots`, which its job summary links. It
+runs the tour twice, in a light browser and a dark one
+(`--color-scheme dark`, the artifact `web-ide-screenshots-dark`): the web
+IDE's page follows the browser's colour scheme, and the tour's last step
+switches it to the other scheme and back. The job Web IDE small window
+opens the IDE on pages smaller than Home (`--size 800x500` and
+`640x480`) in Chromium and Firefox and runs the tour's first two steps.
 
 ### Installer
 
@@ -1794,9 +1862,12 @@ What the installer does:
   time. In an install for all users, the Users group gets Modify
   permission on these data files: the dictionary's
   `Documentation\html_viewer\resources\data\api\exports` folder, and
-  `Toolset\palettes\updates\whatsnew.txt` and `updatehistory\*.txt`
-  (opened with `open file`, which opens a file for reading and
-  writing). No folder or file with stacks, scripts or programs is made
+  `Toolset\palettes\updates\updatehistory\*.txt` (opened with `open
+  file`, which opens a file for reading and writing); and
+  `Toolset\palettes\updates\whatsnew.txt` if a package has one (none
+  has since 0.2.7-rc.6.12: it held OpenXTalk Lite's notes of its own
+  last update, which Preferences showed as the "Summary of last
+  update"). No folder or file with stacks, scripts or programs is made
   writable, so the few places where the IDE saves stacks inside the
   program folder fail for standard users in an install for all users:
   the Report Builder plugin saving itself when it closes, *Plugin
@@ -1948,8 +2019,8 @@ build again.
 `cmd /c ..\make.cmd` rather than `..\make.cmd`.
 
 **Packaging fails to download the runtimes asset**
-(`oxt-runtimes-0.2.5-rc.2.zip`). The download comes from this
-repository's `runtimes-0.2.5-rc.2` release (also in a fork, which needs
+(`oxt-runtimes-0.2.7-rc.6.13.zip`). The download comes from this
+repository's `runtimes-0.2.7-rc.6.13` release (also in a fork, which needs
 no copy of its own), so a failure is usually the network:
 a proxy or firewall, or no access to `github.com` and its download
 servers. Copy the file into the cache folder, where it is used without
@@ -2223,14 +2294,25 @@ Releases are built by CI from a tag: the workflow
 tagged commit and publishes one GitHub Release with the files of all
 three. The product version is the content of `ide/.version` (for
 example `0.1.0`); the tag is `v` followed by it (`v0.1.0`). The engine
-version in the `version` file (9.7.1-OXT, build 25923) is separate:
+version in the `version` file (9.7.1-BeyondEngine, build 25923; 9.7.1-OXT
+until 0.2.7-rc.6.12) is separate:
 change it only when the engine changes, and then also check
 `tools/ci/verify-build.ps1` and the smoke test, which compare against
 it.
 
 1. Make sure the external assets in `tools/oxt/external-assets.json`
    are published (see [External assets](#external-assets)); packaging
-   fails without them. Decide whether the xTalk Suite extensions should
+   fails without them. Rebuild the runtimes asset whenever a commit
+   since the pinned one changed the engine's source
+   (`python3 tools/ci/runtimes_provenance.py` lists them; the CI checks
+   show the same list): run the "Runtimes asset" workflow with
+   `publish` on the latest commit of `main` whose Windows and Linux
+   builds passed, labelled with the version being released, pin the
+   entry its summary shows in a pull request and merge it (see
+   [Making the runtimes asset](#external-assets)). Every release then
+   carries the other platforms' runtimes of its own engine; "Tag a
+   release" refuses to tag while the pinned asset is older than the
+   engine's source. Decide whether the xTalk Suite extensions should
    move to newer commits of their repositories; if so, pin them (see
    [xTalk Suite extensions](#xtalk-suite-extensions)) and merge that
    first.
@@ -2274,7 +2356,8 @@ it.
    commit and run the "Tag a release" workflow
    ([`.github/workflows/tag-release.yml`](.github/workflows/tag-release.yml))
    on `main` instead: it tags that commit `v<ide/.version>`, refuses a
-   tag that exists already or a commit whose builds did not pass, and
+   tag that exists already, a runtimes asset older than the engine's
+   source (step 1) or a commit whose builds did not pass, and
    starts `release.yml` on the new tag, which then does what step 6 says.
    (When the commit's push started no build, because it changed nothing
    a build uses, it starts the builds on `main` instead; run it again once
@@ -2736,7 +2819,7 @@ Emscripten (3.10). These are its steps:
 
    | File | Contents |
    | --- | --- |
-   | `standalone-community-<version>.js`, `.wasm` | The engine. `<version>` is `BUILD_SHORT_VERSION` in the file `version` (`9.7.1-OXT`), which is how the IDE's web builder asks for it. |
+   | `standalone-community-<version>.js`, `.wasm` | The engine. `<version>` is `BUILD_SHORT_VERSION` in the file `version` (`9.7.1-BeyondEngine`), which is how the IDE's web builder asks for it. |
    | `standalone-community-<version>.html` | The page of a standalone, from `engine/rsrc/emscripten-html-template.html`. |
    | `emscripten-standalone-template/` | The files every standalone gets: the font it draws text with. |
    | `emscripten-startup-template.livecodescript` | The template of a standalone's startup script. |

@@ -30,6 +30,9 @@
 #include "mac-clipboard.h"
 #include "mac-internal.h"
 
+// mac-core.mm: whether the system is set to Dark, read afresh
+extern bool MCMacPlatformSystemStyleIsDark(void);
+
 #include <objc/objc-runtime.h>
 
 #include "graphics_util.h"
@@ -269,7 +272,10 @@ static bool s_lock_responder_change = false;
 - (void)popupWindowShouldClose: (NSNotification *)notification
 {
     [self close];
-    MCPlatformCallbackSendWindowCancel([(MCWindowDelegate *)[self delegate] platformWindow]);
+    MCMacPlatformWindow *t_window;
+    t_window = [(MCWindowDelegate *)[self delegate] platformWindow];
+    if (t_window != nil)
+        MCPlatformCallbackSendWindowCancel(t_window);
 }
 
 - (void)popupAndMonitor
@@ -551,6 +557,30 @@ void MCMacPlatformWindowWindowMoved(NSWindow *self, MCPlatformWindowRef p_window
 {
 	[m_tracking_area release];
 	[super dealloc];
+}
+
+// The platform window's destructor calls this. The view can outlive its
+// platform window: the system's text input services (the Accessibility
+// Keyboard's suggestions, the text cursor indicator) keep the view of the
+// last text input client and call its NSTextInputClient methods later, from
+// a delayed perform. With m_window left pointing at the deleted window those
+// calls took a death grip on freed memory, and the grip's release deleted it
+// a second time: a crash after pressing Apply in the script editor while
+// typing with the Accessibility Keyboard (macOS 14). Every method already
+// does nothing when platformWindow is nil.
+- (void)detachPlatformWindow
+{
+    m_window = nil;
+    m_input_method_event = nil;
+}
+
+// A view without a platform window is no longer a text input client, so the
+// system stops asking it for text.
+- (NSTextInputContext *)inputContext
+{
+    if (m_window == nil)
+        return nil;
+    return [super inputContext];
 }
 
 /////////
@@ -871,6 +901,9 @@ static void map_key_event(NSEvent *event, MCPlatformKeyCode& r_key_code, codepoi
 
 - (void)keyDown: (NSEvent *)event
 {
+	if ([self platformWindow] == nil)
+		return;
+	
 	MCMacPlatformHandleModifiersChanged(MCMacPlatformMapNSModifiersToModifiers([event modifierFlags]));
 	
     // Make the event key code to a platform keycode and codepoints.
@@ -1062,7 +1095,9 @@ static void map_key_event(NSEvent *event, MCPlatformKeyCode& r_key_code, codepoi
 	
 	// This is the 'commit' operation, any marked text currently in the buffer should be accepted.
 	// We do this by inserting an empty string, leaving the current selection untouched.
-	
+	// OXT-Beyond: the nil is how MCPlatformHandleTextInputInsertText (desktop.cpp) tells a
+	// commit from an insert; it used to read the first of these no characters, and crashed.
+
 	MCRange t_marked_range, t_selected_range;
 	MCPlatformCallbackSendTextInputQueryTextRanges(t_window, t_marked_range, t_selected_range);
 	
@@ -1417,6 +1452,8 @@ static void map_key_event(NSEvent *event, MCPlatformKeyCode& r_key_code, codepoi
 {
 	MCMacPlatformWindow *t_window;
 	t_window = [self platformWindow];
+	if (t_window == nil)
+		return;
 	t_window -> HandleDragLeave();
 }
 
@@ -1670,6 +1707,11 @@ static void map_key_event(NSEvent *event, MCPlatformKeyCode& r_key_code, codepoi
         [t_window -> GetView() setFrameSize: size];
 }
 
+- (void)detachPlatformWindow
+{
+    m_window = nil;
+}
+
 @end
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1694,6 +1736,14 @@ MCMacPlatformWindow::MCMacPlatformWindow(void)
 
 MCMacPlatformWindow::~MCMacPlatformWindow(void)
 {
+	// The views can outlive this object (the system's text input services
+	// keep the last text input client), so they must not keep pointing at it.
+	// Detach them first, before anything below can call back into them: a
+	// callback into a window being destroyed would take a death grip on it,
+	// and the grip's release would delete it again.
+	[m_view detachPlatformWindow];
+	[m_container_view detachPlatformWindow];
+	
 	[m_handle setDelegate: nil];
 	[m_handle setContentView: nil];
     
@@ -1940,15 +1990,11 @@ void MCMacPlatformWindow::DoRealize(void)
 	//-- tperry 11th October 2025
 	// Apply system appearance to window on creation
 	if (@available(macOS 10.14, *)) {
-		NSUserDefaults *t_defaults = [NSUserDefaults standardUserDefaults];
-		NSString *t_appearance_style = [t_defaults stringForKey:@"AppleInterfaceStyle"];
-		
 		NSAppearanceName t_appearance_name;
-		if (t_appearance_style != nil && [t_appearance_style isEqualToString:@"Dark"]) {
+		if (MCMacPlatformSystemStyleIsDark())
 			t_appearance_name = NSAppearanceNameDarkAqua;
-		} else {
+		else
 			t_appearance_name = NSAppearanceNameAqua;
-		}
 		
 		NSAppearance *t_appearance = [NSAppearance appearanceNamed:t_appearance_name];
 		// Use m_handle (the union base) which works for both NSWindow and NSPanel
@@ -2788,15 +2834,11 @@ void MCMacPlatformWindowUpdateAppearance(MCMacPlatformWindow *p_window)
 		return;
 		
 	if (@available(macOS 10.14, *)) {
-		NSUserDefaults *t_defaults = [NSUserDefaults standardUserDefaults];
-		NSString *t_appearance_style = [t_defaults stringForKey:@"AppleInterfaceStyle"];
-		
 		NSAppearanceName t_appearance_name;
-		if (t_appearance_style != nil && [t_appearance_style isEqualToString:@"Dark"]) {
+		if (MCMacPlatformSystemStyleIsDark())
 			t_appearance_name = NSAppearanceNameDarkAqua;
-		} else {
+		else
 			t_appearance_name = NSAppearanceNameAqua;
-		}
 		
 		NSAppearance *t_appearance = [NSAppearance appearanceNamed:t_appearance_name];
 		[t_window setAppearance:t_appearance];
@@ -2809,15 +2851,11 @@ void MCMacPlatformUpdateAllWindowAppearances(void)
 {
 	// Iterate through all NSWindows in the application
 	if (@available(macOS 10.14, *)) {
-		NSUserDefaults *t_defaults = [NSUserDefaults standardUserDefaults];
-		NSString *t_appearance_style = [t_defaults stringForKey:@"AppleInterfaceStyle"];
-		
 		NSAppearanceName t_appearance_name;
-		if (t_appearance_style != nil && [t_appearance_style isEqualToString:@"Dark"]) {
+		if (MCMacPlatformSystemStyleIsDark())
 			t_appearance_name = NSAppearanceNameDarkAqua;
-		} else {
+		else
 			t_appearance_name = NSAppearanceNameAqua;
-		}
 		
 		NSAppearance *t_appearance = [NSAppearance appearanceNamed:t_appearance_name];
 		

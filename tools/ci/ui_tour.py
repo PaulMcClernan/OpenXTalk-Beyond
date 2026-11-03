@@ -112,7 +112,16 @@ WINDOWS_VALUES = ('AppsUseLightTheme', 'SystemUsesLightTheme')
 
 
 def log(msg=''):
-    print(msg)
+    # A line can hold a character the console cannot show: the script's
+    # lines name fields by their words, the xTalk Assistant's mark is
+    # U+2726, and Windows' console on CI writes cp1252. print() raised
+    # UnicodeEncodeError there after every step had passed, and failed the
+    # run (#311); such a character is logged escaped (\u2726) instead.
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, 'encoding', None) or 'ascii'
+        print(msg.encode(encoding, 'backslashreplace').decode(encoding))
     sys.stdout.flush()
 
 
@@ -616,7 +625,7 @@ def main(argv=None):
     ap.add_argument('--appearance', choices=('light', 'dark'), default='light',
                     help='the system\'s appearance (default: %(default)s)')
     ap.add_argument('--only', default='', help='comma-separated steps of the script to run (default: all)')
-    ap.add_argument('--timeout', type=int, default=600, help='seconds for the whole run (default: %(default)s)')
+    ap.add_argument('--timeout', type=int, default=900, help='seconds for the whole run (default: %(default)s)')
     ap.add_argument('--script', default=SCRIPT, help='the script to run in the IDE (default: %(default)s)')
     args = ap.parse_args(argv)
     if bool(args.install) == bool(args.package):

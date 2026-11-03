@@ -5,6 +5,12 @@ download or install. It is the real IDE, the same scripts and stacks as the
 desktop's, run by the IDE's own engine (development mode) built for the web
 with Emscripten. The page fills the browser window, with the menu bar and
 toolbar across the top. A button at the top right makes it full screen.
+The IDE follows the browser between light and dark: its page asks for
+the browser's colour scheme (`<meta name="oxt-appearance" content="system">`
+in [index.html](index.html)), so `the systemAppearance` is the browser's
+and the IDE hears `systemAppearanceChanged` when it changes. A web
+standalone stays light unless its page asks the same (the HTML5 pane's
+Appearance in the Standalone Settings).
 
 What works in it:
 
@@ -45,7 +51,10 @@ What it leaves out (`revWebIDEMenu` in
 [revwebidelibrary.livecodescript](../../ide/Toolset/libraries/revwebidelibrary.livecodescript)),
 because a browser cannot do it: building standalones, the Extension
 Builder (it runs `lc-compile`), quitting, update checks, the guides that
-the page does not carry, the Resource Center and the tutorials. A browser
+the page does not carry, the Resource Center and the tutorials. The zip
+also leaves out the files of the Script Editor's font, Source Code Pro,
+which the web engine cannot load (code shows in Droid Sans Mono, which the
+Dictionary carries), and an unused archive of the Linux theme. A browser
 keeps some shortcuts for itself (Ctrl+W closes the tab, Ctrl+N and Ctrl+T
 open windows), so their menu items are picked with the mouse. The page asks
 before it is closed once the IDE has started.

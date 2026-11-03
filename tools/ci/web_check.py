@@ -89,7 +89,13 @@ Then:
    javascriptHandlers). An IDE without CEF (Linux arm64)
    has no browser widget, so neither has the standalone that it builds:
    the probe then writes "PROBE info browser-widget not loaded" instead of
-   that check. Last come the externals that the web engine has: an XML
+   that check. With the IDE, the drawing library is named in the
+   settings too: the probe compiles an SVG with drawingSvgCompile, which
+   must give the desktop's drawing, and shows it in an image at the SVG's
+   size (the library reads its SVG specification from its resources
+   folder, which standalone.zip must carry); built without the IDE, the
+   standalone has no drawing library, and the probe writes "PROBE info
+   drawing-library not loaded" instead. Last come the externals that the web engine has: an XML
    tree read with revXML and transformed with XSLT, a zip archive written
    and read back with revZip, and an SQLite database with revDB, whose
    error for a missing table must reach the script as revDB's error (SQLite
@@ -268,6 +274,16 @@ PROBE_PAGE_DEFERRED = ('<!DOCTYPE html><html><head><title>Probe Page</title></he
 # development engine's packaged_extensions, each after those it uses: the
 # browser widget, which the probe makes
 PROBE_EXTENSIONS = ('com.livecode.library.widgetutils', 'com.livecode.widget.browser')
+
+# The drawing library, which the IDE's build names (web-deploy's webBuild)
+# and whose drawingSvgCompile the probe calls (probeDrawing), and the file
+# of its resources folder that it reads when it starts (svgSpecLoad): the
+# builder carries the folder into standalone.zip as
+# boot/standalone/extension<N>/ and maps the library's resources to it
+# (revSBUpdateSettingsForExtensions). Without the file, the library
+# compiles no SVG in the standalone.
+DRAWING_EXTENSION = 'com.livecode.library.drawing'
+DRAWING_SPEC = 'drawing-svg-specification.txt'
 
 # The file the probe writes to /downloads, which the browser must download
 PROBE_DOWNLOAD = ('probe-download.txt', b'download me')
@@ -769,6 +785,99 @@ def make_standalone(runtime, js, wasm, html, startup_data, site, files=(), title
         f.write(page)
 
 
+# The probe's page as a page that follows the browser's colour scheme, as
+# the web builder writes it with the HTML5 pane's Appearance set to "Follow
+# the browser" (getPageHead in
+# ide-support/revsaveasemscriptenstandalone.livecodescript)
+APPEARANCE_META = ('<meta name="color-scheme" content="light dark">'
+                   '<meta name="oxt-appearance" content="system">')
+
+
+def appearance_page_name():
+    return STACK_NAME + '-appearance.html'
+
+
+# The probe's page as a page that asks for its fields in the card's grey,
+# as the web builder writes it with the HTML5 pane's Fields set to "The
+# card's grey" (getPageHead; engine/src/em-theme.cpp)
+FIELDS_META = '<meta name="oxt-field-background" content="card">'
+
+
+def fields_page_name():
+    return STACK_NAME + '-fields.html'
+
+
+# What the probe's snapshot of a stack whose colours are all unset reports
+# (probeReport("colors")): its size, a point in its field, a point on its
+# card. White fields on a light grey card (Windows 10's colours) on the
+# page as built; the card's grey for both on the page that asks for it.
+COLORS_AS_BUILT = '200x100:255,255,255:240,240,240'
+COLORS_FIELDS_LIKE_CARD = '200x100:240,240,240:240,240,240'
+
+# What the probe reports of the boxes of two check boxes that set no colour,
+# in the same stack (probeReport("checks")): its size, a point in the middle
+# of the unticked box, one in a corner of the ticked box clear of its tick,
+# and one on its tick. A white box with a black tick in the light
+# appearance, as on every page before; in the dark appearance (a page that
+# follows a browser set to dark) the dark face (kMCWebThemeDarkFace) with a
+# white tick. Until 0.2.7-rc.6.12 the box was white there too, so an
+# unticked check box looked ticked on a dark card (engine/src/buttondraw.cpp)
+CHECKS_LIGHT = '200x100:255,255,255:255,255,255:0,0,0'
+CHECKS_DARK = '200x100:32,32,32:32,32,32:255,255,255'
+
+
+def write_fields_page(page):
+    """Writes the probe's page with FIELDS_META beside it."""
+    with open(page, 'r', encoding='utf-8') as f:
+        text = f.read()
+    if '</head>' not in text:
+        raise CheckError('%s has no </head>' % page)
+    text = text.replace('</head>', FIELDS_META + '</head>', 1)
+    with open(os.path.join(os.path.dirname(page), fields_page_name()), 'w', encoding='utf-8') as f:
+        f.write(text)
+
+
+def fields_page_from_ide(site, fields_site):
+    """Puts the page of the standalone that the IDE's builder made with the
+    HTML5 pane's Fields setting at "The card's grey" (web-deploy.livecodescript,
+    in <fields_site>) beside the page as built in <site>, as
+    fields_page_name(), after checking that it is that page with FIELDS_META
+    and nothing else changed: the setting's whole way from the Standalone
+    Settings to the page. Returns a line for the summary; CheckError if it is
+    not so."""
+    page = os.path.join(site, STACK_NAME + '.html')
+    fields_page = os.path.join(fields_site, STACK_NAME + '.html')
+    if not os.path.isfile(fields_page):
+        raise CheckError('the IDE\'s builder wrote no page with the Fields setting at "The card\'s grey" (%s)'
+                         % fields_page)
+    with open(page, 'r', encoding='utf-8') as f:
+        built = f.read()
+    with open(fields_page, 'r', encoding='utf-8') as f:
+        text = f.read()
+    head = text.split('</head>', 1)[0]
+    if text.count(FIELDS_META) != 1 or FIELDS_META not in head:
+        raise CheckError('the page that the IDE\'s builder wrote with the Fields setting at "The card\'s grey" '
+                         'has not one %s in its head' % FIELDS_META)
+    if text.replace(FIELDS_META, '', 1) != built:
+        raise CheckError('the page that the IDE\'s builder wrote with the Fields setting at "The card\'s grey" '
+                         'differs from the page as built by more than %s' % FIELDS_META)
+    with open(os.path.join(site, fields_page_name()), 'w', encoding='utf-8') as f:
+        f.write(text)
+    return ('the IDE\'s builder wrote the Fields setting ("The card\'s grey") into the page as %s'
+            % FIELDS_META)
+
+
+def write_appearance_page(page):
+    """Writes the probe's page with APPEARANCE_META beside it."""
+    with open(page, 'r', encoding='utf-8') as f:
+        text = f.read()
+    if '</head>' not in text:
+        raise CheckError('%s has no </head>' % page)
+    text = text.replace('</head>', APPEARANCE_META + '</head>', 1)
+    with open(os.path.join(os.path.dirname(page), appearance_page_name()), 'w', encoding='utf-8') as f:
+        f.write(text)
+
+
 def built_files(site):
     """(version, page) of a standalone's folder: its engine
     (standalone-community-<version>.js and .wasm), standalone.zip and the
@@ -791,17 +900,31 @@ def built_files(site):
     return complete[0], os.path.join(site, STACK_NAME + '.html')
 
 
+def drawing_resources(site):
+    """The names in <site>'s standalone.zip of the drawing library's SVG
+    specification, which the builder puts in the folder it maps the
+    library's resources to (boot/standalone/extension<N>/)."""
+    with zipfile.ZipFile(os.path.join(site, 'standalone.zip')) as z:
+        return [n for n in z.namelist()
+                if re.match(r'^boot/standalone/extension\d+/%s$' % re.escape(DRAWING_SPEC), n)]
+
+
 def build_with_ide(args, work, timeout):
     """Build the probe's standalone with the IDE's web builder (see the
-    header) into <work>/site. Returns (site, lines, browser): browser is
-    whether the IDE had the browser widget, which an IDE without CEF (Linux
-    arm64) leaves out, and so its builder (None: it did not say)."""
+    header) into <work>/site. Returns (site, lines, browser, drawing):
+    browser is whether the IDE had the browser widget, which an IDE without
+    CEF (Linux arm64) leaves out, and so its builder (None: it did not
+    say); drawing is whether it had the drawing library, which it names in
+    the settings."""
     # the IDE is started as tools/ci/ui_tour.py starts it
     import ui_tour
     package, rlc = ui_tour.package, ui_tour.rlc
     p = package.PLATFORMS[args.platform or rlc.default_platform()]
     site = os.path.join(work, 'site')
     shutil.rmtree(site, ignore_errors=True)
+    # (the standalone with the Fields setting: see fields_page_from_ide)
+    fields_site = site + '-fields'
+    shutil.rmtree(fields_site, ignore_errors=True)
     results = os.path.join(work, 'ide-build.txt')
     if os.path.exists(results):
         os.remove(results)
@@ -868,19 +991,34 @@ def build_with_ide(args, work, timeout):
                     ui_tour.mac_tools_log()
             finally:
                 ui_tour.stop(proc)
-        browser = None
+        browser = drawing = None
         for line in ui_tour.read_lines(results):
             log('  ide: %s' % line)
             if line.startswith('BUILD FAILED') or line.startswith('ERROR'):
                 problems.append('the IDE\'s web build: %s' % line)
             if line.startswith('INFO browser-extension-loaded '):
                 browser = line.split()[-1] == 'true'
+            if line.startswith('INFO drawing-extension-loaded '):
+                drawing = line.split()[-1] == 'true'
         if status:
             problems.append('the IDE\'s web build %s' % status)
             for line in ui_tour.read_lines(os.path.join(work, 'ide-output.txt'))[-40:]:
                 log('  ide output: %s' % line)
         else:
             lines.append('the IDE built the standalone in %.0f s' % (time.time() - started))
+            try:
+                lines.append(fields_page_from_ide(site, fields_site))
+            except CheckError as e:
+                problems.append(str(e))
+            if drawing:
+                specs = drawing_resources(site)
+                if specs:
+                    lines.append('standalone.zip carries the drawing library\'s SVG specification (%s)'
+                                 % ', '.join(specs))
+                else:
+                    problems.append('the IDE\'s web build: standalone.zip has no %s in '
+                                    'boot/standalone/extension<N>/, which the drawing library reads when it '
+                                    'starts' % DRAWING_SPEC)
             # The probe uses none of the xTalk Suite's libraries, so the
             # builder gives it the lean engine of the runtime's lean/
             # (getEngineFiles in revsaveasemscriptenstandalone), when the
@@ -902,7 +1040,7 @@ def build_with_ide(args, work, timeout):
             shutil.rmtree(d, ignore_errors=True)
     if problems:
         raise CheckError('; '.join(problems))
-    return site, lines, browser
+    return site, lines, browser, drawing
 
 
 # ---------------------------------------------------------------------------
@@ -1181,12 +1319,43 @@ def browser_watchdog(browser_name, limit=BROWSER_LIMIT):
     return timer
 
 
-def run_browser(url, version, work, timeout, url_path=None, browser_widget=None, browser_name='chromium'):
+def expected_checks(info, browser_widget=None, drawing=None):
+    """(checks, problems, lines): the probe's checks that the run must
+    report, given what the probe said it left out (its info lines), and
+    the problems and lines of what it left out. browser_widget and drawing
+    say whether the standalone must have the browser widget and the
+    drawing library (None: the check may be left out when it has none)."""
+    checks, problems, lines = list(PROBE_CHECKS), [], []
+    if info.get('browser-widget') == 'not loaded':
+        # The probe leaves its check out when the standalone has no browser
+        # widget: right when the IDE that built it had none
+        checks.remove('browser')
+        if browser_widget:
+            problems.append('the standalone has no browser widget: its extension is not loaded (the '
+                            'extensions are %s)' % (info.get('extensions') or 'none'))
+        else:
+            lines.append('the browser widget was not checked: the IDE has none here (no CEF), and so '
+                         'neither has the standalone')
+    if info.get('drawing-library') == 'not loaded':
+        # ... and the SVG check when it has no drawing library: right when
+        # it was made without the IDE, which names it
+        if drawing:
+            problems.append('the standalone has no drawing library: its extension is not loaded (the '
+                            'extensions are %s)' % (info.get('extensions') or 'none'))
+        else:
+            lines.append('SVG was not checked: the standalone was made without the drawing library')
+    else:
+        checks.append('svg')
+    return checks, problems, lines
+
+
+def run_browser(url, version, work, timeout, url_path=None, browser_widget=None, browser_name='chromium',
+                drawing=None):
     """Open the page in browser_name and check what the probe and the page do; url_path is
     what must load the probe's URLs, 'engine' or 'libURL' (None: either),
-    and browser_widget whether the standalone must have the browser widget
-    (None: the probe's check of it may also be left out, when it has none).
-    Returns (problems, lines)."""
+    and browser_widget and drawing whether the standalone must have the
+    browser widget and the drawing library (None: the probe's check of it
+    may also be left out, when it has none). Returns (problems, lines)."""
     try:
         from playwright.sync_api import sync_playwright, Error as PlaywrightError
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -1956,20 +2125,142 @@ def run_browser(url, version, work, timeout, url_path=None, browser_widget=None,
             except PlaywrightError as e:
                 problems.append('the check of the old home folder\'s copy failed: %s%s' % (e, extra_said()))
                 del extra_events[:]
+        if 'ready' in probes:
+            # the systemAppearance in a browser set to dark: "light" on the
+            # page as built, as on every page before 0.2.7-rc.6.9; "dark"
+            # on the page that follows the browser's colour scheme, and
+            # "light" again, with a systemAppearanceChanged message, when
+            # the browser's scheme turns light. On each page, the boxes of
+            # check boxes that set no colour: white with a black tick on
+            # the page as built, dark with a white tick on the page that
+            # follows the browser. With ?tab=, the probe runs no checks.
+            try:
+                browser_waiting[0] = 'the systemAppearance'
+                del extra_events[:]
+                dark = browser.new_context(color_scheme='dark')
+                report_js = "document.liveCode.findStackWithName('%s').probeReport('appearance')" % STACK_NAME
+                checks_js = "document.liveCode.findStackWithName('%s').probeReport('checks')" % STACK_NAME
+                seen = {}
+                boxes = {}
+                for name, page_url in (('as built', url),
+                                       ('following the browser',
+                                        urllib.parse.urljoin(url, appearance_page_name()))):
+                    tab = dark.new_page()
+                    tab.on('dialog', on_dialog)
+                    watch_extra(tab, 'the page %s' % name)
+                    tab.goto(page_url + ('&' if '?' in page_url else '?') + 'tab=appearance')
+                    tab.wait_for_function("() => document.liveCode && document.liveCode.findStackWithName "
+                                          "&& document.liveCode.findStackWithName('%s')" % STACK_NAME,
+                                          timeout=timeout * 1000)
+                    seen[name] = tab.evaluate(report_js)
+                    want_boxes = CHECKS_DARK if name == 'following the browser' else CHECKS_LIGHT
+                    opened = tab.evaluate(checks_js.replace("'checks'", "'colors-open'"))
+                    if opened != 'opened':
+                        problems.append('in a browser set to dark, the page %s could not open a stack for its '
+                                        'check boxes: %r' % (name, opened))
+                    else:
+                        boxes[name] = None
+
+                        def boxes_drawn(name=name, want=want_boxes):
+                            boxes[name] = tab.evaluate(checks_js)
+                            return boxes[name] == want
+                        if not wait_for(boxes_drawn, 'the check boxes of the page %s' % name, 10):
+                            problems.append('in a browser set to dark, the page %s draws check boxes that set no '
+                                            'colour as %r (size:unticked box:ticked box:its tick), expected %r%s'
+                                            % (name, boxes[name], want_boxes,
+                                               '; a white box on a dark card looks ticked'
+                                               if want_boxes == CHECKS_DARK else ''))
+                        tab.evaluate(checks_js.replace("'checks'", "'colors-close'"))
+                    if name == 'following the browser' and seen[name] == 'dark,0':
+                        # the page's own count of the browser's change
+                        # events, which says on a failure whether the
+                        # browser sent one
+                        tab.evaluate("() => { window.oxtCheckSchemeChanges = 0; "
+                                     "window.matchMedia('(prefers-color-scheme: dark)').addEventListener("
+                                     "'change', () => { window.oxtCheckSchemeChanges++; }); }")
+                        tab.emulate_media(color_scheme='light')
+                        after = [None]
+
+                        def turned_light():
+                            after[0] = tab.evaluate(report_js)
+                            return after[0] == 'light,1'
+                        if not wait_for(turned_light, 'the systemAppearance following the browser to light', 10):
+                            problems.append('with the browser turned light, the page that follows its colour '
+                                            'scheme reports %r, expected \'light,1\' (the browser sent %s change '
+                                            'events to the page)'
+                                            % (after[0], tab.evaluate('window.oxtCheckSchemeChanges')))
+                if seen.get('as built') != 'light,0':
+                    problems.append('in a browser set to dark, the page as built reports %r for the '
+                                    'systemAppearance, expected \'light,0\'' % seen.get('as built'))
+                if seen.get('following the browser') != 'dark,0':
+                    problems.append('in a browser set to dark, the page that follows its colour scheme reports '
+                                    '%r for the systemAppearance, expected \'dark,0\''
+                                    % seen.get('following the browser'))
+                elif seen.get('as built') == 'light,0':
+                    lines.append('the systemAppearance: light on the page as built, the browser\'s on the page '
+                                 'that follows it, with systemAppearanceChanged')
+                if (boxes.get('as built') == CHECKS_LIGHT
+                        and boxes.get('following the browser') == CHECKS_DARK):
+                    lines.append('check boxes without colours, in a browser set to dark: white with a black tick '
+                                 'on the page as built, dark with a white tick on the page that follows it')
+                del extra_events[:]
+                dark.close()
+            except (PlaywrightError, PlaywrightTimeoutError) as e:
+                problems.append('the check of the systemAppearance failed: %s%s' % (e, extra_said()))
+                del extra_events[:]
+        if 'ready' in probes:
+            # the colours of a field and a card that set none, in a light
+            # browser: white fields on the page as built, as on every page
+            # before; the card's grey on the page that asks for it (seth's
+            # choice 9A of 2026-10-31)
+            try:
+                browser_waiting[0] = 'the default colours'
+                del extra_events[:]
+                light = browser.new_context(color_scheme='light')
+                report_js = "document.liveCode.findStackWithName('%s').probeReport('colors')" % STACK_NAME
+                seen = {}
+                for name, page_url, want in (('as built', url, COLORS_AS_BUILT),
+                                             ('with its fields in the card\'s grey',
+                                              urllib.parse.urljoin(url, fields_page_name()),
+                                              COLORS_FIELDS_LIKE_CARD)):
+                    tab = light.new_page()
+                    tab.on('dialog', on_dialog)
+                    watch_extra(tab, 'the page %s' % name)
+                    tab.goto(page_url + ('&' if '?' in page_url else '?') + 'tab=colors')
+                    tab.wait_for_function("() => document.liveCode && document.liveCode.findStackWithName "
+                                          "&& document.liveCode.findStackWithName('%s')" % STACK_NAME,
+                                          timeout=timeout * 1000)
+                    opened = tab.evaluate(report_js.replace("'colors'", "'colors-open'"))
+                    if opened != 'opened':
+                        problems.append('the page %s could not open a stack for its colours: %r' % (name, opened))
+                        tab.close()
+                        continue
+                    seen[name] = None
+
+                    def drawn():
+                        seen[name] = tab.evaluate(report_js)
+                        return seen[name] == want
+                    if not wait_for(drawn, 'the default colours of the page %s' % name, 10):
+                        problems.append('the page %s draws a field and a card that set no colour as %r '
+                                        '(size:field:card), expected %r' % (name, seen[name], want))
+                    tab.evaluate(report_js.replace("'colors'", "'colors-close'"))
+                    tab.close()
+                if all(seen.get(n) == w for n, w in (('as built', COLORS_AS_BUILT),
+                                                    ('with its fields in the card\'s grey',
+                                                     COLORS_FIELDS_LIKE_CARD))):
+                    lines.append('fields without colours: white on the page as built, the card\'s grey on the '
+                                 'page that asks for it')
+                del extra_events[:]
+                light.close()
+            except (PlaywrightError, PlaywrightTimeoutError) as e:
+                problems.append('the check of the default colours failed: %s%s' % (e, extra_said()))
+                del extra_events[:]
         browser_waiting[0] = 'the browser to close'
         browser.close()
 
-    checks = list(PROBE_CHECKS)
-    if info.get('browser-widget') == 'not loaded':
-        # The probe leaves its check out when the standalone has no browser
-        # widget: right when the IDE that built it had none
-        checks.remove('browser')
-        if browser_widget:
-            problems.append('the standalone has no browser widget: its extension is not loaded (the '
-                            'extensions are %s)' % (info.get('extensions') or 'none'))
-        else:
-            lines.append('the browser widget was not checked: the IDE has none here (no CEF), and so '
-                         'neither has the standalone')
+    checks, p, l = expected_checks(info, browser_widget, drawing)
+    problems += p
+    lines += l
     for name in checks:
         results = probes.get(name)
         if not results:
@@ -2059,15 +2350,16 @@ def main(argv=None):
             lines.append(lean_engine(runtime, version, wasm))
             url_path = 'engine'
             browser_widget = True
+            drawing = None
             lines.append('built without the IDE, from %s' % runtime)
         elif mode == 'ide':
-            site, built, browser_widget = build_with_ide(args, work, args.ide_timeout)
+            site, built, browser_widget, drawing = build_with_ide(args, work, args.ide_timeout)
             lines += built
             url_path = 'libURL'
         else:
             site = os.path.abspath(args.built)
             url_path = None
-            browser_widget = None
+            browser_widget = drawing = None
             lines.append('built before: %s' % site)
         version, page = built_files(site)
         js, wasm = [os.path.join(site, 'standalone-community-%s.%s' % (version, x)) for x in ('js', 'wasm')]
@@ -2077,12 +2369,16 @@ def main(argv=None):
         lines.append('web engine %s: .wasm %.1f MB, .js %.0f kB' % (
             version, os.path.getsize(wasm) / 1e6, os.path.getsize(js) / 1e3))
         lines.append('standalone.zip %.1f kB' % (os.path.getsize(os.path.join(site, 'standalone.zip')) / 1e3))
+        write_appearance_page(page)
+        # (the IDE's builder wrote its own, from the Fields setting)
+        if mode != 'ide':
+            write_fields_page(page)
         server = make_server(site, PROBE_PAGE_DEFERRED if args.browser == 'webkit' else PROBE_PAGE)
         url = 'http://127.0.0.1:%d/%s' % (server.server_address[1], os.path.basename(page))
         log('Opening %s' % url)
         watchdog = browser_watchdog(args.browser, max(BROWSER_LIMIT, 5 * args.timeout))
         try:
-            p, l = run_browser(url, version, work, args.timeout, url_path, browser_widget, args.browser)
+            p, l = run_browser(url, version, work, args.timeout, url_path, browser_widget, args.browser, drawing)
         finally:
             watchdog.cancel()
         problems += p

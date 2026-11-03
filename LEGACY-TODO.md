@@ -28,7 +28,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 ### FIXME: engine (33)
 
 - [engine/installer-armv6-hf.link:187](engine/installer-armv6-hf.link#L187) FIXME: Why do we need it? When there is no .bss section, we don't
-- [engine/src/dispatch.cpp:1563](engine/src/dispatch.cpp#L1563) FIXME This is horrible
+- [engine/src/dispatch.cpp:1653](engine/src/dispatch.cpp#L1653) FIXME This is horrible
 - [engine/src/em-dc-mainloop.cpp:46](engine/src/em-dc-mainloop.cpp#L46) FIXME these functions are pretty much the same for every X_init()
 - [engine/src/em-event.js:510](engine/src/em-event.js#L510) FIXME Maybe this should be done in the engine?
 - [engine/src/em-event.js:709](engine/src/em-event.js#L709) FIXME not supported
@@ -55,11 +55,11 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 - [engine/src/funcs.h:1148](engine/src/funcs.h#L1148) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1156](engine/src/funcs.h#L1156) EE_NUMTOCHAR_BADSOURCE, PE_NUMTOCHAR_BADPARAM> // FIXME
 - [engine/src/funcs.h:1589](engine/src/funcs.h#L1589) EE_CHARTONUM_BADSOURCE, PE_CHARTONUM_BADPARAM> // FIXME
-- [engine/src/globals.cpp:983](engine/src/globals.cpp#L983) FIXME use MCProperListRef
+- [engine/src/globals.cpp:987](engine/src/globals.cpp#L987) FIXME use MCProperListRef
 - [engine/src/mcsemaphore.h:61](engine/src/mcsemaphore.h#L61) FIXME mark as explicit
 - [engine/src/sysspec-url.cpp:341](engine/src/sysspec-url.cpp#L341) FIXME if wait() returns non-zero, cancel the URL
-- [engine/src/widget.lcb:911](engine/src/widget.lcb#L911) FIXME not actually implemented
-- [engine/src/widget.lcb:1491](engine/src/widget.lcb#L1491) FIXME not implemented
+- [engine/src/widget.lcb:915](engine/src/widget.lcb#L915) FIXME not actually implemented
+- [engine/src/widget.lcb:1495](engine/src/widget.lcb#L1495) FIXME not implemented
 
 <a id="fixme-libfoundation"></a>
 
@@ -105,7 +105,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 ### FIXME: extensions (2)
 
 - [extensions/libraries/iconsvg/iconsvg.lcb:1622](extensions/libraries/iconsvg/iconsvg.lcb#L1622) FIXME Just subscript by tResolved once that's implemented
-- [extensions/widgets/switchbutton/switchbutton.lcb:388](extensions/widgets/switchbutton/switchbutton.lcb#L388) FIXME This is ugly!
+- [extensions/widgets/switchbutton/switchbutton.lcb:411](extensions/widgets/switchbutton/switchbutton.lcb#L411) FIXME This is ugly!
 
 <a id="fixme-libscript"></a>
 
@@ -124,7 +124,7 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 
 ### FIXME: ide (1)
 
-- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12256](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12256) FIXME There is some inconsistency in the guide's files that we
+- [ide/Toolset/libraries/revidelibrary.8.livecodescript:12732](ide/Toolset/libraries/revidelibrary.8.livecodescript#L12732) FIXME There is some inconsistency in the guide's files that we
 
 <a id="fixme-ide-support"></a>
 
@@ -255,8 +255,8 @@ Work left for later. 428 notes, by part of the repository:
 - [engine/src/desktop.cpp:659](engine/src/desktop.cpp#L659) PLATFORM-TODO: Should we do more than this? i.e. Should the dragDrop
 - [engine/src/dispatch.cpp:255](engine/src/dispatch.cpp#L255) TODO[19681]: This can be removed when all engine messages are sent with
 - [engine/src/dispatch.cpp:294](engine/src/dispatch.cpp#L294) TODO[19681]: This can be removed when all engine messages are sent with
-- [engine/src/dispatch.cpp:1557](engine/src/dispatch.cpp#L1557) PLATFORM-TODO: This is needed at the moment to make sure that we don't
-- [engine/src/dispatch.cpp:1895](engine/src/dispatch.cpp#L1895) TODO: what about other 'special' chars added by unicode?
+- [engine/src/dispatch.cpp:1647](engine/src/dispatch.cpp#L1647) PLATFORM-TODO: This is needed at the moment to make sure that we don't
+- [engine/src/dispatch.cpp:1985](engine/src/dispatch.cpp#L1985) TODO: what about other 'special' chars added by unicode?
 - [engine/src/dskmac.cpp:790](engine/src/dskmac.cpp#L790) TODO Check whether the double path resolution is an issue
 - [engine/src/dskmac.cpp:1186](engine/src/dskmac.cpp#L1186) TODO assign relevant error code
 - [engine/src/dskmac.cpp:1208](engine/src/dskmac.cpp#L1208) TODO assign relevant error code
@@ -266,7 +266,7 @@ Work left for later. 428 notes, by part of the repository:
 - [engine/src/dskmain.cpp:222](engine/src/dskmain.cpp#L222) TODO Remove -g,-geometry flag because it's not used any more
 - [engine/src/dskw32.cpp:623](engine/src/dskw32.cpp#L623) TODO: still necessary with GetFileAttributes instead of stat?
 - [engine/src/dskw32.cpp:633](engine/src/dskw32.cpp#L633) TODO: still necessary with GetFileAttributes instead of stat?
-- [engine/src/em-dc.js:181](engine/src/em-dc.js#L181) TODO - handle cleanup of embedded canvas
+- [engine/src/em-dc.js:238](engine/src/em-dc.js#L238) TODO - handle cleanup of embedded canvas
 - [engine/src/em-event.js:881](engine/src/em-event.js#L881) TODO - reenable alt key detection
 - [engine/src/em-util.js:304](engine/src/em-util.js#L304) TODO - support more value types
 - [engine/src/em-util.js:332](engine/src/em-util.js#L332) TODO - for now, treat functions as objects but we may wish to differentiate them later
@@ -320,20 +320,20 @@ Work left for later. 428 notes, by part of the repository:
 - [engine/src/lnxstack.cpp:449](engine/src/lnxstack.cpp#L449) TODO: test if this comment is still true
 - [engine/src/mac-av-player.mm:1552](engine/src/mac-av-player.mm#L1552) TODO: Add more types??
 - [engine/src/mac-av-player.mm:1601](engine/src/mac-av-player.mm#L1601) TODO
-- [engine/src/mac-core.mm:1657](engine/src/mac-core.mm#L1657) 0x47 */ kMCPlatformKeyCodeNumLock, // COCO-TODO: This should be keypad-clear - double-check!
-- [engine/src/mac-core.mm:1724](engine/src/mac-core.mm#L1724) PLATFORM-TODO: Shifted keysym handling should be in the engine rather than
-- [engine/src/mac-core.mm:1797](engine/src/mac-core.mm#L1797) COCOA-TODO: Clean up this external dependency.
-- [engine/src/mac-core.mm:2319](engine/src/mac-core.mm#L2319) COCOA-TODO: Abstract Command/Control switching.
-- [engine/src/mac-core.mm:2394](engine/src/mac-core.mm#L2394) COCOA-TODO: Make this is a little more discerning (only need to reset if
+- [engine/src/mac-core.mm:1683](engine/src/mac-core.mm#L1683) 0x47 */ kMCPlatformKeyCodeNumLock, // COCO-TODO: This should be keypad-clear - double-check!
+- [engine/src/mac-core.mm:1750](engine/src/mac-core.mm#L1750) PLATFORM-TODO: Shifted keysym handling should be in the engine rather than
+- [engine/src/mac-core.mm:1823](engine/src/mac-core.mm#L1823) COCOA-TODO: Clean up this external dependency.
+- [engine/src/mac-core.mm:2345](engine/src/mac-core.mm#L2345) COCOA-TODO: Abstract Command/Control switching.
+- [engine/src/mac-core.mm:2420](engine/src/mac-core.mm#L2420) COCOA-TODO: Make this is a little more discerning (only need to reset if
 - [engine/src/mac-menu.mm:1886](engine/src/mac-menu.mm#L1886) COCOA-TODO: Abstract Command/Control switching.
 - [engine/src/mac-surface.mm:34](engine/src/mac-surface.mm#L34) COCOA-TODO: Clean up external linkage for surface.
 - [engine/src/mac-surface.mm:219](engine/src/mac-surface.mm#L219) COCOA-TODO: Getting the height to flip round is dependent on a friend.
 - [engine/src/mac-surface.mm:261](engine/src/mac-surface.mm#L261) COCOA-TODO: Getting the height to flip round is dependent on a friend.
 - [engine/src/mac-surface.mm:294](engine/src/mac-surface.mm#L294) COCOA-TODO: Getting the height to flip round is dependent on a friend.
-- [engine/src/mac-window.mm:569](engine/src/mac-window.mm#L569) COCOA-TODO: Make sure this is necessary, apparantly things should
-- [engine/src/mac-window.mm:2008](engine/src/mac-window.mm#L2008) COCOA-TODO: Sort out changes that affect window type (not needed at the moment
-- [engine/src/mac-window.mm:2045](engine/src/mac-window.mm#L2045) COCOA-TODO: At the moment force a re-display here to stop redraw artifacts.
-- [engine/src/mac-window.mm:2335](engine/src/mac-window.mm#L2335) COCOA-TODO: Make display update more specific.
+- [engine/src/mac-window.mm:599](engine/src/mac-window.mm#L599) COCOA-TODO: Make sure this is necessary, apparantly things should
+- [engine/src/mac-window.mm:2054](engine/src/mac-window.mm#L2054) COCOA-TODO: Sort out changes that affect window type (not needed at the moment
+- [engine/src/mac-window.mm:2091](engine/src/mac-window.mm#L2091) COCOA-TODO: At the moment force a re-display here to stop redraw artifacts.
+- [engine/src/mac-window.mm:2381](engine/src/mac-window.mm#L2381) COCOA-TODO: Make display update more specific.
 - [engine/src/mblandroidad.cpp:171](engine/src/mblandroidad.cpp#L171) TODO - Should probably improve this to use a similar method to native controls.
 - [engine/src/mblandroidcalendar.cpp:79](engine/src/mblandroidcalendar.cpp#L79) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
 - [engine/src/mblandroidcalendar.cpp:92](engine/src/mblandroidcalendar.cpp#L92) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
@@ -461,8 +461,8 @@ Work left for later. 428 notes, by part of the repository:
 - [engine/src/w32dcw32.cpp:1076](engine/src/w32dcw32.cpp#L1076) TODO: pay attention to the CS_INSERTCHAR and CS_NOMOVECARET flags
 - [engine/src/w32dcw32.cpp:1458](engine/src/w32dcw32.cpp#L1458) TODO - look in to this further:
 - [engine/src/w32printer.cpp:539](engine/src/w32printer.cpp#L539) TODO - fix half pixels lost when insetting by odd integers
-- [engine/src/w32stack.cpp:471](engine/src/w32stack.cpp#L471) TODO - Windows 8 implementation will require getting the appropriate per-window value
-- [engine/src/w32stack.cpp:1152](engine/src/w32stack.cpp#L1152) TODO - Windows 8.1 per-monitor DPI-awareness may require the update region be in logical coords
+- [engine/src/w32stack.cpp:503](engine/src/w32stack.cpp#L503) TODO - Windows 8 implementation will require getting the appropriate per-window value
+- [engine/src/w32stack.cpp:1184](engine/src/w32stack.cpp#L1184) TODO - Windows 8.1 per-monitor DPI-awareness may require the update region be in logical coords
 - [engine/src/widget-events.cpp:190](engine/src/widget-events.cpp#L190) WIDGET-TODO: Reinstate FocusEnter
 - [engine/src/widget-events.cpp:202](engine/src/widget-events.cpp#L202) WIDGET-TODO: Reinstate FocusLeave
 - [engine/src/widget-events.cpp:206](engine/src/widget-events.cpp#L206) TODO: does the unfocus *always* happen before the next focus?
@@ -478,14 +478,14 @@ Work left for later. 428 notes, by part of the repository:
 - [engine/src/widget-events.cpp:1102](engine/src/widget-events.cpp#L1102) Todo: key gesture (shortcuts, accelerators, etc) processing
 - [engine/src/widget-popup.cpp:375](engine/src/widget-popup.cpp#L375) TODO - throw memory error
 - [engine/src/widget-popup.cpp:470](engine/src/widget-popup.cpp#L470) TODO - throw error
-- [engine/src/widget-syntax.cpp:337](engine/src/widget-syntax.cpp#L337) TODO - coordinate transform
-- [engine/src/widget-syntax.cpp:357](engine/src/widget-syntax.cpp#L357) TODO - coordinate transforms
-- [engine/src/widget-syntax.cpp:375](engine/src/widget-syntax.cpp#L375) TODO: Implement asynchronous version.
-- [engine/src/widget-syntax.cpp:387](engine/src/widget-syntax.cpp#L387) TODO: Implement asynchronous version.
-- [engine/src/widget-syntax.cpp:477](engine/src/widget-syntax.cpp#L477) TODO: implement
-- [engine/src/widget-syntax.cpp:816](engine/src/widget-syntax.cpp#L816) TODO - throw error: no native layer
-- [engine/src/widget-syntax.cpp:830](engine/src/widget-syntax.cpp#L830) TODO - throw error: no native layer
-- [engine/src/widget-syntax.cpp:854](engine/src/widget-syntax.cpp#L854) TODO - throw error
+- [engine/src/widget-syntax.cpp:420](engine/src/widget-syntax.cpp#L420) TODO - coordinate transform
+- [engine/src/widget-syntax.cpp:440](engine/src/widget-syntax.cpp#L440) TODO - coordinate transforms
+- [engine/src/widget-syntax.cpp:458](engine/src/widget-syntax.cpp#L458) TODO: Implement asynchronous version.
+- [engine/src/widget-syntax.cpp:470](engine/src/widget-syntax.cpp#L470) TODO: Implement asynchronous version.
+- [engine/src/widget-syntax.cpp:560](engine/src/widget-syntax.cpp#L560) TODO: implement
+- [engine/src/widget-syntax.cpp:899](engine/src/widget-syntax.cpp#L899) TODO - throw error: no native layer
+- [engine/src/widget-syntax.cpp:913](engine/src/widget-syntax.cpp#L913) TODO - throw error: no native layer
+- [engine/src/widget-syntax.cpp:937](engine/src/widget-syntax.cpp#L937) TODO - throw error
 
 <a id="todo-libfoundation"></a>
 
@@ -733,7 +733,7 @@ Work left for later. 428 notes, by part of the repository:
 
 ### TODO: extensions (1)
 
-- [extensions/script-libraries/drawing/drawing.livecodescript:2070](extensions/script-libraries/drawing/drawing.livecodescript#L2070) TODO: Handle unit in an appropriate way.
+- [extensions/script-libraries/drawing/drawing.livecodescript:2256](extensions/script-libraries/drawing/drawing.livecodescript#L2256) TODO: Handle unit in an appropriate way.
 
 <a id="todo-lcidlc"></a>
 

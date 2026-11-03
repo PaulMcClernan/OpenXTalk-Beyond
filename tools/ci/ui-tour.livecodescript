@@ -1,4 +1,4 @@
-script "oxt_ui_tour"
+﻿script "oxt_ui_tour"
 -- Screenshots of the IDE's own windows, run inside the real IDE by
 -- tools/ci/ui_tour.py, which names this file on the command line: the
 -- engine opens it once the IDE has started (home.livecodescript,
@@ -82,7 +82,7 @@ script "oxt_ui_tour"
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,release-notes,home,kit-dialog,learn,example,academy,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,screen-end"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,menubar,menubar-modern,menubar-mac,menu-marks,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,screen-end"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- The inspector's sections for a button, as the icons in its header name
@@ -92,6 +92,10 @@ constant kButtonSections = "Basic,Icons,Colors,Text,Position,Effects,Custom,Adva
 -- learn, academy, xtalk-assistant and xtalk-chat)
 constant kLearn = "revLearn"
 constant kAcademy = "revAcademy"
+-- OXT-Beyond Home (palettes/home, after 0.2.7-rc.6.11), the one window
+-- that hosts Home, the Academy and Learn: in a release that has it, the
+-- learn, academy and home steps find their windows there
+constant kHub = "revHub"
 constant kXtaMain = "org.openxtalk.plugin.xtalkassistant"
 constant kXtaWindow = "revXTalkAssistant"
 constant kXtaSettings = "revXTalkAssistantSettings"
@@ -279,6 +283,60 @@ on tour_hover_tools
    tourShotAround tButton, "revTools", "02-hover-tools"
    tourMouseAway
 end tour_hover_tools
+
+-- Choosing one vector tool after another lights the one chosen (micmac,
+-- openxtalk.org p=25846: the Line tile kept its light). Every vector tile
+-- chooses the graphic tool, with the template graphic's style for its
+-- shape, so going from one to another changes no tool and the engine
+-- sends no newTool for the palette to follow. Line, Polygon, Curve and
+-- Line again, by the palette's own mouseDown, in the classic look and in
+-- the modern one
+on tour_tools_vector
+   local tFails, tShown
+   revIDEOpenPalette "tools"
+   tourToolsClassic
+   tourWait 300
+   put tourToolsVectorCheck("classic") into tFails
+   dispatch function "tmIsModern" to stack "revTools"
+   if it is "handled" then
+      if tourToolsModern(260, false) is true then
+         -- (the modern look shows the vector tools from its menu)
+         put tourTmGroup("graphictools") is empty into tShown
+         if tShown then dispatch "tmMenuPick" to stack "revTools" with "Vector Tools"
+         put tourToolsVectorCheck("modern") after tFails
+         if tShown then dispatch "tmMenuPick" to stack "revTools" with "Vector Tools"
+      end if
+      tourToolsClassic
+   end if
+   choose pointer tool
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_tools_vector
+
+-- A line for each vector tile of the Tools palette, in the look pLook,
+-- that does not choose its shape or is not lit once chosen after another
+function tourToolsVectorCheck pLook
+   local tName, tTile, tLight, tFails
+   repeat for each item tName in "Line,Polygon,Curve,Line"
+      put tourTmNamed("com.livecode.interface.classic." & tName & "Graphic") into tTile
+      if tTile is empty or not the visible of tTile then
+         put pLook & ": no" && tName && "tile shows" & return after tFails
+         next repeat
+      end if
+      tourTmClick tTile
+      tourWait 200
+      put tourTmNamed("tool_hilite") into tLight
+      tourRecord "INFO tools-vector" && pLook & ":" && tName && "chose the" && the tool && "with a" && \
+            the style of the templateGraphic && "template; the light at" && the rect of tLight && "and the tile at" && the rect of tTile
+      if the tool is not "graphic tool" or the style of the templateGraphic is not the cStyle of tTile then
+         put pLook & ":" && tName && "chose the" && the tool && "with a" && the style of the templateGraphic && "template" & return after tFails
+      end if
+      if tLight is empty or not the visible of tLight or the rect of tLight is not the rect of tTile then
+         put pLook & ":" && tName && "is not lit (the light is at" && the rect of tLight & ", the tile at" && the rect of tTile & ")" & return after tFails
+      end if
+   end repeat
+   tourShotStack "revTools", "01b-tools-vector-" & pLook
+   return tFails
+end tourToolsVectorCheck
 
 -- The Tools palette in its modern look (Tools > Modern Tools Palette):
 -- at the size it first opens at, made wide, and wide with the names of
@@ -848,6 +906,99 @@ on tour_appearance_switch
    tourTmFinish "appearance-switch"
 end tour_appearance_switch
 
+-- systemAppearanceChanged reaches a handler in the user's card or stack
+-- when the engine sends it to an IDE stack, the defaultStack the palettes
+-- and editors often leave: the IDE's message handler frontscript sends it
+-- on to the current card of the frontmost stack that is not the IDE's, if
+-- that card or its stack handles it, once (bwmilby, openxtalk.org p=25665).
+-- Before, the user's handler ran only when the switch came while the
+-- user's stack happened to be the default. Sent here as the engine sends
+-- it, to the card of an IDE stack, and to the user's own card
+on tour_appearance_message
+   global gTourAppearanceSeen
+   local tStack, tHandler, tFails, tError
+   put "oxt_appearance_message" into tStack
+   put "on systemAppearanceChanged" & return & \
+         "global gTourAppearanceSeen" & return & \
+         "put the short name of this stack & comma after gTourAppearanceSeen" & return & \
+         "end systemAppearanceChanged" into tHandler
+   revIDEOpenPalette "tools"
+   tourWait 200
+   lock messages
+   if there is a stack tStack then delete stack tStack
+   create stack tStack
+   set the rect of it to "240,160,560,400"
+   unlock messages
+   go stack tStack
+   tourWait 300
+   try
+      -- a handler in the card: one message, for a switch sent to the IDE
+      set the script of card 1 of stack tStack to tHandler
+      put empty into gTourAppearanceSeen
+      send "systemAppearanceChanged" to card 1 of stack "revTools"
+      tourAppearanceSettle
+      if gTourAppearanceSeen is not (tStack & comma) then
+         put "sent to the Tools palette, the card's handler got" && quote & gTourAppearanceSeen & quote && \
+               "(the openStacks" && tourJoin(the openStacks) & ")" & return after tFails
+      end if
+      -- sent to the user's own card: once, as before
+      put empty into gTourAppearanceSeen
+      send "systemAppearanceChanged" to card 1 of stack tStack
+      tourAppearanceSettle
+      if gTourAppearanceSeen is not (tStack & comma) then
+         put "sent to the user's card, its handler got" && quote & gTourAppearanceSeen & quote & return after tFails
+      end if
+      -- a handler in the stack script: also sent on
+      set the script of card 1 of stack tStack to empty
+      set the script of stack tStack to tHandler
+      put empty into gTourAppearanceSeen
+      send "systemAppearanceChanged" to card 1 of stack "revTools"
+      tourAppearanceSettle
+      if gTourAppearanceSeen is not (tStack & comma) then
+         put "sent to the Tools palette, the stack's handler got" && quote & gTourAppearanceSeen & quote && \
+               "(the openStacks" && tourJoin(the openStacks) & ")" & return after tFails
+      end if
+      -- a handler written "command systemAppearanceChanged": also sent on
+      set the script of stack tStack to "command systemAppearanceChanged" & return & line 2 to -1 of tHandler
+      put empty into gTourAppearanceSeen
+      send "systemAppearanceChanged" to card 1 of stack "revTools"
+      tourAppearanceSettle
+      if gTourAppearanceSeen is not (tStack & comma) then
+         put "sent to the Tools palette, a command handler got" && quote & gTourAppearanceSeen & quote && \
+               "(the openStacks" && tourJoin(the openStacks) & ")" & return after tFails
+      end if
+      -- no handler of the user's: nothing is sent on
+      set the script of stack tStack to empty
+      put empty into gTourAppearanceSeen
+      send "systemAppearanceChanged" to card 1 of stack "revTools"
+      tourAppearanceSettle
+      if gTourAppearanceSeen is not empty then
+         put "with no handler, something got" && quote & gTourAppearanceSeen & quote & return after tFails
+      end if
+   catch tError
+      put tError & return after tFails
+   end try
+   lock messages
+   if there is a stack tStack then delete stack tStack
+   unlock messages
+   tourRecord "INFO appearance-message:" && the number of lines of tFails && "failed"
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_appearance_message
+
+-- Waits, at most 8 seconds, until no systemAppearanceChanged and no
+-- ideSystemAppearanceChanged is pending: the IDE remakes its palettes for
+-- each one, which on a slow machine takes longer than a fixed wait
+command tourAppearanceSettle
+   local tWaited
+   put 0 into tWaited
+   repeat while tWaited < 8000
+      tourWait 100
+      add 100 to tWaited
+      if not (the pendingMessages contains "systemAppearanceChanged") then exit repeat
+   end repeat
+   tourWait 200
+end tourAppearanceSettle
+
 -- Whether the stack pStack, or a card or control of it, subscribes to the
 -- IDE's message pMessage
 function tourHears pStack, pMessage
@@ -1221,6 +1372,10 @@ on tour_menubar_modern
             put "modern: the toggle" && tToggle && "is not on" & return after tFails
          end if
       end repeat
+      -- every button's labels whole in it, bold as a lit button draws them
+      add 1 to tChecks
+      get tourMbLabelsCut()
+      if it is not empty then put "modern: a label is cut off:" && it & return after tFails
       tourShotStack tMb, "03-menubar-modern-on"
       tourMbToggles false
       -- the View menu's item turns the classic look on
@@ -1241,6 +1396,9 @@ on tour_menubar_modern
       if the textColor of group "toolbar" of stack tMb is not empty or there is a graphic "mbBackground" of card 1 of stack tMb then
          put "classic: the labels have a colour, or the modern look's background is still there" & return after tFails
       end if
+      add 1 to tChecks
+      get tourMbLabelsCut()
+      if it is not empty then put "classic: a label is cut off:" && it & return after tFails
       tourShotStack tMb, "03-menubar-classic"
       dispatch "revMenubarViewMenuPick" to stack tMb with "Modern Toolbar"
       tourWait 300
@@ -1286,6 +1444,46 @@ function tourMbPrint
    end repeat
    return tOut
 end tourMbPrint
+
+-- The toolbar's buttons whose words are wider than the button, as the
+-- button can show them: its label now and both of revMenubarButtonText's
+-- (lit and not), each bold, as setButtonHilite draws a lit button's and
+-- any button's while it is pressed. Each is measured as the button lays
+-- it out (its formattedWidth) and put back as it was. The toolbar measured
+-- only the plain labels, and on Linux (DejaVu Sans) cut a lit "Select
+-- Grouped" off at its first letter
+function tourMbLabelsCut
+   local tMb, tCut, tN, tBtn, tName, tLabel, tStyle, tLabels, tHilite, tText, tNeed
+   put "revMenuBar" into tMb
+   lock screen
+   lock messages
+   repeat with tN = 1 to the number of buttons of group "toolbar" of stack tMb
+      put the long id of button tN of group "toolbar" of stack tMb into tBtn
+      if not the visible of tBtn or not the showName of tBtn then next repeat
+      put the short name of tBtn into tName
+      put the label of tBtn into tLabel
+      put the textStyle of tBtn into tStyle
+      put tLabel into tLabels
+      repeat for each item tHilite in "true,false"
+         dispatch function "revMenubarButtonText" to stack tMb with tName, tHilite
+         if it is "handled" and the result is not among the lines of tLabels then put return & the result after tLabels
+      end repeat
+      repeat for each line tText in tLabels
+         if tText is empty then next repeat
+         set the label of tBtn to tText
+         set the textStyle of tBtn to "bold"
+         put the formattedWidth of tBtn into tNeed
+         if tNeed > the width of tBtn then
+            put tName && "is" && the width of tBtn && "wide," && quote & tText & quote && "bold needs" && tNeed & "; " after tCut
+         end if
+      end repeat
+      set the textStyle of tBtn to tStyle
+      set the label of tBtn to tLabel
+   end repeat
+   unlock messages
+   unlock screen
+   return tCut
+end tourMbLabelsCut
 
 -- Messages, Errors and Select Grouped on (pOn) or off, as the toolbar
 -- reads them (updateButtonState)
@@ -1516,6 +1714,94 @@ on tour_menu_marks
    if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
 end tour_menu_marks
 
+-- File > New Stack's preset sizes, the ones Preferences lists with "Show a
+-- list of preset new stack sizes in File menu > New Stack": among them
+-- SVGA's 800 x 600 and three quarters of the main screen's width and
+-- height (richmond62, openxtalk.org p=25902), each making a stack of its
+-- size, and the sizes there were before; without the preference, none of
+-- them. The preference and the question that names a new stack are put
+-- back as they were, and the stacks made are deleted
+on tour_new_stack_sizes
+   local tMb, tPresets, tRename, tW, tH, tSizes, tFails, tWant, tBefore, tStack, tNew, tError
+   put "revMenuBar" into tMb
+   if there is not a stack tMb or there is not a button "File" of group "revMenuBar" of stack tMb then
+      throw "failed: the IDE has no File menu (button File of group revMenuBar of stack revMenubar)"
+   end if
+   put the cShowPresetSizes of stack "revPreferences" into tPresets
+   put the cAskForNewStackRename of stack "revPreferences" into tRename
+   put round((item 3 of the screenRect - item 1 of the screenRect) * 3 / 4) into tW
+   put round((item 4 of the screenRect - item 2 of the screenRect) * 3 / 4) into tH
+   try
+      set the cAskForNewStackRename of stack "revPreferences" to false
+      set the cShowPresetSizes of stack "revPreferences" to false
+      put tourNewStackSizes() into tSizes
+      tourRecord "INFO new-stack-sizes without the preference:" && tourJoin(tSizes)
+      if "Default Size" is not in line 1 of tSizes then
+         put "File > New Stack has no Default Size" & return after tFails
+      end if
+      if "SVGA (800x600)" is among the lines of tSizes or "Three Quarters" is in tSizes then
+         put "File > New Stack lists preset sizes when Preferences says not to" & return after tFails
+      end if
+      set the cShowPresetSizes of stack "revPreferences" to true
+      put tourNewStackSizes() into tSizes
+      tourRecord "INFO new-stack-sizes with the preference:" && tourJoin(tSizes)
+      repeat for each item tWant in "VGA (640x480),XGA (1024x768),WXGA HD 16:9 (1366x768),SVGA (800x600)"
+         if tWant is not among the lines of tSizes then
+            put "File > New Stack has no" && quote & tWant & quote & return after tFails
+         end if
+      end repeat
+      put "Three Quarters of the Screen (" & tW & "x" & tH & ")" into tWant
+      if tWant is not among the lines of tSizes then
+         put "File > New Stack has no" && quote & tWant & quote && "for the screenRect" && the screenRect & return after tFails
+      end if
+      -- each new size makes a stack of that size
+      repeat for each item tWant in "SVGA (800x600)," & "Three Quarters of the Screen (" & tW & "x" & tH & ")"
+         if tWant is not among the lines of tSizes then next repeat
+         put the mainStacks into tBefore
+         dispatch "revMenubarFileMenuPick" to stack tMb with "New Stack|" & tWant
+         tourWait 300
+         put empty into tNew
+         repeat for each line tStack in the mainStacks
+            if tStack is not among the lines of tBefore then put tStack & return after tNew
+         end repeat
+         put line 1 to -1 of tNew into tNew
+         if the number of lines of tNew is not 1 then
+            put "File > New Stack >" && tWant && "made" && the number of lines of tNew && "stacks:" && tourJoin(tNew) & return after tFails
+         else
+            tourRecord "INFO new-stack-sizes:" && tWant && "made" && quote & tNew & quote && \
+                  the width of stack tNew & "x" & the height of stack tNew
+            if the width of stack tNew & "x" & the height of stack tNew is not char 2 to -2 of the last word of tWant then
+               put "File > New Stack >" && tWant && "made a stack of" && the width of stack tNew & "x" & the height of stack tNew & return after tFails
+            end if
+         end if
+         repeat for each line tStack in tNew
+            delete stack tStack
+         end repeat
+      end repeat
+   catch tError
+   end try
+   set the cShowPresetSizes of stack "revPreferences" to tPresets
+   set the cAskForNewStackRename of stack "revPreferences" to tRename
+   dispatch "revMenubarBuildMenus" to stack tMb
+   if tError is not empty then throw tError
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_new_stack_sizes
+
+-- The items of File > New Stack, as the IDE's menu bar builds them now
+function tourNewStackSizes
+   local tLine, tIn, tSizes
+   dispatch "revMenubarBuildMenus" to stack "revMenuBar"
+   put false into tIn
+   repeat for each line tLine in the text of button "File" of group "revMenuBar" of stack "revMenuBar"
+      if char 1 of tLine is not tab then
+         put tLine contains "New Stack" into tIn
+      else if tIn then
+         put char 2 to -1 of tLine & return after tSizes
+      end if
+   end repeat
+   return line 1 to -1 of tSizes
+end tourNewStackSizes
+
 -- Opens the pop-up menu of the button pButton of the stack pStack where
 -- the step's snapshots are taken, takes the snapshot pFile while it is
 -- open, and closes it. The long names of the first and last items make
@@ -1693,6 +1979,16 @@ on tour_controls
    tourGrab "Scroll"
    put tourMaxDiff(0, 0, sPixWidth, sPixHeight, tBack) into tMax
    tourCtlCheck tMax >= 24, "a scrollbar with something to scroll is drawn (" & tMax & ")"
+   -- On a dark card a scrollbar's track is dark too: in Windows' dark
+   -- mode the theme drew it light grey, with white arrows, whatever the
+   -- appearance (engine/src/w32theme.cpp, MCWin32DrawDarkScrollPart). A
+   -- point of the track three quarters along, clear of the thumb (from 30
+   -- to 50) and of the arrows
+   if tBack < 100 then
+      put tourLum(sPixWidth * 3 div 4, sPixHeight div 2) into tInside
+      tourRecord "INFO controls: a scrollbar's track is" && tInside && "on the card's" && tBack
+      tourCtlCheck tInside < 100, "a scrollbar's track is dark on the dark card (" & tInside & ")"
+   end if
    
    repeat for each item tWhere in "Slider,SliderOff"
       tourGrab tWhere
@@ -1710,6 +2006,52 @@ on tour_controls
       end if
    end repeat
    
+   -- A standard button taller than the Mac's push button (50 points to
+   -- its 21) is drawn its whole height, as Windows and Linux draw it: on
+   -- the Mac the push button's rounded bezel stayed 21 points high in the
+   -- middle of it, the rest of its rect the card (Skids, openxtalk.org
+   -- p=25824; engine/src/osxtheme.mm, kMCMacFlexiblePushHeight). The rows
+   -- where it differs from the card, its edges included, span four fifths
+   -- of its height or more
+   tourGrab "Tall"
+   put tourRowsDrawn(tBack, 12) into tExtent
+   tourRecord "INFO controls: the tall standard button is drawn in rows" && tExtent && "of 0 to" && sPixHeight - 1
+   tourCtlCheck tExtent is not empty and item 2 of tExtent - item 1 of tExtent + 1 >= sPixHeight * 4 div 5, \
+         "the tall standard button is drawn its whole height (rows" && tExtent && "of 0 to" && sPixHeight - 1 & ")"
+   
+   -- A disabled label is fainter than an enabled one, and still seen. On
+   -- Windows' dark mode it was etched in the theme's white and grey, and
+   -- read as an enabled one (the menu bar's Group); on a dark GTK theme it
+   -- all but vanished (engine/src/buttondraw.cpp,
+   -- MCButtonDisabledInkOnDarkTheme). The most a label's points differ
+   -- from its button's face: 223 and 223 on Windows' dark, 210 and 16 on
+   -- Linux's, 225 and 51 on Windows' light, 164 and 72 on the Mac's dark
+   put tourLabelInk("LabelOn", 12) into tOn
+   put tourLabelInk("LabelOff", 12) into tOff
+   tourRecord "INFO controls: a standard button's label differs from its face by" && tOn & ", a disabled one's by" && tOff
+   tourCtlCheck tOff <= tOn * 0.7, "a disabled label is fainter than an enabled one (" & tOff && "to" && tOn & ")"
+   tourCtlCheck tOff >= 24, "a disabled label is seen on its button (" & tOff & ")"
+   
+   -- A hilited standard button's label is seen on it: from macOS 11 the
+   -- Mac draws a hilited push button light grey in the light appearance,
+   -- and its label was forced white on it (15; the Dictionary's chosen
+   -- syntax, "xTalk Script")
+   put tourLabelInk("Hilited", 12) into tMax
+   tourRecord "INFO controls: a hilited standard button's label differs from its face by" && tMax
+   tourCtlCheck tMax >= 72, "a hilited standard button's label is seen on it (" & tMax & ")"
+   
+   -- An option menu and a combo box show the arrow that says they open a
+   -- menu, in their right 20 points: Windows' dark mode drew them as plain
+   -- boxes (engine/src/w32theme.cpp, drawwidget). The most a point there
+   -- differs from the button's face: 0 there, 139 or more elsewhere
+   repeat for each item tWhere in "Option,Combo"
+      tourGrab tWhere
+      put tourLum(8, sPixHeight div 2) into tInside
+      put tourMaxDiff(sPixWidth - 20, 3, sPixWidth - 3, sPixHeight - 3, tInside) into tMax
+      tourRecord "INFO controls: the right of the" && tWhere && "button differs from its face (" & tInside & ") by" && tMax
+      tourCtlCheck tMax >= 48, "the" && tWhere && "button shows its arrow (" & tMax & ")"
+   end repeat
+
    -- The window colour: on the Mac in light mode the card turns the
    -- system's window colour and back; in dark mode it is that colour
    -- already, and elsewhere nothing changes
@@ -1738,6 +2080,18 @@ on tour_controls
    delete stack kControls
    if sCtlFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of sCtlFails)
 end tour_controls
+
+-- The most a point of the label of the button pName of the controls
+-- stack differs from the button's face: the face at pFace points in from
+-- its left, half way down, and the label in the button less pFace + 4
+-- points either side and 5 above and below (clear of the frame and of the
+-- Mac's bezel's edge)
+function tourLabelInk pName, pFace
+   local tFace
+   tourGrab pName
+   put tourLum(pFace, sPixHeight div 2) into tFace
+   return tourMaxDiff(pFace + 4, 5, sPixWidth - pFace - 4, sPixHeight - 5, tFace)
+end tourLabelInk
 
 command tourCtlCheck pTrue, pWhat
    add 1 to sCtlChecks
@@ -1792,8 +2146,35 @@ function tourControlsStack
    set the endValue of it to 100
    set the thumbPosition of it to 70
    set the enabled of it to false
+   -- a standard button taller than the Mac's push button
    create button "Tall"
    set the rect of it to "280,210,440,260"
+   -- a standard button's label, enabled and disabled
+   create button "LabelOn"
+   set the label of it to "Group"
+   set the rect of it to "280,156,356,182"
+   create button "LabelOff"
+   set the label of it to "Group"
+   set the rect of it to "364,156,440,182"
+   set the enabled of it to false
+   -- a hilited standard button of the usual height
+   create button "Hilited"
+   set the label of it to "Script"
+   set the rect of it to "280,268,400,290"
+   set the hilite of it to true
+   -- an option menu and a combo box, which open a menu
+   create button "Option"
+   set the style of it to "menu"
+   set the menuMode of it to "option"
+   set the text of it to "One" & return & "Two"
+   set the label of it to "One"
+   set the rect of it to "20,296,200,320"
+   create button "Combo"
+   set the style of it to "menu"
+   set the menuMode of it to "comboBox"
+   set the text of it to "One" & return & "Two"
+   set the label of it to empty
+   set the rect of it to "220,296,400,320"
    unlock messages
    unlock screen
    set the defaultStack to tDefault
@@ -2035,12 +2416,18 @@ end tourCbNames
 -- card of the stack pStack, at its middle: the middle point of a snapshot
 -- 5 points square, so a point of the screen on a Retina display too
 function tourCbPixel pStack, pX
-   local tRect, tX, tY, tData, tW, tH, tAt
+   local tRect
    tourUnlockScreen "card-border"
    put the rect of stack pStack into tRect
-   put item 1 of tRect + pX into tX
-   put (item 2 of tRect + item 4 of tRect) div 2 into tY
-   export snapshot from rect (tX - 2, tY - 2, tX + 3, tY + 3) to tData as PNG
+   return tourPixelAt(item 1 of tRect + pX, (item 2 of tRect + item 4 of tRect) div 2)
+end tourCbPixel
+
+-- The red, green and blue of the screen at the point pX, pY of the
+-- screen: the middle point of a snapshot 5 points square, so a point of
+-- the screen on a Retina display too
+function tourPixelAt pX, pY
+   local tData, tW, tH, tAt
+   export snapshot from rect (pX - 2, pY - 2, pX + 3, pY + 3) to tData as PNG
    lock messages
    create invisible image "oxt_tour_probe" in card 1 of stack "oxt_ui_tour"
    set the text of image "oxt_tour_probe" of stack "oxt_ui_tour" to tData
@@ -2051,7 +2438,7 @@ function tourCbPixel pStack, pX
    unlock messages
    put ((tH div 2) * tW + tW div 2) * 4 into tAt
    return byteToNum(byte tAt + 2 of tData) & comma & byteToNum(byte tAt + 3 of tData) & comma & byteToNum(byte tAt + 4 of tData)
-end tourCbPixel
+end tourPixelAt
 
 -- The nearest to the colour pRGB of the four the card is given
 function tourCbName pRGB
@@ -2533,6 +2920,682 @@ on tourFramesAnswer pButton
       tourCloseDialogs
    end if
 end tourFramesAnswer
+
+-- A widget whose colours nobody set by hand follows light and dark (seth's
+-- choice 2A of 2026-10-31; bwmilby, openxtalk.org p=25665, p=25680). The
+-- IDE gives a new segmented control its light defaults as colours of its
+-- own (244,244,244 behind its labels): in the dark appearance, on a dark
+-- card, it now draws them in the dark (64,64,64), while its properties
+-- read what they did; one whose colour was set by hand draws that colour
+-- in both. The screen is read in the first segment, left of its label.
+-- The Mac's switch between the two while the IDE runs is checked as well
+-- (system-switch)
+local sSegmentsDark
+
+on tour_widget_appearance
+   local tArea, tName, tDefault, tMade, tHand, tFails, tError
+   put "oxt_widget_appearance" into tName
+   put line 1 of the working screenRects into tArea
+   tourTbMake tName, item 1 of tArea + 360, item 2 of tArea + 160, empty
+   go stack tName
+   tourOnScreen tName
+   put the defaultStack into tDefault
+   try
+      put tourSegmentsMake(tName, "Made", "10,10,310,50") into tMade
+      put tourSegmentsMake(tName, "Hand", "10,70,310,110") into tHand
+      set the backgroundColor of tHand to "200,120,40"
+      tourWait 500
+      put tourSegmentsCheck(tName, tMade, "244,244,244", "64,64,64", "the segmented control the IDE made") after tFails
+      put tourSegmentsCheck(tName, tHand, "200,120,40", "200,120,40", "a segmented control with its backgroundColor set") after tFails
+      put tourSegmentsProperties(tMade, "the segmented control the IDE made") after tFails
+      -- on the Mac in the dark tour the card is dark (system-switch checks
+      -- it), so a pass there is a pass of the dark appearance's colours
+      if the platform is "MacOS" and $OXT_TOUR_APPEARANCE is "dark" and not sSegmentsDark then
+         put "in the dark tour the segmented control was checked against the light colours" && \
+               "(the systemAppearance" && the systemAppearance & ")" & return after tFails
+      end if
+      tourShotStack tName, "04f-widget-appearance"
+   catch tError
+      put tourJoin(tError) & return after tFails
+   end try
+   set the defaultStack to tDefault
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_widget_appearance
+
+-- A segmented control made as the IDE makes one (revIDECreateObject, which
+-- gives it its light defaults as colours of its own), named pName, at
+-- pRect of the card of the stack pStack, none of its segments hilited;
+-- its long id
+function tourSegmentsMake pStack, pName, pRect
+   local tResult, tError
+   try
+      revIDECreateObject "com.livecode.widget.segmented", the long id of card 1 of stack pStack, "160,30"
+      put the result into tResult
+   catch tError
+      put tourJoin(tError) into tResult
+   end try
+   -- (revIDECreateObject leaves messages and the screen locked when it
+   -- fails)
+   unlock messages
+   tourUnlockScreen "widget-appearance"
+   if word 1 of tResult is not "widget" or not exists(tResult) then
+      throw "the IDE made no segmented control (" & tResult & ")"
+   end if
+   set the name of tResult to pName
+   put the long id of widget pName of card 1 of stack pStack into tResult
+   set the rect of tResult to pRect
+   set the hilitedItems of tResult to empty
+   tourCloseInspectors
+   return tResult
+end tourSegmentsMake
+
+-- Empty if the screen shows pLight in the first segment of the segmented
+-- control pWidget of the stack pStack, or pDark when the systemAppearance
+-- is dark and the card is drawn dark (read below the controls), within 16
+-- of each of red, green and blue (the screen's colour profile); else a
+-- line that says what it shows. sSegmentsDark: whether it wanted pDark
+function tourSegmentsCheck pStack, pWidget, pLight, pDark, pWhat
+   local tStack, tRect, tShown, tCard, tWant, i
+   tourUnlockScreen "widget-appearance"
+   put the rect of stack pStack into tStack
+   put the rect of pWidget into tRect
+   put tourPixelAt(item 1 of tStack + item 1 of tRect + 10, \
+         item 2 of tStack + (item 2 of tRect + item 4 of tRect) div 2) into tShown
+   put tourPixelAt(item 1 of tStack + (item 3 of tStack - item 1 of tStack) div 2, item 4 of tStack - 20) into tCard
+   put the systemAppearance is "dark" and tourSystemLight(tCard) is false into sSegmentsDark
+   if sSegmentsDark then put pDark into tWant
+   else put pLight into tWant
+   tourRecord "INFO widget-appearance:" && pWhat & ": the systemAppearance" && the systemAppearance & \
+         ", the card" && tCard & ", the screen" && tShown & ", wanted" && tWant
+   if the number of items of tShown is not 3 or the number of items of tCard is not 3 then
+      return pWhat & ": no colours from the screen (" & tShown & "; the card" && tCard & ")" & return
+   end if
+   repeat with i = 1 to 3
+      if abs(item i of tShown - item i of tWant) > 16 then
+         return pWhat & ": the screen shows" && tShown & ", not" && tWant && \
+               "(the systemAppearance" && the systemAppearance & ", the card" && tCard & ")" & return
+      end if
+   end repeat
+   return empty
+end tourSegmentsCheck
+
+-- Empty if the segmented control pWidget's colours read the light
+-- defaults the IDE gave it, whatever it is drawn in; else a line
+function tourSegmentsProperties pWidget, pWhat
+   local tRead
+   put the foregroundColor of pWidget & "/" & the backgroundColor of pWidget & "/" & \
+         the borderColor of pWidget into tRead
+   if tRead is not "0,0,0/244,244,244/109,109,109" then
+      return pWhat & ": its colours read" && tRead & ", not 0,0,0/244,244,244/109,109,109" & return
+   end if
+   return empty
+end tourSegmentsProperties
+
+-- The Object menu's Copy Graphics as SVG Paths puts the graphics selected
+-- on the clipboard as an SVG document, a path for each (OpenXTalkPaul,
+-- openxtalk.org p=25819: OpenXTalk Lite 1.01 added the item and its call,
+-- never the command it calls, so it did nothing). A filled rectangle, a
+-- polygon that ends where it starts and a line, selected as a user selects
+-- them, each with colours of its own
+on tour_svg_paths
+   local tArea, tName, tDefault, tRect, tPolygon, tLine, tFails, tError
+   put "oxt_svg_paths" into tName
+   put line 1 of the working screenRects into tArea
+   tourTbMake tName, item 1 of tArea + 360, item 2 of tArea + 160, empty
+   go stack tName
+   tourOnScreen tName
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to tName
+      put tourSvgGraphic("rect", "rectangle", "10,10,110,60", empty, "255,0,0", "0,0,255", 2) into tRect
+      put tourSvgGraphic("polygon", "polygon", empty, "130,10" & return & "180,60" & return & "130,60" & return & "130,10", \
+            empty, "0,128,0", 1) into tPolygon
+      put tourSvgGraphic("line", "line", empty, "200,10" & return & "280,60", empty, "0,0,0", 1) into tLine
+      set the clipboardData["text"] to "nothing copied"
+      revIDESelectObjects tRect & return & tPolygon & return & tLine
+      dispatch "revMenubarObjectMenuPick" to stack "revMenuBar" with "Copy Graphics as SVG Paths"
+      revIDEDeselectAll
+      put tourSvgChecks(the clipboardData["text"]) into tFails
+      put tourSvgRawChecks(the clipboardData["text"]) after tFails
+      tourShotStack tName, "04g-svg-paths"
+   catch tError
+      put tourJoin(tError) & return after tFails
+   end try
+   revIDEDeselectAll
+   set the defaultStack to tDefault
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_svg_paths
+
+-- Copy Graphics as SVG Paths copies an oval, an arc of one and a rounded
+-- rectangle as the curves the engine draws for them, not as the polygon
+-- of their effective points (OpenXTalkPaul, openxtalk.org p=25837; seth,
+-- 2026-11-01): a filled oval, a rounded rectangle, an open arc that
+-- crosses two quadrants' ends and a filled arc that crosses 0 degrees,
+-- which goes back to its centre as the engine fills it. The paths are
+-- tools/ci/tests/test_svg_paths.py's, which draws them as the engine's
+-- graphicscontext.cpp does
+on tour_svg_curves
+   local tArea, tName, tDefault, tOval, tRound, tArc, tWedge, tFails, tError
+   put "oxt_svg_curves" into tName
+   put line 1 of the working screenRects into tArea
+   tourTbMake tName, item 1 of tArea + 360, item 2 of tArea + 160, empty
+   go stack tName
+   tourOnScreen tName
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to tName
+      put tourSvgGraphic("oval", "oval", "10,10,110,60", empty, "255,0,0", "0,0,255", 2) into tOval
+      put tourSvgGraphic("round", "roundrect", "130,10,230,60", empty, empty, "0,128,0", 1) into tRound
+      set the roundRadius of tRound to 30
+      put tourSvgGraphic("arc", "oval", "10,80,110,130", empty, empty, "0,0,0", 1) into tArc
+      set the startAngle of tArc to 45
+      set the arcAngle of tArc to 180
+      put tourSvgGraphic("wedge", "oval", "130,80,230,130", empty, "255,200,0", "0,0,0", 1) into tWedge
+      set the startAngle of tWedge to 300
+      set the arcAngle of tWedge to 90
+      set the clipboardData["text"] to "nothing copied"
+      revIDESelectObjects tOval & return & tRound & return & tArc & return & tWedge
+      dispatch "revMenubarObjectMenuPick" to stack "revMenuBar" with "Copy Graphics as SVG Paths"
+      revIDEDeselectAll
+      put tourSvgCurveChecks(the clipboardData["text"]) into tFails
+      put tourSvgRawChecks(the clipboardData["text"]) after tFails
+      tourShotStack tName, "04g-svg-curves"
+   catch tError
+      put tourJoin(tError) & return after tFails
+   end try
+   revIDEDeselectAll
+   set the defaultStack to tDefault
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_svg_curves
+
+-- Object > Copy Graphics as SVG Paths is enabled only when the selection
+-- holds a graphic, the only thing it copies (OpenXTalkPaul, openxtalk.org
+-- p=25841; seth, 2026-11-01): greyed out with nothing selected, an image,
+-- a field, or both; enabled with a graphic alone or beside an image or a
+-- field, of which it copies the graphic
+on tour_svg_menu
+   local tArea, tName, tDefault, tGraphic, tImage, tField, tFails, tError
+   put "oxt_svg_menu" into tName
+   put line 1 of the working screenRects into tArea
+   tourTbMake tName, item 1 of tArea + 360, item 2 of tArea + 160, empty
+   go stack tName
+   tourOnScreen tName
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to tName
+      put tourSvgGraphic("rect", "rectangle", "10,10,110,60", empty, "255,0,0", "0,0,255", 2) into tGraphic
+      create image "picture"
+      put it into tImage
+      set the rect of tImage to "130,10,180,60"
+      create field "words"
+      put it into tField
+      set the rect of tField to "200,10,300,40"
+      put tourSvgMenuCheck("nothing", empty, false) into tFails
+      put tourSvgMenuCheck("an image", tImage, false) after tFails
+      put tourSvgMenuCheck("a field", tField, false) after tFails
+      put tourSvgMenuCheck("an image and a field", tImage & return & tField, false) after tFails
+      put tourSvgMenuCheck("a graphic", tGraphic, true) after tFails
+      put tourSvgMenuCheck("a graphic and an image", tGraphic & return & tImage, true) after tFails
+      put tourSvgMenuCheck("a field and a graphic", tField & return & tGraphic, true) after tFails
+      -- and with the field and the graphic selected it copies the graphic alone
+      set the clipboardData["text"] to "nothing copied"
+      revIDESelectObjects tField & return & tGraphic
+      dispatch "revMenubarObjectMenuPick" to stack "revMenuBar" with "Copy Graphics as SVG Paths"
+      revIDEDeselectAll
+      put tourSvgMenuCopied(the clipboardData["text"]) after tFails
+   catch tError
+      put tourJoin(tError) & return after tFails
+   end try
+   revIDEDeselectAll
+   set the defaultStack to tDefault
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_svg_menu
+
+-- A line when the menu bar's Object menu, with the objects pObjects
+-- selected (pWhat), does not show pItem (Copy Graphics as SVG Paths when
+-- empty) enabled when pEnabled is true, or greyed out when it is false;
+-- else empty
+function tourSvgMenuCheck pWhat, pObjects, pEnabled, pItem
+   local tLine, tItem
+   if pItem is empty then put "Copy Graphics as SVG Paths" into pItem
+   if pObjects is empty then
+      revIDEDeselectAll
+   else
+      revIDESelectObjects pObjects
+   end if
+   tourWait 200
+   dispatch "revMenubarBuildMenus" to stack "revMenuBar"
+   repeat for each line tLine in the text of button "Object" of group "revMenuBar" of stack "revMenuBar"
+      if tLine contains pItem then put word 1 to -1 of tLine into tItem
+   end repeat
+   tourRecord "INFO svg-menu with" && pWhat && "selected:" && tItem
+   if tItem is empty then return "with" && pWhat && "selected, the Object menu has no" && pItem & return
+   if (char 1 of tItem is not "(") is not pEnabled then
+      return "with" && pWhat && "selected, the Object menu has" && quote & tItem & quote & return
+   end if
+   return empty
+end tourSvgMenuCheck
+
+-- A line when pData, what Copy Graphics as SVG Paths put on the clipboard
+-- with a field and a graphic selected, is not the graphic's one path in
+-- its own box; else empty
+function tourSvgMenuCopied pData
+   local tPath
+   tourRecord "INFO svg-menu the clipboard:" && tourJoin(pData)
+   put "<path d=" & quote & "M10,10 L110,10 L110,60 L10,60 Z" & quote && \
+         "fill=" & quote & "rgb(255,0,0)" & quote && "stroke=" & quote & "rgb(0,0,255)" & quote && \
+         "stroke-width=" & quote & "2" & quote & "/>" into tPath
+   if the number of lines in pData is not 3 or line 2 of pData is not tPath or \
+         not (line 1 of pData contains "viewBox=" & quote & "9 9 102 52" & quote) then
+      return "with a field and a graphic selected, Copy Graphics as SVG Paths copied" && quote & tourJoin(pData) & quote & return
+   end if
+   return empty
+end tourSvgMenuCopied
+
+-- An SVG imported as the IDE imports one, and its Convert to Graphics
+-- (richmond62, openxtalk.org p=25843). The SVG has what the compiler left
+-- out before: a style sheet's colour by class, an opacity, a gradient
+-- whose id has a hyphen, and a clip path (rectangular, so the graphics
+-- match the image exactly). The import must keep each one (read back
+-- with drawingDecode, and the clip seen on screen), the image's right-click
+-- menu must have Convert to Graphics and a plain picture's must not, and
+-- the graphics must look like the image: fewer than 4% of their pixels
+-- more than 64 apart in any channel, which antialiasing alone stays under.
+-- The menu bar's Object > Convert SVG Image to Graphics (OpenXTalkPaul,
+-- openxtalk.org p=25900) is enabled with the SVG image selected alone, not
+-- with the picture, both, or nothing, and makes the same group, selected
+on tour_svg_import
+   local tArea, tName, tDefault, tFile, tImage, tPicture, tDecoded, tMenuBar, tMenu, tGroup, tFails, tError
+   local tGroups, tMade, tResult
+   local tRect, tImageShot, tGroupShot, tStats
+   put "oxt_svg_import" into tName
+   put line 1 of the working screenRects into tArea
+   tourTbMake tName, item 1 of tArea + 360, item 2 of tArea + 160, empty
+   go stack tName
+   tourOnScreen tName
+   put the defaultStack into tDefault
+   put revIDEPaletteToStackName("menubar") into tMenuBar
+   put specialFolderPath("temporary") & "/oxt-tour-import.svg" into tFile
+   put "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='120' viewBox='0 0 200 120'>" & \
+         "<style>.leaf { fill: #2e8b57 }</style>" & \
+         "<defs><linearGradient id='sky-1' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#4682b4'/>" & \
+         "<stop offset='1' stop-color='#87ceeb'/></linearGradient>" & \
+         "<clipPath id='frame-1'><rect x='10' y='10' width='180' height='100'/></clipPath></defs>" & \
+         "<g clip-path='url(#frame-1)'><rect width='200' height='120' fill='url(#sky-1)'/>" & \
+         "<circle class='leaf' cx='60' cy='110' r='50'/>" & \
+         "<path d='M120 110 L150 40 L180 110 Z' fill='#8b4513' opacity='0.5'/></g>" & \
+         "<rect width='10' height='10' fill='#ff0000'/></svg>" into url ("file:" & tFile)
+   try
+      set the defaultStack to tName
+      revIDEImportControl "image", tFile, false
+      put the long id of last image of card 1 of stack tName into tImage
+      set the rect of tImage to "20,20,220,140"
+      put drawingDecode(the text of tImage) into tDecoded
+      if the result is not empty then
+         put "the imported image is not a drawing:" && the result & return after tFails
+      else
+         if the number of elements in tDecoded["shapes"] is not 4 then
+            put "the import has" && the number of elements in tDecoded["shapes"] && "shapes, not 4" & return after tFails
+         end if
+         if tDecoded["shapes"][1]["fill"]["type"] is not "linear" then
+            put "the gradient with a hyphen in its id is" && tDecoded["shapes"][1]["fill"]["type"] & return after tFails
+         end if
+         if abs(item 1 of tDecoded["shapes"][2]["fill"]["color"] - 46 / 255) > 0.01 then
+            put "the style sheet's colour is" && tDecoded["shapes"][2]["fill"]["color"] & return after tFails
+         end if
+         if abs(tDecoded["shapes"][3]["fill-opacity"] - 0.5) > 0.01 then
+            put "the opacity is" && tDecoded["shapes"][3]["fill-opacity"] & return after tFails
+         end if
+         if the number of elements in tDecoded["clips"] is not 1 or tDecoded["shapes"][1]["clip"] is not 1 \
+               or tDecoded["shapes"][4]["clip"] is not empty then
+            put "the clip path is not kept:" && the number of elements in tDecoded["clips"] && "clips" & return after tFails
+         end if
+      end if
+      -- drawn, the clip shows: the sky is inside the frame, not outside it
+      put tourSvgPixel(20 + 100, 20 + 15) into tStats
+      if not (item 3 of tStats > item 1 of tStats + 40) then
+         put "inside the clip is not the sky:" && tStats & return after tFails
+      end if
+      put tourSvgPixel(20 + 100, 20 + 4) into tStats
+      if item 3 of tStats > item 1 of tStats + 40 then
+         put "outside the clip is the sky (the clip is not drawn):" && tStats & return after tFails
+      end if
+      -- the menus
+      dispatch "revMenubarSetContextMenu" to stack tMenuBar with "image", tImage
+      put the text of button "context" of stack tMenuBar into tMenu
+      if lineOffset("Convert to Graphics", tMenu) is 0 then
+         put "an SVG image's menu has no Convert to Graphics" & return after tFails
+      end if
+      create image "picture"
+      put the long id of it into tPicture
+      set the rect of tPicture to "240,20,260,40"
+      dispatch "revMenubarSetContextMenu" to stack tMenuBar with "image", tPicture
+      put the text of button "context" of stack tMenuBar into tMenu
+      if lineOffset("Convert to Graphics", tMenu) is not 0 then
+         put "a picture's menu has Convert to Graphics" & return after tFails
+      end if
+      put tourSvgMenuCheck("an SVG image", tImage, true, "Convert SVG Image to Graphics") after tFails
+      put tourSvgMenuCheck("a picture", tPicture, false, "Convert SVG Image to Graphics") after tFails
+      put tourSvgMenuCheck("an SVG image and a picture", tImage & return & tPicture, false, \
+            "Convert SVG Image to Graphics") after tFails
+      put tourSvgMenuCheck("nothing", empty, false, "Convert SVG Image to Graphics") after tFails
+      revIDEDeselectAll
+      delete tPicture
+      tourShotStack tName, "04g2-svg-import"
+      -- converted; tMade counts the groups it makes, the clip paths' groups
+      -- inside the one it returns among them
+      put the number of groups of card 1 of stack tName into tGroups
+      put revIDEConvertDrawingToGraphics(tImage) into tGroup
+      put the result into tResult
+      put the number of groups of card 1 of stack tName - tGroups into tMade
+      tourRecord "INFO svg-import Convert to Graphics made" && tMade && "groups"
+      if tResult is not empty or tGroup is empty or there is not a tGroup then
+         put "Convert to Graphics failed:" && tResult & return after tFails
+      else
+         if the number of graphics of tGroup < 4 then
+            put "Convert to Graphics made" && the number of graphics of tGroup && "graphics" & return after tFails
+         end if
+         put the rect of tImage into tRect
+         hide tGroup
+         put tourSvgShot(tRect) into tImageShot
+         show tGroup
+         hide tImage
+         put tourSvgShot(tRect) into tGroupShot
+         put tourSvgCompare(tImageShot, tGroupShot) into tStats
+         tourRecord "INFO svg-import graphics against image: mean" && item 1 of tStats && "far" && item 2 of tStats
+         if item 2 of tStats >= 0.04 then
+            put "the graphics differ from the image:" && tStats & return after tFails
+         end if
+         tourShotStack tName, "04g3-svg-convert"
+         -- the menu bar's Object > Convert SVG Image to Graphics, with the
+         -- image selected: another such group (as many groups, the clip
+         -- paths' among them, as Convert to Graphics made), which it selects
+         show tImage
+         put the number of groups of card 1 of stack tName into tGroups
+         revIDESelectObjects tImage
+         tourWait 200
+         dispatch "revMenubarObjectMenuPick" to stack "revMenuBar" with "Convert SVG Image to Graphics"
+         tourRecord "INFO svg-import Object > Convert SVG Image to Graphics selected:" && the selObj
+         if the number of groups of card 1 of stack tName is not tGroups + tMade then
+            put "Object > Convert SVG Image to Graphics made" && \
+                  (the number of groups of card 1 of stack tName - tGroups) && "groups, not" && tMade & return after tFails
+         else if word 1 of the selObj is not "group" or word 1 of the long id of the owner of the selObj is not "card" \
+               or the number of graphics of the selObj is not the number of graphics of tGroup then
+            put "Object > Convert SVG Image to Graphics selected" && quote & the selObj & quote & \
+                  ", not a group of" && the number of graphics of tGroup && "graphics" & return after tFails
+         end if
+         revIDEDeselectAll
+      end if
+   catch tError
+      put tourJoin(tError) & return after tFails
+   end try
+   set the defaultStack to tDefault
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   delete file tFile
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_svg_import
+
+-- The imageData of the card of the default stack in pRect
+function tourSvgShot pRect
+   local tData
+   import snapshot from rect pRect of this card
+   put the imageData of it into tData
+   delete it
+   return tData
+end tourSvgShot
+
+-- The colour (r,g,b) on the card of the default stack at pX,pY
+function tourSvgPixel pX, pY
+   local tData
+   put tourSvgShot(pX & comma & pY & comma & pX + 1 & comma & pY + 1) into tData
+   return byteToNum(byte 2 of tData) & comma & byteToNum(byte 3 of tData) & comma & byteToNum(byte 4 of tData)
+end tourSvgPixel
+
+-- The mean difference of two imageDatas of a size, and the share of their
+-- pixels more than 64 apart in some channel
+function tourSvgCompare pA, pB
+   local tPixel, tCount, tFar, tSum, tChannel, tDiff, tMax
+   put 0 into tFar
+   put 0 into tSum
+   put the number of bytes of pA div 4 into tCount
+   if tCount is 0 or the number of bytes of pB is not the number of bytes of pA then
+      return "255,1"
+   end if
+   repeat with tPixel = 0 to tCount - 1
+      put 0 into tMax
+      repeat with tChannel = 2 to 4
+         put abs(byteToNum(byte tPixel * 4 + tChannel of pA) - byteToNum(byte tPixel * 4 + tChannel of pB)) into tDiff
+         add tDiff to tSum
+         put max(tMax, tDiff) into tMax
+      end repeat
+      if tMax > 64 then
+         add 1 to tFar
+      end if
+   end repeat
+   return round(tSum / (tCount * 3), 2) & comma & round(tFar / tCount, 4)
+end tourSvgCompare
+
+-- The Inspector sets a scrollbar's Orientation (TerryL, openxtalk.org
+-- p=25821): through revIDEPropertySet, the call the Inspector makes when
+-- its Orientation menu is changed, a horizontal scrollbar turns vertical
+-- about its centre and back again, a square one (vertical) turns
+-- horizontal by a pixel, and choosing the orientation a scrollbar has
+-- leaves it alone. Each check reads the orientation as the Inspector shows
+-- it and as a script reads it (tourSbCheck)
+on tour_scrollbar_orientation
+   local tArea, tName, tDefault, tBar, tSquare, tFails, tError
+   put "oxt_scrollbar_orientation" into tName
+   put line 1 of the working screenRects into tArea
+   tourTbMake tName, item 1 of tArea + 360, item 2 of tArea + 160, empty
+   go stack tName
+   tourOnScreen tName
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to tName
+      create scrollbar "bar"
+      put the long id of it into tBar
+      set the rect of tBar to "40,92,240,108"
+      create scrollbar "square"
+      put the long id of it into tSquare
+      set the rect of tSquare to "260,40,300,80"
+      put tourSbCheck("as made", tBar, "horizontal", "40,92,240,108") after tFails
+      revIDEPropertySet tBar, "orientation", "Vertical"
+      put tourSbCheck("set to Vertical", tBar, "vertical", "132,0,148,200") after tFails
+      tourShotStack tName, "04h-scrollbar-orientation"
+      revIDEPropertySet tBar, "orientation", "Vertical"
+      put tourSbCheck("set to Vertical again", tBar, "vertical", "132,0,148,200") after tFails
+      revIDEPropertySet tBar, "orientation", "Horizontal"
+      put tourSbCheck("set back to Horizontal", tBar, "horizontal", "40,92,240,108") after tFails
+      put tourSbCheck("square, as made", tSquare, "vertical", "260,40,300,80") after tFails
+      revIDEPropertySet tSquare, "orientation", "Horizontal"
+      put tourSbCheck("square, set to Horizontal", tSquare, "horizontal", "260,40,301,80") after tFails
+   catch tError
+      put tourJoin(tError) & return after tFails
+   end try
+   set the defaultStack to tDefault
+   lock messages
+   if there is a stack tName then delete stack tName
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_scrollbar_orientation
+
+-- A line saying what is wrong when the scrollbar pBar (pWhen) does not
+-- have the rect pRect, or does not show pOrientation in the Inspector at
+-- once (revIDEPropertiesOfSection, the Inspector's read) or read it as a
+-- script does once it has been drawn; empty when all is right. On macOS
+-- the engine draws, and so works the orientation out, after the script
+-- has finished, so that last read waits for a redraw, up to a second
+function tourSbCheck pWhen, pBar, pOrientation, pRect
+   local tShown, tPropsA, tGroup, tWait, tFails
+   put "(not in the Inspector's Basic section)" into tShown
+   put revIDEPropertiesOfSection(the long id of pBar, "Basic") into tPropsA
+   repeat for each key tGroup in tPropsA
+      if tPropsA[tGroup]["orientation"] is an array then
+         put tPropsA[tGroup]["orientation"]["value"][the long id of pBar] into tShown
+      end if
+   end repeat
+   repeat with tWait = 1 to 20
+      if the orientation of pBar is pOrientation then exit repeat
+      wait 50 milliseconds with messages
+   end repeat
+   tourRecord "INFO scrollbar-orientation" && pWhen & ":" && the short name of pBar && \
+         "the Inspector shows" && tShown & ", the engine reads" && the orientation of pBar && \
+         "at" && the rect of pBar
+   if the rect of pBar is not pRect then
+      put the short name of pBar && pWhen & ": at" && the rect of pBar & ", not" && pRect & return after tFails
+   end if
+   if tShown is not pOrientation then
+      put the short name of pBar && pWhen & ": the Inspector shows" && quote & tShown & quote & ", not" && pOrientation & return after tFails
+   end if
+   if the orientation of pBar is not pOrientation then
+      put the short name of pBar && pWhen & ": the engine reads" && the orientation of pBar & ", not" && pOrientation & return after tFails
+   end if
+   return tFails
+end tourSbCheck
+
+-- The same document under the clipboard types Adobe Illustrator reads
+-- (revidelibrary's kSVGClipboardTypes), in UTF-8, beside the text: what
+-- pastes as vector paths into Illustrator or VectorCraft (OpenXTalkPaul,
+-- openxtalk.org p=25820). Trailing NULs are dropped, because Windows can
+-- hand back a format's data rounded up to its allocation's size; empty
+-- when all is as it should be, else a line for each thing wrong
+function tourSvgRawChecks pSVG
+   local tKeys, tType, tText, tFails, tError
+   lock the clipboard
+   try
+      put the keys of the rawClipboardData into tKeys
+      repeat for each item tType in "com.adobe.illustrator.svg,com.adobe.illustrator.svgm,com.adobe.svg"
+         if tType is not among the lines of tKeys then
+            put "the clipboard has no" && tType && "(it has:" && tourJoin(tKeys) & ")" & return after tFails
+            next repeat
+         end if
+         put textDecode(the rawClipboardData[tType], "UTF-8") into tText
+         repeat while tText is not empty and the last char of tText is numToCodepoint(0)
+            delete the last char of tText
+         end repeat
+         if tText is not pSVG then
+            put tType && "is not the SVG text:" && tourJoin(line 1 to 2 of tText) & return after tFails
+         end if
+      end repeat
+   catch tError
+      put "reading the raw clipboard:" && tourJoin(tError) & return after tFails
+   end try
+   unlock the clipboard
+   return tFails
+end tourSvgRawChecks
+
+-- A graphic pName of the style pStyle made on the default stack's card,
+-- at pRect or through pPoints, filled in pFill unless it is empty, its
+-- line pLineSize wide in pStroke; its long id
+function tourSvgGraphic pName, pStyle, pRect, pPoints, pFill, pStroke, pLineSize
+   local tGraphic
+   create graphic pName
+   put it into tGraphic
+   set the style of tGraphic to pStyle
+   if pRect is not empty then set the rect of tGraphic to pRect
+   if pPoints is not empty then set the points of tGraphic to pPoints
+   set the filled of tGraphic to pFill is not empty
+   if pFill is not empty then set the backgroundColor of tGraphic to pFill
+   set the foregroundColor of tGraphic to pStroke
+   set the lineSize of tGraphic to pLineSize
+   return the long id of tGraphic
+end tourSvgGraphic
+
+-- A line for each way the SVG pSVG (the clipboard's text after Copy
+-- Graphics as SVG Paths) is not the document of tour_svg_paths' graphics:
+-- an svg element around a path each, the rectangle and the polygon that
+-- ends where it starts closed, the line open, a box that holds them all
+function tourSvgChecks pSVG
+   local tPath, tBox, tFails
+   tourRecord "INFO svg-paths the clipboard:" && tourJoin(pSVG)
+   if pSVG is empty or pSVG is "nothing copied" then
+      return "nothing was copied (the clipboard's text is" && quote & pSVG & quote & ")" & return
+   end if
+   if not (line 1 of pSVG begins with "<svg xmlns=" & quote & "http://www.w3.org/2000/svg" & quote) then
+      put "its first line is not an svg element:" && line 1 of pSVG & return after tFails
+   end if
+   if line -1 of pSVG is not "</svg>" or the number of lines of pSVG is not 5 then
+      put "it is not an svg element around three lines:" && the number of lines of pSVG && "lines" & return after tFails
+   end if
+   repeat for each line tPath in \
+         "<path d=" & quote & "M10,10 L110,10 L110,60 L10,60 Z" & quote && "fill=" & quote & "rgb(255,0,0)" & quote && \
+         "stroke=" & quote & "rgb(0,0,255)" & quote && "stroke-width=" & quote & "2" & quote & "/>" & return & \
+         "<path d=" & quote & "M130,10 L180,60 L130,60 Z" & quote && "fill=" & quote & "none" & quote && \
+         "stroke=" & quote & "rgb(0,128,0)" & quote && "stroke-width=" & quote & "1" & quote & "/>" & return & \
+         "<path d=" & quote & "M200,10 L280,60" & quote && "fill=" & quote & "none" & quote && \
+         "stroke=" & quote & "rgb(0,0,0)" & quote && "stroke-width=" & quote & "1" & quote & "/>"
+      if tPath is not among the lines of pSVG then put "it has no line" && tPath & return after tFails
+   end repeat
+   -- the viewBox holds every line: the rectangle's, 2 wide, from 9,9 to
+   -- 111,61, and the line's to 280.5
+   put offset("viewBox=" & quote, line 1 of pSVG) into tBox
+   if tBox is 0 then
+      put "its svg element has no viewBox" & return after tFails
+   else
+      put char tBox + 9 to -1 of line 1 of pSVG into tBox
+      put char 1 to offset(quote, tBox) - 1 of tBox into tBox
+      if the number of words of tBox is not 4 or word 1 of tBox > 9 or word 2 of tBox > 9 or \
+            word 1 of tBox + word 3 of tBox < 281 or word 2 of tBox + word 4 of tBox < 61 then
+         put "its viewBox" && tBox && "does not hold 9,9 to 281,61" & return after tFails
+      end if
+   end if
+   return tFails
+end tourSvgChecks
+
+-- A path element as Copy Graphics as SVG Paths writes it: the data pData,
+-- filled in pFill (or "none") and stroked pWidth wide in pStroke
+function tourSvgPathLine pData, pFill, pStroke, pWidth
+   return "<path d=" & quote & pData & quote && "fill=" & quote & pFill & quote && \
+         "stroke=" & quote & pStroke & quote && "stroke-width=" & quote & pWidth & quote & "/>"
+end tourSvgPathLine
+
+-- A line for each way the SVG pSVG (the clipboard's text after Copy
+-- Graphics as SVG Paths) is not the document of tour_svg_curves' graphics:
+-- an svg element around a path each, each the engine's curves (cubic
+-- Beziers, C) to the hundredth, and a box that holds them all and their
+-- lines, from 9,9 to 231,131
+function tourSvgCurveChecks pSVG
+   local tPath, tFails
+   tourRecord "INFO svg-curves the clipboard:" && tourJoin(pSVG)
+   if pSVG is empty or pSVG is "nothing copied" then
+      return "nothing was copied (the clipboard's text is" && quote & pSVG & quote & ")" & return
+   end if
+   if not (line 1 of pSVG begins with "<svg xmlns=" & quote & "http://www.w3.org/2000/svg" & quote) then
+      put "its first line is not an svg element:" && line 1 of pSVG & return after tFails
+   end if
+   if line -1 of pSVG is not "</svg>" or the number of lines of pSVG is not 6 then
+      put "it is not an svg element around four lines:" && the number of lines of pSVG && "lines" & return after tFails
+   end if
+   if "viewBox=" & quote & "9 9 222 122" & quote is not in line 1 of pSVG then
+      put "its box is not 9 9 222 122:" && line 1 of pSVG & return after tFails
+   end if
+   repeat for each line tPath in \
+         tourSvgPathLine("M110,35 C110,21.19 87.61,10 60,10 C32.39,10 10,21.19 10,35 C10,48.81 32.39,60 60,60 " & \
+         "C87.61,60 110,48.81 110,35 Z", "rgb(255,0,0)", "rgb(0,0,255)", 2) & return & \
+         tourSvgPathLine("M215,10 C223.28,10 230,16.72 230,25 L230,45 C230,53.28 223.28,60 215,60 L145,60 " & \
+         "C136.72,60 130,53.28 130,45 L130,25 C130,16.72 136.72,10 145,10 Z", "none", "rgb(0,128,0)", 1) & return & \
+         tourSvgPathLine("M95.36,87.32 C85.98,82.63 73.26,80 60,80 C32.39,80 10,91.19 10,105 C10,111.63 15.27,117.99 24.64,122.68", \
+         "none", "rgb(0,0,0)", 1) & return & \
+         tourSvgPathLine("M205,126.65 C220.47,122.18 230,113.93 230,105 C230,100.61 227.69,96.3 223.3,92.5 L180,105 Z", \
+         "rgb(255,200,0)", "rgb(0,0,0)", 1)
+      if tPath is not among the lines of pSVG then put "it has no line" && tPath & return after tFails
+   end repeat
+   return tFails
+end tourSvgCurveChecks
 
 on tour_inspector
    local tPI, tSection, tShown, tIndex, tError
@@ -3152,6 +4215,49 @@ function tourRoomBeside pBeside, pWindow, pAvoid, pScreen
    return line 1 to -1 of tRoom
 end tourRoomBeside
 
+-- A widget colour whose default is a colour of its own (the header bar's
+-- text colour, 0,0,0) can be cleared in the inspector, so that the widget
+-- inherits its colour again, as a script can do (OpenXTalkPaul,
+-- openxtalk.org p=25683): its editor offers Clear while it has a colour,
+-- and Clear sets the property to empty. A colour editor whose default is
+-- empty offers no Clear (Reset to default does it)
+on tour_inspector_clear_colour
+   local tWidget, tPI, tEditor, tFails, tError
+   get tourSampleStack()
+   go stack kSample
+   set the defaultStack to kSample
+   create widget "oxtTourHeader" as "com.livecode.widget.headerbar"
+   put it into tWidget
+   set the foregroundColor of tWidget to "200,0,0"
+   try
+      put tourInspect(tWidget) into tPI
+      get tourInspectorSection(tPI, "Colors")
+      put tourInspectorEditor(tPI, "foregroundColor") into tEditor
+      if tEditor is empty then throw "the header bar's inspector has no Text color"
+      repeat 30 times
+         if the editorValue of tEditor is "200,0,0" then exit repeat
+         tourWait 100
+      end repeat
+      if the editorCanClear of tEditor is not true then
+         put "Text color (200,0,0, default 0,0,0) offers no Clear" & return after tFails
+      end if
+      -- as a pick of Clear in the editor's menu (editorPopupMenu's button)
+      if there is not a button "inspectMenu" of tEditor then create button "inspectMenu" in tEditor
+      dispatch "menuPick" to button "inspectMenu" of tEditor with "Clear (no colour of its own)"
+      tourWait 500
+      tourRecord "INFO inspector-clear-colour the header bar's foregroundColor after Clear:" && \
+            quote & the foregroundColor of tWidget & quote
+      if the foregroundColor of tWidget is not empty then
+         put "Clear left the foregroundColor" && the foregroundColor of tWidget & return after tFails
+      end if
+   catch tError
+      put tError & return after tFails
+   end try
+   tourCloseInspectors
+   if exists(tWidget) then delete tWidget
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_inspector_clear_colour
+
 on tour_inspector_multiple
    local tPI
    put tourInspect(tourSample("Push") & return & tourSample("Text") & return & tourSample("Box")) into tPI
@@ -3336,8 +4442,273 @@ on tour_script_editor_search
    send "revSEFindAll" && quote & "mouse" & quote & ", false, false, false, true," && quote & "card" & quote to stack tSE
    tourWait 2000
    tourShotStack tSE, "10-script-editor-search"
+   local tFails
+   put tourSearchResultsInk(tSE) into tFails
    close stack tSE
+   if tFails is not empty then throw tFails
 end tour_script_editor_search
+
+-- The Search Results pane's first result is readable on the pane, in the
+-- light and the dark: its object and its line, in the colours the pane
+-- wrote into its htmlText, against the pane's own colour just left of the
+-- line (they were #505050 and #101010 on the dark pane too, all but
+-- invisible). Empty, or why not.
+function tourSearchResultsInk pSE
+   local tLine, tRect, tBack, tInk, tRatio, tFails, tWhich, tDefault
+   put the defaultStack into tDefault
+   set the defaultStack to pSE
+   if the number of lines of the text of field 1 of group "Search Results" of group "Panes" of card "Main" < 3 then
+      put "the Search Results pane has no result:" && the text of field 1 of group "Search Results" of group "Panes" of card "Main" into tFails
+      set the defaultStack to tDefault
+      return tFails
+   end if
+   put the formattedRect of line 2 of field 1 of group "Search Results" of group "Panes" of card "Main" into tLine
+   put the rect of stack pSE into tRect
+   tourUnlockScreen "script-editor-search"
+   put tourPixelAt(item 1 of tRect + item 1 of tLine - 3, item 2 of tRect + (item 2 of tLine + item 4 of tLine) div 2) into tBack
+   repeat for each item tWhich in "object,line"
+      if tWhich is "object" then
+         put the textColor of char 1 of line 2 of field 1 of group "Search Results" of group "Panes" of card "Main" into tInk
+      else
+         put the textColor of char -2 of line 2 of field 1 of group "Search Results" of group "Panes" of card "Main" into tInk
+      end if
+      put tourRGB(tInk) into tInk
+      put tourContrast(tInk, tBack) into tRatio
+      tourRecord "INFO Search Results: the" && tWhich && "in" && tInk && "on" && tBack && "(contrast" && tRatio & ")"
+      if tRatio < 4.5 then
+         put "the Search Results pane's" && tWhich && "is" && tInk && "on" && tBack & ", contrast" && tRatio & "; " after tFails
+      end if
+   end repeat
+   set the defaultStack to tDefault
+   return char 1 to -3 of tFails
+end tourSearchResultsInk
+
+-- A colour as red, green and blue: from "#RRGGBB" or as it is
+function tourRGB pColour
+   if char 1 of pColour is "#" and the number of chars of pColour is 7 then
+      return baseConvert(char 2 to 3 of pColour, 16, 10) & comma & baseConvert(char 4 to 5 of pColour, 16, 10) & \
+            comma & baseConvert(char 6 to 7 of pColour, 16, 10)
+   end if
+   return pColour
+end tourRGB
+
+-- No sparkle of the banner at the top of the page of the window pStack is
+-- drawn on its words: each shown sparkle (graphic p_heroStar1 to 6) is
+-- clear of the text of each of its fields (p_hero... as far as their text
+-- reaches), looked at five times as the sparkles drift. At fixed parts of
+-- the banner's width they sat on words in a narrow window ("idea at a
+-- time", "Tom Perry"). Empty, or why not; pWhat names the window.
+function tourHeroSparklesClear pStack, pWhat
+   local tDefault, tPass, tStar, tName, tS, tF, tFails, i
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   repeat with tPass = 1 to 5
+      repeat with tStar = 1 to 6
+         if there is not a graphic ("p_heroStar" & tStar) of this card then next repeat
+         if not the visible of graphic ("p_heroStar" & tStar) of this card then next repeat
+         put the rect of graphic ("p_heroStar" & tStar) of this card into tS
+         repeat for each item tName in "p_heroEyebrow,p_heroTitle,p_heroText,p_heroCredit,p_heroStats"
+            if there is not a field tName of this card or the text of field tName of this card is empty then next repeat
+            put the left of field tName of this card, the top of field tName of this card, \
+                  the left of field tName of this card + the formattedWidth of field tName of this card, \
+                  the top of field tName of this card + the formattedHeight of field tName of this card into tF
+            if item 1 of tS < item 3 of tF and item 3 of tS > item 1 of tF and item 2 of tS < item 4 of tF and item 4 of tS > item 2 of tF then
+               put pWhat & "'s banner draws the sparkle p_heroStar" & tStar && "(" & tS & ") on its words" && quote & \
+                     line 1 of field tName of this card & quote && "(" & tF & ")" into tFails
+               exit repeat
+            end if
+         end repeat
+         if tFails is not empty then exit repeat
+      end repeat
+      if tFails is not empty then exit repeat
+      tourWait 300
+   end repeat
+   set the defaultStack to tDefault
+   if tFails is empty then tourRecord "INFO" && pWhat & "'s banner: no sparkle on its words"
+   return tFails
+end tourHeroSparklesClear
+
+-- The selected line of the sidebar's index (field "idx") of the window
+-- pStack is readable on its hilite: the brightest point of its words (from
+-- its first tab stop to the next, or to the field's right) against the
+-- hilite. On Linux and Windows the engine draws selected text in the
+-- field's background colour, and the index, with none, took the dark
+-- window's in the dark appearance (dark words on violet). Empty, or why
+-- not; pWhat names the window.
+-- The Inclusions card of the Standalone Settings: each row's icon is seen
+-- on its row. Its icon took the engine's colour, which on Linux is the GTK
+-- theme's: white with a dark theme, on the light rows of the IDE's light
+-- appearance (revstandalonesettingsinclusionsrowbehavior). For each icon
+-- on the screen, the most a point of it differs from its row, a point
+-- left of it: 64 or more. Empty, or what failed
+function tourInclusionIcons pStack
+   local tDefault, tRects, tTop, tRect, tData, tW, tH, tBack, tMax, tAt, tLum, tX, tY, tCount, tFails, i
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   put the bottom of group "cards" of this card into tTop
+   repeat with i = 1 to the number of controls of this card
+      if the name of control i is not ("widget" && quote & "icon" & quote) then next repeat
+      if not the visible of control i then next repeat
+      put the rect of control i into tRect
+      -- the rows the list shows (the list keeps a row of its own off to
+      -- the right)
+      if item 2 of tRect < tTop + 2 or item 4 of tRect > the height of this stack - 2 then next repeat
+      if item 1 of tRect < 0 or item 3 of tRect > the width of this stack then next repeat
+      put item 1 of the rect of stack pStack + item 1 of tRect - 8, item 2 of the rect of stack pStack + item 2 of tRect, \
+            item 1 of the rect of stack pStack + item 3 of tRect, item 2 of the rect of stack pStack + item 4 of tRect \
+            & return after tRects
+   end repeat
+   set the defaultStack to tDefault
+   if tRects is empty then return "the Inclusions card shows no icons"
+   tourUnlockScreen "the Inclusions card's icons"
+   put 0 into tCount
+   repeat for each line tRect in tRects
+      add 1 to tCount
+      try
+         export snapshot from rect tRect to tData as PNG
+      catch tData
+         put "icon" && tCount && "at" && tRect && "(no snapshot:" && tourJoin(tData) & ")" & return after tFails
+         next repeat
+      end try
+      lock messages
+      create invisible image "oxt_tour_probe" in card 1 of stack "oxt_ui_tour"
+      set the text of image "oxt_tour_probe" of stack "oxt_ui_tour" to tData
+      put the width of image "oxt_tour_probe" of stack "oxt_ui_tour" into tW
+      put the height of image "oxt_tour_probe" of stack "oxt_ui_tour" into tH
+      put the imageData of image "oxt_tour_probe" of stack "oxt_ui_tour" into tData
+      delete image "oxt_tour_probe" of stack "oxt_ui_tour"
+      unlock messages
+      -- the row, left of the icon; the icon, from 8 points in (on a Mac's
+      -- Retina screen the snapshot has two pixels a point)
+      put ((tH div 2) * tW + 2) * 4 into tAt
+      put (byteToNum(byte tAt + 2 of tData) + byteToNum(byte tAt + 3 of tData) + byteToNum(byte tAt + 4 of tData)) / 3 into tBack
+      put 0 into tMax
+      repeat with tY = 0 to tH - 1
+         repeat with tX = (8 * tW) div (item 3 of tRect - item 1 of tRect) to tW - 1
+            put (tY * tW + tX) * 4 into tAt
+            put (byteToNum(byte tAt + 2 of tData) + byteToNum(byte tAt + 3 of tData) + byteToNum(byte tAt + 4 of tData)) / 3 into tLum
+            put max(tMax, abs(tLum - tBack)) into tMax
+         end repeat
+      end repeat
+      tourRecord "INFO Inclusions: icon" && tCount && "differs from its row (" & round(tBack) & ") by" && round(tMax)
+      if tMax < 64 then put "icon" && tCount && "(" & round(tMax) && "on" && round(tBack) & ")" & return after tFails
+   end repeat
+   if tFails is not empty then return "an icon on the Inclusions card cannot be seen on its row:" && tourJoin(line 1 to -1 of tFails)
+   return empty
+end tourInclusionIcons
+
+function tourSelectedLineInk pStack, pWhat
+   local tDefault, tLine, tTabs, tLeft, tRight, tRect, tHilite, tData, tW, tH, tAt, tBest, tBestRGB, tRGB, tLum, i, tRatio
+   local tAside, tError
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   if there is not a field "idx" of this card then
+      set the defaultStack to tDefault
+      return pWhat && "has no index"
+   end if
+   put the hilitedLine of field "idx" of this card into tLine
+   if tLine is empty then
+      set the defaultStack to tDefault
+      return pWhat & "'s index has no line selected"
+   end if
+   put the tabStops of field "idx" of this card into tTabs
+   put the formattedRect of line tLine of field "idx" of this card into tRect
+   put the left of field "idx" of this card + item 1 of the margins of field "idx" of this card + item 1 of tTabs + 2 into tLeft
+   if the number of items of tTabs > 1 then
+      put the left of field "idx" of this card + item 1 of the margins of field "idx" of this card + item 2 of tTabs - 4 into tRight
+   else
+      put the right of field "idx" of this card - 16 into tRight
+   end if
+   put tourRGB(the hiliteColor of field "idx" of this card) into tHilite
+   put item 1 of the rect of stack pStack + tLeft, item 2 of the rect of stack pStack + item 2 of tRect + 2, \
+         item 1 of the rect of stack pStack + tRight, item 2 of the rect of stack pStack + item 4 of tRect - 2 into tRect
+   set the defaultStack to tDefault
+   tourUnlockScreen "the selected line of" && pWhat
+   put tourToolsAside(tRect) into tAside
+   try
+      export snapshot from rect tRect to tData as PNG
+   catch tError
+   end try
+   if tAside then tourToolsBack
+   if tError is not empty then throw tError
+   lock messages
+   create invisible image "oxt_tour_probe" in card 1 of stack "oxt_ui_tour"
+   set the text of image "oxt_tour_probe" of stack "oxt_ui_tour" to tData
+   put the width of image "oxt_tour_probe" of stack "oxt_ui_tour" into tW
+   put the height of image "oxt_tour_probe" of stack "oxt_ui_tour" into tH
+   put the imageData of image "oxt_tour_probe" of stack "oxt_ui_tour" into tData
+   delete image "oxt_tour_probe" of stack "oxt_ui_tour"
+   unlock messages
+   put -1 into tBest
+   repeat with i = 0 to tW * tH - 1
+      put i * 4 into tAt
+      put byteToNum(byte tAt + 2 of tData) & comma & byteToNum(byte tAt + 3 of tData) & comma & byteToNum(byte tAt + 4 of tData) into tRGB
+      put tourLuminance(tRGB) into tLum
+      if tLum > tBest then
+         put tLum into tBest
+         put tRGB into tBestRGB
+      end if
+   end repeat
+   put tourContrast(tBestRGB, tHilite) into tRatio
+   tourRecord "INFO" && pWhat & "'s selected index line (" & tLine & "): brightest" && tBestRGB && "on the hilite" && tHilite && "(contrast" && tRatio & ")"
+   if tRatio < 3 then
+      return pWhat & "'s selected index line is unreadable: its brightest point" && tBestRGB && "on the hilite" && tHilite & ", contrast" && tRatio
+   end if
+   return empty
+end tourSelectedLineInk
+
+-- The Handlers button above the script opens the list of its handlers,
+-- which takes the focus, and so took the script's selection away; closed
+-- with no handler picked, the list puts the selection back (tperry2x,
+-- openxtalk.org p=25787). The list is closed twice: as a click elsewhere
+-- closes it (its field loses the focus), and with Escape, which leaves
+-- the focus in the hidden list's field.
+on tour_script_editor_handlers
+   local tSE, tField, tList, tBefore, tAfter, tShowing, tEscBefore, tEscAfter, tEscShowing, tProblems
+   revIDEEditScriptOfObject tourSample("Push")
+   tourWait 2000
+   put tourStackNamed("revNewScriptEditor") into tSE
+   if tSE is empty then throw "no script editor opened:" && tourJoin(the openStacks)
+   put the long id of field "Script" of group "Editor" of card "Main" of stack tSE into tField
+   put the long id of field "Handlers" of group "Handler List" of card "Main" of stack tSE into tList
+   if the number of chars of tField < 12 then throw "the sample's script is too short:" && the text of tField
+   -- closed by the focus going elsewhere
+   focus on tField
+   select char 4 to 11 of tField
+   put the selectedChunk into tBefore
+   send "mouseUp" to button "Handlers" of group "Toolbar" of card "Main" of stack tSE
+   tourWait 800
+   tourShotStack tSE, "10-script-editor-handlers"
+   dispatch function "seHandlerListIsShowing" to stack tSE
+   put the result into tShowing
+   focus on nothing
+   tourWait 800
+   put the selectedChunk into tAfter
+   -- closed with Escape
+   focus on tField
+   select char 2 to 6 of tField
+   put the selectedChunk into tEscBefore
+   send "mouseUp" to button "Handlers" of group "Toolbar" of card "Main" of stack tSE
+   tourWait 800
+   dispatch function "seHandlerListIsShowing" to stack tSE
+   put the result into tEscShowing
+   send "escapeKey" to tList
+   tourWait 800
+   put the selectedChunk into tEscAfter
+   close stack tSE
+   if tShowing is not true or tEscShowing is not true then
+      throw "the Handlers button did not open the list of handlers"
+   end if
+   -- both cases are told, so a run shows which of them fails
+   if tAfter is not tBefore then
+      put "the script's selection was" && quote & tBefore & quote && "and is" && quote & tAfter & quote && "after the list of handlers lost the focus" into tProblems
+   end if
+   if tEscAfter is not tEscBefore then
+      if tProblems is not empty then put "; " after tProblems
+      put "the script's selection was" && quote & tEscBefore & quote && "and is" && quote & tEscAfter & quote && "after Escape closed the list of handlers" after tProblems
+   end if
+   if tProblems is not empty then throw tProblems
+end tour_script_editor_handlers
 
 on tour_message_box
    revIDEOpenPalette "message box"
@@ -3370,8 +4741,50 @@ on tour_project_browser
    if tInk is "blendExclusion" and tRows is not "255,255,255" then
       throw "the Project Browser inverts rows that are dark already (" & tRows & "), so they show light"
    end if
+   -- Linux: a hilited row's text stands out from the hilite, the GTK
+   -- theme's selection colour, whatever it is (bwmilby, openxtalk.org
+   -- p=25550: Ubuntu's yellow and purple): this desktop's, and those two
+   local tHilite, tText, tRatio, tHilites
+   if the platform is "Linux" then
+      put "255,221,0;119,33,111;233,84,32" into tHilites
+      if the number of items of the hiliteColor is 3 then put the hiliteColor & ";" before tHilites
+      set the itemDelimiter to ";"
+      repeat for each item tHilite in tHilites
+         set the itemDelimiter to comma
+         put revIDEHilitedTextColor(tHilite) into tText
+         put tourContrast(tHilite, tText) into tRatio
+         tourRecord "INFO the Project Browser's hilited text on" && tHilite & ":" && tText && "(contrast" && tRatio & ")"
+         if tRatio < 4.5 then
+            close stack tStack
+            throw "a hilited Project Browser row's text" && tText && "is unreadable on its hilite" && tHilite && \
+                  "(contrast" && tRatio & ")"
+         end if
+         set the itemDelimiter to ";"
+      end repeat
+      set the itemDelimiter to comma
+   end if
    close stack tStack
 end tour_project_browser
+
+-- The WCAG contrast ratio of two RGB colours
+function tourContrast pOne, pTwo
+   local tL1, tL2
+   put tourLuminance(pOne) into tL1
+   put tourLuminance(pTwo) into tL2
+   return round((max(tL1, tL2) + 0.05) / (min(tL1, tL2) + 0.05), 2)
+end tourContrast
+
+function tourLuminance pColour
+   local tL, i, tV
+   put 0 into tL
+   repeat with i = 1 to 3
+      put item i of pColour / 255 into tV
+      if tV <= 0.03928 then put tV / 12.92 into tV
+      else put ((tV + 0.055) / 1.055) ^ 2.4 into tV
+      add tV * item i of "0.2126,0.7152,0.0722" to tL
+   end repeat
+   return tL
+end tourLuminance
 
 -- As Help > Dictionary does: LiveCode's Dictionary, the default, in a
 -- palette with a browser widget, or in the system's browser where there is
@@ -3612,8 +5025,9 @@ command tourDictionaryEntry pStack, pFile
 end tourDictionaryEntry
 
 on tour_preferences
-   local tStack, tPane, tIndex
+   local tStack, tPane, tIndex, tMenu, tItem, tNeed, tFails, tPath, tShown
    put revIDEPaletteToStackName("preferences") into tStack
+   tourLabelInksReset
    revIDEOpenPalette "preferences"
    tourWait 1500
    if there is not a stack tStack or not the visible of stack tStack then throw "Preferences did not open"
@@ -3625,14 +5039,99 @@ on tour_preferences
       dispatch "revPrefsGoSection" to stack tStack with tPane
       tourWait 700
       tourShotStack tStack, "14-preferences-" & format("%02d", tIndex) & "-" & tourFileName(tPane)
+      tourLabelInks tStack
+      put tourButtonsWhole(tStack) after tFails
+      put tourFieldsWhole(tStack) after tFails
    end repeat
+   -- each disabled check box's and radio button's words fainter than an
+   -- enabled one's, and seen (tourDisabledLabels)
+   put tourDisabledLabels("Preferences") after tFails
+   -- The Automatic Updates pane shows no "Summary of last update": the one
+   -- it showed, from Toolset/palettes/updates/whatsnew.txt, was OpenXTalk
+   -- Lite's notes of its own update ("respring implemented for updater"),
+   -- which the package no longer carries. Release Notes, below it, has
+   -- what each release changes
+   if the visible of field "updNote" of card "Automatic Updates" of stack tStack and \
+         field "updNote" of card "Automatic Updates" of stack tStack is not empty then
+      put line 1 to 4 of field "updNote" of card "Automatic Updates" of stack tStack into tItem
+      put "the Automatic Updates pane shows a summary of an update that is not this release's:" && tourJoin(tItem) & \
+            return after tFails
+   end if
+   -- The Script Editor pane's colour scheme menu shows its longest choice,
+   -- "Follow System Appearance", whole (bwmilby, openxtalk.org p=25582: it
+   -- was cut off in 146 pixels): the text, measured in the button's own
+   -- font, and what the engine adds for the menu's margins and its arrow
+   -- (its formattedWidth less its label's text; on Linux the arrow takes
+   -- more than the 16 pixels this step allowed before, and it ran over the
+   -- last letter)
+   -- (the formatted properties are of a control that is open: on the
+   -- pane that shows)
+   dispatch "revPrefsGoSection" to stack tStack with "Script Editor"
+   tourWait 300
+   put the long id of button "Colorization Scheme" of card "Script Editor" of stack tStack into tMenu
+   put the formattedWidth of tMenu - measureText(the label of tMenu, tMenu) into tItem
+   put 0 into tNeed
+   repeat for each line tPane in the text of tMenu
+      put max(tNeed, measureText(tPane, tMenu) + tItem) into tNeed
+   end repeat
+   tourRecord "INFO preferences colour scheme menu: width" && the width of tMenu & ", needs" && tNeed && \
+         "(margins and arrow" && tItem & ")"
+   if the width of tMenu < tNeed then
+      put "the Script Editor pane's colour scheme menu is" && the width of tMenu && \
+            "pixels wide; its longest choice needs" && tNeed & return after tFails
+   end if
+   -- and on Linux each choice ends clear of the menu's arrow, as it shows
+   if the platform is "Linux" then
+      repeat for each line tPane in the text of tMenu
+         if tPane is empty or tPane begins with "-" then next repeat
+         get tourMenuWordsClear(tMenu, tPane)
+         if it is not empty then put "the Script Editor pane's colour scheme menu" && it & return after tFails
+      end repeat
+   end if
+   -- The line under every pane that says where the preferences are saved
+   -- (field "prefloc", filled by updPrefPath in field "Menu") shows a path
+   -- too long for it with "..." for folders in its middle, and the whole
+   -- path in its tooltip. On Windows, where the user's name is part of
+   -- the path, it ran off the window's edge (the build of adc572e45 on
+   -- GitHub's Windows machine: its words needed 473 pixels of 423). A
+   -- long path is tried on every platform (prefPathFit), then updPrefPath
+   -- puts the real one back
+   put "/a-folder-with-a-long-name/another-folder-with-a-long-name/a-third-folder/preferences/oxt-beyond7.rev" \
+         into tPath
+   dispatch "prefPathFit" to field "Menu" of group "Navigation" of stack tStack with tPath
+   put line 2 of field "prefloc" of group "Navigation" of stack tStack into tShown
+   put the formattedWidth of line 2 of field "prefloc" of group "Navigation" of stack tStack into tNeed
+   tourRecord "INFO preferences path: a long one is shown as" && tShown & "," && tNeed && "wide in" && \
+         the width of field "prefloc" of group "Navigation" of stack tStack & ", tooltip" && \
+         the tooltip of field "prefloc" of group "Navigation" of stack tStack
+   if the tooltip of field "prefloc" of group "Navigation" of stack tStack is not tPath or \
+         "/.../" is not in tShown or not (tShown ends with "/preferences/oxt-beyond7.rev") or \
+         tNeed + 2 * item 1 of the margins of field "prefloc" of group "Navigation" of stack tStack > \
+         the width of field "prefloc" of group "Navigation" of stack tStack then
+      put "the line that says where the preferences are saved does not fit a long path:" && tShown && \
+            "is" && tNeed && "pixels wide in" && the width of field "prefloc" of group "Navigation" of stack tStack & \
+            ", its tooltip is" && quote & the tooltip of field "prefloc" of group "Navigation" of stack tStack & \
+            quote & return after tFails
+   end if
+   dispatch "updPrefPath" to field "Menu" of group "Navigation" of stack tStack
    close stack tStack
+   -- each that failed, the words of each pane's buttons and labels among
+   -- them, together
+   if tFails is not empty then throw line 1 to -1 of tFails
 end tour_preferences
 
 on tour_standalone_settings
-   local tStack, tFile, tCards, tCard, tIndex, tDefault, i
+   local tStack, tFile, tCards, tCard, tIndex, tDefault, i, tMacWas, tMacNow, tFails
+   tourLabelInksReset
    -- the settings are for a saved stack
    go stack kSample
+   -- set up on a Mac to build for Apple Silicon and Intel, the stack keeps
+   -- those targets when its OS X card is looked at on Linux or Windows,
+   -- where they cannot be changed (it turned them all off)
+   put tourMacTargets() into tMacWas
+   set the cRevStandaloneSettings["MacOSX x86-32"] of stack kSample to false
+   set the cRevStandaloneSettings["MacOSX x86-64"] of stack kSample to true
+   set the cRevStandaloneSettings["MacOSX x64-ARM64"] of stack kSample to true
    put specialFolderPath("temporary") & "/oxt_tour_sample.oxtstack" into tFile
    save stack kSample as tFile
    revIDEStandaloneSettingsForStack the long id of stack kSample
@@ -3664,6 +5163,17 @@ on tour_standalone_settings
       set the defaultStack to tDefault
       tourWait 700
       tourShotStack tStack, "15-standalone-" & format("%02d", tIndex) & "-" & tourFileName(tCard)
+      -- every label, check box, radio button, push button and option
+      -- menu of the card shows whole (in Linux's DejaVu Sans, "the
+      -- profile librar", "Write External Storag", "save report to fil")
+      tourLabelInks tStack
+      put tourButtonsWhole(tStack) after tFails
+      put tourFieldsWhole(tStack) after tFails
+      -- each row's icon is seen on its row
+      if tCard is "Inclusions" then
+         get tourInclusionIcons(tStack)
+         if it is not empty then put it & return after tFails
+      end if
       -- the Web card makes its page's settings when it first opens: the
       -- HTML5 option and those settings are there
       if tCard is "Emscripten" then
@@ -3673,10 +5183,85 @@ on tour_standalone_settings
          if there is not a field "emscriptenTitle" of card "Emscripten" of stack tStack then
             throw "the Web card has no settings for its page"
          end if
+         -- the Fields setting (seth's choice 9A): white, or the card's grey
+         if there is not a button "emscriptenFields" of card "Emscripten" of stack tStack then
+            throw "the Web card has no Fields setting"
+         end if
+         if the text of button "emscriptenFields" of card "Emscripten" of stack tStack is not \
+               ("White" & return & "The card's grey") then
+            throw "the Fields setting offers" && tourJoin(the text of button "emscriptenFields" of card "Emscripten" of stack tStack)
+         end if
+         if not the visible of button "emscriptenFields" of card "Emscripten" of stack tStack or \
+               item 4 of the rect of button "emscriptenFields" of card "Emscripten" of stack tStack > \
+               item 2 of the rect of field "emscriptenDeploymentInfoLabel" of card "Emscripten" of stack tStack then
+            throw "the Fields setting is hidden or under the pane's text:" && \
+                  the rect of button "emscriptenFields" of card "Emscripten" of stack tStack
+         end if
+         -- a pick is the setting that the web builder reads: as a click
+         -- on the menu does, its choice changes and it gets menuPick (sent
+         -- here, since the pane's settings are disabled while the stack is
+         -- not built for HTML5, and a disabled menu sends none)
+         if the label of button "emscriptenFields" of card "Emscripten" of stack tStack is not "White" or \
+               the cRevStandaloneSettings["emscripten,fieldBackground"] of stack kSample is not empty then
+            throw "the Fields setting of a stack that has none is not White:" && \
+                  the label of button "emscriptenFields" of card "Emscripten" of stack tStack
+         end if
+         lock messages
+         set the menuHistory of button "emscriptenFields" of card "Emscripten" of stack tStack to 2
+         unlock messages
+         dispatch "menuPick" to button "emscriptenFields" of card "Emscripten" of stack tStack with "The card's grey"
+         if the cRevStandaloneSettings["emscripten,fieldBackground"] of stack kSample is not "card" then
+            throw "picking The card's grey set the Fields setting to" && \
+                  quote & the cRevStandaloneSettings["emscripten,fieldBackground"] of stack kSample & quote
+         end if
+         lock messages
+         set the menuHistory of button "emscriptenFields" of card "Emscripten" of stack tStack to 1
+         unlock messages
+         dispatch "menuPick" to button "emscriptenFields" of card "Emscripten" of stack tStack with "White"
+         if the cRevStandaloneSettings["emscripten,fieldBackground"] of stack kSample is not empty then
+            throw "picking White left the Fields setting at" && \
+                  quote & the cRevStandaloneSettings["emscripten,fieldBackground"] of stack kSample & quote
+         end if
       end if
    end repeat
+   -- each disabled check box's and radio button's words fainter than an
+   -- enabled one's, and seen (tourDisabledLabels)
+   put tourDisabledLabels("Standalone Settings") after tFails
    close stack tStack
+   put tourMacTargets() into tMacNow
+   tourRecord "INFO standalone settings: Mac targets (x86-32, x86-64, ARM64) after the cards:" && tMacNow
+   tourSetMacTargets tMacWas
+   if the platform is not "MacOS" then
+      if "OS X" is not among the lines of tCards then
+         throw "the OS X card is not shown, so its keeping the Mac targets was not checked"
+      end if
+      if tMacNow is not "false,true,true" then
+         throw "the OS X card changed the stack's Mac targets (x86-32, x86-64, ARM64) from false,true,true to" && tMacNow
+      end if
+   end if
+   if tFails is not empty then throw line 1 to -1 of tFails
 end tour_standalone_settings
+
+-- The sample stack's three Mac targets, x86-32, x86-64 and ARM64, as one
+-- line of what each setting holds
+private function tourMacTargets
+   local tLine, tKey
+   repeat for each item tKey in "MacOSX x86-32,MacOSX x86-64,MacOSX x64-ARM64"
+      put the cRevStandaloneSettings[tKey] of stack kSample & comma after tLine
+   end repeat
+   delete char -1 of tLine
+   return tLine
+end tourMacTargets
+
+-- Put back what tourMacTargets read
+private command tourSetMacTargets pLine
+   local i, tKey
+   put 0 into i
+   repeat for each item tKey in "MacOSX x86-32,MacOSX x86-64,MacOSX x64-ARM64"
+      add 1 to i
+      set the cRevStandaloneSettings[tKey] of stack kSample to item i of pLine
+   end repeat
+end tourSetMacTargets
 
 -- mergJSON, built from its source into Ext/mergJSON (tools/oxt/package.py
 -- EXT_FILES), as LiveCode's installer put its mergExt collection there:
@@ -3788,7 +5373,15 @@ end tour_ext_mergjson
 -- nothing (in rc.6.3 it stopped halfway, on revSetEdited, a handler that
 -- does not exist: forum, tperry2x), and its lists of menus and items take
 -- their text colour from the appearance (rc.6.3 saved them black, which
--- could not be read on the dark appearance)
+-- could not be read on the dark appearance). Its buttons and check boxes
+-- show their words whole, and the lists, the check boxes under them and
+-- the frames around them do not run into one another as the window is
+-- laid out on opening (tourMbLayout): through rc.6.12 the Geometry
+-- Manager's saved settings put the lists over "Disabled" and "Item Tag",
+-- "Mnemonic" into "Mark:" and the frame of "Menu Items:" through Ctrl,
+-- Shift and Alt, and Linux's font cut off "Delete Menu", "Delete Item",
+-- "Auto Menu Bar Script" and "Mnemonic" (ide-stack-patches,
+-- revmenumanager-geometry-saved-layout.txt and revmenumanager-fit-linux.txt)
 on tour_menu_builder
    local tName, tMM, tFails, tError, tField
    put "OXT Tour Menus" into tName
@@ -3826,6 +5419,8 @@ on tour_menu_builder
             put "its list" && tField && "has the text colour" && the foregroundColor of field tField of stack tMM & return after tFails
          end if
       end repeat
+      put tourButtonsWhole(tMM) after tFails
+      put tourMbLayout(tMM) after tFails
    end if
    -- The Menu Builder is closed and the stack deleted however it went, so
    -- that a Menu Builder stopped halfway (rc.6.3) is not left open for the
@@ -3843,6 +5438,74 @@ on tour_menu_builder
    tourUnlockScreen "menu-builder"
    if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
 end tour_menu_builder
+
+-- The Menu Builder (the stack pStack) as it is laid out: every control
+-- that shows of the group of the menus' check boxes starts below the list
+-- of menus; every one of the items' check boxes, "Mark:" and its menu
+-- starts below the list of items; each ends above the bottom of the frame
+-- around its list ("Menus:", "Menu Items:"), whose line it would cross;
+-- and no two of one side overlap. Empty, or what is out of place
+function tourMbLayout pStack
+   local tDefault, tFails, tSide, tList, tFrame, tControls, tId, tOther, i, j
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   repeat for each item tSide in "menus,items"
+      if tSide is "menus" then
+         put the long id of field "Menu Buttons" of this card into tList
+         put the long id of group "Button Menus:" of this card into tFrame
+         put tourGroupShown(the long id of group "Menu Button Controls" of this card) into tControls
+      else
+         put the long id of field "Menu Items" of this card into tList
+         put the long id of group "Menu Items:" of this card into tFrame
+         put tourGroupShown(the long id of group "Menu Item Controls" of this card) into tControls
+         put the long id of field "Mark Label" of this card into tOther
+         if tourControlShown(tOther) then put tOther & return after tControls
+         put the long id of button "Item Style" of this card into tOther
+         if tourControlShown(tOther) then put tOther & return after tControls
+      end if
+      tourRecord "INFO" && pStack & ": the list of" && tSide && "ends at" && the bottom of tList & ", its frame at" && \
+            the bottom of tFrame & "; under them" && the number of lines of tControls && "controls"
+      if tControls is empty then
+         put "the Menu Builder shows nothing under its list of" && tSide & return after tFails
+         next repeat
+      end if
+      repeat with i = 1 to the number of lines of tControls
+         put line i of tControls into tId
+         if the top of tId < the bottom of tList then
+            put "the Menu Builder's" && the name of tId && "is under its list of" && tSide && "(it starts at" && \
+                  the top of tId & ", the list ends at" && the bottom of tList & ")" & return after tFails
+         end if
+         if the bottom of tId > the bottom of tFrame - 2 then
+            put "the Menu Builder's" && the name of tId && "runs into the frame of its" && tSide && "(it ends at" && \
+                  the bottom of tId & ", the frame at" && the bottom of tFrame & ")" & return after tFails
+         end if
+         repeat with j = i + 1 to the number of lines of tControls
+            put line j of tControls into tOther
+            if the left of tId < the right of tOther and the left of tOther < the right of tId and \
+                  the top of tId < the bottom of tOther and the top of tOther < the bottom of tId then
+               put "the Menu Builder's" && the name of tId && "(" & the rect of tId & ") and" && the name of tOther && \
+                     "(" & the rect of tOther & ") overlap" & return after tFails
+            end if
+         end repeat
+      end repeat
+   end repeat
+   set the defaultStack to tDefault
+   if tFails is empty then return empty
+   return tFails
+end tourMbLayout
+
+-- The long ids of the controls of the group pGroup, in groups in it too,
+-- that show (tourControlShown), a line each; a group itself is left out
+function tourGroupShown pGroup
+   local tShown, i
+   repeat with i = 1 to the number of controls of pGroup
+      if word 1 of the name of control i of pGroup is "group" then next repeat
+      if tourControlShown(the long id of control i of pGroup) then
+         put the long id of control i of pGroup & return after tShown
+      end if
+   end repeat
+   return tShown
+end tourGroupShown
 
 -- A stack of the user's with a menu bar of two menus, File and Edit, and
 -- the hcAddressing of a HyperCard stack
@@ -3965,9 +5628,444 @@ on tour_error_display
    end if
 end tour_error_display
 
+-- Search and Replace. Each check box shows its words whole, inside its
+-- own rect and its group's: the "Search [Marked] cards only" row's words
+-- after the menu lay beyond its group "Options", which cut them off on
+-- Linux and the Mac ("card", "cards o"; ide-stack-patches,
+-- revsearch-cards-only-width.txt)
 on tour_search
-   tourPalette "search", "20-search", 1500
+   local tStack, tFails, tWas, tNow, tDefault
+   put revIDEPaletteToStackName("search") into tStack
+   revIDEOpenPalette "search"
+   tourWait 1500
+   if tStack is empty or there is not a stack tStack then throw "no stack for the palette search"
+   if not the visible of stack tStack then throw "the palette search (" & tStack & ") is not visible"
+   tourShotStack tStack, "20-search"
+   put tourButtonsWhole(tStack) into tFails
+   put tourFieldsWhole(tStack) after tFails
+   -- the group "Options" now reaches over the right of the group
+   -- "Properties": a click on one of its check boxes there still ticks it
+   -- (and a second one unticks it)
+   put the hilite of button "Custom Properties" of group "Properties" of card 1 of stack tStack into tWas
+   put the defaultStack into tDefault
+   set the defaultStack to tStack
+   click at the loc of button "Custom Properties" of group "Properties" of card 1 of stack tStack
+   tourWait 300
+   put the hilite of button "Custom Properties" of group "Properties" of card 1 of stack tStack into tNow
+   click at the loc of button "Custom Properties" of group "Properties" of card 1 of stack tStack
+   tourWait 300
+   tourRecord "INFO search: Custom was" && tWas & ", clicked" && tNow & ", clicked again" && \
+         the hilite of button "Custom Properties" of group "Properties" of card 1 of stack tStack
+   if tNow is tWas or the hilite of button "Custom Properties" of group "Properties" of card 1 of stack tStack is not tWas then
+      put "a click on the check box Custom, under the group Options, did not tick and untick it" & return after tFails
+   end if
+   set the defaultStack to tDefault
+   close stack tStack
+   if tFails is not empty then throw line 1 to -1 of tFails
 end tour_search
+
+-- The buttons of the card of the stack pStack whose words do not show
+-- whole. A check box's or a radio button's words must fit in what shows
+-- them: its own rect, each group it is in, the window, and the room left
+-- by a button or a field to its right on the same line; they end at its
+-- left and its formattedWidth (its box, its words and its margins) less its
+-- right margin. A push button's words, or an option menu's with its arrow,
+-- are in the middle of it and must fit in its width: its formattedWidth
+-- (an icon button is left out). One in a group that is hidden is not
+-- looked at. Empty, or what is cut off
+function tourButtonsWhole pStack
+   local tDefault, tFails, tRight, tNeed, tOwner, tMargin, tKind, tNext, i
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   repeat with i = 1 to the number of buttons of this card
+      if the style of button i of this card is "checkbox" then
+         put "check box" into tKind
+      else if the style of button i of this card is "radioButton" then
+         put "radio button" into tKind
+      else if the style of button i of this card is among the items of "standard,default" then
+         put "button" into tKind
+      else if the style of button i of this card is "menu" and the menuMode of button i of this card is "option" then
+         put "option menu" into tKind
+      else
+         next repeat
+      end if
+      if not tourControlShown(the long id of button i of this card) then next repeat
+      -- a check box or a radio button that shows no name has no words to
+      -- cut off (the Menu Builder's fold-out triangles, check boxes with
+      -- an icon)
+      if tKind is among the items of "check box,radio button" and not the showName of button i of this card then next repeat
+      if tKind is among the items of "button,option menu" then
+         if not the showName of button i of this card then next repeat
+         if the showIcon of button i of this card and the icon of button i of this card is not 0 then next repeat
+         put the formattedWidth of button i of this card into tNeed
+         tourRecord "INFO" && pStack & ":" && tKind && the short name of button i of this card && "needs" && tNeed && \
+               "wide, is" && the width of button i of this card
+         if tNeed > the width of button i of this card + 2 then
+            put "the" && tKind && the short name of button i of this card && "of" && pStack && "on its card" && \
+                  the short name of this card && "is cut off: it is" && the width of button i of this card && \
+                  "wide, its words need" && tNeed & return after tFails
+         end if
+         if tKind is "option menu" and the platform is "Linux" then
+            get tourMenuWordsClear(the long id of button i of this card, the label of button i of this card)
+            if it is not empty then
+               put "the option menu" && the short name of button i of this card && "of" && pStack && "on its card" && \
+                     the short name of this card && it & return after tFails
+            end if
+         end if
+         next repeat
+      end if
+      put min(the right of button i of this card, the width of this stack) into tRight
+      put the long owner of button i of this card into tOwner
+      repeat while word 1 of tOwner is "group"
+         put min(tRight, item 3 of the rect of group id (the id of tOwner) of this card) into tRight
+         put the long owner of group id (the id of tOwner) of this card into tOwner
+      end repeat
+      put tourNextOnLine(the long id of button i of this card, false) into tNext
+      if tNext is not empty then put min(tRight, item 1 of tNext) into tRight
+      put the margins of button i of this card into tMargin
+      if the number of items of tMargin is 4 then put item 3 of tMargin into tMargin
+      put the left of button i of this card + the formattedWidth of button i of this card - tMargin into tNeed
+      tourRecord "INFO" && pStack & ":" && tKind && the short name of button i of this card && "needs to" && tNeed & \
+            ", shows to" && tRight && "(margins" && the margins of button i of this card & ")"
+      -- (2 points to spare: the words end at tNeed less 1, and a letter's
+      -- ink stops short of its advance)
+      if tNeed > tRight + 2 then
+         put "the" && tKind && the short name of button i of this card && "of" && pStack && "on its card" && \
+               the short name of this card && "is cut off at" && tRight && "(it needs to" && tNeed & ")" into tNeed
+         if tNext is not empty and item 1 of tNext is tRight then put "," && item 5 to -1 of tNext && "is there" after tNeed
+         put tNeed & return after tFails
+      end if
+   end repeat
+   set the defaultStack to tDefault
+   if tFails is empty then return empty
+   return tFails
+end tourButtonsWhole
+
+-- On Linux the engine puts an option menu's words where it puts a push
+-- button's, in the middle of the menu when its text is centred or at its
+-- left margin, and GTK draws the menu's arrow over the right of the menu:
+-- on Ubuntu's theme from 22 to 13 pixels before its right. Where the words
+-- pWords of the menu pMenu (its label when empty) end, by their advance,
+-- against the arrow's room (kTourMenuArrowRoom: the arrow's 22 pixels less
+-- the 2 by which a word's ink stops short of its advance): empty when they
+-- end before it. The colour scheme menu's "Follow System Appearance" ran 6
+-- pixels into the arrow in 204 pixels (the screenshots of the rc.6.12 pull
+-- request: its advance ended 14 pixels before the menu's right); the sort
+-- order menus' "Ascending" and Indents' "3", 4 pixels clear of it, end 22
+-- and 23 before. A right-aligned menu is left out
+constant kTourMenuArrowRoom = 20
+function tourMenuWordsClear pMenu, pWords
+   local tWords, tMargin, tEnd
+   if pWords is empty then put the short name of pMenu into pWords
+   put measureText(pWords, pMenu) into tWords
+   put the margins of pMenu into tMargin
+   if the number of items of tMargin is 4 then put item 1 of tMargin into tMargin
+   switch the textAlign of pMenu
+      case "left"
+         put the left of pMenu + tMargin + 1 + tWords into tEnd
+         break
+      case "center"
+         put the left of pMenu + round((the width of pMenu + tWords) / 2) into tEnd
+         break
+      default
+         return empty
+   end switch
+   tourRecord "INFO menu words:" && the short name of pMenu && quote & pWords & quote && "end at" && tEnd & \
+         ", the arrow's room starts at" && the right of pMenu - kTourMenuArrowRoom && "(" & the textAlign of pMenu & ")"
+   if tEnd > the right of pMenu - kTourMenuArrowRoom then
+      return "has its words" && quote & pWords & quote && "end at" && tEnd & ", into its arrow (" & \
+            the right of pMenu - kTourMenuArrowRoom && "on, the menu is" && the textAlign of pMenu & ")"
+   end if
+   return empty
+end tourMenuWordsClear
+
+-- Whether the control pControl shows: it is visible, and so is each group
+-- it is in, and it is in the window of the defaultStack (some palettes keep
+-- controls out to the side, off the window)
+function tourControlShown pControl
+   local tOwner
+   if not the visible of pControl then return false
+   if the right of pControl <= 0 or the left of pControl >= the width of this stack or \
+         the bottom of pControl <= 0 or the top of pControl >= the height of this stack then return false
+   put the long owner of pControl into tOwner
+   repeat while word 1 of tOwner is "group"
+      if not the visible of tOwner then return false
+      put the long owner of tOwner into tOwner
+   end repeat
+   return true
+end tourControlShown
+
+-- A disabled check box's or radio button's words are fainter than an
+-- enabled one's on the same window, and still seen. Preferences' "Show
+-- classic Start Center" and "Load Start Center when last user stack is
+-- closed", and Standalone Settings' "Rename stackfiles generically", were
+-- drawn on Windows' dark mode as if enabled, bold and white, beside
+-- disabled ones drawn grey (the screenshots of the rc.6.12 release pull
+-- request): each had a background colour or pattern saved on it, never
+-- painted as it is not opaque, which made the engine keep the etched label
+-- of the Windows look (engine/src/buttondraw.cpp,
+-- MCButtonDisabledInkOnDarkTheme). tourLabelInks measures the words of the
+-- check boxes and radio buttons that show on the card of the stack pStack
+-- (those that are not opaque, so that what is behind them is the window's,
+-- with words, whole in the window, in each group they are in and in the
+-- screen's working area), and keeps them in sLabelInks until
+-- tourDisabledLabels compares them
+local sLabelInks
+
+-- A step that measures starts with none kept (one that stopped on an
+-- error may have left some)
+command tourLabelInksReset
+   put empty into sLabelInks
+end tourLabelInksReset
+
+command tourLabelInks pStack
+   local tDefault, tControl, tWords, tOwner, tRect, tTopLeft, tImage, tBack, tRight, i, tAside, tArea
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   put tourToolsAside(the rect of stack pStack) into tAside
+   put line 1 of the working screenRects into tArea
+   repeat with i = 1 to the number of buttons of this card
+      if the style of button i of this card is not among the items of "checkbox,radioButton" then next repeat
+      put the long id of button i of this card into tControl
+      if the opaque of tControl or not the showName of tControl then next repeat
+      if not tourControlShown(tControl) then next repeat
+      put the label of tControl into tWords
+      if tWords is empty then put the short name of tControl into tWords
+      if the number of chars of tWords < 3 then next repeat
+      -- whole in the window and in each group it is in (a scrolling
+      -- group's controls may be partly out of it)
+      put the rect of tControl into tRect
+      if item 1 of tRect < 0 or item 2 of tRect < 0 or item 3 of tRect > the width of this stack or \
+            item 4 of tRect > the height of this stack then next repeat
+      put the long owner of tControl into tOwner
+      repeat while word 1 of tOwner is "group"
+         if item 1 of tRect < item 1 of the rect of tOwner or item 2 of tRect < item 2 of the rect of tOwner or \
+               item 3 of tRect > item 3 of the rect of tOwner or item 4 of tRect > item 4 of the rect of tOwner then
+            put empty into tRect
+            exit repeat
+         end if
+         put the long owner of tOwner into tOwner
+      end repeat
+      if tRect is empty or item 4 of tRect - item 2 of tRect < 12 then next repeat
+      put globalLoc(item 1 to 2 of tRect) into tTopLeft
+      put item 1 of tTopLeft, item 2 of tTopLeft, item 1 of tTopLeft + item 3 of tRect - item 1 of tRect, \
+            item 2 of tTopLeft + item 4 of tRect - item 2 of tRect into tRect
+      -- whole in the screen's working area: the snapshot is of the screen,
+      -- and on the Mac runners' 1024 x 768 screen the Dock covers the
+      -- bottom of a window as tall as Standalone Settings' Android card,
+      -- whose last check box ("NFC Tag Reading") then measured the Dock's
+      -- icons, as bright as enabled words
+      if item 1 of tRect < item 1 of tArea or item 2 of tRect < item 2 of tArea or \
+            item 3 of tRect > item 3 of tArea or item 4 of tRect > item 4 of tArea then
+         tourRecord "INFO labels:" && the short name of tControl && "on" && the short name of this card && \
+               "at" && tRect && "is not whole in the working screenRect" && tArea & ", not measured"
+         next repeat
+      end if
+      tourUnlockScreen "labels"
+      set the defaultStack to "oxt_ui_tour"
+      lock messages
+      import snapshot from rect tRect
+      put the long id of last image of card 1 of stack "oxt_ui_tour" into tImage
+      put the width of tImage into sPixWidth
+      put the height of tImage into sPixHeight
+      put the imageData of tImage into sPixData
+      delete tImage
+      unlock messages
+      set the defaultStack to pStack
+      if sPixWidth < 1 or the number of bytes of sPixData < sPixWidth * sPixHeight * 4 then next repeat
+      -- the window behind it at its top left corner; its words from 26
+      -- points in (clear of the box), as far as they reach, 3 points in
+      -- from its top and bottom
+      put tourLum(1, 1) into tBack
+      put min(sPixWidth, 26 + measureText(tWords, tControl) - 6) into tRight
+      if tRight < 36 then next repeat
+      put (not the enabled of tControl) & tab & tourMaxDiff(26, 3, tRight, sPixHeight - 3, tBack) & tab & \
+            the short name of this card & tab & the short name of tControl & return after sLabelInks
+   end repeat
+   if tAside then tourToolsBack
+   set the defaultStack to tDefault
+end tourLabelInks
+
+-- The disabled check boxes and radio buttons that tourLabelInks measured
+-- whose words are not fainter than the enabled ones' (no more than 0.7 of
+-- their median), or are hardly seen (less than 24 from the window behind
+-- them), one line for each, and empties sLabelInks. Each measured is in
+-- the log. Windows' dark: 223 to 223 (etched), grey ones half; its light,
+-- etched, 51 or so to 225
+function tourDisabledLabels pWhat
+   local tOn, tCount, tMedian, tFails, tLine, tState
+   set the itemDelimiter to tab
+   repeat for each line tLine in sLabelInks
+      if item 1 of tLine is true then
+         put "disabled" into tState
+      else
+         put "enabled" into tState
+         put item 2 of tLine & comma after tOn
+      end if
+      tourRecord "INFO" && pWhat & ": the words of" && item 4 of tLine && "on" && item 3 of tLine && \
+            "(" & tState & ") differ from the window by" && item 2 of tLine
+   end repeat
+   set the itemDelimiter to comma
+   delete the last char of tOn
+   put the number of items of tOn into tCount
+   if tCount > 0 then
+      sort items of tOn numeric
+      put item (tCount + 1) div 2 of tOn into tMedian
+   end if
+   tourRecord "INFO" && pWhat & ": the median of" && tCount && "enabled check boxes' and radio buttons' words" && tMedian
+   set the itemDelimiter to tab
+   repeat for each line tLine in sLabelInks
+      if item 1 of tLine is not true then next repeat
+      if tMedian is not empty and item 2 of tLine > tMedian * 0.7 then
+         put "the disabled" && item 4 of tLine && "on" && item 3 of tLine && "of" && pWhat && \
+               "is drawn as if enabled: its words differ from the window by" && item 2 of tLine & \
+               ", the enabled ones' by" && tMedian & return after tFails
+      else if item 2 of tLine < 24 then
+         put "the disabled" && item 4 of tLine && "on" && item 3 of tLine && "of" && pWhat && \
+               "is hardly seen: its words differ from the window by" && item 2 of tLine & return after tFails
+      end if
+   end repeat
+   set the itemDelimiter to comma
+   put empty into sLabelInks
+   return tFails
+end tourDisabledLabels
+
+-- The rect and the name of the nearest button or field that shows to the
+-- right of the control pControl on its card, on the same line (they share
+-- more than half the height of the lower of the two), or empty. Its left
+-- is where it starts to show: for a field with no border that is not
+-- opaque, the left of its words (an empty one shows nothing and is left
+-- out), so a label's words are not taken to run into the next label's
+-- empty margin (the Android card's "Required" and "Used"). With pWithin
+-- false, one that lies within pControl's width is left out: a check box
+-- may hold a menu in a gap of its words on purpose (Search and Replace's
+-- "Search [Marked] cards only")
+function tourNextOnLine pControl, pWithin
+   local tCard, tBest, tLeft, tTop, tBottom, tStart, tWords, j
+   put the long owner of pControl into tCard
+   repeat while word 1 of tCard is "group"
+      put the long owner of tCard into tCard
+   end repeat
+   put the left of pControl into tLeft
+   put the top of pControl into tTop
+   put the bottom of pControl into tBottom
+   repeat with j = 1 to the number of controls of tCard
+      if word 1 of the name of control j of tCard is not among the items of "button,field" then next repeat
+      if the long id of control j of tCard is the long id of pControl then next repeat
+      if the left of control j of tCard <= tLeft + 8 then next repeat
+      if not pWithin and the right of control j of tCard <= the right of pControl then next repeat
+      if min(tBottom, the bottom of control j of tCard) - max(tTop, the top of control j of tCard) <= \
+            min(tBottom - tTop, the height of control j of tCard) / 2 then next repeat
+      if not tourControlShown(the long id of control j of tCard) then next repeat
+      put the left of control j of tCard into tStart
+      if word 1 of the name of control j of tCard is "field" and not the showBorder of control j of tCard \
+            and not the opaque of control j of tCard then
+         put tourWordsRect(the long id of control j of tCard) into tWords
+         if tWords is empty then next repeat
+         put max(tStart, item 1 of tWords) into tStart
+      end if
+      if tBest is empty or tStart < item 1 of tBest then
+         put tStart & comma & item 2 to 4 of the rect of control j of tCard & comma & the name of control j of tCard into tBest
+      end if
+   end repeat
+   return tBest
+end tourNextOnLine
+
+-- Where the words of the field pField show on its card: the left, top,
+-- right and bottom of its text, with the spaces, tabs and returns at its
+-- end left out (the formattedRect of that chunk, so after the field's
+-- margins and its textAlign), or empty when it has none
+function tourWordsRect pField
+   local tText, tLast, tCard
+   put the text of pField into tText
+   put the number of chars of tText into tLast
+   repeat while tLast > 0 and (char tLast of tText is space or char tLast of tText is tab or char tLast of tText is return)
+      subtract 1 from tLast
+   end repeat
+   if tLast is 0 then return empty
+   put the long owner of pField into tCard
+   repeat while word 1 of tCard is "group"
+      put the long owner of tCard into tCard
+   end repeat
+   return the formattedRect of char 1 to tLast of field id (the id of pField) of tCard
+end tourWordsRect
+
+-- The label fields of the card of the stack pStack whose words do not show
+-- whole: a field without scrollbars or a border, locked or never focused,
+-- whose words start above its top, go past its left or right (it does not
+-- wrap) or are taller than it (it wraps), or, in one that does not wrap,
+-- reach into a button or a field to their right on the same line. Its
+-- words are where the engine lays them out (tourWordsRect), after its
+-- margins and as it aligns them. A field with a border is a box that
+-- shows a value, such as the Windows card's icon file, and may scroll it;
+-- one whose border is 0 wide draws none, and is a label (the xTalk
+-- Assistant's are); one in a group that is hidden is not looked at.
+-- Empty, or what is cut off
+function tourFieldsWhole pStack
+   local tDefault, tFails, tNeed, tWords, tWhat, tNext, i
+   put the defaultStack into tDefault
+   set the defaultStack to pStack
+   repeat with i = 1 to the number of fields of this card
+      -- (a label: locked, or never takes the focus)
+      if (not the lockText of field i of this card and the traversalOn of field i of this card) or \
+            the vScrollbar of field i of this card or the hScrollbar of field i of this card or \
+            the listBehavior of field i of this card or \
+            (the showBorder of field i of this card and the borderWidth of field i of this card > 0) then next repeat
+      if field i of this card is empty then next repeat
+      if not tourControlShown(the long id of field i of this card) then next repeat
+      put the short name of field i of this card && "(" & line 1 of field i of this card & ")" into tWhat
+      -- the words start no higher than the field's top, or the field cuts
+      -- the tops of their letters off: the xTalk Assistant's Settings,
+      -- whose notes had a top margin of 4, had their words start two
+      -- points above them, and on Linux the capitals of their first lines
+      -- lost a row of pixels (rc.6.12c)
+      if the vScroll of field i of this card is 0 then
+         put tourWordsRect(the long id of field i of this card) into tWords
+         if tWords is not empty and item 2 of tWords < the top of field i of this card then
+            put "the field" && tWhat && "of" && pStack && "on its card" && the short name of this card && \
+                  "cuts its words' tops off: it starts at" && the top of field i of this card & \
+                  ", its words at" && item 2 of tWords & return after tFails
+         end if
+      end if
+      if the dontWrap of field i of this card then
+         put tourWordsRect(the long id of field i of this card) into tWords
+         if tWords is empty then next repeat
+         tourRecord "INFO" && pStack & ": field" && tWhat && "has its words from" && item 1 of tWords && "to" && \
+               item 3 of tWords & ", is from" && the left of field i of this card && "to" && the right of field i of this card
+         -- (2 points to spare: a letter's ink stops short of its advance)
+         if item 3 of tWords > the right of field i of this card + 2 or item 1 of tWords < the left of field i of this card - 2 then
+            put "the field" && tWhat && "of" && pStack && "on its card" && the short name of this card && \
+                  "is cut off: it is from" && the left of field i of this card && "to" && the right of field i of this card & \
+                  ", its words from" && item 1 of tWords && "to" && item 3 of tWords & return after tFails
+         end if
+         -- a button or a field to their right on the line starts at
+         -- least a point after them: Search and Replace's "Replace with:"
+         -- touched its box (they end at 205 and it starts there), while a
+         -- version number's dots, one point clear of the next box, are as
+         -- they should be
+         put tourNextOnLine(the long id of field i of this card, true) into tNext
+         if tNext is not empty and item 1 of tNext <= min(item 3 of tWords, the right of field i of this card) then
+            put "the words of the field" && tWhat && "of" && pStack && "on its card" && the short name of this card && \
+                  "end at" && min(item 3 of tWords, the right of field i of this card) & ", in" && item 5 to -1 of tNext && \
+                  "(from" && item 1 of tNext & ")" & return after tFails
+         end if
+      else
+         -- the words end at the bottom margin of what they need, and 2
+         -- points lower (formattedHeight takes 2 off each margin), and the
+         -- field cuts them off inside its border: a field one line too
+         -- short showed its second line without its descenders
+         put the formattedHeight of field i of this card - the bottomMargin of field i of this card + 2 into tNeed
+         tourRecord "INFO" && pStack & ": field" && tWhat && "needs" && tNeed && "high, is" && the height of field i of this card
+         if tNeed > the height of field i of this card then
+            put "the field" && tWhat && "of" && pStack && "on its card" && the short name of this card && \
+                  "is cut off: it is" && the height of field i of this card && "high, its words need" && tNeed & return after tFails
+         end if
+      end if
+   end repeat
+   set the defaultStack to tDefault
+   if tFails is empty then return empty
+   return tFails
+end tourFieldsWhole
 
 on tour_object_library
    -- with Development > Object Library, which also selects the Objects tab
@@ -3999,9 +6097,80 @@ on tour_about
    put tourNewStack(tBefore) into tNew
    if tNew is empty then throw "no About window opened"
    tourShotStack tNew, "24-about"
+   tourAboutMark tNew, "opened"
    tourRedrawCheck tNew, "lkAppearanceChanged", "24-about-redrawn"
+   tourAboutMark tNew, "redrawn"
    close stack tNew
 end tour_about
+
+-- The About window's mark is the OXT-Beyond logo (seth, 2026-11-02: the new
+-- logo in all the branding): image "heroMark", a copy of the logo the answer
+-- and ask dialogs show, not the orange-to-pink tile with the "layers" icon
+-- it drew before (that stays only for when the icon stack is missing, which
+-- in the IDE it never is)
+on tourAboutMark pStack, pWhen
+   local tLogo
+   if there is a control "heroMarkIcon" of stack pStack or there is a graphic "heroMark" of stack pStack then
+      throw "the About window (" & pWhen & ") draws the old layers mark, not the logo"
+   end if
+   if there is not an image "heroMark" of stack pStack then
+      throw "the About window (" & pWhen & ") has no logo (image heroMark)"
+   end if
+   put the text of image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons" into tLogo
+   if tLogo is empty or the text of image "heroMark" of stack pStack is not tLogo then
+      throw "the About window's mark (" & pWhen & ") is not the logo the dialogs show"
+   end if
+   if the rect of image "heroMark" of stack pStack is not "28,30,84,86" then
+      throw "the About window's mark (" & pWhen & ") is at" && the rect of image "heroMark" of stack pStack & ", not 28,30,84,86"
+   end if
+end tourAboutMark
+
+-- Help > Dictionary Online (seth's choice 12A of 2026-10-31): the Help
+-- menu has the item, and picking it, as the menu bar's Help button does,
+-- asks revGoURL for OXT-Beyond's own Dictionary on the project's web pages
+-- (tools/pages/build_dictionary.py makes it from each release's web IDE,
+-- and check_dictionary.py checks it in a browser), not the classic one
+-- that calls itself the LiveCode Dictionary. A frontscript catches the
+-- address, so no browser opens.
+constant kTourOnlineDictionary = "https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/dictionary/"
+
+on tour_dictionary_online
+   local tHelp, tDefault, tURL, tError
+   put the text of button "Help" of group "revMenuBar" of stack "revMenuBar" into tHelp
+   if "Dictionary Online" is not among the lines of tHelp then
+      throw "the Help menu has no Dictionary Online:" && tourJoin(tHelp)
+   end if
+   put the defaultStack into tDefault
+   set the defaultStack to "oxt_ui_tour"
+   lock messages
+   create invisible button "oxt_ui_tour_url"
+   set the script of it to "on revGoURL pURL" & return & \
+         "   set the cTourURL of stack " & quote & "oxt_ui_tour" & quote & " to pURL" & return & \
+         "end revGoURL"
+   unlock messages
+   set the defaultStack to tDefault
+   set the cTourURL of stack "oxt_ui_tour" to empty
+   insert the script of button "oxt_ui_tour_url" of stack "oxt_ui_tour" into front
+   -- (a click on the menu makes the menu bar's stack the default one, and
+   -- its pick sends to "this stack")
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to "revMenuBar"
+      dispatch "menuPick" to button "Help" of group "revMenuBar" of stack "revMenuBar" with "Dictionary Online"
+   catch tError
+   end try
+   set the defaultStack to tDefault
+   remove the script of button "oxt_ui_tour_url" of stack "oxt_ui_tour" from front
+   put the cTourURL of stack "oxt_ui_tour" into tURL
+   delete button "oxt_ui_tour_url" of stack "oxt_ui_tour"
+   if tError is not empty then
+      throw "Help > Dictionary Online failed:" && tourJoin(tError)
+   end if
+   tourRecord "INFO Help > Dictionary Online opens" && tURL
+   if tURL is not kTourOnlineDictionary then
+      throw "Help > Dictionary Online opens" && quote & tURL & quote & ", not" && kTourOnlineDictionary
+   end if
+end tour_dictionary_online
 
 on tour_release_notes
    local tBefore, tNew
@@ -4012,6 +6181,12 @@ on tour_release_notes
    put tourNewStack(tBefore) into tNew
    if tNew is empty then throw "no Release Notes window opened"
    tourShotStack tNew, "24b-release-notes"
+   local tFails
+   put tourSelectedLineInk(tNew, "Release Notes") into tFails
+   if tFails is not empty then
+      close stack tNew
+      throw tFails
+   end if
    tourReleaseNotesSearch tNew
    close stack tNew
 end tour_release_notes
@@ -4058,6 +6233,7 @@ on tour_home
    put tourNewStack(tBefore) into tNew
    if tNew is empty then throw "no Home window opened"
    tourShotStack tNew, "24a-home"
+   tourHomeMark tNew, "opened"
    put the rect of stack tNew into tRect
    set the rect of stack tNew to item 1 of tRect, item 2 of tRect, item 1 of tRect + 1200, item 2 of tRect + 760
    tourWait 1500
@@ -4065,11 +6241,37 @@ on tour_home
    -- (as the screen allowed it: a small screen keeps it smaller)
    put the rect of stack tNew into tRect
    tourRedrawCheck tNew, "hmAppearanceChanged", "24a-home-redrawn"
+   tourHomeMark tNew, "redrawn"
    if the rect of stack tNew is not tRect then
       throw "Home drawn again is not the size it was (" & the rect of stack tNew & ", was" && tRect & ")"
    end if
    close stack tNew
 end tour_home
+
+-- Home's mark, at the top of its sidebar in every place (Home, the
+-- Academy, How-to, Guides and Examples), is the OXT-Beyond logo, as the
+-- About window's is (seth, 2026-11-02: the new logo in all the branding):
+-- image "sideMark", a copy of the logo the answer and ask dialogs show,
+-- not the orange-to-pink tile with the "layers" icon it drew before (that
+-- stays only for when the icon stack is missing, which in the IDE it never
+-- is). Learn and the Academy opened on their own, outside Home, keep their
+-- own marks, so this looks at Home's window.
+on tourHomeMark pStack, pWhen
+   local tLogo
+   if there is a control "sideMarkIcon" of stack pStack or there is a graphic "sideMark" of stack pStack then
+      throw "Home's sidebar (" & pWhen & ") draws the old layers mark, not the logo"
+   end if
+   if there is not an image "sideMark" of stack pStack then
+      throw "Home's sidebar (" & pWhen & ") has no logo (image sideMark)"
+   end if
+   put the text of image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons" into tLogo
+   if tLogo is empty or the text of image "sideMark" of stack pStack is not tLogo then
+      throw "Home's sidebar mark (" & pWhen & ") is not the logo the dialogs show"
+   end if
+   if the rect of image "sideMark" of stack pStack is not "20,22,56,58" then
+      throw "Home's sidebar mark (" & pWhen & ") is at" && the rect of image "sideMark" of stack pStack & ", not 20,22,56,58"
+   end if
+end tourHomeMark
 
 -- A window that follows light and dark (#221) hears the IDE's
 -- ideSystemAppearanceChanged, and drawn again as a switch draws it (the
@@ -4133,19 +6335,25 @@ end tourShotKitDialog
 -- the lessons, whose banner has "New to coding? Try the Academy", which
 -- must be there, whole, where the page shows it
 on tour_learn
-   local tButton, tLabel, tOwner, tView, tRect, tError
+   local tButton, tLabel, tOwner, tView, tRect, tError, tWin
    dispatch "revMenubarHelpMenuPick" to stack "revMenuBar" with "Lessons"
-   if not tourWaitOpen(kLearn, 10000) then throw "Learn did not open"
+   put tourWaitHosted(kLearn, 10000) into tWin
+   if tWin is empty then throw "Learn did not open"
    try
       -- (its first page, wherever Learn was left this session)
-      dispatch "leShowSection" to stack kLearn with "lessons", 1
+      dispatch "leShowSection" to stack tWin with "lessons", 1
       tourWait 1500
-      tourShotStack kLearn, "24d-learn"
-      if there is not a group "p_heroB3" of this card of stack kLearn then
+      tourShotStack tWin, "24d-learn"
+      if tWin is kHub then tourHomeMark tWin, "the How-to"
+      get tourSelectedLineInk(tWin, "the How-to")
+      if it is not empty then throw it
+      get tourHeroSparklesClear(tWin, "the How-to")
+      if it is not empty then throw it
+      if there is not a group "p_heroB3" of this card of stack tWin then
          throw "Learn's first page of the lessons has no third button (New to coding? Try the Academy)"
       end if
-      put the long id of group "p_heroB3" of this card of stack kLearn into tButton
-      put field "p_heroB3_label" of this card of stack kLearn into tLabel
+      put the long id of group "p_heroB3" of this card of stack tWin into tButton
+      put field "p_heroB3_label" of this card of stack tWin into tLabel
       tourRecord "INFO Learn's Academy button:" && quote & tLabel & quote && "rect" && the rect of tButton
       if tLabel is not "New to coding? Try the Academy" then
          throw "Learn's third button says" && quote & tLabel & quote & ", not New to coding? Try the Academy"
@@ -4164,16 +6372,17 @@ on tour_learn
          end if
          put the long id of the owner of tOwner into tOwner
       end repeat
-      if item 3 of tRect > the width of stack kLearn or item 4 of tRect > the height of stack kLearn then
-         throw "Learn's Academy button (" & tRect & ") is cut off by the window (" & the width of stack kLearn & "x" & the height of stack kLearn & ")"
+      if item 3 of tRect > the width of stack tWin or item 4 of tRect > the height of stack tWin then
+         throw "Learn's Academy button (" & tRect & ") is cut off by the window (" & the width of stack tWin & "x" & the height of stack tWin & ")"
       end if
-      tourRedrawCheck kLearn, "lkAppearanceChanged", "24d-learn-redrawn"
-      if there is not a group "p_heroB3" of this card of stack kLearn or not the visible of group "p_heroB3" of this card of stack kLearn then
+      tourRedrawCheck tWin, "lkAppearanceChanged", "24d-learn-redrawn"
+      if tWin is kHub then tourHomeMark tWin, "the How-to, redrawn"
+      if there is not a group "p_heroB3" of this card of stack tWin or not the visible of group "p_heroB3" of this card of stack tWin then
          throw "Learn drawn again does not show its first page of the lessons"
       end if
    catch tError
    end try
-   if there is a stack kLearn and the mode of stack kLearn is not 0 then close stack kLearn
+   if there is a stack tWin and the mode of stack tWin is not 0 then close stack tWin
    if tError is not empty then throw tError
 end tour_learn
 
@@ -4228,45 +6437,51 @@ end tour_example
 -- place, the lessons done, the drafts) is put back as it was, and the
 -- Message Box closed again when the step opened it.
 on tour_academy
-   local tSaved, tMsgOpen, tError, tCourses, tStatus, tOut, tExample, i
+   local tSaved, tMsgOpen, tError, tCourses, tStatus, tOut, tExample, i, tWin
    if there is not a stack "revPreferences" then throw "no revPreferences stack"
    put the customProperties["cAcademy"] of stack "revPreferences" into tSaved
    put (there is a stack "Message Box" and the mode of stack "Message Box" is not 0) into tMsgOpen
    try
       dispatch "revMenubarHelpMenuPick" to stack "revMenuBar" with "xTalk Academy"
-      if not tourWaitOpen(kAcademy, 10000) then throw "the Academy did not open"
+      put tourWaitHosted(kAcademy, 10000) into tWin
+      if tWin is empty then throw "the Academy did not open"
       -- the first page of the first course, wherever a learner left it
-      dispatch "acGoTo" to stack kAcademy with "basics", 0
+      dispatch "acGoTo" to stack tWin with "basics", 0
       tourWait 1500
-      tourShotStack kAcademy, "24e-academy"
+      tourShotStack tWin, "24e-academy"
+      if tWin is kHub then tourHomeMark tWin, "the Academy"
+      get tourSelectedLineInk(tWin, "the Academy")
+      if it is not empty then throw it
+      get tourHeroSparklesClear(tWin, "the Academy")
+      if it is not empty then throw it
       -- the courses in the sidebar, one each
-      dispatch function "revAcademyCourses" to stack kAcademy
+      dispatch function "revAcademyCourses" to stack tWin
       put the result into tCourses
       tourRecord "INFO the Academy's courses:" && tCourses["count"]
       if not (tCourses["count"] >= 3) then throw "the Academy has" && tCourses["count"] && "courses, not 3 or more"
       repeat with i = 1 to tCourses["count"]
-         if there is not a control ("nav_" & i) of this card of stack kAcademy then
+         if there is not a control ("nav_" & i) of this card of stack tWin then
             throw "the Academy's sidebar does not list the course" && tCourses[i]["title"]
          end if
       end repeat
-      if the number of lines of field "idx" of stack kAcademy < 3 then throw "the Academy's sidebar has no index of the lessons"
+      if the number of lines of field "idx" of stack tWin < 3 then throw "the Academy's sidebar has no index of the lessons"
       -- a lesson, and its first example tried: its Try it button is
       -- p_c<N>_try, N the example's block of the lesson, and sends
       -- lkAction "try N" (acCodeBlock)
-      dispatch "acGoTo" to stack kAcademy with "basics", "hello"
+      dispatch "acGoTo" to stack tWin with "basics", "hello"
       tourWait 1200
       put empty into tExample
       repeat with i = 1 to 40
-         if there is a control ("p_c" & i & "_try") of this card of stack kAcademy then
+         if there is a control ("p_c" & i & "_try") of this card of stack tWin then
             put i into tExample
             exit repeat
          end if
       end repeat
       if tExample is empty then throw "the lesson Hello, xTalk has no Try it button"
-      dispatch "lkAction" to stack kAcademy with "try" && tExample
+      dispatch "lkAction" to stack tWin with "try" && tExample
       tourWait 1500
-      put field "outStatus" of stack kAcademy into tStatus
-      put the text of field "out" of stack kAcademy into tOut
+      put field "outStatus" of stack tWin into tStatus
+      put the text of field "out" of stack tWin into tOut
       tourRecord "INFO the Academy's output:" && quote & tStatus & quote && "|" && tourJoin(tOut)
       -- What an example puts goes to the Academy's output only (the IDE's
       -- Message Box opened over the lesson until the IDE left the
@@ -4275,9 +6490,9 @@ on tour_academy
          close stack "Message Box"
          throw "the Message Box opened over the Academy when the example ran"
       end if
-      tourShotStack kAcademy, "24e-academy-lesson"
-      if not (field "playWhat" of stack kAcademy begins with "An example from the lesson") then
-         throw "the playground does not have the example (" & field "playWhat" of stack kAcademy & ")"
+      tourShotStack tWin, "24e-academy-lesson"
+      if not (field "playWhat" of stack tWin begins with "An example from the lesson") then
+         throw "the playground does not have the example (" & field "playWhat" of stack tWin & ")"
       end if
       if tStatus is "Stopped" or not (tStatus begins with "Ran") then
          throw "the example did not run:" && tStatus & ":" && tourJoin(tOut)
@@ -4286,21 +6501,334 @@ on tour_academy
          throw "the example put" && quote & tourJoin(tOut) & quote & ", not Hello, world!"
       end if
       -- drawn again, the lesson, the playground and its output stay
-      tourRedrawCheck kAcademy, "lkAppearanceChanged", "24e-academy-redrawn"
-      if not (field "playWhat" of stack kAcademy begins with "An example from the lesson") \
-            or line 1 of the text of field "out" of stack kAcademy is not "Hello, world!" \
-            or field "outStatus" of stack kAcademy is not tStatus then
-         throw "the Academy drawn again lost its playground (" & field "playWhat" of stack kAcademy & "|" & \
-               tourJoin(the text of field "out" of stack kAcademy) & "|" & field "outStatus" of stack kAcademy & ")"
+      tourRedrawCheck tWin, "lkAppearanceChanged", "24e-academy-redrawn"
+      if tWin is kHub then tourHomeMark tWin, "the Academy, redrawn"
+      if not (field "playWhat" of stack tWin begins with "An example from the lesson") \
+            or line 1 of the text of field "out" of stack tWin is not "Hello, world!" \
+            or field "outStatus" of stack tWin is not tStatus then
+         throw "the Academy drawn again lost its playground (" & field "playWhat" of stack tWin & "|" & \
+               tourJoin(the text of field "out" of stack tWin) & "|" & field "outStatus" of stack tWin & ")"
       end if
-      close stack kAcademy
+      close stack tWin
    catch tError
    end try
-   if there is a stack kAcademy and the mode of stack kAcademy is not 0 then close stack kAcademy
+   if there is a stack tWin and the mode of stack tWin is not 0 then close stack tWin
    if not tMsgOpen and there is a stack "Message Box" and the mode of stack "Message Box" is not 0 then close stack "Message Box"
    set the customProperties["cAcademy"] of stack "revPreferences" to tSaved
    if tError is not empty then throw tError
 end tour_academy
+
+-- OXT-Beyond Home (palettes/home/revhub.livecodescript): the one window
+-- of Home's welcome, the xTalk Academy and Learn's how-to lessons, guides
+-- and examples (0.2.7-rc.6.12). Each of the IDE's ways in, the names it
+-- used before Home included, must bring up that one window at its place,
+-- and never a window of the stacks it hosts; half of them find it closed
+-- and half open, at another place. An IDE without Home (a release before
+-- it) skips both steps.
+on tour_home_ways_in
+   local tWays, tWay, tWant, tIndex, tPlace, tError, tFile
+   put tourHubFile() into tFile
+   if tFile is empty then
+      tourRecord "INFO home-ways-in: this IDE has no Home window"
+      exit tour_home_ways_in
+   end if
+   -- kind|what|the place it must open
+   put "help|Welcome to OXT-Beyond|home" & return & \
+         "help|xTalk Academy|academy" & return & \
+         "help|How-to|howto" & return & \
+         "help|Guides|guides" & return & \
+         "help|Examples|examples" & return & \
+         "help|Lessons|howto" & return & \
+         "help|Demos|examples" & return & \
+         "toolbar|Tutorials|academy" & return & \
+         "toolbar|Sample Stacks|examples" & return & \
+         "menubar|tOpenHome|home" & return & \
+         "menubar|tOpenAcademy|academy" & return & \
+         "menubar|tOpenNewGuides|howto" & return & \
+         "menubar|tOpenAllGuides|guides" & return & \
+         "menubar|tOpenDemos|examples" & return & \
+         "stack|revLearnShow guides|guides" & return & \
+         "stack|revLearnShow examples|examples" & return & \
+         "stack|revAcademyShow|academy" & return & \
+         "palette|welcome|home" & return & \
+         "palette|start center|home" & return & \
+         "ide|revIDEOpenHome academy|academy" & return & \
+         "web|revWebIDEShowHome|home" into tWays
+   tourHubClose
+   put 0 into tIndex
+   set the itemDelimiter to "|"
+   repeat for each line tWay in tWays
+      add 1 to tIndex
+      put item 3 of tWay into tWant
+      -- every other one finds the window closed
+      if tIndex mod 2 is 0 then
+         tourHubClose
+      end if
+      try
+         switch item 1 of tWay
+            case "help"
+               dispatch "revMenubarHelpMenuPick" to stack "revMenuBar" with item 2 of tWay
+               break
+            case "toolbar"
+               dispatch "revMenubarMenuButtonClicked" to stack "revMenuBar" with item 2 of tWay
+               break
+            case "menubar"
+               send item 2 of tWay to stack "revMenuBar"
+               break
+            case "stack"
+               if word 1 of item 2 of tWay is "revLearnShow" then
+                  dispatch "revLearnShow" to stack tourToolsetFile("palettes/learn/revlearn.livecodescript") with word 2 of item 2 of tWay
+               else
+                  dispatch "revAcademyShow" to stack tourToolsetFile("palettes/academy/revacademy.livecodescript")
+               end if
+               break
+            case "palette"
+               revIDEOpenPalette item 2 of tWay
+               break
+            case "ide"
+               get revIDEOpenHome(word 2 of item 2 of tWay)
+               break
+            case "web"
+               if there is not a stack "revWebIDELibrary" then
+                  tourRecord "INFO home-ways-in: no revWebIDELibrary here, revWebIDEShowHome not tried"
+                  next repeat
+               end if
+               dispatch "revWebIDEShowHome" to stack "revWebIDELibrary"
+               break
+         end switch
+      catch tError
+         set the itemDelimiter to comma
+         throw item 1 to 2 of tWay & ":" && tourJoin(tError)
+      end try
+      put tourHubWait(tWant, 8000) into tPlace
+      set the itemDelimiter to comma
+      tourRecord "INFO home-ways-in:" && item 1 of tWay & "|" & item 2 of tWay && "->" && tPlace
+      set the itemDelimiter to "|"
+      if tPlace is not tWant then
+         throw item 1 to 2 of tWay && "opened" && quote & tPlace & quote & ", not" && tWant
+      end if
+      tourHubOnly item 1 to 2 of tWay
+   end repeat
+   set the itemDelimiter to comma
+   -- Closed by a handler that goes on to open it again (no wait between:
+   -- Learn's stack, still Home's behavior, is the one running), at a
+   -- place Learn draws and at one it does not
+   repeat for each item tWant in "guides,academy"
+      tourHubClose
+      if not tourHubOpen("howto") or tourHubWait("howto", 8000) is not "howto" then
+         throw "Home did not open at How-to"
+      end if
+      tourWait 500
+      close stack kHub
+      if tWant is "guides" then
+         dispatch "revLearnShow" to stack tourToolsetFile("palettes/learn/revlearn.livecodescript") with "guides"
+      else
+         -- (Learn's "New to coding? Try the Academy")
+         dispatch "lkAction" to stack tourToolsetFile("palettes/learn/revlearn.livecodescript") with "academy"
+      end if
+      put tourHubWait(tWant, 8000) into tPlace
+      tourRecord "INFO home-ways-in: closed and opened again by Learn ->" && tPlace
+      if tPlace is not tWant then
+         throw "Home closed and opened again by Learn is at" && quote & tPlace & quote & ", not" && tWant
+      end if
+      tourHubOnly "Home closed and opened again by Learn at" && tWant
+      tourWait 800
+      tourHubPendingCheck tWant
+   end repeat
+   tourHubClose
+end tour_home_ways_in
+
+-- Each of the five places, from Home's own sidebar (as a click on it
+-- sends): each is drawn whole and only once (as many controls on a second
+-- visit as on the first, a swap leaving nothing behind), leaves no
+-- message waiting that the place in front cannot handle, is drawn again
+-- whole as a switch of light and dark draws it, and fits the smallest
+-- window. Closed, Home leaves nothing waiting, and opens again afresh.
+on tour_home_places
+   local tPlace, tCounts, tCount, tPass, tError, tRect, tWant, tPending
+   if tourHubFile() is empty then
+      tourRecord "INFO home-places: this IDE has no Home window"
+      exit tour_home_places
+   end if
+   tourHubClose
+   try
+      if not tourHubOpen("home") then throw "Home did not open"
+      if tourHubWait("home", 8000) is not "home" then throw "Home did not open at its welcome"
+      if the label of stack kHub is not "OXT-Beyond Home" then
+         throw "Home's window is titled" && quote & the label of stack kHub & quote
+      end if
+      tourWait 800
+      repeat with tPass = 1 to 2
+         repeat for each item tPlace in "home,academy,howto,guides,examples,guides,home,examples,academy,howto"
+            dispatch "lkAction" to stack kHub with "hub" && tPlace
+            if tourHubWait(tPlace, 8000) is not tPlace then
+               throw "Home's sidebar did not go to" && tPlace && "(" & tourHubWait(empty, 0) & ")"
+            end if
+            tourWait 700
+            tourHubOnly tPlace
+            tourHubPendingCheck tPlace
+            put the number of controls of this card of stack kHub into tCount
+            if there is not a control ("hub_" & tPlace) of this card of stack kHub then
+               throw "Home's sidebar at" && tPlace && "has no item hub_" & tPlace
+            end if
+            if tCounts[tPlace] is empty then
+               put tCount into tCounts[tPlace]
+               tourRecord "INFO home-places:" && tPlace && tCount && "controls"
+               if tPass is 1 then
+                  tourShotStack kHub, "24g-hub-" & tPlace
+                  tourHomeMark kHub, tPlace
+               end if
+            else if tCount is not tCounts[tPlace] then
+               throw "Home at" && tPlace && "has" && tCount && "controls, not" && tCounts[tPlace] && "as the first time"
+            end if
+         end repeat
+      end repeat
+      -- drawn again as a switch of light and dark draws it
+      repeat for each item tPlace in "home,academy,howto,guides,examples"
+         dispatch "lkAction" to stack kHub with "hub" && tPlace
+         if tourHubWait(tPlace, 8000) is not tPlace then throw "Home did not go to" && tPlace
+         tourWait 700
+         if tPlace is "home" then
+            tourRedrawCheck kHub, "hmAppearanceChanged", "24g-hub-" & tPlace & "-redrawn"
+         else
+            tourRedrawCheck kHub, "lkAppearanceChanged", "24g-hub-" & tPlace & "-redrawn"
+         end if
+         tourHomeMark kHub, tPlace & ", redrawn"
+      end repeat
+      -- the smallest window: every place's sidebar whole in it
+      put the rect of stack kHub into tRect
+      set the rect of stack kHub to item 1 of tRect, item 2 of tRect, \
+            item 1 of tRect + the minWidth of stack kHub, item 2 of tRect + the minHeight of stack kHub
+      tourWait 800
+      tourRecord "INFO home-places: smallest" && the width of stack kHub & "x" & the height of stack kHub
+      repeat for each item tPlace in "home,academy,howto,guides,examples"
+         dispatch "lkAction" to stack kHub with "hub" && tPlace
+         if tourHubWait(tPlace, 8000) is not tPlace then throw "Home did not go to" && tPlace && "(smallest)"
+         tourWait 700
+         tourHubFits tPlace
+         if tPlace is among the items of "home,academy" then tourShotStack kHub, "24g-hub-" & tPlace & "-smallest"
+      end repeat
+      set the rect of stack kHub to tRect
+      tourWait 500
+   catch tError
+   end try
+   tourHubClose
+   if tError is not empty then throw tError
+   -- closed: nothing left waiting for it, and nothing in front
+   put tourHubPending() into tPending
+   if tPending is not empty then throw "Home, closed, still has messages waiting:" && tourJoin(tPending)
+   if tourHubWait(empty, 0) is not empty then throw "Home, closed, says it is at" && tourHubWait(empty, 0)
+   -- opened again, at a place it was not closed at: afresh
+   put "examples" into tWant
+   if not tourHubOpen(tWant) then throw "Home did not open again"
+   if tourHubWait(tWant, 8000) is not tWant then throw "Home did not open again at" && tWant
+   tourWait 800
+   put the number of controls of this card of stack kHub into tCount
+   tourHubClose
+   if tCount is not tCounts[tWant] then
+      throw "Home opened again at" && tWant && "has" && tCount && "controls, not" && tCounts[tWant]
+   end if
+end tour_home_places
+
+-- Opens Home at pPlace as the IDE's menus do (revMenubarOpenHub)
+function tourHubOpen pPlace
+   dispatch function "revMenubarOpenHub" to stack "revMenuBar" with pPlace
+   return the result is true
+end tourHubOpen
+
+-- Home's file, if this IDE has Home
+function tourHubFile
+   local tFile
+   put tourToolsetFile("palettes/home/revhub.livecodescript") into tFile
+   if there is a file tFile then return tFile
+   return empty
+end tourHubFile
+
+function tourToolsetFile pPath
+   return revEnvironmentToolsetPath() & slash & pPath
+end tourToolsetFile
+
+-- Waits, at most pMilliseconds, for Home to be open at the place pWant;
+-- returns the place it is at (empty when closed)
+function tourHubWait pWant, pMilliseconds
+   local tPlace
+   repeat (pMilliseconds div 250) + 1 times
+      put empty into tPlace
+      if there is a stack kHub and the mode of stack kHub is not 0 and the visible of stack kHub then
+         dispatch function "revHubCurrent" to stack kHub
+         put item 1 of the result into tPlace
+      end if
+      if tPlace is pWant or pMilliseconds <= 0 then exit repeat
+      tourWait 250
+   end repeat
+   return tPlace
+end tourHubWait
+
+command tourHubClose
+   if there is a stack kHub and the mode of stack kHub is not 0 then
+      close stack kHub
+      tourWait 300
+   end if
+end tourHubClose
+
+-- Home is the only window of the stacks it hosts that is open
+command tourHubOnly pWhat
+   local tName
+   repeat for each item tName in "revWebHome,revAcademy,revLearn"
+      if there is a stack tName and the mode of stack tName is not 0 then
+         close stack tName
+         throw pWhat && "opened" && tName && "in a window of its own"
+      end if
+   end repeat
+end tourHubOnly
+
+-- The messages waiting for Home
+function tourHubPending
+   local tLine, tLines, tId
+   if there is not a stack kHub then return empty
+   put the long id of stack kHub into tId
+   repeat for each line tLine in the pendingMessages
+      if item 4 to -1 of tLine is tId then put tLine & return after tLines
+   end repeat
+   delete the last char of tLines
+   return tLines
+end tourHubPending
+
+-- Every message waiting for Home is one the place in front handles: a
+-- timer of a place it left (hmTick, leKeepPlace) would run in the
+-- wrong stack
+command tourHubPendingCheck pPlace
+   local tScripts, tLine, tName, tModule
+   put the script of stack kHub into tScripts
+   put the short name of the behavior of stack kHub into tModule
+   if tModule is empty then throw "Home at" && pPlace && "has no behavior"
+   put return & the script of stack tModule after tScripts
+   if the behavior of stack tModule is not empty then
+      put return & the script of the behavior of stack tModule after tScripts
+   end if
+   repeat for each line tLine in tourHubPending()
+      put item 3 of tLine into tName
+      if not matchText(tScripts, "(?m)^\s*(private\s+)?(on|command|function)\s+" & tName & "\b") then
+         throw "Home at" && pPlace && "(" & tModule & ") has a message waiting that it does not handle:" && tName
+      end if
+   end repeat
+end tourHubPendingCheck
+
+-- At the smallest window, the sidebar's five places are whole in it
+command tourHubFits pPlace
+   local tPlace, tRect
+   repeat for each item tPlace in "home,academy,howto,guides,examples"
+      if there is not a control ("hub_" & tPlace) of this card of stack kHub then
+         throw "Home at" && pPlace && "has no sidebar item for" && tPlace
+      end if
+      put the rect of control ("hub_" & tPlace) of this card of stack kHub into tRect
+      if not the visible of control ("hub_" & tPlace) of this card of stack kHub \
+            or item 1 of tRect < 0 or item 2 of tRect < 0 \
+            or item 3 of tRect > the width of stack kHub or item 4 of tRect > the height of stack kHub then
+         throw "Home at" && pPlace && "in its smallest window cuts off its sidebar item" && tPlace && "(" & tRect & ")"
+      end if
+   end repeat
+end tourHubFits
 
 -- The xTalk Assistant (ide/Extensions/org.openxtalk.plugin.xtalkassistant):
 -- its window, its Settings dialog and its Memory window, in Learn's look.
@@ -4432,6 +6960,10 @@ on tourShotXta
       if not tourWaitOpen(kXtaSettings, 5000) then throw "the Settings did not open"
       tourWait 500
       tourXtaLook kXtaSettings, "Save,Cancel"
+      -- every label's words whole (tourFieldsWhole): its notes under and
+      -- beside the boxes lost their capitals' tops on Linux (rc.6.12c)
+      get tourFieldsWhole(kXtaSettings)
+      if it is not empty then tourXtaProblem it
       tourShotStack kXtaSettings, "24f-xtalk-assistant-settings"
       put true into sXta["settings"]
    catch tError
@@ -4448,6 +6980,8 @@ on tourShotXtaMemory
       tourWait 500
       tourXtaLook kXtaMemory, "Save,Cancel,Forget"
       if there is not a field "You" of stack kXtaMemory then tourXtaProblem "the Memory window has no notes about you"
+      get tourFieldsWhole(kXtaMemory)
+      if it is not empty then tourXtaProblem it
       tourShotStack kXtaMemory, "24f-xtalk-assistant-memory"
       put true into sXta["memory"]
    catch tError
@@ -4544,13 +7078,264 @@ on tour_ask
 end tour_ask
 
 -- The icon chooser of the inspector's icon properties, which opens it as
--- a sheet; here a palette, so that the tour need not wait on it
+-- a sheet; here a palette, so that the tour need not wait on it. The
+-- words of its Image library menu stand out from the menu: OpenXTalk Lite
+-- 1.15 saved the menu with black words on 86,84,93, and Windows and Linux
+-- draw its box in the theme's colours and its words in the button's, so
+-- in the dark appearance "Standard Icons" was black on dark grey
+-- (light-icon-chooser-menu.txt). Its words, as far as they reach, differ
+-- from the box beyond them, clear of the arrow, by 96 or more: on Linux
+-- black on the light box by 246, the theme's light words on the dark one
+-- by 174, and black on the dark one by 63.
+constant kTourMenuWordsInk = 96
+
 on tour_icon_chooser
+   local tMenu, tInk, tError
    palette stack "revIconChooser"
    tourWait 1000
+   put the long id of button "library chooser" of card 1 of stack "revIconChooser" into tMenu
+   try
+      put tourMenuWordsInk(tMenu) into tInk
+      tourRecord "INFO icon-chooser: the words of the Image library menu (" & the label of tMenu & \
+            ") differ from its box by" && tInk
+      if tInk < kTourMenuWordsInk then
+         put "the words of the icon chooser's Image library menu (" & the label of tMenu & \
+               ") can hardly be seen on it: they differ from its box by" && tInk & \
+               ", less than" && kTourMenuWordsInk into tError
+      end if
+   catch tError
+   end try
    tourShotStack "revIconChooser", "27-icon-chooser"
    close stack "revIconChooser"
+   if tError is not empty then throw tError
 end tour_icon_chooser
+
+-- The most a point of the words of the option menu pMenu differs from its
+-- box: its box half way down, between the end of its words and the 24
+-- points at its right where an arrow is drawn, and its words from 2 points
+-- in, as far as measureText says they reach and 2 more (no further than
+-- that box point), 4 points in from its top and bottom
+function tourMenuWordsInk pMenu
+   local tStack, tDefault, tRect, tTopLeft, tImage, tWords, tEnd, tFace
+   put the long owner of pMenu into tStack
+   repeat until word 1 of tStack is "stack"
+      put the long owner of tStack into tStack
+   end repeat
+   tourUnlockScreen "menu words"
+   put the defaultStack into tDefault
+   -- (globalLoc is of the defaultStack's window)
+   set the defaultStack to the short name of tStack
+   put the rect of pMenu into tRect
+   put globalLoc(item 1 to 2 of tRect) into tTopLeft
+   put item 1 of tTopLeft, item 2 of tTopLeft, \
+         item 1 of tTopLeft + item 3 of tRect - item 1 of tRect, \
+         item 2 of tTopLeft + item 4 of tRect - item 2 of tRect into tRect
+   put the label of pMenu into tWords
+   if tWords is empty then put line 1 of the text of pMenu into tWords
+   set the defaultStack to "oxt_ui_tour"
+   lock messages
+   import snapshot from rect tRect
+   put the long id of last image of card 1 of stack "oxt_ui_tour" into tImage
+   put the width of tImage into sPixWidth
+   put the height of tImage into sPixHeight
+   put the imageData of tImage into sPixData
+   delete tImage
+   unlock messages
+   set the defaultStack to tDefault
+   if sPixWidth < 1 or the number of bytes of sPixData < sPixWidth * sPixHeight * 4 then
+      throw "no pixels for the menu" && the short name of pMenu && "(" & tRect & ")"
+   end if
+   put min(4 + measureText(tWords, pMenu) + 2, sPixWidth - 24) into tEnd
+   put tourLum((tEnd + sPixWidth - 24) div 2, sPixHeight div 2) into tFace
+   return tourMaxDiff(2, 4, tEnd, sPixHeight - 4, tFace)
+end tourMenuWordsInk
+
+-- macOS: the system switched between light and dark while the IDE runs,
+-- as System Settings does it (the global AppleInterfaceStyle written, then
+-- AppleInterfaceThemeChangedNotification posted), there and back. Each
+-- switch must send systemAppearanceChanged, and the systemAppearance read
+-- in its handler must already be the new one: NSUserDefaults' cached copy
+-- of the setting once gave the old one, so the IDE stayed on the
+-- appearance it left (bwmilby, openxtalk.org p=25665, p=25668). Other
+-- platforms: skipped (Linux draws light; Windows is switched through the
+-- registry by ui_tour.py only before the start)
+-- After each switch a stack with no colours of its own must read and show
+-- the Mac's own colours for that appearance (seth's choice 1A of
+-- 2026-10-31): the effective backgroundColor and foregroundColor of its
+-- card dark and light in the dark, light and dark in the light, and the
+-- screen in the card's colour (tourSystemColors). Before, they never
+-- changed after a switch, and the dark appearance drew a 61,61,61 the
+-- effective backgroundColor did not give (bwmilby, the same posts)
+on tour_system_switch
+   global gTourSystemSeen
+   local tStart, tOther, tTarget, tSeen, tFails, tWaited, tError
+   local tArea, tColorsStack, tBacks, tSegments
+   if the platform is not "MacOS" then
+      tourRecord "INFO system-switch: macOS only"
+      exit tour_system_switch
+   end if
+   put the systemAppearance into tStart
+   if tStart is "dark" then put "light" into tOther
+   else put "dark" into tOther
+   if there is a button "oxtTourSystemWatch" of card 1 of stack "oxt_ui_tour" then \
+         delete button "oxtTourSystemWatch" of card 1 of stack "oxt_ui_tour"
+   create button "oxtTourSystemWatch" in card 1 of stack "oxt_ui_tour"
+   set the script of it to "on systemAppearanceChanged" & return & \
+         "global gTourSystemSeen" & return & \
+         "put the systemAppearance & comma after gTourSystemSeen" & return & \
+         "pass systemAppearanceChanged" & return & "end systemAppearanceChanged"
+   insert the script of button "oxtTourSystemWatch" of card 1 of stack "oxt_ui_tour" into front
+   put "oxt_system_colors" into tColorsStack
+   put line 1 of the working screenRects into tArea
+   tourTbMake tColorsStack, item 1 of tArea + 380, item 2 of tArea + 180, empty
+   go stack tColorsStack
+   tourOnScreen tColorsStack
+   try
+      -- a widget the IDE made follows the switch as well (2A), at the top
+      -- of the card, clear of the point tourSystemColors reads
+      put tourSegmentsMake(tColorsStack, "Segments", "10,10,310,50") into tSegments
+      repeat for each item tTarget in tOther & comma & tStart
+         put empty into gTourSystemSeen
+         tourSystemSet tTarget
+         put 0 into tWaited
+         repeat while gTourSystemSeen is empty and tWaited < 5000
+            tourWait 250
+            add 250 to tWaited
+         end repeat
+         -- a second notification for one switch (NSSystemColorsDidChange)
+         tourWait 750
+         put gTourSystemSeen into tSeen
+         if char -1 of tSeen is comma then delete char -1 of tSeen
+         tourRecord "INFO system-switch to" && tTarget & ": systemAppearanceChanged with" && \
+               quote & tSeen & quote & ", the systemAppearance now" && the systemAppearance
+         if tSeen is empty then
+            put "no systemAppearanceChanged for the switch to" && tTarget & return after tFails
+         else if item 1 of tSeen is not tTarget then
+            put "the switch to" && tTarget && "gave systemAppearanceChanged with the systemAppearance" && \
+                  item 1 of tSeen & return after tFails
+         end if
+         if the systemAppearance is not tTarget then
+            put "after the switch to" && tTarget && "the systemAppearance is" && the systemAppearance & return after tFails
+         end if
+         put tourSystemColors(tColorsStack, tTarget) after tFails
+         put tourSegmentsCheck(tColorsStack, tSegments, "244,244,244", "64,64,64", \
+               "after the switch to" && tTarget && "a segmented control the IDE made") after tFails
+         -- the card is the appearance's (tourSystemColors), so the switch
+         -- to the dark is checked against the dark colours
+         if sSegmentsDark is not (tTarget is "dark") then
+            put "after the switch to" && tTarget && "the segmented control was checked against the" && \
+                  "other appearance's colours" & return after tFails
+         end if
+         put the effective backgroundColor of card 1 of stack tColorsStack into tBacks[tTarget]
+      end repeat
+      if tBacks[tOther] is tBacks[tStart] then
+         put "the effective backgroundColor of a card was" && tBacks[tStart] && "in the light and the dark" & return after tFails
+      end if
+   catch tError
+      put tError & return after tFails
+   end try
+   remove the script of button "oxtTourSystemWatch" of card 1 of stack "oxt_ui_tour" from front
+   delete button "oxtTourSystemWatch" of card 1 of stack "oxt_ui_tour"
+   lock messages
+   if there is a stack tColorsStack then delete stack tColorsStack
+   unlock messages
+   if tFails is not empty then throw "failed:" && tourJoin(line 1 to -1 of tFails)
+end tour_system_switch
+
+-- The Mac's own colours in a stack with none of its own, pStack, after a
+-- switch to pAppearance (light or dark): empty if its card's effective
+-- backgroundColor is dark in the dark and light in the light, its
+-- effective foregroundColor the other way round, the stack's own the
+-- card's, and the screen shows the card's backgroundColor (within 8 of
+-- each of red, green and blue, for the screen's colour profile) at the
+-- card's middle; else a line for each that is not. (1A: before, the dark
+-- appearance drew 61,61,61 and the effective colours stayed as they were
+-- when the IDE started)
+function tourSystemColors pStack, pAppearance
+   local tCard, tBack, tFore, tShown, tFails, i
+   put the long id of card 1 of stack pStack into tCard
+   if the backgroundColor of tCard is not empty or the backgroundColor of stack pStack is not empty \
+         or the foregroundColor of stack pStack is not empty then
+      return "the stack" && pStack && "has colours of its own" & return
+   end if
+   put the effective backgroundColor of tCard into tBack
+   put the effective foregroundColor of tCard into tFore
+   put tourCbPixel(pStack, (item 3 of the rect of stack pStack - item 1 of the rect of stack pStack) div 2) into tShown
+   tourRecord "INFO system-switch to" && pAppearance & ": a card's effective backgroundColor" && tBack & \
+         ", foregroundColor" && tFore & ", on the screen" && tShown
+   if tourSystemLight(tBack) is (pAppearance is "dark") then
+      put "in the" && pAppearance && "a card's effective backgroundColor is" && tBack & return after tFails
+   end if
+   if tourSystemLight(tFore) is not (pAppearance is "dark") then
+      put "in the" && pAppearance && "a card's effective foregroundColor is" && tFore & return after tFails
+   end if
+   if the effective backgroundColor of stack pStack is not tBack then
+      put "in the" && pAppearance && "the stack's effective backgroundColor is" && \
+            the effective backgroundColor of stack pStack & ", its card's" && tBack & return after tFails
+   end if
+   if the effective foregroundColor of stack pStack is not tFore then
+      put "in the" && pAppearance && "the stack's effective foregroundColor is" && \
+            the effective foregroundColor of stack pStack & ", its card's" && tFore & return after tFails
+   end if
+   if the number of items of tBack is not 3 or the number of items of tShown is not 3 then
+      put "in the" && pAppearance && "no colours to compare: the card's" && tBack & ", the screen's" && tShown & return after tFails
+   else
+      repeat with i = 1 to 3
+         if abs(item i of tShown - item i of tBack) > 8 then
+            put "in the" && pAppearance && "the screen shows" && tShown && "where a card's effective backgroundColor is" && \
+                  tBack & return after tFails
+            exit repeat
+         end if
+      end repeat
+   end if
+   return tFails
+end tourSystemColors
+
+-- Whether the colour pRGB ("r,g,b") is light: the mean of the three 128
+-- or more
+function tourSystemLight pRGB
+   if the number of items of pRGB is not 3 then return empty
+   return (item 1 of pRGB + item 2 of pRGB + item 3 of pRGB) / 3 >= 128
+end tourSystemLight
+
+-- Sets the Mac to pAppearance (light or dark) as System Settings does.
+-- The notification is posted by a small native program that stays alive
+-- until it has gone: one posted through osascript (JavaScript for
+-- Automation) never reached an observer on a CI Mac, an engine's or a
+-- plain Swift program's, while the same post from a Swift program did
+-- (probe on macos-15, 15.8.2, 2026-10-31)
+command tourSystemSet pAppearance
+   local tPoster
+   if pAppearance is "dark" then
+      get shell("defaults write -g AppleInterfaceStyle Dark")
+   else
+      get shell("defaults delete -g AppleInterfaceStyle 2>/dev/null; true")
+   end if
+   put tourThemePoster() into tPoster
+   get shell(quote & tPoster & quote & " 2>&1")
+   if it is not empty then tourRecord "INFO system-switch poster:" && tourJoin(it)
+end tourSystemSet
+
+-- The path of the program that posts AppleInterfaceThemeChangedNotification,
+-- compiled with swiftc the first time it is wanted; throws when it cannot
+-- be built, so that the step fails rather than checks nothing
+local sThemePoster
+function tourThemePoster
+   local tSource, tBinary, tOut
+   if sThemePoster is not empty and there is a file sThemePoster then return sThemePoster
+   put specialFolderPath("temporary") & "/oxt_tour_theme_post.swift" into tSource
+   put specialFolderPath("temporary") & "/oxt_tour_theme_post" into tBinary
+   put "import Foundation" & return & \
+         "DistributedNotificationCenter.default().postNotificationName(" & \
+         "NSNotification.Name(" & quote & "AppleInterfaceThemeChangedNotification" & quote & ")," & \
+         " object: nil, userInfo: nil, deliverImmediately: true)" & return & \
+         "RunLoop.main.run(until: Date().addingTimeInterval(0.5))" & return into URL ("file:" & tSource)
+   if there is a file tBinary then delete file tBinary
+   put shell("xcrun swiftc -O -o " & quote & tBinary & quote && quote & tSource & quote & " 2>&1") into tOut
+   if there is not a file tBinary then throw "could not build the theme poster:" && tourJoin(tOut)
+   put tBinary into sThemePoster
+   return sThemePoster
+end tourThemePoster
 
 on tour_screen_end
    tourShotScreen "99-screen-end"
@@ -4908,6 +7693,18 @@ command tourWait pMilliseconds
 end tourWait
 
 -- Waits, at most pMilliseconds, for the stack pStack to be open and shown
+-- Waits for a learning window: OXT-Beyond Home (kHub), in a release that
+-- has it, or pStack, its own window before Home. Returns the one that
+-- opened, or empty.
+function tourWaitHosted pStack, pMilliseconds
+   repeat (pMilliseconds div 250) times
+      if there is a stack kHub and the mode of stack kHub is not 0 and the visible of stack kHub then return kHub
+      if there is a stack pStack and the mode of stack pStack is not 0 and the visible of stack pStack then return pStack
+      tourWait 250
+   end repeat
+   return empty
+end tourWaitHosted
+
 function tourWaitOpen pStack, pMilliseconds
    repeat (pMilliseconds div 250) times
       if there is a stack pStack and the mode of stack pStack is not 0 and the visible of stack pStack then return true
@@ -4959,6 +7756,35 @@ command tourOnScreen pStack
       end if
    end if
 end tourOnScreen
+
+-- A window as wide as the screen cannot move clear of the Tools palette
+-- (tourOnScreen): OXT-Beyond Home is 1024 wide on the Apple silicon Mac's
+-- 1024 by 768 screen, and the palette, which floats over every window,
+-- covers its sidebar. A check that reads the screen's pixels of a window
+-- would read the palette's: the Academy's selected index line read
+-- 88,88,88, the palette's grey, on the Mac's dark appearance (the rc.6.12
+-- release pull request, 1 November 2026). tourToolsAside hides the palette
+-- while such a check takes its snapshot, when the palette is over pRect
+-- (global), and returns true if it did; tourToolsBack shows it again. The
+-- snapshots a person looks through are taken as they are, palette and all
+function tourToolsAside pRect
+   local tTools
+   if there is not a stack "revTools" then return false
+   if the mode of stack "revTools" is 0 or not the visible of stack "revTools" then return false
+   put the effective rect of stack "revTools" into tTools
+   if item 1 of pRect < item 3 of tTools and item 3 of pRect > item 1 of tTools \
+         and item 2 of pRect < item 4 of tTools and item 4 of pRect > item 2 of tTools then
+      tourRecord "INFO the Tools palette (" & tTools & ") is over" && pRect & ": hidden while the pixels are read"
+      hide stack "revTools"
+      tourWait 300
+      return true
+   end if
+   return false
+end tourToolsAside
+
+command tourToolsBack
+   if there is a stack "revTools" and the mode of stack "revTools" is not 0 then show stack "revTools"
+end tourToolsBack
 
 -- Snapshot of the screen around pObject (of the stack pStack), big enough
 -- for its tooltip

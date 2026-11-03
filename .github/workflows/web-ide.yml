@@ -21,7 +21,10 @@
 # Message Box, an answer dialog in browse mode, the Dictionary, ...). A
 # script error in the IDE, a step that fails, or a page that does not open
 # fails the check. The screenshots are uploaded with a page that shows them
-# (the artifact web-ide-screenshots, which the job summary links).
+# (the artifact web-ide-screenshots, which the job summary links). The job
+# Web IDE small window opens the IDE again on pages smaller than Home
+# (800x500 and 640x480) in Chromium and Firefox and runs the tour's first
+# steps there.
 #
 # The site is built as tools/ci/build-web-ide.sh builds it, from:
 #   - the web IDE's engine (engine.gyp's javascriptify-development), built
@@ -78,6 +81,10 @@ on:
       - tools/ci/build-web-ide.sh
       - tools/ci/build-web.sh
       - tools/web-ide/**
+      - tools/pages/build_pages.py
+      - tools/pages/build_dictionary.py
+      - tools/pages/check_dictionary.py
+      - tools/pages/check_front_page.py
       - tools/ci/web-ide-xtalk.livecodescript
       - tools/ci/nostr_test_relay.py
       - tools/oxt/xtalk-extensions.json
@@ -101,6 +108,10 @@ on:
       - tools/ci/build-web-ide.sh
       - tools/ci/build-web.sh
       - tools/web-ide/**
+      - tools/pages/build_pages.py
+      - tools/pages/build_dictionary.py
+      - tools/pages/check_dictionary.py
+      - tools/pages/check_front_page.py
       - tools/ci/web-ide-xtalk.livecodescript
       - tools/ci/nostr_test_relay.py
       - tools/oxt/xtalk-extensions.json
@@ -336,12 +347,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # In a light browser and a dark one: the page follows the browser
+  # (tools/web-ide/index.html's oxt-appearance), and the tour's last step
+  # switches it to the other scheme and back
   tour:
-    name: Web IDE screenshots
+    name: Web IDE screenshots (${{ matrix.scheme }})
     needs: engine
     if: ${{ !inputs.release }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scheme: [light, dark]
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -391,16 +409,19 @@ jobs:
 
       - name: Web IDE screenshots
         timeout-minutes: 15
+        env:
+          SCHEME: ${{ matrix.scheme }}
         run: |
           "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_ide_tour.py --site "$RUNNER_TEMP/site" \
-            --out "$RUNNER_TEMP/web-ide-tour"
+            --out "$RUNNER_TEMP/web-ide-tour" --color-scheme "$SCHEME"
 
+      # (light keeps the artifact's old name)
       - name: Upload the screenshots
         id: upload
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: web-ide-screenshots
+          name: web-ide-screenshots${{ matrix.scheme == 'dark' && '-dark' || '' }}
           path: ${{ runner.temp }}/web-ide-tour
           if-no-files-found: ignore
           retention-days: 14
@@ -415,6 +436,111 @@ jobs:
             echo
             echo "[Download the screenshots]($URL) (index.html shows them)."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The IDE opened on a page smaller than Home, in Chromium and Firefox:
+  # OpenXTalkPaul's Firefox window on a Mac, too small for Home, kept the
+  # web IDE on its loading screen now and then (openxtalk.org p=25583).
+  # The tour's start step fails unless the IDE opens and its menu bar and
+  # Home are on the page, and its sample step unless it still answers.
+  # At 800x500 each browser also opens it with its storage refused
+  # (web_ide_tour.py --refuse-storage): the storage-open step fails unless
+  # the page's not-saved bar says so.
+  small:
+    name: Web IDE small window (${{ matrix.browser }}, ${{ matrix.size }})
+    needs: engine
+    if: ${{ !inputs.release }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+        size: [800x500, 640x480]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download the engine
+        uses: actions/download-artifact@v8
+        with:
+          name: web-ide-engine
+          path: ${{ runner.temp }}/web-ide-engine
+
+      # As the screenshots' job
+      - name: Download the release's Linux package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release list --repo "$REPO" --limit 30 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]' | head -n 1)
+          fi
+          echo "Release: $TAG"
+          mkdir -p "$RUNNER_TEMP/dist" "$RUNNER_TEMP/oxt"
+          gh release download "$TAG" --repo "$REPO" --pattern "*-linux-x86_64.tar.xz" --dir "$RUNNER_TEMP/dist"
+          tar -xJf "$RUNNER_TEMP"/dist/*-linux-x86_64.tar.xz -C "$RUNNER_TEMP/oxt"
+          home=$(find "$RUNNER_TEMP/oxt" -maxdepth 4 -path '*/Toolset/home.livecodescript' | head -n 1)
+          if [ -z "$home" ]; then echo "::error::the package has no Toolset/home.livecodescript"; exit 1; fi
+          echo "OXT_ROOT=$(dirname "$(dirname "$home")")" >> "$GITHUB_ENV"
+
+      - name: Build the site
+        run: |
+          python3 tools/web-ide/build_site.py --install "$OXT_ROOT" \
+            --engine "$RUNNER_TEMP/web-ide-engine" --out "$RUNNER_TEMP/site" --repo .
+
+      - name: Install Playwright and ${{ matrix.browser }}
+        env:
+          PLAYWRIGHT_VERSION: 1.56.0
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/playwright"
+          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
+          "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps "$BROWSER"
+
+      - name: Web IDE in a small window
+        timeout-minutes: 10
+        env:
+          BROWSER: ${{ matrix.browser }}
+          SIZE: ${{ matrix.size }}
+        run: |
+          "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_ide_tour.py --site "$RUNNER_TEMP/site" \
+            --out "$RUNNER_TEMP/web-ide-small" --browser "$BROWSER" --size "$SIZE" \
+            --only start,sample --timeout 480
+
+      # The browser's storage refusing the page from the start (a private
+      # window, a site's blocked storage): the IDE still opens, and the
+      # page's not-saved bar says the stacks are not being kept (seth's
+      # choice 6A of 2026-10-31). Once for each browser.
+      - name: Web IDE with the browser's storage refused
+        if: ${{ matrix.size == '800x500' }}
+        timeout-minutes: 10
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_ide_tour.py --site "$RUNNER_TEMP/site" \
+            --out "$RUNNER_TEMP/web-ide-refused" --browser "$BROWSER" --refuse-storage \
+            --only storage-open --timeout 480
+
+      - name: Upload the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-ide-small-${{ matrix.browser }}-${{ matrix.size }}
+          path: ${{ runner.temp }}/web-ide-small
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload the storage-refused screenshots
+        if: ${{ always() && matrix.size == '800x500' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-ide-refused-${{ matrix.browser }}
+          path: ${{ runner.temp }}/web-ide-refused
+          if-no-files-found: ignore
+          retention-days: 14
 
   soak:
     name: Web IDE soak (${{ matrix.browser }})
@@ -475,15 +601,19 @@ jobs:
       # check does (tools/ci/retry_check.py: the first try's record is
       # kept in try-1 of the uploaded folder, with a warning in the
       # summary), and the step and the job have room for two tries;
-      # Chromium runs it once, as before
+      # Chromium runs it once, as before. Each try has 11 minutes (a pass
+      # takes about 8.5): a try that hangs is stopped and counts as a
+      # failed one, so the second try still runs. On main 25a872e97 the
+      # first WebKit try hung after 355 seconds and the step's 25 minutes
+      # ran out with the second never started.
       - name: Web IDE soak
         timeout-minutes: ${{ matrix.browser == 'webkit' && 25 || 15 }}
         env:
           BROWSER: ${{ matrix.browser }}
           TRIES: ${{ matrix.browser == 'webkit' && 2 || 1 }}
         run: |
-          python3 tools/ci/retry_check.py --tries "$TRIES" --files "$RUNNER_TEMP/web-ide-soak" \
-            --what "The web IDE soak in $BROWSER" -- \
+          python3 tools/ci/retry_check.py --tries "$TRIES" --try-minutes 11 \
+            --files "$RUNNER_TEMP/web-ide-soak" --what "The web IDE soak in $BROWSER" -- \
             "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_ide_soak.py --site "$RUNNER_TEMP/site" \
             --out "$RUNNER_TEMP/web-ide-soak" --browser "$BROWSER" --minutes 8
 
@@ -701,6 +831,51 @@ jobs:
           sha256sum "$zip" > SHA256SUMS
           ls -l
           cat SHA256SUMS
+
+      # The Dictionary that Help > Dictionary Online opens (seth's choice
+      # 12A): the GitHub Pages site makes it from the release's web IDE zip
+      # (pages.yml, tools/pages/build_pages.py), so it is made here from
+      # this zip the same way and read in a browser
+      # (tools/pages/check_dictionary.py), before the zip goes anywhere
+      - name: Install Playwright and Chromium
+        env:
+          PLAYWRIGHT_VERSION: 1.56.0
+        run: |
+          python3 -m venv "$RUNNER_TEMP/playwright"
+          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
+          "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps chromium
+
+      - name: The online Dictionary
+        run: |
+          zip=$(compgen -G "$RUNNER_TEMP/download/*-web-ide.zip" | head -n 1)
+          version=$(basename "$zip" -web-ide.zip); version=${version#OXT-Beyond-}
+          python3 tools/pages/build_pages.py --out "$RUNNER_TEMP/pages" --ide "$zip" --ide-version "$version"
+          if [ ! -f "$RUNNER_TEMP/pages/dictionary/index.html" ]; then
+            echo "::error::the site made from $(basename "$zip") has no Dictionary"
+            exit 1
+          fi
+          "$RUNNER_TEMP/playwright/bin/python" tools/pages/check_dictionary.py \
+            --site "$RUNNER_TEMP/pages/dictionary" --out "$RUNNER_TEMP/dictionary-shots"
+
+      # The site's front page, made in the step above with this zip's two
+      # parts (the web IDE and its Dictionary), read in a browser wide and
+      # narrow, light and dark: its links answer, it asks no other host for
+      # anything, and nothing is wider than a phone
+      # (tools/pages/check_front_page.py; tools/ci/tests/test_pages_front.py
+      # holds every other set of parts without a browser)
+      - name: The site's front page
+        run: |
+          "$RUNNER_TEMP/playwright/bin/python" tools/pages/check_front_page.py \
+            --site "$RUNNER_TEMP/pages" --out "$RUNNER_TEMP/dictionary-shots"
+
+      - name: Upload the Dictionary's screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-dictionary-screenshots
+          path: ${{ runner.temp }}/dictionary-shots/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload the zip
         id: upload

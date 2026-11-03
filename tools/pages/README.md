@@ -8,8 +8,30 @@ Pages site, so that anyone can open them with nothing to download:
 | --- | --- |
 | `https://<owner>.github.io/<repository>/` | the front page ([index.html](index.html)), which links to both |
 | `.../ide/` | the web IDE |
+| `.../dictionary/` | the IDE's Dictionary (xTalk Script and xTalk Builder), which Help > Dictionary Online opens |
 | `.../player/` | the Stack Player |
+| `.../games/` | web games, such as Pixel Platformer Maker: each page runs its `standalone.zip` on the Stack Player's engine |
 | `.../map/` | the [codebase map](../codebase-map/README.md), for contributors, with the binary stacks' scripts as files beside it (`stack-scripts/`, `stack-scripts.zip`) |
+
+The front page is one self-contained file: its look (a night sky over an
+orange horizon, a small stack whose button answers as its script says,
+and a card for each part) is drawn with its own CSS and SVG, and it asks
+no other host for anything. `build_pages.py` drops every block of a part
+it was not given (a part can have more than one: its card, and its
+button in the header). [test_pages_front.py](../ci/tests/test_pages_front.py)
+builds it with every set of parts and holds its links to the folders
+that are there, its own anchors and the project on GitHub;
+[check_front_page.py](check_front_page.py) reads it in a browser, wide
+and narrow, light and dark (the Web IDE workflow runs it beside the
+Dictionary's check).
+
+With a release (`--release TAG --release-assets FILE`, which pages.yml
+gives: the release on the site, or the newest when the site has a test
+build), the front page also has a Downloads section, as the forum posts
+have: the Windows, macOS and Linux packages, the web zips and the
+plugins, each linked straight to its file, with links to the release's
+page, earlier releases and a bug report. A file the release does not
+have gets no link.
 
 The workflow [pages.yml](../../.github/workflows/pages.yml) builds no
 part of the IDE or the player: it takes the two sites as a release ships them
@@ -18,7 +40,23 @@ puts them in their folders with [build_pages.py](build_pages.py) and
 deploys the result. The one thing it makes is the codebase map, from
 the source of the commit it checks out, with
 [build_map.py](../codebase-map/build_map.py); if that fails, the site goes
-up without the map. The Release workflow starts it once a release is
+up without the map.
+
+The Dictionary is made from the web IDE zip, so it is that release's:
+[build_dictionary.py](build_dictionary.py) takes the IDE's dictionary
+viewer (its page template, styles and scripts) and dictionary data from
+the zip's `ide.zip` and writes the page the IDE once made for its browser
+Dictionary, titled "OXT-Beyond Dictionary", with the data in one
+`built_api.js`. A web IDE without the viewer (one before 0.2.7) leaves the
+Dictionary off the site; one whose Dictionary cannot be made stops the
+build. The Web IDE workflow makes it from every zip it builds, the
+release's too, and reads it in Chromium with
+[check_dictionary.py](check_dictionary.py) (its title and APIs, every
+entry listed, a search, an entry opened, no missing file); the IDE tour's
+dictionary-online step checks that Help > Dictionary Online opens
+`https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/dictionary/`.
+
+The Release workflow starts it once a release is
 published (its last job, "Web pages"), and it runs by
 hand (Actions > Web pages > Run workflow, with a release's tag or none for
 the newest). A release that has no web IDE zip takes the web IDE from a Web IDE

@@ -24,6 +24,8 @@ along with LiveCode.  If not see <http://www.gnu.org/licenses/>.  */
 #include "platform.h"
 #include "mctheme.h"
 #include "context.h"
+#include "uidc.h"
+#include "globals.h"
 
 /* OXT-Beyond: the web has no native theme, so the engine draws every
  * control itself. It draws them in the look of the desktop engines' themes
@@ -107,6 +109,55 @@ em_theme_color(uint32_t p_rgb, MCColor& r_color)
 #define kMCWebThemeHilightEdge      0xFFFFFF /* COLOR_3DHILIGHT */
 #define kMCWebThemeShadowEdge       0xA0A0A0 /* COLOR_3DSHADOW */
 
+/* OXT-Beyond: in the dark appearance (a page that follows the browser's
+ * colour scheme: MCScreenDC::getsystemappearance in em-dc.cpp), the colours
+ * that the Windows engine gives a control in Windows' dark mode
+ * (windows-theme.cpp): white text, and RGB(32,32,32) behind controls,
+ * fields and windows. The others stay as in the light appearance, as
+ * there. */
+#define kMCWebThemeDarkText         0xFFFFFF
+#define kMCWebThemeDarkFace         0x202020
+
+/* OXT-Beyond: and the light edge of a 3-D border, a little lighter than
+ * the dark face: white there drew a bright line around every field, scroll
+ * bar and arrow box, and a disabled label's white emboss under its grey
+ * text read as a second, brighter copy of the label (the web IDE's toolbar
+ * and Preferences in a dark browser) */
+#define kMCWebThemeDarkHilightEdge  0x3A3A3A
+
+/* OXT-Beyond: on a page that asks for it, with
+ * <meta name="oxt-field-background" content="card"> (em-dc.js), a field,
+ * list field or combo box that sets no colour is drawn in the light
+ * appearance in the grey of a card that sets none (kMCWebThemeFace), as
+ * both are in the dark appearance (kMCWebThemeDarkFace), instead of white
+ * (bwmilby, openxtalk.org p=25615; seth's choice 9A of 2026-10-31). A page
+ * without it, which every page was, keeps white fields. Menus keep their
+ * white. */
+extern "C" int32_t MCEmscriptenGetFieldsLikeCard(void);
+
+static bool
+em_theme_is_dark(void)
+{
+	MCSystemAppearance t_appearance;
+	MCscreen->getsystemappearance(t_appearance);
+	return t_appearance == kMCSystemAppearanceDark;
+}
+
+/* OXT-Beyond: the box of a check box that sets no colour of its own
+ * (MCButton::drawcheck, buttondraw.cpp), in the dark appearance: the dark
+ * face, as Windows' dark mode draws one, and the light edge's grey while
+ * the mouse is down in it. It was white there, as in the light appearance,
+ * so an unticked box looked like a ticked one on a dark card (found in the
+ * web IDE, 2026-10-29). False in the light appearance, where the box stays
+ * white (grey while the mouse is down in it), as before. */
+bool
+MCEmscriptenThemeGetCheckBoxColor(bool p_pressed, MCColor& r_color)
+{
+	if (!em_theme_is_dark())
+		return false;
+	return em_theme_color(p_pressed ? kMCWebThemeDarkHilightEdge : kMCWebThemeDarkFace, r_color);
+}
+
 bool
 MCPlatformGetControlThemePropColor(MCPlatformControlType p_type,
                                    MCPlatformControlPart p_part,
@@ -114,6 +165,8 @@ MCPlatformGetControlThemePropColor(MCPlatformControlType p_type,
                                    MCPlatformThemeProperty p_prop,
                                    MCColor& r_color)
 {
+	bool t_dark = em_theme_is_dark();
+
 	switch (p_prop)
 	{
 	case kMCPlatformThemePropertyTextColor:
@@ -121,7 +174,7 @@ MCPlatformGetControlThemePropColor(MCPlatformControlType p_type,
 			return em_theme_color(kMCWebThemeGrayText, r_color);
 		if (p_state & kMCPlatformControlStateSelected)
 			return em_theme_color(kMCWebThemeHighlightText, r_color);
-		return em_theme_color(kMCWebThemeWindowText, r_color);
+		return em_theme_color(t_dark ? kMCWebThemeDarkText : kMCWebThemeWindowText, r_color);
 
 	case kMCPlatformThemePropertyBackgroundColor:
 		if (p_state & kMCPlatformControlStateSelected)
@@ -143,12 +196,15 @@ MCPlatformGetControlThemePropColor(MCPlatformControlType p_type,
 		case kMCPlatformControlTypeInputField:
 		case kMCPlatformControlTypeList:
 		case kMCPlatformControlTypeComboBox:
+			if (!t_dark && MCEmscriptenGetFieldsLikeCard() != 0)
+				return em_theme_color(kMCWebThemeFace, r_color);
+			return em_theme_color(t_dark ? kMCWebThemeDarkFace : kMCWebThemeWindow, r_color);
 		case kMCPlatformControlTypeOptionMenu:
 		case kMCPlatformControlTypePulldownMenu:
 		case kMCPlatformControlTypePopupMenu:
-			return em_theme_color(kMCWebThemeWindow, r_color);
+			return em_theme_color(t_dark ? kMCWebThemeDarkFace : kMCWebThemeWindow, r_color);
 		default:
-			return em_theme_color(kMCWebThemeFace, r_color);
+			return em_theme_color(t_dark ? kMCWebThemeDarkFace : kMCWebThemeFace, r_color);
 		}
 
 	case kMCPlatformThemePropertyShadowColor:
@@ -156,7 +212,7 @@ MCPlatformGetControlThemePropColor(MCPlatformControlType p_type,
 
 	case kMCPlatformThemePropertyTopEdgeColor:
 	case kMCPlatformThemePropertyLeftEdgeColor:
-		return em_theme_color(kMCWebThemeHilightEdge, r_color);
+		return em_theme_color(t_dark ? kMCWebThemeDarkHilightEdge : kMCWebThemeHilightEdge, r_color);
 
 	case kMCPlatformThemePropertyBottomEdgeColor:
 	case kMCPlatformThemePropertyRightEdgeColor:

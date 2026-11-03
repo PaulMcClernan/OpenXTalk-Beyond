@@ -624,8 +624,21 @@ function lkInput pName, pRect, pText, pSize, pGroup
    set the autoHilite of tObj to true
    set the dontWrap of tObj to true
    set the autoTab of tObj to false
+   lkSelectedInk tObj, "255,255,255"
    return tObj
 end lkInput
+
+-- The colour of the text selected in the field pObj: pRGB. On Linux and
+-- Windows the engine draws a field's selected text in the field's
+-- background colour (engine/src/block.cpp, setcolorforselectedtext); a
+-- kit field sets none, so it took the window's, dark in the dark
+-- appearance, and a selected line or word read dark on its hilite (the
+-- violet line of an index, a word picked in a dark search box or code
+-- panel). The field is not opaque, so the colour paints nothing else; a
+-- Mac draws selected text in the text's own colour.
+command lkSelectedInk pObj, pRGB
+   set the backgroundColor of pObj to pRGB
+end lkSelectedInk
 
 -- A code panel's text: the code font, a fixed line height
 function lkCodeField pName, pRect, pSize, pLineHeight, pGroup
@@ -636,6 +649,7 @@ function lkCodeField pName, pRect, pSize, pLineHeight, pGroup
    end if
    set the fixedLineHeight of tObj to true
    set the textHeight of tObj to pLineHeight
+   lkSelectedInk tObj, "255,255,255"
    return tObj
 end lkCodeField
 
@@ -816,6 +830,46 @@ function lkPastEdge pX, pY, pEdgeX, pSx, pSy
    end if
    return pX & "," & (pY + 2 * pSy)
 end lkPastEdge
+
+-- Where a hero's words and buttons are, one rect a line, from the top left
+-- of its background pBg (so the rects hold while the page scrolls): its
+-- fields of pFields as far as their text reaches, and its button groups
+-- of pGroups, each with a few points round it. A sparkle the hero's lights
+-- would put on one is not drawn (lkInZones): at fixed parts of the hero's
+-- width, they landed on its words in a narrow window, a stray mark in
+-- "idea at a time", "very first" or "Tom Perry".
+function lkTextZones pBg, pFields, pGroups
+   local tLeft, tTop, tName, tZones
+   put the left of pBg into tLeft
+   put the top of pBg into tTop
+   repeat for each item tName in pFields
+      if there is a field tName and the text of field tName is not empty then
+         put (the left of field tName - tLeft - 6) & comma & (the top of field tName - tTop - 4) & comma & \
+               (the left of field tName + the formattedWidth of field tName - tLeft + 6) & comma & \
+               (the top of field tName + the formattedHeight of field tName - tTop + 4) & return after tZones
+      end if
+   end repeat
+   repeat for each item tName in pGroups
+      if there is a group tName and the visible of group tName then
+         put (the left of group tName - tLeft - 6) & comma & (the top of group tName - tTop - 6) & comma & \
+               (the right of group tName - tLeft + 6) & comma & (the bottom of group tName - tTop + 6) & return after tZones
+      end if
+   end repeat
+   return line 1 to -1 of tZones
+end lkTextZones
+
+-- Whether the point pX, pY (from the hero's top left) is within pPad points
+-- of a rect of pZones (lkTextZones)
+function lkInZones pZones, pX, pY, pPad
+   local tZone
+   repeat for each line tZone in pZones
+      if pX >= item 1 of tZone - pPad and pX <= item 3 of tZone + pPad and \
+            pY >= item 2 of tZone - pPad and pY <= item 4 of tZone + pPad then
+         return true
+      end if
+   end repeat
+   return false
+end lkInZones
 
 -- A four-pointed sparkle
 function lkSparklePoints pX, pY, pSize
@@ -1418,6 +1472,114 @@ command lkNavItem pName, pTop, pHeight, pLabel, pIcon, pAction, pSize, pRight
    put "255,255,255" into tLook["ink1"]
    lkLive pName, "side", pAction, tLook
 end lkNavItem
+
+################################################################################
+#
+# OXT-Beyond Home (palettes/home/revhub.livecodescript)
+#
+-- Home is one window with a sidebar of five places, each drawn by the
+-- stack that always drew it, used as the window's behavior. A stack that
+-- uses the kit and is hosted there sees the places in the cHubPlaces of
+-- me (lines of key|label|icon|accent) and the one in front in the
+-- cHubPlace of me, and draws the head of the sidebar with lkHubHead in
+-- place of its own mark and list. Open on its own, a stack is not hosted
+-- and draws itself as it always did.
+
+function lkHosted
+   return the cHubPlaces of me is not empty
+end lkHosted
+
+-- Home's mark, at the top of the sidebar lkHubHead draws, at 20,22 and 36
+-- pixels square: image "sideMark", a copy of the OXT-Beyond logo in stack
+-- "revGeneralIcons" (its 64-pixel PNG, the one the About window and the
+-- answer and ask dialogs show, drawn at 36 with the best resizing), with
+-- the logo's own orange glow, as Home's hmSideMark draws it on its own
+-- pages. When that stack or image is not there, the mark is drawn as it
+-- was before the logo: an orange-to-pink tile with the "layers" icon on it.
+private command lkHubMark
+   local tObj
+   if there is a stack "revGeneralIcons" and \
+         there is an image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons" then
+      create image "sideMark"
+      put it into tObj
+      set the text of tObj to the text of image "oxt-l-64.png" of card "theAlertIcons" of stack "revGeneralIcons"
+      set the resizeQuality of tObj to "best"
+      set the lockLoc of tObj to true
+      set the rect of tObj to "20,22,56,58"
+      lkGlow tObj, "255,122,0", 12, 70
+      exit lkHubMark
+   end if
+   put lkBox("sideMark", "20,22,56,58", lkColor("orange"), 22, empty) into tObj
+   lkGradient tObj, "255,139,0|236,72,153", "20,22", "56,58"
+   lkGlow tObj, "255,139,0", 16, 110
+   get lkIcon("sideMarkIcon", "layers", "255,255,255", "28,30,48,50", empty)
+end lkHubMark
+
+-- The head of Home's sidebar, pSide wide: Home's mark, and the five
+-- places, each sending "hub <place>" (revHub's lkAction). It makes the
+-- highlight that slides to the place in front (graphics "navHi" and
+-- "navBar", as the stacks' own lists had), and returns the y below the
+-- places.
+function lkHubHead pSide
+   local tObj, tY, tLine
+   lkHubMark
+   get lkLabel("sideTitle", lkR(66, 21, pSide - 8, 45), "OXT-Beyond", 19, "255,255,255", empty)
+   get lkLabel("sideSub", lkR(66, 45, pSide - 8, 61), "Home: learn, explore, build", 11, lkColor("sideMuted"), empty)
+   put lkBox("navHi", lkR(10, 84, pSide - 10, 116), lkColor("side2"), 16, empty) into tObj
+   lkBorder tObj, lkColor("sideLine")
+   put lkBox("navBar", "10,91,14,109", lkColor("violet"), 4, empty) into tObj
+   put 84 into tY
+   set the itemDelimiter to "|"
+   repeat for each line tLine in the cHubPlaces of me
+      lkNavItem "hub_" & item 1 of tLine, tY, 32, item 2 of tLine, item 3 of tLine, "hub" && item 1 of tLine, 14, pSide - 10
+      add 34 to tY
+   end repeat
+   set the itemDelimiter to comma
+   return tY
+end lkHubHead
+
+-- The sidebar marks the place in front: its name white, its icon in its
+-- accent. Returns the top of its item, where the highlight goes.
+function lkHubSync pAccent
+   local tLine, tName, tTop, tPlace
+   put the cHubPlace of me into tPlace
+   set the itemDelimiter to "|"
+   repeat for each line tLine in the cHubPlaces of me
+      put "hub_" & item 1 of tLine into tName
+      if there is not a group tName of me then
+         next repeat
+      end if
+      if item 1 of tLine is tPlace then
+         lkSetLook tName, "ink0", "255,255,255"
+         lkIconInk the long id of image (tName & "_icon") of me, item 3 of tLine, lkMix(pAccent, "255,255,255", 0.35)
+         put the top of group tName of me into tTop
+      else
+         lkSetLook tName, "ink0", lkColor("sideInk")
+         lkIconInk the long id of image (tName & "_icon") of me, item 3 of tLine, lkColor("sideInk")
+      end if
+   end repeat
+   set the itemDelimiter to comma
+   return tTop
+end lkHubSync
+
+-- A small heading in the sidebar, under the places ("COURSES", "TOUR")
+command lkHubHeading pName, pTop, pText, pSide
+   local tObj
+   put lkLabel(pName, lkR(22, pTop, pSide - 10, pTop + 14), toUpper(pText), 10, lkColor("sideMuted"), empty) into tObj
+   set the textStyle of tObj to "bold"
+end lkHubHeading
+
+-- The place's accent, by its key
+function lkHubAccent pPlace
+   local tLine
+   set the itemDelimiter to "|"
+   repeat for each line tLine in the cHubPlaces of me
+      if item 1 of tLine is pPlace then
+         return lkColor(item 4 of tLine)
+      end if
+   end repeat
+   return lkColor("violet")
+end lkHubAccent
 
 ################################################################################
 #

@@ -1,28 +1,34 @@
 # Remastered examples
 
-The IDE's example stacks, remade in the look of Home and Learn: one
-window, a sidebar of the stack's cards, a header with each card's title,
-and each program on a stage with its scripts beside it, in colour. Each
-remaster stands beside its original, which stays where it was
-(`ide/Resources/Examples`, `ide/Resources/Start Center/samples`) as its
-author made it. Learn's gallery opens the remaster, and lists the
-originals under Classic.
+The IDE's example stacks, remade in the look of Home: one window, a
+sidebar of the stack's cards, a header with each card's title, and each
+program on a stage with its scripts beside it, in colour. Home's
+Examples place opens the remasters, and only they are installed.
 
-| Remaster | Builder | Original, in `ide/Resources` | Made by |
+The originals, as their authors made them, are kept here in
+[`originals/`](originals/), because the builders read their pictures,
+data and text from them. They were installed (in `ide/Resources/Examples`
+and `ide/Resources/Start Center/samples`) and listed under Classic until
+0.2.7-rc.6.12, when Home took the place of the Start Center, the Welcome
+window and OpenXTalk Lite's demos, and the classic copies left the
+package.
+
+| Remaster | Builder | Original, in `originals/` | Made by |
 | --- | --- | --- | --- |
-| Quick Start Guide | [quick-start](quick-start.livecodescript) | `Examples/Quick Start.oxtstack` | Terry Little, 2024 |
-| Animate a Letter | [animate-letter](animate-letter.livecodescript) | `Examples/Animate Letter.oxtstack` | Terry Little, 2022 |
-| A Data Grid Tour | [data-grid-tour](data-grid-tour.livecodescript) | `Examples/Data Grid Tour.oxtstack` | LiveCode Ltd, debranded for OpenXTalk at LiveCode's request |
-| A Tour of SQLite | [sqlite-tour](sqlite-tour.livecodescript) | `Examples/SQLite Tour.oxtstack` | LiveCode Ltd, debranded for OpenXTalk at LiveCode's request |
-| Data Grid Tables | [data-grid-table](data-grid-table.livecodescript) | `Examples/DataGrid Table.oxtstack` | Terry Little, 2022 |
-| SQLite Books | [sqlite-book-library](sqlite-book-library.livecodescript) | `Examples/SQLite Book Library.oxtstack` | Not recorded |
-| RSS Reader | [rss-reader](rss-reader.livecodescript) | `Examples/RSS Demo.oxtstack` | Not recorded; its Import button's script says "via theotherbassist, April 2016" |
-| Scroll an Image | [scroll-image](scroll-image.livecodescript) | `Examples/Scroll Image.oxtstack` | Not recorded (2013, its standalone settings say) |
-| Play a Video | [video-player](video-player.livecodescript) | `Examples/Video Player.oxtstack` | Not recorded (it came in OpenXTalk Lite 1.15) |
-| Zip Archives | [zip-archives](zip-archives.livecodescript) | `Examples/Zip Build Demo.oxtstack` and `Examples/Zip Extract Demo.oxtstack`, as one | Not recorded (2006, their standalone settings say) |
-| Bouncing Balls | [bouncing-balls](bouncing-balls.livecodescript) | `Start Center/samples/sample_1/Balls.livecode` | LiveCode Ltd (then RunRev Ltd), 2011 |
-| Bookshelf | [book-library](book-library.livecodescript) | `Start Center/samples/sample_2/BookLibrary.livecode` | LiveCode Ltd, 2014 |
-| Balloon Game | [balloon-game](balloon-game.livecodescript) | `Start Center/samples/sample_4/balloon.livecode` | LiveCode Ltd (then RunRev Ltd), 2013 |
+| Quick Start Guide | [quick-start](quick-start.livecodescript) | `Quick Start.oxtstack` | Terry Little, 2024 |
+| Animate a Letter | [animate-letter](animate-letter.livecodescript) | `Animate Letter.oxtstack` | Terry Little, 2022 |
+| A Data Grid Tour | [data-grid-tour](data-grid-tour.livecodescript) | `Data Grid Tour.oxtstack` | LiveCode Ltd, debranded for OpenXTalk at LiveCode's request |
+| A Tour of SQLite | [sqlite-tour](sqlite-tour.livecodescript) | `SQLite Tour.oxtstack` | LiveCode Ltd, debranded for OpenXTalk at LiveCode's request |
+| Data Grid Tables | [data-grid-table](data-grid-table.livecodescript) | `DataGrid Table.oxtstack` | Terry Little, 2022 |
+| SQLite Books | [sqlite-book-library](sqlite-book-library.livecodescript) | `SQLite Book Library.oxtstack` | Not recorded |
+| RSS Reader | [rss-reader](rss-reader.livecodescript) | `RSS Demo.oxtstack` | Not recorded; its Import button's script says "via theotherbassist, April 2016" |
+| Scroll an Image | [scroll-image](scroll-image.livecodescript) | `Scroll Image.oxtstack` | Not recorded (2013, its standalone settings say) |
+| Play a Video | [video-player](video-player.livecodescript) | `Video Player.oxtstack` | Not recorded (it came in OpenXTalk Lite 1.15) |
+| Zip Archives | [zip-archives](zip-archives.livecodescript) | `Zip Build Demo.oxtstack` and `Zip Extract Demo.oxtstack`, as one | Not recorded (2006, their standalone settings say) |
+| Bouncing Balls | [bouncing-balls](bouncing-balls.livecodescript) | `sample_1/Balls.livecode` | LiveCode Ltd (then RunRev Ltd), 2011 |
+| Bookshelf | [book-library](book-library.livecodescript) | `sample_2/BookLibrary.livecode` | LiveCode Ltd, 2014 |
+| Balloon Game | [balloon-game](balloon-game.livecodescript) | `sample_4/balloon.livecode` | LiveCode Ltd (then RunRev Ltd), 2013 |
+| Learn Box2D | [learn-box2d](learn-box2d.livecodescript) | None: made here, in the same look | OXT-Beyond, 2026 |
 
 A remaster is a binary stack, `ide/Resources/Examples/Remastered/<name>.oxtstack`,
 and it is never edited by hand: a script here builds it, and the stack is
@@ -43,62 +49,80 @@ The builders also use the drawing handlers of Learn's kit
 saved in the stack as graphics, fields and images, so a remaster does not
 need the kit to open.
 
+## Learn Box2D
+
+Learn Box2D is the one example here with no original: it was made in
+the remasters' look to teach Box2D, the physics engine built in as
+Box2Dxt. Each of its thirteen lessons (the world, body types, shapes,
+materials, forces, hinges, springs, sliders, wheels, dragging, contacts,
+ray casts and terrain) is a `wide` card with:
+
+- a live world in a court, drawn by the `Lab` background group's script
+  (`/*@ Lab` in the builder), which steps the world on a timer, draws
+  every body and joint, lets a body be thrown with the mouse, and gives
+  each card Reset, Pause and Step;
+- a row of buttons, each running a handler of the card's own script
+  (the builder's `buttons` block names them, and the build stops if one
+  is missing);
+- "How it works", and the list of every Box2D call the card's script
+  makes, read from the script when the stack is built: a click on one
+  says what it does (the builder's `docs` block, which must have a line
+  for every call).
+
+The card's script is the lesson, and the Scripts drawer shows it. Its
+`labBuild` makes the world and `labStep` runs after each step; the Lab's
+handlers (`labShow`, `labWalls`, `labMX`, ...) are the drawing and the
+unit changes, so the card's script is all Box2D.
+
+```sh
+xvfb-run -a <install>/OXT-Beyond -ui tools/examples/test-learn-box2d.livecodescript
+```
+
+runs every lesson of the built stack with Box2Dxt loaded from the
+install: each card runs for three seconds, each of its buttons is
+pressed, and the line at the court's top must not report an error; every
+body must be in the court; and a button on nine of the cards must do
+what its lesson says (gravity changes, a ball bounces, the motor speeds
+up, the car drives, contacts are counted, ...). First, the front page's
+banner must be running its toy: a little world of its own (the front
+card's script) that rains shapes onto a spinning paddle, and blasts them
+with b2WorldExplode where the banner is clicked. It ends with `DONE` or `FAILED`.
+`OXT_LEARN_BOX2D` names another copy of the stack, and
+`OXT_LEARN_BOX2D_SNAPS` a folder for a picture of each card.
+
+A script calling handlers is not a click, so
+
+```sh
+python3 tools/examples/learn-box2d-clicks.py --install <install> [--shots <folder>] [--only Rays]
+```
+
+clicks the stack with a real mouse, the way a user does: the install's
+standalone engine opens it in a window on an Xvfb screen of its own,
+with `learn-box2d-clicks.livecodescript` writing what the window shows
+to a file ten times a second, and xdotool (which it needs, with Xvfb)
+clicks. It clicks the toy, checks every tile opens its lesson, and on
+each lesson: the sidebar entry, every button, every call in the list
+(each must explain itself, scrolled to with the wheel where the list is
+longer than the panel), Pause (nothing moves), Step (it stays paused),
+Pause again, Reset, a body dragged with the mouse, the Scripts drawer,
+and a click on an empty court on Rays and Terrain; then the arrow keys,
+the car's on Wheels, and Back and Next. No click may raise a script
+error. It ends with `DONE` or `FAILED n`, and CI runs it after the test
+above.
+
+Where Box2Dxt is not loaded (the web IDE, for now), each lesson says so
+at the top of its court, and the rest of the stack still opens and reads.
+
 ## xTalk Suite demos
 
-Learn also lists four whole apps of the
-[xTalk Suite](https://github.com/SethMorrowSoftware/xtalk-suite), under
-"xTalk Suite demos", which run on the suite's extensions that OXT-Beyond
-ships built in. They are not remasters and have no builder here: each is
-a binary stack in `ide/Resources/Examples/xTalk Suite/` whose stack
-script is the suite's file, unchanged. Each is saved with its window
-already built, so it opens ready to use, and its card script puts the
-window in the middle of the screen each time it opens.
-
-| Stack | The suite's file (stack script) | Needs |
-| --- | --- | --- |
-| No Cloud Quick Share | `nocloud/src/nocloudquickshare.livecodescript` | TorrentXT; SodiumXT for passphrases and the Tor path, and a Tor daemon for that path |
-| Torrent Client | `torrentxt/examples/torrent-client.livecodescript` | TorrentXT |
-| Box2D Platformer | `box2dxt/examples/box2dxt-platformer.livecodescript` | Box2Dxt |
-| Texas Hold'em (`Texas Holdem.oxtstack`) | `holde-em/src/holdem.livecodescript` | the Box2Dxt Kit for the card art (plain cards without it); TorrentXT and SodiumXT to play online |
-
-No Cloud Quick Share and Torrent Client were made from the suite's
-commit `34221ae` (the extensions' pins in
-[`tools/oxt/xtalk-extensions.json`](../oxt/xtalk-extensions.json) are the
-same files) with an OXT-Beyond engine: a new stack named after the app,
-its script set to the file, saved in the 7.0 stack format. Box2D
-Platformer is the stack Seth Morrow saved on 2026-10-14 after its first
-run had imported the suite's `box2dxt/Spritesheets` and its sounds into
-it, so that it opens without that folder, renamed from "Untitled 1";
-every line of its script but the Box2Dxt Kit's doc comments is the
-suite's file at `34221ae`. Texas Hold'em is holde-em v0.25.7 (xtalk-suite
-pull requests #164 and #167), made on 2026-10-21 on Windows the way
-`prebuild-suite-demos.livecodescript` makes it, with the suite's
-`holde-em/assets` as the default folder: its table built, the Kenney card
-faces and backs taken in through the Box2Dxt Kit, which keeps an atlas
-inside the stack marked with the relative path it was read from, and its
-eleven Kenney casino sounds taken in as audio clips. It opens on another
-machine with its art and sounds, and the computer opponents need nothing
-else.
-
-No Cloud Quick Share and Torrent Client build their windows from their
-scripts, and do it again only when the script's version tag differs
-from the one the stack was stamped with.
-[`prebuild-suite-demos.livecodescript`](prebuild-suite-demos.livecodescript)
-runs each one's build once with messages locked and saves it, and sets
-the card script of all four: run it in the IDE, on a machine with a
-display, as its header says. Torrent Client's card script also applies
-the height, download folder and upload cap that Torrent Client
-remembers between runs, which its build applies only when it builds; the
-build's own download folder is cleared before the save. Texas Hold'em's
-build also takes in its art and sounds, from an xtalk-suite checkout
-beside this one or where `OXT_XTALK_SUITE` points, and needs the
-Box2Dxt Kit loaded. Box2D Platformer
-was saved built already, and only gets the card script.
-
-To take a newer version, make the first two and Texas Hold'em the same way and run
-`prebuild-suite-demos.livecodescript`; for the platformer run the new
-file once with the `Spritesheets` folder, let it import, save it, and
-then run `prebuild-suite-demos.livecodescript` for its card script.
+Learn once listed four apps of the
+[xTalk Suite](https://github.com/SethMorrowSoftware/xtalk-suite) (No Cloud
+Quick Share, Torrent Client, Box2D Platformer and Texas Hold'em), saved
+as binary stacks in `ide/Resources/Examples/xTalk Suite/`. Home leaves
+them out: each is a whole app that lives in the suite, where it is made
+and released, and the extensions they run on are still built in. The
+last copies, and `prebuild-suite-demos.livecodescript` that saved them,
+are in the history of the 0.2.7-rc.6.11 tag.
 
 ## Building
 

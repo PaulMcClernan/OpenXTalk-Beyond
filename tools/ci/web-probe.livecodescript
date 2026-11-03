@@ -46,6 +46,11 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 
 local sClicks, sKeys, sLoaded, sLoadedData, sInner, sOrder, sPlayStopped
 local sBrowserCalls, sBrowserEvents, sDrag, sDnd, sDrop, sMouseLoop
+-- how many systemAppearanceChanged messages the stack had (probeReport
+-- "appearance")
+local sAppearanceChanges
+-- the probe's own backgroundColor while probeColorsOpen's stack is open
+local sColorsBack
 
 private command probeLine pText
    write "PROBE " & pText & return to stdout
@@ -89,7 +94,7 @@ end openStack
 
 on probeRun
    local tCheck, tError
-   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeFonts,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals,probeCiphers,probeSpeech,probePrint"
+   repeat for each item tCheck in "probeWaits,probeSends,probeJavaScript,probeFiles,probeFonts,probeUrls,probeDialogs,probeSystem,probeSound,probePlayer,probeBrowser,probeObjects,probeExternals,probeDrawing,probeCiphers,probeSpeech,probePrint"
       try
          dispatch tCheck to me
       catch tError
@@ -619,6 +624,43 @@ command probeExternals
    probeCheck "database-home", tDB is a number and tText is tName, "connection=" & tDB && "data=" & tText
 end probeExternals
 
+-- The drawing library (com.livecode.library.drawing), which the IDE's
+-- builder includes with its resources folder when the Inclusions pane
+-- names it (revSBUpdateSettingsForExtensions; web-deploy.livecodescript
+-- names it): the library reads its SVG specification from that folder
+-- when it starts (svgSpecLoad, through revLibraryMapping), and without it
+-- drawingSvgCompile compiles nothing. An SVG compiled here must give the
+-- drawing that the desktop library compiles from it (the MD5 of the
+-- "rect" case of extensions/script-libraries/drawing/tests, the same SVG
+-- written the same way), and an image set to it must take the SVG's
+-- size. A standalone made without the IDE has no drawing library;
+-- web_check.py then expects the info line, not the check.
+command probeDrawing
+   local tExtensions, tSvg, tDrawing, tError, tMd5, tSize
+   put the loadedExtensions into tExtensions
+   if "com.livecode.library.drawing" is not among the lines of tExtensions then
+      probeInfo "drawing-library", "not loaded"
+      exit probeDrawing
+   end if
+   put "<svg xmlns=" & quote & "http://www.w3.org/2000/svg" & quote && "width=" & quote & "100" & quote && \
+         "height=" & quote & "100" & quote & ">" & \
+         "<rect x='1' y='2' width='30' height='20' fill='#ff0000' stroke='blue' stroke-width='2'/></svg>" into tSvg
+   try
+      put drawingSvgCompile(tSvg) into tDrawing
+      put the result into tError
+   catch tError
+   end try
+   get binaryDecode("H*", md5Digest(tDrawing), tMd5)
+   if tError is empty and byte 1 to 3 of tDrawing is "LCD" then
+      create image "Probe Drawing"
+      set the text of image "Probe Drawing" to tDrawing
+      put the formattedWidth of image "Probe Drawing" & "x" & the formattedHeight of image "Probe Drawing" into tSize
+      delete image "Probe Drawing"
+   end if
+   probeCheck "svg", tError is empty and tMd5 is "492832daa13b77fccaec0d5538932250" and tSize is "100x100", \
+         "error=" & tError && "bytes=" & the number of bytes of tDrawing && "md5=" & tMd5 && "size=" & tSize
+end probeDrawing
+
 -- encrypt, decrypt and the cipherNames, with the OpenSSL that the web
 -- engine links into itself. The values are the desktop engines'.
 command probeCiphers
@@ -826,6 +868,113 @@ private function probeSnapshots
    end try
    return tResult
 end probeSnapshots
+
+-- A stack whose colours are all unset (the probe's own set theirs), with
+-- one empty field, for probeDefaultColors: opened by one call from the
+-- page and read by the next, since a handler the page calls cannot wait
+-- for the page to draw it. A mainstack's colours come from the home
+-- stack, which in a standalone is its own stack, this one: so this
+-- one's blue is taken off until "colors-close" puts it back
+private function probeColorsOpen
+   local tDefault, tError
+   put the defaultStack into tDefault
+   try
+      if there is a stack "Probe Colors" then
+         delete stack "Probe Colors"
+      else
+         put the backgroundColor of stack "WebProbe" into sColorsBack
+      end if
+      set the backgroundColor of stack "WebProbe" to empty
+      create stack "Probe Colors"
+      set the rect of stack "Probe Colors" to 660,0,860,100
+      set the defaultStack to "Probe Colors"
+      create field "Plain Field"
+      set the rect of field "Plain Field" of stack "Probe Colors" to 10,10,190,50
+      -- two check boxes that set no colour, for probeCheckBoxColors: one
+      -- unticked and one ticked, clear of the two points
+      -- probeDefaultColors reads (100,30 and 100,80)
+      probeColorsCheckBox "Plain Check", "10,55,90,75", false
+      probeColorsCheckBox "Ticked Check", "110,55,190,75", true
+      go stack "Probe Colors"
+   catch tError
+      set the defaultStack to tDefault
+      return "error" && item 1 of tError
+   end try
+   set the defaultStack to tDefault
+   return "opened"
+end probeColorsOpen
+
+-- One of probeColorsOpen's check boxes, in the default stack
+private command probeColorsCheckBox pName, pRect, pTicked
+   create button pName
+   set the style of button pName of stack "Probe Colors" to "checkbox"
+   set the shadow of button pName of stack "Probe Colors" to false
+   set the showName of button pName of stack "Probe Colors" to false
+   set the rect of button pName of stack "Probe Colors" to pRect
+   set the hilite of button pName of stack "Probe Colors" to pTicked
+end probeColorsCheckBox
+
+-- The colours of the boxes of probeColorsOpen's two check boxes, which set
+-- no colour of their own, from a snapshot of its stack: the snapshot's
+-- size, then a point in the middle of the unticked box, one in a corner of
+-- the ticked box clear of its tick and one on its tick,
+-- 200x100:255,255,255:255,255,255:0,0,0 (a white box and a black tick, in
+-- the light appearance). In the dark appearance the boxes are dark and the
+-- tick white: a white box there looked ticked (engine/src/buttondraw.cpp,
+-- MCButton::drawcheck). The box is CHECK_SIZE (13) points square, at the
+-- button's left margin less 2 and in the middle of its height, less its
+-- 2-point border; its tick is the polygon drawcheck draws in it
+private function probeCheckBoxColors
+   local tDefault, tResult, tError, tPlain, tTicked
+   if there is not a stack "Probe Colors" then
+      return "no stack"
+   end if
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to "Probe Colors"
+      put probeCheckBoxInside("Plain Check") into tPlain
+      put probeCheckBoxInside("Ticked Check") into tTicked
+      import snapshot from rect 0,0,200,100 of window (the windowID of stack "Probe Colors")
+      put probeImage(item 1 of tPlain + 4, item 2 of tPlain + 4, \
+            item 1 of tTicked + 7, item 2 of tTicked + 7, \
+            item 1 of tTicked + 4, item 2 of tTicked + 5) into tResult
+   catch tError
+      put "error" && item 1 of tError into tResult
+   end try
+   set the defaultStack to tDefault
+   return tResult
+end probeCheckBoxColors
+
+-- The top left of the inside of a check box's box (drawcheck's trect, less
+-- its border): x,y
+private function probeCheckBoxInside pName
+   local tLeft, tTop
+   put the left of button pName + the leftMargin of button pName - 2 + 2 into tLeft
+   put the top of button pName + ((the height of button pName - 13) div 2) + 1 + 2 into tTop
+   return tLeft & comma & tTop
+end probeCheckBoxInside
+
+-- The colours that a field and a card that set none are drawn in (the web
+-- engine's theme, engine/src/em-theme.cpp), from a snapshot of the stack
+-- that probeColorsOpen opened: the snapshot's size, then the colour of a
+-- point in the field and of one on the card,
+-- 200x100:255,255,255:240,240,240
+private function probeDefaultColors
+   local tDefault, tResult, tError
+   if there is not a stack "Probe Colors" then
+      return "no stack"
+   end if
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to "Probe Colors"
+      import snapshot from rect 0,0,200,100 of window (the windowID of stack "Probe Colors")
+      put probeImage(100, 30, 100, 80) into tResult
+   catch tError
+      put "error" && item 1 of tError into tResult
+   end try
+   set the defaultStack to tDefault
+   return tResult
+end probeDefaultColors
 
 -- The size of the last image and the colours of points in it (x, y, ...),
 -- then deletes it: 100x100:204,51,0
@@ -1069,5 +1218,39 @@ function probeReport pWhat
    if pWhat is "mouse" then
       return sMouseLoop
    end if
+   -- the systemAppearance, and how many times it changed (web_check.py
+   -- opens the page in a browser set to dark, as built and as a page that
+   -- follows the browser's colour scheme)
+   if pWhat is "appearance" then
+      return the systemAppearance & "," & (sAppearanceChanges + 0)
+   end if
+   -- the colours of a field and a card that set none (web_check.py opens
+   -- the page as built and as a page that asks for fields in the card's
+   -- grey): "colors-open" opens a stack for it, "colors" reads them once
+   -- the page has drawn it, and "colors-close" deletes it
+   if pWhat is "colors-open" then
+      return probeColorsOpen()
+   end if
+   if pWhat is "colors" then
+      return probeDefaultColors()
+   end if
+   -- the colours of the boxes of two check boxes that set none, in the
+   -- same stack (web_check.py reads them in a browser set to dark, on the
+   -- page as built and on the page that follows the browser)
+   if pWhat is "checks" then
+      return probeCheckBoxColors()
+   end if
+   if pWhat is "colors-close" then
+      if there is a stack "Probe Colors" then
+         delete stack "Probe Colors"
+         set the backgroundColor of stack "WebProbe" to sColorsBack
+      end if
+      return "closed"
+   end if
    return the text of field "Probe Field" & "|" & sKeys & "|" & sClicks
 end probeReport
+
+on systemAppearanceChanged
+   add 1 to sAppearanceChanges
+   pass systemAppearanceChanged
+end systemAppearanceChanged
