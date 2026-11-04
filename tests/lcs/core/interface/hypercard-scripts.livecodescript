@@ -6579,10 +6579,12 @@ on TestHyperCardScriptsT77
          "  put field " & q & "worth" & q & " into value", \
          "  do " & q & "put field " & q & "&typer&" & q & "stot into value" & q, \
          "  if x then do " & q & "put 2 into value" & q & " else beep", \
+         "  do " & q & "put 3 into value " & tab & q, \
          "end mouseUp") into tScript
    TestAssert "T77: a variable T2 renames", line 2 of tScript is "  put field " & q & "worth" & q & " into hc_value"
    TestAssert "T77: a do into it, its text joined", line 3 of tScript is "  do " & q & "put field " & q & "&typer&" & q & "stot into hc_value" & q
    TestAssert "T77: a do into it after then", line 4 of tScript is "  if x then do " & q & "put 2 into hc_value" & q & " else beep"
+   TestAssert "T77: a do into it, a space and a tab after the name", line 5 of tScript is "  do " & q & "put 3 into hc_value " & tab & q
 
    -- unchanged: the word in another statement's text, and the function
    -- where no do puts into a variable of its name

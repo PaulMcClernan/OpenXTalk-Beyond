@@ -2401,15 +2401,23 @@ end _DoTextTarget
 -- handler renames the variable (T2's name), so that the do puts into the
 -- variable the code reads
 private function _DoTextsRenamed pLine, pRename
-   local tTokens, tIndex, tName, tChanged
+   local tTokens, tIndex, tName, tChanged, tText, tAfter
    if "do" is not among the words of _Lower(pLine) then return pLine
    put _Tokens(pLine) into tTokens
    put false into tChanged
    repeat for each item tIndex in _DoTexts(tTokens)
       put _DoTextTarget(tTokens[tIndex]["t"]) into tName
       if tName is empty or pRename[_Lower(tName)] is not true then next repeat
-      -- (by its characters: a word of a string in quotes is the string)
-      put "hc_" before char -(the number of chars of tName) - 1 of tTokens[tIndex]["t"]
+      -- (by its characters, as a word of a string in quotes is the
+      -- string; before any space or tab after the name, "into exists "")
+      put char 1 to -2 of tTokens[tIndex]["t"] into tText
+      put empty into tAfter
+      repeat while char -1 of tText is space or char -1 of tText is tab
+         put char -1 of tText before tAfter
+         delete char -1 of tText
+      end repeat
+      put "hc_" before char -(the number of chars of tName) of tText
+      put tText & tAfter & quote into tTokens[tIndex]["t"]
       put true into tChanged
       _Fire "T77 a variable a do puts into"
    end repeat
