@@ -6153,7 +6153,7 @@ end tourEmFirstInk
 constant kTourHookStack = "oxt_tour_extensions_hook"
 local sTourHookCount
 on tour_extensions_theme_pass
-   local tIds, tId, tLine, tWaiting, tFails, tError
+   local tIds, tId, tLine, tWaiting, tFails, tError, tTry
    put "com.livecode.library.diff,com.livecode.library.getopt,com.livecode.library.mime" into tIds
    repeat for each item tId in tIds
       if revIDEExtensionProperty(tId, "status") is not "installed" then
@@ -6182,8 +6182,16 @@ on tour_extensions_theme_pass
       if tWaiting > 0 then
          put tWaiting && "hook messages wait already, one per extension loaded (none should until the batch ends)" & return after tFails
       end if
-      wait 500 milliseconds with messages
-      tourRecord "INFO extensions-theme-pass hook messages sent for the batch:" && sTourHookCount
+      -- the batch, and the hook message it sends, can take a while on a
+      -- slow machine (an Intel Mac runner had it still waiting after 500
+      -- ms): wait for them for up to 10 seconds, then 300 ms more, in
+      -- which a second hook message would come
+      repeat with tTry = 1 to 100
+         wait 100 milliseconds with messages
+         if sTourHookCount > 0 and not tourHookWaiting() then exit repeat
+      end repeat
+      wait 300 milliseconds with messages
+      tourRecord "INFO extensions-theme-pass hook messages sent for the batch:" && sTourHookCount && "(waited" && tTry * 100 + 300 && "ms)"
       if sTourHookCount is not 1 then
          put sTourHookCount && "hook messages were sent for one batch of six changes, not 1" & return after tFails
       end if
@@ -6208,6 +6216,15 @@ end tour_extensions_theme_pass
 on tourHookCounted
    add 1 to sTourHookCount
 end tourHookCounted
+
+-- Whether the extension library's batch or its hook message still waits
+function tourHookWaiting
+   local tLine
+   repeat for each line tLine in the pendingMessages
+      if item 3 of tLine is among the items of "IDEToDarkMode,IDEToLightMode,doExtensionsChanged,doExtensionsChangedBatch" then return true
+   end repeat
+   return false
+end tourHookWaiting
 
 on tour_extension_builder
    tourPalette "extension builder", "18-extension-builder", 2000
