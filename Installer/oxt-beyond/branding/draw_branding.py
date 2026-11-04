@@ -16,7 +16,8 @@
 # along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.
 """Draw the OXT-Beyond artwork and write every file made from it: the
 icon (from 0.2.7 SVG Lab's SVG logo, tools/pages/games/svg-lab/beyond-logo.svg,
-still and moving), and the 0.2.7 "Bug Hunt" splash screens, installer
+still and moving), the splash screens (from rc.6.14 like the web IDE's
+loading screen), and the 0.2.7 "Bug Hunt" installer
 image and banner, each with the logo.
 
   python3 Installer/oxt-beyond/branding/draw_branding.py
@@ -72,11 +73,8 @@ GLOW = '#5FE0CF'          # glow and the trail
 ICON_SIZES = (16, 24, 32, 48, 64, 128, 256, 512, 1024)
 SMALL_ICON_MAX = 48     # sizes up to this use the icon without its lower line
 
-# The splash is 591 x 306 (1x) and 1182 x 612 (@extra-high). The IDE writes
-# over it (ide/Toolset/palettes/splash/revsplashstackbehavior.livecodescript,
-# at 1x): the version line "<version> · Happy hunting!" under the trail
-# (field "moreinfo", baseline about y 160, grey) and the loading status in
-# the darker band at the bottom ("Status", 5,270 to 478,293).
+# The splash is 591 x 306 (1x) and 1182 x 612 (@extra-high); see splash()
+# for where the IDE writes over it.
 
 
 def bug(x, y, s, gid):
@@ -271,28 +269,61 @@ def trail(x1, x2, y, colour):
     return t
 
 
+def codename():
+    """The release's name (ide/.codename), which the splash shows."""
+    with open(os.path.join(REPO, 'ide', '.codename'), encoding='utf-8') as f:
+        return f.read().strip()
+
+
+# The splash, from 0.2.7-rc.6.14, looks like the web IDE's loading screen
+# (tools/web-ide/index.html, #loading): one centred card on the web IDE's
+# slate desktop (a light one for the light appearance), the logo above
+# "OXT-Beyond" with "OXT" in orange, the release's name in a small pill,
+# and a thin track for the loading bar. Everything below the pill is the
+# IDE's, written over the art at 1x (revsplashstackbehavior.livecodescript):
+# the version line (field "moreinfo"), the bar's orange fill (graphic
+# "progress", over the track drawn here) and the loading status (field
+# "Status"). SPLASH_* are those places at 1x, which the tests hold the
+# script and the art to.
+SPLASH_LOGO = (243, 24, 105)          # x, y and size of the logo
+SPLASH_ART_BOTTOM = 196               # the drawing's words end above this
+SPLASH_MOREINFO = (0, 199, 591, 225)  # field "moreinfo"
+SPLASH_TRACK = (196, 242, 395, 245)   # the loading bar's track
+SPLASH_STATUS = (0, 252, 591, 276)    # field "Status"
+# "OXT-Beyond" is two words of DejaVu Sans Bold at 66 px (at 2x), "OXT"
+# 149.7 px wide and "-Beyond" 305.1: the line is centred when they meet at
+# 591 + (149.7 - 305.1) / 2. CairoSVG does not centre a line of <tspan>s.
+WORDMARK_JOIN = 513
+
+
 def splash(dark):
-    # The logo at the left, the product and release beside it, the beetle at
-    # the right. Everything stays above y 262 at the left, where the IDE
-    # writes the version (field "moreinfo", y 268 to 340 at this size).
     if dark:
-        bg1, bg2, fg, glow, shade = '#1E2126', CHARCOAL, '#F1F3F5', GLOW, 0.25
+        top, bottom, fg, track, pill, shade = '#3B4B5E', '#1D2733', '#F4F6F8', '#FFFFFF', GLOW, 0.45
+        track_opacity = 0.12
     else:
-        bg1, bg2, fg, glow, shade = '#F7F8F5', '#DCE6E4', CHARCOAL, '#2FA897', 0.06
-    return svg(1182, 612, f'''<defs><linearGradient id="sb" x1="0" y1="0" x2="1" y2="0">
-<stop offset="0" stop-color="{bg2}"/><stop offset="1" stop-color="{bg1}"/></linearGradient>
-<radialGradient id="gl" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{glow}" stop-opacity="0.45"/>
-<stop offset="1" stop-color="{glow}" stop-opacity="0"/></radialGradient></defs>
-<rect width="1182" height="612" fill="url(#sb)"/>
-<circle cx="960" cy="300" r="310" fill="url(#gl)"/>
-{bug(820, 160, 1.3, 'shell')}
-{sparks(815, 255, 1.2, glow)}
-{magnifier(965, 235, 1.45)}
-{nested_logo(32, 16, 248)}
-{word(286, 150, 96, 'OXT-Beyond', ORANGE, '#000', 10, sx=0.8)}
-{word(290, 232, 72, 'BUG HUNT', fg, sx=0.78)}
-{trail(290, 760, 258, glow)}
-<rect x="0" y="520" width="1182" height="92" fill="#000" fill-opacity="{shade}"/>''')
+        top, bottom, fg, track, pill, shade = '#FFFFFF', '#DCE3EA', '#17202A', '#17202A', '#1F8F80', 0.22
+        track_opacity = 0.10
+    lx, ly, ls = (2 * n for n in SPLASH_LOGO)
+    cx = 591
+    tx1, ty1, tx2, ty2 = (2 * n for n in SPLASH_TRACK)
+    name = codename().upper()
+    # The pill fits its words: DejaVu Sans Bold at 19 px with 0.18 em
+    # between letters is about 16 px a letter
+    pw = 16 * len(name) + 44
+    return svg(1182, 612, f'''<defs><radialGradient id="desk" gradientUnits="userSpaceOnUse" cx="591" cy="0" r="1000">
+<stop offset="0" stop-color="{top}"/><stop offset="0.75" stop-color="{bottom}"/></radialGradient>
+<radialGradient id="warm" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{ORANGE}" stop-opacity="{0.22 if dark else 0.14}"/>
+<stop offset="1" stop-color="{ORANGE}" stop-opacity="0"/></radialGradient>
+<radialGradient id="drop" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="{shade}"/>
+<stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>
+<rect width="1182" height="612" fill="url(#desk)"/>
+<circle cx="{cx}" cy="{ly + ls // 2}" r="{ls}" fill="url(#warm)"/>
+<ellipse cx="{cx}" cy="{ly + ls - 6}" rx="{ls * 0.42:g}" ry="22" fill="url(#drop)"/>
+{nested_logo(lx, ly, ls)}<text x="{WORDMARK_JOIN}" y="336" text-anchor="end" font-family="DejaVu Sans" font-weight="bold" font-size="66" fill="{ORANGE}">OXT</text>
+<text x="{WORDMARK_JOIN}" y="336" font-family="DejaVu Sans" font-weight="bold" font-size="66" fill="{fg}">-Beyond</text>
+<rect x="{cx - pw / 2:g}" y="356" width="{pw}" height="30" rx="15" fill="{pill}" fill-opacity="0.14" stroke="{pill}" stroke-opacity="0.55" stroke-width="2"/>
+<text x="{cx + 2}" y="378" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="19" letter-spacing="3.4" fill="{pill}">{name}</text>
+<rect x="{tx1}" y="{ty1}" width="{tx2 - tx1}" height="{ty2 - ty1}" rx="{(ty2 - ty1) / 2:g}" fill="{track}" fill-opacity="{track_opacity}"/>''')
 
 
 def wizard():

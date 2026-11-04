@@ -9,8 +9,8 @@ there): the words as paths, so it needs no font, a flame gradient on
 sparks. That file is the one source of the icon: `draw_branding.py`
 makes every icon, the logo on the splash screens, the installer and the
 banner, and the web pages' logo from it, so to change the logo, change
-`genlogo.py` and run both. From 0.2.7, a release frozen for play testing, the splash
-screens, the installer art and the release banner are the "Bug Hunt"
+`genlogo.py` and run both. From 0.2.7, a release frozen for play testing, the installer
+art and the release banner (and the splash screens until rc.6.13) are the "Bug Hunt"
 drawings: a friendly teal beetle caught under an orange-handled
 magnifying glass, over a trail of footprints, on a charcoal background.
 0.2.1 to 0.2.6 had the "Frankenstein" drawings (a friendly flat-top
@@ -28,7 +28,7 @@ the history of this folder (up to 0.2.1-rc.6); his original stays in
 | `svg/icon.svg` | The icon (1024 × 1024): SVG Lab's logo as it is. |
 | `svg/icon-small.svg` | "OXT" and the lightning alone, larger, for 16 to 48 px, where the seam, "BEYOND", the arcs and the sparks would be a pixel or two. |
 | `svg/icon-animated.svg` | The logo, moving, in the file itself (SMIL), so it plays wherever an SVG image does: the rays turn, the glow breathes, the arcs crackle, the sparks twinkle and a shine sweeps across "OXT". |
-| `svg/splash-dark.svg`, `svg/splash-light.svg` | The IDE splash screens (1182 × 612), for the dark and light appearance: the logo, "OXT-Beyond", "BUG HUNT" and the beetle. |
+| `svg/splash-dark.svg`, `svg/splash-light.svg` | The IDE splash screens (1182 × 612), for the dark and light appearance: the logo, "OXT-Beyond", the release's name and the loading bar's track. |
 | `svg/wizard.svg` | The tall image of the Windows installer (534 × 1022). |
 | `svg/banner.svg` | The release banner (1280 × 640), for the GitHub release, the repository's social preview and forum posts. |
 | `png/oxt-beyond-<size>.png` | The icon at 16, 24, 32, 48, 64, 128, 256, 512 and 1024 px. |
@@ -60,12 +60,23 @@ of the GitHub release.
 
 ## The splash screens
 
-The art carries the product and release name. The IDE writes the rest
-over it (`ide/Toolset/palettes/splash/revsplashstackbehavior.livecodescript`,
-at 1x): "<version> · Happy hunting!" in grey 20 px text under the trail
-(field "moreinfo", 24,134 to 560,170; the logo and the words end above it), and the loading status in the
-darker band at the bottom (field "Status", 5,270 to 478,293). The stack's
-own field "Info" (product and version) is hidden.
+From 0.2.7-rc.6.14 the splash looks like the web IDE's loading screen
+(`tools/web-ide/index.html`): one centred card on the web IDE's slate
+desktop (a light one for the light appearance) with the logo, "OXT-Beyond"
+with "OXT" in orange, the release's name (`ide/.codename`) in a small pill
+and the track of a loading bar. Until rc.6.13 the art was the "Bug Hunt"
+beetle beside the logo, with the words at the left.
+
+The IDE writes the rest over the art, centred
+(`ide/Toolset/palettes/splash/revsplashstackbehavior.livecodescript`, at
+1x): "<version> · Happy hunting!" in grey 13 px text (field "moreinfo",
+0,199 to 591,225), the loading bar's orange fill over the track (graphic
+"progress", 196,242 to 395,245, which the splash makes when it opens and
+moves on by one step for each status the IDE shows) and the loading
+status (field "Status", 0,252 to 591,276). The stack's own field "Info"
+(product and version) is hidden. Those places are `SPLASH_*` in
+`draw_branding.py`, and `tools/ci/tests/test_branding.py` holds the
+script and the art to them.
 
 ## Making the files again
 

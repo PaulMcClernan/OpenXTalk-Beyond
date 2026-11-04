@@ -320,7 +320,8 @@ The folder is put together from:
 
 Build outputs that are not installed (every run lists them): `*.pdb` (they go
 into the symbols zip), `installer.exe` (OXT-Beyond uses Inno Setup),
-`server-*` (package.txt installs no server engine),
+`server-*` (package.txt installs no server engine; they go into the server
+zip, see below),
 `Externals/CEF/devtools_resources.pak` (not in package.txt), the second copies
 of the two CEF helper executables in `Externals/CEF/` (package.txt takes the
 identical copies at the build root), and `packaged_extensions/` for
@@ -538,7 +539,7 @@ Intended differences from OXT Lite 1.15:
 | the 3 junk and 2 excluded files | see [Classes](#classes) |
 | `LICENSE`, `LICENSE-EXCEPTION.md`, `THIRD-PARTY-NOTICES.md` | added: OXT-Beyond's licence files |
 | `Ext/mergJSON/**` | added: mergJSON, built from its source in `mergjson/` (the external, its library and the licences of its code) |
-| `PROVENANCE-oxt-runtimes-*.md` | added: provenance of the runtimes asset (`PROVENANCE-oxt-runtimes-0.2.7-rc.6.13.md`, and `PROVENANCE-oxt-runtimes-1.15.md` for its Android files) |
+| `PROVENANCE-oxt-runtimes-*.md` | added: provenance of the runtimes asset (`PROVENANCE-oxt-runtimes-0.2.7-rc.6.14.md`, and `PROVENANCE-oxt-runtimes-1.15.md` for its Android files) |
 | `Runtime/Windows/x86-32/**`, `Runtime/Linux/**`, timezone `code/**` and `resources/**` | with a runtimes asset made from this repository's builds (any but `oxt-runtimes-1.15`), these may differ from 1.15's files, lack what 1.15's Linux runtimes bundled in `lib/` (shared libraries of other projects) and its iOS and macOS 10.9 timezone code, or have new files (the externals lists of the 64-bit Linux runtime, for example); `Runtime/Android/**`, carried over unchanged, is compared byte for byte |
 | `Extensions/<xTalk folders>/**`, `Extensions/XTALK-EXTENSIONS.txt` | added: the xTalk Suite extensions (class `xtalk`); against a reference that has them they are compared like build outputs, and `--no-xtalk-extensions` makes them intended differences |
 
@@ -729,6 +730,35 @@ Under GitHub Actions it writes the step outputs `version`, `package-root`,
 `platform`, `dist-dir`, `package`, `dmg` (with `--dmg`) and `sha256sums`
 and a table of the archives to the job summary.
 
+## The server zip (`package_server.py`)
+
+`package_server.py` writes `OXT-Beyond-<version>-<platform>-server.zip`,
+OXT-Beyond Server: the server engine of a build output with its externals
+and database drivers, in the layout of LiveCode Community's server zips
+(LiveCode's `builder/server_builder.livecodescript`), so that a web server
+set up for one runs it unchanged:
+
+```sh
+python3 tools/oxt/package_server.py --platform linux-x86_64 \
+    --bin-tar OXT-Beyond-linux-x86_64-bin.tar.xz --out dist --sums
+```
+
+The build output is a folder (`--bin`), a tarball (`--bin-tar`: a CI bin
+artifact or a release's binaries tarball) or the Windows binaries zip
+(`--bin-zip`). The zip holds, at its top: `livecode-community-server`
+(`.exe` on Windows; the build's `server-community`), `externals/` (revdb,
+revxml, revzip), `drivers/` (dbsqlite, dbmysql, dbpostgresql, dbodbc),
+`README.txt` (from `server-readme.txt`, with the version, platform and
+engine name filled in) and the licence files, with
+`ide/Open Source Licenses.txt`. The externals and drivers are the build's
+`server-*` libraries; on Windows, where some have no server copy, the
+desktop DLL, as LiveCode's builder did. A missing file, or an engine that
+is not an executable of the platform, writes nothing. `--sums` adds the
+zip to the folder's `SHA256SUMS`. The build workflows make one per
+package (Windows x86-64, macOS universal, Linux x86-64 and arm64) and run
+`tools/ci/server_check.py` on it: the engine as a CGI program on every
+platform, and through Apache on Linux.
+
 ## External assets
 
 `external-assets.json` lists archives that packaging adds to the installed
@@ -743,14 +773,14 @@ xTalk Suite extensions are not assets: see
 {
   "assets": [
     {
-      "id": "oxt-runtimes-0.2.7-rc.6.13",
-      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.13/oxt-runtimes-0.2.7-rc.6.13.zip",
+      "id": "oxt-runtimes-0.2.7-rc.6.14",
+      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.14/oxt-runtimes-0.2.7-rc.6.14.zip",
       "sha256": "<64 lowercase hex digits>",
       "size": 123456789,
       "kind": "zip",
       "strip": 1,
       "dest": "",
-      "rename": { "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.13.md" },
+      "rename": { "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.14.md" },
       "exclude": { "win-x86_64": ["Runtime/Windows/x86-64/**", "..."], "...": ["..."] },
       "description": "...", "licence": "...", "source": "..."
     }
@@ -783,7 +813,7 @@ xTalk Suite extensions are not assets: see
 The runtimes asset excludes, per platform, what that platform's own build
 makes (`make_runtimes_asset.py` writes these; `OWN_PARTS` there):
 
-| platform | left out of `oxt-runtimes-0.2.7-rc.6.13` | why |
+| platform | left out of `oxt-runtimes-0.2.7-rc.6.14` | why |
 |---|---|---|
 | `win-x86_64` | `Runtime/Windows/x86-64/**`, timezone `code/x86_64-win32/**` | the build's own runtime and timezone code |
 | `linux-x86_64` | `Runtime/Linux/x86-64/**`, timezone `code/x86_64-linux/**`, timezone `resources/**` | the build's own runtime and timezone code, and the zoneinfo data (tz.gyp `tzdata`, which the Windows builds do not make) |

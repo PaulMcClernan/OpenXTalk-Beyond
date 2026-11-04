@@ -176,7 +176,12 @@ into another, ends a crash on the Mac when typed text is committed,
 puts the OXT-Beyond logo in Home's sidebar, adds two preset sizes for
 new stacks, converts an SVG image to graphics from the Object menu, and
 brings Learn Box2D, thirteen live lessons in Box2D physics (see
-[0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen));
+[0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen)), and
+0.2.7-rc.6.14 keeps the Inspector's colours up to date in the web IDE,
+opens Windows' full colour dialog, makes Linux menu ticks visible on dark
+menus, calms the website's front page, gives the IDE a new splash, and
+brings Learn stacks for the Box2Dxt Kit and the rest of the xTalk Suite
+(see [0.2.7-rc.6.14](#027-rc614-the-bug-hunt-round-fourteen));
 0.2.6 stays the main download until it has held up.
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
@@ -193,7 +198,7 @@ brings Learn Box2D, thirteen live lessons in Box2D physics (see
   x86-64, macOS for Apple Silicon and Intel, Linux x86-64), and so are
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
-  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.13.zip`)
+  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.14.zip`)
   brings each platform's runtimes into the other packages. The web
   engine of HTML5 standalones, which every package carries, is built
   from this repository too (see [The engine](#the-engine)). The Android
@@ -306,16 +311,20 @@ version, for example `0.1.0`:
 | | `OXT-Beyond-<version>-win-x86_64-portable.zip` | The same program folder without an installer. |
 | | `OXT-Beyond-<version>-win-x86_64-binaries.zip` | Only the built engine, externals and tools (`win-x86_64-bin`, without debug symbols) and the licence files, for use with a source checkout. |
 | | `OXT-Beyond-<version>-win-x86_64-symbols.zip` | Debug symbols (`.pdb`), for developers. |
+| | `OXT-Beyond-<version>-win-x86_64-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
 | macOS 11 or later on Apple Silicon, 10.13 or later on Intel | `OXT-Beyond-<version>-mac-universal.dmg` | A disk image with `OXT-Beyond.app`, one app for Apple Silicon and Intel Macs, to drag to Applications (see [macOS](#macos)). |
 | | `OXT-Beyond-<version>-mac-universal.zip` | The same app, for scripted installs. |
 | | `OXT-Beyond-<version>-mac-universal-binaries.tar.xz` | Only the built engine, externals and tools (`Release/`, both architectures joined), without debug symbols and the build's own tools, and the licence files. |
 | | `OXT-Beyond-<version>-mac-universal-symbols.zip` | Debug symbols (`.dSYM`), for developers. |
+| | `OXT-Beyond-<version>-mac-universal-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
 | Linux x86-64 with glibc 2.31 or later | `OXT-Beyond-<version>-linux-x86_64.tar.xz` | The program folder, with a launcher and `install.sh` for a per-user install (see [Linux](#linux-x86-64)). |
 | | `OXT-Beyond-<version>-linux-x86_64-binaries.tar.xz` | Only the built engine, externals and tools (`linux-x86_64-bin`), without debug symbols and the build's own tools, and the licence files. |
 | | `OXT-Beyond-<version>-linux-x86_64-symbols.tar.xz` | Debug symbols (`.dbg`), for developers. |
+| | `OXT-Beyond-<version>-linux-x86_64-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
 | 64-bit ARM Linux with glibc 2.31 or later (from 0.2.4-rc.2) | `OXT-Beyond-<version>-linux-arm64.tar.xz` | The same program folder for 64-bit ARM, such as a Raspberry Pi 3, 4 or 5 on a 64-bit system, without the browser widget (see [Linux (64-bit ARM)](#linux-64-bit-arm)). |
 | | `OXT-Beyond-<version>-linux-arm64-binaries.tar.xz` | Only the built engine, externals and tools (`linux-arm64-bin`), as for x86-64. |
 | | `OXT-Beyond-<version>-linux-arm64-symbols.tar.xz` | Debug symbols (`.dbg`), for developers. |
+| | `OXT-Beyond-<version>-linux-arm64-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
 | Other xTalks' IDEs (LiveCode Community 9, HyperXTalk, OpenXTalk) | `OXT-Beyond-<version>-xtalk-assistant-plugin.lce`, `OXT-Beyond-<version>-mcp-bridge-plugin.lce` | The xTalk Assistant and the xTalk MCP Bridge as extension packages, to install with that IDE's Extension Manager (see [tools/plugins](tools/plugins/README.md)). OXT-Beyond has both built in. Experimental. |
 | All | `OXT-Beyond-<version>-xtalk-sources.zip` | Every file of the bundled xTalk Suite extensions as the release took it from their repositories, so that it can be rebuilt without them. |
 | All | `SHA256SUMS` | SHA-256 checksums of all the files above. |
@@ -329,8 +338,8 @@ OpenSSL 3 for DataChannelXT); see [macOS](#macos) and
 requirements too.
 
 Releases whose tags do not start with `v`, such as `prebuilts-v1`,
-`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.12c` and
-`runtimes-0.2.7-rc.6.13`, are not programs. They hold
+`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.13` and
+`runtimes-0.2.7-rc.6.14`, are not programs. They hold
 files that the build and the packager download: the prebuilt
 third-party libraries of earlier versions and the standalone runtimes
 for other platforms.
@@ -1647,6 +1656,90 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.14: the Bug Hunt, round fourteen
+
+OXT-Beyond 0.2.7-rc.6.14 has everything in 0.2.7-rc.6.13. In the spirit
+of the Bug Hunt, here is every change since then, each listed as the bug
+it squashes:
+
+- **A colour that stayed after Reset, in the web IDE.** After a swatch's
+  right-click Reset to default, or a colour a script set or took away,
+  the web IDE's Inspector kept showing the old colour until its window
+  was closed: the web engine never told the IDE that a property had
+  changed. It does now, as the desktop engines do (LittleNemo) (#330).
+- **A colour dialog with a row of black squares.** On Windows, answer
+  color and the Inspector's swatches open the colour dialog in its full
+  form, with the spectrum and the red, green and blue boxes, instead of
+  the short form with its row of black "Custom colors" (TerryL) (#330).
+- **Menu ticks you could barely see.** On Linux a menu's tick marks were
+  black on a dark menu whenever the menu's window had a dark colour of
+  its own, as under Ubuntu MATE's dark theme. They follow the colour the
+  menu is drawn on, so light menus keep black marks (tperry2x) (#330).
+- **A front page that kept the fans spinning.** The website's front page
+  kept a browser without a graphics card at well over one core, its
+  memory growing. The stars twinkle twice and rest, the logo moves for
+  the first seconds and again when pointed at, and the rest moves only
+  while pointed at: under 2% of a core at rest (tperry2x) (#329, #330).
+- **Asking before every run, every time.** The xTalk MCP Bridge has
+  Stop Asking..., off by default: Claude runs code and saves stacks
+  without asking each time, and each run and save is written down with
+  its code in ~/.oxt-beyond/mcp-bridge-unasked.log. Ask Me Again, or
+  turning the bridge off, brings the questions back; undoing your own
+  changes is still asked about (#327).
+- **No wheel to turn.** Web Stacks has Waterwheel: one Box2D body on a
+  motorized hinge turns a whole group of graphics while a second group
+  scrolls under it. Spin it, flick it, brake it, pour water on it, or
+  throw it with the mouse (#319).
+- **Web Stacks without pages of their own.** Every stack in the Web
+  Stacks gallery has a page of its own, with the stack running in the
+  Stack Player (#320).
+- **No lessons for the Box2Dxt Kit.** Home's Examples has Learn Box2Dxt
+  Kit: twelve lessons in making games in pixels with the Kit (bodies,
+  joints, the keyboard, sprites and sprite sheets, animation, a camera
+  that follows the player, sound, contacts and terrain) and a searchable
+  Reference of every Kit call, linked with Learn Box2D. In both, a
+  lesson's buttons light up while they work and new shapes no longer
+  flash at the middle of the card, and the Kit's camera works in a
+  viewport away from the card's corner (#326).
+- **No lessons for the rest of the xTalk Suite.** Home's Examples has a
+  new group, The xTalk Suite: Learn SodiumXT, CoinXT, NostrXT, ENet,
+  dataChannelXT, TorrentXT and OnionXT, each a set of lessons with a
+  script to change and run, and a searchable reference of every handler.
+  Their words read at 4.5 to 1 or better in light and dark (#325).
+- **macOS Native Tools showing "error".** On macOS the Extension Manager
+  could show the macOS Native Tools library as an error: when the IDE
+  can't ask lc-compile for its bytecode version it looked for files the
+  library doesn't ship. It now falls back to the engine's own
+  module.2.lcm, and an extension that loaded before loads the same file
+  (Skids) (#332).
+- **A font menu that looked switched off.** When a control takes its
+  font from its card or stack, the Inspector's font menu showed that
+  font in grey, so the menu looked disabled. It is in italics in the
+  menu's own colour now; the other fields keep their grey italics
+  (richmond62) (#333).
+- **A splash from before the new logo.** The IDE's splash has the Web
+  IDE's look: the new logo over "OXT-Beyond" and the release's name, the
+  version under it, and an orange loading bar that fills as the IDE
+  starts, light and dark (#331).
+
+Behind the scenes, the website's check measures the browser's CPU and
+memory at rest in Firefox as well as Chromium; the Linux tour checks
+menu marks under MATE's and Yaru's dark themes and High Contrast
+Inverse; the IDE tours, desktop and web, reset a colour in the
+Inspector and check the swatch; the IDE tour photographs each window in
+front of its own and controls on a card with a colour of its own, and
+checks that the font menu shows an inherited font in its own colour;
+the web runtime check opens a page once more when WebKit crashes it
+before its engine starts; a new Raspberry Pi OS check installs the
+Linux arm64 package as a Pi owner does, on Debian bookworm and trixie
+with the Raspberry Pi archive, natively and as the Pi 3, 4 and 5's
+processors; the Learn stacks are tested lesson by lesson and click by
+click, their words' contrast included; a test holds the Extension
+Manager's module.2.lcm fallback, and the branding tests hold the
+splash's art to its script; and the runtimes that every package
+carries for the other platforms are rebuilt from this release's engine
+(#309, #325, #330, #331, #332, #333).
 
 #### 0.2.7-rc.6.13: the Bug Hunt, round thirteen
 
@@ -3563,6 +3656,30 @@ let a page do (sockets, other programs, other externals) fails as it
 does on a desktop that cannot do it. The guide *Deploying Your
 Application* says what works, and how to put a standalone on a web
 site.
+
+#### OXT-Beyond Server
+
+The engine also comes as a server engine that runs xTalk scripts on a
+web server, as LiveCode Server did: a page is a `.lc` file with xTalk
+between `<?lc` and `?>`, which reads the request in `$_GET`, `$_POST`,
+`$_FILES`, `$_COOKIE` and `$_SERVER`, answers with `put header`,
+`put cookie` and `put`, shares code with `include` and `require`, and
+keeps state with `start session` and `$_SESSION`. Every build has made
+it (`server-community` in the binaries archives); from 0.2.7-rc.6.15
+each release also has it as `OXT-Beyond-<version>-<platform>-server.zip`
+for Windows x86-64, macOS (universal) and Linux x86-64 and arm64, in the
+layout of LiveCode Community's server zips: the engine
+`livecode-community-server` with `externals/` (revDB, revXML, revZip)
+and `drivers/` (SQLite, MySQL, PostgreSQL, ODBC), so that a web server
+set up for LiveCode Community's server runs it unchanged. The zip's
+`README.txt` ([`tools/oxt/server-readme.txt`](tools/oxt/server-readme.txt))
+says how to set it up with Apache, IIS or nginx and what to change
+before putting it on the internet. It is experimental. Every build runs
+each zip's engine as a CGI program, and on Linux through Apache, with
+pages that use all of the above, revDB with SQLite, revXML and revZip
+([`tools/ci/server_check.py`](tools/ci/server_check.py)). From
+0.2.7-rc.6.15 a second `require` of the same file no longer crashes the
+engine (LiveCode Community 9.6.3's server engine crashed there too).
 
 Changes made in this repository to build it: the `thirdparty` and `ide`
 submodules are ordinary folders in the repository, the prebuilt

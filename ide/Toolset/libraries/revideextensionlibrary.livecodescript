@@ -52,6 +52,44 @@ function revIDEExtensionBytecodeFilename pUseVersion
    end if
 end revIDEExtensionBytecodeFilename
 
+# OXT-Beyond: the bytecode version this engine reads
+# (kMCScriptCurrentModuleVersion in libscript/include/libscript/script.h),
+# which extension-utils also answers for the web IDE
+constant kEngineModuleVersion = 2
+
+# The name of the compiled module that the IDE loads from the extension
+# folder pFolder: module.<v>.lcm, where <v> is the version lc-compile
+# writes (pVersion, or asked of lc-compile when empty), as before; if there
+# is none, module.lcm, as before. OXT-Beyond: if neither is there, the
+# engine's own module.2.lcm. When the probe can't compile (extension-utils
+# extensionLCCompileVersion), it reads the bytes of a file that isn't there
+# and answers 0, so the IDE looked only for module.0.lcm and module.lcm,
+# and (on macOS, forum p=25991) an extension shipped with module.2.lcm alone, as the macOS
+# Native Tools library is, failed to load ("error" in the Extension
+# Manager); the Calendar and Pie Chart widgets carry a copy as module.0.lcm
+# for the same reason. Whatever loaded before still loads the same file:
+# the fallback is used only where there was no file to load. With none of
+# the three, module.lcm is answered, so the error is the one it was.
+function revIDEExtensionModuleFileInFolder pFolder, pVersion
+   local tFile
+   if pVersion is empty then
+      put revIDEExtensionBytecodeFilename(true) into tFile
+   else
+      put "module." & pVersion & ".lcm" into tFile
+   end if
+   if there is a file (pFolder & slash & tFile) then
+      return tFile
+   end if
+   put revIDEExtensionBytecodeFilename(false) into tFile
+   if there is a file (pFolder & slash & tFile) then
+      return tFile
+   end if
+   if there is a file (pFolder & slash & "module." & kEngineModuleVersion & ".lcm") then
+      return "module." & kEngineModuleVersion & ".lcm"
+   end if
+   return tFile
+end revIDEExtensionModuleFileInFolder
+
 # Called at startup. Loads all the extensions ready for use
 on revIDEInitialiseExtensions
    # Load all the extensions ready for use
@@ -1175,12 +1213,8 @@ private command __LoadExtension pCacheIndex, pExtensionType, pSourceType, \
       else
          if pSourceType is "lcb" then
             local tResources, tModule, tCode
-            put revIDEExtensionBytecodeFilename(true) into tFileToLoad
+            put revIDEExtensionModuleFileInFolder(pFolder) into tFileToLoad
             put pFolder & slash & tFileToLoad into tModule
-            if there is no file tModule then
-               put revIDEExtensionBytecodeFilename(false) into tFileToLoad
-               put pFolder & slash & tFileToLoad into tModule
-            end if
             put pFolder & slash & "resources" into tResources
             put pFolder & slash & "code" into tCode
             # map code before loading extension

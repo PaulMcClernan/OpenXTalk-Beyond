@@ -731,6 +731,14 @@ writes to `dist\` (`<ver>` is the content of `ide/.version`, for example
 | `OXT-Beyond-<ver>-xtalk-sources.zip` | Only with `-XtalkSourcesZip` (CI sets it for release builds): every file the [xTalk Suite extensions](#xtalk-suite-extensions) pin, as packaging took them, with the manifest. |
 | `SHA256SUMS` | Checksums of the zips. [`build-installer.ps1`](#installer) rewrites it when it adds the installer. |
 
+CI then writes the server zip, `OXT-Beyond-<ver>-win-x86_64-server.zip`, with
+[`tools/oxt/package_server.py`](tools/oxt/README.md#the-server-zip-package_serverpy)
+(`python tools\oxt\package_server.py --platform win-x86_64 --bin win-x86_64-bin --out dist --sums`)
+and checks it with `python tools\ci\server_check.py --zip <zip>`, which runs
+its engine as a CGI program with pages that use what server scripts rely on.
+The Linux and macOS jobs do the same for theirs; on Linux the check also
+runs the pages through Apache.
+
 Options: `-BuildNumber <n>`, `-AssetsCache <folder>`,
 `-NoExternalAssets`, `-NoXtalkExtensions`, `-XtalkCache <folder>`,
 `-XtalkSourcesZip`, `-VcRedist <folder>` (see
@@ -981,17 +989,17 @@ asset is one zip archive with a fixed URL, size and SHA-256:
 | `rename` | Optional: members that go somewhere else, as `{"<path after strip>": "<path relative to dest>"}`. |
 | `description`, `licence`, `source` | Text for people and reports. |
 
-Today there is one asset, `oxt-runtimes-0.2.7-rc.6.13`: the Windows (x86-64
+Today there is one asset, `oxt-runtimes-0.2.7-rc.6.14`: the Windows (x86-64
 and x86) and Linux (x86-64 and x86) runtimes and the time zone library's
 code for them and its zoneinfo data, made from this repository's CI
 builds, with the Android runtime and its time zone library code carried
 over unchanged from the earlier asset `oxt-runtimes-1.15` (OpenXTalk
 Lite 1.15's files). Its `PROVENANCE.md` (installed as
-`PROVENANCE-oxt-runtimes-0.2.7-rc.6.13.md`) names the commit and the CI
+`PROVENANCE-oxt-runtimes-0.2.7-rc.6.14.md`) names the commit and the CI
 runs and lists every file; the 1.15 asset's provenance comes with it as
 `PROVENANCE-oxt-runtimes-1.15.md`. It is published as the file
-`oxt-runtimes-0.2.7-rc.6.13.zip` of this repository's release
-`runtimes-0.2.7-rc.6.13`. Each package leaves out the part its own build
+`oxt-runtimes-0.2.7-rc.6.14.zip` of this repository's release
+`runtimes-0.2.7-rc.6.14`. Each package leaves out the part its own build
 makes (the entry's `exclude`). The manifest names that release in this
 repository, so a fork downloads it from here too. To package
 without the external assets, for example while a new asset is not
@@ -2042,8 +2050,8 @@ build again.
 `cmd /c ..\make.cmd` rather than `..\make.cmd`.
 
 **Packaging fails to download the runtimes asset**
-(`oxt-runtimes-0.2.7-rc.6.13.zip`). The download comes from this
-repository's `runtimes-0.2.7-rc.6.13` release (also in a fork, which needs
+(`oxt-runtimes-0.2.7-rc.6.14.zip`). The download comes from this
+repository's `runtimes-0.2.7-rc.6.14` release (also in a fork, which needs
 no copy of its own), so a failure is usually the network:
 a proxy or firewall, or no access to `github.com` and its download
 servers. Copy the file into the cache folder, where it is used without
@@ -2433,9 +2441,9 @@ it.
 
    | Platform | Files (`OXT-Beyond-<version>-...`) |
    | --- | --- |
-   | Windows x86-64 | `win-x86_64-setup.exe`, `win-x86_64-portable.zip`, `win-x86_64-binaries.zip`, `win-x86_64-symbols.zip` |
-   | macOS universal | `mac-universal.dmg`, `mac-universal.zip`, `mac-universal-binaries.tar.xz`, `mac-universal-symbols.zip` |
-   | Linux x86-64 | `linux-x86_64.tar.xz`, `linux-x86_64-binaries.tar.xz`, `linux-x86_64-symbols.tar.xz` |
+   | Windows x86-64 | `win-x86_64-setup.exe`, `win-x86_64-portable.zip`, `win-x86_64-binaries.zip`, `win-x86_64-symbols.zip`, `win-x86_64-server.zip` |
+   | macOS universal | `mac-universal.dmg`, `mac-universal.zip`, `mac-universal-binaries.tar.xz`, `mac-universal-symbols.zip`, `mac-universal-server.zip` |
+   | Linux x86-64 | `linux-x86_64.tar.xz`, `linux-x86_64-binaries.tar.xz`, `linux-x86_64-symbols.tar.xz`, `linux-x86_64-server.zip` (and the same for `linux-arm64`) |
    | Other xTalks' IDEs | `xtalk-assistant-plugin.lce`, `mcp-bridge-plugin.lce` (built by the publish job, `tools/plugins`) |
    | All | `xtalk-sources.zip`, and `SHA256SUMS` |
 
