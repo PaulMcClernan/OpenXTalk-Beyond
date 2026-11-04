@@ -14,7 +14,9 @@ script "oxtwebidetour"
 -- It waits for the IDE to finish starting and for web_ide_tour.py to say
 -- go, then opens the IDE's windows one by one, as a user does on the web:
 -- a stack of the user with the usual controls, the Property Inspector
--- (and its section icons clicked: inspector-tabs), the Script Editor, the Message Box, the Project Browser, a click in
+-- (and its section icons clicked: inspector-tabs; a button's colour given
+-- and reset in it, and set by a script: inspector-reset-colour), the
+-- Script Editor, the Message Box, the Project Browser, a click in
 -- browse mode that opens an answer dialog, the Dictionary, Preferences,
 -- the File menu, one of each control Object > New Control makes, the
 -- page made narrow, a cascade of the File menu on a page as narrow as a
@@ -53,8 +55,16 @@ Screenshots of the web IDE for its CI job (tools/ci/web_ide_tour.py).
 Only CI's copy of the site has it.
 */
 
-constant kSteps = "start,storage-open,sample,inspector,inspector-tabs,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow,phone-menu,touch-menu,appearance,storage"
+constant kSteps = "start,storage-open,keep,kept,sample,inspector,inspector-tabs,inspector-reset-colour,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow,phone-menu,touch-menu,appearance,storage"
 constant kSample = "Web Tour Sample"
+-- Steps that run only when web_ide_tour.py --only names them: keep, on
+-- the released web IDE, saves a stack and a preference in the home
+-- folder (the browser's storage), and kept, on the new one in the same
+-- browser profile, finds them (web-ide.yml's upgrade job: an update of
+-- the site keeps what the user saved, with no cache to clear)
+constant kAskedSteps = "keep,kept"
+constant kKept = "Web Tour Kept"
+constant kKeptText = "Kept by the web IDE before the update"
 -- The classic controls of Object > New Control (revMenubar), by the last
 -- part of their kind
 constant kNewControls = "Checkbox,ComboBox,DefaultButton,OptionMenu,PopupMenu,PulldownMenu,RadioButton,RectangleButton,Button,TabPanel,DataGrid,Field,LabelField,TextArea,ListField,TableField,Arrow,FivePointStar,OvalGraphic,RectangleGraphic,RegularGraphic,RoundRectGraphic,SpeechBubble,TenPointStar,CurveGraphic,PolygonGraphic,Image,Player,LittleArrows,Progressbar,Scrollbar,Slider"
@@ -100,6 +110,9 @@ on tourRun
    tourCatchErrors
    repeat for each item tStep in kSteps
       if tOnly is not empty and tStep is not among the items of tOnly then
+         next repeat
+      end if
+      if tOnly is empty and tStep is among the items of kAskedSteps then
          next repeat
       end if
       put "tour_" & tStep into tHandler
@@ -200,6 +213,53 @@ on tour_storage_open
    end if
 end tour_storage_open
 
+-- keep (asked for): a stack saved in Documents, with a field's text, and
+-- a preference, as a user's work and settings, written to the browser's
+-- storage before the page goes
+on tour_keep
+   local tDefault, tFile
+   put specialFolderPath("documents") & "/oxt-web-tour-kept.oxtstack" into tFile
+   put the defaultStack into tDefault
+   lock messages
+   create invisible stack kKept
+   set the defaultStack to kKept
+   create field "Kept"
+   set the text of it to kKeptText
+   set the filename of stack kKept to tFile
+   save stack kKept
+   unlock messages
+   set the defaultStack to tDefault
+   delete stack kKept
+   revIDESetPreference "oxtWebTourKept", kKeptText
+   -- the preferences are saved 2 seconds after they change on the web
+   -- (revInternal__SavePreferences), and the home folder soon after that
+   tourWait 3500
+   if there is not a file tFile then
+      throw "the stack was not saved:" && tFile
+   end if
+   tourCheckStorage false, empty, 5000
+   tourRecord "INFO kept" && tFile
+end tour_keep
+
+-- kept (asked for): what keep saved, there after the update
+on tour_kept
+   local tFile, tText, tPref
+   put specialFolderPath("documents") & "/oxt-web-tour-kept.oxtstack" into tFile
+   if there is not a file tFile then
+      throw "the stack saved before the update is gone:" && tFile
+   end if
+   put the text of field "Kept" of stack tFile into tText
+   delete stack kKept
+   if tText is not kKeptText then
+      throw "the stack saved before the update has" && tText
+   end if
+   put revIDEGetPreference("oxtWebTourKept") into tPref
+   if tPref is not kKeptText then
+      throw "the preference saved before the update is" && quote & tPref & quote
+   end if
+   tourRecord "INFO kept from before the update:" && tFile && "and the preference"
+end tour_kept
+
 on tour_sample
    go tourSampleStack()
    tourWait 1000
@@ -271,6 +331,100 @@ on tour_inspector_tabs
       throw "a click on a section's icon did not show it (the icon: the section shown):" && char 1 to -3 of tFails
    end if
 end tour_inspector_tabs
+
+-- A button's background colour given in the inspector and then taken
+-- away with Reset to default (LittleNemo, openxtalk.org p=25968 and
+-- p=25970: in the web IDE the colour stayed until the window was closed).
+-- The swatch shows a colour picked in the colour dialog at once, but Reset
+-- only sets the property: the swatch shows it again when the engine tells
+-- the IDE that the property changed (its property listener, then the
+-- IDE's idePropertyChanged), which the web engine never did. As the
+-- desktop tour's inspector-reset-colour (ui-tour.livecodescript): a colour
+-- given through the swatch, as the colour dialog gives it, is on the
+-- button; after Reset the button has no colour of its own and the swatch
+-- no longer shows the colour; and a colour a script sets is shown by the
+-- swatch, and so is its removal
+on tour_inspector_reset_colour
+   local tButton, tPI, tEditor, tSwatch, tFails, tError
+   put tourSample("Push") into tButton
+   set the backgroundColor of tButton to empty
+   go stack kSample
+   revIDESelectObjects tButton
+   revIDEInspectObjects tButton
+   tourWait 2000
+   put tourStackNamed("revPropertyInspector") into tPI
+   if tPI is empty then
+      throw "no inspector opened:" && tourJoin(the openStacks)
+   end if
+   try
+      dispatch "inspectorSectionChanged" to stack tPI with "Colors"
+      tourWait 1000
+      put tourInspectorEditor(tPI, "backgroundColor") into tEditor
+      if tEditor is empty then
+         throw "the button's inspector has no Background fill"
+      end if
+      put the long id of control 1 of tEditor into tSwatch
+      -- as the colour dialog's answer does (com.livecode.pi.color.behavior)
+      set the swatchColor of tSwatch to "0,160,0"
+      dispatch "valueChanged" to tEditor
+      tourWait 1000
+      tourRecord "INFO inspector-reset-colour given 0,160,0: backgroundColor" && quote & the backgroundColor of tButton & quote && \
+            "swatch" && quote & the swatchColor of tSwatch & quote
+      if the backgroundColor of tButton is not "0,160,0" then
+         put "the colour given through the swatch is not on the button:" && quote & the backgroundColor of tButton & quote & return after tFails
+      end if
+      -- as a pick of Reset to default in the swatch's menu (editorPopupMenu's button)
+      if there is not a button "inspectMenu" of tEditor then
+         create invisible button "inspectMenu" in tEditor
+      end if
+      dispatch "menuPick" to button "inspectMenu" of tEditor with "Reset to default"
+      repeat 30 times
+         if item 1 to 3 of the swatchColor of tSwatch is not "0,160,0" then
+            exit repeat
+         end if
+         tourWait 100
+      end repeat
+      tourWait 500
+      tourRecord "INFO inspector-reset-colour after Reset: backgroundColor" && quote & the backgroundColor of tButton & quote && \
+            "swatch" && quote & the swatchColor of tSwatch & quote
+      if the backgroundColor of tButton is not empty then
+         put "Reset left the backgroundColor" && the backgroundColor of tButton & return after tFails
+      end if
+      if item 1 to 3 of the swatchColor of tSwatch is "0,160,0" then
+         put "after Reset the swatch still shows 0,160,0" & return after tFails
+      end if
+      tourShot "03-inspector-reset-colour"
+      -- a colour that a script sets, and takes away
+      set the backgroundColor of tButton to "0,0,200"
+      repeat 30 times
+         if item 1 to 3 of the swatchColor of tSwatch is "0,0,200" then
+            exit repeat
+         end if
+         tourWait 100
+      end repeat
+      tourRecord "INFO inspector-reset-colour a script set 0,0,200: swatch" && quote & the swatchColor of tSwatch & quote
+      if item 1 to 3 of the swatchColor of tSwatch is not "0,0,200" then
+         put "the swatch does not show 0,0,200 that a script set (it shows" && quote & the swatchColor of tSwatch & quote & ")" & return after tFails
+      end if
+      set the backgroundColor of tButton to empty
+      repeat 30 times
+         if item 1 to 3 of the swatchColor of tSwatch is not "0,0,200" then
+            exit repeat
+         end if
+         tourWait 100
+      end repeat
+      if item 1 to 3 of the swatchColor of tSwatch is "0,0,200" then
+         put "the swatch still shows 0,0,200 after a script took it away" & return after tFails
+      end if
+   catch tError
+      put tError & return after tFails
+   end try
+   set the backgroundColor of tButton to empty
+   tourCloseInspectors
+   if tFails is not empty then
+      throw "failed:" && tourJoin(line 1 to -1 of tFails)
+   end if
+end tour_inspector_reset_colour
 
 on tour_script_editor
    local tSE
@@ -611,6 +765,24 @@ command tourCloseInspectors
    revIDEDeselectAll
    tourWait 300
 end tourCloseInspectors
+
+-- The editor of the property pProperty in the inspector pStack: the group
+-- revinspectorgroupbehavior.livecodescript names for it, in the row of
+-- the section shown (as in ui-tour.livecodescript)
+function tourInspectorEditor pStack, pProperty
+   local tCard, tControl, i
+   put the long id of this card of stack pStack into tCard
+   repeat with i = 1 to the number of controls of tCard
+      put the long id of control i of tCard into tControl
+      if word 1 of tControl is not "group" or the short name of tControl is not pProperty then
+         next repeat
+      end if
+      if the editorProperty["property_name"] of tControl is pProperty then
+         return tControl
+      end if
+   end repeat
+   return empty
+end tourInspectorEditor
 
 -- The first visible open stack whose name starts with pPrefix
 function tourStackNamed pPrefix

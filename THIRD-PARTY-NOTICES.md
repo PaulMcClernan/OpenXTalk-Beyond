@@ -293,6 +293,7 @@ These are in `ide/Plugins/` and are installed in `Plugins/`.
 | Example stacks (the originals of the remasters) | `tools/examples/originals/`, not installed since 0.2.7-rc.6.12 (they were in `ide/Resources/Examples/` and `ide/Resources/Start Center/samples/`) | The examples OpenXTalk Lite added in place of LiveCode's samplers: among them Terry Little's Quick Start, Animate Letter and DataGrid Table, a Video Player example (1.15), and LiveCode's Data Grid Tour and SQLite Tour, "edited and debranded for open source as requested by LiveCode Ltd." according to their text; and three samples of LiveCode Community's Start Center. The remasters' builders read them. The authors of the other examples are not recorded. Terry Little's Text To Image and demo stacks (*Help > Demos*), LiveCode's mobile template and mobile examples, and the Start Center itself left the repository with them. |
 | `neville-segments.mp4` | `ide/Resources/Examples/` | A video file shipped with the examples. Its author and licence are not recorded; see [Still to review](#still-to-review). |
 | Remastered examples | `ide/Resources/Examples/Remastered/`, built by `tools/examples/` | OXT-Beyond's remakes of examples above, in Home's look; the originals stay as they were, in the repository. A remaster keeps its original's programs, comments, credits, pictures and sounds, and is under its original's terms: Terry Little's Quick Start, Animate Letter and DataGrid Table state the GPL version 3 or later; LiveCode Ltd's Data Grid Tour and SQLite Tour and the Start Center's Balls, BookLibrary and balloon samples are LiveCode Community's (GPLv3); RSS Demo (its script says "via theotherbassist, April 2016"), Scroll Image, Video Player, SQLite Book Library and the two Zip demos (remastered as one, Zip Archives) record no author or terms (see [Still to review](#still-to-review)). What OXT-Beyond added (the window, the new cards and programs, the builders) is under the GPLv3, as the rest of the IDE. |
+| Learn Box2D and Learn Box2Dxt Kit | `ide/Resources/Examples/Remastered/`, built by `tools/examples/` | Made here, in the remasters' look, and under the GPLv3 as the rest of the IDE. Learn Box2Dxt Kit's pictures are Kenney's (https://kenney.nl), CC0 (public domain), from the xTalk Suite's `box2dxt/Spritesheets`, copied to `tools/examples/assets/kenney/`; its GIF was made here from two of those frames. |
 | `oxt-respring.zip` | `ide/Resources/MacOs/` | Tom Perry's macOS helper application (an AppleScript applet) that restarts the IDE after an update on macOS. Not used on Windows. |
 | `Default Preferences/livecode7.rev` | `ide/Resources/` | A preferences template from OpenXTalk Lite's installer. |
 | The rest of `ide/Resources/` (object library, sample icons) | | LiveCode Community's (GPLv3). |
@@ -534,14 +535,14 @@ notices.
 Every package carries standalone runtimes for the other platforms that
 the IDE's standalone builder targets, so that it can build standalones
 for them and not only for its own platform. They come from one release
-asset of this repository, `oxt-runtimes-0.2.7-rc.6.13.zip` (release tag
-`runtimes-0.2.7-rc.6.13`), listed with its SHA-256 in
+asset of this repository, `oxt-runtimes-0.2.7-rc.6.14.zip` (release tag
+`runtimes-0.2.7-rc.6.14`), listed with its SHA-256 in
 [`tools/oxt/external-assets.json`](tools/oxt/external-assets.json). The
 "Runtimes asset" workflow made it with
 [`tools/oxt/make_runtimes_asset.py`](tools/oxt/make_runtimes_asset.py)
 `--builds` from the outputs of this repository's CI builds of one
 commit; only the Android runtime is not built here. Its `PROVENANCE.md`,
-installed as `PROVENANCE-oxt-runtimes-0.2.7-rc.6.13.md` at the root of the
+installed as `PROVENANCE-oxt-runtimes-0.2.7-rc.6.14.md` at the root of the
 program folder, names that commit and the CI runs and lists every file
 with its size, SHA-256 and the build it comes from. Each package leaves
 out what its own build makes: the Windows and Linux packages their own
@@ -562,7 +563,7 @@ Licences and corresponding source:
   [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md) for OXT-Beyond's code, and
   the third-party components of the sections above (OpenSSL, curl, ICU,
   the libraries of `thirdparty/`, CEF). Source: this repository at the
-  commit that `PROVENANCE-oxt-runtimes-0.2.7-rc.6.13.md` names.
+  commit that `PROVENANCE-oxt-runtimes-0.2.7-rc.6.14.md` names.
 - **Android files identical to LiveCode Community 9.6.3**: GPLv3.
   Source: [livecode/livecode](https://github.com/livecode/livecode), tag
   [`9.6.3`](https://github.com/livecode/livecode/tree/9.6.3). This

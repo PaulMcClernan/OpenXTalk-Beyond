@@ -29,6 +29,14 @@ package.
 | Bookshelf | [book-library](book-library.livecodescript) | `sample_2/BookLibrary.livecode` | LiveCode Ltd, 2014 |
 | Balloon Game | [balloon-game](balloon-game.livecodescript) | `sample_4/balloon.livecode` | LiveCode Ltd (then RunRev Ltd), 2013 |
 | Learn Box2D | [learn-box2d](learn-box2d.livecodescript) | None: made here, in the same look | OXT-Beyond, 2026 |
+| Learn Box2Dxt Kit | [learn-box2dxt-kit](learn-box2dxt-kit.livecodescript) | None: made here, in the same look | OXT-Beyond, 2026, with Kenney's CC0 pictures |
+| Learn SodiumXT | [learn-sodiumxt](learn-sodiumxt.livecodescript) | None: made here, a Learn stack (below) | OXT-Beyond, 2026 |
+| Learn CoinXT | [learn-coinxt](learn-coinxt.livecodescript) | None: made here, a Learn stack (below) | OXT-Beyond, 2026 |
+| Learn NostrXT | [learn-nostrxt](learn-nostrxt.livecodescript) | None: made here, a Learn stack (below) | OXT-Beyond, 2026 |
+| Learn ENet | [learn-enet](learn-enet.livecodescript) | None: made here, a Learn stack (below) | OXT-Beyond, 2026 |
+| Learn dataChannelXT | [learn-datachannelxt](learn-datachannelxt.livecodescript) | None: made here, a Learn stack (below) | OXT-Beyond, 2026 |
+| Learn TorrentXT | [learn-torrentxt](learn-torrentxt.livecodescript) | None: made here, a Learn stack (below) | OXT-Beyond, 2026 |
+| Learn OnionXT | [learn-onionxt](learn-onionxt.livecodescript) | None: made here, a Learn stack (below) | OXT-Beyond, 2026 |
 
 A remaster is a binary stack, `ide/Resources/Examples/Remastered/<name>.oxtstack`,
 and it is never edited by hand: a script here builds it, and the stack is
@@ -41,6 +49,7 @@ to open them.
 | [build-examples.livecodescript](build-examples.livecodescript) | Builds the examples: run it with an installed OXT-Beyond |
 | [builder.livecodescript](builder.livecodescript) | The handlers every example's builder uses (`ex...`) |
 | [frame-runtime.livecodescript](frame-runtime.livecodescript) | The script of the window in every remaster: the sidebar, the stage and the scripts panel |
+| [learn-runtime.livecodescript](learn-runtime.livecodescript) | The script of the group "Learn" in every Learn stack: its lessons' Run, Copy and Reset, the call pages and the Reference |
 | `<example>.livecodescript` | An example's builder: its cards, its programs, and its scripts |
 
 The builders also use the drawing handlers of Learn's kit
@@ -51,7 +60,8 @@ need the kit to open.
 
 ## Learn Box2D
 
-Learn Box2D is the one example here with no original: it was made in
+Learn Box2D and Learn Box2Dxt Kit are the two examples here with no
+original. Learn Box2D was made in
 the remasters' look to teach Box2D, the physics engine built in as
 Box2Dxt. Each of its thirteen lessons (the world, body types, shapes,
 materials, forces, hinges, springs, sliders, wheels, dragging, contacts,
@@ -112,6 +122,117 @@ above.
 
 Where Box2Dxt is not loaded (the web IDE, for now), each lesson says so
 at the top of its court, and the rest of the stack still opens and reads.
+
+## Learn Box2Dxt Kit
+
+Learn Box2Dxt Kit is Learn Box2D's other half, and each links to the
+other from its front page. Learn Box2D teaches Box2D's own calls, in
+metres; this one teaches the Box2Dxt Kit (`b2k...`), the script library
+that makes games with Box2D in pixels, with the screen's y going down
+and angles in degrees. Its twelve lessons, each a `wide` card with a
+live court, buttons, "How it works" and a Code tab of lines to run:
+
+- the basics (a ball, a box and a floor in a few lines), controls made
+  into bodies, moving things (velocity, impulses, a jump), joints (a
+  windmill, a lift, a rope and a cart on wheels), and a hero on the
+  keyboard;
+- sprites from a sprite sheet, animation (frames, a GIF, and a sheet
+  read from a PNG and Kenney's XML atlas), a player that runs, jumps,
+  climbs and swims, a camera that follows it through a level four
+  times as wide as the court (`b2kCamOn` on a viewport away from the
+  card's corner, which needs the Kit of 2026-11-03 or later), and sound;
+- contacts and sensors (coins, layers that pass through each other),
+  and terrain (smooth ground, a pit, a ray cast, a kill floor).
+
+Its last card, Reference, lists every public handler of the Kit: a
+search narrows the list, and a click on one shows how to call it, what
+each parameter means and which lessons use it. The pictures are
+Kenney's (https://kenney.nl), CC0, copied from the xTalk Suite's
+`box2dxt/Spritesheets` to [assets/kenney](assets/kenney); the builder
+saves them in the stack, so it needs no files beside it, and the one
+GIF, `alien-walk.gif`, was made from two of those frames.
+
+```sh
+xvfb-run -a <install>/OXT-Beyond -ui tools/examples/test-learn-box2dxt-kit.livecodescript
+```
+
+runs every lesson of the built stack with Box2Dxt and the Kit loaded
+from the install: on each card it runs every button, the Code tab's
+lines, Step, Pause and Reset; the line at the court's top must never
+say the lesson or the lines stopped; everything that moves must be in
+the court; and, from a fresh Reset, a button on seven of the cards must
+do what its lesson says (it rains, the ball jumps, the lift rises, the
+cart drives, a sheet's frames load, the camera follows a player that
+runs by itself, contacts are counted). The search
+and an explanation are checked on the Reference card. It ends with
+`DONE` or `FAILED`; `OXT_LEARN_KIT` names another copy of the stack, and
+`OXT_LEARN_KIT_SNAPS` a folder for a picture of each card.
+
+## Learn stacks: the xTalk Suite's extensions
+
+A Learn stack teaches one of the extensions of the
+[xTalk Suite](https://github.com/SethMorrowSoftware/xtalk-suite) that
+OXT-Beyond has built in, one idea a card, for a reader new to it. Home
+lists them under "The xTalk Suite": Learn SodiumXT, Learn CoinXT, Learn
+NostrXT, Learn ENet, Learn dataChannelXT, Learn TorrentXT and Learn
+OnionXT; Learn Box2D, above, has a look of its own. Each is built by its builder
+(`learn-<extension>.livecodescript`) with the `exLearn...` handlers of
+[builder.livecodescript](builder.livecodescript), and has:
+
+- a front page: a banner, a tile for each lesson, three tips, and a
+  panel that says whether the extension is loaded;
+- a lesson on each card: "In plain words" (the builder's
+  `/*@ <card>/words` block), the calls its script makes (a click on one
+  opens that call's page over the script), and the script itself
+  (`/*@ <card>/try`), which the reader can change, Run, Copy and Reset.
+  Run gives the script to a hidden button and clicks it; the script
+  writes its answer into the field "Result", and an error says what and
+  at which line;
+- a Reference card: every public handler of the extension, searchable,
+  each with its syntax, summary, parameters, what it returns, an example,
+  and the lessons that use it. The pages are made from the dictionary's
+  own data (`Documentation/html_viewer/resources/data/api_extensions/`
+  of the install that builds the stack), stored compressed in the stack.
+
+The build stops if a lesson's words or calls do not fit their panel, if
+a line of a script is wider than the code panel, if a script is taller
+than it (24 lines), or if a call has no page. Lessons are plain text and a few links, so a stack stays small
+(Learn SodiumXT is about 150 KB, 47 KB compressed).
+
+```sh
+xvfb-run -a <install>/OXT-Beyond -ui tools/examples/test-learn-stacks.livecodescript
+```
+
+loads each Learn stack's extensions from the install (its `cLoad` says
+which) and checks, on a real engine: the front page says the extension
+is loaded; on every lesson the script shown is the lesson's, every line
+of it and of its result fits its panel, all of the script and all of
+its result fit without scrolling, Run (twice) gives a result
+matching the lesson's `/*@ <card>/expect` pattern, and every call opens
+its own page; Copy, an edit then Reset, a script that does not compile
+and one that stops each say the right thing; the Reference lists every
+handler, every link in every page goes somewhere, and a search finds and
+clears; on every card the sidebar's pill and its one white title mark
+that card's own line (a test shown to fail on a sidebar that always
+marks its first line); and, in the light look and then the dark, every colour of every
+word in a lesson, a page and the Reference is 4.5 to 1 or more from the
+colour under it (the WCAG's ratio for text). The builder chooses those
+colours to pass (`exLearnReadable` darkens or lightens an extension's
+accent as far as it must), and the test holds it to that. `OXT_LEARN_STACKS` names other copies of the stacks;
+`OXT_LEARN_NOLOAD=1` loads nothing and checks that the stack says the
+extension is not loaded, as it does where it is not installed (the web
+IDE, for now); `OXT_LEARN_SNAPS` is a folder for pictures.
+
+```sh
+python3 tools/examples/learn-clicks.py --install <install> [--stack <file>] [--shots <folder>]
+```
+
+clicks every Learn stack with a real mouse, as `learn-box2d-clicks.py`
+does Learn Box2D (`learn-clicks.livecodescript` reports what the window
+shows): a tile, every lesson from the sidebar, Run and its result, every
+call and Back to the script, Copy, typing into a script and Reset, a line
+of the Reference, the wheel, a search typed and cleared, and Back and
+Next. No click may raise a script error. CI runs both.
 
 ## xTalk Suite demos
 

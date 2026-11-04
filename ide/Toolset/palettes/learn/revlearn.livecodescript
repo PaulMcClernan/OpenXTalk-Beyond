@@ -2273,6 +2273,37 @@ private function leExampleTable
    put "|Learn Box2D|Thirteen lessons in Box2D physics, each a live world to play with, how it works and the calls " & \
          "it makes: bodies, shapes, forces, joints, contacts, ray casts and terrain.|OXT-Beyond, 2026, on Box2D 3.1 through Box2Dxt|tours|box|teal|" & \
          "box2d box2dxt physics joints game|Resources/Examples/Remastered/Learn Box2D.oxtstack|Learn Box2D" & return after tTable
+   put "|Learn Box2Dxt Kit|Twelve lessons in making games with the Box2Dxt Kit, in pixels: sprites, sprite sheets " & \
+         "and GIFs, a player to steer and a camera to follow it, sound, contacts, coins and terrain, with a Reference of every Kit call.|OXT-Beyond, 2026, on the Box2Dxt Kit|tours|gamepad-2|emerald|" & \
+         "box2d box2dxt kit physics game sprite spritesheet gif animation player|Resources/Examples/Remastered/Learn Box2Dxt Kit.oxtstack|Learn Box2Dxt Kit" & return after tTable
+   put "|Learn SodiumXT|Thirteen lessons in cryptography with SodiumXT: random bytes, fingerprints, passwords, " & \
+         "secret and public-key boxes, signatures, key exchange, files and streams, each a script to change and run, " & \
+         "and a reference of every handler.|OXT-Beyond, 2026, on libsodium through SodiumXT|suite|key-round|indigo|" & \
+         "sodium sodiumxt libsodium cryptography encryption hash password signature|Resources/Examples/Remastered/Learn SodiumXT.oxtstack|Learn SodiumXT" & return after tTable
+   put "|Learn CoinXT|Thirteen lessons in how Bitcoin and Ethereum keep coins safe, with CoinXT: hashes, keys, " & \
+         "addresses, recovery words, HD wallets, signatures and transactions, each a script to change and run, " & \
+         "and a reference of every handler.|OXT-Beyond, 2026, on trezor-crypto and libsecp256k1 through CoinXT|suite|hash|amber|" & \
+         "coin coinxt bitcoin ethereum wallet address bip39 mnemonic secp256k1 schnorr taproot|Resources/Examples/Remastered/Learn CoinXT.oxtstack|Learn CoinXT" & return after tTable
+   put "|Learn NostrXT|Thirteen lessons in Nostr, the open social network, with NostrXT: keys, npub names, " & \
+         "events and signatures, tags, replies, profiles, links, private messages, filters and relay messages, " & \
+         "each a script to change and run, and a reference of every handler.|OXT-Beyond, 2026, on CoinXT and SodiumXT through NostrXT|suite|message-square-text|violet|" & \
+         "nostr nostrxt npub nsec event relay social nip-44 schnorr|Resources/Examples/Remastered/Learn NostrXT.oxtstack|Learn NostrXT" & return after tTable
+   put "|Learn ENet|Eight lessons in ENet, which sends messages between programs the way games do: servers, " & \
+         "connecting, text and bytes, channels, connection health and saying goodbye, each a script to change and run, " & \
+         "and a reference of every handler.|OXT-Beyond, 2026, on ENet through enetxt|suite|gamepad-2|teal|" & \
+         "enet enetxt udp network networking multiplayer game server client|Resources/Examples/Remastered/Learn ENet.oxtstack|Learn ENet" & return after tTable
+   put "|Learn dataChannelXT|Eight lessons in WebRTC data channels, which let two programs talk directly: peers, " & \
+         "offers and answers, connecting, messages, bytes, channel options and saying goodbye, each a script to change " & \
+         "and run, and a reference of every handler.|OXT-Beyond, 2026, on libdatachannel through datachannelxt|suite|users|sky|" & \
+         "webrtc datachannel datachannelxt libdatachannel peer p2p network networking sdp ice|Resources/Examples/Remastered/Learn dataChannelXT.oxtstack|Learn dataChannelXT" & return after tTable
+   put "|Learn TorrentXT|Nine lessons in BitTorrent with TorrentXT: the session and its settings, making and " & \
+         "seeding a torrent, magnet links, events, files, pausing and limits, each a script to change and run, " & \
+         "and a reference of every handler.|OXT-Beyond, 2026, on libtorrent through torrentxt|suite|package|orange|" & \
+         "torrent torrentxt bittorrent libtorrent magnet seed peer p2p dht file sharing|Resources/Examples/Remastered/Learn TorrentXT.oxtstack|Learn TorrentXT" & return after tTable
+   put "|Learn OnionXT|Six lessons in Tor with OnionXT: what Tor is, checking onion addresses, the key inside " & \
+         "an address, an address of your own from a seed, dialing and onion services, each a script to change and run " & \
+         "without Tor, and a reference of every handler.|OXT-Beyond, 2026, on Tor through onionxt and SodiumXT|suite|lock|violet|" & \
+         "tor onion onionxt anonymity privacy address socks hidden service|Resources/Examples/Remastered/Learn OnionXT.oxtstack|Learn OnionXT" & return after tTable
    put "Resources/Examples/SQLite Book Library.oxtstack|SQLite Book Library|A small catalogue of books in SQLite, shown in " & \
          "a Data Grid: list them, search them, add and delete them.|In OpenXTalk Lite's demo set; its author is not recorded|apps|library-big|emerald|" & \
          "sqlite datagrid books database|Resources/Examples/Remastered/SQLite Books.oxtstack|SQLite Books" & return after tTable
@@ -2432,7 +2463,9 @@ private function leExampleGroups
          "text, graphics and timers, lists and data, each with a short script to read." & return & \
          "small|Small samples|Also from the Stack Player: games, music, live data, speech, notes and modern " & \
          "controls, each small enough to read in one sitting." & return & \
-         "tours|Tours|Guided tours of the Data Grid, of SQLite and of Box2D physics, a card at a time." & return & \
+         "tours|Tours|Guided tours of the Data Grid, of SQLite, of Box2D physics and of making games with the Box2Dxt Kit, a card at a time." & return & \
+         "suite|The xTalk Suite|Lessons in the extensions built into OXT-Beyond, one idea a card: each has a script " & \
+         "to change and run, and a reference of every handler." & return & \
          "apps|Small apps to take apart|Each does one thing, in a few short scripts: open one, then read its scripts." & return & \
          "samples|Samples, remade|Three of LiveCode Community's samples in Home's look: a game, bouncing balls and a database of books."
 end leExampleGroups
