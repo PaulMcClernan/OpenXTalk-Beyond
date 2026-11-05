@@ -25,6 +25,24 @@ same names never starts them with this version's. Its scripts carry
 are. Behind a CDN, purge its cache when the site is updated from a release
 before this one, which had no stamp.
 
+On a phone (a touch screen whose short side is 600 pixels or less) a
+stack has the whole screen. The page takes `data-mobile-web-fill="no"`
+off its body there, so a stack made for phones that calls `mwStart` fills
+the screen as it does in a standalone of its own; any other stack is
+fitted to the screen (`mwFitStack`: scaled to it, and fitted again when
+the phone turns), and taps land on the controls under them. The menu bar
+and the window's title step aside for one round button, back to the
+library, which leaving a stack also gives back the page's own look
+(`mwStop`). Anywhere else a stack is shown in its window, at its own size,
+as before.
+
+If the engine stops in a browser (it runs out of the stack the browser
+gives a page, as on an older build on an iPhone or an iPad, or
+WebAssembly fails), a note across the top of the page says so, with the
+browser's words and its user agent, instead of a blank page. A
+standalone's page (`engine/rsrc/emscripten-html-template.html`) does the
+same.
+
 The home page offers **Open a stack**, **Open a folder** and a drop zone
 (a stack file, a folder, or a `.zip` holding a stack and the files it
 uses), three whole stacks to play (**OXT-Beyond on the Web**, a tour of
@@ -149,16 +167,19 @@ Playwright's WebKit is installed, in WebKit).
 
 `stacks/Phone Starter.oxtstack` is a stack to copy for a stack made for
 phones, with the Mobile Web library
-(`extensions/script-libraries/mobileweb`): a header, four cards under a
-tab bar a thumb can reach (Home, List, Form, Gestures), a swipe left or
-right to change tab, a list that scrolls with a finger, a form that stays
-above the on-screen keyboard, and a pad (a group with its own `swipe`,
-`pinch` and `longPress` handlers) for gestures. One line, `mwStart`,
+(`extensions/script-libraries/mobileweb`): a header, five cards under a
+tab bar a thumb can reach (Home, List, Form, Gestures, Phone), a swipe
+left or right to change tab, a list that scrolls with a finger, a form
+that stays above the on-screen keyboard, a pad (a group with its own
+`swipe`, `pinch`, `longPress` and touch handlers, which draw a ring under
+each finger) for gestures, and a Phone card that takes a photo, shares,
+finds where the phone is, rolls a ball as it tilts, keeps the screen on
+and hides the browser's bars. One line, `mwStart`,
 makes it a phone stack: in a page of its own (an HTML5 standalone) it
 fills the browser's window and fills it again when the phone turns, in
 portrait or landscape (two columns, smaller bars, out of the notch); in
-the player, whose page keeps its own layout, and on a desktop, it is a
-phone-sized window. Without the library (an engine before 0.2.7) it still
+the player on a desktop, whose page keeps its own layout, it is a
+phone-sized window, and in the player on a phone it fills the screen. Without the library (an engine before 0.2.7) it still
 opens and works, without the gestures.
 
 The stack is never edited by hand. Its script is
@@ -172,8 +193,10 @@ OXT-Beyond engine:
 
 `tools/ci/mobile_web_check.py` opens it on emulated phones (Playwright's
 Pixel 7 and iPhone 13, in Chromium and WebKit) and checks the taps,
-drags, swipes, pinch, long press, keyboard and turns (every card in
-landscape must end above the tab bar); it fails if the
+drags, swipes, pinch, long press, fingers, keyboard, the Phone card (a
+location it is given, a photo through the file chooser, a tilt it
+makes) and turns (every card in landscape must end above the tab bar);
+it fails if the
 committed stack's script is not `phone-starter-stack.livecodescript`'s.
 CI runs it in web.yml, after the web runtime check. To run it yourself:
 
