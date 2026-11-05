@@ -453,3 +453,63 @@ class MenuBuilderBareBoxes(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DictionaryPage(unittest.TestCase):
+    """LiveCode's Dictionary opened blank on Windows in the dark appearance
+    (the tour's 13-dictionary, rc.6.11 to rc.6.15) while the step passed:
+    its checks read the page, not the screen. The step now reads the
+    page's part of the screen, and fails when it is one colour, after the
+    snapshot that shows it."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.script = f.read()
+
+    def test_the_step_reads_the_screen_and_fails_after_the_snapshot(self):
+        step = handler(self.script, 'on', 'tour_dictionary')
+        read = step.index('tourDictionaryBlank(tNew, "as it opened")')
+        shot = step.index('tourShotStack tNew, "13-dictionary"')
+        throw = step.index('if tBlank is not empty then throw tBlank')
+        self.assertLess(read, shot)
+        self.assertLess(shot, throw)
+
+    def test_one_colour_is_blank(self):
+        blank = handler(self.script, 'function', 'tourDictionaryBlank')
+        self.assertIn('tourDictionarySpread(pStack)', blank)
+        self.assertIn('if tSpread >= 48 then return empty', blank)
+        self.assertIn('tourUnlockScreen', blank)
+
+    def test_the_tools_palette_is_left_out(self):
+        spread = handler(self.script, 'function', 'tourDictionarySpread')
+        self.assertIn('the contentRect of stack pStack', spread)
+        self.assertIn('the effective rect of stack "revTools"', spread)
+        self.assertIn('import snapshot from rect tRect', spread)
+
+
+class DictionaryFitsItsPage(unittest.TestCase):
+    """The fix for the blank Dictionary: the browser widget, set to
+    0,0,0,0 as the window opens, is fitted to the window once it is open,
+    not only on a resizeStack or browserNavigateComplete (neither came on
+    Windows for a window that opened at the width it had: its widget read
+    0,0,1,1, and a resizeStack drew the page)."""
+
+    BEHAVIOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'ide', 'Toolset',
+                            'palettes', 'dictionary', 'behaviors', 'revdictionarybehavior.livecodescript')
+
+    def setUp(self):
+        with open(self.BEHAVIOR, encoding='utf-8-sig') as f:
+            self.script = f.read()
+
+    def test_open_stack_fits_the_page_once_the_window_is_open(self):
+        open_stack = handler(self.script, 'on', 'openStack')
+        self.assertIn('set the rect of widget "Dictionary" of me to 0,0,0,0', open_stack)
+        fit = open_stack.index('send "dictFitPage" to me in 0 milliseconds')
+        self.assertGreater(fit, open_stack.index('unlock screen'))
+
+    def test_the_fit_is_the_resize(self):
+        fit = handler(self.script, 'on', 'dictFitPage')
+        self.assertIn('if the mode of me is not 0 then', fit)
+        self.assertIn('resizeStack', fit)
+        self.assertIn('set the rect of widget "Dictionary" of me to the contentRect of me',
+                      handler(self.script, 'on', 'resizeStack'))
