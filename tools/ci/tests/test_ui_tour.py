@@ -460,6 +460,57 @@ class GtkTheme(unittest.TestCase):
         names = steps.split('"')[1].split(',')
         self.assertEqual(names.index('menu-words'), names.index('menu-marks') + 1)
 
+    def test_the_hilited_words_on_a_windows_own_colours(self):
+        # the words of the item a menu opens with hilited, on the theme's
+        # hilite: until rc.6.17 a window's own colour, so 48,52,58 on the
+        # selection blue (darker than it in both appearances, where the
+        # theme's own words are lighter: rc.6.16's 03h, own colour 1)
+        with open(TOUR, encoding='utf-8') as f:
+            tour = f.read()
+        step = tour.split('on tour_menu_armed_words', 1)[1].split('end tour_menu_armed_words', 1)[0]
+        self.assertIn('if the platform is not "Linux" then', step)
+        self.assertIn('put "48,52,58" & return & "236,236,236" into tColours', step)
+        self.assertIn('set the backgroundColor of stack tName to tColour', step)
+        # the two menus differ in the first (hilited) item's words alone
+        self.assertIn('"Readable words" & return & "The second item, plain" & return & "The last item, plain"', step)
+        self.assertIn('space & return & "The second item, plain" & return & "The last item, plain"', step)
+        self.assertIn('put tourArmedWords("03j-menu-armed-words", "03k-menu-armed-no-words") into tTheme', step)
+        self.assertIn('tourArmedWordsCheck(tourArmedWords("03l-menu-armed-words-own-colour-" & tPass', step)
+        self.assertIn('if item 1 of tTheme < 20 or item 2 of tTheme is 0 then', step)
+        self.assertIn('throw "failed:"', step)
+        # the same side of the hilite as the theme's own words, and at
+        # least half as far from it
+        check = tour.split('function tourArmedWordsCheck', 1)[1].split('end tourArmedWordsCheck', 1)[0]
+        self.assertIn('if (item 2 of pSeen > 0) is not (pTheme > 0) or abs(item 2 of pSeen) * 2 < abs(pTheme) then', check)
+        self.assertIn('if item 1 of pSeen < 20 then', check)
+        # the signed difference: the words' snapshot less the blank one's
+        groups = tour.split('function tourMarksGroups', 1)[1].split('end tourMarksGroups', 1)[0]
+        self.assertIn('put round((tLumaA - tLumaB) / 1000) into tSigned[', groups)
+        self.assertIn('(tMost - tLeast) & "," & tSignedMost & return after tGroups', groups)
+        words = tour.split('function tourArmedWords', 1)[1].split('end tourArmedWords', 1)[0]
+        self.assertIn('if abs(item 8 of tGroup) > abs(tMost) then put item 8 of tGroup into tMost', words)
+        # its own step, after menu-words, for the watchdog
+        steps = [line for line in tour.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        self.assertEqual(names.index('menu-armed-words'), names.index('menu-words') + 1)
+
+    def test_the_hilited_words_check_on_rc616s_colours(self):
+        # the rule of tourArmedWordsCheck on the colours rc.6.16's Linux
+        # snapshots show: the hilite, the theme's hilited words (white),
+        # and a window's own colours as the words were before rc.6.17
+        def luma(rgb):
+            return round((299 * rgb[0] + 587 * rgb[1] + 114 * rgb[2]) / 1000)
+
+        def passes(seen, theme):
+            return (seen > 0) == (theme > 0) and abs(seen) * 2 >= abs(theme)
+        for hilite in ((74, 144, 217), (33, 93, 156)):
+            theme = luma((255, 255, 255)) - luma(hilite)
+            self.assertTrue(passes(theme, theme))
+            # 48,52,58 on the hilite: failed, in both appearances
+            self.assertFalse(passes(luma((48, 52, 58)) - luma(hilite), theme))
+            # 236,236,236 could be read and still can
+            self.assertTrue(passes(luma((236, 236, 236)) - luma(hilite), theme))
+
     def test_the_linux_package_runs_the_marks_under_them(self):
         repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..')
         with open(os.path.join(repo, '.github', 'workflows', 'build-linux.yml'), encoding='utf-8') as f:
@@ -467,7 +518,7 @@ class GtkTheme(unittest.TestCase):
         self.assertIn('mate-themes ubuntu-mate-themes yaru-theme-gtk gtk2-engines-murrine', text)
         step = text.split('- name: Menu marks, other dark GTK themes', 1)[1].split('\n      - name:', 1)[0]
         self.assertIn('for theme in Yaru-MATE-dark Yaru-dark HighContrastInverse; do', step)
-        self.assertIn('--appearance dark --gtk-theme "$theme" --only menu-marks,menu-words', step)
+        self.assertIn('--appearance dark --gtk-theme "$theme" --only menu-marks,menu-words,menu-armed-words', step)
         self.assertIn('exit 1', step)
         with open(TOUR, encoding='utf-8') as f:
             tour = f.read()
@@ -597,6 +648,128 @@ class DictionaryPage(unittest.TestCase):
         self.assertIn('the contentRect of stack pStack', spread)
         self.assertIn('the effective rect of stack "revTools"', spread)
         self.assertIn('import snapshot from rect tRect', spread)
+
+
+class AppBrowser(unittest.TestCase):
+    """The Application Browser (the App Browser plugin), which the tour did
+    not open until rc.6.17: it listed itself among the user's stacks, its
+    lists were in 11 points (richmond62, openxtalk.org p=26048), and its
+    names were mid grey, 4 to 1 on its white list. The step fails on
+    rc.6.16's IDE, light and dark ("lists itself"), and passes with
+    rc.6.17's (10.4 to 1 light, 9.8 to 1 dark on Linux)."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.script = f.read()
+        self.step = handler(self.script, 'on', 'tour_app_browser')
+
+    def test_a_step_after_the_project_browser(self):
+        steps = [line for line in self.script.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        self.assertEqual(names.index('app-browser'), names.index('project-browser') + 1)
+
+    def test_it_opens_the_plugin_as_the_menu_does(self):
+        self.assertIn('revIDEOpenPlugin tStack', self.step)
+        self.assertIn('go stack kSample', self.step)
+
+    def test_the_shot_before_the_checks(self):
+        shot = self.step.index('tourShotStack tStack, "12b-app-browser"')
+        for throw in ('throw "the App Browser does not list the stack"',
+                      'throw "the App Browser lists itself among the user\'s stacks"',
+                      'not 13"', 'do not read on its list'):
+            self.assertLess(shot, self.step.index(throw), throw)
+
+    def test_it_must_not_list_itself(self):
+        self.assertIn('if tStack is among the lines of tListed then', self.step)
+        # a stack's line is one with no card number
+        self.assertIn('if word 1 to -1 of item 2 of it is empty then', self.step)
+
+    def test_its_lists_in_13_points(self):
+        self.assertIn('the textSize of field "Cards" of card 1 of stack tStack is not 13', self.step)
+        self.assertIn('the textSize of field "Controls" of card 1 of stack tStack is not 13', self.step)
+
+    def test_its_names_read_on_its_list_as_drawn(self):
+        # the list's colour from the screen, inside its scroll bars, and
+        # the names' colour against it at 4.5 to 1
+        self.assertIn('import snapshot from rect tRect', self.step)
+        self.assertIn('subtract the scrollbarWidth of field "Cards" of card 1 of stack tStack from item 3 of tRect',
+                      self.step)
+        self.assertIn('put tourRGB(the effective linkColor of stack tStack) into tLink', self.step)
+        self.assertIn('put tourContrast(tLink, tBack) into tRatio', self.step)
+        self.assertIn('if tRatio < 4.5 then', self.step)
+
+    def test_contrast_of_rc616s_and_rc617s_colours(self):
+        def lum(c):
+            out = []
+            for v in c:
+                v = v / 255
+                out.append(v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4)
+            return 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+
+        def ratio(a, b):
+            la, lb = lum(a), lum(b)
+            return round((max(la, lb) + 0.05) / (min(la, lb) + 0.05), 2)
+        # the plugin's own mid grey on its white list: under 4.5
+        self.assertLess(ratio((127, 127, 127), (255, 255, 255)), 4.5)
+        # rc.6.17's dark grey on white, and light grey on Linux's dark list
+        self.assertEqual(ratio((64, 64, 64), (255, 255, 255)), 10.37)
+        self.assertEqual(ratio((208, 208, 208), (35, 39, 41)), 9.77)
+
+
+class CardNavigator(unittest.TestCase):
+    """The Card Navigator (Tools > Card Navigator, the stack "Card
+    Navigator" of navigatorIDE.oxtstack) is one of the IDE's windows. Its
+    name does not begin with "rev", so until rc.6.17 the lists of the
+    user's stacks showed it (OpenXTalkPaul, openxtalk.org p=26111). The
+    step fails on rc.6.16's IDE and passes with rc.6.17's."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.step = handler(f.read(), 'on', 'tour_navigator')
+
+    def test_it_opens_as_the_menu_does(self):
+        self.assertIn('send "tOpenNavigator" to stack "revMenuBar"', self.step)
+
+    def test_not_among_the_users_stacks(self):
+        self.assertIn('if tNew is among the lines of revFilterStacksList(the mainStacks) then', self.step)
+        self.assertIn('throw "the IDE lists the Card Navigator among the user\'s stacks"', self.step)
+
+    def test_the_shot_first_and_the_window_closed_either_way(self):
+        shot = self.step.index('tourShotStack tNew, "23-navigator"')
+        check = self.step.index('revFilterStacksList')
+        self.assertLess(shot, check)
+        thrown = self.step.index('throw "the IDE lists')
+        self.assertLess(self.step.rindex('close stack tNew', 0, thrown), thrown)
+        self.assertGreater(self.step.rindex('close stack tNew'), thrown)
+
+
+class IDEStacks(unittest.TestCase):
+    """After the tour has opened nearly every window, no stack in memory
+    from the IDE's own folders is among the user's stacks as the IDE lists
+    them (revFilterStacksList). On rc.6.16's IDE the step found four: the
+    App Browser, the Card Navigator (openxtalk.org p=26111), userguides
+    and allguides; it passes with rc.6.17's."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.script = f.read()
+        self.step = handler(self.script, 'on', 'tour_ide_stacks')
+
+    def test_late_in_the_tour(self):
+        steps = [line for line in self.script.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        self.assertEqual(names[-2:], ['ide-stacks', 'screen-end'])
+        for opened in ('app-browser', 'navigator', 'guides', 'learn', 'home-places', 'about', 'release-notes'):
+            self.assertLess(names.index(opened), names.index('ide-stacks'), opened)
+
+    def test_every_stack_from_the_ides_folders(self):
+        self.assertIn('put revEnvironmentToolsetPath() & slash into tToolset', self.step)
+        self.assertIn('put revEnvironmentPluginsPath() & slash into tPlugins', self.step)
+        self.assertIn('repeat for each line tStack in the mainStacks', self.step)
+        self.assertIn('if tStack is among the lines of revFilterStacksList(tStack) then', self.step)
+
+    def test_it_fails_naming_them(self):
+        self.assertIn('throw "the IDE lists its own stacks among the user\'s:" && char 1 to -3 of tWrong', self.step)
 
 
 class DictionaryFitsItsPage(unittest.TestCase):
