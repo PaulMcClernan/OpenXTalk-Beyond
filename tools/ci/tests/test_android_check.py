@@ -952,7 +952,7 @@ class Boot(unittest.TestCase):
         saved = ac.emulator_processes
         saved_time = ac.time
         ac.emulator_processes = lambda: procs
-        ac.time = StepClock()
+        self.clock = ac.time = StepClock()
         out = io.StringIO()
         try:
             with contextlib.redirect_stdout(out):
@@ -1229,21 +1229,24 @@ class Boot(unittest.TestCase):
 
     def test_awake_leaves_it_asleep_a_while_before_waking_it(self):
         # what Android keeps until the screen is off runs once it is off:
-        # the wake comes an --interval after the device said it slept
-        stamp = '"%s" -c "import time; print(time.time())"' % sys.executable
-        script = self.AWAKE.replace(
-            '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state" ;;',
-            '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state"; %s > "$d/slept" ;;' % stamp).replace(
-            '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state" ;;',
-            '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state"; %s > "$d/woke" ;;' % stamp)
-        self.assertNotEqual(script, self.AWAKE)
-        status, out = self.boot(script, '--awake', '--interval', '0.5')
-        self.assertEqual(status, 0, out)
+        # the wake comes an --interval after the device said it slept, by
+        # the check's own clock (StepClock: only the check's sleeps move
+        # it), and not only once the wait for sleep ran out (4 intervals)
+        at = {}
+        saved = ac.run
 
-        def when(name):
-            with open(os.path.join(self.sdk, 'platform-tools', name)) as f:
-                return float(f.read())
-        self.assertGreaterEqual(when('woke') - when('slept'), 0.5)
+        def run(cmd, *args, **kwargs):
+            for key in ('KEYCODE_SLEEP', 'KEYCODE_WAKEUP'):
+                if key in cmd:
+                    at[key] = self.clock.now
+            return saved(cmd, *args, **kwargs)
+        ac.run = run
+        self.addCleanup(setattr, ac, 'run', saved)
+        status, out = self.boot(self.AWAKE, '--awake', '--interval', '0.5')
+        self.assertEqual(status, 0, out)
+        self.assertEqual(sorted(at), ['KEYCODE_SLEEP', 'KEYCODE_WAKEUP'])
+        self.assertGreaterEqual(at['KEYCODE_WAKEUP'] - at['KEYCODE_SLEEP'], 0.5)
+        self.assertLess(at['KEYCODE_WAKEUP'] - at['KEYCODE_SLEEP'], 2.0)
 
     def test_no_awake_unless_asked(self):
         status, out = self.boot(self.AWAKE, '--settle', '--settle-polls', '2')
