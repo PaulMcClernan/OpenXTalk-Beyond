@@ -321,8 +321,10 @@ error.
 
 Google Play takes a new application as an Android App Bundle (`.aab`),
 from which it makes the packages each device installs. To have the
-standalone builder make one beside the `.apk`, with the same name, set
-this on the stack before you build:
+standalone builder make one beside the `.apk`, with the same name, tick
+**App Bundle** at the end of the Android card's row of architectures
+(it can be ticked once an architecture is), or set this on the stack
+before you build, which is what the box does:
 
     set the cRevStandaloneSettings["android,app bundle"] of stack "My App" to true
 

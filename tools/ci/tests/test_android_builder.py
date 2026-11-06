@@ -36,7 +36,9 @@ would not notice going back:
     package's files before zipalign, signed with the package's key after
     the package (jarsigner, the passwords never on a command line); the
     bundletool it runs is checked against its pinned SHA-256 before it is
-    kept or used; and an SDK without aapt2 still builds packages.
+    kept or used; and an SDK without aapt2 still builds packages;
+  - the Android card's "App Bundle" box stores the setting the builder
+    reads, and shows it; a stack that never ticks it has no bundle.
 
   python3 -m unittest discover -s tools/ci/tests
 """
@@ -387,6 +389,102 @@ class AppBundle(unittest.TestCase):
                      'bundletool-cached-wrong', 'bundletool-download-wrong', 'bundletool-no-download',
                      'bundletool-cache-file'):
             self.assertIn('"%s' % case, body)
+
+
+PATCHES = ('tools', 'oxt', 'ide-stack-patches')
+SCRIPTS = ('stack-scripts', 'ide', 'Toolset', 'palettes', 'standalone settings', 'revstandalonesettings.8.rev.bst',
+           'scripts')
+TOUR = ('tools', 'ci', 'ui-tour.livecodescript')
+
+
+def patch_lines(name):
+    """A patch file's lines, without its comments"""
+    return [line for line in read(PATCHES + (name,)).split('\n') if line and not line.startswith('#')]
+
+
+class AppBundleBox(unittest.TestCase):
+    """The Android card's "App Bundle" box, made by the IDE stack patches
+    android-card-app-bundle-*.txt (a copy of "Android x86_64" at the end of
+    the build targets' row, the row grown to hold it, and the row's script
+    storing it) and shown by the card's behaviour. Its setting must be the
+    one the builder reads, a click on it must not be taken for an
+    architecture, and a stack that never ticks it must build as before. The
+    UI tour clicks it in the IDE (tourAndroidAppBundle); the patch tool
+    checks the stack (tools/oxt/ide-stack-patch.sh --check)."""
+
+    def test_the_box_is_a_copy_of_a_box_without_a_script(self):
+        lines = patch_lines('android-card-app-bundle-1.txt')
+        self.assertIn('object: button "Android x86_64" of group "Android Targets" of card "Android"', lines)
+        self.assertIn('clone: App Bundle', lines)
+        self.assertEqual(lines[lines.index('property: label') + 1], 'to: App Bundle')
+        self.assertIn('.aab', lines[lines.index('property: toolTip') + 1])
+        # its source's script is empty, so a click goes to the row's group
+        # as the architectures' do, and the copy (whose script the patch
+        # tool holds to its source's) has none either
+        source = read(SCRIPTS + ('stack_revStandaloneSettings_button_id_31520.livecodescript',))
+        self.assertIn('> button "Android x86_64" (id 31520)', source)
+        self.assertEqual(code(source).split('script "', 1)[1].split('\n', 1)[1].strip(), '')
+        names = [n for n in os.listdir(os.path.join(REPO, *SCRIPTS))
+                 if '> button "App Bundle" (id ' in read(SCRIPTS + (n,))]
+        self.assertEqual(len(names), 1, names)
+        self.assertEqual(code(read(SCRIPTS + (names[0],))).split('\n', 1)[1].strip(), '')
+
+    def test_the_box_is_right_of_x86_64_inside_the_row(self):
+        box = [int(x) for x in patch_lines('android-card-app-bundle-1.txt')[-1][3:].split(',')]
+        grown = patch_lines('android-card-app-bundle-2.txt')
+        self.assertIn('object: group "Android Targets" of card "Android"', grown)
+        before = [int(x) for x in grown[grown.index('property: rect') + 1][5:].split(',')]
+        after = [int(x) for x in grown[grown.index('property: rect') + 2][3:].split(',')]
+        # x86_64 ends at 625 (the stack's dump); the box after it on its row
+        self.assertEqual(before, [111, 70, 629, 99])
+        self.assertGreater(box[0], 625)
+        self.assertEqual((box[1], box[3]), (75, 95))
+        # the row grows only to the right, by the engine's margins of 4,
+        # and stays inside the window (754 wide)
+        self.assertEqual(after, before[:2] + [box[2] + 4, before[3]])
+        self.assertLessEqual(after[2], 754)
+
+    def test_a_click_stores_the_setting_the_builder_reads(self):
+        lines = patch_lines('android-card-app-bundle-3.txt')
+        self.assertIn('object: group "Android Targets" of card "Android"', lines)
+        new = '\n'.join(line[1:-1] for line in lines[lines.index('with:') + 1:])
+        box = new.index('if tTarget is "App Bundle" then')
+        self.assertIn('storeSetting "app bundle", the hilite of the target', new)
+        self.assertLess(box, new.index('exit mouseUp'))
+        # before the architectures' line, which would take "Bundle" for one
+        self.assertLess(new.index('exit mouseUp'), new.index('updateAndroidArch word 2 of tTarget'))
+        # the card stores a setting under "android," and its name, and the
+        # builder makes a bundle when that one is true
+        self.assertIn('setSetting "android," & pName, pValue', handler(code(read(CARD)), 'storeSetting'))
+        self.assertIn('pSettings["android,app bundle"] is true', code(read(BUILDER)))
+        # the row's script in the stack is the patched one
+        row = read(SCRIPTS + ('stack_revStandaloneSettings_group_id_31523.livecodescript',))
+        self.assertIn(new, row)
+
+    def test_the_card_shows_the_setting_and_enables_the_box_with_android(self):
+        card = code(read(CARD))
+        settings = handler(card, 'updateSettings')
+        self.assertRegex(settings, r'set the hilited of button "App Bundle" of group "Android targets" of me to\s+'
+                                   r'\(tSettings\["android,app bundle"\] is true\)')
+        state = handler(card, 'updateAndroidSettingState')
+        self.assertIn('set the enabled of button "App Bundle" of group "Android targets" of me to tEnabled', state)
+        self.assertLess(state.index('put true into tEnabled'), state.index('"App Bundle"'))
+        # an IDE whose stack has no such box opens the card as before
+        for body in (settings, state):
+            self.assertIn('if there is a button "App Bundle" of group "Android targets" of me then', body)
+
+    def test_the_tour_clicks_it(self):
+        tour = read(TOUR)
+        step = handler(tour, 'tour_standalone_settings')
+        self.assertRegex(step, r'if tCard is "Android" then\s+put tourAndroidAppBundle\(tStack\) after tFails')
+        self.assertIn('throw "the Android card is not shown, so its App Bundle box was not checked"', step)
+        check = handler(tour, 'tourAndroidAppBundle')
+        for part in ('dispatch "mouseUp" to tBox with 1', 'dispatch "updateSettings" to tCard',
+                     'the cRevStandaloneSettings["android,app bundle"] of stack kSample is not true',
+                     'the cRevStandaloneSettings["android,app bundle"] of stack kSample is not false',
+                     'set the customProperties["cRevStandaloneSettings"] of stack kSample to tWas',
+                     'the enabled of tBox is not the enabled of group "Android Settings" of tCard'):
+            self.assertIn(part, check)
 
 
 class TargetAPI(unittest.TestCase):

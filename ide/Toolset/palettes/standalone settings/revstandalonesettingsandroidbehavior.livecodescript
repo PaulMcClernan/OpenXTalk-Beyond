@@ -105,6 +105,16 @@ on updateSettings
    put computeDefault(tSettings["android,nfc"], false) into tNFC
    set the hilited of button "NFC Tag Reading" to tNFC
    
+   -- OXT-Beyond: the "App Bundle" box at the end of the build targets' row
+   -- (tools/oxt/ide-stack-patches/android-card-app-bundle-1.txt): the
+   -- "android,app bundle" setting, with which the Android builder makes an
+   -- Android App Bundle (.aab) beside the package. A stack without it has
+   -- none, and the box is not ticked.
+   if there is a button "App Bundle" of group "Android targets" of me then
+      set the hilited of button "App Bundle" of group "Android targets" of me to \
+            (tSettings["android,app bundle"] is true)
+   end if
+   
    -- OXT-Beyond: the Android card of this IDE has no such button (and its
    -- Android build no such setting): setting it stopped the card's update
    -- with an error
@@ -146,6 +156,11 @@ on updateAndroidSettingState
       end if
    end repeat
    set the enabled of group "Android Settings" of me to tEnabled
+   -- OXT-Beyond: the "App Bundle" box is an option of the Android build, as
+   -- the settings below are: it can be ticked once an architecture is
+   if there is a button "App Bundle" of group "Android targets" of me then
+      set the enabled of button "App Bundle" of group "Android targets" of me to tEnabled
+   end if
    set the visible of button "Androidchecked" to tEnabled
    set the opaque of button "Androidchecked" to false
    
