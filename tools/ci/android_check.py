@@ -564,6 +564,59 @@ def permission_granted(package_dump, permission):
     return found
 
 
+# What the Java layer's probe says it did, one line a step: a put with no
+# container is the engine's own log line on Android (tag LiveCode, at info
+# level: engine/src/mblandroid.cpp, MCAndroidSystem::Debug)
+PROBE_SAYS = re.compile(r'^[VDIWEF]/LiveCode\(\s*\d+\): OXT-Beyond probe: (.*?)\s*$')
+
+
+def probe_said(logcat, pids=()):
+    """What the probe said in the log, in order: the lines of its processes
+    (pids), or every such line when no pid is known."""
+    said = []
+    for line in logcat.splitlines():
+        m = PROBE_SAYS.match(line)
+        if m and (not pids or log_pid(line) in pids):
+            said.append(m.group(1))
+    return said
+
+
+# The shared pictures, as MediaStore lists them to the shell (content
+# query): the columns asked for, and the folder an app's pictures go to
+PICTURE_COLUMNS = ('_display_name', 'relative_path', 'owner_package_name')
+PICTURES = 'Pictures/'
+
+
+def shared_pictures(query):
+    """The rows of content query's answer ("Row: N col=value, col=value"),
+    each a dict of PICTURE_COLUMNS (NULL as it says it)."""
+    rows = []
+    for line in query.splitlines():
+        m = re.match(r'\s*Row: \d+ (.*?)\s*$', line)
+        if not m:
+            continue
+        row = {}
+        for part in re.split(r', (?=(?:%s)=)' % '|'.join(PICTURE_COLUMNS), m.group(1)):
+            key, _, value = part.partition('=')
+            row[key] = value
+        rows.append(row)
+    return rows
+
+
+def probe_picture(rows, name, package):
+    """The row of the picture name in the shared Pictures folder that
+    package owns, or None. A name that a picture there has already (one
+    the package added before it was installed again, which Android no
+    longer counts as its own) is named apart by Android: "name (1).png"."""
+    stem, ext = os.path.splitext(name)
+    pattern = re.compile(r'%s(?: \(\d+\))?%s$' % (re.escape(stem), re.escape(ext)))
+    for row in rows:
+        if (pattern.match(row.get('_display_name', '')) and row.get('relative_path') == PICTURES and
+                row.get('owner_package_name') == package):
+            return row
+    return None
+
+
 def ide_results(lines):
     """From the IDE's lines: units (name -> None or why it failed), builds
     (name -> apk or the failure), warnings and questions (name -> text),
@@ -1145,9 +1198,13 @@ def device(args):
             f.write(logcat)
     log('After %.0f s: %.0f%% of the screen is the probe\'s green, %.0f%% its saved red; process %s' % (
         time.time() - started, share * 100, saved * 100, pid.strip() or 'not running'))
+    said = probe_said(logcat, pids)
+    for line in said:
+        log('The probe said: %s' % line)
     if failed >= 0.25:
         problems.append('the probe\'s script ran, and a call it makes into the Java layer failed (the screen '
-                        'is its fail colour, %.0f%%)' % (failed * 100))
+                        'is its fail colour, %.0f%%%s)' % (failed * 100, '; it said: %s' % ' | '.join(said)
+                                                         if said else ''))
     elif share < 0.25:
         problems.append('the screen never turned the probe\'s green (%.0f%% green, %.0f%% red: %s)' % (
             share * 100, saved * 100, 'the stack showed and its script did not run' if saved >= 0.25 else
@@ -1167,6 +1224,20 @@ def device(args):
         elif granted is not True:
             problems.append('%s was allowed in Android\'s dialog, and the package does not hold it (%s)'
                             % (args.allow, 'it does not ask for it' if granted is None else 'not granted'))
+    if args.picture:
+        # the picture the probe exported, where Android keeps the shared
+        # ones (MediaStore), as the package's own
+        _, query = a('shell', 'content', 'query', '--uri', 'content://media/external/images/media',
+                     '--projection', ':'.join(PICTURE_COLUMNS))
+        rows = shared_pictures(query)
+        own = ['%s%s' % (r.get('relative_path', ''), r.get('_display_name', '')) for r in rows
+               if r.get('owner_package_name') == IDENTIFIER]
+        log('Shared pictures the package owns: %s' % (', '.join(own) or 'none'))
+        if not probe_picture(rows, args.picture, IDENTIFIER):
+            problems.append('the probe\'s picture %s is not in the shared %s folder as the package\'s own (%s)'
+                            % (args.picture, PICTURES.rstrip('/'), 'it owns ' + ', '.join(own) if own else
+                               'it owns no shared picture' if rows else
+                               'MediaStore listed no picture: %s' % (query.strip()[-300:] or 'no answer')))
     if crash:
         problems.append('the device\'s log: %s' % ' | '.join(crash[:8]))
     if problems or len(pids) > 1:
@@ -1586,6 +1657,9 @@ def main(argv=None):
     d.add_argument('--allow', metavar='PERMISSION',
                    help='the probe must ask for this runtime permission; allow it in Android\'s dialog, and '
                         'check that the package holds it')
+    d.add_argument('--picture', metavar='NAME',
+                   help='the probe exports a picture of this file name: it must be in the shared Pictures '
+                        'folder as the package\'s own (MediaStore)')
     b = sub.add_parser('boot')
     b.add_argument('--serial', required=True)
     b.add_argument('--sdk', required=True)

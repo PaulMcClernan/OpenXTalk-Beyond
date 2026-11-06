@@ -1580,16 +1580,26 @@ release, so that one release can be run with both builders, and with
 `ide --probe java` builds the Java layer's probe (`AndroidJavaProbe`)
 instead: before it turns green its `openStack` schedules a local
 notification an hour away and cancels it, which goes through the Java
-layer's `PendingIntent`s, and it turns orange (its fail colour) when the
-notification gets no id. Its builds declare `POST_NOTIFICATIONS`, so on
-Android 13 and newer the Java layer asks the user to let it post
-notifications as it schedules one. `device`
-installs a package with adb, starts it, and waits until the screen turns
-the probe's green, which only the probe's `openStack` makes (or the
-fail colour, which fails at once). With `--allow <permission>` the probe
-must ask for that runtime permission: `device` waits for Android's dialog,
-taps its Allow button (found in a `uiautomator` dump) and checks that the
-package then holds the permission (`dumpsys package`); `ide
+layer's `PendingIntent`s; asks for its external folder
+(`specialFolderPath("external documents")`) and whether it holds
+`WRITE_EXTERNAL_STORAGE` (`androidHasPermission`); and exports a
+one-pixel picture to the album as `oxt-beyond-probe`. It takes every
+step, says what each answered in the device's log (`OXT-Beyond probe:`
+lines, tag `LiveCode`), and turns orange (its fail colour) when any
+failed. Its builds declare `POST_NOTIFICATIONS`, so on Android 13 and
+newer the Java layer asks the user to let it post notifications as it
+schedules one, and `WRITE_EXTERNAL_STORAGE`, which Android 13 and newer
+refuse without asking and the rebuilt Java layer counts as granted there.
+`device` installs a package with adb, starts it, and waits until the
+screen turns the probe's green, which only the probe's `openStack` makes
+(or the fail colour, which fails at once), and prints what the probe said
+(kept in the failure when it turns its fail colour). With `--allow
+<permission>` the probe must ask for that runtime permission: `device`
+waits for Android's dialog, taps its Allow button (found in a
+`uiautomator` dump) and checks that the package then holds the
+permission (`dumpsys package`). With `--picture <name>` the picture the
+probe exported must be among the shared pictures (`content query` of
+MediaStore) in `Pictures/`, as the package's own; `ide
 --device <serial>` does what the IDE's Test does for that device. `boot`
 waits for an emulator to finish booting, and when it gives up it prints
 whether the emulator still runs, `/dev/kvm`, adb's devices, the free disk
@@ -1611,11 +1621,14 @@ Android 13 emulator and on one with 16 KB pages. On Linux it also builds
 the Java layer from this checkout and makes the Java layer's probe twice
 from the same stack, once with that layer and once with the release's,
 and runs both on the Android 13 emulator: the rebuilt layer's must turn
-green and ask for the notification permission (`--allow
-android.permission.POST_NOTIFICATIONS`); the release's is only recorded. LiveCode 9.6.3's `PendingIntent`s
-throw on Android 12 and newer, and the engine clears the exception
-without a word in the log, so that probe's notification call answers no
-id and the probe turns its fail colour instead of green.
+green, ask for the notification permission (`--allow
+android.permission.POST_NOTIFICATIONS`) and leave its picture in the
+shared Pictures folder (`--picture oxt-beyond-probe.png`), there and on
+the 16 KB emulator; the release's is only recorded, with what it said.
+LiveCode 9.6.3's `PendingIntent`s throw on Android 12 and newer, and the
+engine clears the exception without a word in the log, so that probe's
+notification call answers no id and the probe turns its fail colour
+instead of green.
 
 ### Android Java layer
 

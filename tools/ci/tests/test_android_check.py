@@ -22,6 +22,7 @@ same builds, colours and files. No Android SDK or engine is needed.
   python3 -m unittest discover -s tools/ci/tests
 """
 
+import base64
 import contextlib
 import io
 import os
@@ -796,6 +797,175 @@ class PermissionReaders(unittest.TestCase):
         self.assertIs(ac.permission_granted(two, name), True)
 
 
+class ProbeSaid(unittest.TestCase):
+    """What the Java layer's probe says in the device's log, a line a step"""
+
+    def test_its_lines_in_order(self):
+        log = ('I/ActivityManager(  590): Start proc 3475:org.openxtalk.check.androidprobe/u0a190 for activity\n'
+               'I/LiveCode( 3475): OXT-Beyond probe: local notification 1\n'
+               'I/revandroid( 3475): exportToAlbum called: oxt-beyond-probe .png\n'
+               'I/LiveCode( 3475): OXT-Beyond probe: external documents   \n'
+               'I/LiveCode( 3475): OXT-Beyond probe: export to album export failed\n')
+        self.assertEqual(ac.probe_said(log, {'3475'}), ['local notification 1', 'external documents',
+                                                        'export to album export failed'])
+        # with no process known, every such line
+        self.assertEqual(len(ac.probe_said(log)), 3)
+
+    def test_only_the_engines_lines_of_the_probe(self):
+        log = ('I/LiveCode(   99): OXT-Beyond probe: another process\n'
+               'I/revandroid( 3475): OXT-Beyond probe: not the engine\'s line\n'
+               'I/LiveCode( 3475): the engine, about something else\n'
+               'I/LiveCode( 3475): said: OXT-Beyond probe: not at the start\n')
+        self.assertEqual(ac.probe_said(log, {'3475'}), [])
+        self.assertEqual(ac.probe_said(log), ['another process'])
+        self.assertEqual(ac.probe_said(''), [])
+
+    def test_the_probe_says_what_it_reads(self):
+        # the probe's put lines begin as PROBE_SAYS reads them
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        lines = re.findall(r'quote & "(OXT-Beyond probe: [^"]*)" & quote && "&& t\w+"', script)
+        self.assertEqual(len(lines), 4, lines)
+        for line in lines:
+            self.assertEqual(ac.probe_said('I/LiveCode( 1): %s x\n' % line), [line[len('OXT-Beyond probe: '):]
+                                                                              + ' x'])
+
+
+class SharedPictures(unittest.TestCase):
+    """device --picture's reading of MediaStore's shared pictures"""
+
+    # as an Android 13 image's content query says them
+    QUERY = ('Row: 0 _display_name=PXL_20260101.jpg, relative_path=DCIM/Camera/, owner_package_name=NULL\n'
+             'Row: 1 _display_name=oxt-beyond-probe.png, relative_path=Pictures/, '
+             'owner_package_name=org.openxtalk.check.androidprobe\n'
+             'Row: 2 _display_name=a, b.png, relative_path=Pictures/, owner_package_name=org.example\n')
+
+    def test_rows(self):
+        rows = ac.shared_pictures(self.QUERY)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0], {'_display_name': 'PXL_20260101.jpg', 'relative_path': 'DCIM/Camera/',
+                                   'owner_package_name': 'NULL'})
+        # a comma in a name is the name's
+        self.assertEqual(rows[2]['_display_name'], 'a, b.png')
+        self.assertEqual(ac.shared_pictures('No result found.\n'), [])
+        self.assertEqual(ac.shared_pictures(''), [])
+
+    def test_the_probes_picture(self):
+        rows = ac.shared_pictures(self.QUERY)
+        self.assertEqual(ac.probe_picture(rows, 'oxt-beyond-probe.png', ac.IDENTIFIER), rows[1])
+        self.assertIsNone(ac.probe_picture(rows, 'oxt-beyond-probe.png', 'org.example'))
+        self.assertIsNone(ac.probe_picture(rows, 'other.png', ac.IDENTIFIER))
+
+    def test_named_apart_is_found(self):
+        # the name a picture there has already (one the package added
+        # before it was installed again): Android adds " (1)"
+        row = {'_display_name': 'oxt-beyond-probe (1).png', 'relative_path': 'Pictures/',
+               'owner_package_name': ac.IDENTIFIER}
+        self.assertEqual(ac.probe_picture([row], 'oxt-beyond-probe.png', ac.IDENTIFIER), row)
+
+    def test_what_is_not_it(self):
+        mine = {'relative_path': 'Pictures/', 'owner_package_name': ac.IDENTIFIER}
+        for name in ('oxt-beyond-probe.jpg', 'oxt-beyond-probe-2.png', 'xoxt-beyond-probe.png',
+                     'oxt-beyond-probe (x).png', 'oxt-beyond-probe.png.png', 'oxt-beyond-probe (1) .png'):
+            self.assertIsNone(ac.probe_picture([dict(mine, _display_name=name)], 'oxt-beyond-probe.png',
+                                               ac.IDENTIFIER), name)
+        # another folder, or no owner (the package's picture before it was
+        # installed again)
+        for other in ({'relative_path': 'DCIM/'}, {'relative_path': 'Pictures/x/'},
+                      {'owner_package_name': 'NULL'}, {'owner_package_name': ac.IDENTIFIER + '.x'}):
+            row = dict(mine, _display_name='oxt-beyond-probe.png', **other)
+            self.assertIsNone(ac.probe_picture([row], 'oxt-beyond-probe.png', ac.IDENTIFIER), other)
+        # a name's dot is a dot
+        self.assertIsNone(ac.probe_picture([dict(mine, _display_name='oxt-beyond-probeXpng')],
+                                           'oxt-beyond-probe.png', ac.IDENTIFIER))
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DevicePicture(unittest.TestCase):
+    """device --picture with a stand-in adb: the Java layer's probe exports
+    a picture to the album, which must then be among the shared pictures
+    (MediaStore) as the package's own; and what the probe said in the log
+    is printed, and kept in the failure when it turns its fail colour"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+    QUERY_CALL = ('shell content query --uri content://media/external/images/media '
+                  '--projection _display_name:relative_path:owner_package_name')
+    SAID = ('I/LiveCode( 3475): OXT-Beyond probe: local notification 1\n'
+            'I/LiveCode( 3475): OXT-Beyond probe: external documents /storage/emulated/0/Android/data/x/files\n'
+            'I/LiveCode( 3475): OXT-Beyond probe: has WRITE_EXTERNAL_STORAGE true\n'
+            'I/LiveCode( 3475): OXT-Beyond probe: export to album\n')
+
+    def run_probe(self, pictures=SharedPictures.QUERY, said='', picture=True, colour=ac.RUN_COLOR):
+        d = self.tmp.name
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0] + said)
+        with open(os.path.join(d, 'pictures.txt'), 'w') as f:
+            f.write(pictures)
+        with open(os.path.join(d, 'screen.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(colour) + [255]) * 16)
+        cases = ('  "shell content query "*) echo "$*" >> "%(d)s/calls"; cat "%(d)s/pictures.txt" ;;\n' % {'d': d})
+        status, out = self.device('echo 3475', timeout='10', cases=cases,
+                                  argv=('--picture', 'oxt-beyond-probe.png') if picture else ())
+        try:
+            with open(os.path.join(d, 'calls')) as f:
+                calls = f.read().splitlines()
+        except FileNotFoundError:
+            calls = []
+        return status, out, calls
+
+    def test_the_packages_picture_passes(self):
+        status, out, calls = self.run_probe(said=self.SAID)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [self.QUERY_CALL])
+        self.assertIn('Shared pictures the package owns: Pictures/oxt-beyond-probe.png', out)
+        # what it said, each line in order
+        at = [out.index('The probe said: ' + x) for x in (
+            'local notification 1', 'external documents /storage/emulated/0/Android/data/x/files',
+            'has WRITE_EXTERNAL_STORAGE true', 'export to album')]
+        self.assertEqual(at, sorted(at))
+
+    def test_no_picture_of_its_own_fails(self):
+        query = SharedPictures.QUERY.replace('owner_package_name=org.openxtalk.check.androidprobe',
+                                             'owner_package_name=NULL')
+        status, out, _ = self.run_probe(query)
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: the probe's picture oxt-beyond-probe.png is not in the shared Pictures folder as "
+                      "the package's own (it owns no shared picture)", out)
+        self.assertIn('Shared pictures the package owns: none', out)
+
+    def test_another_picture_of_its_own_is_named(self):
+        query = SharedPictures.QUERY.replace('_display_name=oxt-beyond-probe.png', '_display_name=I1a2b3c4.png')
+        status, out, _ = self.run_probe(query)
+        self.assertEqual(status, 1, out)
+        self.assertIn("as the package's own (it owns Pictures/I1a2b3c4.png)", out)
+
+    def test_no_pictures_listed_says_what_it_answered(self):
+        status, out, _ = self.run_probe('No result found.\n')
+        self.assertEqual(status, 1, out)
+        self.assertIn("as the package's own (MediaStore listed no picture: No result found.)", out)
+        status, out, _ = self.run_probe('')
+        self.assertIn('(MediaStore listed no picture: no answer)', out)
+
+    def test_without_picture_mediastore_is_not_asked(self):
+        status, out, calls = self.run_probe('', said=self.SAID, picture=False)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [])
+        self.assertNotIn('Shared pictures', out)
+        self.assertIn('The probe said: export to album', out)
+
+    def test_the_fail_colour_keeps_what_it_said(self):
+        said = self.SAID.replace('export to album\n', 'export to album export failed\n')
+        status, out, _ = self.run_probe(said=said, colour=ac.FAIL_COLOR)
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: the probe's script ran, and a call it makes into the Java layer failed (the screen "
+                      "is its fail colour, 100%; it said: local notification 1 | external documents "
+                      "/storage/emulated/0/Android/data/x/files | has WRITE_EXTERNAL_STORAGE true | export to album "
+                      "export failed)", out)
+
+
 class Overlay(unittest.TestCase):
     """overlay puts this checkout's builder over a release's, and with
     --classes a Java layer over the release's Runtime/Android/Classes"""
@@ -1515,20 +1685,48 @@ class OneSystem(unittest.TestCase):
         self.assertEqual(script.count('if probeName() is "AndroidJavaProbe" then'), 2)
 
     def test_java_probe_script(self):
-        # the Java layer's probe: a notification an hour away (the alarm's
-        # PendingIntent), its id checked, cancelled, and only then green;
-        # the plain probe turns green at once, as before
+        # the Java layer's probe takes every step, each answer checked and
+        # said in the log, and turns its fail colour when any failed, else
+        # green: a notification an hour away (the alarm's PendingIntent),
+        # cancelled; the app's external folder (WRITE_EXTERNAL_STORAGE
+        # first) and androidHasPermission of it; a picture exported to the
+        # album. The plain probe turns green at once, as before
         script = read('tools', 'ci', 'android-check.livecodescript')
         body = re.search(r'(?s)private function probeScript\n(.*?)\nend probeScript', script).group(1)
         java = body.split('end if\n   put "   set the backgroundColor of me to"')[0]
-        for part in ('mobileCreateLocalNotification', 'the seconds + 3600, false, 0',
-                     'put the result into tId', 'tId is not an integer or tId < 1',
-                     'kFailColor', 'exit openStack', 'mobileCancelLocalNotification tId'):
-            self.assertIn(part, java)
-        self.assertLess(java.index('mobileCreateLocalNotification'), java.index('mobileCancelLocalNotification'))
+        steps = ['put false into tFailed',
+                 'mobileCreateLocalNotification', 'the seconds + 3600, false, 0',
+                 'put the result into tId', '"OXT-Beyond probe: local notification" & quote && "&& tId"',
+                 'tId is not an integer or tId < 1', 'put true into tFailed', 'mobileCancelLocalNotification tId',
+                 'put specialFolderPath(" & quote & "external documents" & quote & ") into tFolder',
+                 '"OXT-Beyond probe: external documents" & quote && "&& tFolder"',
+                 'if tFolder is empty then put true into tFailed',
+                 'put androidHasPermission(" & quote & "android.permission.WRITE_EXTERNAL_STORAGE" & quote',
+                 '"OXT-Beyond probe: has WRITE_EXTERNAL_STORAGE" & quote && "&& tHas"',
+                 'if tHas is not true then put true into tFailed',
+                 'mobileExportImageToAlbum base64Decode(" & quote & kProbePicture & quote & "),"',
+                 'put the result into tExport', '"OXT-Beyond probe: export to album" & quote && "&& tExport"',
+                 'if tExport is not empty then put true into tFailed',
+                 'if tFailed then', 'kFailColor', 'exit openStack']
+        at = [java.index(x) for x in steps]
+        self.assertEqual(at, sorted(at), steps)
+        # the result is read once, at once, before anything can change it
+        self.assertEqual(java.count('put the result into'), 2)
+        # only the end decides: no step leaves early
+        self.assertEqual(java.count('exit openStack'), 1)
         self.assertIn('if probeName() is "AndroidJavaProbe" then', body)
         self.assertTrue(body.rstrip().endswith('"end openStack" after tScript\n   return tScript'))
         self.assertIn('set the script of stack tProbe to probeScript()', script)
+
+    def test_java_probe_picture(self):
+        # the probe's picture is a real PNG (what the engine sends to the
+        # Java layer as ".png"): one pixel
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        data = base64.b64decode(re.search(r'(?m)^constant kProbePicture = "([^"]+)"$', script).group(1))
+        self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n')
+        self.assertEqual(data[12:16], b'IHDR')
+        self.assertEqual(struct.unpack('>II', data[16:24]), (1, 1))
+        self.assertEqual(data[-8:-4], b'IEND')
 
     def test_builds_take_the_probes_name(self):
         script = read('tools', 'ci', 'android-check.livecodescript')
@@ -1610,8 +1808,10 @@ class OneSystem(unittest.TestCase):
         body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
         self.assertIn('   if probeName() is "AndroidJavaProbe" then\n'
                       '      put true into tSettings["android,application permissions"]["POST_NOTIFICATIONS"]\n'
+                      '      put true into tSettings["android,application permissions"]["WRITE_EXTERNAL_STORAGE"]\n'
                       '   end if\n', body)
         self.assertEqual(script.count('POST_NOTIFICATIONS"]'), 1)
+        self.assertEqual(script.count('WRITE_EXTERNAL_STORAGE"]'), 1)
         # every run of this checkout's Java layer on a device allows it,
         # and no other: the plain probe never asks, and the release's
         # Java layer throws before it could
@@ -1621,6 +1821,20 @@ class OneSystem(unittest.TestCase):
         self.assertEqual(len(java_new), 2, runs)
         for run in runs:
             self.assertEqual('--allow android.permission.POST_NOTIFICATIONS' in run, run in java_new, run)
+
+    def test_java_probe_picture_is_looked_for(self):
+        # every run of this checkout's Java layer looks for the picture the
+        # probe exports, by the name it exports it as; no other run does
+        # (the release's Java layer is refused WRITE_EXTERNAL_STORAGE on
+        # Android 13 before it exports)
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        name = re.search(r'mobileExportImageToAlbum base64Decode\(" & quote & kProbePicture & quote & "\)," && \\\n'
+                         r'\s*quote & "([^"]+)" & quote', script).group(1)
+        workflow = read('.github', 'workflows', 'android.yml')
+        runs = re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', workflow)
+        for run in runs:
+            self.assertEqual('--picture %s.png' % name in run, '/java-new/' in run, run)
+            self.assertEqual(run.count('--picture'), 1 if '/java-new/' in run else 0, run)
 
     def test_target_api(self):
         lib = read('ide-support', 'revdeploylibraryandroid.livecodescript')
