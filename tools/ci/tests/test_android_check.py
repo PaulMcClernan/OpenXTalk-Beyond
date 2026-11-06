@@ -1276,6 +1276,27 @@ class VerifyWithoutTools(unittest.TestCase):
         self.assertIn('did not warn "built for armv7 and not arm64"', problems[0])
 
 
+class StepClock:
+    """The check's clock in the Boot tests (in place of the time module):
+    it moves only by the check's own sleeps, so the seconds the check
+    prints ("settled after 0 s") and the deadlines it keeps are the same
+    however long the stand-in adb takes to start. On real time, a busy
+    macOS runner took over a second for one settle of a few calls, and
+    "after 0 s" read "after 1 s" (CI checks on main's 782a01d0f)."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def monotonic(self):
+        return self.now
+
+    def time(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
 @unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
 class Boot(unittest.TestCase):
     """boot with a stand-in adb: done once the emulator has booted, and
@@ -1312,7 +1333,9 @@ class Boot(unittest.TestCase):
         os.chmod(adb, 0o755)
         procs = {True: ['4242 01:00 /sdk/emulator/emulator -avd api33'], False: [], None: None}[running]
         saved = ac.emulator_processes
+        saved_time = ac.time
         ac.emulator_processes = lambda: procs
+        self.clock = ac.time = StepClock()
         out = io.StringIO()
         try:
             with contextlib.redirect_stdout(out):
@@ -1320,6 +1343,7 @@ class Boot(unittest.TestCase):
                                   '--interval', '0.05'] + list(extra))
         finally:
             ac.emulator_processes = saved
+            ac.time = saved_time
         return status, out.getvalue()
 
     def test_booted(self):
@@ -1588,21 +1612,24 @@ class Boot(unittest.TestCase):
 
     def test_awake_leaves_it_asleep_a_while_before_waking_it(self):
         # what Android keeps until the screen is off runs once it is off:
-        # the wake comes an --interval after the device said it slept
-        stamp = '"%s" -c "import time; print(time.time())"' % sys.executable
-        script = self.AWAKE.replace(
-            '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state" ;;',
-            '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state"; %s > "$d/slept" ;;' % stamp).replace(
-            '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state" ;;',
-            '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state"; %s > "$d/woke" ;;' % stamp)
-        self.assertNotEqual(script, self.AWAKE)
-        status, out = self.boot(script, '--awake', '--interval', '0.5')
-        self.assertEqual(status, 0, out)
+        # the wake comes an --interval after the device said it slept, by
+        # the check's own clock (StepClock: only the check's sleeps move
+        # it), and not only once the wait for sleep ran out (4 intervals)
+        at = {}
+        saved = ac.run
 
-        def when(name):
-            with open(os.path.join(self.sdk, 'platform-tools', name)) as f:
-                return float(f.read())
-        self.assertGreaterEqual(when('woke') - when('slept'), 0.5)
+        def run(cmd, *args, **kwargs):
+            for key in ('KEYCODE_SLEEP', 'KEYCODE_WAKEUP'):
+                if key in cmd:
+                    at[key] = self.clock.now
+            return saved(cmd, *args, **kwargs)
+        ac.run = run
+        self.addCleanup(setattr, ac, 'run', saved)
+        status, out = self.boot(self.AWAKE, '--awake', '--interval', '0.5')
+        self.assertEqual(status, 0, out)
+        self.assertEqual(sorted(at), ['KEYCODE_SLEEP', 'KEYCODE_WAKEUP'])
+        self.assertGreaterEqual(at['KEYCODE_WAKEUP'] - at['KEYCODE_SLEEP'], 0.5)
+        self.assertLess(at['KEYCODE_WAKEUP'] - at['KEYCODE_SLEEP'], 2.0)
 
     def test_no_awake_unless_asked(self):
         status, out = self.boot(self.AWAKE, '--settle', '--settle-polls', '2')
