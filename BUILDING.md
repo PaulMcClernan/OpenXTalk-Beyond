@@ -597,7 +597,7 @@ powershell -ExecutionPolicy Bypass -File tools\ci\verify-build.ps1
 
 [`tools/ci/verify-build.ps1`](tools/ci/verify-build.ps1) checks that the
 expected files exist, that `dbsqlite.dll` contains the `SQLITE_SOURCE_ID`
-from `thirdparty/libsqlite/include/sqlite3.h` (SQLite 3.51.1), and that
+from `thirdparty/libsqlite/include/sqlite3.h` (SQLite 3.51.3), and that
 `LiveCode-Community.exe` contains the version from the `version` file.
 The same checks by hand:
 
