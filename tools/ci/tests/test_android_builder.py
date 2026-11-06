@@ -31,7 +31,12 @@ would not notice going back:
   - the target API: 33, as before, with a runtime whose Java layer is not
     ready for newer, 36 with one that is (known by the classes it has for
     it), or the stack's pin from 33 to 36; and at 36 the manifest keeps the
-    stack's orientation on large screens.
+    stack's orientation on large screens;
+  - the App Bundle: only for a build whose stack asks for one, from the
+    package's files before zipalign, signed with the package's key after
+    the package (jarsigner, the passwords never on a command line); the
+    bundletool it runs is checked against its pinned SHA-256 before it is
+    kept or used; and an SDK without aapt2 still builds packages.
 
   python3 -m unittest discover -s tools/ci/tests
 """
@@ -99,8 +104,17 @@ class Signing(unittest.TestCase):
         self.assertIn('put empty into $OXT_ANDROID_KEY_PASS', self.src)
 
     def test_no_jarsigner(self):
-        self.assertNotIn('pathToJarSigner()', self.src)
+        # apksigner alone signs the package; jarsigner signs only the App
+        # Bundle (which apksigner cannot), never with SHA1
         self.assertNotIn('SHA1withRSA', self.src)
+        main = handler(self.src, 'revSaveAsMobileStandaloneMain')
+        self.assertNotIn('pathToJarSigner()', main)
+        uses = [m.start() for m in re.finditer(r'pathToJarSigner\(\)', self.src)]
+        bundle = handler(self.src, 'androidSignBundle')
+        start = self.src.index(bundle)
+        self.assertTrue(uses)
+        for at in uses:
+            self.assertTrue(start <= at < start + len(bundle), 'jarsigner outside androidSignBundle')
 
     def test_who_signs(self):
         main = handler(self.src, 'revSaveAsMobileStandaloneMain')
@@ -240,6 +254,139 @@ class Compatibility(unittest.TestCase):
 
 JAVA = ('engine', 'src', 'java', 'com', 'runrev', 'android')
 UNITS = ('tools', 'ci', 'android-check.livecodescript')
+
+
+class AppBundle(unittest.TestCase):
+    """The App Bundle (androidBuildBundle and its helpers). The IDE units
+    (unitAppBundle in tools/ci/android-check.livecodescript) run the
+    helpers on made-up files; android.yml builds a bundle, checks it
+    (android_check.py verify) and installs it on the emulators as Google
+    Play would"""
+
+    def setUp(self):
+        self.src = code(read(BUILDER))
+        self.main = handler(self.src, 'revSaveAsMobileStandaloneMain')
+
+    def test_only_when_the_stack_asks_and_never_for_test(self):
+        self.assertRegex(self.main, r'if pTarget contains "build" and pSettings\["android,app bundle"\] is true then\s+'
+                                    r'put androidBundlePath\(pApkFile\) into tBundleFile')
+        # every other use waits for tBundleFile
+        for m in re.finditer(r'(androidBuildBundle|androidSignBundle) ', self.main):
+            before = self.main[:m.start()]
+            self.assertGreater(before.rfind('if tBundleFile is not empty then'), before.rfind('end if'), m.group(1))
+
+    def test_from_the_unsigned_package_before_zipalign(self):
+        built = self.main.find('buildAPK tUnalignedApkFile, tAssetArchive, tClassesFile, tLibsBuildFolder')
+        bundle = self.main.find('androidBuildBundle tUnalignedApkFile, tUnsignedBundleFile, tBuildFolder, '
+                                'androidBundletoolForBuild()')
+        align = self.main.find('pathToZipAlign(), "-f", "-p", "4"')
+        self.assertGreater(built, 0)
+        self.assertGreater(bundle, built)
+        self.assertGreater(align, bundle)
+
+    def test_signed_with_the_packages_key_after_the_package(self):
+        verify = self.main.find('pathToApkSigner(), "verify", pApkFile')
+        sign = self.main.find('androidSignBundle tUnsignedBundleFile, tBundleFile, tKey, tKeystoreAlias')
+        self.assertGreater(verify, 0)
+        self.assertGreater(sign, verify)
+        part = self.main[sign - 300:sign + 400]
+        self.assertIn('put tKeystorePassword into $OXT_ANDROID_KS_PASS', part)
+        self.assertIn('put empty into $OXT_ANDROID_KS_PASS', part)
+        self.assertIn('put empty into $OXT_ANDROID_KEY_PASS', part)
+        # unsigned when the package is
+        self.assertRegex(self.main, r'else if tBundleFile is not empty then\s+'
+                                    r'put url \("binfile:" & tUnsignedBundleFile\) into url \("binfile:" & tBundleFile\)')
+        signer = handler(self.src, 'androidSignBundle')
+        self.assertIn('"-storepass:env", "OXT_ANDROID_KS_PASS", "-keypass:env", "OXT_ANDROID_KEY_PASS"', signer)
+        # jarsigner answers 0 for an unsigned jar: its words decide, in English
+        self.assertIn('not (tResult contains "jar verified")', signer)
+        self.assertEqual(signer.count('"-J-Duser.language=en"'), 2)
+        self.assertNotIn('"-strict"', signer)
+
+    def test_warns_when_play_would_refuse_it(self):
+        self.assertRegex(self.main, r'if tBundleFile is not empty and tSigning is "debug" then\s+revStandaloneAddWarning')
+        self.assertRegex(self.main, r'else if tBundleFile is not empty and tSigning is "none" then\s+'
+                                    r'revStandaloneAddWarning')
+
+    def test_its_files_go(self):
+        self.assertIn('if tUnsignedBundleFile is not empty and there is a file tUnsignedBundleFile then '
+                      'delete file tUnsignedBundleFile', self.main)
+        build = handler(self.src, 'androidBuildBundle')
+        for f in ('tProtoFile', 'tModuleFile', 'tConfigFile'):
+            self.assertIn('if there is a file %s then delete file %s' % (f, f), build)
+        # a bundle cut short is not left behind
+        self.assertRegex(build, r'if tError is not empty then\s+if there is a file pBundleFile then delete file '
+                                r'pBundleFile\s+throw tError')
+
+    def test_the_steps(self):
+        build = handler(self.src, 'androidBuildBundle')
+        steps = ['pathToAapt2(), "convert", "--output-format", "proto", "-o", tProtoFile, pApkFile',
+                 'put androidBundleModulePath(tItem) into tPath',
+                 'revZipAddUncompressedItemWithData tModuleFile, tPath, "tData"',
+                 'put textEncode(androidBundleConfig(), "UTF-8") into url ("binfile:" & tConfigFile)',
+                 r'pathToJava\(\), "-jar", pBundletool, "build-bundle", "--modules", tModuleFile,\s+'
+                 r'"--config", tConfigFile, "--output", pBundleFile']
+        at = [build.find(x) for x in steps[:-1]]
+        last = re.search(steps[-1], build)
+        at.append(last.start() if last else -1)
+        self.assertNotIn(-1, at, steps)
+        self.assertEqual(at, sorted(at))
+
+    def test_bundletool_pinned_and_checked(self):
+        self.assertIn('constant kBundletoolVersion = "1.18.3"', self.src)
+        self.assertIn('constant kBundletoolURL = "https://github.com/google/bundletool/releases/download/1.18.3/'
+                      'bundletool-all-1.18.3.jar"', self.src)
+        self.assertRegex(self.src, r'constant kBundletoolSHA256 = "[0-9a-f]{64}"')
+        # the constants come before their uses (a constant used above its
+        # line is read as its own name)
+        for name in ('kBundletoolVersion', 'kBundletoolURL', 'kBundletoolSHA256'):
+            declared = self.src.index('constant %s = ' % name)
+            uses = [m.start() for m in re.finditer(r'\b%s\b' % name, self.src)
+                    if not self.src.startswith('constant ', m.start() - len('constant '))]
+            self.assertTrue(uses, name)
+            self.assertLess(declared, min(uses), name)
+            self.assertNotIn(name, self.main)
+        tool = handler(self.src, 'androidBundletool')
+        # the Preferences' copy as it is; the cached one only with the
+        # SHA-256; a download checked before it is kept
+        pref = tool.find('if pPreference is not empty then')
+        cached = tool.find('if androidFileSHA256(pCacheFile) is pSHA256 then')
+        fetch = tool.find('put url pURL into tData')
+        check = tool.find('if tHex is not pSHA256 then')
+        keep = tool.find('put tData into url ("binfile:" & pCacheFile)')
+        self.assertNotIn(-1, (pref, cached, fetch, check, keep))
+        self.assertLess(pref, cached)
+        self.assertLess(cached, fetch)
+        self.assertLess(fetch, check)
+        self.assertLess(check, keep)
+        self.assertIn('the socketTimeoutInterval', tool)
+
+    def test_an_sdk_without_aapt2_still_builds_packages(self):
+        # aapt2 is asked for only by a bundle build, not by the SDK check
+        deploy = code(read(DEPLOY))
+        self.assertNotIn('aapt2', handler(deploy, 'deployCheckSDK'))
+        self.assertRegex(handler(deploy, 'pathToAapt2'), r'return pathToPlatformTool\(pRoot, executableName\("aapt2"\)\)')
+        self.assertRegex(handler(self.src, 'androidBuildBundle'), r'if there is no file pathToAapt2\(\) then\s+throw ')
+
+    def test_the_settings_keep_what_the_engine_reads(self):
+        config = handler(self.src, 'androidBundleConfig')
+        self.assertIn('quote & "uncompressNativeLibraries" & quote & ": { " & quote & "enabled" & quote & ": false }"',
+                      config)
+        self.assertIn('quote & "uncompressedGlob" & quote & ": [ " & quote & "assets/**" & quote & " ]"', config)
+        # the assets the bundle keeps stored are the ones the package stores
+        assets = handler(self.src, 'addAssetsToArchive')
+        self.assertIn('revZipAddUncompressedItemWithFile pArchive, "assets/" & tFile["name"]', assets)
+        self.assertNotRegex(assets, r'revZipAddItemWith')
+
+    def test_units_run(self):
+        units = read(UNITS)
+        self.assertIn('unitAppBundle tWork', handler(units, 'androidUnits'))
+        body = handler(units, 'unitAppBundle')
+        for case in ('bundle-path', 'bundle-module-', 'bundle-config', 'bundle-sha256', 'bundletool-preference',
+                     'bundletool-preference-missing', 'bundletool-download', 'bundletool-cached',
+                     'bundletool-cached-wrong', 'bundletool-download-wrong', 'bundletool-no-download',
+                     'bundletool-cache-file'):
+            self.assertIn('"%s' % case, body)
 
 
 class TargetAPI(unittest.TestCase):

@@ -42,9 +42,13 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --       unsigned  "Do not sign", arm64
 --       legacy    what a stack that never opened the Android card has:
 --                 no architecture and no signing setting
+--       bundle    as release, with "android,app bundle": the App Bundle
+--                 (<name>.aab) beside the package, signed with the same
+--                 key; the builder downloads bundletool for it, once
 --    and writes "BUILT <name> <apk>" or "BUILD FAILED <name> <why>",
 --    "INFO <name> warnings <the builder's warnings>" and
---    "INFO <name> asked <the questions it answered>".
+--    "INFO <name> asked <the questions it answered>"; after a bundle
+--    build, "INFO bundletool <the jar the builder keeps>".
 --    With OXT_ANDROID_DEVICE (a device's serial), it then does what Test
 --    does for that device (deployDo in ide-support/
 --    revdeploylibraryandroid.livecodescript: a Test build for the device's
@@ -61,7 +65,7 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --    OXT_ANDROID_STACK     where to save the probe stack (used as it is
 --                          when the file is there)
 --    OXT_ANDROID_OUTPUT    the folder for the packages (<name>.apk)
---    OXT_ANDROID_BUILDS    the builds to make (comma separated; all four
+--    OXT_ANDROID_BUILDS    the builds to make (comma separated; all five
 --                          when empty)
 --    OXT_ANDROID_KEYSTORE, OXT_ANDROID_ALIAS, OXT_ANDROID_PASSWORD
 --                          the release build's keystore, its key's alias,
@@ -82,6 +86,11 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --   - a picture into the shared Pictures folder (mobileExportImageToAlbum
 --     of kProbePicture as "oxt-beyond-probe": MediaStore on Android 10
 --     and newer; android_check.py device --picture finds it there).
+--   - a copy file (the standalone settings' "files", kProbeCopy in
+--     oxt-probe.txt beside the stack), read back from the package
+--     (specialFolderPath("engine")): the engine opens it at its place in
+--     the installed package, so it must be stored there, in an App Bundle's
+--     too.
 -- It takes every step, says what each answered in the device's log (a
 -- put with no container is the engine's log line there, tag LiveCode:
 -- android_check.py device prints them), and turns kFailColor when any
@@ -112,6 +121,9 @@ constant kBackColor = "40,90,200"
 constant kIdentifier = "org.openxtalk.check.androidprobe"
 -- The Java layer's probe's picture: one pixel, a PNG, as base64
 constant kProbePicture = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+-- The Java layer's probe's copy file, oxt-probe.txt, and what it holds
+constant kProbeCopyName = "oxt-probe.txt"
+constant kProbeCopy = "OXT-Beyond probe copy file"
 
 local sStarted
 local sAsked
@@ -192,8 +204,8 @@ private function sortedLines pText
 end sortedLines
 
 -- The builder's handlers, by name (the IDE uses both libraries)
-private function builderCall pHandler, pArg1, pArg2
-   dispatch function pHandler to stack "revSaveAsAndroidStandalone" with pArg1, pArg2
+private function builderCall pHandler, pArg1, pArg2, pArg3, pArg4
+   dispatch function pHandler to stack "revSaveAsAndroidStandalone" with pArg1, pArg2, pArg3, pArg4
    return the result
 end builderCall
 
@@ -216,6 +228,7 @@ private command androidUnits
    unitDebugKeystore
    unitJavaHome tWork
    unitTargetAPI tWork
+   unitAppBundle tWork
    androidUnit "required-sdk", deployCall("deployRequiredSDK") is "Android 13 (API 33) or newer", \
          "deployRequiredSDK() is" && deployCall("deployRequiredSDK")
 end androidUnits
@@ -268,6 +281,96 @@ private command unitTargetAPI pWork
          "    <property android:name=" & quote & "android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY" & quote && \
          "android:value=" & quote & "true" & quote && "/>" & return & "  </application>" & return & "</manifest>", tAnswer
 end unitTargetAPI
+
+-- The App Bundle: its name beside the package, where each file of the
+-- package goes in the bundle's base module, bundletool's settings, a
+-- file's SHA-256, and which bundletool a build runs (the Preferences' copy
+-- as it is; the cached one while its SHA-256 is the one asked for; one
+-- downloaded otherwise, checked before it is kept), on made-up files with
+-- binfile: URLs for the downloads (the bundle build downloads the real one)
+private command unitAppBundle pWork
+   local tWanted, tLine, tAnswer, tFolder, tSource, tOther, tCache, tSHA, tError
+   put builderCall("androidBundlePath", "/a/b/My App.apk") & "|" & builderCall("androidBundlePath", "C:/a/App.APK") & \
+         "|" & builderCall("androidBundlePath", "/a/App") into tAnswer
+   androidUnit "bundle-path", tAnswer is "/a/b/My App.aab|C:/a/App.aab|/a/App.aab", tAnswer
+
+   put "AndroidManifest.xml=manifest/AndroidManifest.xml" & return & \
+         "resources.pb=resources.pb" & return & \
+         "res/drawable/notify_icon.png=res/drawable/notify_icon.png" & return & \
+         "assets/fonts/x.ttf=assets/fonts/x.ttf" & return & \
+         "assets/oxt-probe.txt=assets/oxt-probe.txt" & return & \
+         "lib/arm64-v8a/librevandroid.so=lib/arm64-v8a/librevandroid.so" & return & \
+         "lib/1.jar=" & return & \
+         "classes.dex=dex/classes.dex" & return & \
+         "classes2.dex=dex/classes2.dex" & return & \
+         "notes/classes.dex=root/notes/classes.dex" & return & \
+         "classes/a.dex=root/classes/a.dex" & return & \
+         "kotlin/collections.kotlin_builtins=root/kotlin/collections.kotlin_builtins" into tWanted
+   set the itemDelimiter to "="
+   repeat for each line tLine in tWanted
+      put builderCall("androidBundleModulePath", item 1 of tLine) into tAnswer
+      androidUnit "bundle-module-" & item 1 of tLine, tAnswer is item 2 of tLine, \
+            "gave" && quote & tAnswer & quote & ", wanted" && quote & item 2 of tLine & quote
+   end repeat
+   set the itemDelimiter to comma
+
+   put builderCall("androidBundleConfig") into tAnswer
+   androidUnit "bundle-config", tAnswer contains quote & "uncompressNativeLibraries" & quote & ": { " & quote & \
+         "enabled" & quote & ": false }" and tAnswer contains quote & "uncompressedGlob" & quote & ": [ " & quote & \
+         "assets/**" & quote & " ]", tAnswer
+
+   put pWork & "/bundletool" into tFolder
+   removeTree tFolder
+   revSBEnsureFolder tFolder
+   put tFolder & "/source.jar" into tSource
+   put "abc" into url ("binfile:" & tSource)
+   put builderCall("androidFileSHA256", tSource) into tSHA
+   androidUnit "bundle-sha256", tSHA is "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", tSHA
+   put tFolder & "/other.jar" into tOther
+   put "abd" into url ("binfile:" & tOther)
+   put tFolder & "/cache/Android/bundletool.jar" into tCache
+
+   -- the Preferences' copy, as it is
+   put builderCall("androidBundletool", tOther, tCache, "binfile:" & tSource, tSHA) into tAnswer
+   androidUnit "bundletool-preference", tAnswer is tOther and there is no file tCache, tAnswer
+   put empty into tError
+   try
+      get builderCall("androidBundletool", tFolder & "/none.jar", tCache, "binfile:" & tSource, tSHA)
+   catch tError
+   end try
+   androidUnit "bundletool-preference-missing", tError contains "names" && tFolder & "/none.jar, and there is no such file", \
+         "answered" && it & ", threw" && tError
+   -- downloaded, checked, and kept in the cache
+   put builderCall("androidBundletool", empty, tCache, "binfile:" & tSource, tSHA) into tAnswer
+   androidUnit "bundletool-download", tAnswer is tCache and there is a file tCache and \
+         url ("binfile:" & tCache) is "abc", tAnswer
+   -- the cached one, with nothing to download
+   put builderCall("androidBundletool", empty, tCache, "binfile:" & tFolder & "/none.jar", tSHA) into tAnswer
+   androidUnit "bundletool-cached", tAnswer is tCache, tAnswer
+   -- a cached file that is not the one asked for is downloaded again, and a
+   -- download that is not that one is refused, and not kept
+   put "ab" into url ("binfile:" & tCache)
+   put builderCall("androidBundletool", empty, tCache, "binfile:" & tSource, tSHA) into tAnswer
+   androidUnit "bundletool-cached-wrong", tAnswer is tCache and url ("binfile:" & tCache) is "abc", tAnswer
+   delete file tCache
+   put empty into tError
+   try
+      get builderCall("androidBundletool", empty, tCache, "binfile:" & tOther, tSHA)
+   catch tError
+   end try
+   androidUnit "bundletool-download-wrong", tError contains "is not the file this builder takes" and \
+         there is no file tCache, "answered" && it & ", threw" && tError
+   put empty into tError
+   try
+      get builderCall("androidBundletool", empty, tCache, "binfile:" & tFolder & "/none.jar", tSHA)
+   catch tError
+   end try
+   androidUnit "bundletool-no-download", tError contains "could not download bundletool" and \
+         tError contains "put it at" && tCache and there is no file tCache, "answered" && it & ", threw" && tError
+   removeTree tFolder
+   put builderCall("androidBundletoolCacheFile") into tAnswer
+   androidUnit "bundletool-cache-file", tAnswer is revEnvironmentUserCachePath() & "/Android/bundletool-all-1.18.3.jar", tAnswer
+end unitAppBundle
 
 -- androidComponentsWithoutExported over a manifest with every case
 private command unitExported pWork
@@ -536,7 +639,7 @@ private function probeScript
    put "on openStack" & return into tScript
    if probeName() is "AndroidJavaProbe" then
       -- every step, each answer said in the log (see the header)
-      put "   local tFailed, tId, tFolder, tHas, tExport" & return & \
+      put "   local tFailed, tId, tFolder, tHas, tExport, tCopy" & return & \
             "   put false into tFailed" & return & \
             "   mobileCreateLocalNotification" && quote & "OXT-Beyond Android check" & quote & comma && \
             quote & "Open" & quote & comma && quote & "probe" & quote & ", the seconds + 3600, false, 0" & return & \
@@ -559,6 +662,10 @@ private function probeScript
             "   put the result into tExport" & return & \
             "   put" && quote & "OXT-Beyond probe: export to album" & quote && "&& tExport" & return & \
             "   if tExport is not empty then put true into tFailed" & return & \
+            "   put url (" & quote & "binfile:" & quote && "& specialFolderPath(" & quote & "engine" & quote & ") &" && \
+            quote & "/" & kProbeCopyName & quote & ") into tCopy" & return & \
+            "   put" && quote & "OXT-Beyond probe: copy file" & quote && "&& tCopy" & return & \
+            "   if tCopy is not" && quote & kProbeCopy & quote && "then put true into tFailed" & return & \
             "   if tFailed then" & return & \
             "      set the backgroundColor of me to" && quote & kFailColor & quote & return & \
             "      exit openStack" & return & \
@@ -621,6 +728,11 @@ private function buildSettings pName
    if probeName() is "AndroidJavaProbe" then
       put true into tSettings["android,application permissions"]["POST_NOTIFICATIONS"]
       put true into tSettings["android,application permissions"]["WRITE_EXTERNAL_STORAGE"]
+      -- its copy file, beside the stack (a path relative to its folder)
+      set the itemDelimiter to slash
+      put kProbeCopy into url ("binfile:" & item 1 to -2 of $OXT_ANDROID_STACK & slash & kProbeCopyName)
+      set the itemDelimiter to comma
+      put kProbeCopyName into tSettings["files"]
    end if
    switch pName
       case "debug"
@@ -644,6 +756,13 @@ private function buildSettings pName
          delete variable tSettings["android,signing"]
          delete variable tSettings["android,key"]
          break
+      case "bundle"
+         put "Sign with my key" into tSettings["android,signing"]
+         put $OXT_ANDROID_KEYSTORE into tSettings["android,key"]
+         put true into tSettings["android,arm64"]
+         put true into tSettings["android,x86_64"]
+         put true into tSettings["android,app bundle"]
+         break
    end switch
    return tSettings
 end buildSettings
@@ -663,17 +782,20 @@ private command androidBuilds
    end if
    put $OXT_ANDROID_BUILDS into tBuilds
    if tBuilds is empty then
-      put "debug,release,unsigned,legacy" into tBuilds
+      put "debug,release,unsigned,legacy,bundle" into tBuilds
    end if
    repeat for each item tName in tBuilds
       put $OXT_ANDROID_OUTPUT & slash & tName & ".apk" into tApk
       if there is a file tApk then
          delete file tApk
       end if
+      if there is a file ($OXT_ANDROID_OUTPUT & slash & tName & ".aab") then
+         delete file ($OXT_ANDROID_OUTPUT & slash & tName & ".aab")
+      end if
       put empty into tError
       put empty into sAsked
       revStandaloneResetWarnings
-      if tName is "release" then
+      if tName is "release" or tName is "bundle" then
          send "androidAnswerAsk 0" to me in 500 milliseconds
          put the result into sAskMessage
       end if
@@ -696,6 +818,18 @@ private command androidBuilds
          androidLog "BUILD FAILED" && tName && tError
       end if
    end repeat
+   -- the bundletool a bundle build downloaded (a released builder has none)
+   if "bundle" is among the items of tBuilds then
+      put empty into tError
+      try
+         put builderCall("androidBundletoolCacheFile") into tName
+      catch tError
+         put empty into tName
+      end try
+      if tName is not empty and there is a file tName then
+         androidLog "INFO bundletool" && tName
+      end if
+   end if
 
    put $OXT_ANDROID_DEVICE into tSerial
    if tSerial is not empty then

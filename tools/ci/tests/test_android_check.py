@@ -824,6 +824,98 @@ class PermissionReaders(unittest.TestCase):
         self.assertIs(ac.permission_granted(two, name), True)
 
 
+class BundleReaders(unittest.TestCase):
+    """The App Bundle's readers: protocol buffer fields, bundletool's
+    BundleConfig.pb, where a package's file is in the base module, which
+    files aapt2 convert rewrites, a jar's signers and pm path's APKs"""
+
+    # BundleConfig.pb of an App Bundle the builder made (bundletool 1.18.3,
+    # with androidBundleConfig's settings)
+    CONFIG = bytes.fromhex('0a081206312e31382e33120212001a0b0a096173736574732f2a2a')
+
+    def test_proto_fields(self):
+        data = (b'\x08\x96\x01'            # 1: varint 150
+                b'\x12\x03abc'             # 2: bytes
+                b'\x1d\x01\x02\x03\x04'    # 3: fixed32
+                b'\x21' + b'\0' * 8)       # 4: fixed64
+        self.assertEqual(ac.proto_fields(data), [(1, 150), (2, b'abc'), (3, b'\x01\x02\x03\x04'), (4, b'\0' * 8)])
+        self.assertEqual(ac.proto_fields(b''), [])
+        self.assertEqual(ac.varint(b'\xac\x02', 0), (300, 2))
+        for cut in (b'\x08', b'\x08\x96', b'\x12\x05ab'):
+            with self.assertRaises(ac.CheckError):
+                ac.proto_fields(cut)
+        # a group (wire type 3) is not read
+        with self.assertRaisesRegex(ac.CheckError, 'wire type 3'):
+            ac.proto_fields(b'\x0b')
+
+    def test_the_builders_config(self):
+        self.assertEqual(ac.bundle_config(self.CONFIG), {
+            'version': '1.18.3', 'uncompress_native_libraries': False, 'uncompressed_glob': ['assets/**']})
+
+    def test_other_configs(self):
+        # nothing said: bundletool's defaults (native libraries uncompressed)
+        self.assertEqual(ac.bundle_config(b''), {
+            'version': None, 'uncompress_native_libraries': None, 'uncompressed_glob': []})
+        # enabled
+        on = b'\x12\x04\x12\x02\x08\x01'
+        self.assertIs(ac.bundle_config(on)['uncompress_native_libraries'], True)
+        # an optimizations message that does not say
+        self.assertIsNone(ac.bundle_config(b'\x12\x00')['uncompress_native_libraries'])
+        # two globs, in order
+        globs = b'\x1a\x0e\x0a\x05a/b/*\x0a\x05c/**/'
+        self.assertEqual(ac.bundle_config(globs)['uncompressed_glob'], ['a/b/*', 'c/**/'])
+        with self.assertRaises(ac.CheckError):
+            ac.bundle_config(self.CONFIG[:-3])
+
+    def test_bundle_place_is_the_builders(self):
+        # the builder's androidBundleModulePath, by its unit's table in
+        # android-check.livecodescript: the same answer for each path (the
+        # builder reads the converted package, whose resources.arsc is
+        # resources.pb)
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        table = re.findall(r'"([^"=]+)=([^"]*)" & return & \\|"([^"=]+)=([^"]*)" into tWanted', script)
+        pairs = [(a or c, b if a else d) for a, b, c, d in table]
+        self.assertEqual(len(pairs), 12, pairs)
+        for path, want in pairs:
+            got = ac.bundle_place('resources.arsc' if path == 'resources.pb' else path)
+            self.assertEqual(got, want or None, path)
+        # what the bundle leaves out: the signature, folders
+        for path in ('META-INF/MANIFEST.MF', 'META-INF/CERT.RSA', 'res/', 'lib/x86/'):
+            self.assertIsNone(ac.bundle_place(path), path)
+        self.assertEqual(ac.bundle_place('classes10.dex'), 'dex/classes10.dex')
+        self.assertEqual(ac.bundle_place('stamp-cert-sha256'), 'root/stamp-cert-sha256')
+
+    def test_bundle_converted(self):
+        for place in ('manifest/AndroidManifest.xml', 'resources.pb', 'res/layout/livecode_inputcontrol.xml',
+                      'res/xml/nfc_tech_filter.xml'):
+            self.assertTrue(ac.bundle_converted(place), place)
+        for place in ('res/drawable/notify_icon.png', 'assets/oxt-probe.txt', 'assets/x.xml', 'dex/classes.dex',
+                      'lib/x86_64/librevandroid.so', 'root/a.xml'):
+            self.assertFalse(ac.bundle_converted(place), place)
+
+    def test_jar_signers(self):
+        # keytool -printcert -jarfile, in English
+        out = ('Signer #1:\n\nCertificate #1:\nOwner: CN=OXT Android Check, O=OXT-Beyond, C=US\n'
+               'Issuer: CN=OXT Android Check, O=OXT-Beyond, C=US\nSerial number: de61670a3606b9f3\n')
+        self.assertEqual(ac.jar_signers(out), 'CN=OXT Android Check, O=OXT-Beyond, C=US')
+        self.assertEqual(ac.jar_signers(out + '\nSigner #2:\n\nCertificate #1:\nOwner: CN=Other\n' + out),
+                         'CN=OXT Android Check, O=OXT-Beyond, C=US | CN=Other')
+        self.assertIsNone(ac.jar_signers('Not a signed jar file\n'))
+        # an empty owner is no owner, and does not take the next line
+        self.assertIsNone(ac.jar_signers('Owner: \nIssuer: CN=x\n'))
+        self.assertEqual(ac.jar_signers('Owner: CN=A\r\nIssuer: CN=x\r\n'), 'CN=A')
+        self.assertIsNone(ac.jar_signers(''))
+
+    def test_installed_apks(self):
+        out = ('package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/base.apk\r\n'
+               'package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/split_config.x86_64.apk\r\n'
+               'package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/split_config.xxhdpi.apk\n')
+        self.assertEqual(ac.installed_apks(out), ['base.apk', 'split_config.x86_64.apk', 'split_config.xxhdpi.apk'])
+        self.assertEqual(ac.installed_apks('package:/data/app/x/base.apk\n'), ['base.apk'])
+        self.assertEqual(ac.installed_apks(''), [])
+        self.assertEqual(ac.installed_apks('Error: package not found\n'), [])
+
+
 class ProbeSaid(unittest.TestCase):
     """What the Java layer's probe says in the device's log, a line a step"""
 
@@ -851,7 +943,7 @@ class ProbeSaid(unittest.TestCase):
         # the probe's put lines begin as PROBE_SAYS reads them
         script = read('tools', 'ci', 'android-check.livecodescript')
         lines = re.findall(r'quote & "(OXT-Beyond probe: [^"]*)" & quote && "&& t\w+"', script)
-        self.assertEqual(len(lines), 4, lines)
+        self.assertEqual(len(lines), 5, lines)
         for line in lines:
             self.assertEqual(ac.probe_said('I/LiveCode( 1): %s x\n' % line), [line[len('OXT-Beyond probe: '):]
                                                                               + ' x'])
@@ -1110,6 +1202,160 @@ class DeviceBackAndBars(unittest.TestCase):
         self.assertEqual(calls, [])
 
 
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb and JDK are scripts')
+class DeviceBundle(unittest.TestCase):
+    """device with an App Bundle, a stand-in adb and a stand-in JDK whose
+    java runs a stand-in bundletool: it is installed as Google Play
+    installs it (bundletool's split APKs for the device, signed with a key
+    made here), and must be installed as more than one APK"""
+
+    PM_PATH = ('package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/base.apk\n'
+               'package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/split_config.x86_64.apk\n')
+
+    def setUp(self):
+        Device.setUp(self)
+        d = self.tmp.name
+        self.apk = os.path.join(d, 'bundle.aab')
+        with zipfile.ZipFile(self.apk, 'w') as z:
+            z.writestr('BundleConfig.pb', BundleReaders.CONFIG)
+            z.writestr('base/lib/x86_64/librevandroid.so', b'')
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0])
+        with open(os.path.join(d, 'pm.txt'), 'w') as f:
+            f.write(self.PM_PATH)
+        self.jdk = os.path.join(d, 'jdk')
+        os.makedirs(os.path.join(self.jdk, 'bin'))
+        self.jar = os.path.join(d, 'bundletool.jar')
+        with open(self.jar, 'wb') as f:
+            f.write(b'')
+        # java: the stand-in bundletool, saying each call; build-apks makes
+        # a .apks with two of the device's APKs, unless told to fail
+        with open(os.path.join(self.jdk, 'bin', 'java'), 'w') as f:
+            f.write('#!%s\n'
+                    'import os, sys, zipfile\n'
+                    'd = %r\n'
+                    'args = sys.argv[1:]\n'
+                    'with open(os.path.join(d, "java-calls"), "a") as f:\n'
+                    '    f.write(" ".join(args) + "\\n")\n'
+                    'fail = open(os.path.join(d, "fail")).read() if os.path.exists(os.path.join(d, "fail")) else ""\n'
+                    'if args[2] == "build-apks":\n'
+                    '    if fail == "build":\n'
+                    '        print("[BT:1.18.3] Error: no connected device matches"); sys.exit(1)\n'
+                    '    with zipfile.ZipFile(args[args.index("--output") + 1], "w") as z:\n'
+                    '        z.writestr("toc.pb", b"")\n'
+                    '        z.writestr("splits/base-master.apk", b"m")\n'
+                    '        z.writestr("splits/base-x86_64.apk", b"x")\n'
+                    'elif args[2] == "install-apks":\n'
+                    '    if fail == "install":\n'
+                    '        print("[BT:1.18.3] Error: INSTALL_FAILED_NO_MATCHING_ABIS"); sys.exit(1)\n'
+                    'else:\n'
+                    '    sys.exit(2)\n' % (sys.executable, d))
+        # keytool: makes the keystore it is asked for
+        with open(os.path.join(self.jdk, 'bin', 'keytool'), 'w') as f:
+            f.write('#!%s\n'
+                    'import sys\n'
+                    'open(sys.argv[sys.argv.index("-keystore") + 1], "w").write("ks")\n' % sys.executable)
+        for tool in ('java', 'keytool'):
+            os.chmod(os.path.join(self.jdk, 'bin', tool), 0o755)
+
+    tearDown = Device.tearDown
+    device = Device.device
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+
+    def run_bundle(self, argv=None, fail=''):
+        d = self.tmp.name
+        if fail:
+            with open(os.path.join(d, 'fail'), 'w') as f:
+                f.write(fail)
+        cases = ('  "shell pm path %s") cat "%s/pm.txt" ;;\n' % (ac.IDENTIFIER, d))
+        status, out = self.device('echo 3475', cases=cases,
+                                  argv=['--bundletool', self.jar, '--jdk', self.jdk] if argv is None else argv)
+        try:
+            with open(os.path.join(d, 'java-calls')) as f:
+                calls = [x.split(' ') for x in f.read().splitlines()]
+        except FileNotFoundError:
+            calls = []
+        return status, out, calls
+
+    def test_installed_as_split_apks(self):
+        status, out, calls = self.run_bundle()
+        self.assertEqual(status, 0, out)
+        adb = os.path.join(self.tmp.name, 'platform-tools', 'adb')
+        self.assertEqual(len(calls), 2, calls)
+        build, install = calls
+        self.assertEqual(build[:4], ['-jar', self.jar, 'build-apks', '--bundle'])
+        self.assertEqual(build[4], self.apk)
+        for flag, value in (('--connected-device', None), ('--device-id', 'emulator-5554'), ('--adb', adb),
+                            ('--ks-pass', 'pass:' + ac.KEY_PASSWORD), ('--ks-key-alias', ac.KEY_ALIAS),
+                            ('--key-pass', 'pass:' + ac.KEY_PASSWORD)):
+            self.assertIn(flag, build)
+            if value:
+                self.assertEqual(build[build.index(flag) + 1], value, flag)
+        apks = build[build.index('--output') + 1]
+        self.assertEqual(install[:3], ['-jar', self.jar, 'install-apks'])
+        self.assertEqual(install[install.index('--apks') + 1], apks)
+        self.assertEqual(install[install.index('--device-id') + 1], 'emulator-5554')
+        self.assertEqual(install[install.index('--adb') + 1], adb)
+        # the key made for it, and its .apks, are gone
+        self.assertFalse(os.path.exists(os.path.dirname(apks)))
+        self.assertIn('bundletool made 2 APKs of bundle.aab for the device: base-master.apk, base-x86_64.apk', out)
+        self.assertIn('Installed bundle.aab as 2 APKs: base.apk, split_config.x86_64.apk', out)
+        self.assertNotIn('Installed bundle.aab\n', out)
+
+    def test_one_apk_is_not_as_google_play_installs_it(self):
+        with open(os.path.join(self.tmp.name, 'pm.txt'), 'w') as f:
+            f.write(self.PM_PATH.splitlines()[0] + '\n')
+        status, out, _ = self.run_bundle()
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundle.aab is installed as base.apk, not as split APKs as Google Play installs it',
+                      out)
+
+    def test_bundletool_refusing(self):
+        status, out, calls = self.run_bundle(fail='build')
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundletool makes no APKs of bundle.aab for emulator-5554: [BT:1.18.3] Error: no '
+                      'connected device matches', out)
+        self.assertEqual([c[2] for c in calls], ['build-apks'])
+        status, out, calls = self.run_bundle(fail='install')
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundle.aab does not install on emulator-5554: [BT:1.18.3] Error: '
+                      'INSTALL_FAILED_NO_MATCHING_ABIS', out)
+
+    def test_no_bundletool_or_java(self):
+        status, out, calls = self.run_bundle(argv=['--jdk', self.jdk])
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundle.aab is an App Bundle, and there is no bundletool to install it '
+                      '(--bundletool: not given)', out)
+        self.assertEqual(calls, [])
+        status, out, _ = self.run_bundle(argv=['--bundletool', self.jar + '.none', '--jdk', self.jdk])
+        self.assertIn('(--bundletool: %s.none)' % self.jar, out)
+        saved = ac.jdk_tool
+        ac.jdk_tool = lambda jdk, name: None
+        try:
+            status, out, _ = self.run_bundle()
+        finally:
+            ac.jdk_tool = saved
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: bundle.aab is an App Bundle, and there is no java (the JDK's, --jdk) to run "
+                      "bundletool", out)
+
+    def test_its_libraries_are_the_packages(self):
+        # the crash lines read the bundle's files as the package's: with
+        # librevsecurity.so in the base module, its loading failing is a
+        # crash, not the expected line of a package without it
+        status, out, _ = self.run_bundle()
+        self.assertEqual(status, 0, out)
+        self.assertIn('Expected (the package has no SSL library, and the engine runs on without it): '
+                      'I/revandroid( 3475): java.lang.UnsatisfiedLinkError', out)
+        with zipfile.ZipFile(self.apk, 'a') as z:
+            z.writestr('base/lib/x86_64/librevsecurity.so', b'')
+        status, out, _ = self.run_bundle()
+        self.assertEqual(status, 1, out)
+        self.assertNotIn('Expected (', out)
+        self.assertIn('librevsecurity.so', out[out.index('PROBLEM'):])
+
+
 class Overlay(unittest.TestCase):
     """overlay puts this checkout's builder over a release's, and with
     --classes a Java layer over the release's Runtime/Android/Classes"""
@@ -1254,6 +1500,7 @@ class IdeLines(unittest.TestCase):
             'INFO release asked Please provide the keystore alias to use;',
             'TEST FAILED Installation of app failed: x',
             'ERROR 219,1,1',
+            'INFO bundletool /home/u/.oxt-beyond/cache/Android/bundletool-all-1.18.3.jar',
             'DONE'])
         self.assertEqual(r['units'], {'sdk-complete': None, 'sdk-valid': 'false'})
         self.assertEqual(r['builds'], {'debug': ('ok', '/w/out/debug.apk'),
@@ -1264,6 +1511,12 @@ class IdeLines(unittest.TestCase):
         self.assertEqual(r['test'], 'Installation of app failed: x')
         self.assertEqual(r['errors'], ['ERROR 219,1,1'])
         self.assertTrue(r['done'])
+        self.assertEqual(r['bundletool'], '/home/u/.oxt-beyond/cache/Android/bundletool-all-1.18.3.jar')
+        self.assertNotIn('bundletool', r['warnings'])
+        # a path with spaces is the path's
+        r = ac.ide_results(['INFO bundletool C:/Users/A B/AppData/x/bundletool-all-1.18.3.jar  '])
+        self.assertEqual(r['bundletool'], 'C:/Users/A B/AppData/x/bundletool-all-1.18.3.jar')
+        self.assertIsNone(ac.ide_results(['DONE'])['bundletool'])
 
 
 class Compare(unittest.TestCase):
@@ -1529,6 +1782,323 @@ class VerifyTarget(unittest.TestCase):
                 self.assertEqual(seen.pop(), want)
         finally:
             ac.find_tools, ac.verify_apk = saved
+
+
+class VerifyBundle(unittest.TestCase):
+    """verify_bundle on made-up packages and App Bundles, with stand-in
+    answers from jarsigner, keytool and bundletool: what the bundle holds
+    against its package, bundletool's settings, the signature and the
+    manifest"""
+
+    SPEC = ac.BUILDS['bundle']
+    LIB = elf64([0x4000])
+    # the package's files: (name, bytes)
+    APK = [('AndroidManifest.xml', b'binary manifest'), ('classes.dex', b'dex'), ('resources.arsc', b'arsc'),
+           ('res/layout/livecode_inputcontrol.xml', b'binary layout'), ('res/drawable/notify_icon.png', b'png'),
+           ('assets/oxt-probe.txt', b'OXT-Beyond probe copy file'),
+           ('lib/arm64-v8a/librevandroid.so', LIB), ('lib/x86_64/librevandroid.so', LIB),
+           ('lib/1.jar', b'jar'), ('META-INF/OXTCHECK.SF', b'sf'), ('META-INF/OXTCHECK.RSA', b'rsa'),
+           ('META-INF/MANIFEST.MF', b'mf')]
+    # its App Bundle: the converted files differ, the rest are the same
+    AAB = [('BundleConfig.pb', BundleReaders.CONFIG), ('base/manifest/AndroidManifest.xml', b'proto manifest'),
+           ('base/dex/classes.dex', b'dex'), ('base/resources.pb', b'proto table'),
+           ('base/res/layout/livecode_inputcontrol.xml', b'proto layout'),
+           ('base/res/drawable/notify_icon.png', b'png'), ('base/assets/oxt-probe.txt', b'OXT-Beyond probe copy file'),
+           ('base/lib/arm64-v8a/librevandroid.so', LIB), ('base/lib/x86_64/librevandroid.so', LIB),
+           ('base/assets.pb', b''), ('base/native.pb', b''),
+           ('META-INF/MANIFEST.MF', b'mf'), ('META-INF/OXTCHECK.SF', b'sf'), ('META-INF/OXTCHECK.RSA', b'rsa')]
+    MANIFEST = ('<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="1" '
+                'package="%s">\n  <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="%%s"/>\n'
+                '  <application android:label="Android Probe">\n%%s  </application>\n</manifest>\n' % ac.IDENTIFIER)
+    PROPERTY = '    <property android:name="%s" android:value="%%s"/>\n' % ac.LARGE_SCREEN_PROPERTY
+    TOOLS = {'jarsigner': 'jarsigner', 'keytool': 'keytool', 'java': 'java', 'bundletool': 'bundletool.jar'}
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.answers = {'verify': (0, 'jar verified.\n\nThis jar contains entries whose signer certificate is '
+                                      'self-signed.\n'),
+                        'owner': ac.KEY_DNAME, 'validate': (0, ''), 'manifest': (0, self.MANIFEST % (
+                            '36', self.PROPERTY % 'true'))}
+        self.calls = []
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def check(self, aab=None, apk=None, spec=None, tools=None, target='36'):
+        """verify_bundle's problems and notes"""
+        paths = []
+        for name, entries in (('bundle.apk', apk or self.APK), ('bundle.aab', self.AAB if aab is None else aab)):
+            paths.append(os.path.join(self.dir, name))
+            with open(paths[-1], 'wb') as f:
+                f.write(zip_bytes(entries))
+        saved = ac.run
+
+        def fake(cmd, timeout=300, check=False):
+            self.calls.append(cmd)
+            if cmd[0] == 'jarsigner':
+                self.assertEqual(cmd[1:], ['-J-Duser.language=en', '-verify', paths[1]])
+                return self.answers['verify']
+            if cmd[0] == 'keytool':
+                self.assertEqual(cmd[1:], ['-J-Duser.language=en', '-printcert', '-jarfile', paths[1]])
+                if self.answers['owner'] is None:
+                    return 0, 'Not a signed jar file\n'
+                return 0, 'Signer #1:\n\nCertificate #1:\nOwner: %s\nIssuer: x\n' % self.answers['owner']
+            self.assertEqual(cmd[:3], ['java', '-jar', 'bundletool.jar'])
+            if cmd[3] == 'validate':
+                self.assertEqual(cmd[4:], ['--bundle', paths[1]])
+                return self.answers['validate']
+            self.assertEqual(cmd[3:], ['dump', 'manifest', '--bundle', paths[1]])
+            return self.answers['manifest']
+        ac.run = fake
+        try:
+            return ac.verify_bundle('bundle', paths[1], paths[0], spec or self.SPEC,
+                                    self.TOOLS if tools is None else tools, target)
+        finally:
+            ac.run = saved
+
+    def without(self, name):
+        return [x for x in self.AAB if x[0] != name]
+
+    def test_good(self):
+        problems, notes = self.check()
+        self.assertEqual(problems, [])
+        self.assertEqual(notes, [
+            'it holds the 8 files of bundle.apk',
+            'bundletool 1.18.3, native libraries compressed, assets stored',
+            'signed by %s (jarsigner verifies it)' % ac.KEY_DNAME,
+            'bundletool takes it; its manifest names the package and targets API 36'])
+
+    def test_files_missing_differing_and_extra(self):
+        aab = [x for x in self.AAB if x[0] != 'base/assets/oxt-probe.txt']
+        aab = [(n, b'other' if n == 'base/lib/x86_64/librevandroid.so' else d) for n, d in aab]
+        aab += [('base/root/extra.txt', b'x'), ('base/lib/1.jar', b'jar')]
+        problems, notes = self.check(aab)
+        self.assertEqual(problems, [
+            'bundle.aab does not hold these files of bundle.apk: base/assets/oxt-probe.txt',
+            "bundle.aab: these differ from bundle.apk's: base/lib/x86_64/librevandroid.so",
+            "bundle.aab holds files bundle.apk does not: base/lib/1.jar, base/root/extra.txt"])
+        self.assertNotIn('it holds', ' '.join(notes))
+
+    def test_converted_files_may_differ(self):
+        # the manifest, the table and the resources' XML are aapt2's
+        # protocol buffers in the bundle; a picture is not converted
+        aab = [(n, b'changed' if n == 'base/res/drawable/notify_icon.png' else d) for n, d in self.AAB]
+        problems, _ = self.check(aab)
+        self.assertEqual(problems, ["bundle.aab: these differ from bundle.apk's: base/res/drawable/notify_icon.png"])
+
+    def test_required(self):
+        for name in ('BundleConfig.pb', 'base/manifest/AndroidManifest.xml', 'base/resources.pb',
+                     'base/dex/classes.dex'):
+            problems, _ = self.check(self.without(name))
+            self.assertIn('bundle.aab has no %s' % name, problems)
+
+    def test_abis(self):
+        aab = self.without('base/lib/x86_64/librevandroid.so')
+        apk = [x for x in self.APK if x[0] != 'lib/x86_64/librevandroid.so']
+        problems, _ = self.check(aab, apk)
+        self.assertEqual(problems, ['bundle.aab has native code for arm64-v8a, not arm64-v8a, x86_64'])
+
+    def config(self, data):
+        return [(n, data if n == 'BundleConfig.pb' else d) for n, d in self.AAB]
+
+    def test_native_libraries_uncompressed(self):
+        problems, notes = self.check(self.config(BundleReaders.CONFIG.replace(b'\x12\x02\x12\x00',
+                                                                              b'\x12\x04\x12\x02\x08\x01')))
+        self.assertEqual(problems, [
+            "bundle.aab: the device's packages would hold the native libraries uncompressed, where Android does "
+            "not extract them and the engine does not load them (BundleConfig.pb: uncompressNativeLibraries is "
+            "enabled)"])
+        self.assertNotIn('native libraries compressed', ' '.join(notes))
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'\x12\x02\x12\x00', b'')))
+        self.assertIn('uncompressNativeLibraries is not said', problems[0])
+
+    def test_assets_compressed(self):
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'\x1a\x0b\x0a\x09assets/**', b'')))
+        self.assertEqual(problems, [
+            "bundle.aab: the device's packages would compress the assets, which the engine opens at their place in "
+            "the package (BundleConfig.pb: uncompressedGlob not said)"])
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'\x1a\x0b\x0a\x09assets/**',
+                                                                          b'\x1a\x0b\x0a\x09assets/*.')))
+        self.assertIn("uncompressedGlob ['assets/*.']", problems[0])
+
+    def test_another_bundletool(self):
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'1.18.3', b'1.17.0')))
+        self.assertEqual(problems, ['bundle.aab was made by bundletool 1.17.0, not 1.18.3'])
+
+    def test_not_signed_or_by_another(self):
+        unsigned = [x for x in self.AAB if not x[0].startswith('META-INF/')]
+        self.answers['verify'] = (0, 'jar is unsigned.\n')
+        self.answers['owner'] = None
+        problems, _ = self.check(unsigned)
+        self.assertEqual(problems, ['bundle.aab is not signed',
+                                    'bundle.aab: jarsigner does not verify it: jar is unsigned.',
+                                    'bundle.aab is signed by None, not %s' % ac.KEY_DNAME])
+        self.answers['verify'] = (0, 'jar verified.\n')
+        self.answers['owner'] = 'CN=Android Debug, O=Android, C=US'
+        problems, notes = self.check()
+        self.assertEqual(problems, ['bundle.aab is signed by CN=Android Debug, O=Android, C=US, not %s'
+                                    % ac.KEY_DNAME])
+        self.assertNotIn('signed by', ' '.join(notes))
+        # jarsigner's status alone is not enough, and its words alone not
+        self.answers['owner'] = ac.KEY_DNAME
+        self.answers['verify'] = (1, 'jar verified.\n')
+        self.assertIn('bundle.aab: jarsigner does not verify it: jar verified.', self.check()[0])
+
+    def test_unsigned_build_and_no_jdk(self):
+        spec = dict(self.SPEC, signer=None)
+        problems, _ = self.check(spec=spec)
+        self.assertEqual(problems, ['bundle.aab is signed, and should not be (META-INF/OXTCHECK.RSA, '
+                                    'META-INF/OXTCHECK.SF)'])
+        unsigned = [x for x in self.AAB if not x[0].startswith('META-INF/')]
+        self.assertEqual(self.check(unsigned, spec=spec)[0], [])
+        problems, _ = self.check(tools={'java': 'java', 'bundletool': 'bundletool.jar'})
+        self.assertEqual(problems, ["bundle.aab: no jarsigner and keytool (the JDK's, --jdk) to check its signature"])
+
+    def test_the_manifest(self):
+        self.answers['manifest'] = (0, self.MANIFEST % ('33', ''))
+        self.assertEqual(self.check(target='33')[0], [])
+        problems, notes = self.check()
+        self.assertEqual(problems, [
+            'bundle.aab does not target API 36',
+            "bundle.aab targets API 36, and its manifest does not keep the stack's orientation on large screens"])
+        self.assertNotIn('bundletool takes it', ' '.join(notes))
+        self.answers['manifest'] = (0, self.MANIFEST % ('36', self.PROPERTY % 'false'))
+        self.assertEqual(self.check()[0], [
+            "bundle.aab targets API 36, and its manifest does not keep the stack's orientation on large screens"])
+        self.answers['manifest'] = (0, self.MANIFEST % ('33', self.PROPERTY % 'true'))
+        self.assertEqual(self.check(target='33')[0], [
+            'bundle.aab: the manifest has %s, which is for API 36 and newer' % ac.LARGE_SCREEN_PROPERTY])
+        self.answers['manifest'] = (0, (self.MANIFEST % ('36', self.PROPERTY % 'true')).replace(
+            ac.IDENTIFIER, 'org.example'))
+        self.assertEqual(self.check()[0], ['bundle.aab: its manifest does not name the package %s' % ac.IDENTIFIER])
+
+    def test_bundletool_refuses_or_is_not_there(self):
+        self.answers['validate'] = (1, '[BT:1.18.3] Error: the bundle has no base module\n')
+        self.answers['manifest'] = (1, '[BT:1.18.3] Error: no manifest\n')
+        problems, notes = self.check()
+        self.assertEqual(problems, [
+            'bundle.aab: bundletool does not take it: [BT:1.18.3] Error: the bundle has no base module',
+            'bundle.aab: bundletool cannot read its manifest: [BT:1.18.3] Error: no manifest'])
+        self.assertNotIn('bundletool takes it', ' '.join(notes))
+        self.calls = []
+        problems, _ = self.check(tools={'jarsigner': 'jarsigner', 'keytool': 'keytool'})
+        self.assertEqual(problems, ['bundle.aab: no bundletool (bundletool.jar) and java to read its manifest'])
+        self.assertEqual([c[0] for c in self.calls], ['jarsigner', 'keytool'])
+
+
+class VerifyBundles(unittest.TestCase):
+    """verify's App Bundles: only for the builds that make one, checked
+    with the JDK's tools and the bundletool the builder kept, while it is
+    the one the builder pins; no other build may leave one"""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.work = os.path.join(self.dir, 'work')
+        os.makedirs(os.path.join(self.work, 'out'))
+        with open(os.path.join(self.work, ac.LOG_NAME), 'w') as f:
+            f.write('')
+        for name in ('debug.apk', 'bundle.apk', 'bundle.aab'):
+            with open(os.path.join(self.work, 'out', name), 'wb') as f:
+                f.write(b'x')
+        self.jdk = os.path.join(self.dir, 'jdk')
+        os.makedirs(os.path.join(self.jdk, 'bin'))
+        for tool in ('jarsigner', 'keytool', 'java'):
+            path = os.path.join(self.jdk, 'bin', tool + ('.exe' if os.name == 'nt' else ''))
+            with open(path, 'w') as f:
+                f.write('')
+        self.jar = os.path.join(self.work, ac.BUNDLETOOL_JAR)
+        with open(self.jar, 'wb') as f:
+            f.write(b'a stand-in bundletool')
+        self.seen = []
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def verify(self, *argv, sha=None):
+        saved = ac.find_tools, ac.verify_apk, ac.verify_bundle, ac.BUNDLETOOL_SHA256
+        ac.find_tools = lambda sdk: {}
+        ac.verify_apk = lambda name, apk, spec, tools, warnings, target=None: ([], [])
+
+        def bundle(name, aab, apk, spec, tools, target=None):
+            self.seen.append((name, os.path.basename(aab), os.path.basename(apk), dict(tools), target))
+            return [], ['ok']
+        ac.verify_bundle = bundle
+        if sha is not None:
+            ac.BUNDLETOOL_SHA256 = sha
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                status = ac.main(['verify', '--work', self.work, '--sdk', self.dir] + list(argv))
+        finally:
+            ac.find_tools, ac.verify_apk, ac.verify_bundle, ac.BUNDLETOOL_SHA256 = saved
+        return status, out.getvalue()
+
+    def test_the_pinned_bundletool(self):
+        import hashlib
+        self.assertEqual(ac.sha256_file(self.jar), hashlib.sha256(b'a stand-in bundletool').hexdigest())
+        status, out = self.verify('--builds', 'debug,bundle', '--jdk', self.jdk, '--target', '36',
+                                  sha=ac.sha256_file(self.jar))
+        self.assertEqual(status, 0, out)
+        self.assertEqual(len(self.seen), 1)
+        name, aab, apk, tools, target = self.seen[0]
+        self.assertEqual((name, aab, apk, target), ('bundle', 'bundle.aab', 'bundle.apk', '36'))
+        self.assertEqual(tools['bundletool'], self.jar)
+        for tool in ('jarsigner', 'keytool', 'java'):
+            self.assertEqual(os.path.dirname(tools[tool]), os.path.join(self.jdk, 'bin'), tool)
+        self.assertIn("The builder's bundletool: 1.18.3, SHA-256 ", out)
+        self.assertIn('bundle.aab (0.0 MB): ok', out)
+
+    def test_another_bundletool_is_refused(self):
+        status, out = self.verify('--builds', 'bundle', '--jdk', self.jdk)
+        self.assertEqual(status, 1, out)
+        self.assertIn('the builder kept a bundletool that is not the one it pins (SHA-256 %s, not %s)'
+                      % (ac.sha256_file(self.jar), ac.BUNDLETOOL_SHA256), out)
+        # and is not run
+        self.assertNotIn('bundletool', self.seen[0][3])
+
+    def test_no_bundle(self):
+        os.remove(os.path.join(self.work, 'out', 'bundle.aab'))
+        status, out = self.verify('--builds', 'bundle', sha=ac.sha256_file(self.jar))
+        self.assertEqual(status, 1, out)
+        self.assertIn('there is no %s (the build asked for an App Bundle)'
+                      % os.path.join(self.work, 'out', 'bundle.aab'), out)
+        self.assertEqual(self.seen, [])
+
+    def test_only_a_bundle_build_has_one(self):
+        # a build that did not ask leaves none; nor is one checked
+        status, out = self.verify('--builds', 'debug', sha=ac.sha256_file(self.jar))
+        self.assertEqual(status, 1, out)
+        self.assertIn('the builder left other files beside the packages: bundle.aab', out)
+        self.assertEqual(self.seen, [])
+        with open(os.path.join(self.work, 'out', 'debug.aab'), 'wb') as f:
+            f.write(b'x')
+        status, out = self.verify('--builds', 'debug,bundle', sha=ac.sha256_file(self.jar))
+        self.assertIn('the builder left other files beside the packages: debug.aab', out)
+        self.assertEqual([x[0] for x in self.seen], ['bundle'])
+        # a signed build is not a bundle build either
+        os.remove(os.path.join(self.work, 'out', 'debug.aab'))
+        for name in ('release.apk', 'release.aab'):
+            with open(os.path.join(self.work, 'out', name), 'wb') as f:
+                f.write(b'x')
+        self.seen = []
+        status, out = self.verify('--builds', 'release,bundle', sha=ac.sha256_file(self.jar))
+        self.assertIn('the builder left other files beside the packages: release.aab', out)
+        self.assertEqual([x[0] for x in self.seen], ['bundle'])
+        # and with no bundle build, no JDK tool or bundletool is looked for
+        os.remove(os.path.join(self.work, 'out', 'release.aab'))
+        os.remove(os.path.join(self.work, 'out', 'bundle.aab'))
+        status, out = self.verify('--builds', 'release', '--jdk', self.jdk)
+        self.assertEqual(status, 0, out)
+        self.assertNotIn('bundletool', out)
+
+    def test_jdk_tool(self):
+        self.assertEqual(ac.jdk_tool(self.jdk, 'java'),
+                         os.path.join(self.jdk, 'bin', 'java' + ('.exe' if os.name == 'nt' else '')))
+        import shutil
+        self.assertEqual(ac.jdk_tool(self.jdk, 'no-such-tool'), shutil.which('no-such-tool'))
+        self.assertEqual(ac.jdk_tool(None, 'sh'), shutil.which('sh'))
 
 
 class StepClock:
@@ -2118,8 +2688,7 @@ class OneSystem(unittest.TestCase):
         body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
         self.assertIn('   if probeName() is "AndroidJavaProbe" then\n'
                       '      put true into tSettings["android,application permissions"]["POST_NOTIFICATIONS"]\n'
-                      '      put true into tSettings["android,application permissions"]["WRITE_EXTERNAL_STORAGE"]\n'
-                      '   end if\n', body)
+                      '      put true into tSettings["android,application permissions"]["WRITE_EXTERNAL_STORAGE"]\n', body)
         self.assertEqual(script.count('POST_NOTIFICATIONS"]'), 1)
         self.assertEqual(script.count('WRITE_EXTERNAL_STORAGE"]'), 1)
         # every run of this checkout's Java layer on a device allows it,
@@ -2131,6 +2700,33 @@ class OneSystem(unittest.TestCase):
         self.assertEqual(len(java_new), 2, runs)
         for run in runs:
             self.assertEqual('--allow android.permission.POST_NOTIFICATIONS' in run, run in java_new, run)
+
+    def test_java_probe_reads_its_copy_file(self):
+        # the Java layer's probe, and only it, carries a copy file (the
+        # standalone settings' "files"), which the engine reads from the
+        # package's assets by their offsets: so a package that compressed
+        # its assets (an App Bundle without "assets/**" stored) fails here
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        self.assertIn('constant kProbeCopyName = "oxt-probe.txt"\n', script)
+        self.assertIn('constant kProbeCopy = "OXT-Beyond probe copy file"\n', script)
+        body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
+        java = re.search(r'(?s)   if probeName\(\) is "AndroidJavaProbe" then\n(.*?)\n   end if\n', body).group(1)
+        self.assertIn('      put kProbeCopy into url ("binfile:" & item 1 to -2 of $OXT_ANDROID_STACK & slash '
+                      '& kProbeCopyName)\n', java)
+        self.assertIn('      put kProbeCopyName into tSettings["files"]', java)
+        self.assertEqual(body.count('tSettings["files"]'), 1)
+        # the probe reads it from the engine's folder, says what it read,
+        # and fails if it is not the text written
+        read_line = ('"   put url (" & quote & "binfile:" & quote && "& specialFolderPath(" & quote & "engine" & quote '
+                     '& ") &" && \\\n            quote & "/" & kProbeCopyName & quote & ") into tCopy" & return')
+        said = script.index('"   put" && quote & "OXT-Beyond probe: copy file" & quote && "&& tCopy" & return')
+        failed = script.index('"   if tCopy is not" && quote & kProbeCopy & quote && "then put true into tFailed"')
+        self.assertLess(script.index(read_line), said)
+        self.assertLess(said, failed)
+        # inside the Java layer's probe's steps, which only it runs
+        steps = script.index('"   local tFailed, tId, tFolder, tHas, tExport, tCopy" & return')
+        self.assertLess(steps, script.index(read_line))
+        self.assertLess(failed, script.index('"      exit openStack" & return', steps))
 
     def test_java_probe_picture_is_looked_for(self):
         # every run of this checkout's Java layer looks for the picture the
@@ -2170,13 +2766,120 @@ class OneSystem(unittest.TestCase):
         # the Java layer's probe is built with a Java layer ready for 36, so
         # it targets 36; the other packages target 33, as verify's default
         workflow = read('.github', 'workflows', 'android.yml')
-        verifies = re.findall(r'android_check\.py verify [^\n]*', workflow)
+        verifies = [re.sub(r'\\\n\s*', '', v) for v in
+                    re.findall(r'android_check\.py verify(?:[^\n]*\\\n)*[^\n]*', workflow)]
         self.assertEqual(len(verifies), 2, verifies)
         for v in verifies:
             if '/java-new"' in v:
                 self.assertTrue(v.endswith('--target %s' % ac.NEWEST_TARGET_SDK), v)
             else:
                 self.assertNotIn('--target', v)
+
+    def test_bundletool_pins_agree(self):
+        # the bundletool the builder downloads is the one verify takes
+        builder = read('ide-support', 'revsaveasandroidstandalone.livecodescript')
+        version = re.search(r'^constant kBundletoolVersion = "([^"]+)"$', builder, re.M).group(1)
+        sha = re.search(r'^constant kBundletoolSHA256 = "([0-9a-f]{64})"$', builder, re.M).group(1)
+        url = re.search(r'^constant kBundletoolURL = "([^"]+)"$', builder, re.M).group(1)
+        self.assertEqual(version, ac.BUNDLETOOL_VERSION)
+        self.assertEqual(sha, ac.BUNDLETOOL_SHA256)
+        self.assertEqual(url, 'https://github.com/google/bundletool/releases/download/%s/bundletool-all-%s.jar'
+                         % (version, version))
+        # the check's unit names the same cache file
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        self.assertIn('revEnvironmentUserCachePath() & "/Android/bundletool-all-%s.jar"' % version, script)
+
+    def test_the_bundle_build(self):
+        # its settings are BUILDS["bundle"]'s, and only it asks for a bundle
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
+        case = re.search(r'(?s)      case "bundle"\n(.*?)\n         break', body).group(1)
+        self.assertEqual(case.splitlines(), [
+            '         put "Sign with my key" into tSettings["android,signing"]',
+            '         put $OXT_ANDROID_KEYSTORE into tSettings["android,key"]',
+            '         put true into tSettings["android,arm64"]',
+            '         put true into tSettings["android,x86_64"]',
+            '         put true into tSettings["android,app bundle"]'])
+        self.assertEqual(body.count('"android,app bundle"'), 1)
+        self.assertEqual(ac.BUILDS['bundle']['abis'], {'arm64-v8a', 'x86_64'})
+        self.assertEqual(ac.BUILDS['bundle']['signer'], ac.KEY_DNAME)
+        # its questions are answered as the release build's
+        self.assertIn('if tName is "release" or tName is "bundle" then', script)
+
+    def device_runs(self, workflow):
+        """Each device run of android.yml: (its step, the work folder of
+        its package, the packages it runs (a loop's, or its one), its
+        command with the continuation lines joined)"""
+        runs = []
+        for step in re.split(r'\n      - name: ', workflow)[1:]:
+            name = step.split('\n', 1)[0]
+            for loop in re.finditer(r'(?s)for pkg in ([^;]+); do\n(.*?)\n\s*done', step):
+                for cmd in re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', loop.group(2)):
+                    runs.append((name, cmd, loop.group(1).split()))
+            outside = re.sub(r'(?s)for pkg in [^;]+; do\n.*?\n\s*done', '', step)
+            for cmd in re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', outside):
+                runs.append((name, cmd, None))
+        out = []
+        for name, cmd, pkgs in runs:
+            cmd = re.sub(r'\\\n\s*', '', cmd)
+            m = re.search(r'--apk "\$WORK/([^/]+)/out/([^"]+)"', cmd)
+            self.assertTrue(m, cmd)
+            if pkgs is None:
+                self.assertNotIn('$pkg', m.group(2), cmd)
+                pkgs = [m.group(2)]
+            else:
+                self.assertEqual(m.group(2), '$pkg', cmd)
+            out.append((name, m.group(1), pkgs, cmd))
+        return out
+
+    def test_app_bundle_runs(self):
+        # the bundle build is among the builds of this builder's run (no
+        # --builds) and of the Java layer's probe, both checked with the
+        # JDK's tools; each of their App Bundles is installed as Google
+        # Play installs it, with the bundletool its builder downloaded
+        self.assertTrue(ac.BUILDS['bundle']['bundle'])
+        self.assertEqual([n for n in ac.BUILDS if ac.BUILDS[n].get('bundle')], ['bundle'])
+        workflow = read('.github', 'workflows', 'android.yml')
+        ides = [re.sub(r'\\\n\s*', '', x) for x in
+                re.findall(r'android_check\.py ide(?:[^\n]*\\\n)*[^\n]*', workflow)]
+        changed = [x for x in ides if '--work "$WORK/changed"' in x]
+        self.assertEqual(len(changed), 1, ides)
+        self.assertNotIn('--builds', changed[0])
+        java = [x for x in ides if '--work "$WORK/java-new"' in x]
+        self.assertEqual(len(java), 1, ides)
+        self.assertIn('--builds debug,bundle --probe java', java[0])
+        verifies = [re.sub(r'\\\n\s*', '', v) for v in
+                    re.findall(r'android_check\.py verify(?:[^\n]*\\\n)*[^\n]*', workflow)]
+        for v in verifies:
+            self.assertIn('--jdk "$JDK"', v)
+            self.assertNotIn('--builds', v.replace('--builds debug,bundle', ''))
+        runs = self.device_runs(workflow)
+        bundles = sorted((name, work) for name, work, pkgs, _ in runs if 'bundle.aab' in pkgs)
+        self.assertEqual(bundles, [('Run the Java layer\'s probe on Android 13', 'java-new'),
+                                   ('Run the package with 16 KB pages', 'java-new'),
+                                   ('Run the packages on Android 13', 'changed')])
+        for name, work, pkgs, cmd in runs:
+            if any(p.endswith('.aab') for p in pkgs):
+                self.assertIn('--bundletool "$WORK/%s/%s" --jdk "$JDK"' % (work, ac.BUNDLETOOL_JAR), cmd)
+                # each package of the loop, with its own screen and log
+                self.assertIn('${pkg%.*}.png', cmd)
+                self.assertIn('${pkg%.*}.txt', cmd)
+            else:
+                self.assertNotIn('--bundletool', cmd)
+            for p in pkgs:
+                self.assertTrue(p.endswith(('.apk', '.aab')), p)
+        # the Java layer's probe runs as a package and as a bundle with the
+        # same checks
+        java_runs = [(pkgs, cmd) for _, work, pkgs, cmd in runs if work == 'java-new']
+        self.assertEqual([pkgs for pkgs, _ in java_runs], [['debug.apk', 'bundle.aab']] * 2)
+        self.assertIn('${{ env.WORK }}/*/out/*.aab', workflow)
+
+    def test_java_probe_runs_on_both_emulators(self):
+        # the step names device_runs reads are the workflow's
+        workflow = read('.github', 'workflows', 'android.yml')
+        names = [n for n, _, _, _ in self.device_runs(workflow)]
+        self.assertEqual(len(names), len(re.findall(r'android_check\.py device', workflow)))
+        self.assertIn("Run the Java layer's probe on Android 13", names)
 
     def test_16k_image_at_the_newest_target(self):
         # the 16 KB image is the first at API 36 or newer (Android 16),
