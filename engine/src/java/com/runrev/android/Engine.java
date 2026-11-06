@@ -2013,6 +2013,10 @@ public class Engine extends View implements EngineApi
 	}
 
     public static final int PERMISSION_REQUEST_CODE = 1;
+    // OXT-Beyond: the notification module's own request to post
+    // notifications (NotificationModule.requestPostNotifications), whose
+    // answer nothing waits for
+    public static final int POST_NOTIFICATIONS_REQUEST_CODE = 2;
     public boolean askPermission(String p_permission)
     {
         if (Build.VERSION.SDK_INT >= 23 && getContext().checkSelfPermission(p_permission)
@@ -2123,9 +2127,16 @@ public class Engine extends View implements EngineApi
     }
     
     // sent by the callback
+    // OXT-Beyond: only androidRequestPermission (askPermission) waits for an
+    // answer, so only its request code answers it. And Android answers with
+    // no results when the request was interrupted, or when another request
+    // was showing already (the notification module's, say): that is no,
+    // where reading the first result threw.
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
     {
-        onAskPermissionDone(grantResults[0] == PackageManager.PERMISSION_GRANTED);
+        if (requestCode != PERMISSION_REQUEST_CODE)
+            return;
+        onAskPermissionDone(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED);
     }
     
 	public void showCamera(String p_source)

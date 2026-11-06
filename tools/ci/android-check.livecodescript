@@ -80,7 +80,11 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- (engine/src/mblandroiddc.cpp; its MCLog line is compiled out of a
 -- release engine, so the log says nothing) and the call answers no
 -- notification, which turns the screen kFailColor. LiveCode 9.6.3's layer
--- does that on Android 13 (Android builder run 42157367103).
+-- does that on Android 13 (Android builder run 42157367103). Its builds
+-- declare POST_NOTIFICATIONS (the Android card's "Post Notifications"), so
+-- that on Android 13 and newer the Java layer asks the user to allow it as
+-- the notification is scheduled (android_check.py device --allow taps
+-- Allow and checks that the package holds it).
 
 -- The probe's colours: the stack is saved red, and its openStack makes it
 -- green, so a screen of green says that the engine ran the stack's script
@@ -517,6 +521,10 @@ private function buildSettings pName
    repeat for each item tArch in "armv7,arm64,x86,x86_64"
       delete variable tSettings["android," & tArch]
    end repeat
+   -- the Java layer's probe asks to post notifications (see the header)
+   if probeName() is "AndroidJavaProbe" then
+      put true into tSettings["android,application permissions"]["POST_NOTIFICATIONS"]
+   end if
    switch pName
       case "debug"
          put "Sign for development only" into tSettings["android,signing"]

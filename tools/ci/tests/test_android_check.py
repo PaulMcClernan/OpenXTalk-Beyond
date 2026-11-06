@@ -416,7 +416,7 @@ class Device(unittest.TestCase):
 
     EVENTS = 'echo "I/am_kill (  590): [0,3475,org.openxtalk.check.androidprobe,0,lmk]"'
 
-    def device(self, pidof, timeout='10', power='true', events=EVENTS):
+    def device(self, pidof, timeout='10', power='true', events=EVENTS, cases='', argv=()):
         d = self.tmp.name
         adb = os.path.join(d, 'platform-tools', 'adb')
         with open(adb, 'w') as f:
@@ -438,12 +438,13 @@ class Device(unittest.TestCase):
                     '  "shell dumpsys window") printf "  mCurrentFocus=Window{1f u0 Application Not Responding: '
                     'com.android.systemui}\\n  mFocusedApp=ActivityRecord{2e u0 '
                     'org.openxtalk.check.androidprobe/.mblandroid t9}\\n" ;;\n'
-                    'esac\n' % (d, pidof, d, power, events))
+                    '%s'
+                    'esac\n' % (d, pidof, d, power, events, cases))
         os.chmod(adb, 0o755)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             status = ac.main(['device', '--apk', self.apk, '--serial', 'emulator-5554', '--sdk', d,
-                              '--timeout', timeout])
+                              '--timeout', timeout] + list(argv))
         return status, out.getvalue()
 
     def test_gone_after_drawing(self):
@@ -581,6 +582,218 @@ class Device(unittest.TestCase):
         self.assertIn("80% of the screen is the probe's green", out)
         self.assertNotIn('Java layer failed', out)
         self.assertIn('the app is not running', out)
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DevicePermission(unittest.TestCase):
+    """device --allow with a stand-in adb: the Java layer's probe declares
+    POST_NOTIFICATIONS, and on Android 13 and newer scheduling its
+    notification makes Android ask the user to allow it. The check waits
+    for that dialog, taps its Allow button and checks that the package
+    holds the permission; each way that can go wrong is a failure that says
+    which"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+    PERMISSION = 'android.permission.POST_NOTIFICATIONS'
+
+    # as an Android 13 Google APIs image says them
+    ACTIVITIES = ('ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)\n'
+                  'Display #0 (activities from top to bottom):\n'
+                  '  * Task{d1 #9 type=standard A=10190:org.openxtalk.check.androidprobe}\n'
+                  '    * Hist  #1: ActivityRecord{5b1 u0 com.google.android.permissioncontroller/'
+                  'com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t9}\n'
+                  '    * Hist  #0: ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n'
+                  '  ResumedActivity: ActivityRecord{5b1 u0 com.google.android.permissioncontroller/'
+                  'com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t9}\n'
+                  '  topResumedActivity=ActivityRecord{5b1 u0 com.google.android.permissioncontroller/'
+                  'com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t9}\n')
+    PROBE_IN_FRONT = ('  * Task{d1 #9 type=standard A=10190:org.openxtalk.check.androidprobe}\n'
+                      '    * Hist  #0: ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n'
+                      '  topResumedActivity=ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n')
+    UI = ("<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\">"
+          '<node index="0" text="Allow" resource-id="com.android.permissioncontroller:id/permission_allow_button" '
+          'class="android.widget.Button" package="com.google.android.permissioncontroller" clickable="true" '
+          'bounds="[84,1424][996,1556]" />'
+          '<node index="1" text="Don&apos;t allow" '
+          'resource-id="com.android.permissioncontroller:id/permission_deny_button" class="android.widget.Button" '
+          'package="com.google.android.permissioncontroller" clickable="true" bounds="[84,1556][996,1688]" />'
+          '</hierarchy>')
+    PACKAGE = ('Packages:\n'
+               '  Package [org.openxtalk.check.androidprobe] (5d2a1f0):\n'
+               '    requested permissions:\n'
+               '      android.permission.POST_NOTIFICATIONS\n'
+               '    install permissions:\n'
+               '      android.permission.INTERNET: granted=true\n'
+               '    User 0: ceDataInode=2201 installed=true hidden=false\n'
+               '      runtime permissions:\n'
+               '        android.permission.POST_NOTIFICATIONS: granted=%s, flags=[ USER_SET|'
+               'USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]\n')
+
+    def run_probe(self, activities=ACTIVITIES, ui=UI, after=PACKAGE % 'true', dialog_from=1, allow=True,
+                  timeout='10'):
+        """device on a running, green probe whose dialog is in front from
+        the dialog_from'th look until Allow is tapped; after is what
+        dumpsys package says once it is. Every command the check sends to
+        the stand-in that is about the permission is kept in calls."""
+        d = self.tmp.name
+        for name in ('calls', 'tapped'):
+            if os.path.exists(os.path.join(d, name)):
+                os.remove(os.path.join(d, name))
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(self.LOG.split('I/lowmemorykiller')[0])
+        for name, text in (('activities.txt', activities), ('ui.xml', ui), ('package.txt', self.PACKAGE % 'false'),
+                           ('package-after.txt', after)):
+            with open(os.path.join(d, name), 'w') as f:
+                f.write(text)
+        with open(os.path.join(d, 'probe.txt'), 'w') as f:
+            f.write(self.PROBE_IN_FRONT)
+        cases = ('  "shell dumpsys activity activities") echo "$*" >> "%(d)s/calls"\n'
+                 '    if [ -f "%(d)s/tapped" ] || [ $(grep -c activities "%(d)s/calls") -lt %(from)d ]; then\n'
+                 '      cat "%(d)s/probe.txt"; else cat "%(d)s/activities.txt"; fi ;;\n'
+                 '  "shell uiautomator dump /sdcard/oxt-ui.xml") echo "$*" >> "%(d)s/calls";'
+                 ' echo "UI hierchary dumped to: /sdcard/oxt-ui.xml" ;;\n'
+                 '  "shell cat /sdcard/oxt-ui.xml") echo "$*" >> "%(d)s/calls"; cat "%(d)s/ui.xml" ;;\n'
+                 '  "shell input tap "*) echo "$*" >> "%(d)s/calls"; echo "$*" > "%(d)s/tapped" ;;\n'
+                 '  "shell dumpsys package org.openxtalk.check.androidprobe") echo "$*" >> "%(d)s/calls"\n'
+                 '    if [ -f "%(d)s/tapped" ]; then cat "%(d)s/package-after.txt"; else cat "%(d)s/package.txt"; fi ;;\n'
+                 % {'d': d, 'from': dialog_from})
+        status, out = self.device('echo 3475', timeout=timeout, cases=cases,
+                                  argv=('--allow', self.PERMISSION) if allow else ())
+        return status, out, self.calls()
+
+    def calls(self):
+        try:
+            with open(os.path.join(self.tmp.name, 'calls')) as f:
+                return f.read().splitlines()
+        except FileNotFoundError:
+            return []
+
+    def test_asked_allowed_and_held_passes(self):
+        status, out, calls = self.run_probe()
+        self.assertEqual(status, 0, out)
+        for part in ('Android asks the user to allow android.permission.POST_NOTIFICATIONS',
+                     'tapped Allow at 540,1490', 'android.permission.POST_NOTIFICATIONS: granted',
+                     'Android device: passed'):
+            self.assertIn(part, out)
+        # the dialog's own button, found in the dump, tapped once
+        self.assertEqual([c for c in calls if 'input tap' in c], ['shell input tap 540 1490'])
+        self.assertLess(calls.index('shell uiautomator dump /sdcard/oxt-ui.xml'),
+                        calls.index('shell cat /sdcard/oxt-ui.xml'))
+        self.assertLess(calls.index('shell input tap 540 1490'),
+                        calls.index('shell dumpsys package org.openxtalk.check.androidprobe'))
+        # once allowed, the check looks for the dialog no more
+        self.assertEqual(calls.count('shell dumpsys activity activities'), 1)
+
+    def test_green_before_the_dialog_does_not_end_the_wait(self):
+        # the probe turns green at once, and the dialog comes after: the
+        # wait goes on until it has been answered
+        status, out, calls = self.run_probe(dialog_from=2)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls.count('shell dumpsys activity activities'), 2)
+        self.assertIn('shell input tap 540 1490', calls)
+
+    def test_never_asked_fails(self):
+        status, out, calls = self.run_probe(activities=self.PROBE_IN_FRONT, timeout='4')
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: the probe never asked the user to allow android.permission.POST_NOTIFICATIONS',
+                      out)
+        self.assertNotIn('tapped Allow', out)
+        self.assertFalse([c for c in calls if 'input tap' in c])
+        # it still says what the package holds
+        self.assertIn('android.permission.POST_NOTIFICATIONS: not granted', out)
+
+    def test_no_allow_button_fails(self):
+        ui = self.UI.replace(':id/permission_allow_button', ':id/permission_allow_foreground_only_button')
+        status, out, calls = self.run_probe(ui=ui, timeout='4')
+        self.assertEqual(status, 1, out)
+        self.assertIn('no Allow button in the dialog yet', out)
+        self.assertIn('PROBLEM: Android asked the user to allow android.permission.POST_NOTIFICATIONS, and its '
+                      'dialog had no Allow button to tap', out)
+        self.assertFalse([c for c in calls if 'input tap' in c])
+        self.assertNotIn('never asked', out)
+
+    def test_allowed_and_not_held_fails(self):
+        status, out, _ = self.run_probe(after=self.PACKAGE % 'false')
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: android.permission.POST_NOTIFICATIONS was allowed in Android's dialog, and the "
+                      "package does not hold it (not granted)", out)
+        status, out, _ = self.run_probe(after='Packages:\n  Package [org.openxtalk.check.androidprobe] (5d2a1f0):\n')
+        self.assertEqual(status, 1, out)
+        self.assertIn('android.permission.POST_NOTIFICATIONS: the package does not ask for it', out)
+        self.assertIn('and the package does not hold it (it does not ask for it)', out)
+
+    def test_the_fail_colour_still_ends_the_wait(self):
+        with open(os.path.join(self.tmp.name, 'screen.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(ac.FAIL_COLOR) + [255]) * 16)
+        started = time.time()
+        status, out, _ = self.run_probe(activities=self.PROBE_IN_FRONT, timeout='60')
+        self.assertLess(time.time() - started, 30)
+        self.assertEqual(status, 1, out)
+        self.assertIn('a call it makes into the Java layer failed', out)
+        self.assertIn('never asked the user to allow', out)
+
+    def test_without_allow_nothing_is_asked_of_it(self):
+        status, out, calls = self.run_probe(allow=False)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [])
+        self.assertNotIn('allow', out.lower())
+
+
+
+class PermissionReaders(unittest.TestCase):
+    """What device --allow reads: the activity in front, the dialog's Allow
+    button, and what the package holds"""
+
+    def test_asking_for_permission(self):
+        self.assertTrue(ac.asking_for_permission(DevicePermission.ACTIVITIES))
+        # an AOSP image's permission controller, and Android 10's line
+        aosp = ('  mResumedActivity: ActivityRecord{7 u0 com.android.permissioncontroller/'
+                '.permission.ui.GrantPermissionsActivity t4}\n')
+        self.assertTrue(ac.asking_for_permission(aosp))
+        self.assertFalse(ac.asking_for_permission(DevicePermission.PROBE_IN_FRONT))
+        self.assertFalse(ac.asking_for_permission(''))
+        # the dialog in the task's history and not in front is not asking
+        history = DevicePermission.ACTIVITIES.split('  ResumedActivity')[0] + (
+            '  topResumedActivity=ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n')
+        self.assertFalse(ac.asking_for_permission(history))
+        # another app's activity of the same name is not Android's
+        self.assertFalse(ac.asking_for_permission(
+            '  topResumedActivity=ActivityRecord{1 u0 org.example/.GrantPermissionsActivity t2}\n'))
+
+    def test_allow_button(self):
+        self.assertEqual(ac.allow_button(DevicePermission.UI), (540, 1490))
+        # its attributes in another order
+        self.assertEqual(ac.allow_button('<node bounds="[0,10][100,30]" text="Allow" '
+                                         'resource-id="com.android.permissioncontroller:id/permission_allow_button"/>'),
+                         (50, 20))
+        for other in ('permission_deny_button', 'permission_allow_foreground_only_button',
+                      'permission_allow_one_time_button'):
+            self.assertIsNone(ac.allow_button(DevicePermission.UI.replace(':id/permission_allow_button',
+                                                                          ':id/' + other)))
+        self.assertIsNone(ac.allow_button(''))
+        self.assertIsNone(ac.allow_button('<node resource-id="com.android.permissioncontroller:id/'
+                                          'permission_allow_button" />'))
+
+    def test_permission_granted(self):
+        package = DevicePermission.PACKAGE
+        name = 'android.permission.POST_NOTIFICATIONS'
+        self.assertIs(ac.permission_granted(package % 'true', name), True)
+        self.assertIs(ac.permission_granted(package % 'false', name), False)
+        self.assertIsNone(ac.permission_granted(package % 'true', 'android.permission.CAMERA'))
+        # the requested list names it with no grant: that says nothing
+        self.assertIsNone(ac.permission_granted('    requested permissions:\n      %s\n' % name, name))
+        # a longer name is not this one
+        self.assertIsNone(ac.permission_granted('        %s_X: granted=true\n' % name, name))
+        self.assertIs(ac.permission_granted(package % 'true', 'android.permission.INTERNET'), True)
+        # a second user's line after the probe's (user 0's) changes nothing
+        two = (package % 'true') + ('    User 10: ceDataInode=0 installed=true hidden=false\n'
+                                    '      runtime permissions:\n'
+                                    '        %s: granted=false, flags=[ ]\n' % name)
+        self.assertIs(ac.permission_granted(two, name), True)
 
 
 class Overlay(unittest.TestCase):
@@ -1294,9 +1507,12 @@ class OneSystem(unittest.TestCase):
         self.assertIn('if $OXT_ANDROID_PROBE is "java" then\n      return "AndroidJavaProbe"', name)
         self.assertIn('return "AndroidProbe"', name)
         self.assertIn("OXT_ANDROID_PROBE='java' if args.probe == 'java' else ''", read('tools', 'ci', 'android_check.py'))
-        # the stack's name is said once, there: every use goes through it
+        # the stack's name is said once, there: every use goes through it,
+        # bar the two that ask probeName() which probe this is (its script,
+        # and its build's notification permission)
         self.assertEqual(script.count('"AndroidProbe"'), 1)
-        self.assertEqual(script.count('"AndroidJavaProbe"'), 2)
+        self.assertEqual(script.count('"AndroidJavaProbe"'), 3)
+        self.assertEqual(script.count('if probeName() is "AndroidJavaProbe" then'), 2)
 
     def test_java_probe_script(self):
         # the Java layer's probe: a notification an hour away (the alarm's
@@ -1385,6 +1601,26 @@ class OneSystem(unittest.TestCase):
         for rel in ac.OVERLAY + ('tools/ci/android_check.py', 'tools/ci/android-check.livecodescript',
                                  '.github/workflows/android.yml'):
             self.assertIn(rel, paths)
+
+    def test_java_probe_asks_to_post_notifications(self):
+        # the Java layer's probe, and only it, declares POST_NOTIFICATIONS
+        # (as the Android card's "Post Notifications" does), so Android 13
+        # asks the user for it as the probe schedules its notification
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
+        self.assertIn('   if probeName() is "AndroidJavaProbe" then\n'
+                      '      put true into tSettings["android,application permissions"]["POST_NOTIFICATIONS"]\n'
+                      '   end if\n', body)
+        self.assertEqual(script.count('POST_NOTIFICATIONS"]'), 1)
+        # every run of this checkout's Java layer on a device allows it,
+        # and no other: the plain probe never asks, and the release's
+        # Java layer throws before it could
+        workflow = read('.github', 'workflows', 'android.yml')
+        runs = re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', workflow)
+        java_new = [r for r in runs if '/java-new/' in r]
+        self.assertEqual(len(java_new), 2, runs)
+        for run in runs:
+            self.assertEqual('--allow android.permission.POST_NOTIFICATIONS' in run, run in java_new, run)
 
     def test_target_api(self):
         lib = read('ide-support', 'revdeploylibraryandroid.livecodescript')

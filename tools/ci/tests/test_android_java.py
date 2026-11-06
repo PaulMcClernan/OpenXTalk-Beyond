@@ -996,6 +996,61 @@ class OneSystem(unittest.TestCase):
                                      '%s: %s' % (name, m.group(0)))
         self.assertGreaterEqual(calls, 5)
 
+    def test_notifications_ask_to_post_only_when_declared(self):
+        # Android 13 shows an app's notifications only once the user lets it
+        # post them: scheduling one asks, once a run, and only an app whose
+        # manifest declares POST_NOTIFICATIONS (one that does not is never
+        # asked, as before); the notification is scheduled either way
+        java = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'NotificationModule.java')
+        create = re.search(r'(?s)public long createLocalNotification\(.*?\n    }\n', java).group(0)
+        self.assertRegex(create, r'resetTimer\(m_engine\.getContext\(\)\);\s*requestPostNotifications\(\);\s*'
+                                 r'return t_row_id;\s*}\n$')
+        self.assertEqual(java.count('requestPostNotifications()'), 2)
+        self.assertIn('public static final String POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS";',
+                      java)
+        ask = re.search(r'(?s)protected void requestPostNotifications\(\)\n    {\n(.*?)\n    }\n', java).group(1)
+        guard = ask.index('return;')
+        for part in ('Build.VERSION.SDK_INT < 33 || s_asked_to_post',
+                     't_context.checkSelfPermission(POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ||',
+                     '!Utils.declaresPermission(t_context, POST_NOTIFICATIONS) || !(t_context instanceof Activity)'):
+            self.assertIn(part, ask)
+        # every return comes before it is marked asked, and that before it asks
+        asked = ask.index('s_asked_to_post = true;')
+        request = ask.index('((Activity)t_context).requestPermissions(new String[] {POST_NOTIFICATIONS},\n'
+                            '                                                 Engine.POST_NOTIFICATIONS_REQUEST_CODE);')
+        self.assertLess(guard, asked)
+        self.assertLess(ask.rindex('return;'), asked)
+        self.assertLess(asked, request)
+        self.assertEqual(ask.count('requestPermissions('), 1)
+        # never initialised in <clinit>: compare would see a new class initialiser
+        self.assertIn('protected static boolean s_asked_to_post;\n', java)
+        # the engine: its own request code answers androidRequestPermission,
+        # and nothing else does
+        engine = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'Engine.java')
+        codes = dict(re.findall(r'public static final int (\w+_REQUEST_CODE) = (\d+);', engine))
+        self.assertEqual(codes, {'PERMISSION_REQUEST_CODE': '1', 'POST_NOTIFICATIONS_REQUEST_CODE': '2'})
+        result = re.search(r'(?s)public void onRequestPermissionsResult\(int requestCode, String\[\] permissions, '
+                           r'int\[\] grantResults\)\n    {\n(.*?)\n    }\n', engine).group(1)
+        self.assertEqual(result.split(), (
+            'if (requestCode != PERMISSION_REQUEST_CODE) return; onAskPermissionDone(grantResults.length > 0 && '
+            'grantResults[0] == PackageManager.PERMISSION_GRANTED);').split())
+        self.assertIn('t_activity.requestPermissions(new String[]{p_permission}, PERMISSION_REQUEST_CODE);', engine)
+        # what the manifest declares, as Android reads it
+        utils = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'Utils.java')
+        declares = re.search(r'(?s)public static boolean declaresPermission\(Context p_context, String '
+                             r'p_permission\)\n    {\n(.*?)\n    }\n', utils).group(1)
+        for part in ('getPackageInfo(p_context.getPackageName(),', 'PackageManager.GET_PERMISSIONS',
+                     'if (t_info.requestedPermissions != null)', 'if (p_permission.equals(t_permission))',
+                     'return true;', 'catch (PackageManager.NameNotFoundException e)'):
+            self.assertIn(part, declares)
+        self.assertTrue(declares.rstrip().endswith('return false;'))
+        # and both changes are named, with their reasons, against the
+        # shipped jar
+        for key in ('code com/runrev/android/NotificationModule.createLocalNotification:(Ljava/lang/String;'
+                    'Ljava/lang/String;Ljava/lang/String;JZI)J',
+                    'code com/runrev/android/Engine.onRequestPermissionsResult:(I[Ljava/lang/String;[I)V'):
+            self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
+
     def test_opengl_view_asks_for_the_shipped_engines_version(self):
         # the runtime's engine is LiveCode Community 9.6.3's, which draws
         # with OpenGL ES 1 (android-java.yml's jni checks it on the engine):

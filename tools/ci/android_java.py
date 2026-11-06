@@ -175,6 +175,17 @@ EXPECTED = {
         'code com/runrev/android/NFCModule.startDispatch:()V':
             'NFC foreground dispatch\'s PendingIntent says FLAG_MUTABLE on Android 12 and newer (Android adds '
             'the tag to it), which threw without it (Utils.mutablePendingIntentFlags)',
+        # OXT-Beyond's changes for API 33 and newer
+        'code com/runrev/android/NotificationModule.createLocalNotification:(Ljava/lang/String;Ljava/lang/String;'
+        'Ljava/lang/String;JZI)J':
+            'on Android 13 and newer, an app whose manifest declares POST_NOTIFICATIONS (the Android card\'s '
+            '"Post Notifications") asks the user once a run to let it post notifications when it schedules one '
+            'and may not (requestPostNotifications); an app that does not declare it is never asked, as before, '
+            'and the notification is scheduled as before either way',
+        'code com/runrev/android/Engine.onRequestPermissionsResult:(I[Ljava/lang/String;[I)V':
+            'only androidRequestPermission\'s request code answers it, not the notification module\'s; and '
+            'a request that Android answers with no results (interrupted, or made while another showed) answers '
+            'false, where reading the first result threw',
     },
 }
 

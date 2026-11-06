@@ -1581,10 +1581,15 @@ release, so that one release can be run with both builders, and with
 instead: before it turns green its `openStack` schedules a local
 notification an hour away and cancels it, which goes through the Java
 layer's `PendingIntent`s, and it turns orange (its fail colour) when the
-notification gets no id. `device`
+notification gets no id. Its builds declare `POST_NOTIFICATIONS`, so on
+Android 13 and newer the Java layer asks the user to let it post
+notifications as it schedules one. `device`
 installs a package with adb, starts it, and waits until the screen turns
 the probe's green, which only the probe's `openStack` makes (or the
-fail colour, which fails at once); `ide
+fail colour, which fails at once). With `--allow <permission>` the probe
+must ask for that runtime permission: `device` waits for Android's dialog,
+taps its Allow button (found in a `uiautomator` dump) and checks that the
+package then holds the permission (`dumpsys package`); `ide
 --device <serial>` does what the IDE's Test does for that device. `boot`
 waits for an emulator to finish booting, and when it gives up it prints
 whether the emulator still runs, `/dev/kvm`, adb's devices, the free disk
@@ -1606,7 +1611,8 @@ Android 13 emulator and on one with 16 KB pages. On Linux it also builds
 the Java layer from this checkout and makes the Java layer's probe twice
 from the same stack, once with that layer and once with the release's,
 and runs both on the Android 13 emulator: the rebuilt layer's must turn
-green; the release's is only recorded. LiveCode 9.6.3's `PendingIntent`s
+green and ask for the notification permission (`--allow
+android.permission.POST_NOTIFICATIONS`); the release's is only recorded. LiveCode 9.6.3's `PendingIntent`s
 throw on Android 12 and newer, and the engine clears the exception
 without a word in the log, so that probe's notification call answers no
 id and the probe turns its fail colour instead of green.

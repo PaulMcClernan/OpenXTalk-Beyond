@@ -336,11 +336,15 @@ jobs:
               --sdk "$SDK" --out "$WORK/screen-api33-$build.png" --log-out "$WORK/logcat-api33-$build.txt"
           done
 
+      # It declares POST_NOTIFICATIONS, so as it schedules its notification
+      # the Java layer asks the user to allow it: --allow waits for
+      # Android's dialog, taps Allow and checks that the package holds it
       - name: Run the Java layer's probe on Android 13
         if: runner.os == 'Linux'
         run: |
           "$PY" tools/ci/android_check.py device --apk "$WORK/java-new/out/debug.apk" --serial emulator-5554 \
-            --sdk "$SDK" --out "$WORK/screen-api33-java.png" --log-out "$WORK/logcat-api33-java.txt"
+            --sdk "$SDK" --out "$WORK/screen-api33-java.png" --log-out "$WORK/logcat-api33-java.txt" \
+            --allow android.permission.POST_NOTIFICATIONS
 
       # For the record, not a check (no annotations, so the run's account
       # stays the checks'): the same probe with the release's own Java
@@ -440,7 +444,8 @@ jobs:
           "$PY" tools/ci/android_check.py device --apk "$WORK/changed/out/debug.apk" --serial emulator-5554 \
             --sdk "$SDK" --out "$WORK/screen-16k-debug.png" --log-out "$WORK/logcat-16k-debug.txt"
           "$PY" tools/ci/android_check.py device --apk "$WORK/java-new/out/debug.apk" --serial emulator-5554 \
-            --sdk "$SDK" --out "$WORK/screen-16k-java.png" --log-out "$WORK/logcat-16k-java.txt"
+            --sdk "$SDK" --out "$WORK/screen-16k-java.png" --log-out "$WORK/logcat-16k-java.txt" \
+            --allow android.permission.POST_NOTIFICATIONS
 
       - name: Upload the packages and logs
         if: always()
