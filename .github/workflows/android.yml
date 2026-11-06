@@ -336,11 +336,17 @@ jobs:
               --sdk "$SDK" --out "$WORK/screen-api33-$build.png" --log-out "$WORK/logcat-api33-$build.txt"
           done
 
+      # It declares POST_NOTIFICATIONS, so as it schedules its notification
+      # the Java layer asks the user to allow it: --allow waits for
+      # Android's dialog, taps Allow and checks that the package holds it.
+      # It exports a picture: --picture finds it among the shared pictures
+      # (MediaStore) as the package's own
       - name: Run the Java layer's probe on Android 13
         if: runner.os == 'Linux'
         run: |
           "$PY" tools/ci/android_check.py device --apk "$WORK/java-new/out/debug.apk" --serial emulator-5554 \
-            --sdk "$SDK" --out "$WORK/screen-api33-java.png" --log-out "$WORK/logcat-api33-java.txt"
+            --sdk "$SDK" --out "$WORK/screen-api33-java.png" --log-out "$WORK/logcat-api33-java.txt" \
+            --allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png
 
       # For the record, not a check (no annotations, so the run's account
       # stays the checks'): the same probe with the release's own Java
@@ -348,7 +354,10 @@ jobs:
       # (its PendingIntent says neither FLAG_IMMUTABLE nor FLAG_MUTABLE).
       # The app does not stop: the engine clears the exception, the call
       # answers no id, and the probe turns its fail colour (run
-      # 42157367103)
+      # 42157367103). The probe takes its other steps too and says what
+      # each answered, and the summary keeps what it said: whether Android
+      # 13 refuses that layer WRITE_EXTERNAL_STORAGE, and so its external
+      # folder and its export to the album
       - name: The Java layer's probe with the release's Java layer, on Android 13
         if: runner.os == 'Linux'
         run: |
@@ -440,7 +449,8 @@ jobs:
           "$PY" tools/ci/android_check.py device --apk "$WORK/changed/out/debug.apk" --serial emulator-5554 \
             --sdk "$SDK" --out "$WORK/screen-16k-debug.png" --log-out "$WORK/logcat-16k-debug.txt"
           "$PY" tools/ci/android_check.py device --apk "$WORK/java-new/out/debug.apk" --serial emulator-5554 \
-            --sdk "$SDK" --out "$WORK/screen-16k-java.png" --log-out "$WORK/logcat-16k-java.txt"
+            --sdk "$SDK" --out "$WORK/screen-16k-java.png" --log-out "$WORK/logcat-16k-java.txt" \
+            --allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png
 
       - name: Upload the packages and logs
         if: always()

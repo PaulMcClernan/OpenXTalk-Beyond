@@ -1580,11 +1580,26 @@ release, so that one release can be run with both builders, and with
 `ide --probe java` builds the Java layer's probe (`AndroidJavaProbe`)
 instead: before it turns green its `openStack` schedules a local
 notification an hour away and cancels it, which goes through the Java
-layer's `PendingIntent`s, and it turns orange (its fail colour) when the
-notification gets no id. `device`
-installs a package with adb, starts it, and waits until the screen turns
-the probe's green, which only the probe's `openStack` makes (or the
-fail colour, which fails at once); `ide
+layer's `PendingIntent`s; asks for its external folder
+(`specialFolderPath("external documents")`) and whether it holds
+`WRITE_EXTERNAL_STORAGE` (`androidHasPermission`); and exports a
+one-pixel picture to the album as `oxt-beyond-probe`. It takes every
+step, says what each answered in the device's log (`OXT-Beyond probe:`
+lines, tag `LiveCode`), and turns orange (its fail colour) when any
+failed. Its builds declare `POST_NOTIFICATIONS`, so on Android 13 and
+newer the Java layer asks the user to let it post notifications as it
+schedules one, and `WRITE_EXTERNAL_STORAGE`, which Android 13 and newer
+refuse without asking and the rebuilt Java layer counts as granted there.
+`device` installs a package with adb, starts it, and waits until the
+screen turns the probe's green, which only the probe's `openStack` makes
+(or the fail colour, which fails at once), and prints what the probe said
+(kept in the failure when it turns its fail colour). With `--allow
+<permission>` the probe must ask for that runtime permission: `device`
+waits for Android's dialog, taps its Allow button (found in a
+`uiautomator` dump) and checks that the package then holds the
+permission (`dumpsys package`). With `--picture <name>` the picture the
+probe exported must be among the shared pictures (`content query` of
+MediaStore) in `Pictures/`, as the package's own; `ide
 --device <serial>` does what the IDE's Test does for that device. `boot`
 waits for an emulator to finish booting, and when it gives up it prints
 whether the emulator still runs, `/dev/kvm`, adb's devices, the free disk
@@ -1606,10 +1621,14 @@ Android 13 emulator and on one with 16 KB pages. On Linux it also builds
 the Java layer from this checkout and makes the Java layer's probe twice
 from the same stack, once with that layer and once with the release's,
 and runs both on the Android 13 emulator: the rebuilt layer's must turn
-green; the release's is only recorded. LiveCode 9.6.3's `PendingIntent`s
-throw on Android 12 and newer, and the engine clears the exception
-without a word in the log, so that probe's notification call answers no
-id and the probe turns its fail colour instead of green.
+green, ask for the notification permission (`--allow
+android.permission.POST_NOTIFICATIONS`) and leave its picture in the
+shared Pictures folder (`--picture oxt-beyond-probe.png`), there and on
+the 16 KB emulator; the release's is only recorded, with what it said.
+LiveCode 9.6.3's `PendingIntent`s throw on Android 12 and newer, and the
+engine clears the exception without a word in the log, so that probe's
+notification call answers no id and the probe turns its fail colour
+instead of green.
 
 ### Android Java layer
 
@@ -2733,7 +2752,8 @@ byte for byte; Git cannot show what changed inside them. Change the
 scripts and properties of their objects with patch files, so that every
 change is reviewable text that CI checks:
 
-- write a script or property patch in `tools/oxt/ide-stack-patches/`,
+- write a script, property or clone patch (a clone patch adds a copy of
+  a control, such as another check box) in `tools/oxt/ide-stack-patches/`,
   one file per change (the format is in
   [tools/oxt/README.md](tools/oxt/README.md#binary-ide-stacks));
 - apply it with `tools/oxt/ide-stack-patch.sh <development engine>`,
@@ -2748,14 +2768,15 @@ change is reviewable text that CI checks:
   [tools/oxt/README.md](tools/oxt/README.md#the-stacks-scripts-as-text-stack-scripts)),
   so the diff shows the change. CI checks
   that every script patch is applied (`tools/ci/check_ide_stacks.py`)
-  and the Linux build that every property and image patch is
+  and the Linux build that every property, image and clone patch is
   (`tools/oxt/ide-stack-patch.sh --check` with the engine it built);
 - run the IDE compile check, which also compiles the object scripts
   inside binary stacks, and try the change in the installed layout
   (`dist\stage\OXT-Beyond-<ver>\OXT-Beyond.exe`) as well.
 
-A change that a patch cannot express, such as adding or deleting
-objects, is made with the IDE built from this repository, running from
+A change that a patch cannot express, such as deleting objects or adding
+one that is not a copy of another, is made with the IDE built from this
+repository, running from
 your clone, so that the stack is loaded from `ide/` and saved back there
 by the engine this project ships. Change only that stack (saving
 rewrites the whole file, and can change its format version and the paths

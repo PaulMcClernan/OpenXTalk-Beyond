@@ -572,7 +572,7 @@ jobs:
           python3 tools/ci/run_livecode_check.py compile --repo-layout --bin "linux-$ARCH-bin" \
             --log ide-compile-check.log
 
-      # The property and image patches of tools/oxt/ide-stack-patches are
+      # The property, image and clone patches of tools/oxt/ide-stack-patches are
       # applied to the binary IDE stacks, checked with the engine just built
       # (tools/oxt/ide-stack-patch.sh --check; tools/ci/check_ide_stacks.py
       # checks the script patches without an engine)
