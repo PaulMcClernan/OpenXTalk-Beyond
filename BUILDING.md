@@ -1588,7 +1588,15 @@ fail colour, which fails at once); `ide
 --device <serial>` does what the IDE's Test does for that device. `boot`
 waits for an emulator to finish booting, and when it gives up it prints
 whether the emulator still runs, `/dev/kvm`, adb's devices, the free disk
-and the end of the emulator's log.
+and the end of the emulator's log. With `--settle` it then waits for a
+fresh image's first minute's work (its overlays and broadcasts), and with
+`--awake` it first puts the image to sleep once, wakes it, unlocks it and
+keeps it awake. The carried Android runtime does not survive a second
+start in one process, and Android relaunches a running app's activity
+when, for example, the screen goes off and the system's theme overlays
+change, so the workflow starts no probe until both are done. When a
+probe dies, `device` says whether Android paused it for sleep, changed
+its `ApplicationInfo` or relaunched it.
 
 The workflow "Android builder" (`android.yml`) runs all of it on the
 latest release's IDE, with this checkout's builder put in, on Windows,
@@ -1598,8 +1606,10 @@ Android 13 emulator and on one with 16 KB pages. On Linux it also builds
 the Java layer from this checkout and makes the Java layer's probe twice
 from the same stack, once with that layer and once with the release's,
 and runs both on the Android 13 emulator: the rebuilt layer's must turn
-green; the release's is only recorded (LiveCode 9.6.3's `PendingIntent`s
-throw on Android 12 and newer, so that probe stops).
+green; the release's is only recorded. LiveCode 9.6.3's `PendingIntent`s
+throw on Android 12 and newer, and the engine clears the exception
+without a word in the log, so that probe's notification call answers no
+id and the probe turns its fail colour instead of green.
 
 ### Android Java layer
 

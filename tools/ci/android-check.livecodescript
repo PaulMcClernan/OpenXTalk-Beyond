@@ -76,9 +76,11 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 -- plan's phase 1), each step a call a script makes. Today that is a local
 -- notification an hour away (mobileCreateLocalNotification: the alarm's
 -- PendingIntent), cancelled again at once. A Java layer that throws there
--- stops the app (the exception reaches the engine's thread), so the screen
--- never turns green; a call that answers no notification turns it
--- kFailColor.
+-- does not stop the app: the engine's call into Java clears the exception
+-- (engine/src/mblandroiddc.cpp; its MCLog line is compiled out of a
+-- release engine, so the log says nothing) and the call answers no
+-- notification, which turns the screen kFailColor. LiveCode 9.6.3's layer
+-- does that on Android 13 (Android builder run 42157367103).
 
 -- The probe's colours: the stack is saved red, and its openStack makes it
 -- green, so a screen of green says that the engine ran the stack's script
