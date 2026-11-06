@@ -2711,7 +2711,8 @@ byte for byte; Git cannot show what changed inside them. Change the
 scripts and properties of their objects with patch files, so that every
 change is reviewable text that CI checks:
 
-- write a script or property patch in `tools/oxt/ide-stack-patches/`,
+- write a script, property or clone patch (a clone patch adds a copy of
+  a control, such as another check box) in `tools/oxt/ide-stack-patches/`,
   one file per change (the format is in
   [tools/oxt/README.md](tools/oxt/README.md#binary-ide-stacks));
 - apply it with `tools/oxt/ide-stack-patch.sh <development engine>`,
@@ -2726,14 +2727,15 @@ change is reviewable text that CI checks:
   [tools/oxt/README.md](tools/oxt/README.md#the-stacks-scripts-as-text-stack-scripts)),
   so the diff shows the change. CI checks
   that every script patch is applied (`tools/ci/check_ide_stacks.py`)
-  and the Linux build that every property and image patch is
+  and the Linux build that every property, image and clone patch is
   (`tools/oxt/ide-stack-patch.sh --check` with the engine it built);
 - run the IDE compile check, which also compiles the object scripts
   inside binary stacks, and try the change in the installed layout
   (`dist\stage\OXT-Beyond-<ver>\OXT-Beyond.exe`) as well.
 
-A change that a patch cannot express, such as adding or deleting
-objects, is made with the IDE built from this repository, running from
+A change that a patch cannot express, such as deleting objects or adding
+one that is not a copy of another, is made with the IDE built from this
+repository, running from
 your clone, so that the stack is loaded from `ide/` and saved back there
 by the engine this project ships. Change only that stack (saving
 rewrites the whole file, and can change its format version and the paths

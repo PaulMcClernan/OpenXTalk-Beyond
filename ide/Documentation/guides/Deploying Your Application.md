@@ -299,6 +299,7 @@ Figure 8 – Standalone Settings – Android
 | **Vibration**                   | Request permission to vibrate the device                                                                                                                                                                                              |
 | **Idle Timer**                  | Request permission for the idle timer                                                                                                                                                                                                 |
 | **Ad Support**                  | Request permission for ad support                                                                                                                                                                                                     |
+| **Post Notifications**          | Request permission to post notifications: Android 13 and newer show an app's notifications only once the user allows it, and ask the first time the app schedules a local notification                                                |
 
 Related lessons:
 
