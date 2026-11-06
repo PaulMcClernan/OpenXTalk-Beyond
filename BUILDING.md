@@ -1598,8 +1598,10 @@ Android 13 emulator and on one with 16 KB pages. On Linux it also builds
 the Java layer from this checkout and makes the Java layer's probe twice
 from the same stack, once with that layer and once with the release's,
 and runs both on the Android 13 emulator: the rebuilt layer's must turn
-green; the release's is only recorded (LiveCode 9.6.3's `PendingIntent`s
-throw on Android 12 and newer, so that probe stops).
+green; the release's is only recorded. LiveCode 9.6.3's `PendingIntent`s
+throw on Android 12 and newer, and the engine clears the exception
+without a word in the log, so that probe's notification call answers no
+id and the probe turns its fail colour instead of green.
 
 ### Android Java layer
 

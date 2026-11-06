@@ -42,7 +42,9 @@
 #     layer's probe (android_check.py ide --probe java), which schedules a
 #     local notification before it turns green, built and run on both
 #     emulators, and for the record the same probe with the release's own
-#     Java layer, whose notification call throws on Android 12 and newer.
+#     Java layer, whose notification call throws on Android 12 and newer
+#     (the engine clears the exception, so the call answers no id and the
+#     probe turns its fail colour).
 #
 # The released builder's builds are the comparison's other half; where
 # they fail (its shell zip is not there on Windows), the job says so and
@@ -341,7 +343,10 @@ jobs:
       # For the record, not a check (no annotations, so the run's account
       # stays the checks'): the same probe with the release's own Java
       # layer, whose local notification throws on Android 12 and newer
-      # (its PendingIntent says neither FLAG_IMMUTABLE nor FLAG_MUTABLE)
+      # (its PendingIntent says neither FLAG_IMMUTABLE nor FLAG_MUTABLE).
+      # The app does not stop: the engine clears the exception, the call
+      # answers no id, and the probe turns its fail colour (run
+      # 42157367103)
       - name: The Java layer's probe with the release's Java layer, on Android 13
         if: runner.os == 'Linux'
         run: |
