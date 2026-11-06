@@ -987,6 +987,7 @@ asset is one zip archive with a fixed URL, size and SHA-256:
 | `strip` | Number of leading path components removed from every member of the archive. |
 | `dest` | Folder, relative to the installed root, that the remaining paths go into (`""` for the root). |
 | `rename` | Optional: members that go somewhere else, as `{"<path after strip>": "<path relative to dest>"}`. |
+| `java_layer` | Optional, the runtimes asset only: the Android runtime's Java layer (`Runtime/Android/Classes`) when it was built from the commit `source` names rather than carried over. |
 | `description`, `licence`, `source` | Text for people and reports. |
 
 Today there is one asset, `oxt-runtimes-0.2.7-rc.6.16b`: the Windows (x86-64
@@ -1036,8 +1037,10 @@ platforms.
 hand with a label (the version whose packages will take the asset, for
 example `0.2.1-rc.3`) and the ids of a "Build (Windows)" and a "Build
 (Linux)" run of the same commit whose 32-bit and 64-bit builds passed.
-It makes the archive with
-[`tools/oxt/make_runtimes_asset.py --builds`](tools/oxt/README.md#the-runtimes-asset),
+It builds the Android runtime's Java layer from that commit and checks
+it as the "Android Java layer" workflow checks a pull request's (see
+[Android Java layer](#android-java-layer)), makes the archive with
+[`tools/oxt/make_runtimes_asset.py --builds --android-classes`](tools/oxt/README.md#the-runtimes-asset),
 shows the manifest entry in its summary and, with `publish` and a
 commit on `main`, publishes the pre-release `runtimes-<label>`. Then pin
 that entry in `tools/oxt/external-assets.json` in a pull request. Make
@@ -1660,8 +1663,14 @@ a pull request or push that changes the Java sources, the engine's
 calls into Java, the LCB extensions, the builder or the check, in a few
 minutes on one Linux runner with no build of the engine, and keeps the
 jar it built for 14 days. The Android builder workflow runs that jar on
-an emulator (above). Nothing a package ships changes until a runtimes
-asset carries the rebuilt jar.
+an emulator (above). The "Runtimes asset" workflow builds and checks it
+the same way and ships it: its assets carry the Java layer built from
+their commit in place of LiveCode Community 9.6.3's (the manifest entry's
+`java_layer`; see [Making the runtimes asset](#external-assets)), and the
+rest of `Runtime/Android` is still carried over from `oxt-runtimes-1.15`.
+A package ships it once such an asset is pinned. From then on `compare`
+compares a pull request's jar with that one, so a change to the Java
+layer adds its `EXPECTED` entry under that jar's SHA-256.
 
 ### Browser and player check
 
