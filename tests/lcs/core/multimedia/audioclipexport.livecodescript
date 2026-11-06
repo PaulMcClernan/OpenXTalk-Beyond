@@ -105,8 +105,8 @@ on TestExportAudioClipWaveIsTheFileImported
    put _ImportBytes("ramp16.wav", tWav) into tClip
 
    export audioClip tClip to tOut
-   TestAssert "16-bit mono: the export is the WAV file imported", _Hex(tOut) is _Hex(tWav)
-   TestAssert "16-bit mono: the result is empty", the result is empty
+   TestAssert "wave, 16-bit mono: the export is the WAV file imported", _Hex(tOut) is _Hex(tWav)
+   TestAssert "wave, 16-bit mono: the result is empty", the result is empty
 
    put empty into tOut
    export audioClip tClip to tOut as wave
@@ -133,7 +133,7 @@ on TestExportAudioClip8BitStereo
    put _Wav(2, 8, 11025, tData) into tWav
    put _ImportBytes("stereo8.wav", tWav) into tClip
    export audioClip tClip to tOut
-   TestAssert "8-bit stereo: the export is the WAV file imported", _Hex(tOut) is _Hex(tWav)
+   TestAssert "wave, 8-bit stereo: the export is the WAV file imported", _Hex(tOut) is _Hex(tWav)
    delete audioClip tClip
 end TestExportAudioClip8BitStereo
 
