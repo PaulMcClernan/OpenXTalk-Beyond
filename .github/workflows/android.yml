@@ -305,16 +305,18 @@ jobs:
       # probe across a font size change"). The image had booted while the
       # IDE built, and in run 42142328807 the release package's activity
       # was relaunched as it started (its screen stayed black) a minute
-      # after the debug package's ran; so the probes start once it is done
+      # after the debug package's ran; so the probes start once it is done.
+      # --awake first, as for the 16 KB image: one sleep, so that what
+      # Android keeps until the screen is off is done before the probes,
+      # then the screen woken, unlocked and kept on (it was MENU and
+      # svc power stayon here)
       - name: Wait for the emulator
         if: runner.os == 'Linux'
         timeout-minutes: 20
         run: |
           adb="$SDK/platform-tools/adb"
           "$PY" tools/ci/android_check.py boot --serial emulator-5554 --sdk "$SDK" \
-            --log "$WORK/emulator-api33.log" --minutes 10 --settle
-          "$adb" shell input keyevent 82 || true
-          "$adb" shell svc power stayon true || true
+            --log "$WORK/emulator-api33.log" --minutes 10 --awake --settle
           "$adb" devices
 
       # What Test does (deployDo): the builder makes a debug-signed package
@@ -424,10 +426,14 @@ jobs:
           # minute, which recreates a running activity, and the carried
           # Android runtime aborts on a second start in one process (see
           # "The probe across a font size change"); this step is for 16 KB
-          # loading, so the probe starts once the image is done
+          # loading, so the probe starts once the image is done.
+          # --awake: in run 42218720113 the screen went off a minute after
+          # boot, as the Java layer's probe started; SystemUI then added
+          # its theme overlays (it keeps them until the screen is off), and
+          # the probe, relaunched, aborted after its green. So the image
+          # sleeps once before settling, and then stays awake and unlocked
           "$PY" tools/ci/android_check.py boot --serial emulator-5554 --sdk "$SDK" \
-            --log "$WORK/emulator-16k.log" --minutes 12 --settle
-          "$adb" shell input keyevent 82 || true
+            --log "$WORK/emulator-16k.log" --minutes 12 --awake --settle
           page=$("$adb" shell getconf PAGE_SIZE | tr -d '\r')
           echo "Page size: $page"
           [ "$page" = 16384 ] || { echo "::error::$IMAGE_16K has pages of $page bytes, not 16384"; exit 1; }

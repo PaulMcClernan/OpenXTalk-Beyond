@@ -414,7 +414,9 @@ class Device(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def device(self, pidof, timeout='10'):
+    EVENTS = 'echo "I/am_kill (  590): [0,3475,org.openxtalk.check.androidprobe,0,lmk]"'
+
+    def device(self, pidof, timeout='10', power='true', events=EVENTS):
         d = self.tmp.name
         adb = os.path.join(d, 'platform-tools', 'adb')
         with open(adb, 'w') as f:
@@ -429,13 +431,14 @@ class Device(unittest.TestCase):
                     '  "exec-out screencap") cat "%s/screen.raw" ;;\n'
                     '  "shell pidof"*) %s ;;\n'
                     '  "logcat -d -v brief") cat "%s/logcat.txt" ;;\n'
-                    '  "logcat -d -b events -v brief") echo "I/am_kill (  590): [0,3475,org.openxtalk.check.androidprobe,0,lmk]" ;;\n'
+                    '  "shell dumpsys power") %s ;;\n'
+                    '  "logcat -d -b events -v brief") %s ;;\n'
                     '  "shell dumpsys activity exit-info"*) printf "  ApplicationExitInfo #0:\\n    pid=3612 reason=3 (LOW_MEMORY)\\n" ;;\n'
                     '  "shell cat /proc/meminfo") printf "MemTotal: 2000000 kB\\nMemFree: 1 kB\\nMemAvailable: 90000 kB\\n" ;;\n'
                     '  "shell dumpsys window") printf "  mCurrentFocus=Window{1f u0 Application Not Responding: '
                     'com.android.systemui}\\n  mFocusedApp=ActivityRecord{2e u0 '
                     'org.openxtalk.check.androidprobe/.mblandroid t9}\\n" ;;\n'
-                    'esac\n' % (d, pidof, d))
+                    'esac\n' % (d, pidof, d, power, events))
         os.chmod(adb, 0o755)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
@@ -515,6 +518,58 @@ class Device(unittest.TestCase):
         self.assertIn("the probe's script ran, and a call it makes into the Java layer failed (the screen is its "
                       "fail colour, 100%)", out)
         self.assertNotIn('never turned the probe', out)
+
+    # run 42218720113, on the 16 KB image: the Java layer's probe drew its
+    # green, the screen went off, SystemUI's theme overlays changed its
+    # ApplicationInfo, and its activity was relaunched and aborted
+    RELAUNCH_LOG = (
+        'I/ActivityThread( 3612): ApplicationInfo updating for org.openxtalk.check.androidprobe, new timestamp: 109828\n'
+        'I/ActivityThread( 3612): assets removed: []\n'
+        'I/ActivityThread( 3612): assets added: [/data/resource-cache/com.android.systemui-neutral-gcz6.frro, '
+        '/data/resource-cache/com.android.systemui-accent-78hb.frro]\n'
+        'F/libc    ( 3612): fdsan: failed to exchange ownership of file descriptor: fd 0 is owned by FILE* '
+        '0x7396e1675888, was expected to be unowned\n')
+    RELAUNCH_EVENTS = (
+        "printf '%s\\n' "
+        "'I/wm_pause_activity(  576): [0,259587643,org.openxtalk.check.androidprobe/.mblandroid,"
+        "userLeaving=false,sleep]' "
+        "'I/wm_relaunch_resume_activity(  576): [0,259587643,9,org.openxtalk.check.androidprobe/.mblandroid,"
+        "80000000]' "
+        "'I/wm_pause_activity(  576): [0,259587643,org.openxtalk.check.androidprobe/.mblandroid,"
+        "userLeaving=false,finish]'")
+
+    def test_says_what_android_did_to_the_probe(self):
+        with open(os.path.join(self.tmp.name, 'logcat.txt'), 'w') as f:
+            f.write(self.LOG + self.RELAUNCH_LOG)
+        status, out = self.device('true', events=self.RELAUNCH_EVENTS)
+        self.assertEqual(status, 1, out)
+        notes = ["NOTE: Android paused the probe's activity for sleep (wm_pause_activity: the screen was off or "
+                 "locked)",
+                 "NOTE: the probe's ApplicationInfo changed while it ran (assets added: "
+                 "[/data/resource-cache/com.android.systemui-neutral-gcz6.frro, "
+                 "/data/resource-cache/com.android.systemui-accent-78hb.frro])",
+                 "NOTE: Android relaunched the probe's activity (wm_relaunch_resume_activity), which the carried "
+                 "runtime does not survive"]
+        for note in notes:
+            self.assertIn(note, out)
+        # in that order, before the logs' account
+        at = [out.index(x) for x in notes]
+        self.assertEqual(at, sorted(at))
+        self.assertLess(at[-1], out.index("the probe's own lines (every level):"))
+
+    def test_nothing_done_to_the_probe_says_nothing(self):
+        status, out = self.device('true')
+        self.assertEqual(status, 1, out)
+        for part in ('for sleep', 'ApplicationInfo', 'relaunched'):
+            self.assertNotIn(part, out)
+
+    def test_says_when_the_device_is_asleep(self):
+        status, out = self.device('echo 3475', power='echo "  mWakefulness=Asleep"')
+        self.assertIn('NOTE: the device is Asleep (dumpsys power): Android pauses an activity started now '
+                      '(see boot --awake)', out)
+        for power in ('echo "  mWakefulness=Awake"', 'true'):
+            status, out = self.device('echo 3475', power=power)
+            self.assertNotIn('the device is', out)
 
     def test_a_little_of_the_fail_colour_is_not_a_failure(self):
         # a green screen with a strip of the fail colour (an icon, a bar)
@@ -1112,6 +1167,95 @@ class Boot(unittest.TestCase):
         self.assertTrue(line.endswith('because CONTAINS_MANIFEST. it ended this way)'), line)
         self.assertLess(len(line), 450)
 
+    # booted, and awake: the keys put it to sleep and wake it, and dumpsys
+    # power says which
+    AWAKE = ('d="$(dirname "$0")"\n'
+             'echo "$*" >> "$d/calls"\n'
+             'case "$*" in\n'
+             '  *get-state*) echo device ;;\n'
+             '  *getprop*) echo 1 ;;\n'
+             '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state" ;;\n'
+             '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state" ;;\n'
+             '  *"dumpsys power"*) echo "Power Manager State:"; '
+             'echo "  mWakefulness=$(cat "$d/state" 2>/dev/null || echo Awake)" ;;\n'
+             '  *wait-for-broadcast-idle*) echo "All broadcast queues are idle!" ;;\n'
+             '  *wait-for-handler*) echo Success ;;\n'
+             '  *"overlay list"*) echo "[x] com.a" ;;\n'
+             'esac\n')
+
+    def test_awake_sleeps_once_then_keeps_it_awake_before_settling(self):
+        status, out = self.boot(self.AWAKE, '--awake', '--settle', '--settle-polls', '2')
+        self.assertEqual(status, 0, out)
+        calls = self.calls()
+        order = ['shell input keyevent KEYCODE_SLEEP', 'shell input keyevent KEYCODE_WAKEUP',
+                 'shell wm dismiss-keyguard', 'shell input keyevent 82', 'shell svc power stayon true',
+                 'shell settings put system screen_off_timeout 1800000', 'shell am wait-for-broadcast-idle']
+        at = [calls.index(x) for x in order]
+        self.assertEqual(at, sorted(at))
+        for x in order[:-1]:
+            self.assertEqual(calls.count(x), 1, x)
+        # it was asked whether the device slept before it was woken, and
+        # whether it woke before the keyguard
+        self.assertIn('shell dumpsys power', calls[at[0]:at[1]])
+        self.assertIn('shell dumpsys power', calls[at[1]:at[2]])
+        self.assertIn('emulator-5554 awake after 0 s: slept (Asleep after 0 s); woke (Awake after 0 s); the '
+                      'keyguard dismissed; it stays on while powered; its screen times out after 30 minutes '
+                      'without a touch (Awake before)', out)
+        self.assertLess(out.index('awake after'), out.index('settling:'))
+
+    def test_awake_leaves_it_asleep_a_while_before_waking_it(self):
+        # what Android keeps until the screen is off runs once it is off:
+        # the wake comes an --interval after the device said it slept
+        stamp = '"%s" -c "import time; print(time.time())"' % sys.executable
+        script = self.AWAKE.replace(
+            '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state" ;;',
+            '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state"; %s > "$d/slept" ;;' % stamp).replace(
+            '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state" ;;',
+            '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state"; %s > "$d/woke" ;;' % stamp)
+        self.assertNotEqual(script, self.AWAKE)
+        status, out = self.boot(script, '--awake', '--interval', '0.5')
+        self.assertEqual(status, 0, out)
+
+        def when(name):
+            with open(os.path.join(self.sdk, 'platform-tools', name)) as f:
+                return float(f.read())
+        self.assertGreaterEqual(when('woke') - when('slept'), 0.5)
+
+    def test_no_awake_unless_asked(self):
+        status, out = self.boot(self.AWAKE, '--settle', '--settle-polls', '2')
+        self.assertEqual(status, 0, out)
+        self.assertNotIn('awake', out)
+        self.assertFalse([x for x in self.calls() if 'keyevent' in x or 'stayon' in x or 'power' in x])
+
+    def test_awake_never_fails_the_boot(self):
+        # an image that says nothing of its wakefulness and has none of the
+        # commands: each is said, and the boot passes
+        script = ('case "$*" in\n'
+                  '  *get-state*) echo device ;;\n'
+                  '  *getprop*) echo 1 ;;\n'
+                  '  *"dumpsys power"*) echo "Power Manager State:" ;;\n'
+                  '  *keyevent*) ;;\n'
+                  '  *) echo "Unknown command"; exit 255 ;;\n'
+                  'esac\n')
+        started = time.monotonic()
+        status, out = self.boot(script, '--awake')
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(status, 0, out)
+        for part in ('awake: dumpsys power does not say whether emulator-5554 is awake; waking it all the same',
+                     'did not sleep in 0.2 s (dumpsys power does not say)',
+                     'did not wake in 0.2 s (dumpsys power does not say)',
+                     'wm dismiss-keyguard cannot say (Unknown command)',
+                     'svc power stayon cannot say (Unknown command)',
+                     'settings put system screen_off_timeout cannot say (Unknown command)',
+                     '(not said before)'):
+            self.assertIn(part, out)
+
+    def test_wakefulness(self):
+        self.assertEqual(ac.wakefulness('POWER MANAGER\n  mWakefulness=Asleep\n  mWakefulnessChanging=false'),
+                         'Asleep')
+        self.assertEqual(ac.wakefulness('  mWakefulness=Awake\n'), 'Awake')
+        self.assertEqual(ac.wakefulness('cmd: Can\'t find service: power'), '')
+
     def test_answer(self):
         self.assertEqual(ac.answer(' a\n b  '), 'a b')
         self.assertEqual(ac.answer('x' * 10 + 'end', keep=5), '...xxend')
@@ -1198,6 +1342,21 @@ class OneSystem(unittest.TestCase):
         self.assertTrue(boot, 'the 16 KB step waits for the emulator')
         self.assertIn('--settle', boot.group(0))
         self.assertLess(boot.start(), step.index('android_check.py device'))
+
+    def test_every_emulator_stays_awake_under_its_probes(self):
+        # run 42218720113: the 16 KB image's screen went off as the Java
+        # layer's probe started, SystemUI's theme overlays relaunched it,
+        # and it aborted. Each image sleeps once and is kept awake (boot
+        # --awake) before any probe starts on it
+        workflow = read('.github', 'workflows', 'android.yml')
+        boots = re.findall(r'android_check\.py boot [^\n]*\\\n[^\n]*', workflow)
+        self.assertEqual(len(boots), 2, boots)
+        for boot in boots:
+            self.assertIn('--awake', boot)
+            self.assertIn('--settle', boot)
+        for name in ('Wait for the emulator', 'Run the package with 16 KB pages'):
+            step = re.search(r'(?s)- name: %s\n(.*?)\n      - name:' % re.escape(name), workflow).group(1)
+            self.assertIn('--awake', step, name)
 
     def test_android_13_settles_before_any_probe_starts(self):
         # the Android 13 image boots while the IDE builds; every probe on it

@@ -27,6 +27,8 @@ compare them with what another builder made, and run them on a device.
   python3 tools/ci/android_check.py compare --old DIR --new DIR --sdk DIR
   python3 tools/ci/android_check.py device --apk FILE --serial SERIAL --sdk DIR
       [--out FILE] [--abi ABI] [--timeout SECONDS]
+  python3 tools/ci/android_check.py boot --serial SERIAL --sdk DIR [--log FILE]
+      [--minutes M] [--awake] [--settle]
 
 extract unpacks a package as tools/ci/run_livecode_check.py does (modes and
 symbolic links kept) and prints the folder to give --install, and with
@@ -79,8 +81,9 @@ a PNG (--out), and the probe's own lines in the device's log are searched
 for its crash (the engine's caught attempt at an SSL library the package
 does not hold is expected, and only then: crash_lines). When it is not
 running, crashed or was started more than once, it prints the logs'
-account of its processes, how each ended (dumpsys activity exit-info) and
-the memory left.
+account of its processes, what Android did to it that the carried runtime
+does not survive (paused for sleep, a changed ApplicationInfo, a relaunch),
+how each process ended (dumpsys activity exit-info) and the memory left.
 
 boot waits until an emulator has booted (adb sees it and
 sys.boot_completed is 1), saying where it is every minute. It gives up
@@ -92,6 +95,9 @@ log (--log), which otherwise only reaches the workflow's artifact. With
 minute's work is done (settle): broadcast queues idle, the package
 manager idle, the enabled overlays unchanged, each waiting through a
 system server that is not serving, and says if that server restarted.
+With --awake, first, it puts the device to sleep once, so that what
+Android keeps until the screen is off is done, wakes it, dismisses the
+keyguard and keeps it awake (awake).
 
 Exit status 0 when every check passed, 1 otherwise. Only the Python 3
 standard library is used (3.8 or later), with the Android SDK's adb,
@@ -487,6 +493,32 @@ def probe_story(logcat, events, pids, keep=60):
             ('the system on the probe', system[-keep:]),
             ('the events buffer on the probe', ev[-keep:]),
             ('lines about page sizes', pages[-20:])]
+
+
+def disturbances(logcat, events):
+    """What Android did to a running probe that the carried runtime does not
+    survive (it aborts on a second start in one process), each said once:
+    its activity paused for sleep (the screen off or locked), its
+    ApplicationInfo changed (overlays added: what relaunches it), and the
+    activity relaunched. Run 42218720113 showed all three."""
+    notes = []
+    ev = [x for x in events.splitlines() if IDENTIFIER in x]
+    if any(re.search(r'wm_pause_activity\b.*,sleep\]', x) for x in ev):
+        notes.append('Android paused the probe\'s activity for sleep (wm_pause_activity: the screen was off '
+                     'or locked)')
+    lines = logcat.splitlines()
+    for i, line in enumerate(lines):
+        if re.search(r'ApplicationInfo updating for %s\b' % re.escape(IDENTIFIER), line):
+            pid = log_pid(line)
+            added = next((x.split('assets added:', 1)[1].strip() for x in lines[i + 1:i + 6]
+                          if 'assets added:' in x and log_pid(x) == pid), '')
+            notes.append('the probe\'s ApplicationInfo changed while it ran (%s)' % (
+                'assets added: ' + added if added else 'ActivityThread'))
+            break
+    if any(re.search(r'wm_relaunch(_resume)?_activity\b', x) for x in ev):
+        notes.append('Android relaunched the probe\'s activity (wm_relaunch_resume_activity), which the carried '
+                     'runtime does not survive')
+    return notes
 
 
 def ide_results(lines):
@@ -999,6 +1031,10 @@ def device(args):
     _, page = a('shell', 'getconf', 'PAGE_SIZE')
     _, abi = a('shell', 'getprop', 'ro.product.cpu.abi')
     log('Device %s: API %s, %s, pages of %s bytes' % (args.serial, props.strip(), abi.strip(), page.strip()))
+    state = wakefulness(a('shell', 'dumpsys', 'power')[1])
+    if state and state != 'Awake':
+        log('NOTE: the device is %s (dumpsys power): Android pauses an activity started now (see boot --awake)'
+            % state)
     a('uninstall', IDENTIFIER)
     status, out = a('install', '-r', args.apk, timeout=600)
     if 'Success' not in out:
@@ -1064,6 +1100,8 @@ def device(args):
         if len(pids) > 1:
             log('NOTE: the probe was started %d times (processes %s)' % (len(pids), ', '.join(sorted(pids))))
         _, events = a('logcat', '-d', '-b', 'events', '-v', 'brief')
+        for note in disturbances(logcat, events):
+            log('NOTE: %s' % note)
         for heading, lines in probe_story(logcat, events, pids):
             log('%s:%s' % (heading, '' if lines else ' none'))
             for line in lines:
@@ -1301,6 +1339,88 @@ def settle(adb, serial, minutes, interval, polls=3):
     return held, missed
 
 
+def wakefulness(out):
+    """What `dumpsys power` says of the device (mWakefulness=): Awake,
+    Asleep, Dozing or Dreaming; '' when it does not say."""
+    m = re.search(r'\bmWakefulness=(\w+)', out)
+    return m.group(1) if m else ''
+
+
+# How long the screen stays on without a touch once awake() has run, in
+# minutes: longer than the workflow's probes take, so it does not time out
+# under one
+AWAKE_MINUTES = 30
+
+
+def awake(adb, serial, interval):
+    """Put the device to sleep once and wake it, then keep it awake, before
+    a probe runs on it. In run 42218720113 the 16 KB image's screen went
+    off about a minute after it booted, just as the Java layer's probe
+    started: Android paused the probe's activity for sleep, SystemUI added
+    its wallpaper colours' theme overlays (com.android.systemui-neutral,
+    -accent and -dynamic .frro; AOSP's ThemeOverlayController keeps a
+    change of colours until the screen is off), every app's ApplicationInfo
+    changed, and when the probe resumed Android relaunched its activity,
+    which the carried runtime does not survive (an fdsan abort). One sleep
+    here does that deferred work before settling and the probes; then the
+    screen is woken (KEYCODE_WAKEUP), the keyguard dismissed (wm
+    dismiss-keyguard, and MENU, which the workflow sent before), and it
+    stays on (svc power stayon true; a screen-off timeout of AWAKE_MINUTES).
+    Each step that cannot say is said, and the run goes on: this decides
+    nothing."""
+    start = time.monotonic()
+    step = max(interval / 5, 0.01)
+    wait = interval * 4
+
+    def shell(*cmd):
+        try:
+            return run([adb, '-s', serial, 'shell'] + list(cmd), timeout=60)
+        except CheckError as e:
+            return None, str(e)
+
+    def power():
+        return wakefulness(shell('dumpsys', 'power')[1])
+
+    def until(want, then):
+        """Poll until want(wakefulness) or `wait` seconds; (state, seconds)."""
+        while True:
+            now = power()
+            if want(now) or time.monotonic() - then >= wait:
+                return now, time.monotonic() - then
+            time.sleep(step)
+
+    said = []
+    before = power()
+    if not before:
+        log('awake: dumpsys power does not say whether %s is awake; waking it all the same' % serial)
+    shell('input', 'keyevent', 'KEYCODE_SLEEP')
+    asleep, took = until(lambda w: w and w != 'Awake', time.monotonic())
+    if asleep and asleep != 'Awake':
+        said.append('slept (%s after %d s)' % (asleep, took))
+        # what Android keeps until the screen is off runs now
+        time.sleep(interval)
+    else:
+        said.append('did not sleep in %g s (%s)' % (wait, asleep or 'dumpsys power does not say'))
+    shell('input', 'keyevent', 'KEYCODE_WAKEUP')
+    woke, took = until(lambda w: w == 'Awake', time.monotonic())
+    said.append('woke (Awake after %d s)' % took if woke == 'Awake' else
+                'did not wake in %g s (%s)' % (wait, woke or 'dumpsys power does not say'))
+    status, out = shell('wm', 'dismiss-keyguard')
+    said.append('the keyguard dismissed' if status == 0 else
+                'wm dismiss-keyguard cannot say (%s)' % (answer(out, 120) or 'exit status %s' % status))
+    shell('input', 'keyevent', '82')
+    status, out = shell('svc', 'power', 'stayon', 'true')
+    said.append('it stays on while powered' if status == 0 else
+                'svc power stayon cannot say (%s)' % (answer(out, 120) or 'exit status %s' % status))
+    status, out = shell('settings', 'put', 'system', 'screen_off_timeout', str(AWAKE_MINUTES * 60000))
+    said.append('its screen times out after %d minutes without a touch' % AWAKE_MINUTES if status == 0 else
+                'settings put system screen_off_timeout cannot say (%s)' % (
+                    answer(out, 120) or 'exit status %s' % status))
+    log('%s awake after %d s: %s (%s before)' % (serial, time.monotonic() - start, '; '.join(said),
+                                                before or 'not said'))
+    return said
+
+
 def boot(args):
     adb = adb_path(args.sdk)
     if not adb:
@@ -1320,6 +1440,8 @@ def boot(args):
         now = time.monotonic()
         if booted == '1':
             log('%s booted after %d s' % (args.serial, now - start))
+            if args.awake:
+                awake(adb, args.serial, args.interval)
             if args.settle:
                 settle(adb, args.serial, args.settle_minutes, args.interval, args.settle_polls)
             return []
@@ -1394,6 +1516,8 @@ def main(argv=None):
     b.add_argument('--settle', action='store_true',
                    help="then wait for the first minute's work of a fresh image (settle)")
     b.add_argument('--settle-minutes', type=float, default=5)
+    b.add_argument('--awake', action='store_true',
+                   help='first put it to sleep once, wake it and keep it awake (awake)')
     b.add_argument('--settle-polls', type=int, default=3)
     args = ap.parse_args(argv)
     try:
