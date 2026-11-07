@@ -209,7 +209,18 @@ EXPECTED = {
             'ignore it below that, where onBackPressed is called as before; and on Android 15 and newer, for an '
             'app that targets API 35 or newer, which Android draws edge to edge, it pads the view that holds the '
             'stack by the system bars, the cutout and the keyboard (keepOutOfSystemBars), so the stack keeps the '
-            'area it had; an app that targets less is laid out as before',
+            'area it had; an app that targets less is laid out as before. Made again in a process whose engine '
+            'has run, it starts the app again in a new process (RelaunchActivity) where the manifest declares '
+            'that, instead of starting the engine a second time, which Android 11 and newer stop for an app '
+            'that targets API 30 or newer (fdsan); without the declaration it starts the engine as before',
+        # OXT-Beyond: the engine runs once in a process
+        'code com/runrev/android/LiveCodeActivity.onDestroy:()V':
+            'once the engine has finished and the activity is finishing (the stack quit, as an unhandled '
+            'backKey quits it, or the user closed the app), the process ends (endProcess), so that the app '
+            'opened again starts its engine in a new process, as after Android ends the process: opened again '
+            'in the same one, its second engine was stopped on Android 11 and newer (fdsan). Not for a '
+            'configuration change; and an activity that started the app again in a new process (onCreate) has '
+            'no engine to finish',
         'code com/runrev/android/BusyIndicator.showBusyIndicator:(Ljava/lang/String;)V':
             'the busy indicator\'s dialog gets the same back callback on Android 13 and newer (Android 16 sends '
             'an app that targets API 36 no KEYCODE_BACK), which does what its key listener does',
