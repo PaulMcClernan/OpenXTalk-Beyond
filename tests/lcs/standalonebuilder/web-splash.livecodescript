@@ -9,7 +9,6 @@ script "TestStandaloneBuilderWebSplash"
 -- file, which TestEmptySettingAddsNothing checks in the library's text.
 
 constant kStack = "TestStandaloneBuilderWebSplashStack"
-constant kLibrary = "/ide-support/revsaveasemscriptenstandalone.livecodescript"
 constant kHandlers = "getSplashMarkup,getImageDataSize,getImageDataNumber"
 
 -- A 24x24 PNG, all of it the colour 0,170,0 (tools/ci/web-deploy.livecodescript's)
@@ -22,9 +21,11 @@ constant kGreenPNG = "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAHklEQVR42m
 
 -- The library's text, with its lines ending in return alone, as the file
 -- has them in git (a Windows checkout may end them in CRLF)
+-- (the path is written out after TestGetEngineRepositoryPath() so that
+-- tools/ci/web_tests.py finds it and puts the file in the web standalone)
 private function libraryText
    local tText
-   put textDecode(url ("binfile:" & TestGetEngineRepositoryPath() & kLibrary), "UTF-8") into tText
+   put textDecode(url ("binfile:" & TestGetEngineRepositoryPath() & "/ide-support/revsaveasemscriptenstandalone.livecodescript"), "UTF-8") into tText
    replace numToChar(13) & numToChar(10) with return in tText
    return tText
 end libraryText
