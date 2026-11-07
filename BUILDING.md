@@ -598,7 +598,7 @@ powershell -ExecutionPolicy Bypass -File tools\ci\verify-build.ps1
 
 [`tools/ci/verify-build.ps1`](tools/ci/verify-build.ps1) checks that the
 expected files exist, that `dbsqlite.dll` contains the `SQLITE_SOURCE_ID`
-from `thirdparty/libsqlite/include/sqlite3.h` (SQLite 3.51.1), and that
+from `thirdparty/libsqlite/include/sqlite3.h` (SQLite 3.51.3), and that
 `LiveCode-Community.exe` contains the version from the `version` file.
 The same checks by hand:
 
@@ -1548,20 +1548,25 @@ named on its command line (under `xvfb-run` on Linux without a
 `DISPLAY`), which first runs the units of the builder's handlers that
 need no SDK (the manifest's components without `android:exported`, the
 64-bit and extension warnings, the SDK check on made-up SDK folders),
-then builds the probe four times as File > Save as Standalone
+then builds the probe five times as File > Save as Standalone
 Application does: `debug` ("Sign for development only", all four
 architectures, a push sender ID), `release` ("Sign with my key", with a
 keystore the check makes; the script answers the builder's three
-questions in its ask dialogs), `unsigned` ("Do not sign") and `legacy`
-(a stack that never opened the Android card). It needs Python 3.8 or
-later, a JDK, and an Android SDK with `platforms;android-33`, build-tools
-and platform-tools:
+questions in its ask dialogs), `unsigned` ("Do not sign"), `legacy`
+(a stack that never opened the Android card) and `bundle` (as `release`,
+for arm64 and x86-64, with `"android,app bundle"`, so the builder also
+makes `bundle.aab`; it downloads bundletool the first time, and `ide`
+copies the jar it keeps to `<work>/bundletool.jar`). It needs Python 3.8
+or later, a JDK, and an Android SDK with `platforms;android-33`,
+build-tools (with aapt2) and platform-tools:
 
 ```sh
 python3 tools/ci/android_check.py ide --install <folder> --work <work> --sdk <sdk> --jdk <jdk>
-python3 tools/ci/android_check.py verify --work <work> --sdk <sdk>
+python3 tools/ci/android_check.py verify --work <work> --sdk <sdk> --jdk <jdk>
 python3 tools/ci/android_check.py compare --old <work of the released IDE> --new <work> --sdk <sdk>
 python3 tools/ci/android_check.py device --apk <work>/out/debug.apk --serial emulator-5554 --sdk <sdk>
+python3 tools/ci/android_check.py device --apk <work>/out/bundle.aab --serial emulator-5554 --sdk <sdk> \
+    --bundletool <work>/bundletool.jar --jdk <jdk>
 python3 tools/ci/android_check.py boot --serial emulator-5554 --sdk <sdk> --log <the emulator's log>
 ```
 
@@ -1574,7 +1579,19 @@ the 64-bit engine libraries aligned for 16 KB memory pages, the package
 name and target API (`--target`, 33 unless given; at 36 the manifest must
 keep the stack's orientation on large screens, below it must not say
 so), and the builder's warnings (the `legacy` build must be told that it
-has no arm64 build). `compare` takes the packages a
+has no arm64 build). For the `bundle` build it also checks `bundle.aab`:
+it holds the package's files with the same bytes, in the base module
+where bundletool wants them (bar the manifest, the resource table and
+the resources' XML, which aapt2 converts), and no others; its
+`BundleConfig.pb` keeps the native libraries compressed and the assets
+stored in the device's packages (the engine loads externals from the
+app's native library folder and opens its files at their place in the
+installed package), and says bundletool 1.18.3; it is signed by the
+package's signer (the JDK's `jarsigner` verifies it, `keytool` names the
+signer); and `bundletool validate` takes it, its manifest naming the
+package and the target API. The bundletool jar must be the one the
+builder pins (its SHA-256), and no other build may leave an `.aab`.
+`compare` takes the packages a
 released IDE made of the same probe stack (`ide --no-units --stack
 <work>/AndroidProbe.livecode`: the stack goes into the engine library)
 and fails on any file that differs, apart from what the builder's change
@@ -1598,19 +1615,38 @@ schedules one, and `WRITE_EXTERNAL_STORAGE`, which Android 13 and newer
 refuse without asking and the rebuilt Java layer counts as granted there.
 Once green, its `backKey` turns it blue and does not pass the message, so
 the app stays.
-`device` installs a package with adb, starts it, and waits until the
+`device` installs a package with adb (an App Bundle as Google Play
+installs it: `bundletool build-apks --connected-device`, signed with a
+key made for it, then `install-apks`, and the app must be installed as
+more than one APK), waits until the system has taken the install (the
+broadcast queues and the package manager idle: in run 42324548829
+Android 16 killed the Java layer's probe for memory while its apps were
+still taking it), starts it, and waits until the
 screen turns the probe's green, which only the probe's `openStack` makes
 (or the fail colour, which fails at once), and prints what the probe said
-(kept in the failure when it turns its fail colour). With `--allow
+(kept in the failure when it turns its fail colour). Another app's "isn't
+responding" dialog in front of the probe (an emulator's launcher's, in
+run 42354758286, its scrim dimming the probe's green) is answered with
+its Wait button, at most three times in a wait; the probe's own is a
+failure. With `--allow
 <permission>` the probe must ask for that runtime permission: `device`
 waits for Android's dialog, taps its Allow button (found in a
 `uiautomator` dump) and checks that the package then holds the
 permission (`dumpsys package`). With `--picture <name>` the picture the
 probe exported must be among the shared pictures (`content query` of
-MediaStore) in `Pictures/`, as the package's own. With `--within-bars`
+MediaStore) in `Pictures/`, as the package's own; before it installs the
+probe again, `device` then waits (up to 60 seconds) for MediaProvider to
+say in the log that it took the removal of the one before, which it does
+in a job of its own and which clears the owner of every picture of the
+package's name, the new install's too (run 42359925885). With `--within-bars`
 the screen's first and last rows, where the status and navigation bars
 are, must not be the probe's green once it is green: the stack is not
-drawn under the bars. With `--back` `device` then presses the back key,
+drawn under the bars. When the first green screen has its green there,
+`device` takes the screen again every second for up to 8 seconds, and
+fails only if the bars never come over it (on the 16 KB image the first
+green screen of a package that passes in other runs, soon after a cold
+start, once had its green in the bottom row). With `--back` `device`
+then presses the back key,
 and the probe's `backKey` must turn the screen blue (`-back.png` beside
 `--out` keeps that screen). `ide --device <serial>` does what the IDE's
 Test does for that device. `boot`
@@ -1638,7 +1674,11 @@ green, ask for the notification permission (`--allow
 android.permission.POST_NOTIFICATIONS`), leave its picture in the shared
 Pictures folder (`--picture oxt-beyond-probe.png`), get its back key
 (`--back`) and stay inside the system bars (`--within-bars`), there and
-on the 16 KB emulator; the release's is only recorded, with what it said.
+on the 16 KB emulator, as a package and as an App Bundle installed as
+split APKs, in which it also reads the file it carries (`oxt-probe.txt`,
+its standalone settings' `files`) from the base APK's stored assets; the
+release's is only recorded, with what it said. The other builds' App
+Bundle (`bundle.aab`, which targets 33) runs on the Android 13 emulator.
 That layer is ready for API 36, so the builder makes the probe target 36
 (`verify --target 36`), and the 16 KB emulator is the first such image
 at API 36 (Android 16) or newer: there Android draws an app that targets
@@ -1737,6 +1777,41 @@ an empty one leaves it to the runtime. The builder compiles against
 target: the manifest's `targetSdkVersion` decides how Android treats the
 app (and build-tools 34's aapt failed on `android-36`'s resources when
 tried).
+
+A stack with `set the cRevStandaloneSettings["android,app bundle"] of
+stack "<name>" to true` (the Android card's **App Bundle** box, at the end
+of its row of architectures: a copy of "Android x86_64" made by the
+`android-card-app-bundle-*.txt` IDE stack patches, which the row's script
+stores and the card's behaviour shows) also gets an Android App Bundle
+beside its package (`<name>.aab`), as Google Play takes a new app: a build, never
+Test, makes it (`androidBuildBundle`) from the package before zipalign.
+`aapt2 convert --output-format proto` rewrites the manifest and the
+resources as bundletool reads them; each file then goes to its place in
+the base module (`androidBundleModulePath`: the manifest to `manifest/`,
+the dex files to `dex/`, `res/`, `assets/`, `lib/<abi>/` and
+`resources.pb` as they are, anything else to `root/`, the jar files the
+builder leaves at the top of `lib/` nowhere); bundletool's `build-bundle`
+makes the bundle with `androidBundleConfig`, which keeps the native
+libraries compressed and the assets stored in the device's packages, as
+in the `.apk` (the engine loads externals from the app's native library
+folder and opens its files at their offsets in the installed package);
+and the JDK's `jarsigner` signs it with the package's key, its passwords
+in environment variables, not on its command line. The builder warns
+when the bundle is signed with the debug key or not signed, which Google
+Play refuses. bundletool is Google's jar, downloaded on the first such
+build from its GitHub release (`kBundletoolURL`, version 1.18.3, checked
+against `kBundletoolSHA256` before it is kept; a download that fails is
+tried again, up to `kBundletoolTries` times, 2 seconds apart, the second
+time with the JDK's own HTTP client through a small Java program,
+`androidDownloadJavaSource`, which java runs from the temporary folder,
+because libURL's download stalled three times in a row on the Android
+builder check's macOS runner) into
+`revEnvironmentUserCachePath()/Android`, unless
+`the cMobileSupport["android.bundletool"] of stack "revPreferences"`
+names a jar; OXT-Beyond ships no copy. aapt2 is in build-tools; the SDK
+check (`deployCheckSDK`) does not ask for it, so an SDK without it still
+builds packages, and only a bundle build stops with an error that says
+so.
 
 ### Browser and player check
 
