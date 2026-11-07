@@ -1002,6 +1002,32 @@ class Gles(unittest.TestCase):
                          ['x86: engine/src/mblandroiddc.cpp asks OpenGLView for an OpenGL ES version this check '
                           'cannot read'])
 
+    def test_the_config_can_make_the_context(self):
+        """The view's source: for OpenGL ES 1, the config LiveCode's Java
+        always chose (findConfig of four sizes, which says nothing of the
+        renderable type); from OpenGL ES 2 on, one that says it can make
+        that version's context, or none so that the next sizes are tried
+        (the EGL default, OpenGL ES 1 alone, may give a config that cannot
+        make an OpenGL ES 3 context first)"""
+        src = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'OpenGLView.java')
+        four = re.search(r'(?s)private EGLConfig findConfig\(int r, int g, int b, int a\)\s*\{(.*?)\n\t\}', src)
+        self.assertNotIn('RENDERABLE', four.group(1))
+        self.assertIn('return t_configs[0];', four.group(1))
+        five = re.search(r'(?s)private EGLConfig findConfig\(int r, int g, int b, int a, int p_gles_version\)\s*'
+                         r'\{(.*?)\n\t\}', src).group(1)
+        self.assertRegex(five, r'^\s*if \(p_gles_version <= 1\)\s+return findConfig\(r, g, b, a\);')
+        self.assertIn('EGL_RENDERABLE_TYPE, p_gles_version >= 3 ? EGL_OPENGL_ES3_BIT_KHR : EGL_OPENGL_ES2_BIT,', five)
+        self.assertEqual(five.count('return null;'), 2)
+        # EGL's values (EGL 1.5 and EGL_KHR_create_context)
+        for name, value in (('EGL_RENDERABLE_TYPE', '0x3040'), ('EGL_OPENGL_ES2_BIT', '0x0004'),
+                            ('EGL_OPENGL_ES3_BIT_KHR', '0x0040')):
+            self.assertIn('private static final int %s = %s;' % (name, value), src)
+        start = re.search(r'(?s)public void startGLES\(int p_gles_version\)\s*\{(.*?)\n\t\}', src).group(1)
+        sizes = re.findall(r'findConfig\((\d+, \d+, \d+, \d+)(, p_gles_version)?\)', start)
+        self.assertEqual(sizes, [(x, ', p_gles_version') for x in ('8, 8, 8, 8', '5, 6, 5, 0', '5, 5, 5, 0',
+                                                                     '4, 4, 4, 4', '0, 0, 0, 0')])
+        self.assertRegex(src, r'public void start\(\)\s*\{\s*startGLES\(1\);\s*\}')
+
     def test_the_shipped_view_with_each_engine(self):
         """LiveCode 9.6.3's view has no startGLES: right for its own engine,
         and an engine built from this tree could not draw with it."""
