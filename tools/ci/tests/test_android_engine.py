@@ -230,10 +230,15 @@ class ConfigToolchain(unittest.TestCase):
         self.assertIn("'ANDROID_FUSE_LD'", configure)
         env = text[text.index('def process_env_options('):]
         self.assertIn("'ANDROID_FUSE_LD'", env[:env.index('\ndef ')])
-        gypi = read('config', 'android-settings.gypi')
-        self.assertIn("'android_fuse_ld%': '<!(echo ${ANDROID_FUSE_LD:-bfd})'", gypi)
-        self.assertIn("'-fuse-ld=<(android_fuse_ld)'", gypi)
-        self.assertNotIn("'-fuse-ld=bfd'", gypi)
+        # android.gypi reads it for every gyp file, and android-settings.gypi
+        # has it again for its target_conditions (which see a target's
+        # variables, not a file's)
+        self.assertEqual(gyp('config', 'android.gypi')['variables']['android_fuse_ld%'],
+                         '<!(echo ${ANDROID_FUSE_LD:-bfd})')
+        settings = gyp('config', 'android-settings.gypi')
+        self.assertEqual(settings['variables']['android_fuse_ld%'], '<(android_fuse_ld)')
+        self.assertEqual(settings['ldflags'], ['-fuse-ld=<(android_fuse_ld)'])
+        self.assertNotIn("'-fuse-ld=bfd'", read('config', 'android-settings.gypi'))
 
 
 # ---------------------------------------------------------------------------
@@ -800,6 +805,38 @@ class NewerCompiler(unittest.TestCase):
             for y in edges + spread[:40]:
                 self.assertEqual(assembly(x, y), portable(x, y), (x, y))
 
+    def test_64_bit_stdio_offsets_where_there_are_some(self):
+        """libFoundation's stdio streams ask for 64-bit file offsets except on
+        32-bit Android below API 24, where bionic has no fseeko64 and
+        ftello64 and a current NDK then declares no fseeko or ftello (CI's
+        armv7 build stopped there): such a build keeps the 32-bit ones, as
+        NDK r15's headers gave it. The #if is evaluated as the preprocessor
+        would, for each kind of build."""
+        text = read('libfoundation', 'src', 'system-stream.cpp')
+        m = re.search(r'^#if (.*?)\n#define _FILE_OFFSET_BITS 64\n#endif\n', text, re.M | re.S)
+        self.assertIsNotNone(m, 'the request is guarded')
+        self.assertEqual(len(re.findall(r'_FILE_OFFSET_BITS 64', text)), 1)
+        self.assertLess(m.end(), text.index('#include'), 'before any header')
+        self.assertIn('fseeko (t_stream', text)
+        self.assertIn('ftello (t_stream)', text)
+        condition = m.group(1).replace('\\\n', ' ')
+
+        def holds(**macros):
+            expr = re.sub(r'defined\((\w+)\)', lambda d: str(d.group(1) in macros), condition)
+            expr = re.sub(r'\b__\w+__\b', lambda n: str(macros.get(n.group(0), 0)), expr)
+            expr = expr.replace('&&', ' and ').replace('||', ' or ')
+            expr = re.sub(r'!(?!=)', ' not ', expr)
+            return eval(expr, {'__builtins__': {}})
+
+        self.assertTrue(holds(__linux__=1, __LP64__=1))                 # Linux, macOS
+        self.assertTrue(holds(__linux__=1))                             # 32-bit Linux
+        self.assertTrue(holds(__ANDROID__=1, __LP64__=1, __ANDROID_MIN_SDK_VERSION__=21))
+        self.assertFalse(holds(__ANDROID__=1, __ANDROID_MIN_SDK_VERSION__=21))
+        self.assertFalse(holds(__ANDROID__=1, __ANDROID_MIN_SDK_VERSION__=23))
+        self.assertTrue(holds(__ANDROID__=1, __ANDROID_MIN_SDK_VERSION__=24))
+        self.assertFalse(holds(__ANDROID__=1))                          # a standalone toolchain's Clang
+        self.assertTrue(holds(__ANDROID__=1, __LP64__=1))
+
     def test_posix_headers_for_what_they_declare(self):
         """PATH_MAX and gettimeofday come from where POSIX puts them, not
         from whichever header brought them in with NDK r15's headers."""
@@ -819,7 +856,12 @@ class NewerCompiler(unittest.TestCase):
 
 def gyp(*path):
     import ast
-    return ast.literal_eval(read(*path))
+    # gyp files are Python 2 literals, where an escape such as engine-
+    # sources.gypi's '\.' is the two characters it is in Python 3, which
+    # warns about it from 3.12 on
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', SyntaxWarning)
+        return ast.literal_eval(read(*path))
 
 
 def gyp_target(data, name):
@@ -890,6 +932,196 @@ class AndroidCxxStandard(unittest.TestCase):
         version = read('prebuilt', 'versions', 'icu').strip()
         self.assertRegex(version, r'^\d+\.\d+$')
         self.assertGreaterEqual(int(version.split('.')[0]), 75)
+
+
+# ---------------------------------------------------------------------------
+# The C++ library: with a current NDK (lld) every library links it into
+# itself, from LINK's -static-libstdc++ (config.py), and no gyp file adds
+# -lstdc++, which there named the NDK's libc++_shared.so, a library Android
+# does not have: CI's first whole arm64 build asked for it in the engine and
+# every external, through config/android-settings.gypi and ICU's link
+# flags. A standalone toolchain keeps -lstdc++ where it had it.
+
+
+def condition_branches(entry, names):
+    """The branches of a gyp condition ([cond, then, cond, then, ..., else])
+    that can apply where `names` hold; a condition that names anything else
+    could go either way."""
+    branches = []
+    i = 0
+    while i < len(entry):
+        if not isinstance(entry[i], str):  # the else
+            branches.append(entry[i])
+            break
+        try:
+            holds = eval(entry[i], {'__builtins__': {}}, names)
+        except NameError:
+            branches.append(entry[i + 1])
+        else:
+            if holds:
+                branches.append(entry[i + 1])
+                break
+        i += 2
+    return branches
+
+
+def gyp_link_flags(node, names, wanted):
+    """Every flag of `wanted` a gyp tree can put in link flags (ldflags,
+    libraries) where `names` hold, in its order: a branch's own flags, then
+    its nested conditions', as gyp merges them."""
+    found = []
+    if isinstance(node, list):
+        for item in node:
+            found += gyp_link_flags(item, names, wanted)
+    elif isinstance(node, dict):
+        nested = []
+        for key, value in node.items():
+            if key in ('conditions', 'target_conditions'):
+                nested += [b for entry in value for b in condition_branches(entry, names)]
+            elif key.rstrip('!/+=') in ('ldflags', 'libraries'):
+                found += [flag for flag in value if flag in wanted]
+            else:
+                found += gyp_link_flags(value, names, wanted)
+        for branch in nested:
+            found += gyp_link_flags(branch, names, wanted)
+    return found
+
+
+def gyp_files():
+    """Every gyp file of the tree (not gyp's own tests, nor a build's)."""
+    found = []
+    for top, dirs, files in os.walk(REPO):
+        rel = os.path.relpath(top, REPO)
+        dirs[:] = sorted(d for d in dirs if not d.startswith(('.', 'build-'))
+                         and not (rel == '.' and d in ('gyp', '_cache')))
+        found += [os.path.join(rel, f) for f in sorted(files) if f.endswith(('.gyp', '.gypi'))]
+    return found
+
+
+def find_python2():
+    """A Python 2, which the tree's gyp needs (config.py runs it), or None."""
+    for name in ('python2', 'python2.7', 'python'):
+        path = shutil.which(name)
+        if path and subprocess.run([path, '-c', 'import sys; sys.exit(sys.version_info[0] != 2)'],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            return path
+    return None
+
+
+PYTHON2 = find_python2()
+
+# An Android library's target, and the two routes config.py takes
+ANDROID_TARGET = dict(OS='android', toolset_os='android', _toolset='target', host_os='linux',
+                      cross_compile=1, mobile=1, GENERATOR='make', _type='loadable_module')
+CXX_LIBRARY_FLAGS = ('-lstdc++', '-lc++', '-lc++_shared', '-lgnustl_shared', '-lc++_static')
+
+
+class CxxLibrary(unittest.TestCase):
+
+    def flags(self, path, linker, **names):
+        return gyp_link_flags(gyp(*path.split('/')), dict(ANDROID_TARGET, android_fuse_ld=linker, **names),
+                              CXX_LIBRARY_FLAGS)
+
+    def test_no_gyp_file_names_one_with_a_current_ndk(self):
+        """Every gyp file in the tree, every branch that could apply to an
+        Android library's target with lld: none names a C++ library."""
+        files = gyp_files()
+        self.assertIn(os.path.join('config', 'android-settings.gypi'), files)
+        self.assertGreater(len(files), 50)
+        named = {}
+        for path in files:
+            flags = self.flags(path.replace(os.sep, '/'), 'lld')
+            if flags:
+                named[path] = flags
+        self.assertEqual(named, {})
+
+    def test_a_standalone_toolchain_keeps_it(self):
+        """With a standalone toolchain (bfd, or a linker set by hand) the two
+        places that gave -lstdc++ give it still, and nothing else does."""
+        for linker in ('bfd', 'gold'):
+            named = {}
+            for path in gyp_files():
+                path = path.replace(os.sep, '/')
+                flags = self.flags(path, linker)
+                if flags:
+                    named[path] = flags
+            self.assertEqual(named, {'config/android-settings.gypi': ['-lstdc++'],
+                                     'prebuilt/libicu.gyp': ['-lstdc++']}, linker)
+
+    def test_the_settings_in_order(self):
+        """android-settings.gypi's link flags for a library, as before but
+        for -lstdc++ with lld, and none for a static library."""
+        settings = gyp('config', 'android-settings.gypi')
+        every = ('<(android_lib_path)', '-lstdc++', '-landroid')
+        for linker, wanted in (('lld', ['<(android_lib_path)', '-landroid']),
+                               ('bfd', list(every)), ('gold', list(every))):
+            self.assertEqual(gyp_link_flags(settings, dict(ANDROID_TARGET, android_fuse_ld=linker), every),
+                             wanted, linker)
+            self.assertEqual(gyp_link_flags(settings, dict(ANDROID_TARGET, android_fuse_ld=linker,
+                                                           _type='static_library'), every),
+                             [], linker)
+
+    def test_icu_in_order(self):
+        """ICU's link flags for an Android target, as before but for
+        -lstdc++ with lld."""
+        link = gyp_target(gyp('prebuilt', 'libicu.gyp'), 'libicu_link')
+        every = ('-licui18n', '-licuio', '-licuuc', '-licudata', '-lstdc++', '-lm', '-latomic')
+        for linker, wanted in (('lld', [f for f in every if f != '-lstdc++']), ('bfd', list(every))):
+            self.assertEqual(gyp_link_flags(link, dict(ANDROID_TARGET, android_fuse_ld=linker), every),
+                             wanted, linker)
+
+    def test_the_route_that_picks_lld_links_it_in(self):
+        """lld is the linker of the route whose LINK says -static-libstdc++
+        (ConfigToolchain runs config.py on both routes), and the check of a built
+        engine refuses libc++_shared.so."""
+        text = read('config.py')
+        self.assertIn("'bfd' if llvm_bin is None else 'lld'", text)
+        self.assertIn("'-target {} {} -fuse-ld=lld -static-libstdc++ {}'", text)
+        self.assertNotIn('libc++_shared.so', ae.SYSTEM_LIBRARIES)
+        self.assertIn('never libc++_shared.so', read('tools', 'ci', 'android_engine.py'))
+
+    @unittest.skipUnless(PYTHON2, "needs a Python 2 (gyp's)")
+    def test_gyp_says_the_same(self):
+        """gyp itself, on a loadable module and a static library given the
+        settings as config/android.gypi gives them (its linker variable
+        included): the link flags for each linker are the ones above."""
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copy(os.path.join(REPO, 'config', 'android-settings.gypi'), tmp)
+            with open(os.path.join(tmp, 'lib.c'), 'w'):
+                pass
+            fuse_ld = gyp('config', 'android.gypi')['variables']['android_fuse_ld%']
+            with open(os.path.join(tmp, 't.gyp'), 'w') as f:
+                f.write(repr({
+                    'variables': {'android_fuse_ld%': fuse_ld},
+                    'target_defaults': {
+                        'variables': {'silence_warnings': 0},
+                        'target_conditions': [
+                            ['_toolset == "host"', {}, {'includes': ['android-settings.gypi']}],
+                        ],
+                    },
+                    'targets': [
+                        {'target_name': 'Lib', 'type': 'loadable_module', 'sources': ['lib.c']},
+                        {'target_name': 'Static', 'type': 'static_library', 'sources': ['lib.c']},
+                    ],
+                }))
+            run = ('import sys; sys.path.insert(0, sys.argv[1]); import gyp; '
+                   'sys.exit(gyp.main(sys.argv[2:]))')
+            for linker, wanted in (('lld', ['-L/libs', '-landroid']),
+                                   ('bfd', ['-L/libs', '-lstdc++', '-landroid'])):
+                env = dict(os.environ, ANDROID_FUSE_LD=linker, ANDROID_LIB_PATH='/libs')
+                env.pop('CXX_STD', None)
+                out = 'out-' + linker
+                subprocess.run([PYTHON2, '-c', run, os.path.join(REPO, 'gyp', 'pylib'),
+                                '--depth=.', '-f', 'make', '--generator-output=' + out, 't.gyp'],
+                               cwd=tmp, env=env, check=True, stdout=subprocess.DEVNULL)
+
+                def ldflags(target):
+                    with open(os.path.join(tmp, out, target + '.target.mk')) as f:
+                        text = f.read()
+                    block = re.search(r'^LDFLAGS_Release := \\\n((?:\t.*\n)*)', text, re.M)
+                    return [line.strip().rstrip(' \\') for line in block.group(1).splitlines()]
+                self.assertEqual(ldflags('Lib'), ['-fuse-ld=' + linker] + wanted, linker)
+                self.assertEqual(ldflags('Static'), ['-fuse-ld=' + linker], linker)
 
 
 # ---------------------------------------------------------------------------

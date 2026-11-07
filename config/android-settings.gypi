@@ -3,10 +3,10 @@
 	{
 		'c++_std': '<!(echo ${CXX_STD:-c++11})',
 		'android_lib_path%': '<!(echo ${ANDROID_LIB_PATH:+-L${ANDROID_LIB_PATH}})',
-		# OXT-Beyond: the linker, which config.py names: bfd with a
-		# standalone toolchain (as before), lld with a current NDK's own
-		# toolchain, which has no other
-		'android_fuse_ld%': '<!(echo ${ANDROID_FUSE_LD:-bfd})',
+		# OXT-Beyond: the linker, config/android.gypi's (which config.py
+		# names), again here for this file's target_conditions, which see
+		# a target's own variables and not a gyp file's
+		'android_fuse_ld%': '<(android_fuse_ld)',
 	},
 
 	'cflags':
@@ -45,13 +45,33 @@
 		[
 			'_type == "loadable_module"',
 			{
-				'ldflags':
+				# OXT-Beyond: -lstdc++ only with a standalone toolchain, as
+				# before. lld is a current NDK's linker (config.py), whose
+				# clang++ links the C++ library into each library itself
+				# (-static-libstdc++ in LINK); there -lstdc++ also named the
+				# NDK's shared libc++, libc++_shared.so, which Android does
+				# not have (CI's first whole arm64 build asked for it).
+				'target_conditions':
 				[
-					'<(android_lib_path)',
-					'-lstdc++',
-					'-landroid',
+					[
+						'android_fuse_ld == "lld"',
+						{
+							'ldflags':
+							[
+								'<(android_lib_path)',
+								'-landroid',
+							],
+						},
+						{
+							'ldflags':
+							[
+								'<(android_lib_path)',
+								'-lstdc++',
+								'-landroid',
+							],
+						},
+					],
 				],
-
 			},
 		],
 		[
