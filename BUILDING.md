@@ -1773,7 +1773,11 @@ when the bundle is signed with the debug key or not signed, which Google
 Play refuses. bundletool is Google's jar, downloaded on the first such
 build from its GitHub release (`kBundletoolURL`, version 1.18.3, checked
 against `kBundletoolSHA256` before it is kept; a download that fails is
-tried again, up to `kBundletoolTries` times, 2 seconds apart) into
+tried again, up to `kBundletoolTries` times, 2 seconds apart, the second
+time with the JDK's own HTTP client through a small Java program,
+`androidDownloadJavaSource`, which java runs from the temporary folder,
+because libURL's download stalled three times in a row on the Android
+builder check's macOS runner) into
 `revEnvironmentUserCachePath()/Android`, unless
 `the cMobileSupport["android.bundletool"] of stack "revPreferences"`
 names a jar; OXT-Beyond ships no copy. aapt2 is in build-tools; the SDK
