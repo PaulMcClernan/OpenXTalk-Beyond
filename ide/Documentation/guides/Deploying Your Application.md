@@ -288,7 +288,7 @@ Figure 8 – Standalone Settings – Android
 | **Multitouch**                  | Choose whether multitouch is required, prohibited or not applicable in order for the application to function                                                                                                                          |
 | **Multitouch Distinct**         | Choose whether multitouch distinct is required, prohibited or not applicable in order for the application to function                                                                                                                 |
 | **Multitouch Jazzhand**         | Choose whether multitouch jazzhand is required, prohibited or not applicable in order for the application to function                                                                                                                 |
-| **Write External Storage**      | Request permission to write to external storage                                                                                                                                                                                       |
+| **Write External Storage**      | Request permission to write to external storage: the external folders and Export to album ask for it; Android 13 and newer no longer grant it, and there it counts as granted                                                         |
 | **Internet**                    | Request permission to for internet access                                                                                                                                                                                             |
 | **Camera**                      | Request permission to access the camera                                                                                                                                                                                               |
 | **Read Contacts**               | Request permission to read the user's contact data                                                                                                                                                                                    |
@@ -299,6 +299,25 @@ Figure 8 – Standalone Settings – Android
 | **Vibration**                   | Request permission to vibrate the device                                                                                                                                                                                              |
 | **Idle Timer**                  | Request permission for the idle timer                                                                                                                                                                                                 |
 | **Ad Support**                  | Request permission for ad support                                                                                                                                                                                                     |
+| **Post Notifications**          | Request permission to post notifications: Android 13 and newer show an app's notifications only once the user allows it, and ask the first time the app schedules a local notification                                                |
+
+The API level an Android application targets decides how Android treats
+it, and Google Play takes new applications and updates only when they
+target API 36. The standalone builder targets API 36 when the Android
+runtime it builds with is ready for it, and API 33, as before, when it
+is not (the runtime's Java layer built from OXT-Beyond's source is
+ready; the one that earlier runtimes carried is not). At API 36 the stack still gets
+`backKey` for the back button and gesture, it is kept out of the status
+and navigation bars, which Android 15 and newer would otherwise draw over
+it, and Android 16 keeps its orientation on tablets and other large
+screens. To build for a target of your choice, from 33 to 36, set it on
+the stack before you build, for example for an application that is not
+for Google Play:
+
+    set the cRevStandaloneSettings["android,target sdk"] of stack "My App" to 33
+
+Empty leaves it to the runtime; any other value stops the build with an
+error.
 
 Related lessons:
 

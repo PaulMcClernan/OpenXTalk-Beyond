@@ -72,22 +72,46 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --
 -- The Java layer's probe, AndroidJavaProbe, is the probe with more to do
 -- before it turns green: it asks the Java layer of the runtime for what
--- Android 12 and newer refuse unless the Java says more (the Android
--- plan's phase 1), each step a call a script makes. Today that is a local
--- notification an hour away (mobileCreateLocalNotification: the alarm's
--- PendingIntent), cancelled again at once. A Java layer that throws there
--- does not stop the app: the engine's call into Java clears the exception
--- (engine/src/mblandroiddc.cpp; its MCLog line is compiled out of a
--- release engine, so the log says nothing) and the call answers no
--- notification, which turns the screen kFailColor. LiveCode 9.6.3's layer
--- does that on Android 13 (Android builder run 42157367103).
+-- Android 10 and newer refuse unless the Java says more (the Android
+-- plan's phase 1), each step a call a script makes:
+--   - a local notification an hour away (mobileCreateLocalNotification:
+--     the alarm's PendingIntent), cancelled again at once;
+--   - the app's own external folder (specialFolderPath("external
+--     documents")), which the engine asks WRITE_EXTERNAL_STORAGE for
+--     first, and androidHasPermission of that permission;
+--   - a picture into the shared Pictures folder (mobileExportImageToAlbum
+--     of kProbePicture as "oxt-beyond-probe": MediaStore on Android 10
+--     and newer; android_check.py device --picture finds it there).
+-- It takes every step, says what each answered in the device's log (a
+-- put with no container is the engine's log line there, tag LiveCode:
+-- android_check.py device prints them), and turns kFailColor when any
+-- failed. A Java layer that throws does not stop the app: the engine's
+-- call into Java clears the exception (engine/src/mblandroiddc.cpp; its
+-- MCLog line is compiled out of a release engine, so the log says
+-- nothing) and the call answers no notification. LiveCode 9.6.3's layer
+-- does that on Android 13 (Android builder run 42157367103). Its builds
+-- declare POST_NOTIFICATIONS (the Android card's "Post Notifications"), so
+-- that on Android 13 and newer the Java layer asks the user to allow it as
+-- the notification is scheduled (android_check.py device --allow taps
+-- Allow and checks that the package holds it), and WRITE_EXTERNAL_STORAGE
+-- ("Write External Storage"), which Android 13 and newer refuse without
+-- asking and the Java layer counts as granted there (Engine.java,
+-- grantedWithoutAsking). Once green, its backKey turns it kBackColor,
+-- and it does not pass the message, so the app stays (android_check.py
+-- device --back presses the back key: Android 16 sends it to the back
+-- callback of an app that targets API 36, which the builder makes of a
+-- runtime whose Java layer is ready for it).
 
 -- The probe's colours: the stack is saved red, and its openStack makes it
 -- green, so a screen of green says that the engine ran the stack's script
 constant kSavedColor = "204,34,0"
 constant kRunColor = "31,158,90"
 constant kFailColor = "230,160,0"
+-- kBackColor: the Java layer's probe got backKey
+constant kBackColor = "40,90,200"
 constant kIdentifier = "org.openxtalk.check.androidprobe"
+-- The Java layer's probe's picture: one pixel, a PNG, as base64
+constant kProbePicture = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 local sStarted
 local sAsked
@@ -191,9 +215,59 @@ private command androidUnits
    unitCheckSDK tWork
    unitDebugKeystore
    unitJavaHome tWork
+   unitTargetAPI tWork
    androidUnit "required-sdk", deployCall("deployRequiredSDK") is "Android 13 (API 33) or newer", \
          "deployRequiredSDK() is" && deployCall("deployRequiredSDK")
 end androidUnits
+
+-- The API a package targets: the newest when the runtime's Java layer is
+-- ready for it (its jar names the back callback and the system bars'
+-- padding), 33 as before when it is not, and a stack's pin from 33 to the
+-- newest; the large-screen property at 36 and only there
+private command unitTargetAPI pWork
+   local tRuntime, tSettings, tAnswer, tError, tManifest, tPin
+   put pWork & "/runtime" into tRuntime
+   removeTree tRuntime
+   revSBEnsureFolder tRuntime
+   androidUnit "target-no-java-layer", builderCall("androidTargetAPI", tSettings, tRuntime) is 33, \
+         builderCall("androidTargetAPI", tSettings, tRuntime)
+   -- 9.6.3's jar has neither name; one of the two is not enough
+   put textEncode("PK" & "com/runrev/android/LiveCodeActivity.class" & \
+         "com/runrev/android/LiveCodeActivity$BackCallback.class", "UTF-8") into url ("binfile:" & tRuntime & "/Classes")
+   androidUnit "target-java-layer-not-ready", builderCall("androidJavaLayerIsReady", tRuntime) is false and \
+         builderCall("androidTargetAPI", tSettings, tRuntime) is 33, builderCall("androidTargetAPI", tSettings, tRuntime)
+   put textEncode("PK" & "com/runrev/android/LiveCodeActivity$BackCallback.class" & numToByte(0) & \
+         "com/runrev/android/LiveCodeActivity$SystemBarsPadding.class", "UTF-8") into url ("binfile:" & tRuntime & "/Classes")
+   put builderCall("androidTargetAPI", tSettings, tRuntime) into tAnswer
+   androidUnit "target-java-layer-ready", builderCall("androidJavaLayerIsReady", tRuntime) is true and \
+         tAnswer is deployCall("deployNewestTargetSdkVersion") and tAnswer is 36, tAnswer
+   -- a pin, with the layer ready or not
+   repeat for each item tPin in "33,34,35,36"
+      put tPin into tSettings["android,target sdk"]
+      androidUnit "target-pinned-" & tPin, builderCall("androidTargetAPI", tSettings, tRuntime) is tPin and \
+            builderCall("androidTargetAPI", tSettings, pWork & "/no-runtime") is tPin, \
+            builderCall("androidTargetAPI", tSettings, tRuntime)
+   end repeat
+   repeat for each item tPin in "32,37,thirty,35.5"
+      put tPin into tSettings["android,target sdk"]
+      put empty into tError
+      try
+         get builderCall("androidTargetAPI", tSettings, tRuntime)
+      catch tError
+      end try
+      androidUnit "target-pin-refused-" & tPin, tError contains "is not one the builder can make: from 33 to 36", \
+            "answered" && it & ", threw" && tError
+   end repeat
+   removeTree tRuntime
+   -- the large-screen property: at 36, once, in the application; below, nothing
+   put "<manifest>" & return & "  <application>" & return & "  </application>" & return & "</manifest>" into tManifest
+   androidUnit "large-screen-below-36", builderCall("androidKeepLargeScreenLayout", tManifest, 35) is tManifest, \
+         builderCall("androidKeepLargeScreenLayout", tManifest, 35)
+   put builderCall("androidKeepLargeScreenLayout", tManifest, 36) into tAnswer
+   androidUnit "large-screen-36", tAnswer is "<manifest>" & return & "  <application>" & return & \
+         "    <property android:name=" & quote & "android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY" & quote && \
+         "android:value=" & quote & "true" & quote && "/>" & return & "  </application>" & return & "</manifest>", tAnswer
+end unitTargetAPI
 
 -- androidComponentsWithoutExported over a manifest with every case
 private command unitExported pWork
@@ -461,18 +535,43 @@ private function probeScript
    local tScript
    put "on openStack" & return into tScript
    if probeName() is "AndroidJavaProbe" then
-      put "   local tId" & return & \
+      -- every step, each answer said in the log (see the header)
+      put "   local tFailed, tId, tFolder, tHas, tExport" & return & \
+            "   put false into tFailed" & return & \
             "   mobileCreateLocalNotification" && quote & "OXT-Beyond Android check" & quote & comma && \
             quote & "Open" & quote & comma && quote & "probe" & quote & ", the seconds + 3600, false, 0" & return & \
             "   put the result into tId" & return & \
+            "   put" && quote & "OXT-Beyond probe: local notification" & quote && "&& tId" & return & \
             "   if tId is not an integer or tId < 1 then" & return & \
+            "      put true into tFailed" & return & \
+            "   else" & return & \
+            "      mobileCancelLocalNotification tId" & return & \
+            "   end if" & return & \
+            "   put specialFolderPath(" & quote & "external documents" & quote & ") into tFolder" & return & \
+            "   put" && quote & "OXT-Beyond probe: external documents" & quote && "&& tFolder" & return & \
+            "   if tFolder is empty then put true into tFailed" & return & \
+            "   put androidHasPermission(" & quote & "android.permission.WRITE_EXTERNAL_STORAGE" & quote & \
+            ") into tHas" & return & \
+            "   put" && quote & "OXT-Beyond probe: has WRITE_EXTERNAL_STORAGE" & quote && "&& tHas" & return & \
+            "   if tHas is not true then put true into tFailed" & return & \
+            "   mobileExportImageToAlbum base64Decode(" & quote & kProbePicture & quote & ")," && \
+            quote & "oxt-beyond-probe" & quote & return & \
+            "   put the result into tExport" & return & \
+            "   put" && quote & "OXT-Beyond probe: export to album" & quote && "&& tExport" & return & \
+            "   if tExport is not empty then put true into tFailed" & return & \
+            "   if tFailed then" & return & \
             "      set the backgroundColor of me to" && quote & kFailColor & quote & return & \
             "      exit openStack" & return & \
-            "   end if" & return & \
-            "   mobileCancelLocalNotification tId" & return after tScript
+            "   end if" & return after tScript
    end if
    put "   set the backgroundColor of me to" && quote & kRunColor & quote & return & \
          "end openStack" after tScript
+   if probeName() is "AndroidJavaProbe" then
+      -- the back key, not passed (see the header)
+      put return & "on backKey" & return & \
+            "   set the backgroundColor of me to" && quote & kBackColor & quote & return & \
+            "end backKey" after tScript
+   end if
    return tScript
 end probeScript
 
@@ -517,6 +616,12 @@ private function buildSettings pName
    repeat for each item tArch in "armv7,arm64,x86,x86_64"
       delete variable tSettings["android," & tArch]
    end repeat
+   -- the Java layer's probe asks to post notifications, and declares
+   -- WRITE_EXTERNAL_STORAGE (see the header)
+   if probeName() is "AndroidJavaProbe" then
+      put true into tSettings["android,application permissions"]["POST_NOTIFICATIONS"]
+      put true into tSettings["android,application permissions"]["WRITE_EXTERNAL_STORAGE"]
+   end if
    switch pName
       case "debug"
          put "Sign for development only" into tSettings["android,signing"]

@@ -26,7 +26,7 @@ compare them with what another builder made, and run them on a device.
   python3 tools/ci/android_check.py verify --work DIR --sdk DIR
   python3 tools/ci/android_check.py compare --old DIR --new DIR --sdk DIR
   python3 tools/ci/android_check.py device --apk FILE --serial SERIAL --sdk DIR
-      [--out FILE] [--abi ABI] [--timeout SECONDS]
+      [--out FILE] [--abi ABI] [--timeout SECONDS] [--allow PERMISSION]
   python3 tools/ci/android_check.py boot --serial SERIAL --sdk DIR [--log FILE]
       [--minutes M] [--awake] [--settle]
 
@@ -76,7 +76,11 @@ waits until the screen is the probe's green (kRunColor in
 android-check.livecodescript), which only the probe's openStack makes: the
 engine loaded, opened the stack and ran its script. The Java layer's
 probe's FAIL_COLOR ends the wait too, as a failure: its script ran and a
-call into the Java layer failed. The screen is saved as
+call into the Java layer failed. With --allow PERMISSION the probe must
+ask for that runtime permission: the wait goes on past its green until
+Android's dialog asking for it is in front (dumpsys activity), its Allow
+button is tapped (found in a uiautomator dump), and afterwards the package
+must hold the permission (dumpsys package). The screen is saved as
 a PNG (--out), and the probe's own lines in the device's log are searched
 for its crash (the engine's caught attempt at an SSL library the package
 does not hold is expected, and only then: crash_lines). When it is not
@@ -136,11 +140,21 @@ SAVED_COLOR = (204, 34, 0)
 # kFailColor: the Java layer's probe ran, and a call into the Java layer
 # failed
 FAIL_COLOR = (230, 160, 0)
+# kBackColor: the Java layer's probe got backKey (device --back), which
+# it must show within BACK_WAIT seconds of the key
+BACK_COLOR = (40, 90, 200)
+BACK_WAIT = 20
 # The probes (--probe): the stack file each is saved as
 PROBES = {'app': 'AndroidProbe.livecode', 'java': 'AndroidJavaProbe.livecode'}
 # Where a release's Java layer is (overlay --classes)
 CLASSES = ('Runtime', 'Android', 'Classes')
+# The API the builder targets with a runtime whose Java layer is not ready
+# for newer (as before), and the newest, which it targets when it is
+# (androidTargetAPI); at 36 the manifest keeps the stack's orientation on
+# large screens (LARGE_SCREEN_PROPERTY)
 TARGET_SDK = '33'
+NEWEST_TARGET_SDK = '36'
+LARGE_SCREEN_PROPERTY = 'android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY'
 KEY_ALIAS = 'oxtcheck'
 KEY_PASSWORD = 'oxtcheck-pass'
 KEY_DNAME = 'CN=OXT Android Check, O=OXT-Beyond, C=US'
@@ -355,6 +369,31 @@ def manifest_components(xmltree):
     return components
 
 
+def manifest_properties(xmltree):
+    """The <property> elements in aapt's xmltree (aapt's or aapt2's form),
+    name to value as aapt prints it: a boolean's true is 0xffffffff or
+    true, a string's value is unquoted."""
+    props, prop = {}, None
+    for line in xmltree.splitlines():
+        m = re.match(r'^(\s*)(E|A): (.*)$', line)
+        if not m:
+            continue
+        depth, kind, rest = len(m.group(1)), m.group(2), m.group(3)
+        if kind == 'E':
+            # the attributes that follow are this element's
+            prop = {'depth': depth} if rest.split()[0] == 'property' else None
+            continue
+        if prop is None or depth <= prop['depth']:
+            continue
+        a = re.match(r'^(?:\S*:)?(name|value)\(0x[0-9a-f]+\)=(?:\(type 0x[0-9a-f]+\))?(.*?)(?: \(Raw: .*\))?$', rest)
+        if a:
+            q = re.match(r'^"([^"]*)"$', a.group(2))
+            prop[a.group(1)] = q.group(1) if q else a.group(2)
+            if 'name' in prop and 'value' in prop:
+                props[prop['name']] = prop['value']
+    return props
+
+
 def manifest_lines(xmltree):
     """aapt's xmltree with the line numbers taken out, which move when a
     line of the manifest template moves"""
@@ -386,6 +425,25 @@ def colour_share(rgba, colour, tolerance=24, step=7):
                 abs(rgba[i + 2] - b0) <= tolerance:
             hits += 1
     return hits / total if total else 0.0
+
+
+def row_share(rgba, width, y, colour, tolerance=24):
+    """The share of the pixels of row y within tolerance of colour."""
+    row = rgba[y * width * 4:(y + 1) * width * 4]
+    return colour_share(row, colour, tolerance, step=1)
+
+
+def bars_drawn_over(rgba, width, height, colour=RUN_COLOR):
+    """Where the stack's colour shows in the screen's first or last row
+    (where the status and navigation bars are): a list of 'top' and
+    'bottom', each with its share, empty when neither row is mostly the
+    stack's."""
+    over = []
+    for where, y in (('top', 0), ('bottom', height - 1)):
+        part = row_share(rgba, width, y, colour) if height else 0.0
+        if part >= 0.5:
+            over.append('%s %.0f%%' % (where, part * 100))
+    return over
 
 
 def screen_colours(rgba, top=4, step=7):
@@ -519,6 +577,98 @@ def disturbances(logcat, events):
         notes.append('Android relaunched the probe\'s activity (wm_relaunch_resume_activity), which the carried '
                      'runtime does not survive')
     return notes
+
+
+# Android's dialog that asks the user for a runtime permission (the
+# permission controller's GrantPermissionsActivity, which an app's
+# requestPermissions starts) and its Allow button, as uiautomator dumps it
+GRANT_ACTIVITY = re.compile(r'\bpermissioncontroller/\S*GrantPermissionsActivity\b')
+ALLOW_BUTTON = ':id/permission_allow_button'
+
+
+def asking_for_permission(activities):
+    """Whether the activity in front (dumpsys activity activities: its
+    topResumedActivity or mResumedActivity line) is Android's dialog that
+    asks for a runtime permission."""
+    return any(GRANT_ACTIVITY.search(x) for x in activities.splitlines()
+               if re.search(r'\b(topResumedActivity|mResumedActivity|ResumedActivity)\b', x))
+
+
+def allow_button(xml):
+    """The centre (x, y) of the permission dialog's Allow button in a
+    uiautomator dump, or None."""
+    for m in re.finditer(r'<node\b[^>]*>', xml):
+        node = m.group(0)
+        rid = re.search(r'resource-id="([^"]*)"', node)
+        bounds = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+        if rid and rid.group(1).endswith(ALLOW_BUTTON) and bounds:
+            x1, y1, x2, y2 = (int(v) for v in bounds.groups())
+            return (x1 + x2) // 2, (y1 + y2) // 2
+    return None
+
+
+def permission_granted(package_dump, permission):
+    """True, False, or None when the package does not ask for it at all:
+    what dumpsys package says of one of its runtime permissions."""
+    found = None
+    for line in package_dump.splitlines():
+        m = re.match(r'\s*%s: granted=(true|false)\b' % re.escape(permission), line)
+        if m:
+            found = found or m.group(1) == 'true'
+    return found
+
+
+# What the Java layer's probe says it did, one line a step: a put with no
+# container is the engine's own log line on Android (tag LiveCode, at info
+# level: engine/src/mblandroid.cpp, MCAndroidSystem::Debug)
+PROBE_SAYS = re.compile(r'^[VDIWEF]/LiveCode\(\s*\d+\): OXT-Beyond probe: (.*?)\s*$')
+
+
+def probe_said(logcat, pids=()):
+    """What the probe said in the log, in order: the lines of its processes
+    (pids), or every such line when no pid is known."""
+    said = []
+    for line in logcat.splitlines():
+        m = PROBE_SAYS.match(line)
+        if m and (not pids or log_pid(line) in pids):
+            said.append(m.group(1))
+    return said
+
+
+# The shared pictures, as MediaStore lists them to the shell (content
+# query): the columns asked for, and the folder an app's pictures go to
+PICTURE_COLUMNS = ('_display_name', 'relative_path', 'owner_package_name')
+PICTURES = 'Pictures/'
+
+
+def shared_pictures(query):
+    """The rows of content query's answer ("Row: N col=value, col=value"),
+    each a dict of PICTURE_COLUMNS (NULL as it says it)."""
+    rows = []
+    for line in query.splitlines():
+        m = re.match(r'\s*Row: \d+ (.*?)\s*$', line)
+        if not m:
+            continue
+        row = {}
+        for part in re.split(r', (?=(?:%s)=)' % '|'.join(PICTURE_COLUMNS), m.group(1)):
+            key, _, value = part.partition('=')
+            row[key] = value
+        rows.append(row)
+    return rows
+
+
+def probe_picture(rows, name, package):
+    """The row of the picture name in the shared Pictures folder that
+    package owns, or None. A name that a picture there has already (one
+    the package added before it was installed again, which Android no
+    longer counts as its own) is named apart by Android: "name (1).png"."""
+    stem, ext = os.path.splitext(name)
+    pattern = re.compile(r'%s(?: \(\d+\))?%s$' % (re.escape(stem), re.escape(ext)))
+    for row in rows:
+        if (pattern.match(row.get('_display_name', '')) and row.get('relative_path') == PICTURES and
+                row.get('owner_package_name') == package):
+            return row
+    return None
 
 
 def ide_results(lines):
@@ -764,8 +914,9 @@ def zipalign_supports_pages(zipalign):
     return '-P' in out
 
 
-def verify_apk(name, apk, spec, tools, warnings):
-    """The problems of one package, and lines saying what was checked."""
+def verify_apk(name, apk, spec, tools, warnings, target=TARGET_SDK):
+    """The problems of one package, and lines saying what was checked:
+    target is the API it must target."""
     problems, notes = [], []
     with open(apk, 'rb') as f:
         data = f.read()
@@ -847,8 +998,8 @@ def verify_apk(name, apk, spec, tools, warnings):
         status, badging = run([aapt, 'dump', 'badging', apk])
         if "package: name='%s'" % IDENTIFIER not in badging:
             problems.append('%s: aapt does not name the package %s' % (name, IDENTIFIER))
-        if "targetSdkVersion:'%s'" % TARGET_SDK not in badging:
-            problems.append('%s does not target API %s' % (name, TARGET_SDK))
+        if "targetSdkVersion:'%s'" % target not in badging:
+            problems.append('%s does not target API %s' % (name, target))
         status, tree = run([aapt, 'dump', 'xmltree', apk, 'AndroidManifest.xml'])
         if status != 0:
             problems.append('%s: aapt cannot read the manifest: %s' % (name, tree.strip()[-300:]))
@@ -865,6 +1016,14 @@ def verify_apk(name, apk, spec, tools, warnings):
             if not spec['push'] and push:
                 problems.append('%s has a push receiver' % name)
             notes.append('%d components, every one with an intent-filter says android:exported' % len(comps))
+            # the stack's orientation kept on large screens at 36, and only there
+            large = manifest_properties(tree).get(LARGE_SCREEN_PROPERTY)
+            if int(target) >= 36 and large not in ('0xffffffff', 'true'):
+                problems.append('%s targets API %s, and its manifest does not keep the stack\'s orientation on large '
+                                'screens (%s is %s)' % (name, target, LARGE_SCREEN_PROPERTY, large or 'not there'))
+            elif int(target) < 36 and large is not None:
+                problems.append('%s: the manifest has %s, which is for a package that targets API 36 or newer '
+                                '(this one must target %s)' % (name, LARGE_SCREEN_PROPERTY, target))
     # the builder's warnings
     said = warnings.get(name, '')
     for w in spec['warnings']:
@@ -896,7 +1055,7 @@ def verify(args):
         if not os.path.isfile(apk):
             problems.append('there is no %s' % apk)
             continue
-        p, notes = verify_apk(name, apk, BUILDS[name], tools, r['warnings'])
+        p, notes = verify_apk(name, apk, BUILDS[name], tools, r['warnings'], args.target)
         log('%s.apk (%.1f MB): %s' % (name, os.path.getsize(apk) / 1e6, '; '.join(notes)))
         for x in p:
             log('  PROBLEM: %s' % x)
@@ -1049,8 +1208,28 @@ def device(args):
     share = saved = failed = 0.0
     w = h = 0
     rgba = b''
+    # --allow: the probe must ask for the permission (Android's dialog in
+    # front of it), which is allowed with the dialog's own button; until
+    # then its green does not end the wait
+    asked = allowed = False
     while time.time() - started < args.timeout:
         time.sleep(3)
+        if args.allow and not allowed:
+            _, activities = a('shell', 'dumpsys', 'activity', 'activities')
+            if asking_for_permission(activities):
+                if not asked:
+                    log('After %.0f s: Android asks the user to allow %s' % (time.time() - started, args.allow))
+                asked = True
+                a('shell', 'uiautomator', 'dump', '/sdcard/oxt-ui.xml')
+                _, xml = a('shell', 'cat', '/sdcard/oxt-ui.xml')
+                where = allow_button(xml)
+                if where:
+                    a('shell', 'input', 'tap', str(where[0]), str(where[1]))
+                    log('  tapped Allow at %d,%d' % where)
+                    allowed = True
+                else:
+                    log('  no Allow button in the dialog yet')
+                continue
         try:
             proc = subprocess.run([adb, '-s', args.serial, 'exec-out', 'screencap'], stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, timeout=60)
@@ -1060,7 +1239,7 @@ def device(args):
             continue
         share, saved = colour_share(rgba, RUN_COLOR), colour_share(rgba, SAVED_COLOR)
         failed = colour_share(rgba, FAIL_COLOR)
-        if share >= 0.25 or failed >= 0.25:
+        if failed >= 0.25 or (share >= 0.25 and (allowed or not args.allow)):
             break
     _, pid = a('shell', 'pidof', IDENTIFIER)
     _, logcat = a('logcat', '-d', '-v', 'brief')
@@ -1082,15 +1261,89 @@ def device(args):
             f.write(logcat)
     log('After %.0f s: %.0f%% of the screen is the probe\'s green, %.0f%% its saved red; process %s' % (
         time.time() - started, share * 100, saved * 100, pid.strip() or 'not running'))
+    said = probe_said(logcat, pids)
+    for line in said:
+        log('The probe said: %s' % line)
     if failed >= 0.25:
         problems.append('the probe\'s script ran, and a call it makes into the Java layer failed (the screen '
-                        'is its fail colour, %.0f%%)' % (failed * 100))
+                        'is its fail colour, %.0f%%%s)' % (failed * 100, '; it said: %s' % ' | '.join(said)
+                                                         if said else ''))
     elif share < 0.25:
         problems.append('the screen never turned the probe\'s green (%.0f%% green, %.0f%% red: %s)' % (
             share * 100, saved * 100, 'the stack showed and its script did not run' if saved >= 0.25 else
             'the stack never showed'))
+    green = failed < 0.25 and share >= 0.25
+    if args.within_bars and green:
+        # the stack inside the system bars: the screen's first and last
+        # rows are not its green (Android 15 and newer draw an app that
+        # targets API 35 edge to edge, and the Java layer pads the stack)
+        over = bars_drawn_over(rgba, w, h)
+        log('The bars: %s' % ('the stack is drawn under them (%s)' % ', '.join(over) if over else
+                              'the stack is inside them (the first and last rows are not its green)'))
+        if over:
+            problems.append('the stack is drawn under the system bars (its green in the screen\'s %s row)'
+                            % ' and '.join(over))
+    if args.back and green and pid.strip():
+        # the back key: the probe's backKey turns the screen its back colour
+        # (Android 16 sends it to the window's back callback for an app that
+        # targets API 36, older Android to onBackPressed)
+        a('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+        back = 0.0
+        brgba = b''
+        pressed = time.time()
+        while time.time() - pressed < BACK_WAIT:
+            time.sleep(2)
+            try:
+                proc = subprocess.run([adb, '-s', args.serial, 'exec-out', 'screencap'], stdout=subprocess.PIPE,
+                                      stderr=subprocess.DEVNULL, timeout=60)
+                bw, bh, brgba = screen_from_raw(proc.stdout)
+            except (CheckError, subprocess.TimeoutExpired) as e:
+                log('  screencap: %s' % e)
+                continue
+            back = colour_share(brgba, BACK_COLOR)
+            if back >= 0.25:
+                break
+        _, after = a('shell', 'pidof', IDENTIFIER)
+        if args.out and brgba:
+            # the screen after the back key, beside the first
+            path = os.path.splitext(args.out)[0] + '-back.png'
+            with open(path, 'wb') as f:
+                f.write(png_from_rgba(bw, bh, brgba))
+            log('Screen after the back key: %s' % path)
+        log('After the back key: %.0f%% of the screen is the probe\'s back colour; process %s' % (
+            back * 100, after.strip() or 'not running'))
+        if back < 0.25:
+            problems.append('the back key did not reach the stack\'s backKey (%.0f%% of the screen its back colour; '
+                            'the app is %s)' % (back * 100, 'running' if after.strip() else 'gone'))
     if not pid.strip():
         problems.append('the app is not running')
+    if args.allow:
+        _, package = a('shell', 'dumpsys', 'package', IDENTIFIER)
+        granted = permission_granted(package, args.allow)
+        log('%s: %s' % (args.allow, {None: 'the package does not ask for it', True: 'granted',
+                                     False: 'not granted'}[granted]))
+        if not asked:
+            problems.append('the probe never asked the user to allow %s' % args.allow)
+        elif not allowed:
+            problems.append('Android asked the user to allow %s, and its dialog had no Allow button to tap'
+                            % args.allow)
+        elif granted is not True:
+            problems.append('%s was allowed in Android\'s dialog, and the package does not hold it (%s)'
+                            % (args.allow, 'it does not ask for it' if granted is None else 'not granted'))
+    if args.picture:
+        # the picture the probe exported, where Android keeps the shared
+        # ones (MediaStore), as the package's own
+        _, query = a('shell', 'content', 'query', '--uri', 'content://media/external/images/media',
+                     '--projection', ':'.join(PICTURE_COLUMNS))
+        rows = shared_pictures(query)
+        own = ['%s%s' % (r.get('relative_path', ''), r.get('_display_name', '')) for r in rows
+               if r.get('owner_package_name') == IDENTIFIER]
+        log('Shared pictures the package owns: %s' % (', '.join(own) or 'none'))
+        if not probe_picture(rows, args.picture, IDENTIFIER):
+            problems.append('the probe\'s picture %s is not in the shared %s folder as the package\'s own (%s)'
+                            % (args.picture, PICTURES.rstrip('/'), 'it owns ' + ', '.join(own) if own else
+                               'it owns no shared picture' if rows else
+                               'MediaStore listed no picture: %s' % (query.strip()[-300:] or 'no answer')))
     if crash:
         problems.append('the device\'s log: %s' % ' | '.join(crash[:8]))
     if problems or len(pids) > 1:
@@ -1495,6 +1748,9 @@ def main(argv=None):
     v.add_argument('--work', required=True)
     v.add_argument('--sdk', required=True)
     v.add_argument('--builds')
+    v.add_argument('--target', default=TARGET_SDK,
+                   help='the API the packages must target (%s with a runtime whose Java layer is not ready for '
+                        'newer, %s when it is)' % (TARGET_SDK, NEWEST_TARGET_SDK))
     c = sub.add_parser('compare')
     c.add_argument('--old', required=True)
     c.add_argument('--new', required=True)
@@ -1507,6 +1763,16 @@ def main(argv=None):
     d.add_argument('--out')
     d.add_argument('--log-out')
     d.add_argument('--timeout', type=int, default=90)
+    d.add_argument('--allow', metavar='PERMISSION',
+                   help='the probe must ask for this runtime permission; allow it in Android\'s dialog, and '
+                        'check that the package holds it')
+    d.add_argument('--back', action='store_true',
+                   help='once green, press the back key: the probe\'s backKey must turn the screen its back colour')
+    d.add_argument('--within-bars', action='store_true',
+                   help='once green, the screen\'s first and last rows (the system bars) must not be the stack\'s')
+    d.add_argument('--picture', metavar='NAME',
+                   help='the probe exports a picture of this file name: it must be in the shared Pictures '
+                        'folder as the package\'s own (MediaStore)')
     b = sub.add_parser('boot')
     b.add_argument('--serial', required=True)
     b.add_argument('--sdk', required=True)

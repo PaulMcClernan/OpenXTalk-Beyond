@@ -597,7 +597,7 @@ powershell -ExecutionPolicy Bypass -File tools\ci\verify-build.ps1
 
 [`tools/ci/verify-build.ps1`](tools/ci/verify-build.ps1) checks that the
 expected files exist, that `dbsqlite.dll` contains the `SQLITE_SOURCE_ID`
-from `thirdparty/libsqlite/include/sqlite3.h` (SQLite 3.51.1), and that
+from `thirdparty/libsqlite/include/sqlite3.h` (SQLite 3.51.3), and that
 `LiveCode-Community.exe` contains the version from the `version` file.
 The same checks by hand:
 
@@ -987,6 +987,7 @@ asset is one zip archive with a fixed URL, size and SHA-256:
 | `strip` | Number of leading path components removed from every member of the archive. |
 | `dest` | Folder, relative to the installed root, that the remaining paths go into (`""` for the root). |
 | `rename` | Optional: members that go somewhere else, as `{"<path after strip>": "<path relative to dest>"}`. |
+| `java_layer` | Optional, the runtimes asset only: the Android runtime's Java layer (`Runtime/Android/Classes`) when it was built from the commit `source` names rather than carried over. |
 | `description`, `licence`, `source` | Text for people and reports. |
 
 Today there is one asset, `oxt-runtimes-0.2.7-rc.6.17`: the Windows (x86-64
@@ -1036,8 +1037,10 @@ platforms.
 hand with a label (the version whose packages will take the asset, for
 example `0.2.1-rc.3`) and the ids of a "Build (Windows)" and a "Build
 (Linux)" run of the same commit whose 32-bit and 64-bit builds passed.
-It makes the archive with
-[`tools/oxt/make_runtimes_asset.py --builds`](tools/oxt/README.md#the-runtimes-asset),
+It builds the Android runtime's Java layer from that commit and checks
+it as the "Android Java layer" workflow checks a pull request's (see
+[Android Java layer](#android-java-layer)), makes the archive with
+[`tools/oxt/make_runtimes_asset.py --builds --android-classes`](tools/oxt/README.md#the-runtimes-asset),
 shows the manifest entry in its summary and, with `publish` and a
 commit on `main`, publishes the pre-release `runtimes-<label>`. Then pin
 that entry in `tools/oxt/external-assets.json` in a pull request. Make
@@ -1567,8 +1570,10 @@ signature, signed by the debug key or the keystore; none for the other
 two), zipalign, `resources.arsc` stored and aligned, every activity,
 service and receiver with an intent-filter saying `android:exported`,
 the 64-bit engine libraries aligned for 16 KB memory pages, the package
-name and target API, and the builder's warnings (the `legacy` build must
-be told that it has no arm64 build). `compare` takes the packages a
+name and target API (`--target`, 33 unless given; at 36 the manifest must
+keep the stack's orientation on large screens, below it must not say
+so), and the builder's warnings (the `legacy` build must be told that it
+has no arm64 build). `compare` takes the packages a
 released IDE made of the same probe stack (`ide --no-units --stack
 <work>/AndroidProbe.livecode`: the stack goes into the engine library)
 and fails on any file that differs, apart from what the builder's change
@@ -1580,12 +1585,34 @@ release, so that one release can be run with both builders, and with
 `ide --probe java` builds the Java layer's probe (`AndroidJavaProbe`)
 instead: before it turns green its `openStack` schedules a local
 notification an hour away and cancels it, which goes through the Java
-layer's `PendingIntent`s, and it turns orange (its fail colour) when the
-notification gets no id. `device`
-installs a package with adb, starts it, and waits until the screen turns
-the probe's green, which only the probe's `openStack` makes (or the
-fail colour, which fails at once); `ide
---device <serial>` does what the IDE's Test does for that device. `boot`
+layer's `PendingIntent`s; asks for its external folder
+(`specialFolderPath("external documents")`) and whether it holds
+`WRITE_EXTERNAL_STORAGE` (`androidHasPermission`); and exports a
+one-pixel picture to the album as `oxt-beyond-probe`. It takes every
+step, says what each answered in the device's log (`OXT-Beyond probe:`
+lines, tag `LiveCode`), and turns orange (its fail colour) when any
+failed. Its builds declare `POST_NOTIFICATIONS`, so on Android 13 and
+newer the Java layer asks the user to let it post notifications as it
+schedules one, and `WRITE_EXTERNAL_STORAGE`, which Android 13 and newer
+refuse without asking and the rebuilt Java layer counts as granted there.
+Once green, its `backKey` turns it blue and does not pass the message, so
+the app stays.
+`device` installs a package with adb, starts it, and waits until the
+screen turns the probe's green, which only the probe's `openStack` makes
+(or the fail colour, which fails at once), and prints what the probe said
+(kept in the failure when it turns its fail colour). With `--allow
+<permission>` the probe must ask for that runtime permission: `device`
+waits for Android's dialog, taps its Allow button (found in a
+`uiautomator` dump) and checks that the package then holds the
+permission (`dumpsys package`). With `--picture <name>` the picture the
+probe exported must be among the shared pictures (`content query` of
+MediaStore) in `Pictures/`, as the package's own. With `--within-bars`
+the screen's first and last rows, where the status and navigation bars
+are, must not be the probe's green once it is green: the stack is not
+drawn under the bars. With `--back` `device` then presses the back key,
+and the probe's `backKey` must turn the screen blue (`-back.png` beside
+`--out` keeps that screen). `ide --device <serial>` does what the IDE's
+Test does for that device. `boot`
 waits for an emulator to finish booting, and when it gives up it prints
 whether the emulator still runs, `/dev/kvm`, adb's devices, the free disk
 and the end of the emulator's log. With `--settle` it then waits for a
@@ -1606,10 +1633,21 @@ Android 13 emulator and on one with 16 KB pages. On Linux it also builds
 the Java layer from this checkout and makes the Java layer's probe twice
 from the same stack, once with that layer and once with the release's,
 and runs both on the Android 13 emulator: the rebuilt layer's must turn
-green; the release's is only recorded. LiveCode 9.6.3's `PendingIntent`s
-throw on Android 12 and newer, and the engine clears the exception
-without a word in the log, so that probe's notification call answers no
-id and the probe turns its fail colour instead of green.
+green, ask for the notification permission (`--allow
+android.permission.POST_NOTIFICATIONS`), leave its picture in the shared
+Pictures folder (`--picture oxt-beyond-probe.png`), get its back key
+(`--back`) and stay inside the system bars (`--within-bars`), there and
+on the 16 KB emulator; the release's is only recorded, with what it said.
+That layer is ready for API 36, so the builder makes the probe target 36
+(`verify --target 36`), and the 16 KB emulator is the first such image
+at API 36 (Android 16) or newer: there Android draws an app that targets
+35 or newer edge to edge, which the Java layer pads, and sends the back
+key of one that targets 36 only to its back callback. The other packages
+target 33, and must stay inside the bars on both emulators too.
+LiveCode 9.6.3's `PendingIntent`s throw on Android 12 and newer, and the
+engine clears the exception without a word in the log, so that probe's
+notification call answers no id and the probe turns its fail colour
+instead of green.
 
 ### Android Java layer
 
@@ -1670,8 +1708,32 @@ a pull request or push that changes the Java sources, the engine's
 calls into Java, the LCB extensions, the builder or the check, in a few
 minutes on one Linux runner with no build of the engine, and keeps the
 jar it built for 14 days. The Android builder workflow runs that jar on
-an emulator (above). Nothing a package ships changes until a runtimes
-asset carries the rebuilt jar.
+an emulator (above). The "Runtimes asset" workflow builds and checks it
+the same way and ships it: its assets carry the Java layer built from
+their commit in place of LiveCode Community 9.6.3's (the manifest entry's
+`java_layer`; see [Making the runtimes asset](#external-assets)), and the
+rest of `Runtime/Android` is still carried over from `oxt-runtimes-1.15`.
+A package ships it once such an asset is pinned. From then on `compare`
+compares a pull request's jar with that one, so a change to the Java
+layer adds its `EXPECTED` entry under that jar's SHA-256.
+
+The API a package targets follows the runtime's Java layer
+(`androidTargetAPI` in the builder): 33, as before, with a Java layer
+that is not ready for newer (LiveCode 9.6.3's), and 36 with one that is,
+which the builder knows by the two classes it has for it
+(`LiveCodeActivity$BackCallback` and `LiveCodeActivity$SystemBarsPadding`
+in `Runtime/Android/Classes`). Google Play asks for 36 of a new app or
+an update. At 36 the manifest also says
+`android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY`, so that
+Android 16 keeps the stack's orientation and size on a large screen as
+before. A stack can pin the API with
+`set the cRevStandaloneSettings["android,target sdk"] of stack "<name>" to 33`
+(any of 33 to 36; the build stops with an error for anything else), and
+an empty one leaves it to the runtime. The builder compiles against
+`platforms;android-33` when the SDK has it, as before, whatever the
+target: the manifest's `targetSdkVersion` decides how Android treats the
+app (and build-tools 34's aapt failed on `android-36`'s resources when
+tried).
 
 ### Browser and player check
 
@@ -2733,7 +2795,8 @@ byte for byte; Git cannot show what changed inside them. Change the
 scripts and properties of their objects with patch files, so that every
 change is reviewable text that CI checks:
 
-- write a script or property patch in `tools/oxt/ide-stack-patches/`,
+- write a script, property or clone patch (a clone patch adds a copy of
+  a control, such as another check box) in `tools/oxt/ide-stack-patches/`,
   one file per change (the format is in
   [tools/oxt/README.md](tools/oxt/README.md#binary-ide-stacks));
 - apply it with `tools/oxt/ide-stack-patch.sh <development engine>`,
@@ -2748,14 +2811,15 @@ change is reviewable text that CI checks:
   [tools/oxt/README.md](tools/oxt/README.md#the-stacks-scripts-as-text-stack-scripts)),
   so the diff shows the change. CI checks
   that every script patch is applied (`tools/ci/check_ide_stacks.py`)
-  and the Linux build that every property and image patch is
+  and the Linux build that every property, image and clone patch is
   (`tools/oxt/ide-stack-patch.sh --check` with the engine it built);
 - run the IDE compile check, which also compiles the object scripts
   inside binary stacks, and try the change in the installed layout
   (`dist\stage\OXT-Beyond-<ver>\OXT-Beyond.exe`) as well.
 
-A change that a patch cannot express, such as adding or deleting
-objects, is made with the IDE built from this repository, running from
+A change that a patch cannot express, such as deleting objects or adding
+one that is not a copy of another, is made with the IDE built from this
+repository, running from
 your clone, so that the stack is loaded from `ide/` and saved back there
 by the engine this project ships. Change only that stack (saving
 rewrites the whole file, and can change its format version and the paths
