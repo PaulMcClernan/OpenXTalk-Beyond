@@ -483,6 +483,14 @@ class BuildScript(unittest.TestCase):
             self.assertRegex(self.text, r'PREBUILT_BUILD_LIBS=%s \./build-libraries\.sh android "\$\{ARCH\}" '
                                         r'"\$\{SUBPLATFORM\}"' % lib)
         self.assertIn('export PREBUILT_SKIP_FETCH=1', self.text)
+        # OpenSSL before the Thirdparty libraries, whose libmysql includes
+        # OpenSSL's headers (as build-libraries.sh orders them: CI's first
+        # run built them the other way round and failed on
+        # openssl/opensslv.h)
+        order = [self.text.index('PREBUILT_BUILD_LIBS=%s ./build-libraries.sh android' % lib)
+                 for lib in ('icu', 'openssl', 'thirdparty')]
+        self.assertEqual(order, sorted(order))
+        self.assertIn('PREBUILT_LIBS="openssl icu thirdparty"', read('prebuilt', 'build-libraries.sh'))
         self.assertIn('Thirdparty_LIBS_android', self.text)
 
     def test_stripped_with_the_debug_information_kept(self):

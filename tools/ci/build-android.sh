@@ -242,22 +242,23 @@ else
 	done
 fi
 
-# 3. The Thirdparty libraries for Android (build-thirdparty.sh configures
+# 3. OpenSSL for Android (build-openssl.sh, which names its libraries
+# libcustomcrypto and libcustomssl), before the Thirdparty libraries:
+# libmysql includes its headers (as build-libraries.sh orders them)
+if hasLibraries "${LIB_ANDROID}" libcustomcrypto libcustomssl && [ -f "${PREBUILT}/include/openssl/evp.h" ] ; then
+	echo "OpenSSL for Android ${ARCH}: already built"
+else
+	echo "OpenSSL: building it for Android ${ARCH}"
+	(cd prebuilt && MAKEFLAGS="-j${JOBS}" PREBUILT_BUILD_LIBS=openssl ./build-libraries.sh android "${ARCH}" "${SUBPLATFORM}")
+fi
+
+# 4. The Thirdparty libraries for Android (build-thirdparty.sh configures
 # build-android-<architecture> and builds its target thirdparty-prebuilts)
 if hasLibraries "${LIB_ANDROID}" "${THIRDPARTY_LIBS[@]}" ; then
 	echo "Thirdparty libraries for Android ${ARCH}: already built"
 else
 	echo "Thirdparty libraries: building them for Android ${ARCH}"
 	(cd prebuilt && PREBUILT_BUILD_LIBS=thirdparty ./build-libraries.sh android "${ARCH}" "${SUBPLATFORM}")
-fi
-
-# 4. OpenSSL for Android (build-openssl.sh, which names its libraries
-# libcustomcrypto and libcustomssl)
-if hasLibraries "${LIB_ANDROID}" libcustomcrypto libcustomssl && [ -f "${PREBUILT}/include/openssl/evp.h" ] ; then
-	echo "OpenSSL for Android ${ARCH}: already built"
-else
-	echo "OpenSSL: building it for Android ${ARCH}"
-	(cd prebuilt && MAKEFLAGS="-j${JOBS}" PREBUILT_BUILD_LIBS=openssl ./build-libraries.sh android "${ARCH}" "${SUBPLATFORM}")
 fi
 
 if [ -z "${OUT}" ] ; then
