@@ -673,6 +673,174 @@ class AndroidAssembly(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# What a current Clang and the NDK's current headers refuse in the sources
+# the Android build compiles, which NDK r15 took: found with a Clang of the
+# same family on x86 (and, for libffi, in CI's third x86 build)
+
+
+def c_functions(text, return_type):
+    """(name, body) of each function defined at the top level with this
+    return type, its body up to the closing brace in the first column."""
+    for m in re.finditer(r'^%s\s+([\w:]+)\s*\([^;{]*?\)\s*\{(.*?)^\}' % re.escape(return_type), text, re.M | re.S):
+        yield m.group(1), m.group(2)
+
+
+class NewerCompiler(unittest.TestCase):
+
+    def test_ffi_call_sysv_takes_what_it_is_given(self):
+        """x86's ffi_call_SYSV is declared to take the function its callers
+        pass (ffi_prep_args and ffi_prep_args_raw, which return unsigned
+        int): Clang from 16 on refuses the mismatch with the void it said."""
+        text = read('thirdparty', 'libffi', 'src', 'x86', 'ffi.c')
+        decl = re.search(r'extern void ffi_call_SYSV\(([\w ]+\(\*\)\([^)]*\)),', text)
+        self.assertIsNotNone(decl)
+        param = decl.group(1).replace(' ', '')
+        for name in ('ffi_prep_args', 'ffi_prep_args_raw'):
+            self.assertRegex(text, r'\n(?:static\s+)?unsigned int\s*\n?%s\s*\(char \*stack, extended_cif \*ecif\)' % name)
+            self.assertRegex(text, r'ffi_call_SYSV\(%s,' % name)
+        self.assertEqual(param, 'unsignedint(*)(char*,extended_cif*)')
+        # as ffi_call_win32 has always said
+        self.assertIn('ffi_call_win32(unsigned int (*)(char *, extended_cif *)', text)
+        self.assertIn('/* OXT-Beyond:', text[:decl.start()][-600:])
+        self.assertIn('src/x86/ffi.c', read('thirdparty', 'libffi', 'ORIGIN'))
+
+    def ffi_call_sysv_case(self, declaration):
+        """A C file that calls ffi_call_SYSV as ffi.c does, with ffi.c's
+        declaration of it and of what its callers pass."""
+        return ('typedef struct extended_cif extended_cif;\n'
+                'unsigned int ffi_prep_args(char *stack, extended_cif *ecif);\n'
+                'unsigned int ffi_prep_args_raw(char *stack, extended_cif *ecif);\n' + declaration + '\n'
+                'void call(extended_cif *e, unsigned *r, void (*fn)(void))\n'
+                '{\n\tffi_call_SYSV(ffi_prep_args, e, 0, 0, r, fn);\n'
+                '\tffi_call_SYSV(ffi_prep_args_raw, e, 0, 0, r, fn);\n}\n')
+
+    def test_a_compiler_takes_the_call(self):
+        """What the NDK's Clang refused, compiled: the old declaration is an
+        error where the mismatch is (Clang 16 and later make it one by
+        default), and ffi.c's own is not."""
+        clang = shutil.which('clang')
+        if not clang:
+            self.skipTest('no clang here')
+        text = read('thirdparty', 'libffi', 'src', 'x86', 'ffi.c')
+        declaration = re.search(r'extern void ffi_call_SYSV\(.*?\);', text, re.S).group(0)
+        old = declaration.replace('unsigned int (*)(char *, extended_cif *)', 'void (*)(char *, extended_cif *)')
+        self.assertNotEqual(old, declaration)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, 'case.c')
+            def compile_it(decl):
+                touch(src, self.ffi_call_sysv_case(decl).encode('ascii'))
+                return subprocess.run([clang, '-fsyntax-only', '-Werror=incompatible-function-pointer-types',
+                                       '-Werror=incompatible-pointer-types', src], capture_output=True, text=True)
+            p = compile_it(old)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn('incompatible', p.stderr)
+            p = compile_it(declaration)
+            self.assertEqual(p.returncode, 0, p.stderr)
+
+    def test_android_bool_functions_return_bools(self):
+        """No Android engine function that returns bool returns nil, which
+        is nullptr in C++: a current Clang refuses it (popupaskdialog did)."""
+        found = []
+        for name in sorted(os.listdir(os.path.join(REPO, 'engine', 'src'))):
+            if 'android' in name and name.endswith('.cpp'):
+                for func, body in c_functions(read('engine', 'src', name), 'bool'):
+                    if re.search(r'\breturn\s+nil\s*;', body):
+                        found.append('%s: %s' % (name, func))
+        self.assertEqual(found, [])
+        dialog = dict(c_functions(read('engine', 'src', 'mblandroiddialog.cpp'), 'bool'))
+        self.assertIn('MCScreenDC::popupaskdialog', dialog)
+        self.assertIn('return false;', dialog['MCScreenDC::popupaskdialog'])
+
+    def test_the_finder_sees_a_nil_return(self):
+        text = 'bool f(int x)\n{\n\tif (x)\n\t\treturn nil;\n\treturn true;\n}\n'
+        self.assertEqual([(n, bool(re.search(r'\breturn\s+nil\s*;', b))) for n, b in c_functions(text, 'bool')],
+                         [('f', True)])
+
+    def test_posix_headers_for_what_they_declare(self):
+        """PATH_MAX and gettimeofday come from where POSIX puts them, not
+        from whichever header brought them in with NDK r15's headers."""
+        fs = read('libcore', 'src', 'filesystem.cpp')
+        self.assertLess(fs.index('#include <limits.h>'), fs.index('char t_path[PATH_MAX];'))
+        process = read('engine', 'src', 'mblandroidprocess.cpp')
+        self.assertLess(process.index('#include <sys/time.h>'), process.index('gettimeofday('))
+
+
+# ---------------------------------------------------------------------------
+# C++17 for what includes ICU's headers, which ICU 75 and later need: an
+# Android build merges its settings, -std=c++11 among them, after a target's
+# own (as a web build does), so the targets ask for C++17 again there. CI's
+# third arm64 build stopped on hb-icu.cc and ICU 78's char16ptr.h for want
+# of it.
+
+
+def gyp(*path):
+    import ast
+    return ast.literal_eval(read(*path))
+
+
+def gyp_target(data, name):
+    found = [t for t in data['targets'] if t['target_name'] == name]
+    assert len(found) == 1, name
+    return found[0]
+
+
+def late_cflags_cc(target, **names):
+    """The C++ flags a target's target_conditions add where their condition
+    holds (gyp's conditions are Python expressions), in order."""
+    flags = []
+    for entry in target.get('target_conditions', []):
+        cond, then = entry[0], entry[1]
+        other = entry[2] if len(entry) > 2 else {}
+        try:
+            holds = eval(cond, {'__builtins__': {}}, names)
+        except NameError:
+            continue
+        flags += (then if holds else other).get('cflags_cc', [])
+    return flags
+
+
+class AndroidCxxStandard(unittest.TestCase):
+
+    def test_android_merges_its_settings_late(self):
+        """Why the targets need the flag again: config/android.gypi brings in
+        android-settings.gypi (the target) and linux-settings.gypi (the
+        host) in target_conditions, after a target's own flags, and both say
+        -std=<(c++_std), C++11 unless CXX_STD says otherwise."""
+        conds = gyp('config', 'android.gypi')['target_defaults']['target_conditions']
+        self.assertEqual([(c[0], c[1]['includes'], c[2]['includes']) for c in conds],
+                         [('_toolset == "host"', ['linux-settings.gypi'], ['android-settings.gypi'])])
+        for name in ('android-settings.gypi', 'linux-settings.gypi'):
+            settings = gyp('config', name)
+            self.assertEqual(settings['variables']['c++_std'], '<!(echo ${CXX_STD:-c++11})', name)
+            self.assertIn('-std=<(c++_std)', settings['cflags_cc'], name)
+
+    def test_libfoundation(self):
+        target = gyp_target(gyp('libfoundation', 'libfoundation.gyp'), 'libFoundation')
+        self.assertIn('-std=c++17', target['cflags_cc'])
+        for toolset in ('target', 'host'):
+            self.assertEqual(late_cflags_cc(target, OS='android', toolset_os='android', _toolset=toolset),
+                             ['-std=c++17'], toolset)
+        self.assertEqual(late_cflags_cc(target, OS='emscripten', toolset_os='emscripten', _toolset='target'),
+                         ['-std=c++17'])
+        # a desktop build merges its settings first, and keeps the target's
+        for os_name in ('linux', 'mac', 'win'):
+            self.assertEqual(late_cflags_cc(target, OS=os_name, toolset_os=os_name, _toolset='target'), [], os_name)
+
+    def test_libharfbuzz(self):
+        target = gyp_target(gyp('thirdparty', 'libharfbuzz', 'libharfbuzz.gyp'), 'libharfbuzz')
+        self.assertIn('src/hb-icu.cc', target['sources'])
+        for os_name in ('android', 'emscripten'):
+            self.assertEqual(late_cflags_cc(target, toolset_os=os_name, _toolset='target'), ['-std=c++17'], os_name)
+        self.assertEqual(late_cflags_cc(target, toolset_os='linux', _toolset='target'), [])
+
+    def test_icu_needs_it(self):
+        """The ICU the build uses is one that needs C++17 for its headers."""
+        version = read('prebuilt', 'versions', 'icu').strip()
+        self.assertRegex(version, r'^\d+\.\d+$')
+        self.assertGreaterEqual(int(version.split('.')[0]), 75)
+
+
+# ---------------------------------------------------------------------------
 # tools/ci/android_engine.py on made-up ELF files
 
 
