@@ -334,8 +334,8 @@ the files you add stay stored, as in the package, so an application
 installed from Google Play loads its externals and reads its files as
 before. The builder needs aapt2, which the SDK's build-tools have, and
 Google's bundletool, which it downloads the first time (version 1.18.3,
-about 32 MB, checked by its SHA-256) and keeps in OXT-Beyond's cache
-folder. Without an internet connection, download that file yourself and
+about 32 MB, checked by its SHA-256, and tried up to three times) and
+keeps in OXT-Beyond's cache folder. Without an internet connection, download that file yourself and
 put it where the error says, or name your copy:
 
     set the cMobileSupport["android.bundletool"] of stack "revPreferences" to "/path/to/bundletool-all-1.18.3.jar"

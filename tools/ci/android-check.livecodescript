@@ -128,6 +128,9 @@ constant kProbeCopy = "OXT-Beyond probe copy file"
 local sStarted
 local sAsked
 local sAskMessage
+-- unitAppBundle's made-up bundletool, which appears while the builder
+-- pauses between two tries of its download (unitBundletoolAppears)
+local sBundletoolSource
 
 on openStack
    if sStarted is not true and the environment is "development" then
@@ -366,11 +369,31 @@ private command unitAppBundle pWork
    catch tError
    end try
    androidUnit "bundletool-no-download", tError contains "could not download bundletool" and \
-         tError contains "put it at" && tCache and there is no file tCache, "answered" && it & ", threw" && tError
+         tError contains "(tried 3 times)" and tError contains "put it at" && tCache and \
+         there is no file tCache, "answered" && it & ", threw" && tError
+   -- a download that fails is tried again: the file appears half a second
+   -- after the first try, while the builder pauses before the second
+   delete file tSource
+   put tSource into sBundletoolSource
+   send "unitBundletoolAppears" to me in 500 milliseconds
+   put empty into tAnswer
+   put empty into tError
+   try
+      put builderCall("androidBundletool", empty, tCache, "binfile:" & tSource, tSHA) into tAnswer
+   catch tError
+   end try
+   androidUnit "bundletool-download-again", tAnswer is tCache and there is a file tCache and \
+         url ("binfile:" & tCache) is "abc", "answered" && tAnswer & ", threw" && tError
    removeTree tFolder
    put builderCall("androidBundletoolCacheFile") into tAnswer
    androidUnit "bundletool-cache-file", tAnswer is revEnvironmentUserCachePath() & "/Android/bundletool-all-1.18.3.jar", tAnswer
 end unitAppBundle
+
+-- unitAppBundle's made-up bundletool appears, as a download that worked
+-- the second time
+on unitBundletoolAppears
+   put "abc" into url ("binfile:" & sBundletoolSource)
+end unitBundletoolAppears
 
 -- androidComponentsWithoutExported over a manifest with every case
 private command unitExported pWork
