@@ -3429,3 +3429,9 @@ and on the first image with 16 KB pages, with the checks that the
 [Android standalone check](#android-standalone-check) makes of them with
 the 9.6.3 engine: the Java layer's probe's notification permission, its
 picture and its back key; neither probe drawn under the system bars.
+And the app probe, which carries this checkout's Java layer (with
+`RelaunchActivity`), is run with `--font-scale`, `--density` and
+`--relaunch`, as that check runs it with the 9.6.3 engine: the engine
+starts once in a process, so the app goes on in its process through a
+font size change, starts again in a new one for a density change, and
+opens again in a new one once the back key has quit its stack.

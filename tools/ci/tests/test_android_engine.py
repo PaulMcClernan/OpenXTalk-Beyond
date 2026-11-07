@@ -1957,7 +1957,9 @@ class Workflow(unittest.TestCase):
         sys.path.insert(0, os.path.join(REPO, 'tools', 'ci'))
         import android_check as ac
         self.assertEqual(ac.BUILDS['debug']['abis'], set(ae.ABIS))
-        app = '--within-bars'
+        # the app probe, with this checkout's Java layer: the engine once in
+        # a process, as android.yml checks it with 9.6.3's engine
+        app = '--within-bars --font-scale --density --relaunch'
         java = '--allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png --back --within-bars'
         for step, where in (('Run the probes on Android 13', 'api33'), ('Run the probes with 16 KB pages', '16k')):
             runs = [x for x in lines(step) if ' device ' in x]
