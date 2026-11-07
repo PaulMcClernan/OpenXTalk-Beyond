@@ -466,6 +466,21 @@ jobs:
             --sdk "$SDK" --out "$WORK/screen-16k-java.png" --log-out "$WORK/logcat-16k-java.txt" \
             --allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png --back --within-bars
 
+      # TEMPORARY (to be removed): where a hung probe's threads wait
+      - name: TEMPORARY dump a hung probe's threads
+        if: failure()
+        timeout-minutes: 5
+        run: |
+          adb="$SDK/platform-tools/adb -s emulator-5554"
+          $adb root || true
+          sleep 3
+          $adb wait-for-device
+          for p in $($adb shell pidof org.openxtalk.check.androidprobe | tr -d '\r'); do
+            echo "== process $p"
+            $adb shell debuggerd -b "$p" || true
+            $adb shell debuggerd -j "$p" || true
+          done
+
       - name: Upload the packages and logs
         if: always()
         uses: actions/upload-artifact@v7
