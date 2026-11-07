@@ -77,7 +77,7 @@
     {
       "name": "TorrentXT",
       "repository": "SethMorrowSoftware/TorrentXT",
-      "commit": "5890768146b3051f9b83c6dd76abf80100d29a0c",
+      "commit": "b7b368604b2d1490798588056a56a233a6901d20",
       "version": "0.1.0",
       "version_from": {
         "path": "src/torrent.lcb",
@@ -87,13 +87,13 @@
       "files": [
         {"path": "src/torrent.lcb", "role": "source", "sha256": "a6b73142d9ab5a5b685710c4bc29d7e39ce10cea5bd23418ca311510ede25034", "size": 130874},
         {"path": "examples/torrent-helpers.livecodescript", "role": "source", "sha256": "2111f040a841380867084f65ce82852efcf34141e6e84edd432927808168aafd", "size": 13943},
-        {"path": "src/code/MANIFEST.sha256", "role": "code-manifest", "sha256": "27f6f0357a8a75648da9b8145786b9a10254281d93d3e2e37770514fdfdf2f15", "size": 551},
-        {"path": "src/code/x86_64-win32/torrentxt.dll", "role": "library", "sha256": "ad6737fc2c0906a03c82bca83a54b4949d7c01a4b1bd30314c3cd1245b05bba3", "size": 12140544, "imports": ["MSWSOCK.dll", "CRYPT32.dll", "IPHLPAPI.DLL", "bcrypt.dll", "WS2_32.dll", "KERNEL32.dll", "USER32.dll", "ADVAPI32.dll"]},
-        {"path": "src/code/x86-win32/torrentxt.dll", "role": "library", "sha256": "85face9401b8821df508da7681534a2931fda162e349a22e1c564ac5cbc8be72", "size": 9599488, "imports": ["MSWSOCK.dll", "CRYPT32.dll", "IPHLPAPI.DLL", "bcrypt.dll", "WS2_32.dll", "KERNEL32.dll", "USER32.dll", "ADVAPI32.dll"]},
-        {"path": "src/code/x86_64-linux/torrentxt.so", "role": "library", "sha256": "db99e525186864f61d57549f5df46d879073f54b42e2308eb7cb17017c5e8d04", "size": 12975360},
+        {"path": "src/code/MANIFEST.sha256", "role": "code-manifest", "sha256": "ebdffe1c27eb599eacc51f2d022d1aa71c446beb1585827bd6b7e633a82654de", "size": 551},
+        {"path": "src/code/x86_64-win32/torrentxt.dll", "role": "library", "sha256": "25878fd15e8b873e29cf4f7fc56bb9e6d9546451fe485d52367e12ac8af490d1", "size": 12140544, "imports": ["MSWSOCK.dll", "CRYPT32.dll", "IPHLPAPI.DLL", "bcrypt.dll", "WS2_32.dll", "KERNEL32.dll", "USER32.dll", "ADVAPI32.dll"]},
+        {"path": "src/code/x86-win32/torrentxt.dll", "role": "library", "sha256": "bda664531083c9a0b8ed627fef325c04bed2d138a0d1ed044935322b99fa2bf6", "size": 9599488, "imports": ["MSWSOCK.dll", "CRYPT32.dll", "IPHLPAPI.DLL", "bcrypt.dll", "WS2_32.dll", "KERNEL32.dll", "USER32.dll", "ADVAPI32.dll"]},
+        {"path": "src/code/x86_64-linux/torrentxt.so", "role": "library", "sha256": "66a64519afcc4c257a5ee7583c23b0d541d205ade9e706f0d9ac43cde81cf50f", "size": 12999968},
         {"path": "src/code/x86-linux/torrentxt.so", "role": "library", "sha256": "65c0a7892b4bb056cc85aadaf9b8fc2ba9f60be12b3912a70ff1f92273190254", "size": 6721400},
-        {"path": "src/code/arm64-linux/torrentxt.so", "role": "library", "sha256": "93eaf92fd615a19e33f8e146dd39192df4be1b486c42c8c2d8a2f02f4e8f04cb", "size": 11827040},
-        {"path": "src/code/universal-mac/torrentxt.dylib", "role": "library", "sha256": "3da6fd69e563dbed246049d8e07be2754da4e958cf9da23fa36589168eab96bf", "size": 27060928},
+        {"path": "src/code/arm64-linux/torrentxt.so", "role": "library", "sha256": "a582e8efc8ead9f3ebcafdec5dce111d4d57a497dae0414248c2abfcef845eaf", "size": 11827040},
+        {"path": "src/code/universal-mac/torrentxt.dylib", "role": "library", "sha256": "8c4d538692d0c37f08c03d8aed751d59d1ca977782534f70c7fbae32a72c6273", "size": 27096944},
         {"path": "LICENSE", "role": "licence", "sha256": "619cfd2b7774524c93cbef14bd92f4ffb5dedcf41a5e0f82cc97c7994147bea3", "size": 1357},
         {"path": "THIRD-PARTY-LICENSES.md", "role": "licence", "sha256": "73cf3c5bc7ee24125a0e4b63379f7f453bba572967e8069f21a6f657c191af00", "size": 11243},
         {"path": "LICENSE.txt", "repository": "openssl/openssl", "commit": "d3c1b1169b3569ff3069e5b399f47b2b28e03d79", "ref": "openssl-3.6.4", "role": "licence", "name": "OpenSSL-LICENSE.txt", "comment": "OpenSSL 3 (Apache-2.0) is statically linked into torrentxt; the member's own licence files do not carry its licence text", "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a", "size": 10175}
