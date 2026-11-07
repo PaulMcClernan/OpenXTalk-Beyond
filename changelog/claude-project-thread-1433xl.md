@@ -1,0 +1,1 @@
+- Stack Player: Nova Rescue, a game made for phones: drag a finger to fly, rescue the drifting crews for a growing bonus, dodge meteors and raiders and beat a mothership every fourth sector, with Kenney's CC0 pictures and sounds; it fills a phone's screen upright or turned, and is in Home's gallery too (#401)

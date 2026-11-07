@@ -350,6 +350,12 @@ SAMPLES = [
                     'phone, a rail on a tablet and a sidebar on a desktop, a grid that reflows, '
                     'details in a sheet or a pane, and a dark look. Make the window narrower to see it.',
      'tags': ['Responsive', 'Layout', 'Starter']},
+    {'title': 'Nova Rescue', 'source': 'stacks',
+     'files': ['Nova Rescue.oxtstack'], 'image': 'Nova Rescue.webp',
+     'description': 'A space rescue for a phone: drag to fly, save the drifting crews, dodge '
+                    'meteors and raiders, and face a mothership every fourth sector. Kenney\'s '
+                    'art and sounds, mixed by Web Audio; it plays with the mouse and keys too.',
+     'tags': ['Game', 'Phones', 'Touch']},
     {'title': 'Tour', 'files': ['Tour.livecode'],
      'description': 'Cards, a widget, a palette window and a script error, caught and shown.',
      'tags': ['Cards', 'Widget', 'Palette']},
