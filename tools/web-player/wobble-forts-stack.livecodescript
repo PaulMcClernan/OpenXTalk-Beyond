@@ -82,8 +82,11 @@ local sLibrary, sPhysics, sMode, sHowtoThen, sLoop, sManual, sLast
 -- the frames shown in the last second, and since when; how long a
 -- frame's script took (the physics, and the drawing), in milliseconds
 local sFps, sFrames, sFpsFrom, sWork, sDraw, sStepMs
--- sClock runs in every screen; sNow while a level plays
-local sClock, sNow
+-- sClock runs in every screen; sNow while a level plays; the physics
+-- time not yet stepped (less than a step, or a hair over)
+local sClock, sNow, sStepDebt
+-- the physics steps taken since the level began (for the tests)
+local sStepCount
 -- the world on the screen: its scale (points a unit), where its 0,0 is,
 -- the size of the HUD and its buttons (sU), and the window's insets
 local sV, sOX, sOY, sU, sInsetT, sInsetL, sInsetR, sInsetB
@@ -169,6 +172,8 @@ command wfInit
    put 0 into sWorld
    put 0 into sClock
    put 0 into sNow
+   put 0 into sStepDebt
+   put 0 into sStepCount
    put 0 into sFps
    put 0 into sWork
    put 0 into sDraw
@@ -601,9 +606,21 @@ command wfAdvance pDt
       case "clear"
       case "fail"
          add pDt to sNow
-         -- the physics, in fixed steps: as many as the time asks, at most
-         -- kMaxSteps (a slow phone plays a little slower, never jumps)
-         put min(kMaxSteps, max(1, round(pDt / kStep))) into tSteps
+         -- the physics, in fixed steps: the time owed is kept from frame
+         -- to frame (sStepDebt), so a 100 Hz screen steps 3 frames in 5
+         -- and the world keeps the clock's pace on every device; at most
+         -- kMaxSteps a frame (a slow phone plays a little slower, never
+         -- jumps), the rest forgiven. 2 ms of slack lets a frame of a
+         -- sixtieth (a hair under kStep) take its step.
+         add pDt to sStepDebt
+         put trunc((sStepDebt + 0.002) / kStep) into tSteps
+         if tSteps > kMaxSteps then
+            put kMaxSteps into tSteps
+            put 0 into sStepDebt
+         else
+            subtract tSteps * kStep from sStepDebt
+         end if
+         add tSteps to sStepCount
          put the milliseconds into tFrom
          repeat tSteps
             wfPhysicsStep true
@@ -825,6 +842,8 @@ command wfStartLevel pLevel, pPlay
    put 0 into sScore
    put 0 into sShots
    put 0 into sNow
+   put 0 into sStepDebt
+   put 0 into sStepCount
    put 0 into sShotT
    put 0 into sLastHit
    put 0 into sFlyer
@@ -2712,13 +2731,17 @@ command wfTestBegin pSeed, pSaveFile
    put false into sSound
 end wfTestBegin
 
--- The game, pSeconds on, a sixtieth of a second at a time
-command wfTestStep pSeconds
+-- The game, pSeconds on, a sixtieth of a second at a time (or frames
+-- of pFrame seconds, as a faster or slower screen would give)
+command wfTestStep pSeconds, pFrame
    set the defaultStack to the short name of me
+   if pFrame is not a number or pFrame <= 0 then
+      put 1/60 into pFrame
+   end if
    lock screen
    repeat while pSeconds > 0.0001
-      wfAdvance min(pSeconds, 1/60)
-      subtract 1/60 from pSeconds
+      wfAdvance min(pSeconds, pFrame)
+      subtract pFrame from pSeconds
    end repeat
    unlock screen
 end wfTestStep
@@ -2792,6 +2815,7 @@ function wfState
          "font:" & sFontLoaded & return & "sound:" & sSound & return & "howto:" & sSeenHowto & return & \
          "map:" & sMapLand & return & "view:" & round(sV, 3) & return & "fps:" & sFps & return & \
          "work:" & round(sWork, 2) & return & "draw:" & round(sDraw, 2) & return & "step:" & round(sStepMs, 2) & return & \
+         "steps:" & sStepCount & return & \
          "window:" & the width of this stack & comma & the height of this stack into tOut
    if sFlyer is an integer and sPAlive[sFlyer] is true then
       put return & "flyer:" & round(sPX[sFlyer]) & comma & round(sPY[sFlyer]) after tOut

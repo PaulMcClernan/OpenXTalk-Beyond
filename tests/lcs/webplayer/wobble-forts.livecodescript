@@ -552,6 +552,31 @@ on TestAPauseStopsTheClock
    TestAssert "R plays it again", st("mode") is "aim" and st("shots") is 0
 end TestAPauseStopsTheClock
 
+-- The physics keeps the clock's pace whatever the screen's: frames of
+-- a hundredth step 3 times in 5, a sixtieth once, a twentieth 3 times,
+-- and a frame of a tenth at most kMaxSteps (3), the rest forgiven
+on TestThePhysicsKeepsTheClocksPace
+   local tFrom, tFrame, tSteps, tWant, tBad
+   if not needBox2D("the physics' pace") then
+      exit TestThePhysicsKeepsTheClocksPace
+   end if
+   playLevel 1
+   repeat for each item tFrame in "0.01,0.0166667,0.05,0.1"
+      put st("steps") into tFrom
+      game "wfTestStep", 1, tFrame
+      put st("steps") - tFrom into tSteps
+      if tFrame is 0.1 then
+         put 30 into tWant
+      else
+         put 60 into tWant
+      end if
+      if abs(tSteps - tWant) > 1 then
+         put "frames of" && tFrame & ":" && tSteps && "steps, not" && tWant & ";" after tBad
+      end if
+   end repeat
+   TestAssert "a second of frames is a second of physics" && tBad, tBad is empty
+end TestThePhysicsKeepsTheClocksPace
+
 ----------------------------------------------------------------------
 -- Kept between visits
 
