@@ -539,8 +539,8 @@ Intended differences from OXT Lite 1.15:
 | the 3 junk and 2 excluded files | see [Classes](#classes) |
 | `LICENSE`, `LICENSE-EXCEPTION.md`, `THIRD-PARTY-NOTICES.md` | added: OXT-Beyond's licence files |
 | `Ext/mergJSON/**` | added: mergJSON, built from its source in `mergjson/` (the external, its library and the licences of its code) |
-| `PROVENANCE-oxt-runtimes-*.md` | added: provenance of the runtimes asset (`PROVENANCE-oxt-runtimes-0.2.7-rc.6.16b.md`, and `PROVENANCE-oxt-runtimes-1.15.md` for its Android files) |
-| `Runtime/Windows/x86-32/**`, `Runtime/Linux/**`, timezone `code/**` and `resources/**` | with a runtimes asset made from this repository's builds (any but `oxt-runtimes-1.15`), these may differ from 1.15's files, lack what 1.15's Linux runtimes bundled in `lib/` (shared libraries of other projects) and its iOS and macOS 10.9 timezone code, or have new files (the externals lists of the 64-bit Linux runtime, for example); `Runtime/Android/**`, carried over unchanged, is compared byte for byte |
+| `PROVENANCE-oxt-runtimes-*.md` | added: provenance of the runtimes asset (`PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md`, and `PROVENANCE-oxt-runtimes-1.15.md` for its Android files) |
+| `Runtime/Windows/x86-32/**`, `Runtime/Linux/**`, timezone `code/**` and `resources/**` | with a runtimes asset made from this repository's builds (any but `oxt-runtimes-1.15`), these may differ from 1.15's files, lack what 1.15's Linux runtimes bundled in `lib/` (shared libraries of other projects) and its iOS and macOS 10.9 timezone code, or have new files (the externals lists of the 64-bit Linux runtime, for example); `Runtime/Android/**`, carried over unchanged, is compared byte for byte, apart from the Java layer that such an asset's `java_layer` names (`Runtime/Android/Classes`, built from this repository) |
 | `Extensions/<xTalk folders>/**`, `Extensions/XTALK-EXTENSIONS.txt` | added: the xTalk Suite extensions (class `xtalk`); against a reference that has them they are compared like build outputs, and `--no-xtalk-extensions` makes them intended differences |
 
 Result with the CI build of this repository
@@ -765,7 +765,9 @@ platform, and through Apache on Linux.
 layout: files this repository does not build, kept out of git and published
 as GitHub Release assets. Now this is the runtimes asset: the other
 platforms' standalone runtimes, built from this repository, with OXT Lite
-1.15's Android runtime (see [The runtimes asset](#the-runtimes-asset)). (The
+1.15's Android runtime (its Java layer built from this repository in the
+assets that name one, `java_layer`; see
+[The runtimes asset](#the-runtimes-asset)). (The
 xTalk Suite extensions are not assets: see
 [below](#xtalk-suite-extensions-xtalk_extensionspy).)
 
@@ -773,14 +775,14 @@ xTalk Suite extensions are not assets: see
 {
   "assets": [
     {
-      "id": "oxt-runtimes-0.2.7-rc.6.16b",
-      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.16b/oxt-runtimes-0.2.7-rc.6.16b.zip",
+      "id": "oxt-runtimes-0.2.7-rc.6.17",
+      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.17/oxt-runtimes-0.2.7-rc.6.17.zip",
       "sha256": "<64 lowercase hex digits>",
       "size": 123456789,
       "kind": "zip",
       "strip": 1,
       "dest": "",
-      "rename": { "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.16b.md" },
+      "rename": { "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md" },
       "exclude": { "win-x86_64": ["Runtime/Windows/x86-64/**", "..."], "...": ["..."] },
       "description": "...", "licence": "...", "source": "..."
     }
@@ -808,12 +810,18 @@ xTalk Suite extensions are not assets: see
   instead of `package.py`'s "comes from both" error; `exclude_note` says
   why. A key that matches no platform is an error, and a glob that matches
   nothing on the platform is reported (a stale glob excludes nothing).
+* `java_layer` (optional, the runtimes asset only) names the Android
+  runtime's Java layer when it was built from the commit `source` names,
+  not carried over (`make_runtimes_asset.py --android-classes`):
+  `package.py --compare` then lets it differ from 1.15's, and
+  `tools/ci/runtimes_provenance.py` counts the commits since the asset's
+  for it.
 * `description`, `licence` and `source` are for people.
 
 The runtimes asset excludes, per platform, what that platform's own build
 makes (`make_runtimes_asset.py` writes these; `OWN_PARTS` there):
 
-| platform | left out of `oxt-runtimes-0.2.7-rc.6.16b` | why |
+| platform | left out of `oxt-runtimes-0.2.7-rc.6.17` | why |
 |---|---|---|
 | `win-x86_64` | `Runtime/Windows/x86-64/**`, timezone `code/x86_64-win32/**` | the build's own runtime and timezone code |
 | `linux-x86_64` | `Runtime/Linux/x86-64/**`, timezone `code/x86_64-linux/**`, timezone `resources/**` | the build's own runtime and timezone code, and the zoneinfo data (tz.gyp `tzdata`, which the Windows builds do not make) |
@@ -961,7 +969,7 @@ build makes (the asset's `exclude` in `external-assets.json`).
 python tools/oxt/make_runtimes_asset.py --builds --label LABEL --out DIR
     --bin win-x86=PATH --bin win-x86_64=PATH --bin linux-x86=PATH --bin linux-x86_64=PATH
     [--carry oxt-runtimes-1.15.zip] [--assets-cache DIR] [--commit SHA]
-    [--run BUILDS=URL]... [--update-manifest [FILE]]
+    [--run BUILDS=URL]... [--android-classes JAR] [--update-manifest [FILE]]
 ```
 
 Each `PATH` is a build output folder or the CI archive that holds it
@@ -978,7 +986,16 @@ library's Android code are not built here: they are carried over unchanged
 from `oxt-runtimes-1.15` (downloaded into the assets cache and checked
 against its SHA-256, which the tool records), and that asset's
 `PROVENANCE.md` goes into the new archive as
-`PROVENANCE-oxt-runtimes-1.15.md`. Every `.exe`, `.dll`, `.so` and engine
+`PROVENANCE-oxt-runtimes-1.15.md`. With `--android-classes JAR` the
+Android runtime's Java layer built from this repository
+(`tools/ci/android_java.py build`, from `engine/src/java` at the builds'
+commit) takes the place of the carried `Runtime/Android/Classes`
+(LiveCode Community 9.6.3's): the jar must hold only class files, among
+them the classes the engines and the Android builder name, and every
+PendingIntent it makes must say whether it is mutable; it gets the date of
+the builds' newest file. The manifest entry then names it
+(`"java_layer": "Runtime/Android/Classes"`), and `PROVENANCE.md` says what
+it replaced and how it was checked. Every `.exe`, `.dll`, `.so` and engine
 must be a PE or ELF file of its build's architecture, and every
 `Standalone` must carry this source tree's engine version, or no archive
 is written. The generated `PROVENANCE.md` names the commit and the CI
@@ -995,7 +1012,11 @@ entries of `external-assets.json`.
 [`.github/workflows/runtimes.yml`](../../.github/workflows/runtimes.yml)
 ("Runtimes asset", started by hand) does all of this from the artifacts
 of a "Build (Windows)" and a "Build (Linux)" run of the same commit,
-whose 32-bit and 64-bit builds must have passed; it uploads the result
+whose 32-bit and 64-bit builds must have passed. It builds the Java layer
+from that commit and checks it as `android-java.yml` checks a pull
+request's (`android_java.py compare` with the Java layer of the asset
+pinned at that commit, `jni` against its Android engines, and `rules`)
+before it passes it with `--android-classes`; it uploads the result
 as the artifact `runtimes-asset` and, with `publish`, creates the
 pre-release `runtimes-<label>` at that commit (which must be on `main`)
 with the zip and its `PROVENANCE.md`. A published asset is never

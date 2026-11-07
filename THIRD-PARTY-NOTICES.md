@@ -100,7 +100,7 @@ licence text are in `thirdparty/`.
 | Skia | revision `20471894` | engine, libgraphics | BSD 3-clause | [upstream](https://github.com/google/skia/blob/main/LICENSE); file headers in `thirdparty/libskia/` |
 | libxml2 | 2.15.4, with local changes and the HTTP and FTP clients of 2.14.6 and 2.13.9 (see [`thirdparty/libxml/ORIGIN`](thirdparty/libxml/ORIGIN)) | revXML, web engine | MIT | [`thirdparty/libxml/docs/COPYING`](thirdparty/libxml/docs/COPYING) |
 | libxslt | 1.1.45, with local changes (see [`thirdparty/libxslt/ORIGIN`](thirdparty/libxslt/ORIGIN)) | revXML, web engine | MIT-style | [`thirdparty/libxslt/docs/COPYING`](thirdparty/libxslt/docs/COPYING) |
-| SQLite | 3.51.1 | `dbsqlite.dll`, web engine | Public domain | header of `thirdparty/libsqlite/include/sqlite3.h`, [sqlite.org/copyright.html](https://www.sqlite.org/copyright.html) |
+| SQLite | 3.51.3 | `dbsqlite.dll`, web engine | Public domain | header of `thirdparty/libsqlite/include/sqlite3.h`, [sqlite.org/copyright.html](https://www.sqlite.org/copyright.html) |
 | sqlitedataset | 0.1.0 | `dbsqlite.dll`, web engine | MIT | [`thirdparty/libsqlite/docs/LICENSE`](thirdparty/libsqlite/docs/LICENSE) |
 | MySQL Connector/C | 6.0.0 | `dbmysql.dll` | GPL version 2 with the MySQL FLOSS License Exception (version 0.6) | [`thirdparty/libmysql/docs/COPYING`](thirdparty/libmysql/docs/COPYING) and [`EXCEPTIONS-CLIENT`](thirdparty/libmysql/docs/EXCEPTIONS-CLIENT) |
 | libpq (from PostgreSQL) | 9.4.5 | `dbpostgresql.dll` | PostgreSQL licence | [`thirdparty/libpq/docs/COPYRIGHT`](thirdparty/libpq/docs/COPYRIGHT) |
@@ -451,9 +451,9 @@ below.
 | Extensions (folder in `Extensions/`) | Repository | Licence | Compiled into the native libraries | Licence texts in `licenses/` |
 | --- | --- | --- | --- | --- |
 | `org.openxtalk.library.sodium` | `SodiumXT` | MIT, © 2026 Seth Morrow | libsodium (1.0.22 in the Windows libraries, 1.0.20 in the others): ISC, © Frank Denis. SHA-3 from RHash (© 2013 Aleksey Kravchenko), taken through trezor-crypto: a permission notice in the style of the MIT licence. trezor-crypto's helpers: MIT, © Tomas Dzetkulic and Pavol Rusnak. | `LICENSE` (with libsodium's ISC text), `trezor-crypto-LICENSE`, `RHash-SHA3-NOTICE.txt` (the notice from the header of the member's `src/vendor/sha3.c`, the only place it has it) |
-| `org.openxtalk.library.torrent`, `torrentHelpers` | `TorrentXT` | MIT, © 2026 Seth Morrow | libtorrent-rasterbar 2.1.1: BSD 3-clause, © Arvid Norberg. The code it includes has its own terms, noted in the member's `THIRD-PARTY-LICENSES.md`: puff (© Mark Adler; zlib-style terms in its header) and the ed25519 implementation (© Orson Peters): zlib licence. SHA-1 (Steve Reid) and SHA-256 (from LibTomCrypt): public domain. `route.h`, compiled only into the macOS library: Apple Public Source License 2.0, over code © The Regents of the University of California under the BSD licence with the advertising clause (which the University withdrew in 1999). Boost: Boost Software License 1.0. OpenSSL 3 (3.6.4 in the Windows libraries, 3.5.4 in the macOS and Linux x86-64 ones), statically linked: Apache License 2.0; the Linux x86 library uses the system's OpenSSL (`libssl.so.3`) instead. | `LICENSE`, `THIRD-PARTY-LICENSES.md`, `OpenSSL-LICENSE.txt` |
+| `org.openxtalk.library.torrent`, `torrentHelpers` | `TorrentXT` | MIT, © 2026 Seth Morrow | libtorrent-rasterbar (2.1.2 in the Windows libraries, 2.0.11 in the others): BSD 3-clause, © Arvid Norberg. The code it includes has its own terms, noted in the member's `THIRD-PARTY-LICENSES.md`: puff (© Mark Adler; zlib-style terms in its header) and the ed25519 implementation (© Orson Peters): zlib licence. SHA-1 (Steve Reid) and SHA-256 (from LibTomCrypt): public domain. `route.h`, compiled only into the macOS library: Apple Public Source License 2.0, over code © The Regents of the University of California under the BSD licence with the advertising clause (which the University withdrew in 1999). Boost: Boost Software License 1.0. OpenSSL 3 (3.6.5 in the Windows libraries, 3.5.4 in the macOS and the Linux x86-64 and arm64 ones), statically linked: Apache License 2.0; the Linux x86 library uses the system's OpenSSL (`libssl.so.3`) instead. | `LICENSE`, `THIRD-PARTY-LICENSES.md`, `OpenSSL-LICENSE.txt` |
 | `org.openxtalk.library.enet`, `enetHelpers` | `enetxt` | MIT, © 2026 Seth Morrow | ENet 1.3.18: MIT, © Lee Salzman. The Windows libraries use the Visual C++ runtime (see below). | `LICENSE`, `THIRD-PARTY-LICENSES.md`; `Microsoft-Visual-C++-Runtime.txt` in `org.openxtalk.library.enet` (Microsoft's terms for the runtime DLLs, see below) |
-| `org.openxtalk.library.datachannel`, `dataChannelHelpers` | `dataChannelXT` | MIT, © 2026 Seth Morrow Software | libdatachannel 0.24.5 and libjuice: Mozilla Public License 2.0, © Paul-Louis Ageneau. usrsctp: BSD 3-clause. plog: MIT. OpenSSL 3 (3.6.4 in the Windows libraries, 3.5.4 in the macOS one), statically linked: Apache License 2.0; the Linux libraries use the system's OpenSSL. | `LICENSE`, `THIRD-PARTY-LICENSES.md`, `OpenSSL-LICENSE.txt` |
+| `org.openxtalk.library.datachannel`, `dataChannelHelpers` | `dataChannelXT` | MIT, © 2026 Seth Morrow Software | libdatachannel 0.24.5 and libjuice: Mozilla Public License 2.0, © Paul-Louis Ageneau. usrsctp: BSD 3-clause. plog: MIT. OpenSSL 3 (3.6.5 in the Windows libraries, 3.5.4 in the macOS and the Linux x86-64 and arm64 ones), statically linked: Apache License 2.0; the Linux x86 library uses the system's OpenSSL (`libssl.so.3`) instead. | `LICENSE`, `THIRD-PARTY-LICENSES.md`, `OpenSSL-LICENSE.txt` |
 | `org.openxtalk.box2dxt`, `box2dxt-kit` | `Box2Dxt` | MIT, © 2026 Seth Morrow and Box2Dxt contributors | Box2D 3.1.0: MIT, © 2019 Erin Catto. The Windows libraries use the Visual C++ runtime (see below). | `LICENSE` (with Box2D's notice); `Microsoft-Visual-C++-Runtime.txt` in `org.openxtalk.box2dxt` (Microsoft's terms for the runtime DLLs, see below) |
 | `org.openxtalk.library.coin`, `coinxt` | `CoinXT` | MIT, © 2026 Seth Morrow | trezor-crypto: MIT, © Tomas Dzetkulic and Pavol Rusnak (`address.c` also © Daira Hopwood, `hasher.c` © Saleem Rashid). libsecp256k1: MIT, © Pieter Wuille. SHA-2 (`sha2.c`): BSD 3-clause, © Aaron D. Gifford and Pavol Rusnak, whose notice must be reproduced with the binaries. SHA-3/Keccak from RHash: MIT. RIPEMD-160: public domain. BLAKE-256 and BLAKE2b: CC0 1.0. Groestl: MIT, © Projet RNRT SAPHIR. The member's `THIRD-PARTY-LICENSES.md` maps every vendored file to its licence and copyright holder. | `LICENSE`, `THIRD-PARTY-LICENSES.md`, `trezor-crypto-LICENSE` (trezor-crypto's MIT text, from the member's `native/vendor/LICENSE`, which its own licence files only point to), `trezor-crypto-address-NOTICE.txt` and `trezor-crypto-hasher-NOTICE.txt` (the notices from the headers of `native/vendor/address.c` and `hasher.c`) |
 | `onionxt`, `onion-httpd` | `OnionXT` | MIT, © 2026 Seth Morrow | none (LiveCode Script only) | `LICENSE` |
@@ -535,14 +535,14 @@ notices.
 Every package carries standalone runtimes for the other platforms that
 the IDE's standalone builder targets, so that it can build standalones
 for them and not only for its own platform. They come from one release
-asset of this repository, `oxt-runtimes-0.2.7-rc.6.16b.zip` (release tag
-`runtimes-0.2.7-rc.6.16b`), listed with its SHA-256 in
+asset of this repository, `oxt-runtimes-0.2.7-rc.6.17.zip` (release tag
+`runtimes-0.2.7-rc.6.17`), listed with its SHA-256 in
 [`tools/oxt/external-assets.json`](tools/oxt/external-assets.json). The
 "Runtimes asset" workflow made it with
 [`tools/oxt/make_runtimes_asset.py`](tools/oxt/make_runtimes_asset.py)
 `--builds` from the outputs of this repository's CI builds of one
 commit; only the Android runtime is not built here. Its `PROVENANCE.md`,
-installed as `PROVENANCE-oxt-runtimes-0.2.7-rc.6.16b.md` at the root of the
+installed as `PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md` at the root of the
 program folder, names that commit and the CI runs and lists every file
 with its size, SHA-256 and the build it comes from. Each package leaves
 out what its own build makes: the Windows and Linux packages their own
@@ -563,7 +563,7 @@ Licences and corresponding source:
   [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md) for OXT-Beyond's code, and
   the third-party components of the sections above (OpenSSL, curl, ICU,
   the libraries of `thirdparty/`, CEF). Source: this repository at the
-  commit that `PROVENANCE-oxt-runtimes-0.2.7-rc.6.16b.md` names.
+  commit that `PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md` names.
 - **Android files identical to LiveCode Community 9.6.3**: GPLv3.
   Source: [livecode/livecode](https://github.com/livecode/livecode), tag
   [`9.6.3`](https://github.com/livecode/livecode/tree/9.6.3). This
