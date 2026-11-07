@@ -1511,6 +1511,46 @@ def install_bundle(args, adb, a):
     return []
 
 
+# How long device waits, after installing the probe, for each of: the
+# broadcasts the install set off, and the package manager's handler
+QUIET_SECONDS = 120
+
+
+def quiet_after_install(a, seconds=QUIET_SECONDS):
+    """After the probe is installed and before it starts: until the
+    broadcast queues are idle (am wait-for-broadcast-idle) and the package
+    manager's handler is idle (pm wait-for-handler), at most `seconds` each,
+    as boot --settle waits after booting. An install wakes many of the
+    system's apps (its PACKAGE_ADDED receivers), and each holds a
+    foreground priority while its receiver runs. In run 42324548829 the
+    Java layer's probe on the 16 KB image at API 36 started into that (the
+    launcher, MediaProvider, the IMS resolver, Blockstore and the app
+    indexer were taking the install), behind its notification permission
+    dialog, so visible but not in front (oom_score_adj 101), and lmkd killed
+    it, with 3 GB on the device and 1.7 GB available a second later ("min
+    watermark is breached even after kill"; exit-info LOW_MEMORY); run
+    42312203693, at 1536 MB, the same. A wait that does not end, or a
+    command that cannot say, is said, and the run goes on: this decides
+    nothing. `a` runs adb on the device."""
+    said = []
+    for what, cmd in (('the broadcast queues are idle', ('am', 'wait-for-broadcast-idle')),
+                      ("the package manager's handler is idle",
+                       ('pm', 'wait-for-handler', '--timeout', str(seconds * 1000)))):
+        name = ' '.join(cmd[:2])
+        start = time.monotonic()
+        try:
+            status, out = a('shell', *cmd, timeout=seconds + 10)
+        except CheckError:
+            said.append('%s: not in %d s (%s)' % (what, seconds, name))
+            continue
+        if status != 0 or re.search(NOT_SERVING, out) or re.search(r'(?i)unknown (command|option)|error', out):
+            said.append('%s: %s cannot say (exit status %d: %s)' % (what, name, status, answer(out) or 'nothing'))
+        else:
+            said.append('%s after %d s (%s)' % (what, time.monotonic() - start, name))
+    log('Before it starts: %s' % '; '.join(said))
+    return said
+
+
 def device(args):
     adb = adb_path(args.sdk)
     if not adb:
@@ -1537,6 +1577,7 @@ def device(args):
         if 'Success' not in out:
             return ['%s does not install on %s: %s' % (os.path.basename(args.apk), args.serial, out.strip()[-800:])]
         log('Installed %s' % os.path.basename(args.apk))
+    quiet_after_install(a)
     a('logcat', '-c')
     status, out = a('shell', 'am', 'start', '-W', '-n', IDENTIFIER + '/.mblandroid')
     log('Started: %s' % ' | '.join(x.strip() for x in out.splitlines() if x.strip()))
