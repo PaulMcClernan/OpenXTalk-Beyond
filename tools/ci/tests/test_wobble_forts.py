@@ -234,6 +234,30 @@ class Assets(unittest.TestCase):
         pictures = {p for p in packs if not re.search(r'Sounds|Audio|Jingles', p)}
         self.assertFalse(pictures & nova_packs, pictures & nova_packs)
 
+    def test_no_word_in_kenney_future_has_a_k_or_an_x(self):
+        # Kenney Future Narrow draws K and X much as it draws H: NEXT read
+        # NEHT and "knock" HNOCH. What is written in it: the builder's
+        # labels and buttons, the fields it gives the font (setText then
+        # textFont: the hint, the tagline, the turn hint, the fail text),
+        # the game's labels, the lands' names and the levels' hints
+        text = builder()
+        script = game_script()
+        found, exprs = [], []
+        found += re.findall(r'setLabel the long id of field "[^"]*", "([^"]*)"', text)
+        found += re.findall(r'makeButton "[^"]*", "([^"]*)"', text)
+        for name in re.findall(r'set the textFont of field "([^"]+)" to kFont', text):
+            found += re.findall(r'setText the long id of field "%s", "([^"]*)"' % re.escape(name), text)
+            exprs += re.findall(r'set the text of field "%s" to ([^\n]*)' % re.escape(name), script)
+        for name in ('Clear Next Label', 'Records', 'Map Sub', 'Clear Best', 'Level Name', 'Map Title'):
+            exprs += re.findall(r'set the text of field "%s" to ([^\n]*)' % re.escape(name), script)
+        found += re.findall(r'^constant kLands = "([^"]*)"', script, re.M)
+        found += [line[5:] for line in levels().split('\n') if line.startswith('hint ')]
+        self.assertGreater(len(found) + len(exprs), 30)
+        # (a value of the game's script: its quoted words only)
+        found += [w for expr in exprs for w in re.findall(r'"([^"]*)"', expr)]
+        for text in found:
+            self.assertNotRegex(text, '[KkXx]', text)
+
     def test_the_title_is_a_picture(self):
         self.assertIn('logo-wobble', builder())
         self.assertIn('logo-forts', builder())

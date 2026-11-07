@@ -420,3 +420,10 @@ after Nova Rescue's check. To run it yourself:
 ```sh
 python3 tools/ci/wobble_forts_check.py --runtime <web runtime> --engine-cache <folder> --shots <folder>
 ```
+
+It also has a page of its own on the web site's gallery
+(`games/wobble-forts/`, see [tools/pages](../pages/README.md)), which
+plays this sample in the bare player. The stack's `cJavascriptHandlers`
+are `wfPageHidden` (the page is hidden: a level pauses) and `wfState`, so
+that `tools/pages/check_wobble_forts_page.py` can ask the game how it is
+there; `build_player.py --check` runs that check on the player it builds.

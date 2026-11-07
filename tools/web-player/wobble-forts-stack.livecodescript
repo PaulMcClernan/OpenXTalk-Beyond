@@ -392,6 +392,18 @@ function wfUnlocked pLevel
    return sStars[pLevel - 1] is an integer and sStars[pLevel - 1] > 0
 end wfUnlocked
 
+-- The first fort not yet cleared that is open (or, all cleared, the
+-- first of the land the map shows): Space or Return on the map plays it
+function wfNextLevel
+   local n
+   repeat with n = 1 to sLevelCount
+      if wfUnlocked(n) and not (sStars[n] is an integer and sStars[n] > 0) then
+         return n
+      end if
+   end repeat
+   return max(1, min(sLevelCount, (sMapLand - 1) * kLevelsPerLand + 1))
+end wfNextLevel
+
 function wfTotalStars
    local n, tTotal
    put 0 into tTotal
@@ -1664,7 +1676,7 @@ private command wfDrawTrail
 end wfDrawTrail
 
 -- A tap while a Bloop flies: its trick, once. Zip (blue) dashes, Trio
--- (pink) splits in three, Bonk (green) drops like a stone, Boom (beige)
+-- (pink) splits in three, Thud (green) drops like a stone, Boom (beige)
 -- goes bang; the yellow Bloop has none
 command wfTrick
    local tBody, tVX, tVY, tX, tY, k, i, tA, tSpeed, tNX, tNY
@@ -1917,7 +1929,7 @@ command wfShowClear
    set the text of field "Clear Score" to wfCommas(sClearBase)
    set the text of field "Clear Best" to empty
    if sLevel < sLevelCount then
-      set the text of field "Clear Next Label" to "NEXT"
+      set the text of field "Clear Next Label" to "ONWARD"
    else
       set the text of field "Clear Next Label" to "LEVELS"
    end if
@@ -2268,6 +2280,10 @@ on rawKeyDown pKey
                break
             case "howto"
                wfPress "Howto Go"
+               break
+            case "map"
+               -- (the keys alone play: the next fort to clear)
+               wfPlay wfNextLevel()
                break
             case "pause"
                wfPress "Resume"
@@ -2775,7 +2791,8 @@ function wfState
          "physics:" & sPhysics & return & "library:" & sLibrary & return & "audio:" & sAudio & return & \
          "font:" & sFontLoaded & return & "sound:" & sSound & return & "howto:" & sSeenHowto & return & \
          "map:" & sMapLand & return & "view:" & round(sV, 3) & return & "fps:" & sFps & return & \
-         "work:" & round(sWork, 2) & return & "draw:" & round(sDraw, 2) & return & "step:" & round(sStepMs, 2) into tOut
+         "work:" & round(sWork, 2) & return & "draw:" & round(sDraw, 2) & return & "step:" & round(sStepMs, 2) & return & \
+         "window:" & the width of this stack & comma & the height of this stack into tOut
    if sFlyer is an integer and sPAlive[sFlyer] is true then
       put return & "flyer:" & round(sPX[sFlyer]) & comma & round(sPY[sFlyer]) after tOut
    else

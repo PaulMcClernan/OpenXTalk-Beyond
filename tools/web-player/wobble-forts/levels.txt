@@ -17,7 +17,7 @@
 level First Wobble
 land 1
 bloops yellow yellow yellow
-hint Pull the Bloop back, aim along the dots and let go!
+hint Pull the Bloop, aim along the dots and let go!
 wood-post 1050 0
 wood-post 1190 0
 wood-beam 1120 140
@@ -28,7 +28,7 @@ end
 level Glass House
 land 1
 bloops yellow yellow yellow
-hint Glass breaks easily. Knock it down on the Grumps!
+hint Glass shatters easily. Topple it onto the Grumps!
 glass-post 1000 0
 grump-blue 1070 0
 glass-post 1140 0
@@ -57,7 +57,7 @@ end
 level Stone Steps
 land 1
 bloops yellow blue pink
-hint Trio, the pink Bloop: tap and it splits in three!
+hint Trio, the rosy Bloop: tap and it splits in three!
 stone-slab 1000 0
 grump-green 1000 140
 stone-slab 1140 0
@@ -91,7 +91,7 @@ end
 level Sand Castle
 land 2
 bloops yellow green yellow
-hint Bonk, the green Bloop: tap and it drops like a stone!
+hint Thud, the green Bloop: tap and it drops straight down!
 stone-pillar 1000 0
 tnt-cube 1100 0
 grump-green 1100 70
@@ -103,7 +103,7 @@ end
 level Crate Stack
 land 2
 bloops yellow blue green
-hint TNT goes bang when it breaks.
+hint TNT goes bang when it is hit hard.
 wood-cube 1050 0
 wood-cube 1120 0
 wood-cube 1190 0
@@ -174,7 +174,7 @@ end
 level Spore Shed
 land 3
 bloops yellow blue blue
-hint Metal hardly breaks. Push it over instead!
+hint Metal is tough. Push it over instead!
 metal-post 1000 0
 grump-green 1080 0
 grump-blue 1160 0
@@ -233,7 +233,7 @@ end
 level Grump King
 land 3
 bloops blue pink green beige yellow
-hint The Grump King himself. Bring the house down!
+hint The Grumps' ruler in person. Bring the house down!
 stone-slab 980 0
 boss-pink 1120 0
 stone-slab 1260 0

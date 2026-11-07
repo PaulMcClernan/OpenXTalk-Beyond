@@ -395,7 +395,7 @@ private command buildHowto
    create field "Howto Title" in group "Howto"
    setLabel the long id of field "Howto Title", "HOW TO PLAY", 24, kInk, "plain", "center"
    put "Pull the Bloop back from anywhere on the screen, aim along the dots and let go." & return & \
-         "Tap while a Bloop flies: Zip dashes, Trio splits in three, Bonk drops like a stone, Boom goes bang." & return & \
+         "Tap while a Bloop flies: Zip dashes, Trio splits in three, Thud drops like a stone, Boom goes bang." & return & \
          "Pop every Grump to clear the fort. Bloops to spare earn more stars." into tTexts
    put "bloop-yellow,bloop-blue,grump-green" into tIcons
    repeat with i = 1 to 3
@@ -434,7 +434,7 @@ private command buildClear
    setLabel the long id of field "Clear Best", empty, 13, kEdge, "plain", "center"
    makeButton "Clear Levels", empty, "icon-menu-grid", "blue", "Clear"
    makeButton "Clear Replay", empty, "icon-return", "blue", "Clear"
-   makeButton "Clear Next", "NEXT", empty, "green", "Clear"
+   makeButton "Clear Next", "ONWARD", empty, "green", "Clear"
    set the visible of group "Clear" to false
 end buildClear
 
@@ -458,7 +458,7 @@ private command buildNotice
    create group "Notice"
    makePanel "Notice"
    create field "Notice Title" in group "Notice"
-   setLabel the long id of field "Notice Title", "NO BOX2D HERE", 22, kInk, "plain", "center"
+   setLabel the long id of field "Notice Title", "NO PHYSICS HERE", 22, kInk, "plain", "center"
    create field "Notice Text" in group "Notice"
    setText the long id of field "Notice Text", "Wobble Forts plays on Box2D, through the Box2Dxt extension. " & \
          "Turn on Box2Dxt in Tools > Extension Manager and open the stack again, or play it in the Stack Player in a browser.", 15, kInk, "center"

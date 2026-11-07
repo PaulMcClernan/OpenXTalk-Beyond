@@ -177,6 +177,11 @@ private command playLevel pLevel
    step 0.5
 end playLevel
 
+-- A key pressed (its keysym: 32 Space, 65293 Return, 80 P, 114 r)
+private command key pKey
+   game "rawKeyDown", pKey
+end key
+
 -- Skipped, and false, without Box2D
 private function needBox2D pWhat
    if physics() then
@@ -424,7 +429,32 @@ on TestPoppingEveryGrumpClearsTheFort
    press "Pause"
    press "Pause Levels"
    TestAssert "which is open on the map", not the visible of image "Tile 2 Lock" of card "Fort" of stack kStack
+   key 32
+   TestAssert "where Space plays the next fort to clear", st("mode") is "aim" and st("level") is 2
 end TestPoppingEveryGrumpClearsTheFort
+
+-- The keys alone play, from the title to a fort (a page on a computer
+-- gives the game the keys at once: tools/pages/check_wobble_forts_page.py)
+on TestTheKeysAlonePlay
+   if not needBox2D("the keys") then
+      exit TestTheKeysAlonePlay
+   end if
+   key 32
+   TestAssert "Space on the title shows how to play", st("mode") is "howto"
+   key 65293
+   TestAssert "Return then shows the map", st("mode") is "map"
+   key 32
+   TestAssert "and Space plays the first fort", st("mode") is "aim" and st("level") is 1
+   step 0.5
+   key 80
+   TestAssert "P pauses", st("mode") is "pause"
+   key 32
+   TestAssert "Space plays on", st("mode") is "aim"
+   game "wfTestShoot", 0, -120
+   step 0.3
+   key 114
+   TestAssert "r plays the fort again", st("mode") is "aim" and st("shots") is 0
+end TestTheKeysAlonePlay
 
 -- Bloops sent into the ground: no Grump popped, and no Bloops left
 on TestOutOfBloops
@@ -445,7 +475,7 @@ on TestOutOfBloops
    TestAssert "try again plays it again", st("mode") is "aim" and st("shots") is 0 and st("grumps") is 2
 end TestOutOfBloops
 
--- The tricks: Zip (blue) dashes, Trio (pink) splits in three, Bonk
+-- The tricks: Zip (blue) dashes, Trio (pink) splits in three, Thud
 -- (green) drops, Boom (beige) goes bang; yellow has none. Level 4 has
 -- yellow, blue, pink; level 9 yellow, blue, green, beige
 on TestTheTricks
