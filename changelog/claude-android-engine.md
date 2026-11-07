@@ -1,2 +1,0 @@
-- Android engine: the engine built here runs on the emulators; CI builds both probes with it in the released IDE and runs them on Android 13 and with 16 KB pages (#NNN)
-- Android check: `overlay --engine` puts an engine built here into an IDE, and `verify --engine` checks that each package carries it (#NNN)
