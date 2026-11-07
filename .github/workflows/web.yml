@@ -516,6 +516,26 @@ jobs:
             --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check/wobble-forts" \
             --shots "$RUNNER_TEMP/web-check/wobble-forts/shots" --browser "$BROWSER"
 
+      # Puzzle Almanac (tools/web-player/stacks), the daily puzzle book
+      # made for phones, played on emulated phones: How to play, today's
+      # Number Place solved by taps, today's Hidden Word typed on its
+      # keyboard, the stickers, the page loaded again with the save kept, a
+      # turn and no script error (tools/ci/puzzle_almanac_check.py, which
+      # says what it checks). Chromium and WebKit, as above; its files go
+      # in puzzle-almanac.
+      - name: Play Puzzle Almanac on phones in ${{ matrix.browser }}
+        if: matrix.browser != 'firefox'
+        timeout-minutes: ${{ matrix.browser == 'webkit' && 20 || 10 }}
+        env:
+          BROWSER: ${{ matrix.browser }}
+          TRIES: ${{ matrix.browser == 'webkit' && 2 || 1 }}
+        run: |
+          python3 tools/ci/retry_check.py --tries "$TRIES" --files "$RUNNER_TEMP/web-check/puzzle-almanac" \
+            --what "The Puzzle Almanac check in $BROWSER" -- \
+            "$RUNNER_TEMP/playwright/bin/python" tools/ci/puzzle_almanac_check.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check/puzzle-almanac" \
+            --shots "$RUNNER_TEMP/web-check/puzzle-almanac/shots" --browser "$BROWSER"
+
       - name: Upload the check's files
         if: always()
         uses: actions/upload-artifact@v7
