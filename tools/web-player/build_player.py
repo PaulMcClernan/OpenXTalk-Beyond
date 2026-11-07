@@ -370,6 +370,12 @@ SAMPLES = [
                     'Grumps\' wobbly forts of wood, glass, stone, metal and TNT, with a trick for '
                     'each Bloop. Fifteen forts in three lands on Box2Dxt, with stars to earn.',
      'tags': ['Game', 'Phones', 'Touch', 'Physics']},
+    {'title': 'Puzzle Almanac', 'source': 'stacks',
+     'files': ['Puzzle Almanac.oxtstack'], 'image': 'Puzzle Almanac.webp',
+     'description': 'A daily puzzle book for a phone: a Number Place in three sizes and a Hidden '
+                    'Word of four to six letters, new every day and the same for everyone, with a '
+                    'sticker book to fill. Every puzzle can be solved without a guess.',
+     'tags': ['Game', 'Phones', 'Touch', 'Puzzles']},
     {'title': 'Tour', 'files': ['Tour.livecode'],
      'description': 'Cards, a widget, a palette window and a script error, caught and shown.',
      'tags': ['Cards', 'Widget', 'Palette']},
