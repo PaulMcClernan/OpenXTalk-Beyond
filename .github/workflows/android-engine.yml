@@ -467,33 +467,41 @@ jobs:
       # change
       - name: TEMPORARY debug the density relaunch
         if: always()
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: |
           adb="$SDK/platform-tools/adb -s emulator-5554"
           app=org.openxtalk.check.androidprobe
           $adb root || true
           sleep 3
           $adb wait-for-device
-          $adb shell wm density reset || true
-          $adb shell am force-stop $app || true
-          $adb logcat -c || true
-          $adb shell am start -W -n $app/.mblandroid || true
-          sleep 8
-          pid=$($adb shell pidof $app | tr -d '\r')
-          echo "pid before: $pid"
-          $adb shell wm density 374 || true
-          sleep 12
-          echo "pids after: $($adb shell pidof $app | tr -d '\r')"
-          for p in $($adb shell pidof $app | tr -d '\r'); do
-            echo "=== debuggerd -b $p"
-            $adb shell debuggerd -b "$p" | head -600 || true
-            echo "=== debuggerd -j $p"
-            $adb shell debuggerd -j "$p" | head -400 || true
+          hung=0
+          for i in $(seq 1 15); do
+            $adb shell wm density reset || true
+            $adb shell am force-stop $app || true
+            sleep 2
+            $adb logcat -c || true
+            $adb logcat -b events -c || true
+            $adb shell am start -W -n $app/.mblandroid > /dev/null || true
+            sleep 6
+            pid=$($adb shell pidof $app | tr -d '\r')
+            $adb shell wm density 374 || true
+            sleep 10
+            now=$($adb shell pidof $app | tr -d '\r')
+            echo "try $i: pid before $pid, after $now"
+            if [ "$now" = "$pid" ]; then
+              hung=$((hung + 1))
+              echo "=== try $i: the same process; its threads"
+              $adb shell debuggerd -b "$pid" | head -900 || true
+              echo "=== try $i: Java threads"
+              $adb shell debuggerd -j "$pid" | head -600 || true
+              echo "=== try $i: events"
+              $adb logcat -d -b events | grep -E "$app|am_anr" | tail -40 || true
+              echo "=== try $i: the app's lines"
+              $adb logcat -d | grep -E "\( *$pid\)| $pid " | grep -v ' linker ' | tail -120 || true
+              [ "$hung" -ge 2 ] && break
+            fi
           done
-          echo "=== events"
-          $adb logcat -d -b events | grep -E "$app|am_anr" | tail -60 || true
-          echo "=== the app's lines"
-          $adb logcat -d | grep -E "\( *$pid\)|revandroid|ANR" | grep -v 'W/linker' | tail -200 || true
+          echo "hung: $hung"
           $adb shell wm density reset || true
 
       - name: Upload the packages and logs
