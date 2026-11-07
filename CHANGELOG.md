@@ -63,6 +63,7 @@ words, is in the [README](README.md#the-ide) and on the
 - CI: the IDE tour fails when the App Browser's icons are not drawn at 20 points, its rows are not 24 high, or Tools > Application Browser is missing or unchecked with it shown (#390)
 - Stack Player: Nova Rescue, a game made for phones: drag a finger to fly, rescue the drifting crews for a growing bonus, dodge meteors and raiders and beat a mothership every fourth sector, with Kenney's CC0 pictures and sounds; it fills a phone's screen upright or turned, and is in Home's gallery too (#401)
 - Web site: Nova Rescue has a page of its own in the web stacks gallery, with the big ones: on a computer it plays in a phone's frame on the page, keys and all, and on a phone a tap opens it on the whole screen; it plays the Stack Player's own copy, so the page goes up with a player that has it (#401)
+- xTalk Suite extensions: SodiumXT carries libsodium 1.0.22 on every platform (was 1.0.20 except on Windows), and TorrentXT and dataChannelXT carry OpenSSL 3.5.9 (was 3.5.4) on macOS and on Linux x86-64 and arm64; enetxt's and Box2Dxt's Windows libraries were rebuilt from the same sources. Their scripts and behaviour are unchanged (#408)
 
 ## 0.2.7-rc.6.17 (2026-11-06, pre-release)
 

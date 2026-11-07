@@ -156,7 +156,7 @@ every change, release by release.
 
 | Version | What it brings |
 | --- | --- |
-| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; the App Browser back in the Tools menu with sharp icons; SQLite 3.51.3 |
+| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; the App Browser back in the Tools menu with sharp icons; SQLite 3.51.3, and libsodium 1.0.22 and OpenSSL 3.5.9 in the xTalk Suite |
 | [0.2.7-rc.6.17](#027-rc617-the-bug-hunt-round-seventeen) | The round to squash what was left before 0.2.7 is stable: buttons on a coloured card in the web IDE, a dark menu item on Linux, a main window that wouldn't minimize on Windows 11, an App Browser that listed itself (and the Card Navigator), windows that flashed at start, Inclusions in a new order every run, the Responsive Starter's second save, the Phone Starter's pinch and its fit on an iPhone's Home Screen; and Lessons, a course in xTalk, on the website |
 | [0.2.7-rc.6.16](#027-rc616-the-bug-hunt-round-sixteen) | The Responsive Starter lays one stack out for a phone, a tablet and a desktop; phone stacks use touch, sensors, the camera and the share sheet; a stack plays with nothing around it; Android packages install again; the website gets an Extensions page; the Script Editor's black words on grey, a blank Dictionary on Windows and unreadable menu words are fixed |
 | [0.2.7-rc.6.15](#027-rc615-the-bug-hunt-round-fifteen) | The Mobile Web library and the Phone Starter bring stacks to phones; animations that wait 0 ms show in the browser; a Clear button for the Inspector's colours; named tools; the web IDE and the website rest; `write to process` sends text as written |
@@ -1749,6 +1749,10 @@ found since rc.6.17. Here is each change, listed as the bug it squashes:
   when a WAL file is reset. Values come back exactly as before; 3.53
   and later would change the text scripts get for real numbers, so they
   aren't used (#396).
+- **Older libsodium and OpenSSL in the xTalk Suite.** SodiumXT carries
+  libsodium 1.0.22 on every platform, and TorrentXT and dataChannelXT
+  carry OpenSSL 3.5.9 on macOS and Linux, as the engine does; their
+  scripts and behaviour are unchanged (#408).
 
 Behind the scenes, about fifty everyday things a person does are
 clicked through the IDE's own windows on every build, light and dark
