@@ -1761,7 +1761,7 @@ checked as Android takes it, though packages still carry LiveCode
 check finds any handler that uses a script local declared below it
 (#385); and the runtimes that every package carries are rebuilt from
 this release's engine, with the Android Java layer built here (#393,
-#408).
+#409).
 
 #### 0.2.7-rc.6.17: the Bug Hunt, round seventeen
 
