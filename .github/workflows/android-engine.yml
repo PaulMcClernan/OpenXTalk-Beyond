@@ -474,6 +474,7 @@ jobs:
           $adb root || true
           sleep 3
           $adb wait-for-device
+          $adb install -r "$WORK/app/out/debug.apk" || true
           hung=0
           for i in $(seq 1 15); do
             $adb shell wm density reset || true
