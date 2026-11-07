@@ -124,6 +124,7 @@ on:
       - '.github/workflows/ui-tour.yml'
       - '.github/workflows/android.yml'
       - '.github/workflows/android-java.yml'
+      - '.github/workflows/android-engine.yml'
       - '.github/workflows/mac-menu-backdrop.yml'
       - '.github/workflows/pages.yml'
       - 'tools/pages/**'
@@ -134,6 +135,9 @@ on:
       - 'tools/ci/android_check.py'
       - 'tools/ci/android-check.livecodescript'
       - 'tools/ci/android_java.py'
+      - 'tools/ci/android_engine.py'
+      - 'tools/ci/build-android.sh'
+      - 'config/android-ndk-version'
       - 'engine/src/java/**'
       - 'tools/ci/tests/**'
       - '.github/workflows/build-linux.yml'
@@ -155,8 +159,18 @@ on:
       - 'tools/ci/win_crashtrace.py'
       - 'tools/ci/window-frame-check.livecodescript'
       - 'tools/ci/window_frame_check.py'
+  # DRAFT PULL REQUESTS (2026-11-06). A draft runs none of this workflow's
+  # jobs: each job's `if:` ends in `github.event.pull_request.draft != true`,
+  # and marking the pull request ready (ready_for_review, below) starts the
+  # whole run on its newest commit. A draft is work in progress whose commits
+  # land minutes apart, and each one used to start this full build only for
+  # the next to cancel it (26 of 52 builds on 2026-11-06 00:38-02:15 UTC). CI
+  # checks still run on every draft commit. A push, a dispatch and a call from
+  # release.yml have no pull request, so the condition is always true there.
+  # tools/ci/tests/test_draft_builds.py holds every job to it.
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore: *build-paths-ignore
   workflow_dispatch:
   workflow_call:
@@ -199,6 +213,7 @@ defaults:
 jobs:
   build:
     name: Build mac-${{ matrix.arch }}
+    if: ${{ github.event.pull_request.draft != true }}
     strategy:
       fail-fast: false
       matrix:
@@ -539,6 +554,7 @@ jobs:
   # engines build
   docs:
     name: Docs
+    if: ${{ github.event.pull_request.draft != true }}
     uses: ./.github/workflows/docs.yml
     with:
       artifact: OXT-Beyond-docs-macos
@@ -546,6 +562,7 @@ jobs:
   # The web runtime of the package (web.yml), made while the engines build
   web:
     name: Web
+    if: ${{ github.event.pull_request.draft != true }}
     uses: ./.github/workflows/web.yml
     with:
       artifact: OXT-Beyond-web-macos
@@ -558,7 +575,7 @@ jobs:
   package:
     name: Package mac-universal
     needs: [build, docs, web]
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    if: ${{ (!cancelled() && needs.build.result == 'success') && github.event.pull_request.draft != true }}
     runs-on: macos-15
     timeout-minutes: 90
     env:
@@ -864,6 +881,7 @@ jobs:
   # repository mode).
   test:
     name: Test mac-universal (${{ matrix.arch }})
+    if: ${{ github.event.pull_request.draft != true }}
     needs: package
     strategy:
       fail-fast: false
@@ -1149,6 +1167,27 @@ jobs:
           python3 tools/ci/ui_tour.py --install "$RUNNER_TEMP/oxt-test" --platform mac-universal \
             --appearance dark --out "$LOGS/ui-tour/dark"
 
+      # Everyday tasks a person does in the IDE, through its own windows
+      # with the system's mouse and keyboard (CGEvent): a new stack, the
+      # common controls from the Tools palette, Inspector edits, the Script
+      # Editor, the Message Box, undo, copy, group, align, cards, Save As,
+      # Close and Remove From Memory and opening it again, Revert, the
+      # Dictionary, the Geometry Manager, Preferences and the Application
+      # Browser; each asserted and snapshot
+      # (tools/ci/everyday-tasks.livecodescript). One appearance a Mac,
+      # light on Apple silicon and dark on Intel, so that the step adds
+      # one run's time to each; a task that fails, or a script error,
+      # fails it
+      - name: Everyday IDE tasks
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        env:
+          APPEARANCE: ${{ matrix.arch == 'arm64' && 'light' || 'dark' }}
+        run: |
+          python3 tools/ci/ui_tour.py --install "$RUNNER_TEMP/oxt-test" --platform mac-universal \
+            --script tools/ci/everyday-tasks.livecodescript --timeout 900 \
+            --appearance "$APPEARANCE" --out "$LOGS/ui-tour/everyday-$APPEARANCE"
+
       # For a person to look through: a page with each window light and
       # dark side by side (tools/ci/ui_tour_page.py), uploaded with the
       # snapshots and the tour's lines as an artifact of their own, which
@@ -1268,6 +1307,7 @@ jobs:
   # (inspector-hypercard).
   tour-macos-26:
     name: IDE tour on macOS 26 (arm64)
+    if: ${{ github.event.pull_request.draft != true }}
     needs: package
     runs-on: macos-26
     timeout-minutes: 30

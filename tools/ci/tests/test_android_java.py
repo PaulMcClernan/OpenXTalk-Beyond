@@ -598,9 +598,20 @@ class Elf(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # jni
 
-def engine_classes(extra_natives=(), gles=None):
+# OpenGLView.startGLES(int) as this tree's javac writes it: the context of
+# the version asked for from OpenGL ES 2 on, else one with no attributes
+#   if (p > 1) m_egl_context = eglCreateContext(..., new int[] {
+#       EGL_CONTEXT_CLIENT_VERSION, p, EGL_NONE}); else ...(null)
+STARTGLES_CODE = [0x1b, 0x04, 0xa4, ('u2', 26), 0x06, 0xbc, 10, 0x59, ICONST_0, SIPUSH, ('u2', 0x3098), 0x4f,
+                  0x59, 0x04, 0x1b, 0x4f, 0x59, ICONST_2, SIPUSH, ('u2', 0x3038), 0x4f, 0x4d, GOTO, ('u2', 5),
+                  ACONST_NULL, 0x4d, RETURN]
+
+
+def engine_classes(extra_natives=(), gles=None, delegate=None):
     """A made-up Java layer: an Engine with natives and methods the engine
-    calls, an OpenGLView, and a listener interface."""
+    calls, an OpenGLView, and a listener interface. The view's start()
+    makes its context (with gles, of that version) or, with delegate, calls
+    startGLES(delegate)."""
     e = ClassWriter('com/runrev/android/Engine', 'android/view/View')
     e.method('doProcess', '(Z)V', 0x010a)
     e.method('doName_x', '(Ljava/lang/String;)V', 0x0101)
@@ -611,7 +622,12 @@ def engine_classes(extra_natives=(), gles=None):
     e.method('showAlert', '(Ljava/lang/String;I)V', code=[RETURN])
     e.method('pick', '(Ljava/lang/String;)Ljava/lang/String;', code=[ACONST_NULL, ARETURN])
     v = ClassWriter('com/runrev/android/OpenGLView', 'android/view/SurfaceView')
-    if gles is None:
+    if delegate is not None:
+        v.method('start', '()V', code=[ALOAD_0, BIPUSH, delegate, INVOKEVIRTUAL,
+                                       ('ref', 'method', 'com/runrev/android/OpenGLView', 'startGLES', '(I)V'),
+                                       RETURN])
+        v.method('startGLES', '(I)V', code=STARTGLES_CODE)
+    elif gles is None:
         v.method('start', '()V', code=[ALOAD_0, ACONST_NULL, POP, POP, RETURN])
     else:
         # new int[] {EGL_CONTEXT_CLIENT_VERSION, gles, EGL_NONE}
@@ -906,24 +922,138 @@ class Named(unittest.TestCase):
 
 
 class Gles(unittest.TestCase):
-    def classes(self, gles):
-        return aj.Classes({w.name: parse(w) for w in engine_classes(gles=gles)})
+    def classes(self, gles=None, delegate=None):
+        return aj.Classes({w.name: parse(w) for w in engine_classes(gles=gles, delegate=delegate)})
 
     def test_no_attributes_is_es_1(self):
         self.assertEqual(aj.gles_version(self.classes(None)), 1)
         problems, lines = aj.check_gles(self.classes(None), {'arm64-v8a': ['libGLESv1_CM.so', 'libc.so']})
         self.assertEqual(problems, [])
-        self.assertIn('OpenGLView makes OpenGL ES 1 contexts', lines)
+        self.assertIn('OpenGLView.start() makes OpenGL ES 1 contexts', lines)
+        self.assertIn('arm64-v8a: it calls OpenGLView.start(), which makes OpenGL ES 1 contexts', lines)
 
     def test_es_3_context_with_an_es_1_engine(self):
         self.assertEqual(aj.gles_version(self.classes(3)), 3)
         problems, _ = aj.check_gles(self.classes(3), {'arm64-v8a': ['libGLESv1_CM.so']})
-        self.assertEqual(problems, ['arm64-v8a: the engine draws with OpenGL ES 1 (libGLESv1_CM.so), and OpenGLView '
-                                    'makes OpenGL ES 3 contexts'])
+        self.assertEqual(problems, ['arm64-v8a: the engine draws with OpenGL ES 1 (libGLESv1_CM.so), and '
+                                    'OpenGLView.start() makes OpenGL ES 3 contexts'])
         self.assertEqual(aj.check_gles(self.classes(3), {'arm64-v8a': ['libGLESv3.so', 'libEGL.so']})[0], [])
 
     def test_no_view(self):
         self.assertEqual(aj.check_gles(aj.Classes({}), {})[0], ['the jar has no com/runrev/android/OpenGLView.start'])
+
+    def test_start_calls_startgles(self):
+        """This tree's view: start() calls startGLES(1), which makes its
+        context with no attributes for 1 and of the version for more."""
+        classes = self.classes(delegate=1)
+        self.assertEqual(aj.gles_contexts(classes), (1, None))
+        self.assertEqual(aj.gles_contexts(classes, 3), (1, 3))
+        self.assertEqual(aj.gles_contexts(classes, 2), (1, 2))
+        self.assertEqual(aj.gles_contexts(self.classes(delegate=3)), (3, None))
+        # what this check cannot read: a start() that passes startGLES a
+        # value from elsewhere, or a startGLES without the version it asks
+        view = ClassWriter('com/runrev/android/OpenGLView', 'android/view/SurfaceView')
+        view.method('start', '()V', code=[ALOAD_0, ALOAD_0, GETFIELD,
+                                          ('ref', 'field', 'com/runrev/android/OpenGLView', 'm_version', 'I'),
+                                          INVOKEVIRTUAL,
+                                          ('ref', 'method', 'com/runrev/android/OpenGLView', 'startGLES', '(I)V'),
+                                          RETURN])
+        view.method('startGLES', '(I)V', code=STARTGLES_CODE)
+        self.assertEqual(aj.gles_contexts(aj.Classes({view.name: parse(view)}), 3), (0, 3))
+        view = ClassWriter('com/runrev/android/OpenGLView', 'android/view/SurfaceView')
+        view.method('start', '()V', code=[ALOAD_0, ICONST_2, INVOKEVIRTUAL,
+                                          ('ref', 'method', 'com/runrev/android/OpenGLView', 'startGLES', '(I)V'),
+                                          RETURN])
+        view.method('startGLES', '(I)V', code=[0x06, 0xbc, 10, 0x59, ICONST_0, SIPUSH, ('u2', 0x3098), 0x4f,
+                                               0x59, ICONST_0, 0x1b, 0x4f, 0x4d, RETURN])
+        self.assertEqual(aj.gles_contexts(aj.Classes({view.name: parse(view)}), 3), (0, 0))
+        problems, _ = aj.check_gles(aj.Classes({view.name: parse(view)}), {'x86': ['libGLESv3.so']}, 3)
+        self.assertEqual(problems, ['com/runrev/android/OpenGLView.start asks for an OpenGL ES version this check '
+                                    'cannot read',
+                                    'x86: OpenGLView.startGLES(3) asks for an OpenGL ES version this check cannot '
+                                    'read'])
+
+    def test_both_engines_with_this_trees_view(self):
+        """One Java layer, two engines: 9.6.3's (libGLESv1_CM) calls start()
+        and gets OpenGL ES 1; one built from this tree (libGLESv3) calls
+        startGLES with the source's version and gets OpenGL ES 3."""
+        classes = self.classes(delegate=1)
+        old = {'arm64-v8a': ['libGLESv1_CM.so', 'libc.so']}
+        new = {'arm64-v8a': ['libGLESv3.so', 'libEGL.so'], 'x86': ['libGLESv3.so']}
+        problems, lines = aj.check_gles(classes, old, 3)
+        self.assertEqual(problems, [])
+        self.assertIn('arm64-v8a: it calls OpenGLView.start(), which makes OpenGL ES 1 contexts', lines)
+        problems, lines = aj.check_gles(classes, new, 3)
+        self.assertEqual(problems, [])
+        self.assertIn('arm64-v8a: it calls OpenGLView.startGLES(3), which makes OpenGL ES 3 contexts', lines)
+        self.assertIn('x86: it calls OpenGLView.startGLES(3), which makes OpenGL ES 3 contexts', lines)
+        # the engine of this tree, had its source kept calling start()
+        self.assertEqual(aj.check_gles(classes, new, None)[0],
+                         ['arm64-v8a: the engine draws with OpenGL ES 3 (libGLESv3.so), and OpenGLView.start() '
+                          'makes OpenGL ES 1 contexts',
+                          'x86: the engine draws with OpenGL ES 3 (libGLESv3.so), and OpenGLView.start() makes '
+                          'OpenGL ES 1 contexts'])
+        # or asked for a version the library is not
+        self.assertEqual(aj.check_gles(classes, {'x86': ['libGLESv3.so']}, 2)[0],
+                         ['x86: the engine draws with OpenGL ES 3 (libGLESv3.so), and OpenGLView.startGLES(2) '
+                          'makes OpenGL ES 2 contexts'])
+        # and a source this check cannot read
+        self.assertEqual(aj.check_gles(classes, {'x86': ['libGLESv3.so']}, 0)[0],
+                         ['x86: engine/src/mblandroiddc.cpp asks OpenGLView for an OpenGL ES version this check '
+                          'cannot read'])
+
+    def test_the_config_can_make_the_context(self):
+        """The view's source: for OpenGL ES 1, the config LiveCode's Java
+        always chose (findConfig of four sizes, which says nothing of the
+        renderable type); from OpenGL ES 2 on, one that says it can make
+        that version's context, or none so that the next sizes are tried
+        (the EGL default, OpenGL ES 1 alone, may give a config that cannot
+        make an OpenGL ES 3 context first)"""
+        src = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'OpenGLView.java')
+        four = re.search(r'(?s)private EGLConfig findConfig\(int r, int g, int b, int a\)\s*\{(.*?)\n\t\}', src)
+        self.assertNotIn('RENDERABLE', four.group(1))
+        self.assertIn('return t_configs[0];', four.group(1))
+        five = re.search(r'(?s)private EGLConfig findConfig\(int r, int g, int b, int a, int p_gles_version\)\s*'
+                         r'\{(.*?)\n\t\}', src).group(1)
+        self.assertRegex(five, r'^\s*if \(p_gles_version <= 1\)\s+return findConfig\(r, g, b, a\);')
+        self.assertIn('EGL_RENDERABLE_TYPE, p_gles_version >= 3 ? EGL_OPENGL_ES3_BIT_KHR : EGL_OPENGL_ES2_BIT,', five)
+        self.assertEqual(five.count('return null;'), 2)
+        # EGL's values (EGL 1.5 and EGL_KHR_create_context)
+        for name, value in (('EGL_RENDERABLE_TYPE', '0x3040'), ('EGL_OPENGL_ES2_BIT', '0x0004'),
+                            ('EGL_OPENGL_ES3_BIT_KHR', '0x0040')):
+            self.assertIn('private static final int %s = %s;' % (name, value), src)
+        start = re.search(r'(?s)public void startGLES\(int p_gles_version\)\s*\{(.*?)\n\t\}', src).group(1)
+        sizes = re.findall(r'findConfig\((\d+, \d+, \d+, \d+)(, p_gles_version)?\)', start)
+        self.assertEqual(sizes, [(x, ', p_gles_version') for x in ('8, 8, 8, 8', '5, 6, 5, 0', '5, 5, 5, 0',
+                                                                     '4, 4, 4, 4', '0, 0, 0, 0')])
+        self.assertRegex(src, r'public void start\(\)\s*\{\s*startGLES\(1\);\s*\}')
+
+    def test_the_shipped_view_with_each_engine(self):
+        """LiveCode 9.6.3's view has no startGLES: right for its own engine,
+        and an engine built from this tree could not draw with it."""
+        classes = self.classes(None)
+        self.assertEqual(aj.check_gles(classes, {'x86': ['libGLESv1_CM.so']}, 3)[0], [])
+        self.assertEqual(aj.check_gles(classes, {'x86': ['libGLESv3.so']}, 3)[0],
+                         ['x86: the engine calls OpenGLView.startGLES(3) (engine/src/mblandroiddc.cpp), which the '
+                          'jar does not have'])
+
+    def test_the_source_reader(self):
+        call = ('static const jint kMCAndroidOpenGLESVersion = 3;\n'
+                's_openglview_start_method = env -> GetMethodID(t_view_class, "startGLES", "(I)V");\n'
+                's_java_env -> CallVoidMethod(s_android_opengl_view, s_openglview_start_method, '
+                'kMCAndroidOpenGLESVersion);\n')
+        self.assertEqual(aj.source_gles_version(call), 3)
+        self.assertEqual(aj.source_gles_version(call.replace('= 3;', '= 2;')), 2)
+        # LiveCode's own call
+        self.assertIsNone(aj.source_gles_version(
+            's_openglview_start_method = env -> GetMethodID(t_view_class, "start", "()V");\n'
+            's_java_env -> CallVoidMethod(s_android_opengl_view, s_openglview_start_method);\n'))
+        # what it cannot read: no version, or one not passed
+        self.assertEqual(aj.source_gles_version(call.replace('kMCAndroidOpenGLESVersion = 3', 'kOther = 3')), 0)
+        self.assertEqual(aj.source_gles_version(call.replace(', kMCAndroidOpenGLESVersion)', ', 3)')), 0)
+        self.assertEqual(aj.source_gles_version('nothing'), 0)
+        # and the tree's
+        self.assertEqual(aj.source_gles_version(), 3)
 
 
 class Rules(unittest.TestCase):
@@ -996,12 +1126,257 @@ class OneSystem(unittest.TestCase):
                                      '%s: %s' % (name, m.group(0)))
         self.assertGreaterEqual(calls, 5)
 
-    def test_opengl_view_asks_for_the_shipped_engines_version(self):
+    def test_notifications_ask_to_post_only_when_declared(self):
+        # Android 13 shows an app's notifications only once the user lets it
+        # post them: scheduling one asks, once a run, and only an app whose
+        # manifest declares POST_NOTIFICATIONS (one that does not is never
+        # asked, as before); the notification is scheduled either way
+        java = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'NotificationModule.java')
+        create = re.search(r'(?s)public long createLocalNotification\(.*?\n    }\n', java).group(0)
+        self.assertRegex(create, r'resetTimer\(m_engine\.getContext\(\)\);\s*requestPostNotifications\(\);\s*'
+                                 r'return t_row_id;\s*}\n$')
+        self.assertEqual(java.count('requestPostNotifications()'), 2)
+        self.assertIn('public static final String POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS";',
+                      java)
+        ask = re.search(r'(?s)protected void requestPostNotifications\(\)\n    {\n(.*?)\n    }\n', java).group(1)
+        guard = ask.index('return;')
+        for part in ('Build.VERSION.SDK_INT < 33 || s_asked_to_post',
+                     't_context.checkSelfPermission(POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ||',
+                     '!Utils.declaresPermission(t_context, POST_NOTIFICATIONS) || !(t_context instanceof Activity)'):
+            self.assertIn(part, ask)
+        # every return comes before it is marked asked, and that before it asks
+        asked = ask.index('s_asked_to_post = true;')
+        request = ask.index('((Activity)t_context).requestPermissions(new String[] {POST_NOTIFICATIONS},\n'
+                            '                                                 Engine.POST_NOTIFICATIONS_REQUEST_CODE);')
+        self.assertLess(guard, asked)
+        self.assertLess(ask.rindex('return;'), asked)
+        self.assertLess(asked, request)
+        self.assertEqual(ask.count('requestPermissions('), 1)
+        # never initialised in <clinit>: compare would see a new class initialiser
+        self.assertIn('protected static boolean s_asked_to_post;\n', java)
+        # the engine: its own request code answers androidRequestPermission,
+        # and nothing else does
+        engine = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'Engine.java')
+        codes = dict(re.findall(r'public static final int (\w+_REQUEST_CODE) = (\d+);', engine))
+        self.assertEqual(codes, {'PERMISSION_REQUEST_CODE': '1', 'POST_NOTIFICATIONS_REQUEST_CODE': '2'})
+        result = re.search(r'(?s)public void onRequestPermissionsResult\(int requestCode, String\[\] permissions, '
+                           r'int\[\] grantResults\)\n    {\n(.*?)\n    }\n', engine).group(1)
+        self.assertEqual(result.split(), (
+            'if (requestCode != PERMISSION_REQUEST_CODE) return; onAskPermissionDone(grantResults.length > 0 && '
+            'grantResults[0] == PackageManager.PERMISSION_GRANTED);').split())
+        self.assertIn('t_activity.requestPermissions(new String[]{p_permission}, PERMISSION_REQUEST_CODE);', engine)
+        # what the manifest declares, as Android reads it
+        utils = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'Utils.java')
+        declares = re.search(r'(?s)public static boolean declaresPermission\(Context p_context, String '
+                             r'p_permission\)\n    {\n(.*?)\n    }\n', utils).group(1)
+        for part in ('getPackageInfo(p_context.getPackageName(),', 'PackageManager.GET_PERMISSIONS',
+                     'if (t_info.requestedPermissions != null)', 'if (p_permission.equals(t_permission))',
+                     'return true;', 'catch (PackageManager.NameNotFoundException e)'):
+            self.assertIn(part, declares)
+        self.assertTrue(declares.rstrip().endswith('return false;'))
+        # and both changes are named, with their reasons, against the
+        # shipped jar
+        for key in ('code com/runrev/android/NotificationModule.createLocalNotification:(Ljava/lang/String;'
+                    'Ljava/lang/String;Ljava/lang/String;JZI)J',
+                    'code com/runrev/android/Engine.onRequestPermissionsResult:(I[Ljava/lang/String;[I)V'):
+            self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
+
+    def test_write_external_storage_on_android_13(self):
+        # Android 13 and newer refuse WRITE_EXTERNAL_STORAGE without asking,
+        # and it gives an app that targets API 30 or newer nothing: for an
+        # app that declares it, it counts as granted there, without asking,
+        # so what the engine asks for it first works. Only that permission,
+        # only there, only declared; everything else is asked as before
+        engine = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'Engine.java')
+        self.assertIn('public static final String WRITE_EXTERNAL_STORAGE = '
+                      '"android.permission.WRITE_EXTERNAL_STORAGE";', engine)
+        rule = re.search(r'(?s)protected boolean grantedWithoutAsking\(String p_permission\)\n    {\n(.*?)\n    }\n',
+                         engine).group(1)
+        self.assertEqual(rule.split(), (
+            'return Build.VERSION.SDK_INT >= 33 && WRITE_EXTERNAL_STORAGE.equals(p_permission) && '
+            'getContext().getApplicationInfo().targetSdkVersion >= 30 && '
+            'Utils.declaresPermission(getContext(), p_permission);').split())
+        # asking: granted at once, as for one already granted, and nothing
+        # is requested; else as before
+        ask = re.search(r'(?s)public boolean askPermission\(String p_permission\)\n    {\n(.*?)\n    }\n',
+                        engine).group(1)
+        self.assertTrue(ask.lstrip().startswith('if (grantedWithoutAsking(p_permission))\n'
+                                                '            onAskPermissionDone(true);\n'
+                                                '        else if (Build.VERSION.SDK_INT >= 23 && '
+                                                'getContext().checkSelfPermission(p_permission)'), ask)
+        self.assertEqual(ask.count('requestPermissions('), 1)
+        self.assertEqual(ask.count('onAskPermissionDone(true);'), 2)
+        self.assertTrue(ask.rstrip().endswith('return true;'))
+        # androidHasPermission: the same answer
+        has = re.search(r'(?s)public boolean checkHasPermissionGranted\(String p_permission\)\n    {\n(.*?)\n    }\n',
+                        engine).group(1)
+        self.assertTrue(has.lstrip().startswith('if (grantedWithoutAsking(p_permission))\n'
+                                                '            return true;\n'
+                                                '        if (Build.VERSION.SDK_INT >= 23)'), has)
+        self.assertEqual(engine.count('grantedWithoutAsking('), 3)
+        for key in ('code com/runrev/android/Engine.askPermission:(Ljava/lang/String;)Z',
+                    'code com/runrev/android/Engine.checkHasPermissionGranted:(Ljava/lang/String;)Z'):
+            self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
+
+    def test_export_to_album_through_media_store(self):
+        # Android 10 and newer: the picture goes into the shared Pictures
+        # folder through MediaStore, by the name and type the older code
+        # gave the file, answered as it answered; Android 9 and older write
+        # the file as before
+        engine = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'Engine.java')
+        export = re.search(r'(?s)public String exportImageToAlbum \(byte\[\] t_image_data, String t_file_name, '
+                           r'String t_file_type\)\n    {\n(.*?)\n    }\n', engine).group(1)
+        branch = export.index('if (Build.VERSION.SDK_INT >= 29)\n'
+                              '                return exportImageToMediaStore(t_image_data, t_filename, t_file_type);')
+        # after the name is made (as before), before any file is written
+        self.assertLess(export.rindex('t_filename = t_file_name + t_file_type;'), branch)
+        self.assertLess(export.index('t_filename = "I" + t_uuid.toString().substring(0,7) + t_file_type;'), branch)
+        self.assertLess(branch, export.index('new FileOutputStream(t_file)'))
+        self.assertLess(export.index('if (t_image_data == null)\n            return "export failed";'), branch)
+        store = re.search(r'(?s)protected String exportImageToMediaStore\(byte\[\] p_data, String p_filename, '
+                          r'String p_file_type\)\n    {\n(.*?)\n    }\n', engine).group(1)
+        for part in ('MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)',
+                     'String t_folder = Environment.DIRECTORY_PICTURES + "/";',
+                     'Uri t_uri = ownPicture(t_resolver, t_collection, p_filename, t_folder);',
+                     't_values.put(MediaStore.MediaColumns.DISPLAY_NAME, p_filename);',
+                     't_values.put(MediaStore.MediaColumns.MIME_TYPE, imageMimeType(p_file_type));',
+                     't_values.put(MediaStore.MediaColumns.RELATIVE_PATH, t_folder);',
+                     't_values.put(MediaStore.MediaColumns.IS_PENDING, 1);',
+                     't_uri = t_resolver.insert(t_collection, t_values);',
+                     'if (t_uri == null)\n                    return "export failed";',
+                     'OutputStream t_out = t_resolver.openOutputStream(t_uri, "wt");',
+                     't_out.write(p_data, 0, p_data.length);',
+                     't_values.put(MediaStore.MediaColumns.IS_PENDING, 0);',
+                     't_resolver.update(t_uri, t_values, null, null);',
+                     'catch (IOException | RuntimeException e)',
+                     't_resolver.delete(t_uri, null, null);',
+                     'return e.toString();'):
+            self.assertIn(part, store)
+        # the stream is closed however the write ends; only a picture this
+        # call inserted is marked done, or deleted when the write fails
+        self.assertRegex(store, r'(?s)try\s*{\s*t_out\.write\(.*?\}\s*finally\s*{\s*t_out\.close\(\);')
+        self.assertEqual(store.count('if (t_inserted)'), 2)
+        self.assertLess(store.index('t_inserted = true;'), store.index('openOutputStream'))
+        # null is success, as the older code answered
+        self.assertTrue(store.rstrip().endswith('return null;'))
+        # an existing picture is written over only when this app added it
+        own = re.search(r'(?s)protected Uri ownPicture\(ContentResolver p_resolver, Uri p_collection, String '
+                        r'p_filename, String p_folder\)\n    {\n(.*?)\n    }\n', engine).group(1)
+        for part in ('MediaStore.MediaColumns.OWNER_PACKAGE_NAME',
+                     'MediaStore.MediaColumns.DISPLAY_NAME + "=? AND " +',
+                     'MediaStore.MediaColumns.RELATIVE_PATH + "=?"', 'new String[] {p_filename, p_folder}',
+                     'if (getContext().getPackageName().equals(t_cursor.getString(1)))',
+                     'return ContentUris.withAppendedId(p_collection, t_cursor.getLong(0));',
+                     't_cursor.close();'):
+            self.assertIn(part, own)
+        self.assertTrue(own.rstrip().endswith('return null;'))
+        # the engine's three types (exec-misc.cpp: ".png", ".gif", ".jpg")
+        types = re.findall(r'"(\.\w+)\\n"', read('engine', 'src', 'exec-misc.cpp'))
+        self.assertEqual(sorted(set(types)), ['.gif', '.jpg', '.png'])
+        mime = re.search(r'(?s)protected static String imageMimeType\(String p_file_type\)\n    {\n(.*?)\n    }\n',
+                         engine).group(1)
+        self.assertEqual(mime.split(), ('if (".png".equalsIgnoreCase(p_file_type)) return "image/png"; '
+                                        'if (".gif".equalsIgnoreCase(p_file_type)) return "image/gif"; '
+                                        'return "image/jpeg";').split())
+        # no new class initialiser: the new fields are constants
+        self.assertNotIn('static {', engine)
+        key = ('code com/runrev/android/Engine.exportImageToAlbum:([BLjava/lang/String;Ljava/lang/String;)'
+               'Ljava/lang/String;')
+        self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
+
+    def test_back_reaches_backkey_through_the_back_callback(self):
+        # Android 16 and newer call only the window's back callback for an
+        # app that targets API 36: it does what onBackPressed does, which
+        # is what it did; registered from Android 13 on (where Android
+        # ignores it below target 36, and calls onBackPressed as before)
+        activity = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'LiveCodeActivity.java')
+        create = re.search(r'(?s)protected void onCreate\(Bundle p_saved_state\)\n\t{\n(.*?)\n\t}\n', activity).group(1)
+        self.assertRegex(create, r'if \(Build\.VERSION\.SDK_INT >= 33\)\s+registerBackCallback\(\);')
+        register = re.search(r'(?s)protected void registerBackCallback\(\)\n    {\n(.*?)\n    }\n', activity).group(1)
+        self.assertEqual(register.split(), (
+            'getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, '
+            'new BackCallback(this));').split())
+        invoked = re.search(r'(?s)protected static class BackCallback implements OnBackInvokedCallback\n    {\n(.*?)'
+                            r'\n    }\n', activity).group(1)
+        self.assertRegex(invoked, r'public void onBackInvoked\(\)\s*{\s*m_activity\.onBackPressed\(\);\s*}')
+        # onBackPressed is the stack's backKey, as before
+        self.assertRegex(activity, r'public void onBackPressed\(\)\s*{\s*s_main_view\.onBackPressed\(\);\s*}')
+        # the busy indicator's dialog: its key listener and its callback do
+        # one thing, what the listener did
+        busy = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'BusyIndicator.java')
+        show = re.search(r'(?s)public void showBusyIndicator\(String p_label\)\n    {\n(.*?)\n    }\n', busy).group(1)
+        self.assertRegex(show, r'event\.getRepeatCount\(\) == 0\)\s*{\s*backPressed\(\);\s*return true;\s*}')
+        self.assertRegex(show, r'if \(Build\.VERSION\.SDK_INT >= 33\)\s+registerBackCallback\(t_dialog\);')
+        self.assertLess(show.index('setOnKeyListener'), show.index('registerBackCallback(t_dialog)'))
+        pressed = re.search(r'(?s)protected void backPressed\(\)\n    {\n(.*?)\n    }\n', busy).group(1)
+        self.assertEqual(pressed.split(), 'for (ProgressDialog t_dialog : m_dialog) t_dialog.dismiss(); '
+                                          'm_engine.doBackPressed();'.split())
+        self.assertIn('p_dialog.getOnBackInvokedDispatcher().registerOnBackInvokedCallback('
+                      'OnBackInvokedDispatcher.PRIORITY_DEFAULT,', busy)
+        self.assertRegex(busy, r'public void onBackInvoked\(\)\s*{\s*m_indicator\.backPressed\(\);\s*}')
+        for key in ('code com/runrev/android/LiveCodeActivity.onCreate:(Landroid/os/Bundle;)V',
+                    'code com/runrev/android/BusyIndicator.showBusyIndicator:(Ljava/lang/String;)V',
+                    'code com/runrev/android/BusyIndicator$1.onKey:(Landroid/content/DialogInterface;ILandroid/view/'
+                    'KeyEvent;)Z'):
+            self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
+
+    def test_edge_to_edge_keeps_the_stack_out_of_the_bars(self):
+        # an app that targets API 35 or newer is drawn edge to edge on
+        # Android 15 and newer: the view that holds the stack (and the
+        # native controls' layers, its children) is padded by the bars, the
+        # cutout and, while the window is to resize for it, the keyboard;
+        # an app that targets less is laid out as before
+        activity = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'LiveCodeActivity.java')
+        create = re.search(r'(?s)protected void onCreate\(Bundle p_saved_state\)\n\t{\n(.*?)\n\t}\n', activity).group(1)
+        self.assertRegex(create, r'if \(Build\.VERSION\.SDK_INT >= 35 && getApplicationInfo\(\)\.targetSdkVersion >= '
+                                 r'35\)\s+keepOutOfSystemBars\(\);')
+        self.assertLess(create.index('setContentView('), create.index('keepOutOfSystemBars();'))
+        self.assertIn('s_main_layout.setOnApplyWindowInsetsListener(new SystemBarsPadding(this));', activity)
+        pad = re.search(r'(?s)public WindowInsets onApplyWindowInsets\(View p_view, WindowInsets p_insets\)\n'
+                        r'        {\n(.*?)\n        }\n', activity).group(1)
+        self.assertEqual(pad.split(), (
+            'int t_types = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout(); '
+            'if ((m_activity.getWindow().getAttributes().softInputMode & '
+            'WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) == WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE) '
+            't_types |= WindowInsets.Type.ime(); '
+            'Insets t_bars = p_insets.getInsets(t_types); '
+            'p_view.setPadding(t_bars.left, t_bars.top, t_bars.right, t_bars.bottom); '
+            'return WindowInsets.CONSUMED;').split())
+        # the window resizes for the keyboard unless the stack says "pan"
+        self.assertIn('getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);', activity)
+        # everything the stack shows is a child of that view, filling it
+        engine = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'Engine.java')
+        self.assertIn('new NativeControlModule(this, ((LiveCodeActivity)getContext()).s_main_layout)', engine)
+        self.assertIn('t_main_view.addView(m_view_layout, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.'
+                      'MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));', engine)
+        native = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'nativecontrol', 'NativeControlModule.java')
+        self.assertRegex(native, r'm_parent \. addView\(m_layout,\s*new FrameLayout\.LayoutParams\(FrameLayout\.'
+                                 r'LayoutParams\.MATCH_PARENT,\s*FrameLayout\.LayoutParams\.MATCH_PARENT\)\);')
+        self.assertRegex(activity, r's_main_layout \. addView\(s_main_view,\s*new FrameLayout\.LayoutParams\('
+                                   r'FrameLayout\.LayoutParams\.MATCH_PARENT,\s*FrameLayout\.LayoutParams\.MATCH_PARENT\)\);')
+
+    def test_opengl_view_serves_both_engines(self):
         # the runtime's engine is LiveCode Community 9.6.3's, which draws
-        # with OpenGL ES 1 (android-java.yml's jni checks it on the engine):
-        # while the runtimes asset carries that engine, the view asks for 1
+        # with OpenGL ES 1 and calls start() (android-java.yml's jni checks
+        # it on the engine): while the runtimes asset carries that engine,
+        # start() makes the context it made, with no attributes
         java = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'OpenGLView.java')
-        self.assertIn('private static final int GLES_VERSION = 1;', java)
+        self.assertRegex(java, r'public void start\(\)\s*{\s*startGLES\(1\);\s*}')
+        self.assertIn('public void startGLES(int p_gles_version)', java)
+        self.assertRegex(java, r'if \(p_gles_version > 1\)\s*{\s*int\[\] t_attr = new int\[\] {\s*'
+                               r'EGL_CONTEXT_CLIENT_VERSION, p_gles_version,\s*EGL10.EGL_NONE,\s*};\s*'
+                               r'm_egl_context = m_egl \. eglCreateContext\(m_egl_display, m_egl_config, '
+                               r'EGL10 \. EGL_NO_CONTEXT, t_attr\);\s*}\s*else\s*m_egl_context = m_egl \. '
+                               r'eglCreateContext\(m_egl_display, m_egl_config, EGL10 \. EGL_NO_CONTEXT, null\);')
+        self.assertNotIn('GLES_VERSION', java)
+        # an engine built from this tree draws with OpenGL ES 3, which it
+        # links, and asks startGLES for that (android-engine.yml's jni
+        # checks it on the engine built)
+        self.assertEqual(aj.source_gles_version(), 3)
+        kernel = read('engine', 'kernel.gyp')
+        self.assertIn("'-lGLESv3',", kernel)
+        self.assertNotIn("'-lGLESv1_CM',", kernel)
+        self.assertNotIn('"start", "()V"', read('engine', 'src', 'mblandroiddc.cpp'))
         import json
         assets = json.loads(read('tools', 'oxt', 'external-assets.json'))
         runtimes = [a for a in assets['assets'] if a['id'].startswith('oxt-runtimes-')]

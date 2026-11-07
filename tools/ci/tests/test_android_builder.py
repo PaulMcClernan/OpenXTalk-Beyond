@@ -26,8 +26,21 @@ would not notice going back:
   - no shell zip, sh or find (none of them is there on Windows);
   - the push receiver says android:exported;
   - a stack that saved no architecture still builds for armv7 alone (the
-    card, not the builder, ticks arm64 for a new one), and the target API
-    and the minimum API list stay as they were.
+    card, not the builder, ticks arm64 for a new one), and the minimum API
+    list stays as it was;
+  - the target API: 33, as before, with a runtime whose Java layer is not
+    ready for newer, 36 with one that is (known by the classes it has for
+    it), or the stack's pin from 33 to 36; and at 36 the manifest keeps the
+    stack's orientation on large screens;
+  - the App Bundle: only for a build whose stack asks for one, from the
+    package's files before zipalign, signed with the package's key after
+    the package (jarsigner, the passwords never on a command line); the
+    bundletool it runs is checked against its pinned SHA-256 before it is
+    kept or used, and a download that fails is tried again, the second
+    time through the JDK's own HTTP client; and an SDK without aapt2 still
+    builds packages;
+  - the Android card's "App Bundle" box stores the setting the builder
+    reads, and shows it; a stack that never ticks it has no bundle.
 
   python3 -m unittest discover -s tools/ci/tests
 """
@@ -95,8 +108,17 @@ class Signing(unittest.TestCase):
         self.assertIn('put empty into $OXT_ANDROID_KEY_PASS', self.src)
 
     def test_no_jarsigner(self):
-        self.assertNotIn('pathToJarSigner()', self.src)
+        # apksigner alone signs the package; jarsigner signs only the App
+        # Bundle (which apksigner cannot), never with SHA1
         self.assertNotIn('SHA1withRSA', self.src)
+        main = handler(self.src, 'revSaveAsMobileStandaloneMain')
+        self.assertNotIn('pathToJarSigner()', main)
+        uses = [m.start() for m in re.finditer(r'pathToJarSigner\(\)', self.src)]
+        bundle = handler(self.src, 'androidSignBundle')
+        start = self.src.index(bundle)
+        self.assertTrue(uses)
+        for at in uses:
+            self.assertTrue(start <= at < start + len(bundle), 'jarsigner outside androidSignBundle')
 
     def test_who_signs(self):
         main = handler(self.src, 'revSaveAsMobileStandaloneMain')
@@ -232,6 +254,476 @@ class Compatibility(unittest.TestCase):
         scan = root.find('repeat for each line tFolder in folders(')
         self.assertGreater(first, 0)
         self.assertGreater(scan, first, 'the target API\'s platform is taken before any newer one')
+
+
+JAVA = ('engine', 'src', 'java', 'com', 'runrev', 'android')
+UNITS = ('tools', 'ci', 'android-check.livecodescript')
+
+
+class AppBundle(unittest.TestCase):
+    """The App Bundle (androidBuildBundle and its helpers). The IDE units
+    (unitAppBundle in tools/ci/android-check.livecodescript) run the
+    helpers on made-up files; android.yml builds a bundle, checks it
+    (android_check.py verify) and installs it on the emulators as Google
+    Play would"""
+
+    def setUp(self):
+        self.src = code(read(BUILDER))
+        self.main = handler(self.src, 'revSaveAsMobileStandaloneMain')
+
+    def test_only_when_the_stack_asks_and_never_for_test(self):
+        self.assertRegex(self.main, r'if pTarget contains "build" and pSettings\["android,app bundle"\] is true then\s+'
+                                    r'put androidBundlePath\(pApkFile\) into tBundleFile')
+        # every other use waits for tBundleFile
+        for m in re.finditer(r'(androidBuildBundle|androidSignBundle) ', self.main):
+            before = self.main[:m.start()]
+            self.assertGreater(before.rfind('if tBundleFile is not empty then'), before.rfind('end if'), m.group(1))
+
+    def test_from_the_unsigned_package_before_zipalign(self):
+        built = self.main.find('buildAPK tUnalignedApkFile, tAssetArchive, tClassesFile, tLibsBuildFolder')
+        bundle = self.main.find('androidBuildBundle tUnalignedApkFile, tUnsignedBundleFile, tBuildFolder, '
+                                'androidBundletoolForBuild()')
+        align = self.main.find('pathToZipAlign(), "-f", "-p", "4"')
+        self.assertGreater(built, 0)
+        self.assertGreater(bundle, built)
+        self.assertGreater(align, bundle)
+
+    def test_signed_with_the_packages_key_after_the_package(self):
+        verify = self.main.find('pathToApkSigner(), "verify", pApkFile')
+        sign = self.main.find('androidSignBundle tUnsignedBundleFile, tBundleFile, tKey, tKeystoreAlias')
+        self.assertGreater(verify, 0)
+        self.assertGreater(sign, verify)
+        part = self.main[sign - 300:sign + 400]
+        self.assertIn('put tKeystorePassword into $OXT_ANDROID_KS_PASS', part)
+        self.assertIn('put empty into $OXT_ANDROID_KS_PASS', part)
+        self.assertIn('put empty into $OXT_ANDROID_KEY_PASS', part)
+        # unsigned when the package is
+        self.assertRegex(self.main, r'else if tBundleFile is not empty then\s+'
+                                    r'put url \("binfile:" & tUnsignedBundleFile\) into url \("binfile:" & tBundleFile\)')
+        signer = handler(self.src, 'androidSignBundle')
+        self.assertIn('"-storepass:env", "OXT_ANDROID_KS_PASS", "-keypass:env", "OXT_ANDROID_KEY_PASS"', signer)
+        # jarsigner answers 0 for an unsigned jar: its words decide, in English
+        self.assertIn('not (tResult contains "jar verified")', signer)
+        self.assertEqual(signer.count('"-J-Duser.language=en"'), 2)
+        self.assertNotIn('"-strict"', signer)
+
+    def test_warns_when_play_would_refuse_it(self):
+        self.assertRegex(self.main, r'if tBundleFile is not empty and tSigning is "debug" then\s+revStandaloneAddWarning')
+        self.assertRegex(self.main, r'else if tBundleFile is not empty and tSigning is "none" then\s+'
+                                    r'revStandaloneAddWarning')
+
+    def test_its_files_go(self):
+        self.assertIn('if tUnsignedBundleFile is not empty and there is a file tUnsignedBundleFile then '
+                      'delete file tUnsignedBundleFile', self.main)
+        build = handler(self.src, 'androidBuildBundle')
+        for f in ('tProtoFile', 'tModuleFile', 'tConfigFile'):
+            self.assertIn('if there is a file %s then delete file %s' % (f, f), build)
+        # a bundle cut short is not left behind
+        self.assertRegex(build, r'if tError is not empty then\s+if there is a file pBundleFile then delete file '
+                                r'pBundleFile\s+throw tError')
+
+    def test_the_steps(self):
+        build = handler(self.src, 'androidBuildBundle')
+        steps = ['pathToAapt2(), "convert", "--output-format", "proto", "-o", tProtoFile, pApkFile',
+                 'put androidBundleModulePath(tItem) into tPath',
+                 'revZipAddUncompressedItemWithData tModuleFile, tPath, "tData"',
+                 'put textEncode(androidBundleConfig(), "UTF-8") into url ("binfile:" & tConfigFile)',
+                 r'pathToJava\(\), "-jar", pBundletool, "build-bundle", "--modules", tModuleFile,\s+'
+                 r'"--config", tConfigFile, "--output", pBundleFile']
+        at = [build.find(x) for x in steps[:-1]]
+        last = re.search(steps[-1], build)
+        at.append(last.start() if last else -1)
+        self.assertNotIn(-1, at, steps)
+        self.assertEqual(at, sorted(at))
+
+    def test_bundletool_pinned_and_checked(self):
+        self.assertIn('constant kBundletoolVersion = "1.18.3"', self.src)
+        self.assertIn('constant kBundletoolURL = "https://github.com/google/bundletool/releases/download/1.18.3/'
+                      'bundletool-all-1.18.3.jar"', self.src)
+        self.assertRegex(self.src, r'constant kBundletoolSHA256 = "[0-9a-f]{64}"')
+        # the constants come before their uses (a constant used above its
+        # line is read as its own name)
+        for name in ('kBundletoolVersion', 'kBundletoolURL', 'kBundletoolSHA256', 'kBundletoolTries'):
+            declared = self.src.index('constant %s = ' % name)
+            uses = [m.start() for m in re.finditer(r'\b%s\b' % name, self.src)
+                    if not self.src.startswith('constant ', m.start() - len('constant '))]
+            self.assertTrue(uses, name)
+            self.assertLess(declared, min(uses), name)
+            self.assertNotIn(name, self.main)
+        tool = handler(self.src, 'androidBundletool')
+        # the Preferences' copy as it is; the cached one only with the
+        # SHA-256; a download checked before it is kept
+        pref = tool.find('if pPreference is not empty then')
+        cached = tool.find('if androidFileSHA256(pCacheFile) is pSHA256 then')
+        fetch = tool.find('put url pURL into tData')
+        check = tool.find('if tHex is not pSHA256 then')
+        keep = tool.find('put tData into url ("binfile:" & pCacheFile)')
+        self.assertNotIn(-1, (pref, cached, fetch, check, keep))
+        self.assertLess(pref, cached)
+        self.assertLess(cached, fetch)
+        self.assertLess(fetch, check)
+        self.assertLess(check, keep)
+        self.assertIn('the socketTimeoutInterval', tool)
+
+    def test_a_failed_download_is_tried_again(self):
+        # Android builder run 42315551744: one "socket timeout" on the
+        # redirect to GitHub's release assets failed the build, where the
+        # run before had downloaded the same file
+        self.assertIn('constant kBundletoolTries = 3', self.src)
+        tool = handler(self.src, 'androidBundletool')
+        loop = re.search(r'(?ms)^\s*repeat kBundletoolTries times\n(.*?)^\s*end repeat', tool)
+        self.assertTrue(loop, tool)
+        body = loop.group(1)
+        # each try after the first waits 2 seconds, letting messages
+        # through; each starts empty, and the first that brings data ends
+        # the tries
+        self.assertRegex(body, r'if tTries > 1 then\s+wait 2 seconds with messages')
+        start = [body.find(x) for x in ('put empty into tData', 'put empty into tResult', 'put url pURL into tData')]
+        self.assertNotIn(-1, start)
+        self.assertEqual(start, sorted(start))
+        self.assertRegex(body, r'if tResult is empty and tData is empty then\s+put "nothing came" into tResult')
+        self.assertRegex(body, r'if tResult is empty then\s+exit repeat')
+        # the download is tried only in the loop; the timeout is put back
+        # after it, and the SHA-256 is checked after it
+        self.assertEqual(tool.count('put url pURL into tData'), 1)
+        after = tool[loop.end():]
+        self.assertIn('set the socketTimeoutInterval to tTimeout', after)
+        self.assertIn('if tHex is not pSHA256 then', after)
+        self.assertRegex(after, r'put " \(tried" && tTries && "times\)" after tResult')
+
+    def test_every_second_try_goes_through_the_jdk(self):
+        # Android builder run 42321580394: libURL's download stalled three
+        # times in a row on the macOS runner, where gh had fetched the
+        # release from the same host in seconds; so a try that follows a
+        # failed one is made with the JDK's own HTTP client, the JDK the
+        # build runs bundletool with
+        self.assertIn('androidBundletoolCacheFile(), kBundletoolURL, kBundletoolSHA256, pathToJava())',
+                      handler(self.src, 'androidBundletoolForBuild'))
+        tool = handler(self.src, 'androidBundletool')
+        self.assertTrue(tool.startswith('function androidBundletool pPreference, pCacheFile, pURL, pSHA256, pJava\n'),
+                        tool[:80])
+        loop = re.search(r'(?ms)^\s*repeat kBundletoolTries times\n(.*?)^\s*end repeat', tool)
+        self.assertTrue(loop, tool)
+        body = loop.group(1)
+        # the JDK on the second try (and the fourth, ...), libURL on the
+        # others; the JDK's file read, and gone, whatever it held
+        self.assertRegex(body, r'if tTries mod 2 is 0 and pJava is not empty then\s+'
+                               r'put androidDownloadWithJava\(pJava, pURL, tPart\) into tResult\s+'
+                               r'put tResult into tJavaResult\s+'
+                               r'if tResult is empty then\s+put url \("binfile:" & tPart\) into tData\s+end if\s+'
+                               r'if there is a file tPart then\s+delete file tPart\s+end if\s+'
+                               r'else\s+try\s+put url pURL into tData')
+        # each try starts empty, before either way of downloading
+        self.assertLess(body.index('put empty into tResult'), body.index('if tTries mod 2 is 0'))
+        self.assertEqual(tool.count('androidDownloadWithJava('), 1)
+        # its file is named in the temporary folder before the tries
+        self.assertIn('put specialFolderPath("temporary") & "/oxt-bundletool-" & the milliseconds & ".part" into tPart',
+                      tool[:loop.start()])
+        # when libURL had the last try, what the JDK said is in the error
+        # too, before the count
+        after = tool[loop.end():]
+        self.assertRegex(after, r'if tJavaResult is not empty and tJavaResult is not tResult then\s+'
+                                r'put "; and" && tJavaResult after tResult')
+        self.assertLess(after.index('"; and"'), after.index('" (tried"'))
+
+    def test_the_jdk_download(self):
+        java = handler(self.src, 'androidDownloadWithJava')
+        # the program goes to a file in the temporary folder; java runs it
+        # with the system's proxies; its exit status and its file decide,
+        # and the program's file goes either way
+        steps = ['put specialFolderPath("temporary") & "/oxt-download-" & the milliseconds & ".java" into tSource',
+                 'put textEncode(androidDownloadJavaSource(), "UTF-8") into url ("binfile:" & tSource)',
+                 'if there is a file pFile then',
+                 'executeShellCommand pJava, "-Djava.net.useSystemProxies=true", tSource, pURL, pFile',
+                 'put the result into tOutput',
+                 'put sShellStatus into tStatus',
+                 'delete file tSource',
+                 'if (tStatus is not empty and tStatus is not 0) or there is no file pFile then']
+        at = [java.find(x) for x in steps]
+        self.assertNotIn(-1, at, [s for s, a in zip(steps, at) if a < 0])
+        self.assertEqual(at, sorted(at))
+        self.assertRegex(java, r'if the result is not empty then\s+return "could not write" && tSource')
+        # a failure leaves no file, and says what java printed
+        self.assertRegex(java, r'or there is no file pFile then\s+if there is a file pFile then\s+delete file pFile\s+'
+                               r'end if\s+return "the JDK could not download it:" && androidToolError\(tOutput\)')
+        self.assertTrue(java.rstrip().endswith('return empty\nend androidDownloadWithJava'), java[-80:])
+
+    def test_the_jdk_download_program(self):
+        source = handler(self.src, 'androidDownloadJavaSource')
+        m = re.search(r'(?s)put (.*) into tLines', source)
+        self.assertTrue(m, source)
+        # the program as the builder writes it: its strings, quote and lf
+        parts = re.findall(r'"[^"]*"|\bquote\b|\blf\b|&|\S+', m.group(1))
+        self.assertEqual(set(p for p in parts if not p.startswith('"')) - {'quote', 'lf', '&'}, set(), parts)
+        program = ''.join({'quote': '"', 'lf': '\n', '&': ''}.get(p, p[1:-1]) for p in parts)
+        self.assertTrue(program.endswith('}\n'), program)
+        # it gives up on a server that sends nothing for 60 seconds (as
+        # libURL does here), takes only a 200, and any failure prints one
+        # line with "Error:" in it, which androidToolError picks out, and
+        # exits 1
+        for line in ('URLConnection connection = new URL(args[0]).openConnection();',
+                     'connection.setConnectTimeout(60000);',
+                     'connection.setReadTimeout(60000);',
+                     'if (http.getResponseCode() != 200) {',
+                     'throw new IOException(http.getResponseCode() + " " + http.getResponseMessage() + " from " + '
+                     'http.getURL());',
+                     'Files.copy(in, Paths.get(args[1]), StandardCopyOption.REPLACE_EXISTING);',
+                     '} catch (Exception e) {',
+                     'System.err.println("Error: " + e);',
+                     'System.exit(1);'):
+            self.assertIn('\n' + line + '\n', '\n' + '\n'.join(x.strip() for x in program.split('\n')) + '\n', line)
+        # nothing turns redirects off (HttpURLConnection follows them by
+        # default; GitHub answers the release URL with one)
+        self.assertNotIn('setInstanceFollowRedirects', program)
+        self.assertNotIn('setFollowRedirects', program)
+        # balanced braces and parentheses, one class, no package (java
+        # runs the file as it is)
+        self.assertEqual(program.count('{'), program.count('}'))
+        self.assertEqual(program.count('('), program.count(')'))
+        self.assertEqual(len(re.findall(r'\bclass\b', program)), 1)
+        self.assertNotIn('package ', program)
+
+    def test_an_sdk_without_aapt2_still_builds_packages(self):
+        # aapt2 is asked for only by a bundle build, not by the SDK check
+        deploy = code(read(DEPLOY))
+        self.assertNotIn('aapt2', handler(deploy, 'deployCheckSDK'))
+        self.assertRegex(handler(deploy, 'pathToAapt2'), r'return pathToPlatformTool\(pRoot, executableName\("aapt2"\)\)')
+        self.assertRegex(handler(self.src, 'androidBuildBundle'), r'if there is no file pathToAapt2\(\) then\s+throw ')
+
+    def test_the_settings_keep_what_the_engine_reads(self):
+        config = handler(self.src, 'androidBundleConfig')
+        self.assertIn('quote & "uncompressNativeLibraries" & quote & ": { " & quote & "enabled" & quote & ": false }"',
+                      config)
+        self.assertIn('quote & "uncompressedGlob" & quote & ": [ " & quote & "assets/**" & quote & " ]"', config)
+        # the assets the bundle keeps stored are the ones the package stores
+        assets = handler(self.src, 'addAssetsToArchive')
+        self.assertIn('revZipAddUncompressedItemWithFile pArchive, "assets/" & tFile["name"]', assets)
+        self.assertNotRegex(assets, r'revZipAddItemWith')
+
+    def test_units_run(self):
+        units = read(UNITS)
+        self.assertIn('unitAppBundle tWork', handler(units, 'androidUnits'))
+        body = handler(units, 'unitAppBundle')
+        for case in ('bundle-path', 'bundle-module-', 'bundle-config', 'bundle-sha256', 'bundletool-preference',
+                     'bundletool-preference-missing', 'bundletool-download', 'bundletool-cached',
+                     'bundletool-cached-wrong', 'bundletool-download-wrong', 'bundletool-no-download',
+                     'bundletool-download-again', 'bundletool-java-download', 'bundletool-java-no-download',
+                     'bundletool-download-java', 'bundletool-no-download-java', 'bundletool-cache-file'):
+            self.assertIn('"%s' % case, body)
+        # the download that works the second time: its file appears while
+        # the builder pauses between the tries, from a message sent before
+        # the call, to a handler that writes what the unit's SHA-256 is of
+        again = body.index('"bundletool-download-again"')
+        send = body.index('send "unitBundletoolAppears" to me in 500 milliseconds')
+        call = body.rindex('builderCall("androidBundletool", empty, tCache, "binfile:" & tSource, tSHA)', 0, again)
+        self.assertLess(body.rindex('delete file tSource', 0, send), send)
+        self.assertLess(send, call)
+        self.assertIn('tError contains "(tried 3 times)"', body)
+        appears = handler(units, 'unitBundletoolAppears')
+        self.assertIn('put "abc" into url ("binfile:" & sBundletoolSource)', appears)
+        self.assertFalse(appears.startswith('private'))
+        # the script local is declared above its first use (a variable
+        # used above its line is another, empty one)
+        uses = [m.start() for m in re.finditer(r'\bsBundletoolSource\b', units)]
+        self.assertEqual(units[uses[0] - len('local '):uses[0]], 'local ')
+        self.assertEqual(len(uses), 3)
+        # the JDK's download, with this check's JDK: a file: URL, one that
+        # is not there, and through androidBundletool a jar: URL (which
+        # libURL cannot fetch, so the second try, the JDK's, brings it), and
+        # one that is not there, three times
+        self.assertIn('put deployCall("pathToJava", $OXT_ANDROID_JDK) into tJava', body)
+        self.assertIn('builderCall("androidDownloadWithJava", tJava, fileURL(tSource), tPart)', body)
+        self.assertIn('builderCall("androidDownloadWithJava", tJava, fileURL(tFolder & "/none.jar"), tPart)', body)
+        self.assertIn('builderCall("androidBundletool", empty, tCache, "jar:" & fileURL(tZip) & "!/source.jar", tSHA, '
+                      'tJava)', body)
+        self.assertIn('builderCall("androidBundletool", empty, tCache, "jar:" & fileURL(tFolder & "/none.zip") & '
+                      '"!/source.jar", tSHA, tJava)', body)
+        self.assertIn('tError contains "the JDK could not download it:" and tError contains "(tried 3 times)"', body)
+        # the cache the earlier units made goes first (a cached file would
+        # answer without a download)
+        cleared = body.find('delete file tCache', body.index('"bundletool-download-again"'))
+        self.assertGreater(cleared, 0)
+        self.assertLess(cleared, body.index('"bundletool-java-download"'))
+        # the check's builderCall passes a fifth argument on
+        call = handler(units, 'builderCall')
+        self.assertIn('pArg1, pArg2, pArg3, pArg4, pArg5\n', call)
+        self.assertIn('with pArg1, pArg2, pArg3, pArg4, pArg5', call)
+        self.assertRegex(handler(units, 'fileURL'), r'if char 1 of pPath is slash then\s+return "file://" & pPath\s+'
+                                                    r'end if\s+return "file:///" & pPath')
+
+
+PATCHES = ('tools', 'oxt', 'ide-stack-patches')
+SCRIPTS = ('stack-scripts', 'ide', 'Toolset', 'palettes', 'standalone settings', 'revstandalonesettings.8.rev.bst',
+           'scripts')
+TOUR = ('tools', 'ci', 'ui-tour.livecodescript')
+
+
+def patch_lines(name):
+    """A patch file's lines, without its comments"""
+    return [line for line in read(PATCHES + (name,)).split('\n') if line and not line.startswith('#')]
+
+
+class AppBundleBox(unittest.TestCase):
+    """The Android card's "App Bundle" box, made by the IDE stack patches
+    android-card-app-bundle-*.txt (a copy of "Android x86_64" at the end of
+    the build targets' row, the row grown to hold it, and the row's script
+    storing it) and shown by the card's behaviour. Its setting must be the
+    one the builder reads, a click on it must not be taken for an
+    architecture, and a stack that never ticks it must build as before. The
+    UI tour clicks it in the IDE (tourAndroidAppBundle); the patch tool
+    checks the stack (tools/oxt/ide-stack-patch.sh --check)."""
+
+    def test_the_box_is_a_copy_of_a_box_without_a_script(self):
+        lines = patch_lines('android-card-app-bundle-1.txt')
+        self.assertIn('object: button "Android x86_64" of group "Android Targets" of card "Android"', lines)
+        self.assertIn('clone: App Bundle', lines)
+        self.assertEqual(lines[lines.index('property: label') + 1], 'to: App Bundle')
+        self.assertIn('.aab', lines[lines.index('property: toolTip') + 1])
+        # its source's script is empty, so a click goes to the row's group
+        # as the architectures' do, and the copy (whose script the patch
+        # tool holds to its source's) has none either
+        source = read(SCRIPTS + ('stack_revStandaloneSettings_button_id_31520.livecodescript',))
+        self.assertIn('> button "Android x86_64" (id 31520)', source)
+        self.assertEqual(code(source).split('script "', 1)[1].split('\n', 1)[1].strip(), '')
+        names = [n for n in os.listdir(os.path.join(REPO, *SCRIPTS))
+                 if '> button "App Bundle" (id ' in read(SCRIPTS + (n,))]
+        self.assertEqual(len(names), 1, names)
+        self.assertEqual(code(read(SCRIPTS + (names[0],))).split('\n', 1)[1].strip(), '')
+
+    def test_the_box_is_right_of_x86_64_inside_the_row(self):
+        box = [int(x) for x in patch_lines('android-card-app-bundle-1.txt')[-1][3:].split(',')]
+        grown = patch_lines('android-card-app-bundle-2.txt')
+        self.assertIn('object: group "Android Targets" of card "Android"', grown)
+        before = [int(x) for x in grown[grown.index('property: rect') + 1][5:].split(',')]
+        after = [int(x) for x in grown[grown.index('property: rect') + 2][3:].split(',')]
+        # x86_64 ends at 625 (the stack's dump); the box after it on its row
+        self.assertEqual(before, [111, 70, 629, 99])
+        self.assertGreater(box[0], 625)
+        self.assertEqual((box[1], box[3]), (75, 95))
+        # the row grows only to the right, by the engine's margins of 4,
+        # and stays inside the window (754 wide)
+        self.assertEqual(after, before[:2] + [box[2] + 4, before[3]])
+        self.assertLessEqual(after[2], 754)
+
+    def test_a_click_stores_the_setting_the_builder_reads(self):
+        lines = patch_lines('android-card-app-bundle-3.txt')
+        self.assertIn('object: group "Android Targets" of card "Android"', lines)
+        new = '\n'.join(line[1:-1] for line in lines[lines.index('with:') + 1:])
+        box = new.index('if tTarget is "App Bundle" then')
+        self.assertIn('storeSetting "app bundle", the hilite of the target', new)
+        self.assertLess(box, new.index('exit mouseUp'))
+        # before the architectures' line, which would take "Bundle" for one
+        self.assertLess(new.index('exit mouseUp'), new.index('updateAndroidArch word 2 of tTarget'))
+        # the card stores a setting under "android," and its name, and the
+        # builder makes a bundle when that one is true
+        self.assertIn('setSetting "android," & pName, pValue', handler(code(read(CARD)), 'storeSetting'))
+        self.assertIn('pSettings["android,app bundle"] is true', code(read(BUILDER)))
+        # the row's script in the stack is the patched one
+        row = read(SCRIPTS + ('stack_revStandaloneSettings_group_id_31523.livecodescript',))
+        self.assertIn(new, row)
+
+    def test_the_card_shows_the_setting_and_enables_the_box_with_android(self):
+        card = code(read(CARD))
+        settings = handler(card, 'updateSettings')
+        self.assertRegex(settings, r'set the hilited of button "App Bundle" of group "Android targets" of me to\s+'
+                                   r'\(tSettings\["android,app bundle"\] is true\)')
+        state = handler(card, 'updateAndroidSettingState')
+        self.assertIn('set the enabled of button "App Bundle" of group "Android targets" of me to tEnabled', state)
+        self.assertLess(state.index('put true into tEnabled'), state.index('"App Bundle"'))
+        # an IDE whose stack has no such box opens the card as before
+        for body in (settings, state):
+            self.assertIn('if there is a button "App Bundle" of group "Android targets" of me then', body)
+
+    def test_the_tour_clicks_it(self):
+        tour = read(TOUR)
+        step = handler(tour, 'tour_standalone_settings')
+        self.assertRegex(step, r'if tCard is "Android" then\s+put tourAndroidAppBundle\(tStack\) after tFails')
+        self.assertIn('throw "the Android card is not shown, so its App Bundle box was not checked"', step)
+        check = handler(tour, 'tourAndroidAppBundle')
+        for part in ('dispatch "mouseUp" to tBox with 1', 'dispatch "updateSettings" to tCard',
+                     'the cRevStandaloneSettings["android,app bundle"] of stack kSample is not true',
+                     'the cRevStandaloneSettings["android,app bundle"] of stack kSample is not false',
+                     'set the customProperties["cRevStandaloneSettings"] of stack kSample to tWas',
+                     'the enabled of tBox is not the enabled of group "Android Settings" of tCard'):
+            self.assertIn(part, check)
+
+
+class TargetAPI(unittest.TestCase):
+    """The API a package targets (androidTargetAPI). The IDE units
+    (unitTargetAPI in tools/ci/android-check.livecodescript) run these
+    handlers on made-up runtimes; android.yml builds and runs a package of
+    each kind"""
+
+    def setUp(self):
+        self.src = code(read(BUILDER))
+        self.deploy = code(read(DEPLOY))
+
+    def test_oldest_and_newest(self):
+        self.assertIn('constant kDeployAndroidTargetSDK = "33"', self.deploy)
+        self.assertIn('constant kDeployAndroidNewestTargetSDK = "36"', self.deploy)
+        self.assertRegex(handler(self.deploy, 'deployNewestTargetSdkVersion'),
+                         r'return kDeployAndroidNewestTargetSDK\s+end')
+        self.assertRegex(handler(self.src, 'newestTargetSDKVersion'),
+                         r'dispatch function "deployNewestTargetSdkVersion" to stack kDeployLibrary\s+'
+                         r'return the result')
+
+    def test_the_manifest_takes_it(self):
+        main = handler(self.src, 'revSaveAsMobileStandaloneMain')
+        choose = main.find('put androidTargetAPI(pSettings, revMobileRuntimeFolder(pTarget)) into tTargetAPI')
+        use = main.find('replace "${TARGET_SDK_VERSION}" with tTargetAPI in tManifest')
+        large = main.find('put androidKeepLargeScreenLayout(tManifest, tTargetAPI) into tManifest')
+        saved = main.find('put tManifest into url ("binfile:" & tManifestFile)')
+        self.assertGreater(choose, 0)
+        self.assertGreater(use, choose)
+        self.assertGreater(large, use)
+        self.assertGreater(saved, large, 'the property is in the manifest that is saved')
+        self.assertNotIn('with targetSDKVersion() in tManifest', main)
+
+    def test_the_choice(self):
+        choose = handler(self.src, 'androidTargetAPI')
+        # a pin first: an integer from the oldest to the newest, else an
+        # error that stops the build; then the newest for a ready Java
+        # layer, else the oldest, as before
+        self.assertRegex(choose, r'put pSettings\["android,target sdk"\] into tPin\s+if tPin is not empty then\s+'
+                                 r'if tPin is not an integer or tPin < targetSDKVersion\(\) or '
+                                 r'tPin > newestTargetSDKVersion\(\) then\s+throw ')
+        self.assertRegex(choose, r'return tPin \+ 0\s+end if\s+'
+                                 r'if androidJavaLayerIsReady\(pRuntimeFolder\) then\s+'
+                                 r'return newestTargetSDKVersion\(\)\s+end if\s+return targetSDKVersion\(\)\s+end')
+
+    def test_ready_is_known_by_classes_the_java_layer_has(self):
+        # the names the builder looks for are classes of this checkout's
+        # Java layer (LiveCodeActivity's back callback and its padding of
+        # the stack inside the system bars): renamed, the builder would
+        # quietly target 33 again
+        names = re.search(r'constant kJavaLayerReady = "([^"]+)"', self.src).group(1).split(',')
+        self.assertEqual(len(names), 2)
+        activity = read(JAVA + ('LiveCodeActivity.java',))
+        for name in names:
+            m = re.match(r'^com/runrev/android/LiveCodeActivity\$(\w+)\.class$', name)
+            self.assertTrue(m, name)
+            self.assertRegex(activity, r'(?m)^\s+(?:protected |private |public )?static class %s\b' % m.group(1))
+        ready = handler(self.src, 'androidJavaLayerIsReady')
+        self.assertIn('put mapFilePath(pRuntimeFolder & slash & "Classes") into tJar', ready)
+        self.assertRegex(ready, r'if there is no file tJar then\s+return false')
+        self.assertRegex(ready, r'if byteOffset\(textEncode\(tEntry, "UTF-8"\), tJar\) is 0 then\s+return false')
+
+    def test_large_screens_only_at_36(self):
+        keep = handler(self.src, 'androidKeepLargeScreenLayout')
+        self.assertIn('constant kRestrictedResizability = '
+                      '"android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"', self.src)
+        self.assertRegex(keep, r'^function androidKeepLargeScreenLayout pManifest, pTargetAPI\s+'
+                               r'if pTargetAPI < 36 then\s+return pManifest\s+end if')
+        self.assertIn('replace "</application>" with tProperty & "  </application>" in pManifest', keep)
+
+    def test_units_run(self):
+        units = read(UNITS)
+        body = handler(units, 'androidUnits')
+        self.assertIn('unitTargetAPI tWork', body)
+        target = handler(units, 'unitTargetAPI')
+        for case in ('target-no-java-layer', 'target-java-layer-not-ready', 'target-java-layer-ready',
+                     'target-pinned-', 'target-pin-refused-', 'large-screen-below-36', 'large-screen-36'):
+            self.assertIn(case, target)
 
 
 if __name__ == '__main__':

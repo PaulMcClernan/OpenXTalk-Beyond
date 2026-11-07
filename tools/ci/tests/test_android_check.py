@@ -22,6 +22,7 @@ same builds, colours and files. No Android SDK or engine is needed.
   python3 -m unittest discover -s tools/ci/tests
 """
 
+import base64
 import contextlib
 import io
 import os
@@ -176,6 +177,33 @@ class PackageReaders(unittest.TestCase):
         self.assertIs(comps[('service', 'S')]['exported'], None)
         self.assertTrue(comps[('service', 'S')]['filter'])
         self.assertIs(comps[('activity-alias', 'AA')]['exported'], False)
+
+    def test_manifest_properties(self):
+        # aapt's form (a boolean's true is 0xffffffff), as a build at
+        # target 36 has it, and aapt2's; another element's name and value
+        # are not a property's
+        prop = ('      E: property (line=11)\n'
+                '        A: android:name(0x01010003)="%s" (Raw: "%s")\n'
+                '        A: android:value(0x01010024)=(type 0x12)0xffffffff\n' % ((ac.LARGE_SCREEN_PROPERTY,) * 2))
+        tree = AAPT1_TREE.replace('      E: service (line=9)\n', prop + '      E: service (line=9)\n')
+        self.assertEqual(ac.manifest_properties(tree), {ac.LARGE_SCREEN_PROPERTY: '0xffffffff'})
+        self.assertEqual(ac.manifest_properties(AAPT1_TREE), {})
+        tree2 = AAPT2_TREE + ('      E: property (line=40)\n'
+                              '        A: http://schemas.android.com/apk/res/android:name(0x01010003)="p.q" (Raw: "p.q")\n'
+                              '        A: http://schemas.android.com/apk/res/android:value(0x01010024)=true\n'
+                              '      E: property (line=41)\n'
+                              '        A: http://schemas.android.com/apk/res/android:name(0x01010003)="p.s" (Raw: "p.s")\n'
+                              '        A: http://schemas.android.com/apk/res/android:value(0x01010024)="text" (Raw: "text")\n'
+                              '      E: meta-data (line=42)\n'
+                              '        A: http://schemas.android.com/apk/res/android:name(0x01010003)="m" (Raw: "m")\n'
+                              '        A: http://schemas.android.com/apk/res/android:value(0x01010024)="v" (Raw: "v")\n')
+        self.assertEqual(ac.manifest_properties(tree2), {'p.q': 'true', 'p.s': 'text'})
+        # the attributes of an element inside a property are not its own
+        nested = ('      E: property (line=1)\n'
+                  '        E: other (line=2)\n'
+                  '          A: android:name(0x01010003)="x" (Raw: "x")\n'
+                  '          A: android:value(0x01010024)="y" (Raw: "y")\n')
+        self.assertEqual(ac.manifest_properties(nested), {})
 
     def test_manifest_lines_drop_line_numbers(self):
         self.assertEqual(ac.manifest_lines('  E: activity (line=9)\n\n    A: x="y"\n'),
@@ -414,34 +442,104 @@ class Device(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def device(self, pidof, timeout='10'):
+    EVENTS = 'echo "I/am_kill (  590): [0,3475,org.openxtalk.check.androidprobe,0,lmk]"'
+
+    WINDOW = ('printf "  mCurrentFocus=Window{1f u0 Application Not Responding: '
+              'com.android.systemui}\\n  mFocusedApp=ActivityRecord{2e u0 '
+              'org.openxtalk.check.androidprobe/.mblandroid t9}\\n"')
+
+    def device(self, pidof, timeout='10', power='true', events=EVENTS, cases='', argv=(), screencap='',
+               window=WINDOW):
         d = self.tmp.name
         adb = os.path.join(d, 'platform-tools', 'adb')
         with open(adb, 'w') as f:
             f.write('#!/bin/sh\n'
                     'shift 2\n'
+                    'echo "$*" >> "$(dirname "$0")/calls"\n'
                     'case "$*" in\n'
                     '  "shell getprop ro.build.version.sdk") echo 35 ;;\n'
                     '  "shell getconf PAGE_SIZE") echo 16384 ;;\n'
                     '  "shell getprop ro.product.cpu.abi") echo x86_64 ;;\n'
                     '  install*) echo Success ;;\n'
                     '  "shell am start"*) echo "Status: ok" ;;\n'
-                    '  "exec-out screencap") cat "%s/screen.raw" ;;\n'
+                    '  "exec-out screencap") %scat "%s/screen.raw" ;;\n'
                     '  "shell pidof"*) %s ;;\n'
                     '  "logcat -d -v brief") cat "%s/logcat.txt" ;;\n'
-                    '  "logcat -d -b events -v brief") echo "I/am_kill (  590): [0,3475,org.openxtalk.check.androidprobe,0,lmk]" ;;\n'
+                    '  "shell dumpsys power") %s ;;\n'
+                    '  "logcat -d -b events -v brief") %s ;;\n'
                     '  "shell dumpsys activity exit-info"*) printf "  ApplicationExitInfo #0:\\n    pid=3612 reason=3 (LOW_MEMORY)\\n" ;;\n'
                     '  "shell cat /proc/meminfo") printf "MemTotal: 2000000 kB\\nMemFree: 1 kB\\nMemAvailable: 90000 kB\\n" ;;\n'
-                    '  "shell dumpsys window") printf "  mCurrentFocus=Window{1f u0 Application Not Responding: '
-                    'com.android.systemui}\\n  mFocusedApp=ActivityRecord{2e u0 '
-                    'org.openxtalk.check.androidprobe/.mblandroid t9}\\n" ;;\n'
-                    'esac\n' % (d, pidof, d))
+                    '  "shell dumpsys window") %s ;;\n'
+                    '%s'
+                    'esac\n' % (screencap, d, pidof, d, power, events, window, cases))
         os.chmod(adb, 0o755)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             status = ac.main(['device', '--apk', self.apk, '--serial', 'emulator-5554', '--sdk', d,
-                              '--timeout', timeout])
+                              '--timeout', timeout] + list(argv))
         return status, out.getvalue()
+
+    def calls(self):
+        with open(os.path.join(self.tmp.name, 'platform-tools', 'calls')) as f:
+            return f.read().splitlines()
+
+    def test_starts_once_the_install_is_taken(self):
+        # run 42324548829: lmkd killed the probe that started while the
+        # system's apps were taking its install; it starts once the
+        # broadcasts are delivered and the package manager is idle
+        status, out = self.device('echo 3475', cases=(
+            '  "shell am wait-for-broadcast-idle") echo "All broadcast queues are idle!" ;;\n'
+            '  "shell pm wait-for-handler --timeout 120000") echo Success ;;\n'))
+        self.assertEqual(status, 0, out)
+        calls = self.calls()
+        steps = [next(i for i, c in enumerate(calls) if c.startswith(x))
+                 for x in ('install', 'shell am wait-for-broadcast-idle', 'shell pm wait-for-handler --timeout 120000',
+                           'logcat -c', 'shell am start')]
+        self.assertEqual(steps, sorted(steps), calls)
+        self.assertEqual(steps[1:], list(range(steps[1], steps[1] + 4)), calls)
+        self.assertIn("Before it starts: the broadcast queues are idle after 0 s (am wait-for-broadcast-idle); "
+                      "the package manager's handler is idle after 0 s (pm wait-for-handler)\n", out)
+        self.assertLess(out.index('Installed debug.apk'), out.index('Before it starts:'))
+        self.assertLess(out.index('Before it starts:'), out.index('Started:'))
+
+    def test_a_wait_that_cannot_say_decides_nothing(self):
+        status, out = self.device('echo 3475', cases=(
+            '  "shell am wait-for-broadcast-idle") echo "it ended this way"; exit 3 ;;\n'
+            '  "shell pm wait-for-handler"*) echo "cmd: Can\'t find service: package" ;;\n'))
+        self.assertEqual(status, 0, out)
+        self.assertIn('Before it starts: the broadcast queues are idle: am wait-for-broadcast-idle cannot say '
+                      '(exit status 3: it ended this way); the package manager\'s handler '
+                      'is idle: pm wait-for-handler cannot say (exit status 0: cmd: Can\'t find service: package)',
+                      out)
+
+    def test_a_wait_that_does_not_end(self):
+        said = []
+
+        def a(*cmd, timeout=180):
+            said.append((cmd, timeout))
+            if 'wait-for-broadcast-idle' in cmd:
+                raise ac.CheckError('adb: timed out')
+            return 0, 'Success\n'
+
+        def older(*cmd, timeout=180):
+            return 0, 'Unknown command: %s\n' % cmd[2]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            got = ac.quiet_after_install(older)
+        self.assertEqual(got, ['the broadcast queues are idle: am wait-for-broadcast-idle cannot say (exit status 0: '
+                               'Unknown command: wait-for-broadcast-idle)',
+                               "the package manager's handler is idle: pm wait-for-handler cannot say (exit status 0: "
+                               'Unknown command: wait-for-handler)'])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            got = ac.quiet_after_install(a, seconds=7)
+        self.assertEqual(got, ['the broadcast queues are idle: not in 7 s (am wait-for-broadcast-idle)',
+                               "the package manager's handler is idle after 0 s (pm wait-for-handler)"])
+        # each wait has its own time, a little longer than the device's
+        self.assertEqual(said, [(('shell', 'am', 'wait-for-broadcast-idle'), 17),
+                                (('shell', 'pm', 'wait-for-handler', '--timeout', '7000'), 17)])
+        self.assertIn('Before it starts: the broadcast queues are idle: not in 7 s', out.getvalue())
+        self.assertEqual(ac.QUIET_SECONDS, 120)
 
     def test_gone_after_drawing(self):
         status, out = self.device('true')
@@ -516,6 +614,58 @@ class Device(unittest.TestCase):
                       "fail colour, 100%)", out)
         self.assertNotIn('never turned the probe', out)
 
+    # run 42218720113, on the 16 KB image: the Java layer's probe drew its
+    # green, the screen went off, SystemUI's theme overlays changed its
+    # ApplicationInfo, and its activity was relaunched and aborted
+    RELAUNCH_LOG = (
+        'I/ActivityThread( 3612): ApplicationInfo updating for org.openxtalk.check.androidprobe, new timestamp: 109828\n'
+        'I/ActivityThread( 3612): assets removed: []\n'
+        'I/ActivityThread( 3612): assets added: [/data/resource-cache/com.android.systemui-neutral-gcz6.frro, '
+        '/data/resource-cache/com.android.systemui-accent-78hb.frro]\n'
+        'F/libc    ( 3612): fdsan: failed to exchange ownership of file descriptor: fd 0 is owned by FILE* '
+        '0x7396e1675888, was expected to be unowned\n')
+    RELAUNCH_EVENTS = (
+        "printf '%s\\n' "
+        "'I/wm_pause_activity(  576): [0,259587643,org.openxtalk.check.androidprobe/.mblandroid,"
+        "userLeaving=false,sleep]' "
+        "'I/wm_relaunch_resume_activity(  576): [0,259587643,9,org.openxtalk.check.androidprobe/.mblandroid,"
+        "80000000]' "
+        "'I/wm_pause_activity(  576): [0,259587643,org.openxtalk.check.androidprobe/.mblandroid,"
+        "userLeaving=false,finish]'")
+
+    def test_says_what_android_did_to_the_probe(self):
+        with open(os.path.join(self.tmp.name, 'logcat.txt'), 'w') as f:
+            f.write(self.LOG + self.RELAUNCH_LOG)
+        status, out = self.device('true', events=self.RELAUNCH_EVENTS)
+        self.assertEqual(status, 1, out)
+        notes = ["NOTE: Android paused the probe's activity for sleep (wm_pause_activity: the screen was off or "
+                 "locked)",
+                 "NOTE: the probe's ApplicationInfo changed while it ran (assets added: "
+                 "[/data/resource-cache/com.android.systemui-neutral-gcz6.frro, "
+                 "/data/resource-cache/com.android.systemui-accent-78hb.frro])",
+                 "NOTE: Android relaunched the probe's activity (wm_relaunch_resume_activity), which the carried "
+                 "runtime does not survive"]
+        for note in notes:
+            self.assertIn(note, out)
+        # in that order, before the logs' account
+        at = [out.index(x) for x in notes]
+        self.assertEqual(at, sorted(at))
+        self.assertLess(at[-1], out.index("the probe's own lines (every level):"))
+
+    def test_nothing_done_to_the_probe_says_nothing(self):
+        status, out = self.device('true')
+        self.assertEqual(status, 1, out)
+        for part in ('for sleep', 'ApplicationInfo', 'relaunched'):
+            self.assertNotIn(part, out)
+
+    def test_says_when_the_device_is_asleep(self):
+        status, out = self.device('echo 3475', power='echo "  mWakefulness=Asleep"')
+        self.assertIn('NOTE: the device is Asleep (dumpsys power): Android pauses an activity started now '
+                      '(see boot --awake)', out)
+        for power in ('echo "  mWakefulness=Awake"', 'true'):
+            status, out = self.device('echo 3475', power=power)
+            self.assertNotIn('the device is', out)
+
     def test_a_little_of_the_fail_colour_is_not_a_failure(self):
         # a green screen with a strip of the fail colour (an icon, a bar)
         # is the probe's green: 2 of the 10 pixels read are that colour
@@ -526,6 +676,977 @@ class Device(unittest.TestCase):
         self.assertIn("80% of the screen is the probe's green", out)
         self.assertNotIn('Java layer failed', out)
         self.assertIn('the app is not running', out)
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DevicePermission(unittest.TestCase):
+    """device --allow with a stand-in adb: the Java layer's probe declares
+    POST_NOTIFICATIONS, and on Android 13 and newer scheduling its
+    notification makes Android ask the user to allow it. The check waits
+    for that dialog, taps its Allow button and checks that the package
+    holds the permission; each way that can go wrong is a failure that says
+    which"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+    PERMISSION = 'android.permission.POST_NOTIFICATIONS'
+
+    # as an Android 13 Google APIs image says them
+    ACTIVITIES = ('ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)\n'
+                  'Display #0 (activities from top to bottom):\n'
+                  '  * Task{d1 #9 type=standard A=10190:org.openxtalk.check.androidprobe}\n'
+                  '    * Hist  #1: ActivityRecord{5b1 u0 com.google.android.permissioncontroller/'
+                  'com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t9}\n'
+                  '    * Hist  #0: ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n'
+                  '  ResumedActivity: ActivityRecord{5b1 u0 com.google.android.permissioncontroller/'
+                  'com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t9}\n'
+                  '  topResumedActivity=ActivityRecord{5b1 u0 com.google.android.permissioncontroller/'
+                  'com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t9}\n')
+    PROBE_IN_FRONT = ('  * Task{d1 #9 type=standard A=10190:org.openxtalk.check.androidprobe}\n'
+                      '    * Hist  #0: ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n'
+                      '  topResumedActivity=ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n')
+    UI = ("<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\">"
+          '<node index="0" text="Allow" resource-id="com.android.permissioncontroller:id/permission_allow_button" '
+          'class="android.widget.Button" package="com.google.android.permissioncontroller" clickable="true" '
+          'bounds="[84,1424][996,1556]" />'
+          '<node index="1" text="Don&apos;t allow" '
+          'resource-id="com.android.permissioncontroller:id/permission_deny_button" class="android.widget.Button" '
+          'package="com.google.android.permissioncontroller" clickable="true" bounds="[84,1556][996,1688]" />'
+          '</hierarchy>')
+    PACKAGE = ('Packages:\n'
+               '  Package [org.openxtalk.check.androidprobe] (5d2a1f0):\n'
+               '    requested permissions:\n'
+               '      android.permission.POST_NOTIFICATIONS\n'
+               '    install permissions:\n'
+               '      android.permission.INTERNET: granted=true\n'
+               '    User 0: ceDataInode=2201 installed=true hidden=false\n'
+               '      runtime permissions:\n'
+               '        android.permission.POST_NOTIFICATIONS: granted=%s, flags=[ USER_SET|'
+               'USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]\n')
+
+    def run_probe(self, activities=ACTIVITIES, ui=UI, after=PACKAGE % 'true', dialog_from=1, allow=True,
+                  timeout='10'):
+        """device on a running, green probe whose dialog is in front from
+        the dialog_from'th look until Allow is tapped; after is what
+        dumpsys package says once it is. Every command the check sends to
+        the stand-in that is about the permission is kept in calls."""
+        d = self.tmp.name
+        for name in ('calls', 'tapped'):
+            if os.path.exists(os.path.join(d, name)):
+                os.remove(os.path.join(d, name))
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(self.LOG.split('I/lowmemorykiller')[0])
+        for name, text in (('activities.txt', activities), ('ui.xml', ui), ('package.txt', self.PACKAGE % 'false'),
+                           ('package-after.txt', after)):
+            with open(os.path.join(d, name), 'w') as f:
+                f.write(text)
+        with open(os.path.join(d, 'probe.txt'), 'w') as f:
+            f.write(self.PROBE_IN_FRONT)
+        cases = ('  "shell dumpsys activity activities") echo "$*" >> "%(d)s/calls"\n'
+                 '    if [ -f "%(d)s/tapped" ] || [ $(grep -c activities "%(d)s/calls") -lt %(from)d ]; then\n'
+                 '      cat "%(d)s/probe.txt"; else cat "%(d)s/activities.txt"; fi ;;\n'
+                 '  "shell uiautomator dump /sdcard/oxt-ui.xml") echo "$*" >> "%(d)s/calls";'
+                 ' echo "UI hierchary dumped to: /sdcard/oxt-ui.xml" ;;\n'
+                 '  "shell cat /sdcard/oxt-ui.xml") echo "$*" >> "%(d)s/calls"; cat "%(d)s/ui.xml" ;;\n'
+                 '  "shell input tap "*) echo "$*" >> "%(d)s/calls"; echo "$*" > "%(d)s/tapped" ;;\n'
+                 '  "shell dumpsys package org.openxtalk.check.androidprobe") echo "$*" >> "%(d)s/calls"\n'
+                 '    if [ -f "%(d)s/tapped" ]; then cat "%(d)s/package-after.txt"; else cat "%(d)s/package.txt"; fi ;;\n'
+                 % {'d': d, 'from': dialog_from})
+        status, out = self.device('echo 3475', timeout=timeout, cases=cases,
+                                  argv=('--allow', self.PERMISSION) if allow else ())
+        return status, out, self.calls()
+
+    def calls(self):
+        try:
+            with open(os.path.join(self.tmp.name, 'calls')) as f:
+                return f.read().splitlines()
+        except FileNotFoundError:
+            return []
+
+    def test_asked_allowed_and_held_passes(self):
+        status, out, calls = self.run_probe()
+        self.assertEqual(status, 0, out)
+        for part in ('Android asks the user to allow android.permission.POST_NOTIFICATIONS',
+                     'tapped Allow at 540,1490', 'android.permission.POST_NOTIFICATIONS: granted',
+                     'Android device: passed'):
+            self.assertIn(part, out)
+        # the dialog's own button, found in the dump, tapped once
+        self.assertEqual([c for c in calls if 'input tap' in c], ['shell input tap 540 1490'])
+        self.assertLess(calls.index('shell uiautomator dump /sdcard/oxt-ui.xml'),
+                        calls.index('shell cat /sdcard/oxt-ui.xml'))
+        self.assertLess(calls.index('shell input tap 540 1490'),
+                        calls.index('shell dumpsys package org.openxtalk.check.androidprobe'))
+        # once allowed, the check looks for the dialog no more
+        self.assertEqual(calls.count('shell dumpsys activity activities'), 1)
+
+    def test_green_before_the_dialog_does_not_end_the_wait(self):
+        # the probe turns green at once, and the dialog comes after: the
+        # wait goes on until it has been answered
+        status, out, calls = self.run_probe(dialog_from=2)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls.count('shell dumpsys activity activities'), 2)
+        self.assertIn('shell input tap 540 1490', calls)
+
+    def test_never_asked_fails(self):
+        status, out, calls = self.run_probe(activities=self.PROBE_IN_FRONT, timeout='4')
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: the probe never asked the user to allow android.permission.POST_NOTIFICATIONS',
+                      out)
+        self.assertNotIn('tapped Allow', out)
+        self.assertFalse([c for c in calls if 'input tap' in c])
+        # it still says what the package holds
+        self.assertIn('android.permission.POST_NOTIFICATIONS: not granted', out)
+
+    def test_no_allow_button_fails(self):
+        ui = self.UI.replace(':id/permission_allow_button', ':id/permission_allow_foreground_only_button')
+        status, out, calls = self.run_probe(ui=ui, timeout='4')
+        self.assertEqual(status, 1, out)
+        self.assertIn('no Allow button in the dialog yet', out)
+        self.assertIn('PROBLEM: Android asked the user to allow android.permission.POST_NOTIFICATIONS, and its '
+                      'dialog had no Allow button to tap', out)
+        self.assertFalse([c for c in calls if 'input tap' in c])
+        self.assertNotIn('never asked', out)
+
+    def test_allowed_and_not_held_fails(self):
+        status, out, _ = self.run_probe(after=self.PACKAGE % 'false')
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: android.permission.POST_NOTIFICATIONS was allowed in Android's dialog, and the "
+                      "package does not hold it (not granted)", out)
+        status, out, _ = self.run_probe(after='Packages:\n  Package [org.openxtalk.check.androidprobe] (5d2a1f0):\n')
+        self.assertEqual(status, 1, out)
+        self.assertIn('android.permission.POST_NOTIFICATIONS: the package does not ask for it', out)
+        self.assertIn('and the package does not hold it (it does not ask for it)', out)
+
+    def test_the_fail_colour_still_ends_the_wait(self):
+        with open(os.path.join(self.tmp.name, 'screen.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(ac.FAIL_COLOR) + [255]) * 16)
+        started = time.time()
+        status, out, _ = self.run_probe(activities=self.PROBE_IN_FRONT, timeout='60')
+        self.assertLess(time.time() - started, 30)
+        self.assertEqual(status, 1, out)
+        self.assertIn('a call it makes into the Java layer failed', out)
+        self.assertIn('never asked the user to allow', out)
+
+    def test_without_allow_nothing_is_asked_of_it(self):
+        status, out, calls = self.run_probe(allow=False)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [])
+        self.assertNotIn('allow', out.lower())
+
+
+
+class PermissionReaders(unittest.TestCase):
+    """What device --allow reads: the activity in front, the dialog's Allow
+    button, and what the package holds"""
+
+    def test_asking_for_permission(self):
+        self.assertTrue(ac.asking_for_permission(DevicePermission.ACTIVITIES))
+        # an AOSP image's permission controller, and Android 10's line
+        aosp = ('  mResumedActivity: ActivityRecord{7 u0 com.android.permissioncontroller/'
+                '.permission.ui.GrantPermissionsActivity t4}\n')
+        self.assertTrue(ac.asking_for_permission(aosp))
+        self.assertFalse(ac.asking_for_permission(DevicePermission.PROBE_IN_FRONT))
+        self.assertFalse(ac.asking_for_permission(''))
+        # the dialog in the task's history and not in front is not asking
+        history = DevicePermission.ACTIVITIES.split('  ResumedActivity')[0] + (
+            '  topResumedActivity=ActivityRecord{2e u0 org.openxtalk.check.androidprobe/.mblandroid t9}\n')
+        self.assertFalse(ac.asking_for_permission(history))
+        # another app's activity of the same name is not Android's
+        self.assertFalse(ac.asking_for_permission(
+            '  topResumedActivity=ActivityRecord{1 u0 org.example/.GrantPermissionsActivity t2}\n'))
+
+    def test_allow_button(self):
+        self.assertEqual(ac.allow_button(DevicePermission.UI), (540, 1490))
+        # its attributes in another order
+        self.assertEqual(ac.allow_button('<node bounds="[0,10][100,30]" text="Allow" '
+                                         'resource-id="com.android.permissioncontroller:id/permission_allow_button"/>'),
+                         (50, 20))
+        for other in ('permission_deny_button', 'permission_allow_foreground_only_button',
+                      'permission_allow_one_time_button'):
+            self.assertIsNone(ac.allow_button(DevicePermission.UI.replace(':id/permission_allow_button',
+                                                                          ':id/' + other)))
+        self.assertIsNone(ac.allow_button(''))
+        self.assertIsNone(ac.allow_button('<node resource-id="com.android.permissioncontroller:id/'
+                                          'permission_allow_button" />'))
+
+    # Android's "isn't responding" dialog, as uiautomator dumps it
+    ANR_UI = ('<hierarchy><node resource-id="android:id/alertTitle" text="Pixel Launcher isn\'t responding" '
+              'bounds="[90,980][990,1050]"/>'
+              '<node resource-id="android:id/aerr_close" text="Close app" bounds="[90,1100][990,1220]"/>'
+              '<node resource-id="android:id/aerr_wait" text="Wait" bounds="[90,1220][990,1340]"/></hierarchy>')
+
+    def test_other_anr(self):
+        # run 42354758286's 16 KB image: the launcher's dialog in front
+        window = ('  mCurrentFocus=Window{22bc663 u0 Application Not Responding: '
+                  'com.google.android.apps.nexuslauncher}\n'
+                  '  mFocusedApp=ActivityRecord{67638321 u0 org.openxtalk.check.androidprobe/.mblandroid t8}\n')
+        self.assertEqual(ac.other_anr(window), 'com.google.android.apps.nexuslauncher')
+        # the probe's own is never answered: it is a failure
+        self.assertIsNone(ac.other_anr(window.replace('com.google.android.apps.nexuslauncher', ac.IDENTIFIER)))
+        self.assertIsNone(ac.other_anr('  mCurrentFocus=Window{2 u0 org.openxtalk.check.androidprobe/'
+                                       'org.openxtalk.check.androidprobe.mblandroid}\n'))
+        self.assertIsNone(ac.other_anr(''))
+
+    def test_wait_button(self):
+        self.assertEqual(ac.button_centre(self.ANR_UI, ac.WAIT_BUTTON), (540, 1280))
+        self.assertIsNone(ac.button_centre(self.ANR_UI.replace('aerr_wait', 'aerr_mute'), ac.WAIT_BUTTON))
+        self.assertEqual(ac.button_centre(DevicePermission.UI, ac.ALLOW_BUTTON), ac.allow_button(DevicePermission.UI))
+
+    def test_permission_granted(self):
+        package = DevicePermission.PACKAGE
+        name = 'android.permission.POST_NOTIFICATIONS'
+        self.assertIs(ac.permission_granted(package % 'true', name), True)
+        self.assertIs(ac.permission_granted(package % 'false', name), False)
+        self.assertIsNone(ac.permission_granted(package % 'true', 'android.permission.CAMERA'))
+        # the requested list names it with no grant: that says nothing
+        self.assertIsNone(ac.permission_granted('    requested permissions:\n      %s\n' % name, name))
+        # a longer name is not this one
+        self.assertIsNone(ac.permission_granted('        %s_X: granted=true\n' % name, name))
+        self.assertIs(ac.permission_granted(package % 'true', 'android.permission.INTERNET'), True)
+        # a second user's line after the probe's (user 0's) changes nothing
+        two = (package % 'true') + ('    User 10: ceDataInode=0 installed=true hidden=false\n'
+                                    '      runtime permissions:\n'
+                                    '        %s: granted=false, flags=[ ]\n' % name)
+        self.assertIs(ac.permission_granted(two, name), True)
+
+
+class BundleReaders(unittest.TestCase):
+    """The App Bundle's readers: protocol buffer fields, bundletool's
+    BundleConfig.pb, where a package's file is in the base module, which
+    files aapt2 convert rewrites, a jar's signers and pm path's APKs"""
+
+    # BundleConfig.pb of an App Bundle the builder made (bundletool 1.18.3,
+    # with androidBundleConfig's settings)
+    CONFIG = bytes.fromhex('0a081206312e31382e33120212001a0b0a096173736574732f2a2a')
+
+    def test_proto_fields(self):
+        data = (b'\x08\x96\x01'            # 1: varint 150
+                b'\x12\x03abc'             # 2: bytes
+                b'\x1d\x01\x02\x03\x04'    # 3: fixed32
+                b'\x21' + b'\0' * 8)       # 4: fixed64
+        self.assertEqual(ac.proto_fields(data), [(1, 150), (2, b'abc'), (3, b'\x01\x02\x03\x04'), (4, b'\0' * 8)])
+        self.assertEqual(ac.proto_fields(b''), [])
+        self.assertEqual(ac.varint(b'\xac\x02', 0), (300, 2))
+        for cut in (b'\x08', b'\x08\x96', b'\x12\x05ab'):
+            with self.assertRaises(ac.CheckError):
+                ac.proto_fields(cut)
+        # a group (wire type 3) is not read
+        with self.assertRaisesRegex(ac.CheckError, 'wire type 3'):
+            ac.proto_fields(b'\x0b')
+
+    def test_the_builders_config(self):
+        self.assertEqual(ac.bundle_config(self.CONFIG), {
+            'version': '1.18.3', 'uncompress_native_libraries': False, 'uncompressed_glob': ['assets/**']})
+
+    def test_other_configs(self):
+        # nothing said: bundletool's defaults (native libraries uncompressed)
+        self.assertEqual(ac.bundle_config(b''), {
+            'version': None, 'uncompress_native_libraries': None, 'uncompressed_glob': []})
+        # enabled
+        on = b'\x12\x04\x12\x02\x08\x01'
+        self.assertIs(ac.bundle_config(on)['uncompress_native_libraries'], True)
+        # an optimizations message that does not say
+        self.assertIsNone(ac.bundle_config(b'\x12\x00')['uncompress_native_libraries'])
+        # two globs, in order
+        globs = b'\x1a\x0e\x0a\x05a/b/*\x0a\x05c/**/'
+        self.assertEqual(ac.bundle_config(globs)['uncompressed_glob'], ['a/b/*', 'c/**/'])
+        with self.assertRaises(ac.CheckError):
+            ac.bundle_config(self.CONFIG[:-3])
+
+    def test_bundle_place_is_the_builders(self):
+        # the builder's androidBundleModulePath, by its unit's table in
+        # android-check.livecodescript: the same answer for each path (the
+        # builder reads the converted package, whose resources.arsc is
+        # resources.pb)
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        table = re.findall(r'"([^"=]+)=([^"]*)" & return & \\|"([^"=]+)=([^"]*)" into tWanted', script)
+        pairs = [(a or c, b if a else d) for a, b, c, d in table]
+        self.assertEqual(len(pairs), 12, pairs)
+        for path, want in pairs:
+            got = ac.bundle_place('resources.arsc' if path == 'resources.pb' else path)
+            self.assertEqual(got, want or None, path)
+        # what the bundle leaves out: the signature, folders
+        for path in ('META-INF/MANIFEST.MF', 'META-INF/CERT.RSA', 'res/', 'lib/x86/'):
+            self.assertIsNone(ac.bundle_place(path), path)
+        self.assertEqual(ac.bundle_place('classes10.dex'), 'dex/classes10.dex')
+        self.assertEqual(ac.bundle_place('stamp-cert-sha256'), 'root/stamp-cert-sha256')
+
+    def test_bundle_converted(self):
+        for place in ('manifest/AndroidManifest.xml', 'resources.pb', 'res/layout/livecode_inputcontrol.xml',
+                      'res/xml/nfc_tech_filter.xml'):
+            self.assertTrue(ac.bundle_converted(place), place)
+        for place in ('res/drawable/notify_icon.png', 'assets/oxt-probe.txt', 'assets/x.xml', 'dex/classes.dex',
+                      'lib/x86_64/librevandroid.so', 'root/a.xml'):
+            self.assertFalse(ac.bundle_converted(place), place)
+
+    def test_jar_signers(self):
+        # keytool -printcert -jarfile, in English
+        out = ('Signer #1:\n\nCertificate #1:\nOwner: CN=OXT Android Check, O=OXT-Beyond, C=US\n'
+               'Issuer: CN=OXT Android Check, O=OXT-Beyond, C=US\nSerial number: de61670a3606b9f3\n')
+        self.assertEqual(ac.jar_signers(out), 'CN=OXT Android Check, O=OXT-Beyond, C=US')
+        self.assertEqual(ac.jar_signers(out + '\nSigner #2:\n\nCertificate #1:\nOwner: CN=Other\n' + out),
+                         'CN=OXT Android Check, O=OXT-Beyond, C=US | CN=Other')
+        self.assertIsNone(ac.jar_signers('Not a signed jar file\n'))
+        # an empty owner is no owner, and does not take the next line
+        self.assertIsNone(ac.jar_signers('Owner: \nIssuer: CN=x\n'))
+        self.assertEqual(ac.jar_signers('Owner: CN=A\r\nIssuer: CN=x\r\n'), 'CN=A')
+        self.assertIsNone(ac.jar_signers(''))
+
+    def test_installed_apks(self):
+        out = ('package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/base.apk\r\n'
+               'package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/split_config.x86_64.apk\r\n'
+               'package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/split_config.xxhdpi.apk\n')
+        self.assertEqual(ac.installed_apks(out), ['base.apk', 'split_config.x86_64.apk', 'split_config.xxhdpi.apk'])
+        self.assertEqual(ac.installed_apks('package:/data/app/x/base.apk\n'), ['base.apk'])
+        self.assertEqual(ac.installed_apks(''), [])
+        self.assertEqual(ac.installed_apks('Error: package not found\n'), [])
+
+
+class ProbeSaid(unittest.TestCase):
+    """What the Java layer's probe says in the device's log, a line a step"""
+
+    def test_its_lines_in_order(self):
+        log = ('I/ActivityManager(  590): Start proc 3475:org.openxtalk.check.androidprobe/u0a190 for activity\n'
+               'I/LiveCode( 3475): OXT-Beyond probe: local notification 1\n'
+               'I/revandroid( 3475): exportToAlbum called: oxt-beyond-probe .png\n'
+               'I/LiveCode( 3475): OXT-Beyond probe: external documents   \n'
+               'I/LiveCode( 3475): OXT-Beyond probe: export to album export failed\n')
+        self.assertEqual(ac.probe_said(log, {'3475'}), ['local notification 1', 'external documents',
+                                                        'export to album export failed'])
+        # with no process known, every such line
+        self.assertEqual(len(ac.probe_said(log)), 3)
+
+    def test_only_the_engines_lines_of_the_probe(self):
+        log = ('I/LiveCode(   99): OXT-Beyond probe: another process\n'
+               'I/revandroid( 3475): OXT-Beyond probe: not the engine\'s line\n'
+               'I/LiveCode( 3475): the engine, about something else\n'
+               'I/LiveCode( 3475): said: OXT-Beyond probe: not at the start\n')
+        self.assertEqual(ac.probe_said(log, {'3475'}), [])
+        self.assertEqual(ac.probe_said(log), ['another process'])
+        self.assertEqual(ac.probe_said(''), [])
+
+    def test_the_probe_says_what_it_reads(self):
+        # the probe's put lines begin as PROBE_SAYS reads them
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        lines = re.findall(r'quote & "(OXT-Beyond probe: [^"]*)" & quote && "&& t\w+"', script)
+        self.assertEqual(len(lines), 5, lines)
+        for line in lines:
+            self.assertEqual(ac.probe_said('I/LiveCode( 1): %s x\n' % line), [line[len('OXT-Beyond probe: '):]
+                                                                              + ' x'])
+
+
+class SharedPictures(unittest.TestCase):
+    """device --picture's reading of MediaStore's shared pictures"""
+
+    # as an Android 13 image's content query says them
+    QUERY = ('Row: 0 _display_name=PXL_20260101.jpg, relative_path=DCIM/Camera/, owner_package_name=NULL\n'
+             'Row: 1 _display_name=oxt-beyond-probe.png, relative_path=Pictures/, '
+             'owner_package_name=org.openxtalk.check.androidprobe\n'
+             'Row: 2 _display_name=a, b.png, relative_path=Pictures/, owner_package_name=org.example\n')
+
+    def test_rows(self):
+        rows = ac.shared_pictures(self.QUERY)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0], {'_display_name': 'PXL_20260101.jpg', 'relative_path': 'DCIM/Camera/',
+                                   'owner_package_name': 'NULL'})
+        # a comma in a name is the name's
+        self.assertEqual(rows[2]['_display_name'], 'a, b.png')
+        self.assertEqual(ac.shared_pictures('No result found.\n'), [])
+        self.assertEqual(ac.shared_pictures(''), [])
+
+    def test_the_probes_picture(self):
+        rows = ac.shared_pictures(self.QUERY)
+        self.assertEqual(ac.probe_picture(rows, 'oxt-beyond-probe.png', ac.IDENTIFIER), rows[1])
+        self.assertIsNone(ac.probe_picture(rows, 'oxt-beyond-probe.png', 'org.example'))
+        self.assertIsNone(ac.probe_picture(rows, 'other.png', ac.IDENTIFIER))
+
+    def test_named_apart_is_found(self):
+        # the name a picture there has already (one the package added
+        # before it was installed again): Android adds " (1)"
+        row = {'_display_name': 'oxt-beyond-probe (1).png', 'relative_path': 'Pictures/',
+               'owner_package_name': ac.IDENTIFIER}
+        self.assertEqual(ac.probe_picture([row], 'oxt-beyond-probe.png', ac.IDENTIFIER), row)
+
+    def test_what_is_not_it(self):
+        mine = {'relative_path': 'Pictures/', 'owner_package_name': ac.IDENTIFIER}
+        for name in ('oxt-beyond-probe.jpg', 'oxt-beyond-probe-2.png', 'xoxt-beyond-probe.png',
+                     'oxt-beyond-probe (x).png', 'oxt-beyond-probe.png.png', 'oxt-beyond-probe (1) .png'):
+            self.assertIsNone(ac.probe_picture([dict(mine, _display_name=name)], 'oxt-beyond-probe.png',
+                                               ac.IDENTIFIER), name)
+        # another folder, or no owner (the package's picture before it was
+        # installed again)
+        for other in ({'relative_path': 'DCIM/'}, {'relative_path': 'Pictures/x/'},
+                      {'owner_package_name': 'NULL'}, {'owner_package_name': ac.IDENTIFIER + '.x'}):
+            row = dict(mine, _display_name='oxt-beyond-probe.png', **other)
+            self.assertIsNone(ac.probe_picture([row], 'oxt-beyond-probe.png', ac.IDENTIFIER), other)
+        # a name's dot is a dot
+        self.assertIsNone(ac.probe_picture([dict(mine, _display_name='oxt-beyond-probeXpng')],
+                                           'oxt-beyond-probe.png', ac.IDENTIFIER))
+
+
+class RemovalTaken(unittest.TestCase):
+    """device --picture's wait, after the uninstall, for MediaProvider's
+    lines of the package's removal"""
+
+    def wait(self, answers, seconds=60):
+        calls = []
+
+        def a(*cmd, timeout=180):
+            calls.append(cmd)
+            return 0, answers[min(len(calls), len(answers)) - 1]
+        out = io.StringIO()
+        saved = ac.time.sleep
+        ac.time.sleep = lambda x: None
+        try:
+            with contextlib.redirect_stdout(out):
+                said = ac.removal_taken(a, seconds)
+        finally:
+            ac.time.sleep = saved
+        return said, calls, out.getvalue()
+
+    def test_said_at_once(self):
+        said, calls, out = self.wait([DevicePicture.TAKEN])
+        self.assertEqual(said, 'Before it is installed: MediaProvider took the removal of the package after 0 s '
+                               '(deleted 0; orphaned 1)')
+        self.assertEqual(calls, [('logcat', '-d', '-s', 'MediaProvider')])
+        self.assertEqual(out, said + '\n')
+
+    def test_said_later(self):
+        older = 'D/MediaProvider( 1735): Orphaned 2 items belonging to org.openxtalk.check.androidprobe on x.db\n'
+        said, calls, _ = self.wait(['', 'D/MediaProvider( 1735): Scanning\n', older])
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(said.endswith('(orphaned 2)'), said)
+
+    def test_another_package_is_not_it(self):
+        other = ('D/MediaProvider( 1735): Orphaned 1 items belonging to org.openxtalk.check.androidprobe2 on x\n'
+                 'D/MediaProvider( 1735): Orphaned 1 items belonging to org.openxtalk.check.androidprobe.x on x\n'
+                 'D/MediaProvider( 1735): Orphaned 1 items belonging to com.example on x\n')
+        said, calls, _ = self.wait([other], seconds=0)
+        self.assertTrue(said.startswith('NOTE: MediaProvider has not said in 0 s'), said)
+        self.assertEqual(len(calls), 1)
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DevicePicture(unittest.TestCase):
+    """device --picture with a stand-in adb: the Java layer's probe exports
+    a picture to the album, which must then be among the shared pictures
+    (MediaStore) as the package's own; and what the probe said in the log
+    is printed, and kept in the failure when it turns its fail colour"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+    QUERY_CALL = ('shell content query --uri content://media/external/images/media '
+                  '--projection _display_name:relative_path:owner_package_name')
+    SAID = ('I/LiveCode( 3475): OXT-Beyond probe: local notification 1\n'
+            'I/LiveCode( 3475): OXT-Beyond probe: external documents /storage/emulated/0/Android/data/x/files\n'
+            'I/LiveCode( 3475): OXT-Beyond probe: has WRITE_EXTERNAL_STORAGE true\n'
+            'I/LiveCode( 3475): OXT-Beyond probe: export to album\n')
+
+    calls_of_adb = Device.calls
+
+    # MediaProvider's lines for the removal of the package, as the 16 KB
+    # Android 16 image says them (run 42359925885)
+    TAKEN = ('D/MediaProvider( 1735): Deleted 0 Android/media items belonging to '
+             'org.openxtalk.check.androidprobe on /data/user/0/com.google.android.providers.media.module/'
+             'databases/external.db\n'
+             'D/MediaProvider( 1735): Orphaned 1 items belonging to org.openxtalk.check.androidprobe on '
+             '/data/user/0/com.google.android.providers.media.module/databases/external.db\n')
+
+    def run_probe(self, pictures=SharedPictures.QUERY, said='', picture=True, colour=ac.RUN_COLOR,
+                  uninstall='Success', taken=TAKEN):
+        d = self.tmp.name
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0] + said)
+        with open(os.path.join(d, 'pictures.txt'), 'w') as f:
+            f.write(pictures)
+        with open(os.path.join(d, 'taken.txt'), 'w') as f:
+            f.write(taken)
+        with open(os.path.join(d, 'screen.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(colour) + [255]) * 16)
+        cases = ('  "shell content query "*) echo "$*" >> "%(d)s/calls"; cat "%(d)s/pictures.txt" ;;\n'
+                 '  "uninstall "*) echo "%(uninstall)s" ;;\n'
+                 '  "logcat -d -s MediaProvider") cat "%(d)s/taken.txt" ;;\n' % {'d': d, 'uninstall': uninstall})
+        status, out = self.device('echo 3475', timeout='10', cases=cases,
+                                  argv=('--picture', 'oxt-beyond-probe.png') if picture else ())
+        try:
+            with open(os.path.join(d, 'calls')) as f:
+                calls = f.read().splitlines()
+        except FileNotFoundError:
+            calls = []
+        return status, out, calls
+
+    def test_the_packages_picture_passes(self):
+        status, out, calls = self.run_probe(said=self.SAID)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [self.QUERY_CALL])
+        self.assertIn('Shared pictures the package owns: Pictures/oxt-beyond-probe.png', out)
+        # what it said, each line in order
+        at = [out.index('The probe said: ' + x) for x in (
+            'local notification 1', 'external documents /storage/emulated/0/Android/data/x/files',
+            'has WRITE_EXTERNAL_STORAGE true', 'export to album')]
+        self.assertEqual(at, sorted(at))
+
+    def test_no_picture_of_its_own_fails(self):
+        query = SharedPictures.QUERY.replace('owner_package_name=org.openxtalk.check.androidprobe',
+                                             'owner_package_name=NULL')
+        status, out, _ = self.run_probe(query)
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: the probe's picture oxt-beyond-probe.png is not in the shared Pictures folder as "
+                      "the package's own (it owns no shared picture; Pictures/oxt-beyond-probe.png there has no "
+                      "owner)", out)
+        self.assertIn('Shared pictures the package owns: none', out)
+        # none of its name at all
+        query = SharedPictures.QUERY.replace('_display_name=oxt-beyond-probe.png, relative_path=Pictures/, '
+                                             'owner_package_name=org.openxtalk.check.androidprobe',
+                                             '_display_name=x.png, relative_path=Pictures/, owner_package_name=NULL')
+        status, out, _ = self.run_probe(query)
+        self.assertIn("as the package's own (it owns no shared picture)\n", out)
+
+    def test_waits_for_mediaprovider_to_take_the_removal(self):
+        # run 42359925885: MediaProvider took the removal of the package
+        # after it was installed again and had exported its picture, and
+        # orphaned that; with --picture, device waits for it in between
+        status, out, _ = self.run_probe(said=self.SAID)
+        self.assertEqual(status, 0, out)
+        calls = self.calls_of_adb()
+        steps = [calls.index(x) for x in ('logcat -c', 'uninstall org.openxtalk.check.androidprobe',
+                                          'logcat -d -s MediaProvider')]
+        steps.append(next(i for i, c in enumerate(calls) if c.startswith('install')))
+        self.assertEqual(steps, list(range(steps[0], steps[0] + 4)), calls)
+        self.assertIn('Before it is installed: MediaProvider took the removal of the package after 0 s '
+                      '(deleted 0; orphaned 1)', out)
+        self.assertLess(out.index('Before it is installed:'), out.index('Installed debug.apk'))
+
+    def test_no_wait_without_picture_or_without_a_removal(self):
+        adb_calls = os.path.join(self.tmp.name, 'platform-tools', 'calls')
+        for picture, uninstall in ((False, 'Success'), (True, 'Failure [DELETE_FAILED_INTERNAL_ERROR]')):
+            if os.path.exists(adb_calls):
+                os.remove(adb_calls)
+            status, out, _ = self.run_probe(said=self.SAID, picture=picture, uninstall=uninstall)
+            self.assertEqual(status, 0, out)
+            calls = self.calls_of_adb()
+            self.assertIn('uninstall org.openxtalk.check.androidprobe', calls)
+            self.assertNotIn('logcat -d -s MediaProvider', calls)
+            self.assertNotIn('MediaProvider', out)
+            # the log is cleared before the uninstall only for the wait
+            self.assertEqual(calls.index('logcat -c') < calls.index('uninstall org.openxtalk.check.androidprobe'),
+                             picture, calls)
+
+    def test_a_wait_that_ends_without_it_decides_nothing(self):
+        saved = ac.REMOVAL_WAIT
+        ac.REMOVAL_WAIT = 0
+        try:
+            status, out, _ = self.run_probe(said=self.SAID, taken='')
+        finally:
+            ac.REMOVAL_WAIT = saved
+        self.assertEqual(status, 0, out)
+        self.assertIn('NOTE: MediaProvider has not said in 0 s that it took the removal of the package; '
+                      'a picture the probe exports may lose its owner when it does', out)
+
+    def test_another_picture_of_its_own_is_named(self):
+        query = SharedPictures.QUERY.replace('_display_name=oxt-beyond-probe.png', '_display_name=I1a2b3c4.png')
+        status, out, _ = self.run_probe(query)
+        self.assertEqual(status, 1, out)
+        self.assertIn("as the package's own (it owns Pictures/I1a2b3c4.png)", out)
+
+    def test_no_pictures_listed_says_what_it_answered(self):
+        status, out, _ = self.run_probe('No result found.\n')
+        self.assertEqual(status, 1, out)
+        self.assertIn("as the package's own (MediaStore listed no picture: No result found.)", out)
+        status, out, _ = self.run_probe('')
+        self.assertIn('(MediaStore listed no picture: no answer)', out)
+
+    def test_without_picture_mediastore_is_not_asked(self):
+        status, out, calls = self.run_probe('', said=self.SAID, picture=False)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [])
+        self.assertNotIn('Shared pictures', out)
+        self.assertIn('The probe said: export to album', out)
+
+    def test_the_fail_colour_keeps_what_it_said(self):
+        said = self.SAID.replace('export to album\n', 'export to album export failed\n')
+        status, out, _ = self.run_probe(said=said, colour=ac.FAIL_COLOR)
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: the probe's script ran, and a call it makes into the Java layer failed (the screen "
+                      "is its fail colour, 100%; it said: local notification 1 | external documents "
+                      "/storage/emulated/0/Android/data/x/files | has WRITE_EXTERNAL_STORAGE true | export to album "
+                      "export failed)", out)
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DeviceBackAndBars(unittest.TestCase):
+    """device --within-bars and --back with a stand-in adb: once green, the
+    screen's first and last rows must not be the probe's green (the stack
+    is not drawn under the system bars), and the back key must reach the
+    probe's backKey, which turns it its back colour"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+
+    @staticmethod
+    def screen(rows):
+        """a raw screencap 4 pixels wide, a row of each colour"""
+        return struct.pack('<IIII', 4, len(rows), 1, 0) + b''.join(bytes(list(c) + [255]) * 4 for c in rows)
+
+    def run_probe(self, before, after=None, gone=False, argv=('--back', '--within-bars'), out=False, then=None):
+        """the probe shows before, and after once the back key is pressed
+        (unchanged when None); gone: its process ends with the key; then:
+        what it shows from the second screen on (the bars drawn late)"""
+        d = self.tmp.name
+        for name in ('calls', 'gone', 'shots'):
+            if os.path.exists(os.path.join(d, name)):
+                os.remove(os.path.join(d, name))
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0])
+        with open(os.path.join(d, 'screen.raw'), 'wb') as f:
+            f.write(self.screen(before))
+        later = ''
+        if then is not None:
+            with open(os.path.join(d, 'then.raw'), 'wb') as f:
+                f.write(self.screen(then))
+            later = ('[ "$(grep -c shot "%(d)s/shots")" = 2 ] && cp "%(d)s/then.raw" "%(d)s/screen.raw"; '
+                     % {'d': d})
+        with open(os.path.join(d, 'back.raw'), 'wb') as f:
+            f.write(self.screen(after if after is not None else before))
+        cases = ('  "shell input keyevent KEYCODE_BACK") echo "$*" >> "%(d)s/calls"; echo key >> "%(d)s/shots"; '
+                 'cp "%(d)s/back.raw" "%(d)s/screen.raw"; %(gone)s ;;\n'
+                 % {'d': d, 'gone': 'touch "%s/gone"' % d if gone else 'true'})
+        pidof = '[ -f "%s/gone" ] || echo 3475' % d
+        extra = list(argv) + (['--out', os.path.join(d, 'screen.png')] if out else [])
+        saved = ac.BACK_WAIT, ac.BARS_WAIT, ac.BARS_INTERVAL
+        ac.BACK_WAIT, ac.BARS_WAIT, ac.BARS_INTERVAL = 3, 2, 0.3
+        try:
+            status, text = self.device(pidof, timeout='10', cases=cases, argv=extra,
+                                       screencap='echo shot >> "%s/shots"; %s' % (d, later))
+        finally:
+            ac.BACK_WAIT, ac.BARS_WAIT, ac.BARS_INTERVAL = saved
+        try:
+            with open(os.path.join(d, 'calls')) as f:
+                calls = f.read().splitlines()
+        except FileNotFoundError:
+            calls = []
+        with open(os.path.join(d, 'shots')) as f:
+            self.shots = f.read().splitlines()
+        return status, text, calls
+
+    G, K, B, F = ac.RUN_COLOR, (0, 0, 0), ac.BACK_COLOR, ac.FAIL_COLOR
+    INSIDE = (K, G, G, K)
+
+    def test_inside_the_bars_and_back_passes(self):
+        status, out, calls = self.run_probe(self.INSIDE, (self.K, self.B, self.B, self.K), out=True)
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, ['shell input keyevent KEYCODE_BACK'])
+        self.assertIn('The bars: the stack is inside them (the first and last rows are not its green)', out)
+        self.assertRegex(out, r"After the back key: [1-9]\d*% of the screen is the probe's back colour; process 3475")
+        # the first screen after the key that shows it ends the wait
+        self.assertEqual(self.shots[self.shots.index('key'):], ['key', 'shot'])
+        # the screen after the key, beside the first
+        back = os.path.join(self.tmp.name, 'screen-back.png')
+        self.assertIn('Screen after the back key: %s' % back, out)
+        with open(back, 'rb') as f:
+            self.assertEqual(f.read(8), b'\x89PNG\r\n\x1a\n')
+
+    def test_drawn_under_the_bars_fails(self):
+        status, out, _ = self.run_probe((self.G,) * 4, (self.B,) * 4)
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: the stack is drawn under the system bars (its green in the screen's top 100% and "
+                      "bottom 100% row)", out)
+        status, out, _ = self.run_probe((self.G, self.G, self.G, self.K), (self.B,) * 4)
+        self.assertIn("(its green in the screen's top 100% row)", out)
+
+    def test_drawn_under_the_bars_looks_again(self):
+        # the screen is taken again until BARS_WAIT (2 s here) has passed,
+        # and the failure says so
+        status, out, _ = self.run_probe((self.G,) * 4, argv=('--within-bars',))
+        self.assertEqual(status, 1, out)
+        self.assertIn("The bars: the first green screen has the stack's green in its top 100% and bottom 100% row; "
+                      "the screen again for up to 2 s", out)
+        self.assertRegex(out, r"The bars: [4-7] more screen\(s\) in 2 s; the stack's green is still where the "
+                              r"bars are")
+        self.assertGreaterEqual(self.shots.count('shot'), 5)
+
+    def test_bars_drawn_late_pass(self):
+        # the first green screen is green where the bars are, the next has
+        # them over it: the stack is inside them
+        status, out, calls = self.run_probe((self.G,) * 4, argv=('--within-bars',), then=self.INSIDE)
+        self.assertEqual(status, 0, out)
+        self.assertIn('The bars: 1 more screen(s) in 0 s; the bars are drawn over the stack in the last', out)
+        self.assertIn('The bars: the stack is inside them (the first and last rows are not its green)', out)
+        self.assertEqual(self.shots, ['shot', 'shot'])
+
+    def test_a_screen_that_is_not_the_probe_says_nothing_of_the_bars(self):
+        # a black screen (a dialog, the probe gone) next: still under them
+        status, out, _ = self.run_probe((self.G,) * 4, argv=('--within-bars',), then=(self.K,) * 4)
+        self.assertEqual(status, 1, out)
+        self.assertIn("the stack's green is still where the bars are", out)
+
+    def test_inside_the_bars_takes_no_more_screens(self):
+        status, out, _ = self.run_probe(self.INSIDE, argv=('--within-bars',))
+        self.assertEqual(status, 0, out)
+        self.assertEqual(self.shots, ['shot'])
+        self.assertNotIn('the screen again', out)
+
+    def test_back_not_reaching_backkey_fails(self):
+        status, out, calls = self.run_probe(self.INSIDE)
+        self.assertEqual(status, 1, out)
+        self.assertEqual(calls, ['shell input keyevent KEYCODE_BACK'])
+        self.assertIn("PROBLEM: the back key did not reach the stack's backKey (0% of the screen its back colour; "
+                      "the app is running)", out)
+        # it looked again until BACK_WAIT (3 s here) had passed
+        self.assertEqual(self.shots[self.shots.index('key'):], ['key', 'shot', 'shot'])
+
+    def test_back_ending_the_app_fails(self):
+        # an unhandled back key ends the app: the stack never got it
+        status, out, _ = self.run_probe(self.INSIDE, (self.K,) * 4, gone=True)
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: the back key did not reach the stack's backKey (0% of the screen its back colour; "
+                      "the app is gone)", out)
+        self.assertIn("process not running", out)
+
+    def test_neither_unless_asked(self):
+        status, out, calls = self.run_probe((self.G,) * 4, argv=())
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [])
+        self.assertNotIn('The bars:', out)
+        self.assertNotIn('back key', out)
+
+    def test_not_green_is_not_asked_more(self):
+        # the fail colour fails as before, and neither check runs
+        status, out, calls = self.run_probe((self.F,) * 4)
+        self.assertEqual(status, 1, out)
+        self.assertEqual(calls, [])
+        self.assertNotIn('The bars:', out)
+        self.assertIn("a call it makes into the Java layer failed", out)
+
+    def test_each_alone(self):
+        status, out, calls = self.run_probe((self.G,) * 4, (self.B,) * 4, argv=('--back',))
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, ['shell input keyevent KEYCODE_BACK'])
+        status, out, calls = self.run_probe(self.INSIDE, argv=('--within-bars',))
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [])
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DeviceAnotherAppsAnr(unittest.TestCase):
+    """device with another app's "isn't responding" dialog in front of the
+    probe (run 42354758286: the launcher's, its scrim dimming the probe's
+    green): it taps the dialog's Wait, and the probe's green ends the wait;
+    a dialog that stays is answered at most ANR_TAPS times"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    calls = Device.calls
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+
+    def run_probe(self, wait_closes=True, package='com.google.android.apps.nexuslauncher'):
+        d = self.tmp.name
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0])
+        # the probe's green under the dialog's scrim, and then without it
+        dim = tuple(c * 2 // 5 for c in ac.RUN_COLOR)
+        with open(os.path.join(d, 'screen.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(dim) + [255]) * 16)
+        with open(os.path.join(d, 'green.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(ac.RUN_COLOR) + [255]) * 16)
+        with open(os.path.join(d, 'ui.xml'), 'w') as f:
+            f.write(PermissionReaders.ANR_UI)
+        # the dialog has the focus until Wait is tapped (when it closes)
+        anr = ('[ -f "%s/answered" ] || printf "  mCurrentFocus=Window{22bc663 u0 Application Not Responding: '
+               '%s}\\n"' % (d, package))
+        tap = ('cp "%(d)s/green.raw" "%(d)s/screen.raw"; touch "%(d)s/answered"' % {'d': d}) if wait_closes else 'true'
+        cases = ('  "shell uiautomator dump /sdcard/oxt-ui.xml") true ;;\n'
+                 '  "shell cat /sdcard/oxt-ui.xml") cat "%(d)s/ui.xml" ;;\n'
+                 '  "shell input tap 540 1280") %(tap)s ;;\n' % {'d': d, 'tap': tap})
+        status, out = self.device('echo 3475', timeout='20', cases=cases, window=anr)
+        return status, out, [c for c in self.calls() if c.startswith(('shell uiautomator', 'shell input'))]
+
+    def test_wait_is_tapped_and_the_probe_passes(self):
+        status, out, calls = self.run_probe()
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, ['shell uiautomator dump /sdcard/oxt-ui.xml', 'shell input tap 540 1280'])
+        self.assertIn("  com.google.android.apps.nexuslauncher isn't responding, its dialog in front of the probe: "
+                      "tapped Wait at 540,1280", out)
+        self.assertRegex(out, r"After \d+ s: 100% of the screen is the probe's green")
+
+    def test_a_dialog_that_stays_is_answered_three_times(self):
+        status, out, calls = self.run_probe(wait_closes=False)
+        self.assertEqual(status, 1, out)
+        self.assertEqual(calls.count('shell input tap 540 1280'), ac.ANR_TAPS)
+        self.assertIn("PROBLEM: the screen never turned the probe's green", out)
+
+    def test_the_probes_own_is_not_answered(self):
+        status, out, calls = self.run_probe(package=ac.IDENTIFIER)
+        self.assertEqual(status, 1, out)
+        self.assertEqual(calls, [])
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb and JDK are scripts')
+class DeviceBundle(unittest.TestCase):
+    """device with an App Bundle, a stand-in adb and a stand-in JDK whose
+    java runs a stand-in bundletool: it is installed as Google Play
+    installs it (bundletool's split APKs for the device, signed with a key
+    made here), and must be installed as more than one APK"""
+
+    PM_PATH = ('package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/base.apk\n'
+               'package:/data/app/~~a1/org.openxtalk.check.androidprobe-b2/split_config.x86_64.apk\n')
+
+    def setUp(self):
+        Device.setUp(self)
+        d = self.tmp.name
+        self.apk = os.path.join(d, 'bundle.aab')
+        with zipfile.ZipFile(self.apk, 'w') as z:
+            z.writestr('BundleConfig.pb', BundleReaders.CONFIG)
+            z.writestr('base/lib/x86_64/librevandroid.so', b'')
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0])
+        with open(os.path.join(d, 'pm.txt'), 'w') as f:
+            f.write(self.PM_PATH)
+        self.jdk = os.path.join(d, 'jdk')
+        os.makedirs(os.path.join(self.jdk, 'bin'))
+        self.jar = os.path.join(d, 'bundletool.jar')
+        with open(self.jar, 'wb') as f:
+            f.write(b'')
+        # java: the stand-in bundletool, saying each call; build-apks makes
+        # a .apks with two of the device's APKs, unless told to fail
+        with open(os.path.join(self.jdk, 'bin', 'java'), 'w') as f:
+            f.write('#!%s\n'
+                    'import os, sys, zipfile\n'
+                    'd = %r\n'
+                    'args = sys.argv[1:]\n'
+                    'with open(os.path.join(d, "java-calls"), "a") as f:\n'
+                    '    f.write(" ".join(args) + "\\n")\n'
+                    'fail = open(os.path.join(d, "fail")).read() if os.path.exists(os.path.join(d, "fail")) else ""\n'
+                    'if args[2] == "build-apks":\n'
+                    '    if fail == "build":\n'
+                    '        print("[BT:1.18.3] Error: no connected device matches"); sys.exit(1)\n'
+                    '    with zipfile.ZipFile(args[args.index("--output") + 1], "w") as z:\n'
+                    '        z.writestr("toc.pb", b"")\n'
+                    '        z.writestr("splits/base-master.apk", b"m")\n'
+                    '        z.writestr("splits/base-x86_64.apk", b"x")\n'
+                    'elif args[2] == "install-apks":\n'
+                    '    if fail == "install":\n'
+                    '        print("[BT:1.18.3] Error: INSTALL_FAILED_NO_MATCHING_ABIS"); sys.exit(1)\n'
+                    'else:\n'
+                    '    sys.exit(2)\n' % (sys.executable, d))
+        # keytool: makes the keystore it is asked for
+        with open(os.path.join(self.jdk, 'bin', 'keytool'), 'w') as f:
+            f.write('#!%s\n'
+                    'import sys\n'
+                    'open(sys.argv[sys.argv.index("-keystore") + 1], "w").write("ks")\n' % sys.executable)
+        for tool in ('java', 'keytool'):
+            os.chmod(os.path.join(self.jdk, 'bin', tool), 0o755)
+
+    tearDown = Device.tearDown
+    device = Device.device
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+
+    def run_bundle(self, argv=None, fail=''):
+        d = self.tmp.name
+        if fail:
+            with open(os.path.join(d, 'fail'), 'w') as f:
+                f.write(fail)
+        cases = ('  "shell pm path %s") cat "%s/pm.txt" ;;\n' % (ac.IDENTIFIER, d))
+        status, out = self.device('echo 3475', cases=cases,
+                                  argv=['--bundletool', self.jar, '--jdk', self.jdk] if argv is None else argv)
+        try:
+            with open(os.path.join(d, 'java-calls')) as f:
+                calls = [x.split(' ') for x in f.read().splitlines()]
+        except FileNotFoundError:
+            calls = []
+        return status, out, calls
+
+    def test_installed_as_split_apks(self):
+        status, out, calls = self.run_bundle()
+        self.assertEqual(status, 0, out)
+        adb = os.path.join(self.tmp.name, 'platform-tools', 'adb')
+        self.assertEqual(len(calls), 2, calls)
+        build, install = calls
+        self.assertEqual(build[:4], ['-jar', self.jar, 'build-apks', '--bundle'])
+        self.assertEqual(build[4], self.apk)
+        for flag, value in (('--connected-device', None), ('--device-id', 'emulator-5554'), ('--adb', adb),
+                            ('--ks-pass', 'pass:' + ac.KEY_PASSWORD), ('--ks-key-alias', ac.KEY_ALIAS),
+                            ('--key-pass', 'pass:' + ac.KEY_PASSWORD)):
+            self.assertIn(flag, build)
+            if value:
+                self.assertEqual(build[build.index(flag) + 1], value, flag)
+        apks = build[build.index('--output') + 1]
+        self.assertEqual(install[:3], ['-jar', self.jar, 'install-apks'])
+        self.assertEqual(install[install.index('--apks') + 1], apks)
+        self.assertEqual(install[install.index('--device-id') + 1], 'emulator-5554')
+        self.assertEqual(install[install.index('--adb') + 1], adb)
+        # the key made for it, and its .apks, are gone
+        self.assertFalse(os.path.exists(os.path.dirname(apks)))
+        self.assertIn('bundletool made 2 APKs of bundle.aab for the device: base-master.apk, base-x86_64.apk', out)
+        self.assertIn('Installed bundle.aab as 2 APKs: base.apk, split_config.x86_64.apk', out)
+        self.assertNotIn('Installed bundle.aab\n', out)
+        # and it starts, as a package does, once the install is taken
+        self.assertLess(out.index('Installed bundle.aab as 2 APKs'), out.index('Before it starts: '))
+        self.assertLess(out.index('Before it starts: '), out.index('Started: '))
+
+    def test_one_apk_is_not_as_google_play_installs_it(self):
+        with open(os.path.join(self.tmp.name, 'pm.txt'), 'w') as f:
+            f.write(self.PM_PATH.splitlines()[0] + '\n')
+        status, out, _ = self.run_bundle()
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundle.aab is installed as base.apk, not as split APKs as Google Play installs it',
+                      out)
+
+    def test_bundletool_refusing(self):
+        status, out, calls = self.run_bundle(fail='build')
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundletool makes no APKs of bundle.aab for emulator-5554: [BT:1.18.3] Error: no '
+                      'connected device matches', out)
+        self.assertEqual([c[2] for c in calls], ['build-apks'])
+        status, out, calls = self.run_bundle(fail='install')
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundle.aab does not install on emulator-5554: [BT:1.18.3] Error: '
+                      'INSTALL_FAILED_NO_MATCHING_ABIS', out)
+
+    def test_no_bundletool_or_java(self):
+        status, out, calls = self.run_bundle(argv=['--jdk', self.jdk])
+        self.assertEqual(status, 1, out)
+        self.assertIn('PROBLEM: bundle.aab is an App Bundle, and there is no bundletool to install it '
+                      '(--bundletool: not given)', out)
+        self.assertEqual(calls, [])
+        status, out, _ = self.run_bundle(argv=['--bundletool', self.jar + '.none', '--jdk', self.jdk])
+        self.assertIn('(--bundletool: %s.none)' % self.jar, out)
+        saved = ac.jdk_tool
+        ac.jdk_tool = lambda jdk, name: None
+        try:
+            status, out, _ = self.run_bundle()
+        finally:
+            ac.jdk_tool = saved
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: bundle.aab is an App Bundle, and there is no java (the JDK's, --jdk) to run "
+                      "bundletool", out)
+
+    def test_its_libraries_are_the_packages(self):
+        # the crash lines read the bundle's files as the package's: with
+        # librevsecurity.so in the base module, its loading failing is a
+        # crash, not the expected line of a package without it
+        status, out, _ = self.run_bundle()
+        self.assertEqual(status, 0, out)
+        self.assertIn('Expected (the package has no SSL library, and the engine runs on without it): '
+                      'I/revandroid( 3475): java.lang.UnsatisfiedLinkError', out)
+        with zipfile.ZipFile(self.apk, 'a') as z:
+            z.writestr('base/lib/x86_64/librevsecurity.so', b'')
+        status, out, _ = self.run_bundle()
+        self.assertEqual(status, 1, out)
+        self.assertNotIn('Expected (', out)
+        self.assertIn('librevsecurity.so', out[out.index('PROBLEM'):])
 
 
 class Overlay(unittest.TestCase):
@@ -629,6 +1750,25 @@ class Screen(unittest.TestCase):
         rgba = bytes(list(ac.RUN_COLOR) + [255]) * 50 + bytes([0, 0, 0, 255]) * 50
         self.assertAlmostEqual(ac.colour_share(rgba, ac.RUN_COLOR, step=1), 0.5)
 
+    def test_bars_drawn_over(self):
+        # a 4x4 screen: green but for its first and last rows (the bars
+        # drawn as before), all green (drawn under them), green to the top
+        # (under the status bar alone), and a top row half green
+        green, black = bytes(list(ac.RUN_COLOR) + [255]), bytes([0, 0, 0, 255])
+        row = lambda c, n=4: c * n
+        inside = row(black) + row(green) * 2 + row(black)
+        self.assertEqual(ac.bars_drawn_over(inside, 4, 4), [])
+        self.assertEqual(ac.bars_drawn_over(row(green) * 4, 4, 4), ['top 100%', 'bottom 100%'])
+        self.assertEqual(ac.bars_drawn_over(row(green) * 3 + row(black), 4, 4), ['top 100%'])
+        self.assertEqual(ac.bars_drawn_over(row(green, 2) + row(black, 2) + row(green) * 3, 4, 4),
+                         ['top 50%', 'bottom 100%'])
+        self.assertEqual(ac.bars_drawn_over(row(green, 1) + row(black, 3) + row(green) * 2 + row(black), 4, 4), [])
+        self.assertEqual(ac.bars_drawn_over(b'', 0, 0), [])
+        # a colour of one's own
+        self.assertEqual(ac.bars_drawn_over(row(black) * 4, 4, 4, (0, 0, 0)), ['top 100%', 'bottom 100%'])
+        self.assertAlmostEqual(ac.row_share(row(green, 3) + row(black, 1) + row(black), 4, 0, ac.RUN_COLOR), 0.75)
+        self.assertEqual(ac.row_share(row(green, 3) + row(black, 1) + row(black), 4, 1, ac.RUN_COLOR), 0.0)
+
     def test_png(self):
         png = ac.png_from_rgba(2, 2, bytes([1, 2, 3, 255]) * 4)
         self.assertTrue(png.startswith(b'\x89PNG\r\n\x1a\n'))
@@ -653,6 +1793,7 @@ class IdeLines(unittest.TestCase):
             'INFO release asked Please provide the keystore alias to use;',
             'TEST FAILED Installation of app failed: x',
             'ERROR 219,1,1',
+            'INFO bundletool /home/u/.oxt-beyond/cache/Android/bundletool-all-1.18.3.jar',
             'DONE'])
         self.assertEqual(r['units'], {'sdk-complete': None, 'sdk-valid': 'false'})
         self.assertEqual(r['builds'], {'debug': ('ok', '/w/out/debug.apk'),
@@ -663,6 +1804,12 @@ class IdeLines(unittest.TestCase):
         self.assertEqual(r['test'], 'Installation of app failed: x')
         self.assertEqual(r['errors'], ['ERROR 219,1,1'])
         self.assertTrue(r['done'])
+        self.assertEqual(r['bundletool'], '/home/u/.oxt-beyond/cache/Android/bundletool-all-1.18.3.jar')
+        self.assertNotIn('bundletool', r['warnings'])
+        # a path with spaces is the path's
+        r = ac.ide_results(['INFO bundletool C:/Users/A B/AppData/x/bundletool-all-1.18.3.jar  '])
+        self.assertEqual(r['bundletool'], 'C:/Users/A B/AppData/x/bundletool-all-1.18.3.jar')
+        self.assertIsNone(ac.ide_results(['DONE'])['bundletool'])
 
 
 class Compare(unittest.TestCase):
@@ -838,6 +1985,415 @@ class VerifyWithoutTools(unittest.TestCase):
         self.assertIn('did not warn "built for armv7 and not arm64"', problems[0])
 
 
+class VerifyTarget(unittest.TestCase):
+    """verify_apk with an aapt that answers a badging and a manifest: the
+    API the package targets is the one asked for (33 unless --target says
+    otherwise), and at 36, and only there, the manifest keeps the stack's
+    orientation on large screens"""
+
+    SPEC = VerifyWithoutTools.SPEC
+    # a manifest without the push receiver (SPEC has no push)
+    TREE = AAPT1_TREE.split('      E: receiver (line=9)\n        A: android:name(0x01010003)="PushReceiver"')[0] + \
+        '      E: service (line=9)\n        A: android:name(0x01010003)=".mblandroidservice" (Raw: "x")\n'
+    PROPERTY = ('      E: property (line=11)\n'
+                '        A: android:name(0x01010003)="%s" (Raw: "x")\n'
+                '        A: android:value(0x01010024)=(type 0x12)%%s\n' % ac.LARGE_SCREEN_PROPERTY)
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.apk = os.path.join(self.dir, 'p.apk')
+        with open(self.apk, 'wb') as f:
+            f.write(zip_bytes([('AndroidManifest.xml', b'm'), ('classes.dex', b'd'), ('resources.arsc', b'r'),
+                               ('lib/arm64-v8a/librevandroid.so', elf64([0x10000]))], stored=('resources.arsc',)))
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def check(self, targets, value=None, *target):
+        """verify_apk of a package that targets targets, with the large
+        screen property of value (none when None)"""
+        tree = self.TREE + (self.PROPERTY % value if value is not None else '')
+        saved = ac.run
+
+        def fake(cmd, timeout=300, check=False):
+            if cmd[1:3] == ['dump', 'badging']:
+                return 0, ("package: name='%s' versionCode='1'\nsdkVersion:'21'\ntargetSdkVersion:'%s'\n"
+                           % (ac.IDENTIFIER, targets))
+            self.assertEqual(cmd[1:3], ['dump', 'xmltree'])
+            return 0, tree
+        ac.run = fake
+        try:
+            return ac.verify_apk('unsigned', self.apk, self.SPEC, {'aapt': 'aapt'}, {}, *target)[0]
+        finally:
+            ac.run = saved
+
+    def test_33_as_before(self):
+        self.assertEqual(ac.TARGET_SDK, '33')
+        self.assertEqual(self.check('33'), [])
+        self.assertEqual(self.check('33', None, '33'), [])
+        self.assertEqual(self.check('36'), ['unsigned does not target API 33'])
+
+    def test_36_with_the_property(self):
+        self.assertEqual(ac.NEWEST_TARGET_SDK, '36')
+        self.assertEqual(self.check('36', '0xffffffff', '36'), [])
+        self.assertEqual(self.check('33', None, '36'), [
+            'unsigned does not target API 36',
+            "unsigned targets API 36, and its manifest does not keep the stack's orientation on large screens "
+            "(%s is not there)" % ac.LARGE_SCREEN_PROPERTY])
+
+    def test_36_without_the_property_or_false(self):
+        self.assertEqual(self.check('36', None, '36'), [
+            "unsigned targets API 36, and its manifest does not keep the stack's orientation on large screens "
+            "(%s is not there)" % ac.LARGE_SCREEN_PROPERTY])
+        self.assertEqual(self.check('36', '0x0', '36'), [
+            "unsigned targets API 36, and its manifest does not keep the stack's orientation on large screens "
+            "(%s is 0x0)" % ac.LARGE_SCREEN_PROPERTY])
+
+    def test_the_property_below_36(self):
+        self.assertEqual(self.check('33', '0xffffffff'), [
+            'unsigned: the manifest has %s, which is for a package that targets API 36 or newer (this one must '
+            'target 33)' % ac.LARGE_SCREEN_PROPERTY])
+
+    def test_verify_takes_the_target(self):
+        # verify's --target reaches verify_apk; without it, 33
+        work = os.path.join(self.dir, 'work')
+        os.makedirs(os.path.join(work, 'out'))
+        with open(os.path.join(work, ac.LOG_NAME), 'w') as f:
+            f.write('')
+        with open(os.path.join(work, 'out', 'debug.apk'), 'wb') as f:
+            f.write(b'apk')
+        seen = []
+        saved = ac.find_tools, ac.verify_apk
+        ac.find_tools = lambda sdk: {}
+        ac.verify_apk = lambda name, apk, spec, tools, warnings, target=None: (seen.append(target) or ([], []))
+        try:
+            for extra, want in (((), '33'), (('--target', '36'), '36')):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    status = ac.main(['verify', '--work', work, '--sdk', self.dir, '--builds', 'debug'] + list(extra))
+                self.assertEqual(status, 0)
+                self.assertEqual(seen.pop(), want)
+        finally:
+            ac.find_tools, ac.verify_apk = saved
+
+
+class VerifyBundle(unittest.TestCase):
+    """verify_bundle on made-up packages and App Bundles, with stand-in
+    answers from jarsigner, keytool and bundletool: what the bundle holds
+    against its package, bundletool's settings, the signature and the
+    manifest"""
+
+    SPEC = ac.BUILDS['bundle']
+    LIB = elf64([0x4000])
+    # the package's files: (name, bytes)
+    APK = [('AndroidManifest.xml', b'binary manifest'), ('classes.dex', b'dex'), ('resources.arsc', b'arsc'),
+           ('res/layout/livecode_inputcontrol.xml', b'binary layout'), ('res/drawable/notify_icon.png', b'png'),
+           ('assets/oxt-probe.txt', b'OXT-Beyond probe copy file'),
+           ('lib/arm64-v8a/librevandroid.so', LIB), ('lib/x86_64/librevandroid.so', LIB),
+           ('lib/1.jar', b'jar'), ('META-INF/OXTCHECK.SF', b'sf'), ('META-INF/OXTCHECK.RSA', b'rsa'),
+           ('META-INF/MANIFEST.MF', b'mf')]
+    # its App Bundle: the converted files differ, the rest are the same
+    AAB = [('BundleConfig.pb', BundleReaders.CONFIG), ('base/manifest/AndroidManifest.xml', b'proto manifest'),
+           ('base/dex/classes.dex', b'dex'), ('base/resources.pb', b'proto table'),
+           ('base/res/layout/livecode_inputcontrol.xml', b'proto layout'),
+           ('base/res/drawable/notify_icon.png', b'png'), ('base/assets/oxt-probe.txt', b'OXT-Beyond probe copy file'),
+           ('base/lib/arm64-v8a/librevandroid.so', LIB), ('base/lib/x86_64/librevandroid.so', LIB),
+           ('base/assets.pb', b''), ('base/native.pb', b''),
+           ('META-INF/MANIFEST.MF', b'mf'), ('META-INF/OXTCHECK.SF', b'sf'), ('META-INF/OXTCHECK.RSA', b'rsa')]
+    MANIFEST = ('<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="1" '
+                'package="%s">\n  <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="%%s"/>\n'
+                '  <application android:label="Android Probe">\n%%s  </application>\n</manifest>\n' % ac.IDENTIFIER)
+    PROPERTY = '    <property android:name="%s" android:value="%%s"/>\n' % ac.LARGE_SCREEN_PROPERTY
+    TOOLS = {'jarsigner': 'jarsigner', 'keytool': 'keytool', 'java': 'java', 'bundletool': 'bundletool.jar'}
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.answers = {'verify': (0, 'jar verified.\n\nThis jar contains entries whose signer certificate is '
+                                      'self-signed.\n'),
+                        'owner': ac.KEY_DNAME, 'validate': (0, ''), 'manifest': (0, self.MANIFEST % (
+                            '36', self.PROPERTY % 'true'))}
+        self.calls = []
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def check(self, aab=None, apk=None, spec=None, tools=None, target='36'):
+        """verify_bundle's problems and notes"""
+        paths = []
+        for name, entries in (('bundle.apk', apk or self.APK), ('bundle.aab', self.AAB if aab is None else aab)):
+            paths.append(os.path.join(self.dir, name))
+            with open(paths[-1], 'wb') as f:
+                f.write(zip_bytes(entries))
+        saved = ac.run
+
+        def fake(cmd, timeout=300, check=False):
+            self.calls.append(cmd)
+            if cmd[0] == 'jarsigner':
+                self.assertEqual(cmd[1:], ['-J-Duser.language=en', '-verify', paths[1]])
+                return self.answers['verify']
+            if cmd[0] == 'keytool':
+                self.assertEqual(cmd[1:], ['-J-Duser.language=en', '-printcert', '-jarfile', paths[1]])
+                if self.answers['owner'] is None:
+                    return 0, 'Not a signed jar file\n'
+                return 0, 'Signer #1:\n\nCertificate #1:\nOwner: %s\nIssuer: x\n' % self.answers['owner']
+            self.assertEqual(cmd[:3], ['java', '-jar', 'bundletool.jar'])
+            if cmd[3] == 'validate':
+                self.assertEqual(cmd[4:], ['--bundle', paths[1]])
+                return self.answers['validate']
+            self.assertEqual(cmd[3:], ['dump', 'manifest', '--bundle', paths[1]])
+            return self.answers['manifest']
+        ac.run = fake
+        try:
+            return ac.verify_bundle('bundle', paths[1], paths[0], spec or self.SPEC,
+                                    self.TOOLS if tools is None else tools, target)
+        finally:
+            ac.run = saved
+
+    def without(self, name):
+        return [x for x in self.AAB if x[0] != name]
+
+    def test_good(self):
+        problems, notes = self.check()
+        self.assertEqual(problems, [])
+        self.assertEqual(notes, [
+            'it holds the 8 files of bundle.apk',
+            'bundletool 1.18.3, native libraries compressed, assets stored',
+            'signed by %s (jarsigner verifies it)' % ac.KEY_DNAME,
+            'bundletool takes it; its manifest names the package and targets API 36'])
+
+    def test_files_missing_differing_and_extra(self):
+        aab = [x for x in self.AAB if x[0] != 'base/assets/oxt-probe.txt']
+        aab = [(n, b'other' if n == 'base/lib/x86_64/librevandroid.so' else d) for n, d in aab]
+        aab += [('base/root/extra.txt', b'x'), ('base/lib/1.jar', b'jar')]
+        problems, notes = self.check(aab)
+        self.assertEqual(problems, [
+            'bundle.aab does not hold these files of bundle.apk: base/assets/oxt-probe.txt',
+            "bundle.aab: these differ from bundle.apk's: base/lib/x86_64/librevandroid.so",
+            "bundle.aab holds files bundle.apk does not: base/lib/1.jar, base/root/extra.txt"])
+        self.assertNotIn('it holds', ' '.join(notes))
+
+    def test_converted_files_may_differ(self):
+        # the manifest, the table and the resources' XML are aapt2's
+        # protocol buffers in the bundle; a picture is not converted
+        aab = [(n, b'changed' if n == 'base/res/drawable/notify_icon.png' else d) for n, d in self.AAB]
+        problems, _ = self.check(aab)
+        self.assertEqual(problems, ["bundle.aab: these differ from bundle.apk's: base/res/drawable/notify_icon.png"])
+
+    def test_required(self):
+        for name in ('BundleConfig.pb', 'base/manifest/AndroidManifest.xml', 'base/resources.pb',
+                     'base/dex/classes.dex'):
+            problems, _ = self.check(self.without(name))
+            self.assertIn('bundle.aab has no %s' % name, problems)
+
+    def test_abis(self):
+        aab = self.without('base/lib/x86_64/librevandroid.so')
+        apk = [x for x in self.APK if x[0] != 'lib/x86_64/librevandroid.so']
+        problems, _ = self.check(aab, apk)
+        self.assertEqual(problems, ['bundle.aab has native code for arm64-v8a, not arm64-v8a, x86_64'])
+
+    def config(self, data):
+        return [(n, data if n == 'BundleConfig.pb' else d) for n, d in self.AAB]
+
+    def test_native_libraries_uncompressed(self):
+        problems, notes = self.check(self.config(BundleReaders.CONFIG.replace(b'\x12\x02\x12\x00',
+                                                                              b'\x12\x04\x12\x02\x08\x01')))
+        self.assertEqual(problems, [
+            "bundle.aab: the device's packages would hold the native libraries uncompressed, where Android does "
+            "not extract them and the engine does not load them (BundleConfig.pb: uncompressNativeLibraries is "
+            "enabled)"])
+        self.assertNotIn('native libraries compressed', ' '.join(notes))
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'\x12\x02\x12\x00', b'')))
+        self.assertIn('uncompressNativeLibraries is not said', problems[0])
+
+    def test_assets_compressed(self):
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'\x1a\x0b\x0a\x09assets/**', b'')))
+        self.assertEqual(problems, [
+            "bundle.aab: the device's packages would compress the assets, which the engine opens at their place in "
+            "the package (BundleConfig.pb: uncompressedGlob not said)"])
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'\x1a\x0b\x0a\x09assets/**',
+                                                                          b'\x1a\x0b\x0a\x09assets/*.')))
+        self.assertIn("uncompressedGlob ['assets/*.']", problems[0])
+
+    def test_another_bundletool(self):
+        problems, _ = self.check(self.config(BundleReaders.CONFIG.replace(b'1.18.3', b'1.17.0')))
+        self.assertEqual(problems, ['bundle.aab was made by bundletool 1.17.0, not 1.18.3'])
+
+    def test_not_signed_or_by_another(self):
+        unsigned = [x for x in self.AAB if not x[0].startswith('META-INF/')]
+        self.answers['verify'] = (0, 'jar is unsigned.\n')
+        self.answers['owner'] = None
+        problems, _ = self.check(unsigned)
+        self.assertEqual(problems, ['bundle.aab is not signed',
+                                    'bundle.aab: jarsigner does not verify it: jar is unsigned.',
+                                    'bundle.aab is signed by None, not %s' % ac.KEY_DNAME])
+        self.answers['verify'] = (0, 'jar verified.\n')
+        self.answers['owner'] = 'CN=Android Debug, O=Android, C=US'
+        problems, notes = self.check()
+        self.assertEqual(problems, ['bundle.aab is signed by CN=Android Debug, O=Android, C=US, not %s'
+                                    % ac.KEY_DNAME])
+        self.assertNotIn('signed by', ' '.join(notes))
+        # jarsigner's status alone is not enough, and its words alone not
+        self.answers['owner'] = ac.KEY_DNAME
+        self.answers['verify'] = (1, 'jar verified.\n')
+        self.assertIn('bundle.aab: jarsigner does not verify it: jar verified.', self.check()[0])
+
+    def test_unsigned_build_and_no_jdk(self):
+        spec = dict(self.SPEC, signer=None)
+        problems, _ = self.check(spec=spec)
+        self.assertEqual(problems, ['bundle.aab is signed, and should not be (META-INF/OXTCHECK.RSA, '
+                                    'META-INF/OXTCHECK.SF)'])
+        unsigned = [x for x in self.AAB if not x[0].startswith('META-INF/')]
+        self.assertEqual(self.check(unsigned, spec=spec)[0], [])
+        problems, _ = self.check(tools={'java': 'java', 'bundletool': 'bundletool.jar'})
+        self.assertEqual(problems, ["bundle.aab: no jarsigner and keytool (the JDK's, --jdk) to check its signature"])
+
+    def test_the_manifest(self):
+        self.answers['manifest'] = (0, self.MANIFEST % ('33', ''))
+        self.assertEqual(self.check(target='33')[0], [])
+        problems, notes = self.check()
+        self.assertEqual(problems, [
+            'bundle.aab does not target API 36',
+            "bundle.aab targets API 36, and its manifest does not keep the stack's orientation on large screens"])
+        self.assertNotIn('bundletool takes it', ' '.join(notes))
+        self.answers['manifest'] = (0, self.MANIFEST % ('36', self.PROPERTY % 'false'))
+        self.assertEqual(self.check()[0], [
+            "bundle.aab targets API 36, and its manifest does not keep the stack's orientation on large screens"])
+        self.answers['manifest'] = (0, self.MANIFEST % ('33', self.PROPERTY % 'true'))
+        self.assertEqual(self.check(target='33')[0], [
+            'bundle.aab: the manifest has %s, which is for API 36 and newer' % ac.LARGE_SCREEN_PROPERTY])
+        self.answers['manifest'] = (0, (self.MANIFEST % ('36', self.PROPERTY % 'true')).replace(
+            ac.IDENTIFIER, 'org.example'))
+        self.assertEqual(self.check()[0], ['bundle.aab: its manifest does not name the package %s' % ac.IDENTIFIER])
+
+    def test_bundletool_refuses_or_is_not_there(self):
+        self.answers['validate'] = (1, '[BT:1.18.3] Error: the bundle has no base module\n')
+        self.answers['manifest'] = (1, '[BT:1.18.3] Error: no manifest\n')
+        problems, notes = self.check()
+        self.assertEqual(problems, [
+            'bundle.aab: bundletool does not take it: [BT:1.18.3] Error: the bundle has no base module',
+            'bundle.aab: bundletool cannot read its manifest: [BT:1.18.3] Error: no manifest'])
+        self.assertNotIn('bundletool takes it', ' '.join(notes))
+        self.calls = []
+        problems, _ = self.check(tools={'jarsigner': 'jarsigner', 'keytool': 'keytool'})
+        self.assertEqual(problems, ['bundle.aab: no bundletool (bundletool.jar) and java to read its manifest'])
+        self.assertEqual([c[0] for c in self.calls], ['jarsigner', 'keytool'])
+
+
+class VerifyBundles(unittest.TestCase):
+    """verify's App Bundles: only for the builds that make one, checked
+    with the JDK's tools and the bundletool the builder kept, while it is
+    the one the builder pins; no other build may leave one"""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.work = os.path.join(self.dir, 'work')
+        os.makedirs(os.path.join(self.work, 'out'))
+        with open(os.path.join(self.work, ac.LOG_NAME), 'w') as f:
+            f.write('')
+        for name in ('debug.apk', 'bundle.apk', 'bundle.aab'):
+            with open(os.path.join(self.work, 'out', name), 'wb') as f:
+                f.write(b'x')
+        self.jdk = os.path.join(self.dir, 'jdk')
+        os.makedirs(os.path.join(self.jdk, 'bin'))
+        for tool in ('jarsigner', 'keytool', 'java'):
+            path = os.path.join(self.jdk, 'bin', tool + ('.exe' if os.name == 'nt' else ''))
+            with open(path, 'w') as f:
+                f.write('')
+        self.jar = os.path.join(self.work, ac.BUNDLETOOL_JAR)
+        with open(self.jar, 'wb') as f:
+            f.write(b'a stand-in bundletool')
+        self.seen = []
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def verify(self, *argv, sha=None):
+        saved = ac.find_tools, ac.verify_apk, ac.verify_bundle, ac.BUNDLETOOL_SHA256
+        ac.find_tools = lambda sdk: {}
+        ac.verify_apk = lambda name, apk, spec, tools, warnings, target=None: ([], [])
+
+        def bundle(name, aab, apk, spec, tools, target=None):
+            self.seen.append((name, os.path.basename(aab), os.path.basename(apk), dict(tools), target))
+            return [], ['ok']
+        ac.verify_bundle = bundle
+        if sha is not None:
+            ac.BUNDLETOOL_SHA256 = sha
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                status = ac.main(['verify', '--work', self.work, '--sdk', self.dir] + list(argv))
+        finally:
+            ac.find_tools, ac.verify_apk, ac.verify_bundle, ac.BUNDLETOOL_SHA256 = saved
+        return status, out.getvalue()
+
+    def test_the_pinned_bundletool(self):
+        import hashlib
+        self.assertEqual(ac.sha256_file(self.jar), hashlib.sha256(b'a stand-in bundletool').hexdigest())
+        status, out = self.verify('--builds', 'debug,bundle', '--jdk', self.jdk, '--target', '36',
+                                  sha=ac.sha256_file(self.jar))
+        self.assertEqual(status, 0, out)
+        self.assertEqual(len(self.seen), 1)
+        name, aab, apk, tools, target = self.seen[0]
+        self.assertEqual((name, aab, apk, target), ('bundle', 'bundle.aab', 'bundle.apk', '36'))
+        self.assertEqual(tools['bundletool'], self.jar)
+        for tool in ('jarsigner', 'keytool', 'java'):
+            self.assertEqual(os.path.dirname(tools[tool]), os.path.join(self.jdk, 'bin'), tool)
+        self.assertIn("The builder's bundletool: 1.18.3, SHA-256 ", out)
+        self.assertIn('bundle.aab (0.0 MB): ok', out)
+
+    def test_another_bundletool_is_refused(self):
+        status, out = self.verify('--builds', 'bundle', '--jdk', self.jdk)
+        self.assertEqual(status, 1, out)
+        self.assertIn('the builder kept a bundletool that is not the one it pins (SHA-256 %s, not %s)'
+                      % (ac.sha256_file(self.jar), ac.BUNDLETOOL_SHA256), out)
+        # and is not run
+        self.assertNotIn('bundletool', self.seen[0][3])
+
+    def test_no_bundle(self):
+        os.remove(os.path.join(self.work, 'out', 'bundle.aab'))
+        status, out = self.verify('--builds', 'bundle', sha=ac.sha256_file(self.jar))
+        self.assertEqual(status, 1, out)
+        self.assertIn('there is no %s (the build asked for an App Bundle)'
+                      % os.path.join(self.work, 'out', 'bundle.aab'), out)
+        self.assertEqual(self.seen, [])
+
+    def test_only_a_bundle_build_has_one(self):
+        # a build that did not ask leaves none; nor is one checked
+        status, out = self.verify('--builds', 'debug', sha=ac.sha256_file(self.jar))
+        self.assertEqual(status, 1, out)
+        self.assertIn('the builder left other files beside the packages: bundle.aab', out)
+        self.assertEqual(self.seen, [])
+        with open(os.path.join(self.work, 'out', 'debug.aab'), 'wb') as f:
+            f.write(b'x')
+        status, out = self.verify('--builds', 'debug,bundle', sha=ac.sha256_file(self.jar))
+        self.assertIn('the builder left other files beside the packages: debug.aab', out)
+        self.assertEqual([x[0] for x in self.seen], ['bundle'])
+        # a signed build is not a bundle build either
+        os.remove(os.path.join(self.work, 'out', 'debug.aab'))
+        for name in ('release.apk', 'release.aab'):
+            with open(os.path.join(self.work, 'out', name), 'wb') as f:
+                f.write(b'x')
+        self.seen = []
+        status, out = self.verify('--builds', 'release,bundle', sha=ac.sha256_file(self.jar))
+        self.assertIn('the builder left other files beside the packages: release.aab', out)
+        self.assertEqual([x[0] for x in self.seen], ['bundle'])
+        # and with no bundle build, no JDK tool or bundletool is looked for
+        os.remove(os.path.join(self.work, 'out', 'release.aab'))
+        os.remove(os.path.join(self.work, 'out', 'bundle.aab'))
+        status, out = self.verify('--builds', 'release', '--jdk', self.jdk)
+        self.assertEqual(status, 0, out)
+        self.assertNotIn('bundletool', out)
+
+    def test_jdk_tool(self):
+        self.assertEqual(ac.jdk_tool(self.jdk, 'java'),
+                         os.path.join(self.jdk, 'bin', 'java' + ('.exe' if os.name == 'nt' else '')))
+        import shutil
+        self.assertEqual(ac.jdk_tool(self.jdk, 'no-such-tool'), shutil.which('no-such-tool'))
+        self.assertEqual(ac.jdk_tool(None, 'sh'), shutil.which('sh'))
+
+
 class StepClock:
     """The check's clock in the Boot tests (in place of the time module):
     it moves only by the check's own sleeps, so the seconds the check
@@ -897,7 +2453,7 @@ class Boot(unittest.TestCase):
         saved = ac.emulator_processes
         saved_time = ac.time
         ac.emulator_processes = lambda: procs
-        ac.time = StepClock()
+        self.clock = ac.time = StepClock()
         out = io.StringIO()
         try:
             with contextlib.redirect_stdout(out):
@@ -1136,6 +2692,98 @@ class Boot(unittest.TestCase):
         self.assertTrue(line.endswith('because CONTAINS_MANIFEST. it ended this way)'), line)
         self.assertLess(len(line), 450)
 
+    # booted, and awake: the keys put it to sleep and wake it, and dumpsys
+    # power says which
+    AWAKE = ('d="$(dirname "$0")"\n'
+             'echo "$*" >> "$d/calls"\n'
+             'case "$*" in\n'
+             '  *get-state*) echo device ;;\n'
+             '  *getprop*) echo 1 ;;\n'
+             '  *"keyevent KEYCODE_SLEEP"*) echo Asleep > "$d/state" ;;\n'
+             '  *"keyevent KEYCODE_WAKEUP"*) echo Awake > "$d/state" ;;\n'
+             '  *"dumpsys power"*) echo "Power Manager State:"; '
+             'echo "  mWakefulness=$(cat "$d/state" 2>/dev/null || echo Awake)" ;;\n'
+             '  *wait-for-broadcast-idle*) echo "All broadcast queues are idle!" ;;\n'
+             '  *wait-for-handler*) echo Success ;;\n'
+             '  *"overlay list"*) echo "[x] com.a" ;;\n'
+             'esac\n')
+
+    def test_awake_sleeps_once_then_keeps_it_awake_before_settling(self):
+        status, out = self.boot(self.AWAKE, '--awake', '--settle', '--settle-polls', '2')
+        self.assertEqual(status, 0, out)
+        calls = self.calls()
+        order = ['shell input keyevent KEYCODE_SLEEP', 'shell input keyevent KEYCODE_WAKEUP',
+                 'shell wm dismiss-keyguard', 'shell input keyevent 82', 'shell svc power stayon true',
+                 'shell settings put system screen_off_timeout 1800000', 'shell am wait-for-broadcast-idle']
+        at = [calls.index(x) for x in order]
+        self.assertEqual(at, sorted(at))
+        for x in order[:-1]:
+            self.assertEqual(calls.count(x), 1, x)
+        # it was asked whether the device slept before it was woken, and
+        # whether it woke before the keyguard
+        self.assertIn('shell dumpsys power', calls[at[0]:at[1]])
+        self.assertIn('shell dumpsys power', calls[at[1]:at[2]])
+        self.assertIn('emulator-5554 awake after 0 s: slept (Asleep after 0 s); woke (Awake after 0 s); the '
+                      'keyguard dismissed; it stays on while powered; its screen times out after 30 minutes '
+                      'without a touch (Awake before)', out)
+        self.assertLess(out.index('awake after'), out.index('settling:'))
+
+    def test_awake_leaves_it_asleep_a_while_before_waking_it(self):
+        # what Android keeps until the screen is off runs once it is off:
+        # the wake comes an --interval after the device said it slept, by
+        # the check's own clock (StepClock: only the check's sleeps move
+        # it), and not only once the wait for sleep ran out (4 intervals)
+        at = {}
+        saved = ac.run
+
+        def run(cmd, *args, **kwargs):
+            for key in ('KEYCODE_SLEEP', 'KEYCODE_WAKEUP'):
+                if key in cmd:
+                    at[key] = self.clock.now
+            return saved(cmd, *args, **kwargs)
+        ac.run = run
+        self.addCleanup(setattr, ac, 'run', saved)
+        status, out = self.boot(self.AWAKE, '--awake', '--interval', '0.5')
+        self.assertEqual(status, 0, out)
+        self.assertEqual(sorted(at), ['KEYCODE_SLEEP', 'KEYCODE_WAKEUP'])
+        self.assertGreaterEqual(at['KEYCODE_WAKEUP'] - at['KEYCODE_SLEEP'], 0.5)
+        self.assertLess(at['KEYCODE_WAKEUP'] - at['KEYCODE_SLEEP'], 2.0)
+
+    def test_no_awake_unless_asked(self):
+        status, out = self.boot(self.AWAKE, '--settle', '--settle-polls', '2')
+        self.assertEqual(status, 0, out)
+        self.assertNotIn('awake', out)
+        self.assertFalse([x for x in self.calls() if 'keyevent' in x or 'stayon' in x or 'power' in x])
+
+    def test_awake_never_fails_the_boot(self):
+        # an image that says nothing of its wakefulness and has none of the
+        # commands: each is said, and the boot passes
+        script = ('case "$*" in\n'
+                  '  *get-state*) echo device ;;\n'
+                  '  *getprop*) echo 1 ;;\n'
+                  '  *"dumpsys power"*) echo "Power Manager State:" ;;\n'
+                  '  *keyevent*) ;;\n'
+                  '  *) echo "Unknown command"; exit 255 ;;\n'
+                  'esac\n')
+        started = time.monotonic()
+        status, out = self.boot(script, '--awake')
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(status, 0, out)
+        for part in ('awake: dumpsys power does not say whether emulator-5554 is awake; waking it all the same',
+                     'did not sleep in 0.2 s (dumpsys power does not say)',
+                     'did not wake in 0.2 s (dumpsys power does not say)',
+                     'wm dismiss-keyguard cannot say (Unknown command)',
+                     'svc power stayon cannot say (Unknown command)',
+                     'settings put system screen_off_timeout cannot say (Unknown command)',
+                     '(not said before)'):
+            self.assertIn(part, out)
+
+    def test_wakefulness(self):
+        self.assertEqual(ac.wakefulness('POWER MANAGER\n  mWakefulness=Asleep\n  mWakefulnessChanging=false'),
+                         'Asleep')
+        self.assertEqual(ac.wakefulness('  mWakefulness=Awake\n'), 'Awake')
+        self.assertEqual(ac.wakefulness('cmd: Can\'t find service: power'), '')
+
     def test_answer(self):
         self.assertEqual(ac.answer(' a\n b  '), 'a b')
         self.assertEqual(ac.answer('x' * 10 + 'end', keep=5), '...xxend')
@@ -1160,10 +2808,16 @@ class OneSystem(unittest.TestCase):
         self.assertIn('constant kRunColor = "%d,%d,%d"' % ac.RUN_COLOR, script)
         self.assertIn('constant kSavedColor = "%d,%d,%d"' % ac.SAVED_COLOR, script)
         self.assertIn('constant kFailColor = "%d,%d,%d"' % ac.FAIL_COLOR, script)
+        self.assertIn('constant kBackColor = "%d,%d,%d"' % ac.BACK_COLOR, script)
         self.assertIn('constant kIdentifier = "%s"' % ac.IDENTIFIER, script)
-        # three colours the screen tells apart
-        colours = (ac.RUN_COLOR, ac.SAVED_COLOR, ac.FAIL_COLOR)
-        self.assertEqual(len(set(colours)), 3)
+        # four colours the screen tells apart: none within another's
+        # tolerance of colour_share
+        colours = (ac.RUN_COLOR, ac.SAVED_COLOR, ac.FAIL_COLOR, ac.BACK_COLOR)
+        self.assertEqual(len(set(colours)), 4)
+        for a in colours:
+            for b in colours:
+                if a != b:
+                    self.assertEqual(ac.colour_share(bytes(list(a) + [255]), b, step=1), 0.0, (a, b))
 
     def test_probes(self):
         # the stack ide --probe names is the one the script makes: its file
@@ -1174,25 +2828,78 @@ class OneSystem(unittest.TestCase):
         self.assertIn('if $OXT_ANDROID_PROBE is "java" then\n      return "AndroidJavaProbe"', name)
         self.assertIn('return "AndroidProbe"', name)
         self.assertIn("OXT_ANDROID_PROBE='java' if args.probe == 'java' else ''", read('tools', 'ci', 'android_check.py'))
-        # the stack's name is said once, there: every use goes through it
+        # the stack's name is said once, there: every use goes through it,
+        # bar the three that ask probeName() which probe this is (its
+        # openStack, its backKey, and its build's permissions)
         self.assertEqual(script.count('"AndroidProbe"'), 1)
-        self.assertEqual(script.count('"AndroidJavaProbe"'), 2)
+        self.assertEqual(script.count('"AndroidJavaProbe"'), 4)
+        self.assertEqual(script.count('if probeName() is "AndroidJavaProbe" then'), 3)
 
     def test_java_probe_script(self):
-        # the Java layer's probe: a notification an hour away (the alarm's
-        # PendingIntent), its id checked, cancelled, and only then green;
-        # the plain probe turns green at once, as before
+        # the Java layer's probe takes every step, each answer checked and
+        # said in the log, and turns its fail colour when any failed, else
+        # green: a notification an hour away (the alarm's PendingIntent),
+        # cancelled; the app's external folder (WRITE_EXTERNAL_STORAGE
+        # first) and androidHasPermission of it; a picture exported to the
+        # album. The plain probe turns green at once, as before
         script = read('tools', 'ci', 'android-check.livecodescript')
         body = re.search(r'(?s)private function probeScript\n(.*?)\nend probeScript', script).group(1)
         java = body.split('end if\n   put "   set the backgroundColor of me to"')[0]
-        for part in ('mobileCreateLocalNotification', 'the seconds + 3600, false, 0',
-                     'put the result into tId', 'tId is not an integer or tId < 1',
-                     'kFailColor', 'exit openStack', 'mobileCancelLocalNotification tId'):
-            self.assertIn(part, java)
-        self.assertLess(java.index('mobileCreateLocalNotification'), java.index('mobileCancelLocalNotification'))
+        steps = ['put false into tFailed',
+                 'mobileCreateLocalNotification', 'the seconds + 3600, false, 0',
+                 'put the result into tId', '"OXT-Beyond probe: local notification" & quote && "&& tId"',
+                 'tId is not an integer or tId < 1', 'put true into tFailed', 'mobileCancelLocalNotification tId',
+                 'put specialFolderPath(" & quote & "external documents" & quote & ") into tFolder',
+                 '"OXT-Beyond probe: external documents" & quote && "&& tFolder"',
+                 'if tFolder is empty then put true into tFailed',
+                 'put androidHasPermission(" & quote & "android.permission.WRITE_EXTERNAL_STORAGE" & quote',
+                 '"OXT-Beyond probe: has WRITE_EXTERNAL_STORAGE" & quote && "&& tHas"',
+                 'if tHas is not true then put true into tFailed',
+                 'mobileExportImageToAlbum base64Decode(" & quote & kProbePicture & quote & "),"',
+                 'put the result into tExport', '"OXT-Beyond probe: export to album" & quote && "&& tExport"',
+                 'if tExport is not empty then put true into tFailed',
+                 'if tFailed then', 'kFailColor', 'exit openStack']
+        at = [java.index(x) for x in steps]
+        self.assertEqual(at, sorted(at), steps)
+        # the result is read once, at once, before anything can change it
+        self.assertEqual(java.count('put the result into'), 2)
+        # only the end decides: no step leaves early
+        self.assertEqual(java.count('exit openStack'), 1)
         self.assertIn('if probeName() is "AndroidJavaProbe" then', body)
-        self.assertTrue(body.rstrip().endswith('"end openStack" after tScript\n   return tScript'))
+        self.assertTrue(body.rstrip().endswith('"end backKey" after tScript\n   end if\n   return tScript'))
         self.assertIn('set the script of stack tProbe to probeScript()', script)
+
+    def test_java_probe_back_key(self):
+        # the Java layer's probe, and only it, handles backKey after its
+        # openStack: it turns its back colour (device --back) and does not
+        # pass the message, so the app stays
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        body = re.search(r'(?s)private function probeScript\n(.*?)\nend probeScript', script).group(1)
+        tail = body.split('"end openStack" after tScript')[1]
+        self.assertEqual(tail,
+                         '\n   if probeName() is "AndroidJavaProbe" then\n'
+                         '      -- the back key, not passed (see the header)\n'
+                         '      put return & "on backKey" & return & \\\n'
+                         '            "   set the backgroundColor of me to" && quote & kBackColor & quote & return & '
+                         '\\\n'
+                         '            "end backKey" after tScript\n'
+                         '   end if\n'
+                         '   return tScript')
+        self.assertNotIn('pass backKey', tail)
+        # in code, the constant and its one use
+        uses = [x.strip() for x in script.splitlines() if 'kBackColor' in x and not x.lstrip().startswith('--')]
+        self.assertEqual(len(uses), 2, uses)
+        self.assertTrue(uses[0].startswith('constant kBackColor = '), uses)
+
+    def test_java_probe_picture(self):
+        # the probe's picture is a real PNG (what the engine sends to the
+        # Java layer as ".png"): one pixel
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        data = base64.b64decode(re.search(r'(?m)^constant kProbePicture = "([^"]+)"$', script).group(1))
+        self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n')
+        self.assertEqual(data[12:16], b'IHDR')
+        self.assertEqual(struct.unpack('>II', data[16:24]), (1, 1))
+        self.assertEqual(data[-8:-4], b'IEND')
 
     def test_builds_take_the_probes_name(self):
         script = read('tools', 'ci', 'android-check.livecodescript')
@@ -1223,6 +2930,36 @@ class OneSystem(unittest.TestCase):
         self.assertIn('--settle', boot.group(0))
         self.assertLess(boot.start(), step.index('android_check.py device'))
 
+    def test_16k_image_has_3_gb(self):
+        # run 42312203693: with the 1536 MB avdmanager gives a Pixel 5,
+        # Android 16 ran short of memory and killed the Java layer's probe
+        # (LOW_MEMORY) behind its permission dialog. The AVD gets 3 GB, as
+        # its one hw.ramSize line, before the emulator starts
+        workflow = read('.github', 'workflows', 'android.yml')
+        step = re.search(r'(?s)- name: Run the package with 16 KB pages\n(.*?)\n      - name:', workflow).group(1)
+        config = '"$ANDROID_AVD_HOME/pages16k.avd/config.ini"'
+        drop = step.index("sed -i '/^hw.ramSize=/d' " + config)
+        add = step.index("echo 'hw.ramSize=3072M' >> " + config)
+        self.assertLess(step.index('avdmanager" create avd -n pages16k'), drop)
+        self.assertLess(drop, add)
+        self.assertLess(add, step.index('"$SDK/emulator/emulator" -avd pages16k'))
+        self.assertNotIn('-memory', step)
+
+    def test_every_emulator_stays_awake_under_its_probes(self):
+        # run 42218720113: the 16 KB image's screen went off as the Java
+        # layer's probe started, SystemUI's theme overlays relaunched it,
+        # and it aborted. Each image sleeps once and is kept awake (boot
+        # --awake) before any probe starts on it
+        workflow = read('.github', 'workflows', 'android.yml')
+        boots = re.findall(r'android_check\.py boot [^\n]*\\\n[^\n]*', workflow)
+        self.assertEqual(len(boots), 2, boots)
+        for boot in boots:
+            self.assertIn('--awake', boot)
+            self.assertIn('--settle', boot)
+        for name in ('Wait for the emulator', 'Run the package with 16 KB pages'):
+            step = re.search(r'(?s)- name: %s\n(.*?)\n      - name:' % re.escape(name), workflow).group(1)
+            self.assertIn('--awake', step, name)
+
     def test_android_13_settles_before_any_probe_starts(self):
         # the Android 13 image boots while the IDE builds; every probe on it
         # (the IDE's Test, the packages, the Java layer's probe) starts only
@@ -1251,9 +2988,215 @@ class OneSystem(unittest.TestCase):
                                  '.github/workflows/android.yml'):
             self.assertIn(rel, paths)
 
+    def test_java_probe_asks_to_post_notifications(self):
+        # the Java layer's probe, and only it, declares POST_NOTIFICATIONS
+        # (as the Android card's "Post Notifications" does), so Android 13
+        # asks the user for it as the probe schedules its notification
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
+        self.assertIn('   if probeName() is "AndroidJavaProbe" then\n'
+                      '      put true into tSettings["android,application permissions"]["POST_NOTIFICATIONS"]\n'
+                      '      put true into tSettings["android,application permissions"]["WRITE_EXTERNAL_STORAGE"]\n', body)
+        self.assertEqual(script.count('POST_NOTIFICATIONS"]'), 1)
+        self.assertEqual(script.count('WRITE_EXTERNAL_STORAGE"]'), 1)
+        # every run of this checkout's Java layer on a device allows it,
+        # and no other: the plain probe never asks, and the release's
+        # Java layer throws before it could
+        workflow = read('.github', 'workflows', 'android.yml')
+        runs = re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', workflow)
+        java_new = [r for r in runs if '/java-new/' in r]
+        self.assertEqual(len(java_new), 2, runs)
+        for run in runs:
+            self.assertEqual('--allow android.permission.POST_NOTIFICATIONS' in run, run in java_new, run)
+
+    def test_java_probe_reads_its_copy_file(self):
+        # the Java layer's probe, and only it, carries a copy file (the
+        # standalone settings' "files"), which the engine reads from the
+        # package's assets by their offsets: so a package that compressed
+        # its assets (an App Bundle without "assets/**" stored) fails here
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        self.assertIn('constant kProbeCopyName = "oxt-probe.txt"\n', script)
+        self.assertIn('constant kProbeCopy = "OXT-Beyond probe copy file"\n', script)
+        body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
+        java = re.search(r'(?s)   if probeName\(\) is "AndroidJavaProbe" then\n(.*?)\n   end if\n', body).group(1)
+        self.assertIn('      put kProbeCopy into url ("binfile:" & item 1 to -2 of $OXT_ANDROID_STACK & slash '
+                      '& kProbeCopyName)\n', java)
+        self.assertIn('      put kProbeCopyName into tSettings["files"]', java)
+        self.assertEqual(body.count('tSettings["files"]'), 1)
+        # the probe reads it from the engine's folder, says what it read,
+        # and fails if it is not the text written
+        read_line = ('"   put url (" & quote & "binfile:" & quote && "& specialFolderPath(" & quote & "engine" & quote '
+                     '& ") &" && \\\n            quote & "/" & kProbeCopyName & quote & ") into tCopy" & return')
+        said = script.index('"   put" && quote & "OXT-Beyond probe: copy file" & quote && "&& tCopy" & return')
+        failed = script.index('"   if tCopy is not" && quote & kProbeCopy & quote && "then put true into tFailed"')
+        self.assertLess(script.index(read_line), said)
+        self.assertLess(said, failed)
+        # inside the Java layer's probe's steps, which only it runs
+        steps = script.index('"   local tFailed, tId, tFolder, tHas, tExport, tCopy" & return')
+        self.assertLess(steps, script.index(read_line))
+        self.assertLess(failed, script.index('"      exit openStack" & return', steps))
+
+    def test_java_probe_picture_is_looked_for(self):
+        # every run of this checkout's Java layer looks for the picture the
+        # probe exports, by the name it exports it as; no other run does
+        # (the release's Java layer is refused WRITE_EXTERNAL_STORAGE on
+        # Android 13 before it exports)
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        name = re.search(r'mobileExportImageToAlbum base64Decode\(" & quote & kProbePicture & quote & "\)," && \\\n'
+                         r'\s*quote & "([^"]+)" & quote', script).group(1)
+        workflow = read('.github', 'workflows', 'android.yml')
+        runs = re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', workflow)
+        for run in runs:
+            self.assertEqual('--picture %s.png' % name in run, '/java-new/' in run, run)
+            self.assertEqual(run.count('--picture'), 1 if '/java-new/' in run else 0, run)
+
     def test_target_api(self):
         lib = read('ide-support', 'revdeploylibraryandroid.livecodescript')
         self.assertIn('constant kDeployAndroidTargetSDK = "%s"' % ac.TARGET_SDK, lib)
+        self.assertIn('constant kDeployAndroidNewestTargetSDK = "%s"' % ac.NEWEST_TARGET_SDK, lib)
+        builder = read('ide-support', 'revsaveasandroidstandalone.livecodescript')
+        self.assertIn('constant kRestrictedResizability = "%s"' % ac.LARGE_SCREEN_PROPERTY, builder)
+
+    def test_back_and_bars_runs(self):
+        # every run of this checkout's Java layer (which targets 36) presses
+        # the back key and checks the bars; the builder's other packages
+        # (which target 33) check the bars alone; the release's Java layer,
+        # only recorded, neither
+        workflow = read('.github', 'workflows', 'android.yml')
+        runs = re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', workflow)
+        self.assertEqual(sum('/java-new/' in r for r in runs), 2, runs)
+        self.assertEqual(sum('/changed/' in r for r in runs), 2, runs)
+        for run in runs:
+            self.assertEqual('--back' in run, '/java-new/' in run, run)
+            self.assertEqual('--within-bars' in run, '/java-new/' in run or '/changed/' in run, run)
+
+    def test_java_probe_verified_at_the_newest_target(self):
+        # the Java layer's probe is built with a Java layer ready for 36, so
+        # it targets 36; the other packages target 33, as verify's default
+        workflow = read('.github', 'workflows', 'android.yml')
+        verifies = [re.sub(r'\\\n\s*', '', v) for v in
+                    re.findall(r'android_check\.py verify(?:[^\n]*\\\n)*[^\n]*', workflow)]
+        self.assertEqual(len(verifies), 2, verifies)
+        for v in verifies:
+            if '/java-new"' in v:
+                self.assertTrue(v.endswith('--target %s' % ac.NEWEST_TARGET_SDK), v)
+            else:
+                self.assertNotIn('--target', v)
+
+    def test_bundletool_pins_agree(self):
+        # the bundletool the builder downloads is the one verify takes
+        builder = read('ide-support', 'revsaveasandroidstandalone.livecodescript')
+        version = re.search(r'^constant kBundletoolVersion = "([^"]+)"$', builder, re.M).group(1)
+        sha = re.search(r'^constant kBundletoolSHA256 = "([0-9a-f]{64})"$', builder, re.M).group(1)
+        url = re.search(r'^constant kBundletoolURL = "([^"]+)"$', builder, re.M).group(1)
+        self.assertEqual(version, ac.BUNDLETOOL_VERSION)
+        self.assertEqual(sha, ac.BUNDLETOOL_SHA256)
+        self.assertEqual(url, 'https://github.com/google/bundletool/releases/download/%s/bundletool-all-%s.jar'
+                         % (version, version))
+        # the check's unit names the same cache file
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        self.assertIn('revEnvironmentUserCachePath() & "/Android/bundletool-all-%s.jar"' % version, script)
+
+    def test_the_bundle_build(self):
+        # its settings are BUILDS["bundle"]'s, and only it asks for a bundle
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        body = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
+        case = re.search(r'(?s)      case "bundle"\n(.*?)\n         break', body).group(1)
+        self.assertEqual(case.splitlines(), [
+            '         put "Sign with my key" into tSettings["android,signing"]',
+            '         put $OXT_ANDROID_KEYSTORE into tSettings["android,key"]',
+            '         put true into tSettings["android,arm64"]',
+            '         put true into tSettings["android,x86_64"]',
+            '         put true into tSettings["android,app bundle"]'])
+        self.assertEqual(body.count('"android,app bundle"'), 1)
+        self.assertEqual(ac.BUILDS['bundle']['abis'], {'arm64-v8a', 'x86_64'})
+        self.assertEqual(ac.BUILDS['bundle']['signer'], ac.KEY_DNAME)
+        # its questions are answered as the release build's
+        self.assertIn('if tName is "release" or tName is "bundle" then', script)
+
+    def device_runs(self, workflow):
+        """Each device run of android.yml: (its step, the work folder of
+        its package, the packages it runs (a loop's, or its one), its
+        command with the continuation lines joined)"""
+        runs = []
+        for step in re.split(r'\n      - name: ', workflow)[1:]:
+            name = step.split('\n', 1)[0]
+            for loop in re.finditer(r'(?s)for pkg in ([^;]+); do\n(.*?)\n\s*done', step):
+                for cmd in re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', loop.group(2)):
+                    runs.append((name, cmd, loop.group(1).split()))
+            outside = re.sub(r'(?s)for pkg in [^;]+; do\n.*?\n\s*done', '', step)
+            for cmd in re.findall(r'android_check\.py device(?:[^\n]*\\\n)*[^\n]*', outside):
+                runs.append((name, cmd, None))
+        out = []
+        for name, cmd, pkgs in runs:
+            cmd = re.sub(r'\\\n\s*', '', cmd)
+            m = re.search(r'--apk "\$WORK/([^/]+)/out/([^"]+)"', cmd)
+            self.assertTrue(m, cmd)
+            if pkgs is None:
+                self.assertNotIn('$pkg', m.group(2), cmd)
+                pkgs = [m.group(2)]
+            else:
+                self.assertEqual(m.group(2), '$pkg', cmd)
+            out.append((name, m.group(1), pkgs, cmd))
+        return out
+
+    def test_app_bundle_runs(self):
+        # the bundle build is among the builds of this builder's run (no
+        # --builds) and of the Java layer's probe, both checked with the
+        # JDK's tools; each of their App Bundles is installed as Google
+        # Play installs it, with the bundletool its builder downloaded
+        self.assertTrue(ac.BUILDS['bundle']['bundle'])
+        self.assertEqual([n for n in ac.BUILDS if ac.BUILDS[n].get('bundle')], ['bundle'])
+        workflow = read('.github', 'workflows', 'android.yml')
+        ides = [re.sub(r'\\\n\s*', '', x) for x in
+                re.findall(r'android_check\.py ide(?:[^\n]*\\\n)*[^\n]*', workflow)]
+        changed = [x for x in ides if '--work "$WORK/changed"' in x]
+        self.assertEqual(len(changed), 1, ides)
+        self.assertNotIn('--builds', changed[0])
+        java = [x for x in ides if '--work "$WORK/java-new"' in x]
+        self.assertEqual(len(java), 1, ides)
+        self.assertIn('--builds debug,bundle --probe java', java[0])
+        verifies = [re.sub(r'\\\n\s*', '', v) for v in
+                    re.findall(r'android_check\.py verify(?:[^\n]*\\\n)*[^\n]*', workflow)]
+        for v in verifies:
+            self.assertIn('--jdk "$JDK"', v)
+            self.assertNotIn('--builds', v.replace('--builds debug,bundle', ''))
+        runs = self.device_runs(workflow)
+        bundles = sorted((name, work) for name, work, pkgs, _ in runs if 'bundle.aab' in pkgs)
+        self.assertEqual(bundles, [('Run the Java layer\'s probe on Android 13', 'java-new'),
+                                   ('Run the package with 16 KB pages', 'java-new'),
+                                   ('Run the packages on Android 13', 'changed')])
+        for name, work, pkgs, cmd in runs:
+            if any(p.endswith('.aab') for p in pkgs):
+                self.assertIn('--bundletool "$WORK/%s/%s" --jdk "$JDK"' % (work, ac.BUNDLETOOL_JAR), cmd)
+                # each package of the loop, with its own screen and log
+                self.assertIn('${pkg%.*}.png', cmd)
+                self.assertIn('${pkg%.*}.txt', cmd)
+            else:
+                self.assertNotIn('--bundletool', cmd)
+            for p in pkgs:
+                self.assertTrue(p.endswith(('.apk', '.aab')), p)
+        # the Java layer's probe runs as a package and as a bundle with the
+        # same checks
+        java_runs = [(pkgs, cmd) for _, work, pkgs, cmd in runs if work == 'java-new']
+        self.assertEqual([pkgs for pkgs, _ in java_runs], [['debug.apk', 'bundle.aab']] * 2)
+        self.assertIn('${{ env.WORK }}/*/out/*.aab', workflow)
+
+    def test_java_probe_runs_on_both_emulators(self):
+        # the step names device_runs reads are the workflow's
+        workflow = read('.github', 'workflows', 'android.yml')
+        names = [n for n, _, _, _ in self.device_runs(workflow)]
+        self.assertEqual(len(names), len(re.findall(r'android_check\.py device', workflow)))
+        self.assertIn("Run the Java layer's probe on Android 13", names)
+
+    def test_16k_image_at_the_newest_target(self):
+        # the 16 KB image is the first at API 36 or newer (Android 16),
+        # where the back key of an app that targets 36 goes only to its
+        # back callback
+        workflow = read('.github', 'workflows', 'android.yml')
+        pick = re.search(r'(?s)img16=\$\((.*?)\)\n', workflow).group(1)
+        self.assertIn("if (v + 0 >= %s) print" % ac.NEWEST_TARGET_SDK, pick)
+        self.assertTrue(pick.rstrip().endswith('head -n 1'), pick)
 
 
 if __name__ == '__main__':

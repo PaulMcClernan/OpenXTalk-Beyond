@@ -123,6 +123,7 @@ on:
       - '.github/workflows/ui-tour.yml'
       - '.github/workflows/android.yml'
       - '.github/workflows/android-java.yml'
+      - '.github/workflows/android-engine.yml'
       - '.github/workflows/mac-menu-backdrop.yml'
       - '.github/workflows/pages.yml'
       - 'tools/pages/**'
@@ -133,6 +134,9 @@ on:
       - 'tools/ci/android_check.py'
       - 'tools/ci/android-check.livecodescript'
       - 'tools/ci/android_java.py'
+      - 'tools/ci/android_engine.py'
+      - 'tools/ci/build-android.sh'
+      - 'config/android-ndk-version'
       - 'engine/src/java/**'
       - 'tools/ci/tests/**'
       - '.github/workflows/build-macos.yml'
@@ -149,8 +153,18 @@ on:
       - 'tools/ci/win_crashtrace.py'
       - 'tools/ci/window-frame-check.livecodescript'
       - 'tools/ci/window_frame_check.py'
+  # DRAFT PULL REQUESTS (2026-11-06). A draft runs none of this workflow's
+  # jobs: each job's `if:` ends in `github.event.pull_request.draft != true`,
+  # and marking the pull request ready (ready_for_review, below) starts the
+  # whole run on its newest commit. A draft is work in progress whose commits
+  # land minutes apart, and each one used to start this full build only for
+  # the next to cancel it (26 of 52 builds on 2026-11-06 00:38-02:15 UTC). CI
+  # checks still run on every draft commit. A push, a dispatch and a call from
+  # release.yml have no pull request, so the condition is always true there.
+  # tools/ci/tests/test_draft_builds.py holds every job to it.
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore: *build-paths-ignore
   workflow_dispatch:
     inputs:
@@ -207,6 +221,7 @@ defaults:
 jobs:
   build:
     name: Build linux-${{ matrix.arch }}
+    if: ${{ github.event.pull_request.draft != true }}
     strategy:
       fail-fast: false
       matrix:
@@ -572,7 +587,7 @@ jobs:
           python3 tools/ci/run_livecode_check.py compile --repo-layout --bin "linux-$ARCH-bin" \
             --log ide-compile-check.log
 
-      # The property and image patches of tools/oxt/ide-stack-patches are
+      # The property, image and clone patches of tools/oxt/ide-stack-patches are
       # applied to the binary IDE stacks, checked with the engine just built
       # (tools/oxt/ide-stack-patch.sh --check; tools/ci/check_ide_stacks.py
       # checks the script patches without an engine)
@@ -657,6 +672,7 @@ jobs:
   # nothing is packaged.
   build-x86:
     name: Build linux-x86
+    if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 330
     env:
@@ -862,6 +878,7 @@ jobs:
   # engines build
   docs:
     name: Docs
+    if: ${{ github.event.pull_request.draft != true }}
     uses: ./.github/workflows/docs.yml
     with:
       artifact: OXT-Beyond-docs-linux
@@ -870,6 +887,7 @@ jobs:
   # build, and checked in a headless browser
   web:
     name: Web
+    if: ${{ github.event.pull_request.draft != true }}
     uses: ./.github/workflows/web.yml
     with:
       artifact: OXT-Beyond-web-linux
@@ -893,7 +911,7 @@ jobs:
   databases:
     name: Databases linux-x86_64
     needs: build
-    if: ${{ !cancelled() && needs.build.outputs.built-x86_64 == 'true' }}
+    if: ${{ (!cancelled() && needs.build.outputs.built-x86_64 == 'true') && github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -1004,7 +1022,7 @@ jobs:
   package:
     name: Package linux-${{ matrix.arch }}
     needs: [build, docs, web]
-    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.outputs.built-x86_64 == 'true' || needs.build.outputs.built-arm64 == 'true') }}
+    if: ${{ (!cancelled() && (needs.build.result == 'success' || needs.build.outputs.built-x86_64 == 'true' || needs.build.outputs.built-arm64 == 'true')) && github.event.pull_request.draft != true }}
     strategy:
       fail-fast: false
       matrix:
@@ -1569,6 +1587,43 @@ jobs:
         run: |
           python3 tools/ci/ui_tour.py --install "$OXT_ROOT" --platform "linux-$ARCH" \
             --appearance dark --out "$RUNNER_TEMP/logs/ui-tour/dark"
+
+      # Everyday tasks a person does in the IDE, through its own windows
+      # with the system's mouse and keyboard (xdotool): a new stack, each
+      # common control from the Tools palette, Inspector edits, the
+      # Script Editor (Apply, a compile error, find and replace, a
+      # breakpoint), the Message Box, undo and redo, copy, group, align,
+      # cards, Save As, Close and Remove From Memory and opening it again,
+      # Revert, the Dictionary, an image as a button's icon, the Geometry
+      # Manager, Preferences and the Application Browser; each asserted
+      # and snapshot (tools/ci/everyday-tasks.livecodescript). Light and
+      # dark at once, each on its own Xvfb screen, so that the step adds
+      # one run's time; a task that fails, or a script error, fails it
+      - name: Everyday IDE tasks, light and dark
+        if: ${{ !cancelled() && env.OXT_ROOT != '' }}
+        timeout-minutes: 20
+        run: |
+          pids=()
+          for appearance in light dark; do
+            python3 tools/ci/ui_tour.py --install "$OXT_ROOT" --platform "linux-$ARCH" \
+              --script tools/ci/everyday-tasks.livecodescript --timeout 900 \
+              --appearance "$appearance" --out "$RUNNER_TEMP/logs/ui-tour/everyday-$appearance" \
+              > "$RUNNER_TEMP/everyday-$appearance.txt" 2>&1 &
+            pids+=($!)
+          done
+          failed=()
+          for i in 0 1; do
+            appearance=$([ $i = 0 ] && echo light || echo dark)
+            if ! wait "${pids[$i]}"; then failed+=("$appearance"); fi
+            echo "::group::Everyday IDE tasks, $appearance"
+            cat "$RUNNER_TEMP/everyday-$appearance.txt"
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            grep -h -E '^(STEP .* FAILED|ERROR)' "$RUNNER_TEMP"/everyday-*.txt | sed 's/^/::error::/' || true
+            echo "::error::the everyday IDE tasks failed in ${failed[*]}"
+            exit 1
+          fi
 
       # The tour's menu-marks step again under dark GTK 2 themes a desktop
       # ships, beside the Adwaita-dark of the run above: Ubuntu MATE's own
