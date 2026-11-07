@@ -51,8 +51,9 @@
 # builds for. It needs Linux with the tools of a Linux build (BUILDING.md:
 # gcc and g++, make, perl, bison and flex, and Python 2.7 as "python" for
 # gyp and config.py), a JDK (javac and jar, for the Java layer), and the
-# Android SDK with that NDK, the build tools and the platform of
-# ANDROID_API_VERSION (aidl and android.jar).
+# Android SDK with that NDK, the platform of ANDROID_API_VERSION (its
+# android.jar) and build tools (config.py asks for them; the Java of the
+# AIDL interfaces is kept beside their .aidl files, so aidl is not run).
 #
 # The libraries: the engine links OpenSSL, ICU and the Thirdparty libraries
 # built for Android (prebuilt/lib/android/<architecture>/ndk21r<NDK major>),
@@ -69,10 +70,10 @@
 # Environment:
 #   ANDROID_SDK          the Android SDK (or ANDROID_HOME, ANDROID_SDK_ROOT)
 #   ANDROID_NDK          the NDK (default: <SDK>/ndk/<config/android-ndk-version>)
-#   ANDROID_API_VERSION  the platform whose android.jar and framework.aidl
-#                        the Java layer compiles against (default 36)
-#   ANDROID_BUILD_TOOLS  the build tools' version, for aidl (default: the
-#                        newest in the SDK)
+#   ANDROID_API_VERSION  the platform whose android.jar the Java layer
+#                        compiles against (default 36)
+#   ANDROID_BUILD_TOOLS  the build tools' version, which config.py asks for
+#                        (default: the newest in the SDK)
 #   JAVA_SDK             the JDK (default: the one of javac on PATH)
 #   ANDROID_JOBS         how many jobs make runs at once (default: the
 #                        number of processors)
@@ -165,8 +166,8 @@ ANDROID_PLATFORM=android-${ANDROID_API_VERSION}
 if [ -z "${ANDROID_BUILD_TOOLS:-}" ] ; then
 	ANDROID_BUILD_TOOLS=$(ls "${ANDROID_SDK}/build-tools" 2>/dev/null | sort -V | tail -n 1)
 fi
-[ -n "${ANDROID_BUILD_TOOLS}" ] && [ -x "${ANDROID_SDK}/build-tools/${ANDROID_BUILD_TOOLS}/aidl" ] ||
-	fail "the SDK has no build tools with aidl (set ANDROID_BUILD_TOOLS)"
+[ -n "${ANDROID_BUILD_TOOLS}" ] && [ -d "${ANDROID_SDK}/build-tools/${ANDROID_BUILD_TOOLS}" ] ||
+	fail "the SDK has no build tools (set ANDROID_BUILD_TOOLS)"
 
 if [ -z "${JAVA_SDK:-}" ] ; then
 	JAVAC=$(command -v javac || true)

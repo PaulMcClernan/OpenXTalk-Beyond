@@ -97,7 +97,7 @@ licence text are in `thirdparty/`.
 | zlib | 1.3.2 | engines, revZip, revXML | zlib licence | "Copyright notice" in [`thirdparty/libz/docs/README`](thirdparty/libz/docs/README) |
 | libzip | 1.12, with two changes (see [`thirdparty/libzip/ORIGIN`](thirdparty/libzip/ORIGIN)) | revZip, web engine | BSD 3-clause | [`thirdparty/libzip/docs/LICENSE`](thirdparty/libzip/docs/LICENSE) |
 | PCRE | 8.45 | engines | BSD | [`thirdparty/libpcre/docs/LICENCE`](thirdparty/libpcre/docs/LICENCE) |
-| Skia | revision `20471894` | engine, libgraphics | BSD 3-clause | [upstream](https://github.com/google/skia/blob/main/LICENSE); file headers in `thirdparty/libskia/` |
+| Skia | revision `20471894`, with one change (see [`thirdparty/libskia/ORIGIN`](thirdparty/libskia/ORIGIN)) | engine, libgraphics | BSD 3-clause | [upstream](https://github.com/google/skia/blob/main/LICENSE); file headers in `thirdparty/libskia/` |
 | libxml2 | 2.15.4, with local changes and the HTTP and FTP clients of 2.14.6 and 2.13.9 (see [`thirdparty/libxml/ORIGIN`](thirdparty/libxml/ORIGIN)) | revXML, web engine | MIT | [`thirdparty/libxml/docs/COPYING`](thirdparty/libxml/docs/COPYING) |
 | libxslt | 1.1.45, with local changes (see [`thirdparty/libxslt/ORIGIN`](thirdparty/libxslt/ORIGIN)) | revXML, web engine | MIT-style | [`thirdparty/libxslt/docs/COPYING`](thirdparty/libxslt/docs/COPYING) |
 | SQLite | 3.51.1 | `dbsqlite.dll`, web engine | Public domain | header of `thirdparty/libsqlite/include/sqlite3.h`, [sqlite.org/copyright.html](https://www.sqlite.org/copyright.html) |

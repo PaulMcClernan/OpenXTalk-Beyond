@@ -756,6 +756,45 @@ class NewerCompiler(unittest.TestCase):
         self.assertEqual([(n, bool(re.search(r'\breturn\s+nil\s*;', b))) for n, b in c_functions(text, 'bool')],
                          [('f', True)])
 
+    def test_skia_arm_multiply(self):
+        """Skia's 32-bit ARM SkFixedMul is the portable product, with no
+        smull of its own (Clang refused one with both halves in a register);
+        the change is marked and recorded."""
+        text = read('thirdparty', 'libskia', 'include', 'private', 'SkFixed.h')
+        arm = text[text.index('#if defined(SK_CPU_ARM32)'):]
+        arm = arm[:arm.index('#endif')]
+        self.assertNotIn('smull', re.sub(r'/\*.*?\*/', '', arm, flags=re.S))
+        body = re.search(r'inline SkFixed SkFixedMul_arm\(SkFixed x, SkFixed y\)\s*\{(.*?)\}', arm, re.S).group(1)
+        self.assertEqual(body.split(), ['return', 'SkFixedMul_longlong(x,', 'y);'])
+        self.assertIn('#define SkFixedMul(x, y)        SkFixedMul_arm(x, y)', arm)
+        self.assertIn('/* OXT-Beyond:', arm)
+        self.assertIn('return (SkFixed)((int64_t)a * b >> 16);', text)
+        self.assertIn('include/private/SkFixed.h', read('thirdparty', 'libskia', 'ORIGIN'))
+        self.assertIn('[`thirdparty/libskia/ORIGIN`](thirdparty/libskia/ORIGIN)', read('THIRD-PARTY-NOTICES.md'))
+
+    def test_the_two_products_agree(self):
+        """What the assembly worked out (the low word shifted right 16, the
+        high word's low 16 bits above it) is the portable product, bits 16
+        to 47 of the 64-bit product, for every pair of inputs: these, the
+        edges and a spread between them."""
+        def s32(v):
+            v &= 0xffffffff
+            return v - (1 << 32) if v & 0x80000000 else v
+
+        def assembly(x, y):
+            p = (x * y) & 0xffffffffffffffff      # smull: RdLo, RdHi
+            lo, hi = p & 0xffffffff, p >> 32
+            return s32((lo >> 16) | (hi << 16))   # lsr #16, then orr lsl #16
+
+        def portable(x, y):
+            return s32((x * y) >> 16)             # (int64_t)a * b >> 16, as SkFixed
+
+        edges = [-2 ** 31, -2 ** 31 + 1, -65536, -65535, -1, 0, 1, 65535, 65536, 2 ** 31 - 1]
+        spread = [s32(i * 0x9E3779B1) for i in range(1, 400)]
+        for x in edges + spread:
+            for y in edges + spread[:40]:
+                self.assertEqual(assembly(x, y), portable(x, y), (x, y))
+
     def test_posix_headers_for_what_they_declare(self):
         """PATH_MAX and gettimeofday come from where POSIX puts them, not
         from whichever header brought them in with NDK r15's headers."""
@@ -838,6 +877,79 @@ class AndroidCxxStandard(unittest.TestCase):
         version = read('prebuilt', 'versions', 'icu').strip()
         self.assertRegex(version, r'^\d+\.\d+$')
         self.assertGreaterEqual(int(version.split('.')[0]), 75)
+
+
+# ---------------------------------------------------------------------------
+# The AIDL interfaces: compiled from the Java kept beside each .aidl file
+# (LiveCode's own aidl output), as android_java.py builds the Java layer;
+# CI's fourth x86 build stopped on the aidl of build tools 36, which wants
+# a file's folder among its import paths, spelled alike.
+
+
+def aidl_methods(text):
+    """The names of the methods an .aidl interface declares."""
+    body = re.sub(r'/\*.*?\*/|//[^\n]*', '', text, flags=re.S)
+    body = body[body.index('{') + 1:body.rindex('}')]
+    return re.findall(r'(\w+)\s*\(', body)
+
+
+class AidlInterfaces(unittest.TestCase):
+
+    def kernel_java_sources(self):
+        target = gyp_target(gyp('engine', 'kernel.gyp'), 'kernel-java')
+        android = [c[1] for c in target['conditions'] if c[0] == 'OS == "android"']
+        self.assertEqual(len(android), 1)
+        return android[0]['sources']
+
+    def test_kernel_java_compiles_the_java_beside_each(self):
+        sources = self.kernel_java_sources()
+        self.assertEqual(sources[-1], '<@(engine_java_source_files)')
+        # no .aidl for the aidl rule, and nothing aidl would have written
+        self.assertNotIn('<@(engine_aidl_source_files)', sources)
+        for entry in sources:
+            self.assertNotIn('INTERMEDIATE_DIR', entry)
+            self.assertNotIn('intermediate_dir', entry)
+        self.assertEqual(len(sources), 2)
+        command = sources[0]
+        self.assertTrue(command.startswith('<!@(') and command.endswith(')'), command)
+        if not BASH:
+            self.skipTest('no sh here to run what gyp runs')
+        # what gyp runs: the list in place of its name, words of the output
+        _, aidls = android_java.java_sources()
+        script = command[len('<!@('):-1].replace('<@(engine_aidl_source_files)', ' '.join(aidls))
+        out = subprocess.run(['sh', '-c', script], cwd=os.path.join(REPO, 'engine'),
+                             capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(out, [os.path.splitext(x)[0] + '.java' for x in aidls])
+        for x in out:
+            self.assertTrue(os.path.isfile(os.path.join(REPO, 'engine', x)), x)
+
+    def test_the_java_is_the_interface(self):
+        """Each .java beside an .aidl is that interface, as aidl writes one:
+        its package, an IInterface, a Stub, and each method."""
+        _, aidls = android_java.java_sources()
+        self.assertEqual(len(aidls), 4)
+        for x in aidls:
+            aidl = read('engine', *x.split('/'))
+            java = read('engine', *(os.path.splitext(x)[0] + '.java').split('/'))
+            name = os.path.splitext(os.path.basename(x))[0]
+            package = re.search(r'^package\s+([\w.]+);', aidl, re.M).group(1)
+            self.assertRegex(java, r'(?m)^package %s;' % re.escape(package))
+            self.assertIn('public interface %s extends android.os.IInterface' % name, java)
+            self.assertIn('public static abstract class Stub extends android.os.Binder implements %s.%s'
+                          % (package, name), java)
+            methods = aidl_methods(aidl)
+            self.assertTrue(methods, x)
+            for method in methods:
+                self.assertRegex(java, r'public [\w.<>\[\], ]+ %s\(' % method, (x, method))
+
+    def test_the_method_finder(self):
+        self.assertEqual(aidl_methods('package a;\n/** b(c) */\ninterface I {\n  // d(e)\n'
+                                      '  int f(int x);\n  void g(in Bundle b, String s);\n}\n'), ['f', 'g'])
+
+    def test_the_build_needs_no_aidl(self):
+        script = read('tools', 'ci', 'build-android.sh')
+        self.assertNotIn('/aidl', script)
+        self.assertIn('[ -d "${ANDROID_SDK}/build-tools/${ANDROID_BUILD_TOOLS}" ]', script)
 
 
 # ---------------------------------------------------------------------------

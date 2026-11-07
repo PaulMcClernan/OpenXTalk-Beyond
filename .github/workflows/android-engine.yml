@@ -172,7 +172,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       # The NDK of config/android-ndk-version, the platform and build tools
-      # (aidl), from the runner's SDK, or installed into it
+      # (which config.py asks for), from the runner's SDK, or installed into it
       - name: Set up the NDK and the SDK
         run: |
           ndk=$(head -n 1 config/android-ndk-version | tr -d '[:space:]')
