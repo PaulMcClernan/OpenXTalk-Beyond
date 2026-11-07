@@ -450,6 +450,7 @@ class Device(unittest.TestCase):
         with open(adb, 'w') as f:
             f.write('#!/bin/sh\n'
                     'shift 2\n'
+                    'echo "$*" >> "$(dirname "$0")/calls"\n'
                     'case "$*" in\n'
                     '  "shell getprop ro.build.version.sdk") echo 35 ;;\n'
                     '  "shell getconf PAGE_SIZE") echo 16384 ;;\n'
@@ -474,6 +475,68 @@ class Device(unittest.TestCase):
             status = ac.main(['device', '--apk', self.apk, '--serial', 'emulator-5554', '--sdk', d,
                               '--timeout', timeout] + list(argv))
         return status, out.getvalue()
+
+    def calls(self):
+        with open(os.path.join(self.tmp.name, 'platform-tools', 'calls')) as f:
+            return f.read().splitlines()
+
+    def test_starts_once_the_install_is_taken(self):
+        # run 42324548829: lmkd killed the probe that started while the
+        # system's apps were taking its install; it starts once the
+        # broadcasts are delivered and the package manager is idle
+        status, out = self.device('echo 3475', cases=(
+            '  "shell am wait-for-broadcast-idle") echo "All broadcast queues are idle!" ;;\n'
+            '  "shell pm wait-for-handler --timeout 120000") echo Success ;;\n'))
+        self.assertEqual(status, 0, out)
+        calls = self.calls()
+        steps = [next(i for i, c in enumerate(calls) if c.startswith(x))
+                 for x in ('install', 'shell am wait-for-broadcast-idle', 'shell pm wait-for-handler --timeout 120000',
+                           'logcat -c', 'shell am start')]
+        self.assertEqual(steps, sorted(steps), calls)
+        self.assertEqual(steps[1:], list(range(steps[1], steps[1] + 4)), calls)
+        self.assertIn("Before it starts: the broadcast queues are idle after 0 s (am wait-for-broadcast-idle); "
+                      "the package manager's handler is idle after 0 s (pm wait-for-handler)\n", out)
+        self.assertLess(out.index('Installed debug.apk'), out.index('Before it starts:'))
+        self.assertLess(out.index('Before it starts:'), out.index('Started:'))
+
+    def test_a_wait_that_cannot_say_decides_nothing(self):
+        status, out = self.device('echo 3475', cases=(
+            '  "shell am wait-for-broadcast-idle") echo "it ended this way"; exit 3 ;;\n'
+            '  "shell pm wait-for-handler"*) echo "cmd: Can\'t find service: package" ;;\n'))
+        self.assertEqual(status, 0, out)
+        self.assertIn('Before it starts: the broadcast queues are idle: am wait-for-broadcast-idle cannot say '
+                      '(exit status 3: it ended this way); the package manager\'s handler '
+                      'is idle: pm wait-for-handler cannot say (exit status 0: cmd: Can\'t find service: package)',
+                      out)
+
+    def test_a_wait_that_does_not_end(self):
+        said = []
+
+        def a(*cmd, timeout=180):
+            said.append((cmd, timeout))
+            if 'wait-for-broadcast-idle' in cmd:
+                raise ac.CheckError('adb: timed out')
+            return 0, 'Success\n'
+
+        def older(*cmd, timeout=180):
+            return 0, 'Unknown command: %s\n' % cmd[2]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            got = ac.quiet_after_install(older)
+        self.assertEqual(got, ['the broadcast queues are idle: am wait-for-broadcast-idle cannot say (exit status 0: '
+                               'Unknown command: wait-for-broadcast-idle)',
+                               "the package manager's handler is idle: pm wait-for-handler cannot say (exit status 0: "
+                               'Unknown command: wait-for-handler)'])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            got = ac.quiet_after_install(a, seconds=7)
+        self.assertEqual(got, ['the broadcast queues are idle: not in 7 s (am wait-for-broadcast-idle)',
+                               "the package manager's handler is idle after 0 s (pm wait-for-handler)"])
+        # each wait has its own time, a little longer than the device's
+        self.assertEqual(said, [(('shell', 'am', 'wait-for-broadcast-idle'), 17),
+                                (('shell', 'pm', 'wait-for-handler', '--timeout', '7000'), 17)])
+        self.assertIn('Before it starts: the broadcast queues are idle: not in 7 s', out.getvalue())
+        self.assertEqual(ac.QUIET_SECONDS, 120)
 
     def test_gone_after_drawing(self):
         status, out = self.device('true')
@@ -1302,6 +1365,9 @@ class DeviceBundle(unittest.TestCase):
         self.assertIn('bundletool made 2 APKs of bundle.aab for the device: base-master.apk, base-x86_64.apk', out)
         self.assertIn('Installed bundle.aab as 2 APKs: base.apk, split_config.x86_64.apk', out)
         self.assertNotIn('Installed bundle.aab\n', out)
+        # and it starts, as a package does, once the install is taken
+        self.assertLess(out.index('Installed bundle.aab as 2 APKs'), out.index('Before it starts: '))
+        self.assertLess(out.index('Before it starts: '), out.index('Started: '))
 
     def test_one_apk_is_not_as_google_play_installs_it(self):
         with open(os.path.join(self.tmp.name, 'pm.txt'), 'w') as f:

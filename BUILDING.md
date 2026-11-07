@@ -1614,7 +1614,10 @@ the app stays.
 `device` installs a package with adb (an App Bundle as Google Play
 installs it: `bundletool build-apks --connected-device`, signed with a
 key made for it, then `install-apks`, and the app must be installed as
-more than one APK), starts it, and waits until the
+more than one APK), waits until the system has taken the install (the
+broadcast queues and the package manager idle: in run 42324548829
+Android 16 killed the Java layer's probe for memory while its apps were
+still taking it), starts it, and waits until the
 screen turns the probe's green, which only the probe's `openStack` makes
 (or the fail colour, which fails at once), and prints what the probe said
 (kept in the failure when it turns its fail colour). With `--allow

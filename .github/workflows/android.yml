@@ -465,7 +465,10 @@ jobs:
           # run 42312203693 Android 16 ran short with 1536 MB (the low
           # memory killer's "min watermark is breached") and killed the Java
           # layer's probe (exit-info LOW_MEMORY) while its notification
-          # permission dialog was in front, so the probe never came back
+          # permission dialog was in front, so the probe never came back.
+          # (Run 42324548829 did the same with 3 GB: the probe had started
+          # while the system's apps were still taking its install, so
+          # device now waits for that first.)
           sed -i '/^hw.ramSize=/d' "$ANDROID_AVD_HOME/pages16k.avd/config.ini"
           echo 'hw.ramSize=3072M' >> "$ANDROID_AVD_HOME/pages16k.avd/config.ini"
           # its memory and cores, for the account device prints if the probe dies
