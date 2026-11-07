@@ -1639,7 +1639,11 @@ waits for Android's dialog, taps its Allow button (found in a
 `uiautomator` dump) and checks that the package then holds the
 permission (`dumpsys package`). With `--picture <name>` the picture the
 probe exported must be among the shared pictures (`content query` of
-MediaStore) in `Pictures/`, as the package's own. With `--within-bars`
+MediaStore) in `Pictures/`, as the package's own; before it installs the
+probe again, `device` then waits (up to 60 seconds) for MediaProvider to
+say in the log that it took the removal of the one before, which it does
+in a job of its own and which clears the owner of every picture of the
+package's name, the new install's too (run 42359925885). With `--within-bars`
 the screen's first and last rows, where the status and navigation bars
 are, must not be the probe's green once it is green: the stack is not
 drawn under the bars. When the first green screen has its green there,
