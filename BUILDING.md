@@ -1692,10 +1692,12 @@ where `<runtime>` is the runtimes asset's `Runtime/Android` folder.
   `GetMethodID`) finds its method with that signature in the jar or in
   Android's classes (`KNOWN_CALLS` names the calls that never found one,
   in 9.6.3's jar too); every LCB binding to `com.runrev` classes; every
-  class the builder and the manifest name; and the OpenGL ES version the
-  jar's `OpenGLView` asks for against the library the engine draws with
-  (9.6.3's engine draws with OpenGL ES 1, this tree's with 3, so the
-  view asks for 1 while the runtime carries 9.6.3's engine). The
+  class the builder and the manifest name; and the OpenGL ES version of
+  the context `OpenGLView` makes for each engine against the library the
+  engine draws with. One jar serves both engines: 9.6.3's draws with
+  OpenGL ES 1 and calls `start()`, which makes the context it always
+  had; an engine built from this tree draws with OpenGL ES 3 and calls
+  `startGLES(3)` (`kMCAndroidOpenGLESVersion` in `mblandroiddc.cpp`). The
   workflow runs it on the release's jar as well, so that each statement
   is known to hold of the jar that ships.
 - `rules` checks what Android asks of the code: today, that every

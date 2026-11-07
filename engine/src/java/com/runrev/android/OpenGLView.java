@@ -36,17 +36,6 @@ public class OpenGLView extends SurfaceView implements SurfaceHolder.Callback
 	
 	private static final int EGL_CONTEXT_CLIENT_VERSION = 0x00003098;
 	
-	// OXT-Beyond: the OpenGL ES version of the context that start() makes,
-	// which must be the one the native engine draws with. The engine that
-	// ships with this Java layer (LiveCode Community 9.6.3's, carried in the
-	// runtime) draws with OpenGL ES 1 (it loads libGLESv1_CM), which wants a
-	// context made with no attributes, as its own Java made it; an engine
-	// built from this tree draws with OpenGL ES 3 (tilecachegl3.x.cpp, linked
-	// with -lGLESv3), whose context asks for version 3. Change it with the
-	// engine: tools/ci/android_java.py jni checks it against the OpenGL ES
-	// library the runtime's engine loads.
-	private static final int GLES_VERSION = 1;
-	
 	private EGL10 m_egl;
 	private EGLDisplay m_egl_display;
 	private EGLSurface m_egl_surface;
@@ -111,7 +100,21 @@ public class OpenGLView extends SurfaceView implements SurfaceHolder.Callback
 		return t_configs[0];
 	}
 	
+	// OXT-Beyond: the context must be of the OpenGL ES version the native
+	// engine draws with, and one Java layer serves two engines. start() is
+	// what LiveCode Community 9.6.3's engine calls, the one the runtime
+	// carries: it draws with OpenGL ES 1 (it loads libGLESv1_CM) and gets the
+	// context its own Java made, asked for with no attributes. An engine
+	// built from this tree draws with OpenGL ES 3 (tilecachegl3.x.cpp, linked
+	// with -lGLESv3) and calls startGLES(3) (mblandroiddc.cpp), a name 9.6.3's
+	// engine does not know. tools/ci/android_java.py jni checks each engine's
+	// library against the context it asks for.
 	public void start()
+	{
+		startGLES(1);
+	}
+	
+	public void startGLES(int p_gles_version)
 	{
 		Log.i("revandroid", "OpenGLView.start");
 
@@ -140,12 +143,13 @@ public class OpenGLView extends SurfaceView implements SurfaceHolder.Callback
 		// For debugging.
 		dumpConfig("Using EGLConfig", m_egl, m_egl_display, m_egl_config);
 		
-		// Now create the OpenGL ES context (javac keeps only the branch that
-		// GLES_VERSION takes).
-		if (GLES_VERSION > 1)
+		// Now create the OpenGL ES context: of the version asked for from
+		// OpenGL ES 2 on, and for OpenGL ES 1 with no attributes (EGL's
+		// default), as LiveCode's Java always made it.
+		if (p_gles_version > 1)
 		{
 			int[] t_attr = new int[] {
-				EGL_CONTEXT_CLIENT_VERSION, GLES_VERSION,
+				EGL_CONTEXT_CLIENT_VERSION, p_gles_version,
 				EGL10.EGL_NONE,
 			};
 			m_egl_context = m_egl . eglCreateContext(m_egl_display, m_egl_config, EGL10 . EGL_NO_CONTEXT, t_attr);
