@@ -418,7 +418,14 @@ on TestAppBrowserInToolsMenu
    dispatch function "revMenubarBuildMenu" to stack "revMenuBar" with "Tools"
    TestAssert "checked while it is shown", "!cApplication Browser" is among the lines of the result
 
+   TestAssert "the open App Browser is marked open in the preferences", \
+         the cAppOverview of stack "revPreferences" is true
    dispatch "revMenubarToolsMenuPick" to stack "revMenuBar" with "Application Browser"
    wait 200 milliseconds with messages
    TestAssert "Tools > Application Browser closes it again", revIDEAppBrowserStack() is empty
+   -- closed as its close box closes it: the plugin's revAppBrowserFinalise
+   -- ran (it keeps the stacks open in its tree, and marks it closed)
+   -- (Codex review of #390)
+   TestAssert "closing it from the menu runs the plugin's finaliser", \
+         the cAppOverview of stack "revPreferences" is false
 end TestAppBrowserInToolsMenu

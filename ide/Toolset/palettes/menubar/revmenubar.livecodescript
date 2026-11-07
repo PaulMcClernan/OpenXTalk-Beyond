@@ -3290,7 +3290,16 @@ on revMenubarToolsMenuPick pWhich
          -- shown, it closes, as the other palettes of this menu do; else it
          -- opens as Development > Plugins opens it
          if revMenubarAppBrowserIsOpen() then
-            close stack revIDEAppBrowserStack()
+            -- (close stack sends no closeStackRequest, where the plugin
+            -- keeps the stacks the user opened in its tree for next time
+            -- (revAppBrowserFinalise), so it is run here, as its window's
+            -- close box runs it)
+            local tBrowser
+            put revIDEAppBrowserStack() into tBrowser
+            try
+               dispatch "revAppBrowserFinalise" to stack tBrowser
+            end try
+            close stack tBrowser
          else if "App Browser" is among the keys of revIDEPlugins() then
             revIDEOpenPlugin "App Browser"
          end if
