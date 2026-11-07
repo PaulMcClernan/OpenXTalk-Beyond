@@ -1787,8 +1787,9 @@ emulator's slower steps (#404); the IDE tour checks the App Bundle box
 its last step on a Mac, puts the IDE in the background
 and reads a default button's label there (#406); the Android engine
 itself is built here with a current NDK for all four architectures and
-checked as Android takes it, though packages still carry LiveCode
-9.6.3's (#402); a test pins the text SQLite gives scripts (#396); a
+checked as Android takes it (#402), and it now runs: both probes are
+built with it and run on the Android 13 and 16 KB page emulators, though
+packages still carry LiveCode 9.6.3's engines (#407); a test pins the text SQLite gives scripts (#396); a
 check finds any handler that uses a script local declared below it
 (#385); and the runtimes that every package carries are rebuilt from
 this release's engine, with the Android Java layer built here (#393,

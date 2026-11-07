@@ -68,6 +68,12 @@ words, is in the [README](README.md#the-ide) and on the
 - Mobile Web deploy (tools/ci/mobile-web-deploy.livecodescript): OXT_MW_MODULES adds extension modules to a standalone, so a check can deploy a stack that uses one; without it nothing changes (#403)
 - Web site: Wobble Forts has a page of its own in the web stacks gallery, with the big ones: on a computer it plays first on the page in the frame of a phone on its side, keys and mouse at once, and on a phone a tap opens it on the whole screen; it plays the Stack Player's own copy, so the page goes up with a player that has it (#403)
 - HTML5 standalones: a new Splash setting in the Web pane of the Standalone Application Settings shows an image in the middle of the browser's window, on the page's colour, with what is loading under it, while the engine and the stack download and start (bwmilby's request); without it the page is as before (#398)
+- Android engine: the engine built here runs on the emulators; CI builds both probes with it in the released IDE and runs them on Android 13 and with 16 KB pages (#407)
+- Android check: `overlay --engine` puts an engine built here into an IDE, and `verify --engine` checks that each package carries it (#407)
+- Android engine: lld links the engine with a copy of its linker script that keeps `.got` inside RELRO, so `.data` no longer shares RELRO's read-only page (the engine built here died loading); `android_engine.py check` refuses a library with anything writable in RELRO's pages (#407)
+- Android engine: on the current NDK's route, Clang keeps code's checks of a null `this`, as NDK r16's did, so the bundled HarfBuzz no longer crashes the engine on its first text (#407)
+- Android check: `device --allow` taps Wait on another app's "isn't responding" dialog that stands over Android's permission dialog, as it already did over the probe (#407)
+- Learn Box2D click check: the drag pressed while the window is busy reads where the bodies are before each try, tries up to six and gives a grabbed body up to 4 seconds to follow, so a box held under the Bodies lesson's sliding platform no longer fails the Linux package job (#407)
 
 ## 0.2.7-rc.6.17 (2026-11-06, pre-release)
 
