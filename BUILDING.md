@@ -3307,8 +3307,14 @@ chooses it for the engine, and `prebuilt/scripts/android.inc` for the
 libraries, when there is no standalone toolchain (`ANDROID_TOOLCHAIN`, or
 `~/android/toolchain/standalone-<arch>`); with one, both build as before.
 `ANDROID_FUSE_LD` names the linker to `config/android-settings.gypi`
-(`bfd` with a standalone toolchain, `lld` without). Like the web engine's
-script, it builds the prebuilt libraries that no server publishes:
+(`bfd` with a standalone toolchain, `lld` without), and `engine/engine.gyp`
+gives the engine's link the linker script for it: GNU ld takes
+`engine/standalone-android.link` as before, and lld a copy,
+`engine/standalone-android-lld.link`, that puts `.got` inside RELRO
+(lld counts it as RELRO wherever a script puts it, and with the old
+script RELRO ended in the page `.data` starts in, which Android's loader
+makes read-only whole: the engine died loading on the emulator). Like the
+web engine's script, it builds the prebuilt libraries that no server publishes:
 OpenSSL, ICU and the Thirdparty libraries for Android, into
 `prebuilt/lib/android/<arch>/ndk21r<NDK major>`, and ICU, libz and libffi
 for the build's host tools.
@@ -3318,6 +3324,9 @@ builder will take it: the right machine and word size; every LOAD segment
 of a 64-bit one aligned to 16 KB (Android 15's devices with 16 KB pages
 load nothing aligned to less, and Google Play asks it of apps that target
 Android 15); no text relocations, which Android 6.0 and later refuse;
+nothing writable but RELRO in the pages RELRO starts and ends in, at 16 KB
+for the 64-bit ABIs and 4 KB for the others (Android's loader makes those
+pages read-only whole, so the first write to what shares them crashes);
 only Android's own system libraries needed (never `libc++_shared.so`);
 API 21 in the note the NDK writes; and in the engine, the `.project`
 section that the builder writes the stack into, last in memory and at the
