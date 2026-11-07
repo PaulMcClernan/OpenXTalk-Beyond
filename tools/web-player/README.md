@@ -340,8 +340,15 @@ screens at five sizes and a turn in the middle of a run.
 `tools/ci/nova_rescue_check.py` plays it on emulated phones (Pixel 7 and
 iPhone 13, in Chromium and WebKit) with real touches: Play, a finger that
 flies the ship, a rescue, Pause, the frame rate, a turn and no script
-error. CI runs it in web.yml, after the Responsive Starter's check. To
-run it yourself:
+error. CI runs it in web.yml, after the Responsive Starter's check.
+
+It also has a page of its own on the web site's gallery
+(`games/nova-rescue/`, see [tools/pages](../pages/README.md)), which
+plays this sample in the bare player. The stack's `cJavascriptHandlers`
+are `nrPageHidden` (the page is hidden: a run pauses) and `nrState`, so
+that `tools/pages/check_nova_rescue_page.py` can ask the game how it is
+there; `build_player.py --check` runs that check on the player it
+builds. To run the phone check yourself:
 
 ```sh
 python3 tools/ci/nova_rescue_check.py --runtime <web runtime> --engine-cache <folder> --shots <folder>

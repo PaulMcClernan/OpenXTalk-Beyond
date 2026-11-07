@@ -2932,7 +2932,9 @@ command nrTestSet pName, pValue
    end switch
 end nrTestSet
 
--- How things are, a line each: name:value
+-- How things are, a line each: name:value. One of the stack's
+-- cJavascriptHandlers, so a page can ask it too (the check of the game's
+-- page on the web site, tools/pages/check_nova_rescue_page.py)
 function nrState
    local tOut, tKind
    put "mode:" & sMode & return & "score:" & sScore & return & "streak:" & sStreak & return & \

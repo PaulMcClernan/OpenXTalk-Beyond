@@ -110,8 +110,11 @@ private command buildStack pFile
    set the textFont of stack tName to empty
    set the textSize of stack tName to 14
    -- the page calls nrPageHidden when it is hidden (another app, a
-   -- locked phone), so that a run never plays on behind it
-   set the cJavascriptHandlers of stack tName to "nrPageHidden"
+   -- locked phone), so that a run never plays on behind it; nrState says
+   -- how the game is, for the checks of its page on the web site
+   -- (tools/pages/check_nova_rescue_page.py), which play it there as
+   -- anyone would
+   set the cJavascriptHandlers of stack tName to "nrPageHidden" & return & "nrState"
 
    -- the pictures, on a card of their own
    set the name of card 1 of stack tName to "Space"
