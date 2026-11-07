@@ -1531,8 +1531,18 @@ class Workflow(unittest.TestCase):
         self.assertEqual(upload['path'], 'android-runtime/')
 
     def test_nothing_is_published(self):
+        # the device job downloads the latest release's IDE to run the
+        # builder in; nothing is written to a release, a package or the
+        # repository
         self.assertEqual(self.wf['permissions'], {'contents': 'read'})
-        self.assertNotIn('release', self.text.lower().replace('nothing here\n# goes into a package or a release', ''))
+        for job in self.wf['jobs'].values():
+            self.assertNotIn('permissions', job)
+        self.assertNotRegex(self.text, r':\s*write\b')
+        runs = ' '.join(s.get('run', '') for job in self.wf['jobs'].values() for s in job['steps'])
+        self.assertEqual(re.findall(r'gh release (\w+)', runs), ['list', 'download'])
+        uses = [s['uses'].split('@')[0] for job in self.wf['jobs'].values() for s in job['steps'] if 'uses' in s]
+        self.assertEqual(sorted(set(uses)), ['actions/cache/restore', 'actions/cache/save', 'actions/checkout',
+                                             'actions/download-artifact', 'actions/upload-artifact'])
 
     def test_what_starts_it(self):
         on = self.wf[True]
@@ -1545,6 +1555,75 @@ class Workflow(unittest.TestCase):
         # the files the build runs, outside the folders it builds from
         for name in re.findall(r"'\.\./tools/([\w.-]+\.sh)'", read('config', 'java.gypi')):
             self.assertIn('tools/' + name, paths)
+
+    def test_the_device_job(self):
+        """The engine built here runs: the device job takes the four build
+        jobs' folders as one runtime, puts it and this builder into the
+        release's IDE, builds both probes with it, checks each package's
+        engine is the one built here, and runs them on Android 13 and with
+        16 KB pages"""
+        import fnmatch
+        job = self.wf['jobs']['device']
+        self.assertEqual(job['needs'], 'build')
+        self.assertEqual(job['runs-on'], 'ubuntu-24.04')
+        self.assertNotIn('container', job)
+        self.assertNotIn('if', job)
+        steps = dict((s.get('name'), s) for s in job['steps'])
+        download = steps['Download the runtime']
+        self.assertTrue(download['uses'].startswith('actions/download-artifact@'))
+        pattern = download['with']['pattern']
+        self.assertTrue(download['with']['merge-multiple'])
+        self.assertEqual(download['with']['path'], '${{ runner.temp }}/android/engine')
+        # every build job's folder, and not the device job's own upload
+        for abi in bash_assoc(read('tools', 'ci', 'build-android.sh'), 'ABIS').values():
+            name = self.steps['Upload the runtime']['with']['name'].replace('${{ matrix.abi }}', abi)
+            self.assertTrue(fnmatch.fnmatchcase(name, pattern), name)
+        own = steps['Upload the packages and logs']['with']['name']
+        self.assertFalse(fnmatch.fnmatchcase(own, pattern), own)
+        self.assertIn('echo "WORK=$RUNNER_TEMP/android" >> "$GITHUB_ENV"', steps['Download the IDE']['run'])
+
+        def lines(step):
+            return [' '.join(x.split()) for x in steps[step]['run'].replace('\\\n', ' ').splitlines() if x.strip()]
+
+        unpack = lines('Unpack the IDE, and put this builder and the runtime into it')
+        self.assertIn('python3 tools/ci/android_check.py overlay --root "$WORK/ide" --engine "$WORK/engine"', unpack)
+        built = lines('Build the probes with this engine')
+        self.assertEqual([x for x in built if ' ide ' in x], [
+            'python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" --work "$WORK/app" '
+            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug',
+            'python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" --work "$WORK/java" '
+            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug --probe java'])
+        self.assertIn('for probe in app java; do', built)
+        self.assertIn('python3 tools/ci/android_check.py verify --work "$WORK/$probe" --sdk "$SDK" --jdk "$JDK" '
+                      '--builds debug --target 36 --engine "$WORK/engine"', built)
+        # the debug build has every architecture, so verify --engine checks
+        # every engine built here
+        sys.path.insert(0, os.path.join(REPO, 'tools', 'ci'))
+        import android_check as ac
+        self.assertEqual(ac.BUILDS['debug']['abis'], set(ae.ABIS))
+        app = '--within-bars'
+        java = '--allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png --back --within-bars'
+        for step, where in (('Run the probes on Android 13', 'api33'), ('Run the probes with 16 KB pages', '16k')):
+            runs = [x for x in lines(step) if ' device ' in x]
+            self.assertEqual(runs, [
+                'python3 tools/ci/android_check.py device --apk "$WORK/app/out/debug.apk" --serial emulator-5554 '
+                '--sdk "$SDK" --out "$WORK/screen-%s-app.png" --log-out "$WORK/logcat-%s-app.txt" %s'
+                % (where, where, app),
+                'python3 tools/ci/android_check.py device --apk "$WORK/java/out/debug.apk" --serial emulator-5554 '
+                '--sdk "$SDK" --out "$WORK/screen-%s-java.png" --log-out "$WORK/logcat-%s-java.txt" %s'
+                % (where, where, java)], step)
+        # options the check has
+        for flag in set(re.findall(r'(--[a-z-]+)', app + ' ' + java)):
+            self.assertIn("d.add_argument('%s'" % flag, read('tools', 'ci', 'android_check.py'), flag)
+        sixteen = steps['Run the probes with 16 KB pages']['run']
+        self.assertIn('[ "$page" = 16384 ]', sixteen)
+        self.assertIn('--awake --settle', sixteen)
+        self.assertIn('--awake --settle', steps['Wait for the emulator']['run'])
+        setup = steps['Set up the JDK and the Android SDK']['run']
+        for part in ('"platforms;android-36"', '"system-images;android-33;google_apis;x86_64"', '"$img16"',
+                     'google_apis_ps16k;x86_64', '"emulator"'):
+            self.assertIn(part, setup)
+        self.assertEqual(steps['Upload the packages and logs']['if'], 'always()')
 
     def test_the_desktop_builds_skip_it(self):
         import yaml

@@ -3332,3 +3332,24 @@ Android SDK, on a pull request or push that changes what the engine is
 built from, and keeps each folder for 14 days as
 `android-engine-<abi>`. The libraries come from a cache keyed by what
 they are built with, so a change to the engine builds only the engine.
+
+Its "Android engine on the emulator" job then runs the engine. It puts
+the four folders, as one runtime, and this checkout's builder into the
+latest release's IDE:
+
+```sh
+python3 tools/ci/android_check.py overlay --root <ide> --engine <runtime>
+```
+
+`--engine` puts every architecture's engine and externals over the
+release's, and the Java layer and the files beside them, and changes
+nothing when the runtime or the release lacks one of them, so that no
+package mixes the two engines. The builder there builds the app probe and
+the Java layer's probe (debug, for all four architectures), and `verify
+--engine <runtime>` checks that each package's engine is the one built
+here: the same code (its `.text` section, which the builder's deploy
+writes out as it was). Both probes then run on an Android 13 emulator
+and on the first image with 16 KB pages, with the checks that the
+[Android standalone check](#android-standalone-check) makes of them with
+the 9.6.3 engine: the Java layer's probe's notification permission, its
+picture and its back key; neither probe drawn under the system bars.
