@@ -156,7 +156,7 @@ every change, release by release.
 
 | Version | What it brings |
 | --- | --- |
-| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; the App Browser back in the Tools menu with sharp icons; SQLite 3.51.3, and libsodium 1.0.22 and OpenSSL 3.5.9 in the xTalk Suite |
+| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Two games made for phones in the Stack Player, Nova Rescue and Wobble Forts; Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; the App Browser back in the Tools menu with sharp icons; SQLite 3.51.3, and libsodium 1.0.22 and OpenSSL 3.5.9 in the xTalk Suite |
 | [0.2.7-rc.6.17](#027-rc617-the-bug-hunt-round-seventeen) | The round to squash what was left before 0.2.7 is stable: buttons on a coloured card in the web IDE, a dark menu item on Linux, a main window that wouldn't minimize on Windows 11, an App Browser that listed itself (and the Card Navigator), windows that flashed at start, Inclusions in a new order every run, the Responsive Starter's second save, the Phone Starter's pinch and its fit on an iPhone's Home Screen; and Lessons, a course in xTalk, on the website |
 | [0.2.7-rc.6.16](#027-rc616-the-bug-hunt-round-sixteen) | The Responsive Starter lays one stack out for a phone, a tablet and a desktop; phone stacks use touch, sensors, the camera and the share sheet; a stack plays with nothing around it; Android packages install again; the website gets an Extensions page; the Script Editor's black words on grey, a blank Dictionary on Windows and unreadable menu words are fixed |
 | [0.2.7-rc.6.15](#027-rc615-the-bug-hunt-round-fifteen) | The Mobile Web library and the Phone Starter bring stacks to phones; animations that wait 0 ms show in the browser; a Clear button for the Inspector's colours; named tools; the web IDE and the website rest; `write to process` sends text as written |
@@ -1672,10 +1672,22 @@ from 0.2.6-rc.1.
 #### 0.2.7-rc.6.18: the Bug Hunt, round eighteen
 
 OXT-Beyond 0.2.7-rc.6.18 has everything in 0.2.7-rc.6.17. This round
-brings Android standalones up to what Google Play asks of an app today,
-gets a stack's sounds back out as files, and squashes what the forum
-found since rc.6.17. Here is each change, listed as the bug it squashes:
+puts two games made for phones in the Stack Player, brings Android
+standalones up to what Google Play asks of an app today, gets a stack's
+sounds back out as files, and squashes what the forum found since
+rc.6.17. Here is each change, listed as the bug it squashes:
 
+- **Not enough to play on a phone.** The Stack Player has two new games
+  made for phones. In Nova Rescue you drag a finger to fly, rescue the
+  drifting crews for a growing bonus, dodge meteors and raiders, and
+  beat a mothership every fourth sector. In Wobble Forts, built on
+  Box2DXT, you pull back and fling the round Bloops at the Grumps'
+  wobbly forts of wood, glass, stone, metal and TNT: fifteen forts in
+  three lands, with a boss at the end of each. Both fill a phone's
+  screen upright or turned, use Kenney's CC0 pictures and sounds, are in
+  Home's gallery, and have a page of their own in the website's web
+  stacks gallery, where a phone opens them on the whole screen (#401,
+  #403).
 - **Android apps that Google Play would turn away.** Google Play asks
   new apps and updates to target Android 16 (API 36), and takes a new
   app as an App Bundle. A package now targets API 36, and a stack can
@@ -1756,8 +1768,9 @@ found since rc.6.17. Here is each change, listed as the bug it squashes:
 
 Behind the scenes, about fifty everyday things a person does are
 clicked through the IDE's own windows on every build, light and dark
-(#363); a draft pull request runs its platform builds once it is marked
-ready (#386); the Android builder's checks keep their emulators awake,
+(#363); both new games are played on emulated phones, in Chromium and
+in WebKit (Safari's engine), on every build (#401, #403); a draft pull
+request runs its platform builds once it is marked ready (#386); the Android builder's checks keep their emulators awake,
 tap Allow on Android's permission dialogs, check the target API, the
 back key, the bars, the album, a font size and a density change, an app
 opened again after it quits, and App Bundles installed as Google Play
