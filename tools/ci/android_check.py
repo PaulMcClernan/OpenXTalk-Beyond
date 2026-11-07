@@ -157,6 +157,15 @@ FAIL_COLOR = (230, 160, 0)
 # it must show within BACK_WAIT seconds of the key
 BACK_COLOR = (40, 90, 200)
 BACK_WAIT = 20
+# device --within-bars: how long the screen is taken again, every
+# BARS_INTERVAL seconds, when the first green screen has the probe's green
+# where a system bar is, before that is a failure. On the 16 KB Android 16
+# image the same package that targets API 33 passed in other runs, and in
+# run 42354758286 (attempt 2) its first green screen, 4 s after a cold
+# start, was green in its bottom row: a screen taken before the bar was
+# drawn over the window is not where the window is
+BARS_WAIT = 8
+BARS_INTERVAL = 1
 # The probes (--probe): the stack file each is saved as
 PROBES = {'app': 'AndroidProbe.livecode', 'java': 'AndroidJavaProbe.livecode'}
 # Where a release's Java layer is (overlay --classes)
@@ -578,6 +587,27 @@ def bars_drawn_over(rgba, width, height, colour=RUN_COLOR):
     return over
 
 
+def bars_again(adb, serial, over, seconds=None):
+    """device --within-bars, when the first green screen had the stack's
+    green where a bar is (over): the screen taken again every BARS_INTERVAL
+    seconds, up to BARS_WAIT, until one that is the probe's green has the
+    bars over it. (what bars_drawn_over says of the last such screen, how
+    many screens were taken, the seconds waited)"""
+    seconds = BARS_WAIT if seconds is None else seconds
+    started, shots = time.time(), 0
+    while over and time.time() - started < seconds:
+        time.sleep(BARS_INTERVAL)
+        got = screen_now(adb, serial)
+        if not got:
+            continue
+        shots += 1
+        w, h, rgba = got
+        # another screen (a dialog, the probe gone) says nothing of the bars
+        if colour_share(rgba, RUN_COLOR) >= 0.25:
+            over = bars_drawn_over(rgba, w, h)
+    return over, shots, time.time() - started
+
+
 def screen_colours(rgba, top=4, step=7):
     """The screen's commonest colours (every step-th pixel), most common
     first, as [((r, g, b), share)]: what the screen showed when it was not
@@ -726,17 +756,58 @@ def asking_for_permission(activities):
                if re.search(r'\b(topResumedActivity|mResumedActivity|ResumedActivity)\b', x))
 
 
-def allow_button(xml):
-    """The centre (x, y) of the permission dialog's Allow button in a
-    uiautomator dump, or None."""
+def button_centre(xml, resource_id):
+    """The centre (x, y) of the first node in a uiautomator dump whose
+    resource-id ends with resource_id, or None."""
     for m in re.finditer(r'<node\b[^>]*>', xml):
         node = m.group(0)
         rid = re.search(r'resource-id="([^"]*)"', node)
         bounds = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
-        if rid and rid.group(1).endswith(ALLOW_BUTTON) and bounds:
+        if rid and rid.group(1).endswith(resource_id) and bounds:
             x1, y1, x2, y2 = (int(v) for v in bounds.groups())
             return (x1 + x2) // 2, (y1 + y2) // 2
     return None
+
+
+def allow_button(xml):
+    """The centre (x, y) of the permission dialog's Allow button in a
+    uiautomator dump, or None."""
+    return button_centre(xml, ALLOW_BUTTON)
+
+
+# Android's "isn't responding" dialog (AppNotRespondingDialog) for another
+# app, in front of the probe: in run 42354758286 the 16 KB image showed
+# the launcher's over the probe's green, which its scrim dimmed, and the
+# probe was failed for a screen that never turned green. Its Wait button
+# lets that app go on and closes the dialog; the probe's own is a failure
+# (CRASH), never answered. At most ANR_TAPS times in a wait
+ANR_WINDOW = re.compile(r'mCurrentFocus=Window\{[^}]*\bApplication Not Responding: ([\w.]+)\}')
+WAIT_BUTTON = 'android:id/aerr_wait'
+ANR_TAPS = 3
+
+
+def other_anr(window):
+    """The package whose "isn't responding" dialog has the focus, in
+    `dumpsys window`, when it is not the probe; else None."""
+    m = ANR_WINDOW.search(window)
+    return m.group(1) if m and m.group(1) != IDENTIFIER else None
+
+
+def answer_other_anr(a):
+    """Taps Wait on another app's "isn't responding" dialog when it has the
+    focus: that app's package, or None when there is no such dialog."""
+    package = other_anr(a('shell', 'dumpsys', 'window')[1])
+    if not package:
+        return None
+    a('shell', 'uiautomator', 'dump', '/sdcard/oxt-ui.xml')
+    _, xml = a('shell', 'cat', '/sdcard/oxt-ui.xml')
+    where = button_centre(xml, WAIT_BUTTON)
+    if where:
+        a('shell', 'input', 'tap', str(where[0]), str(where[1]))
+        log('  %s isn\'t responding, its dialog in front of the probe: tapped Wait at %d,%d' % ((package,) + where))
+    else:
+        log('  %s isn\'t responding, its dialog in front of the probe, which has no Wait button yet' % package)
+    return package
 
 
 def permission_granted(package_dump, permission):
@@ -1551,6 +1622,62 @@ def quiet_after_install(a, seconds=QUIET_SECONDS):
     return said
 
 
+# MediaProvider's account, in the device's log, of the probe's package
+# removed: it orphans the package's shared media (their owner is cleared),
+# found by the package's name, in a job of its own (onPackageOrphaned, which
+# says "Deleted N Android/media items belonging to <package>" and "Orphaned
+# N items belonging to <package>"; an older one may say a line only when
+# N is not 0, and the wait then ends at its limit)
+REMOVAL_TAKEN = r'(Deleted|Orphaned) (\d+) (?:Android/media )?items belonging to %s(?=\s|$)'
+REMOVAL_WAIT = 60
+REMOVAL_INTERVAL = 2
+
+
+def removal_taken(a, seconds=None):
+    """With device --picture, after the probe is uninstalled and before it
+    is installed again: until MediaProvider has taken the removal (it says
+    so in the log, which was cleared before the uninstall: REMOVAL_TAKEN),
+    at most `seconds` (REMOVAL_WAIT). Its job may run after the probe is
+    installed again, and orphans by the package's name what the new install
+    exported too: in run 42359925885 the Java layer's probe on the 16 KB
+    image exported its picture, MediaProvider took the plain probe's
+    removal only after that (the log, cleared after the install, has its
+    "Orphaned 1 items belonging to org.openxtalk.check.androidprobe"), and
+    the package owned no picture. A wait that ends without it is said, and
+    the run goes on: this decides nothing. `a` runs adb on the device.
+    Returns what it logged."""
+    seconds = REMOVAL_WAIT if seconds is None else seconds
+    pattern = REMOVAL_TAKEN % re.escape(IDENTIFIER)
+    started = time.monotonic()
+    while True:
+        _, out = a('logcat', '-d', '-s', 'MediaProvider')
+        found = re.findall(pattern, out)
+        took = time.monotonic() - started
+        if found:
+            said = ('Before it is installed: MediaProvider took the removal of the package after %d s (%s)'
+                    % (took, '; '.join('%s %s' % (kind.lower(), n) for kind, n in found)))
+            break
+        if took >= seconds:
+            said = ('NOTE: MediaProvider has not said in %d s that it took the removal of the package; '
+                    'a picture the probe exports may lose its owner when it does' % seconds)
+            break
+        time.sleep(REMOVAL_INTERVAL)
+    log(said)
+    return said
+
+
+def screen_now(adb, serial):
+    """(width, height, rgba) of the device's screen now, or None when
+    screencap gives none."""
+    try:
+        proc = subprocess.run([adb, '-s', serial, 'exec-out', 'screencap'], stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, timeout=60)
+        return screen_from_raw(proc.stdout)
+    except (CheckError, subprocess.TimeoutExpired) as e:
+        log('  screencap: %s' % e)
+        return None
+
+
 def device(args):
     adb = adb_path(args.sdk)
     if not adb:
@@ -1567,7 +1694,11 @@ def device(args):
     if state and state != 'Awake':
         log('NOTE: the device is %s (dumpsys power): Android pauses an activity started now (see boot --awake)'
             % state)
-    a('uninstall', IDENTIFIER)
+    if args.picture:
+        a('logcat', '-c')
+    _, out = a('uninstall', IDENTIFIER)
+    if args.picture and 'Success' in out:
+        removal_taken(a)
     if args.apk.endswith('.aab'):
         refused = install_bundle(args, adb, a)
         if refused:
@@ -1591,6 +1722,7 @@ def device(args):
     # front of it), which is allowed with the dialog's own button; until
     # then its green does not end the wait
     asked = allowed = False
+    anr_taps = 0
     while time.time() - started < args.timeout:
         time.sleep(3)
         if args.allow and not allowed:
@@ -1620,6 +1752,8 @@ def device(args):
         failed = colour_share(rgba, FAIL_COLOR)
         if failed >= 0.25 or (share >= 0.25 and (allowed or not args.allow)):
             break
+        if share < 0.25 and failed < 0.25 and anr_taps < ANR_TAPS and answer_other_anr(a):
+            anr_taps += 1
     _, pid = a('shell', 'pidof', IDENTIFIER)
     _, logcat = a('logcat', '-d', '-v', 'brief')
     pids = probe_pids(logcat, pid)
@@ -1659,6 +1793,13 @@ def device(args):
         # rows are not its green (Android 15 and newer draw an app that
         # targets API 35 edge to edge, and the Java layer pads the stack)
         over = bars_drawn_over(rgba, w, h)
+        if over:
+            log('The bars: the first green screen has the stack\'s green in its %s row; the screen again for up '
+                'to %g s' % (' and '.join(over), BARS_WAIT))
+            over, shots, waited = bars_again(adb, args.serial, over)
+            log('The bars: %d more screen(s) in %.0f s; %s' % (
+                shots, waited, 'the bars are drawn over the stack in the last' if not over else
+                'the stack\'s green is still where the bars are'))
         log('The bars: %s' % ('the stack is drawn under them (%s)' % ', '.join(over) if over else
                               'the stack is inside them (the first and last rows are not its green)'))
         if over:
@@ -1721,10 +1862,15 @@ def device(args):
                if r.get('owner_package_name') == IDENTIFIER]
         log('Shared pictures the package owns: %s' % (', '.join(own) or 'none'))
         if not probe_picture(rows, args.picture, IDENTIFIER):
-            problems.append('the probe\'s picture %s is not in the shared %s folder as the package\'s own (%s)'
+            # one of its name with no owner: MediaProvider orphaned it
+            # (REMOVAL_TAKEN), or it is an earlier install's
+            unowned = probe_picture(rows, args.picture, 'NULL')
+            problems.append('the probe\'s picture %s is not in the shared %s folder as the package\'s own (%s%s)'
                             % (args.picture, PICTURES.rstrip('/'), 'it owns ' + ', '.join(own) if own else
                                'it owns no shared picture' if rows else
-                               'MediaStore listed no picture: %s' % (query.strip()[-300:] or 'no answer')))
+                               'MediaStore listed no picture: %s' % (query.strip()[-300:] or 'no answer'),
+                               '; %s%s there has no owner' % (PICTURES, unowned['_display_name'])
+                               if unowned else ''))
     if crash:
         problems.append('the device\'s log: %s' % ' | '.join(crash[:8]))
     if problems or len(pids) > 1:

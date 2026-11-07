@@ -1623,16 +1623,29 @@ Android 16 killed the Java layer's probe for memory while its apps were
 still taking it), starts it, and waits until the
 screen turns the probe's green, which only the probe's `openStack` makes
 (or the fail colour, which fails at once), and prints what the probe said
-(kept in the failure when it turns its fail colour). With `--allow
+(kept in the failure when it turns its fail colour). Another app's "isn't
+responding" dialog in front of the probe (an emulator's launcher's, in
+run 42354758286, its scrim dimming the probe's green) is answered with
+its Wait button, at most three times in a wait; the probe's own is a
+failure. With `--allow
 <permission>` the probe must ask for that runtime permission: `device`
 waits for Android's dialog, taps its Allow button (found in a
 `uiautomator` dump) and checks that the package then holds the
 permission (`dumpsys package`). With `--picture <name>` the picture the
 probe exported must be among the shared pictures (`content query` of
-MediaStore) in `Pictures/`, as the package's own. With `--within-bars`
+MediaStore) in `Pictures/`, as the package's own; before it installs the
+probe again, `device` then waits (up to 60 seconds) for MediaProvider to
+say in the log that it took the removal of the one before, which it does
+in a job of its own and which clears the owner of every picture of the
+package's name, the new install's too (run 42359925885). With `--within-bars`
 the screen's first and last rows, where the status and navigation bars
 are, must not be the probe's green once it is green: the stack is not
-drawn under the bars. With `--back` `device` then presses the back key,
+drawn under the bars. When the first green screen has its green there,
+`device` takes the screen again every second for up to 8 seconds, and
+fails only if the bars never come over it (on the 16 KB image the first
+green screen of a package that passes in other runs, soon after a cold
+start, once had its green in the bottom row). With `--back` `device`
+then presses the back key,
 and the probe's `backKey` must turn the screen blue (`-back.png` beside
 `--out` keeps that screen). `ide --device <serial>` does what the IDE's
 Test does for that device. `boot`
