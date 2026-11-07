@@ -202,19 +202,22 @@ Earlier versions, from 0.2.1 to 0.2.5, are described under
   64-bit system; see [Linux (64-bit ARM)](#linux-64-bit-arm)), without
   the browser widget. 32-bit Windows and Linux are built in CI but not
   packaged, for their standalone runtimes.
-- **The Android runtime is still a prebuilt one.** Each package's
+- **The Android engines are still prebuilt ones.** Each package's
   engine, externals and tools are built from this repository (Windows
   x86-64, macOS for Apple Silicon and Intel, Linux x86-64), and so are
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
-  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.17.zip`)
+  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.18.zip`)
   brings each platform's runtimes into the other packages. The web
   engine of HTML5 standalones, which every package carries, is built
-  from this repository too (see [The engine](#the-engine)). The Android
-  runtime, though, is still OpenXTalk Lite 1.15's (stock LiveCode 9.6.3
-  builds as Tom Perry shipped them), carried over unchanged in that
-  asset. Only the macOS package has the macOS runtimes, OXT-Beyond does
-  not support iOS and has no iOS build or runtimes (so the Standalone
+  from this repository too (see [The engine](#the-engine)), and so is
+  the Android runtime's Java layer (`Runtime/Android/Classes`) from
+  0.2.7-rc.6.18 on. The Android engines, though, are still OpenXTalk
+  Lite 1.15's (stock LiveCode 9.6.3 builds as Tom Perry shipped them),
+  carried over unchanged in that asset: the Android engine is built
+  here and checked in CI, but the packages do not carry it yet. Only
+  the macOS package has the macOS runtimes, OXT-Beyond does not support
+  iOS and has no iOS build or runtimes (so the Standalone
   Settings have no iOS card, and a stack set to build for iOS in
   LiveCode builds for its other platforms), and
   32-bit Linux standalones have no browser (CEF's 32-bit
@@ -351,7 +354,8 @@ requirements too.
 Releases whose tags do not start with `v`, such as `prebuilts-v1`,
 `runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.13`,
 `runtimes-0.2.7-rc.6.14`, `runtimes-0.2.7-rc.6.15`,
-`runtimes-0.2.7-rc.6.16b` and `runtimes-0.2.7-rc.6.17`, are not programs. They hold files that the
+`runtimes-0.2.7-rc.6.16b`, `runtimes-0.2.7-rc.6.17` and
+`runtimes-0.2.7-rc.6.18`, are not programs. They hold files that the
 build and the packager download: the prebuilt
 third-party libraries of earlier versions and the standalone runtimes
 for other platforms.
@@ -4309,16 +4313,18 @@ Known limitations, in rough order of importance:
    74 and several older libraries in `thirdparty/`. (OpenSSL, curl,
    ICU, zlib, libpng, giflib, libjpeg and PCRE are current from
    0.2.1-rc.3 on.) Plan: update them too.
-2. The Android standalone runtime is OpenXTalk Lite 1.15's (LiveCode
-   Community 9.6.3 builds), not built from this repository, and it
-   targets Android 13 (API 33), which Google Play no longer takes for new
-   apps and updates. The Android builder is tested automatically
+2. The Android standalone engines are OpenXTalk Lite 1.15's (LiveCode
+   Community 9.6.3 builds), not built from this repository; the Java
+   layer beside them is built here from 0.2.7-rc.6.18 on, and with it a
+   package targets Android 16 (API 36), as Google Play asks of new apps
+   and updates. The Android builder is tested automatically
    (packages built with a real Android SDK, checked, and run on Android 13
    and 16 KB page emulators), the engine itself only as that build runs
    it. The Windows and Linux runtimes are built from this repository from
    0.2.1-rc.3 on, and every package's tests build a standalone from each
-   of them. Plan: build the Android engine here too, then raise the
-   target API.
+   of them. The Android engine is built here and checked as Android takes
+   it, but packages do not carry it yet. Plan: ship the Android engines
+   built here.
 3. The Windows binaries are not code-signed, and the macOS app is signed
    ad hoc, not with an Apple Developer ID, and not notarized. Plan:
    Developer ID signing and notarization for macOS.
