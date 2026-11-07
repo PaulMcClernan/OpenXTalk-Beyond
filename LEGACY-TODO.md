@@ -72,9 +72,9 @@ Code its authors knew to be wrong or incomplete. 64 notes, by part of the reposi
 - [libfoundation/src/system-file-w32.cpp:286](libfoundation/src/system-file-w32.cpp#L286) FIXME Remaining weaknesses:
 - [libfoundation/src/system-file-w32.cpp:484](libfoundation/src/system-file-w32.cpp#L484) FIXME[2017-04-20] there should be a "basename" function
 - [libfoundation/src/system-file-w32.cpp:540](libfoundation/src/system-file-w32.cpp#L540) FIXME Currently, this function -- and thus the files API on Windows
-- [libfoundation/src/system-stream.cpp:51](libfoundation/src/system-stream.cpp#L51) FIXME known issues:
-- [libfoundation/src/system-stream.cpp:221](libfoundation/src/system-stream.cpp#L221) FIXME see the "known issues" at the top of this file.
-- [libfoundation/src/system-stream.cpp:280](libfoundation/src/system-stream.cpp#L280) FIXME see the "known issues" at the top of this file.
+- [libfoundation/src/system-stream.cpp:61](libfoundation/src/system-stream.cpp#L61) FIXME known issues:
+- [libfoundation/src/system-stream.cpp:231](libfoundation/src/system-stream.cpp#L231) FIXME see the "known issues" at the top of this file.
+- [libfoundation/src/system-stream.cpp:290](libfoundation/src/system-stream.cpp#L290) FIXME see the "known issues" at the top of this file.
 
 <a id="fixme-tests"></a>
 
@@ -177,7 +177,7 @@ Workarounds their authors were not happy with. 32 notes, by part of the reposito
 ### HACK: prebuilt (3)
 
 - [prebuilt/libicu.gyp:57](prebuilt/libicu.gyp#L57) Hack required due to GYP failure / refusal to treat this as a path
-- [prebuilt/libicu.gyp:392](prebuilt/libicu.gyp#L392) Really nasty hack to prevent this from being treated as a path
+- [prebuilt/libicu.gyp:413](prebuilt/libicu.gyp#L413) Really nasty hack to prevent this from being treated as a path
 - [prebuilt/thirdparty.gyp:728](prebuilt/thirdparty.gyp#L728) Hack to put licuuc after lharfbuzz in library list
 
 <a id="hack-stack-scripts"></a>
@@ -348,7 +348,7 @@ Work left for later. 434 notes, by part of the repository:
 - [engine/src/mblandroidcalendar.cpp:186](engine/src/mblandroidcalendar.cpp#L186) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
 - [engine/src/mblandroidcalendar.cpp:205](engine/src/mblandroidcalendar.cpp#L205) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
 - [engine/src/mblandroidcalendar.cpp:213](engine/src/mblandroidcalendar.cpp#L213) TODO - IMPLEMENT SUPPORT FOR API LEVEL 14
-- [engine/src/mblandroiddialog.cpp:142](engine/src/mblandroiddialog.cpp#L142) TODO - java -> stringref conversion
+- [engine/src/mblandroiddialog.cpp:144](engine/src/mblandroiddialog.cpp#L144) TODO - java -> stringref conversion
 - [engine/src/mblandroidjava.cpp:784](engine/src/mblandroidjava.cpp#L784) TODO: check for exceptions
 - [engine/src/mblandroidjava.cpp:847](engine/src/mblandroidjava.cpp#L847) TODO: check for exceptions
 - [engine/src/mblandroidjava.cpp:1343](engine/src/mblandroidjava.cpp#L1343) TODO
@@ -703,7 +703,7 @@ Work left for later. 434 notes, by part of the repository:
 
 - [Makefile:209](Makefile#L209) TODO Replace with real rules
 - [common.gypi:21](common.gypi#L21) TODO add windows msvc compiler and crt mode to platform id
-- [config.py:465](config.py#L465) TODO [2017-04-11]: This should be 2017, but it is not
+- [config.py:466](config.py#L466) TODO [2017-04-11]: This should be 2017, but it is not
 
 <a id="todo-revmobile"></a>
 
