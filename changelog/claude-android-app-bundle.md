@@ -1,0 +1,1 @@
+- Android builder check: device answers another app's "isn't responding" dialog in front of the probe (an emulator launcher's, which failed a run for a screen that never turned green under its scrim) with its Wait button, at most three times in a wait; the probe's own still fails (#NNN)

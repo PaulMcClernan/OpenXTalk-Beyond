@@ -726,17 +726,58 @@ def asking_for_permission(activities):
                if re.search(r'\b(topResumedActivity|mResumedActivity|ResumedActivity)\b', x))
 
 
-def allow_button(xml):
-    """The centre (x, y) of the permission dialog's Allow button in a
-    uiautomator dump, or None."""
+def button_centre(xml, resource_id):
+    """The centre (x, y) of the first node in a uiautomator dump whose
+    resource-id ends with resource_id, or None."""
     for m in re.finditer(r'<node\b[^>]*>', xml):
         node = m.group(0)
         rid = re.search(r'resource-id="([^"]*)"', node)
         bounds = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
-        if rid and rid.group(1).endswith(ALLOW_BUTTON) and bounds:
+        if rid and rid.group(1).endswith(resource_id) and bounds:
             x1, y1, x2, y2 = (int(v) for v in bounds.groups())
             return (x1 + x2) // 2, (y1 + y2) // 2
     return None
+
+
+def allow_button(xml):
+    """The centre (x, y) of the permission dialog's Allow button in a
+    uiautomator dump, or None."""
+    return button_centre(xml, ALLOW_BUTTON)
+
+
+# Android's "isn't responding" dialog (AppNotRespondingDialog) for another
+# app, in front of the probe: in run 42354758286 the 16 KB image showed
+# the launcher's over the probe's green, which its scrim dimmed, and the
+# probe was failed for a screen that never turned green. Its Wait button
+# lets that app go on and closes the dialog; the probe's own is a failure
+# (CRASH), never answered. At most ANR_TAPS times in a wait
+ANR_WINDOW = re.compile(r'mCurrentFocus=Window\{[^}]*\bApplication Not Responding: ([\w.]+)\}')
+WAIT_BUTTON = 'android:id/aerr_wait'
+ANR_TAPS = 3
+
+
+def other_anr(window):
+    """The package whose "isn't responding" dialog has the focus, in
+    `dumpsys window`, when it is not the probe; else None."""
+    m = ANR_WINDOW.search(window)
+    return m.group(1) if m and m.group(1) != IDENTIFIER else None
+
+
+def answer_other_anr(a):
+    """Taps Wait on another app's "isn't responding" dialog when it has the
+    focus: that app's package, or None when there is no such dialog."""
+    package = other_anr(a('shell', 'dumpsys', 'window')[1])
+    if not package:
+        return None
+    a('shell', 'uiautomator', 'dump', '/sdcard/oxt-ui.xml')
+    _, xml = a('shell', 'cat', '/sdcard/oxt-ui.xml')
+    where = button_centre(xml, WAIT_BUTTON)
+    if where:
+        a('shell', 'input', 'tap', str(where[0]), str(where[1]))
+        log('  %s isn\'t responding, its dialog in front of the probe: tapped Wait at %d,%d' % ((package,) + where))
+    else:
+        log('  %s isn\'t responding, its dialog in front of the probe, which has no Wait button yet' % package)
+    return package
 
 
 def permission_granted(package_dump, permission):
@@ -1591,6 +1632,7 @@ def device(args):
     # front of it), which is allowed with the dialog's own button; until
     # then its green does not end the wait
     asked = allowed = False
+    anr_taps = 0
     while time.time() - started < args.timeout:
         time.sleep(3)
         if args.allow and not allowed:
@@ -1620,6 +1662,8 @@ def device(args):
         failed = colour_share(rgba, FAIL_COLOR)
         if failed >= 0.25 or (share >= 0.25 and (allowed or not args.allow)):
             break
+        if share < 0.25 and failed < 0.25 and anr_taps < ANR_TAPS and answer_other_anr(a):
+            anr_taps += 1
     _, pid = a('shell', 'pidof', IDENTIFIER)
     _, logcat = a('logcat', '-d', '-v', 'brief')
     pids = probe_pids(logcat, pid)

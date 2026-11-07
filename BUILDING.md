@@ -1623,7 +1623,11 @@ Android 16 killed the Java layer's probe for memory while its apps were
 still taking it), starts it, and waits until the
 screen turns the probe's green, which only the probe's `openStack` makes
 (or the fail colour, which fails at once), and prints what the probe said
-(kept in the failure when it turns its fail colour). With `--allow
+(kept in the failure when it turns its fail colour). Another app's "isn't
+responding" dialog in front of the probe (an emulator's launcher's, in
+run 42354758286, its scrim dimming the probe's green) is answered with
+its Wait button, at most three times in a wait; the probe's own is a
+failure. With `--allow
 <permission>` the probe must ask for that runtime permission: `device`
 waits for Android's dialog, taps its Allow button (found in a
 `uiautomator` dump) and checks that the package then holds the

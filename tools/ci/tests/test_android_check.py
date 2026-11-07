@@ -444,7 +444,12 @@ class Device(unittest.TestCase):
 
     EVENTS = 'echo "I/am_kill (  590): [0,3475,org.openxtalk.check.androidprobe,0,lmk]"'
 
-    def device(self, pidof, timeout='10', power='true', events=EVENTS, cases='', argv=(), screencap=''):
+    WINDOW = ('printf "  mCurrentFocus=Window{1f u0 Application Not Responding: '
+              'com.android.systemui}\\n  mFocusedApp=ActivityRecord{2e u0 '
+              'org.openxtalk.check.androidprobe/.mblandroid t9}\\n"')
+
+    def device(self, pidof, timeout='10', power='true', events=EVENTS, cases='', argv=(), screencap='',
+               window=WINDOW):
         d = self.tmp.name
         adb = os.path.join(d, 'platform-tools', 'adb')
         with open(adb, 'w') as f:
@@ -464,11 +469,9 @@ class Device(unittest.TestCase):
                     '  "logcat -d -b events -v brief") %s ;;\n'
                     '  "shell dumpsys activity exit-info"*) printf "  ApplicationExitInfo #0:\\n    pid=3612 reason=3 (LOW_MEMORY)\\n" ;;\n'
                     '  "shell cat /proc/meminfo") printf "MemTotal: 2000000 kB\\nMemFree: 1 kB\\nMemAvailable: 90000 kB\\n" ;;\n'
-                    '  "shell dumpsys window") printf "  mCurrentFocus=Window{1f u0 Application Not Responding: '
-                    'com.android.systemui}\\n  mFocusedApp=ActivityRecord{2e u0 '
-                    'org.openxtalk.check.androidprobe/.mblandroid t9}\\n" ;;\n'
+                    '  "shell dumpsys window") %s ;;\n'
                     '%s'
-                    'esac\n' % (screencap, d, pidof, d, power, events, cases))
+                    'esac\n' % (screencap, d, pidof, d, power, events, window, cases))
         os.chmod(adb, 0o755)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
@@ -869,6 +872,29 @@ class PermissionReaders(unittest.TestCase):
         self.assertIsNone(ac.allow_button('<node resource-id="com.android.permissioncontroller:id/'
                                           'permission_allow_button" />'))
 
+    # Android's "isn't responding" dialog, as uiautomator dumps it
+    ANR_UI = ('<hierarchy><node resource-id="android:id/alertTitle" text="Pixel Launcher isn\'t responding" '
+              'bounds="[90,980][990,1050]"/>'
+              '<node resource-id="android:id/aerr_close" text="Close app" bounds="[90,1100][990,1220]"/>'
+              '<node resource-id="android:id/aerr_wait" text="Wait" bounds="[90,1220][990,1340]"/></hierarchy>')
+
+    def test_other_anr(self):
+        # run 42354758286's 16 KB image: the launcher's dialog in front
+        window = ('  mCurrentFocus=Window{22bc663 u0 Application Not Responding: '
+                  'com.google.android.apps.nexuslauncher}\n'
+                  '  mFocusedApp=ActivityRecord{67638321 u0 org.openxtalk.check.androidprobe/.mblandroid t8}\n')
+        self.assertEqual(ac.other_anr(window), 'com.google.android.apps.nexuslauncher')
+        # the probe's own is never answered: it is a failure
+        self.assertIsNone(ac.other_anr(window.replace('com.google.android.apps.nexuslauncher', ac.IDENTIFIER)))
+        self.assertIsNone(ac.other_anr('  mCurrentFocus=Window{2 u0 org.openxtalk.check.androidprobe/'
+                                       'org.openxtalk.check.androidprobe.mblandroid}\n'))
+        self.assertIsNone(ac.other_anr(''))
+
+    def test_wait_button(self):
+        self.assertEqual(ac.button_centre(self.ANR_UI, ac.WAIT_BUTTON), (540, 1280))
+        self.assertIsNone(ac.button_centre(self.ANR_UI.replace('aerr_wait', 'aerr_mute'), ac.WAIT_BUTTON))
+        self.assertEqual(ac.button_centre(DevicePermission.UI, ac.ALLOW_BUTTON), ac.allow_button(DevicePermission.UI))
+
     def test_permission_granted(self):
         package = DevicePermission.PACKAGE
         name = 'android.permission.POST_NOTIFICATIONS'
@@ -1262,6 +1288,62 @@ class DeviceBackAndBars(unittest.TestCase):
         self.assertEqual(calls, ['shell input keyevent KEYCODE_BACK'])
         status, out, calls = self.run_probe(self.INSIDE, argv=('--within-bars',))
         self.assertEqual(status, 0, out)
+        self.assertEqual(calls, [])
+
+
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DeviceAnotherAppsAnr(unittest.TestCase):
+    """device with another app's "isn't responding" dialog in front of the
+    probe (run 42354758286: the launcher's, its scrim dimming the probe's
+    green): it taps the dialog's Wait, and the probe's green ends the wait;
+    a dialog that stays is answered at most ANR_TAPS times"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    calls = Device.calls
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+
+    def run_probe(self, wait_closes=True, package='com.google.android.apps.nexuslauncher'):
+        d = self.tmp.name
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0])
+        # the probe's green under the dialog's scrim, and then without it
+        dim = tuple(c * 2 // 5 for c in ac.RUN_COLOR)
+        with open(os.path.join(d, 'screen.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(dim) + [255]) * 16)
+        with open(os.path.join(d, 'green.raw'), 'wb') as f:
+            f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(ac.RUN_COLOR) + [255]) * 16)
+        with open(os.path.join(d, 'ui.xml'), 'w') as f:
+            f.write(PermissionReaders.ANR_UI)
+        # the dialog has the focus until Wait is tapped (when it closes)
+        anr = ('[ -f "%s/answered" ] || printf "  mCurrentFocus=Window{22bc663 u0 Application Not Responding: '
+               '%s}\\n"' % (d, package))
+        tap = ('cp "%(d)s/green.raw" "%(d)s/screen.raw"; touch "%(d)s/answered"' % {'d': d}) if wait_closes else 'true'
+        cases = ('  "shell uiautomator dump /sdcard/oxt-ui.xml") true ;;\n'
+                 '  "shell cat /sdcard/oxt-ui.xml") cat "%(d)s/ui.xml" ;;\n'
+                 '  "shell input tap 540 1280") %(tap)s ;;\n' % {'d': d, 'tap': tap})
+        status, out = self.device('echo 3475', timeout='20', cases=cases, window=anr)
+        return status, out, [c for c in self.calls() if c.startswith(('shell uiautomator', 'shell input'))]
+
+    def test_wait_is_tapped_and_the_probe_passes(self):
+        status, out, calls = self.run_probe()
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls, ['shell uiautomator dump /sdcard/oxt-ui.xml', 'shell input tap 540 1280'])
+        self.assertIn("  com.google.android.apps.nexuslauncher isn't responding, its dialog in front of the probe: "
+                      "tapped Wait at 540,1280", out)
+        self.assertRegex(out, r"After \d+ s: 100% of the screen is the probe's green")
+
+    def test_a_dialog_that_stays_is_answered_three_times(self):
+        status, out, calls = self.run_probe(wait_closes=False)
+        self.assertEqual(status, 1, out)
+        self.assertEqual(calls.count('shell input tap 540 1280'), ac.ANR_TAPS)
+        self.assertIn("PROBLEM: the screen never turned the probe's green", out)
+
+    def test_the_probes_own_is_not_answered(self):
+        status, out, calls = self.run_probe(package=ac.IDENTIFIER)
+        self.assertEqual(status, 1, out)
         self.assertEqual(calls, [])
 
 
