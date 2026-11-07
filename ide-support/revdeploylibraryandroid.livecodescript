@@ -547,6 +547,14 @@ function pathToAapt pRoot
    return pathToPlatformTool(pRoot, executableName("aapt"))
 end pathToAapt
 
+-- OXT-Beyond: aapt2, which turns a package's manifest and resources into
+-- the form an App Bundle holds (aapt2 convert). Every build-tools release
+-- since 26.0.0 has it; only a build that makes an App Bundle needs it, so
+-- deployCheckSDK does not ask for it
+function pathToAapt2 pRoot
+   return pathToPlatformTool(pRoot, executableName("aapt2"))
+end pathToAapt2
+
 function pathToAdb pRoot
    if pRoot is empty then
       put sAndroidRoot into pRoot

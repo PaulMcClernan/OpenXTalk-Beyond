@@ -11,5 +11,11 @@ on mouseUp
    
    local tTarget
    put the short name of the target into tTarget
+   -- OXT-Beyond: "App Bundle" is no architecture: it asks the build for
+   -- an Android App Bundle (.aab) beside the package
+   if tTarget is "App Bundle" then
+      storeSetting "app bundle", the hilite of the target
+      exit mouseUp
+   end if
    updateAndroidArch word 2 of tTarget, the hilite of the target
 end mouseUp
