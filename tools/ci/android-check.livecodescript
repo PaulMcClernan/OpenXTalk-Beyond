@@ -118,6 +118,12 @@ constant kRunColor = "31,158,90"
 constant kFailColor = "230,160,0"
 -- kBackColor: the Java layer's probe got backKey
 constant kBackColor = "40,90,200"
+-- kWaitColor: a probe's mouseUp (a tap) is waiting kProbeWait seconds
+-- with messages, after which it is green again: android_check.py device
+-- --density-in-wait changes the density while it waits, as Android makes
+-- the activity again then (the engine's doDestroy, which hung there)
+constant kWaitColor = "120,60,160"
+constant kProbeWait = 20
 constant kIdentifier = "org.openxtalk.check.androidprobe"
 -- The Java layer's probe's picture: one pixel, a PNG, as base64
 constant kProbePicture = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -782,6 +788,12 @@ private function probeScript
    end if
    put "   set the backgroundColor of me to" && quote & kRunColor & quote & return & \
          "end openStack" after tScript
+   -- a tap: a script waiting (kWaitColor), then green again
+   put return & "on mouseUp" & return & \
+         "   set the backgroundColor of me to" && quote & kWaitColor & quote & return & \
+         "   wait" && kProbeWait && "seconds with messages" & return & \
+         "   set the backgroundColor of me to" && quote & kRunColor & quote & return & \
+         "end mouseUp" after tScript
    if probeName() is "AndroidJavaProbe" then
       -- the back key, not passed (see the header)
       put return & "on backKey" & return & \

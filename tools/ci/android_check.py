@@ -169,6 +169,14 @@ FAIL_COLOR = (230, 160, 0)
 # it must show within BACK_WAIT seconds of the key
 BACK_COLOR = (40, 90, 200)
 BACK_WAIT = 20
+# kWaitColor and kProbeWait: a probe's mouseUp (a tap) turns its screen
+# WAIT_COLOR and waits PROBE_WAIT seconds with messages, then is green
+# again (device --density-in-wait). The density is changed once that
+# colour is seen, which must be within WAIT_SEEN seconds of the tap, so
+# that the script is still waiting when Android makes the activity again
+WAIT_COLOR = (120, 60, 160)
+PROBE_WAIT = 20
+WAIT_SEEN = 10
 # device --within-bars: how long the screen is taken again, every
 # BARS_INTERVAL seconds, when the first green screen has the probe's green
 # where a system bar is, before that is a failure. On the 16 KB Android 16
@@ -179,12 +187,12 @@ BACK_WAIT = 20
 BARS_WAIT = 8
 BARS_INTERVAL = 1
 # The engine runs once in a process (RelaunchActivity in the Java layer
-# says why): device --font-scale, --density and --relaunch. How long the
-# probe is given after a change to show its green again (in the same
-# process, or in a new one; a font size change first has FONT_SETTLE to
-# reach it, so that the green before it is not taken for the green after),
-# and how long its process to end once its stack quits; the font scale and
-# the density each check sets
+# says why): device --font-scale, --density, --density-in-wait and
+# --relaunch. How long the probe is given after a change to show its green
+# again (in the same process, or in a new one; a font size change first has
+# FONT_SETTLE to reach it, so that the green before it is not taken for the
+# green after), and how long its process to end once its stack quits; the
+# font scale and the density each check sets
 RETURN_WAIT = 60
 FONT_SETTLE = 5
 END_WAIT = 20
@@ -2012,11 +2020,13 @@ def stays_through_font_scale(args, adb, a, pid, names):
     return problems
 
 
-def starts_again_for_density(args, adb, a, pid, names):
+def starts_again_for_density(args, adb, a, pid, names, what='density change', suffix='density'):
     """--density: a change the manifest does not list (the screen's
     density, the display size setting), for which Android makes the
     activity again in its process: the app must start again in a new
-    process (RelaunchActivity) and show its green there, without a crash."""
+    process (RelaunchActivity) and show its green there, without a crash.
+    what and suffix: the change, as the log and the problems name it ("a
+    density change"), and the end of its screen's file name"""
     _, out = a('shell', 'wm', 'density')
     m = re.search(r'Physical density:\s*(\d+)', out)
     if not m:
@@ -2029,23 +2039,60 @@ def starts_again_for_density(args, adb, a, pid, names):
         crash, pids = new_crashes(a, names)
     finally:
         a('shell', 'wm', 'density', 'reset')
-    save_screen(args.out and os.path.splitext(args.out)[0] + '-density.png', shot, 'after the density change')
-    log('After a density change (%s, from %s): %.0f%% of the screen is the probe\'s green; process %s (before it: '
-        '%s); its processes in the log: %s' % (density, m.group(1), share * 100, after or 'not running', pid,
+    save_screen(args.out and os.path.splitext(args.out)[0] + '-%s.png' % suffix, shot, 'after the %s' % what)
+    log('After a %s (%s, from %s): %.0f%% of the screen is the probe\'s green; process %s (before it: '
+        '%s); its processes in the log: %s' % (what, density, m.group(1), share * 100, after or 'not running', pid,
                                                ', '.join(sorted(pids)) or 'none'))
     problems = []
     if not after or after == pid:
-        problems.append('after a density change the app did not start again in a new process (%s before it, %s '
-                        'after)' % (pid, after or 'none'))
+        problems.append('after a %s the app did not start again in a new process (%s before it, %s '
+                        'after)' % (what, pid, after or 'none'))
     elif share < 0.25:
-        problems.append('after a density change the screen is not the probe\'s green (%.0f%%)' % (share * 100))
+        problems.append('after a %s the screen is not the probe\'s green (%.0f%%)' % (what, share * 100))
     if crash:
-        problems.append('the device\'s log across the density change: %s' % ' | '.join(crash[:6]))
+        problems.append('the device\'s log across the %s: %s' % (what, ' | '.join(crash[:6])))
     if not problems:
         # back to the screen's own density, which makes the activity again
         # too, before anything else is asked of the app
         green_again(adb, args.serial, a, RETURN_WAIT, other_than=after)
     return problems
+
+
+def starts_again_for_density_in_wait(args, adb, a, pid, names):
+    """--density-in-wait: --density's change while the probe's script
+    waits. A tap on the probe: its mouseUp turns the screen WAIT_COLOR and
+    waits PROBE_WAIT seconds with messages, and the density is changed once
+    that colour is seen. As Android destroys the activity, the engine, let
+    go on to finish (doDestroy in engine/src/mblandroiddc.cpp), yields to
+    Android's thread again inside the wait: before, that thread then went
+    on to join the engine thread, which was waiting for its turn, and the
+    app hung there for good (on Android 16 in run 42416576870, where the
+    engine yielded in the middle of drawing). The app must start again in
+    a new process, as for --density, once the wait is over."""
+    got = screen_now(adb, args.serial)
+    if not got:
+        return ['no screen of the probe to find where to tap it']
+    a('shell', 'input', 'tap', str(got[0] // 2), str(got[1] // 2))
+    tapped = time.time()
+    share = 0.0
+    while time.time() - tapped < WAIT_SEEN:
+        time.sleep(1)
+        got = screen_now(adb, args.serial)
+        if got:
+            share = colour_share(got[2], WAIT_COLOR)
+            if share >= 0.25:
+                break
+    seen = time.time() - tapped
+    log('After a tap on the probe: %.0f%% of the screen is its wait colour, %.0f s after the tap (it waits %d s)'
+        % (share * 100, seen, PROBE_WAIT))
+    if share < 0.25:
+        return ['a tap did not reach the probe\'s mouseUp: the screen did not turn its wait colour in %d s (%.0f%%)'
+                % (WAIT_SEEN, share * 100)]
+    if seen > WAIT_SEEN:
+        return ['the probe\'s wait colour was seen %.0f s after the tap, too late to change the density while its '
+                'script surely waits (at most %d s)' % (seen, WAIT_SEEN)]
+    return starts_again_for_density(args, adb, a, pid, names, 'density change while the probe\'s script waited',
+                                    'density-in-wait')
 
 
 def opens_again_after_quit(args, adb, a, pid, names):
@@ -2251,8 +2298,10 @@ def device(args):
                             'the app is %s)' % (back * 100, 'running' if after.strip() else 'gone'))
     # The engine runs once in a process: the app goes on through a change
     # the manifest lists, starts again in a new process for one it does
-    # not, and opened again after its stack quit starts in a new process
+    # not (also while its script waits), and opened again after its stack
+    # quit starts in a new process
     for wanted, check in ((args.font_scale, stays_through_font_scale), (args.density, starts_again_for_density),
+                          (args.density_in_wait, starts_again_for_density_in_wait),
                           (args.relaunch, opens_again_after_quit)):
         if wanted and green and pid.strip():
             found = check(args, adb, a, pid_now(a), names)
@@ -2732,6 +2781,10 @@ def main(argv=None):
     d.add_argument('--density', action='store_true',
                    help='once green, change the screen\'s density: the app must start again in a new process '
                         'and show its green there')
+    d.add_argument('--density-in-wait', action='store_true',
+                   help='once green, tap the probe, whose mouseUp waits %d s with messages, and change the '
+                        'density while it waits: the app must start again in a new process and show its green '
+                        'there (the engine built here; 9.6.3\'s hangs)' % PROBE_WAIT)
     d.add_argument('--relaunch', action='store_true',
                    help='once green, press the back key, which the app probe passes, so its stack quits: its '
                         'process must end, and the app opened again must show its green in a new one')
