@@ -1087,6 +1087,48 @@ class SharedPictures(unittest.TestCase):
                                            'oxt-beyond-probe.png', ac.IDENTIFIER))
 
 
+class RemovalTaken(unittest.TestCase):
+    """device --picture's wait, after the uninstall, for MediaProvider's
+    lines of the package's removal"""
+
+    def wait(self, answers, seconds=60):
+        calls = []
+
+        def a(*cmd, timeout=180):
+            calls.append(cmd)
+            return 0, answers[min(len(calls), len(answers)) - 1]
+        out = io.StringIO()
+        saved = ac.time.sleep
+        ac.time.sleep = lambda x: None
+        try:
+            with contextlib.redirect_stdout(out):
+                said = ac.removal_taken(a, seconds)
+        finally:
+            ac.time.sleep = saved
+        return said, calls, out.getvalue()
+
+    def test_said_at_once(self):
+        said, calls, out = self.wait([DevicePicture.TAKEN])
+        self.assertEqual(said, 'Before it is installed: MediaProvider took the removal of the package after 0 s '
+                               '(deleted 0; orphaned 1)')
+        self.assertEqual(calls, [('logcat', '-d', '-s', 'MediaProvider')])
+        self.assertEqual(out, said + '\n')
+
+    def test_said_later(self):
+        older = 'D/MediaProvider( 1735): Orphaned 2 items belonging to org.openxtalk.check.androidprobe on x.db\n'
+        said, calls, _ = self.wait(['', 'D/MediaProvider( 1735): Scanning\n', older])
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(said.endswith('(orphaned 2)'), said)
+
+    def test_another_package_is_not_it(self):
+        other = ('D/MediaProvider( 1735): Orphaned 1 items belonging to org.openxtalk.check.androidprobe2 on x\n'
+                 'D/MediaProvider( 1735): Orphaned 1 items belonging to org.openxtalk.check.androidprobe.x on x\n'
+                 'D/MediaProvider( 1735): Orphaned 1 items belonging to com.example on x\n')
+        said, calls, _ = self.wait([other], seconds=0)
+        self.assertTrue(said.startswith('NOTE: MediaProvider has not said in 0 s'), said)
+        self.assertEqual(len(calls), 1)
+
+
 @unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
 class DevicePicture(unittest.TestCase):
     """device --picture with a stand-in adb: the Java layer's probe exports
@@ -1106,15 +1148,30 @@ class DevicePicture(unittest.TestCase):
             'I/LiveCode( 3475): OXT-Beyond probe: has WRITE_EXTERNAL_STORAGE true\n'
             'I/LiveCode( 3475): OXT-Beyond probe: export to album\n')
 
-    def run_probe(self, pictures=SharedPictures.QUERY, said='', picture=True, colour=ac.RUN_COLOR):
+    calls_of_adb = Device.calls
+
+    # MediaProvider's lines for the removal of the package, as the 16 KB
+    # Android 16 image says them (run 42359925885)
+    TAKEN = ('D/MediaProvider( 1735): Deleted 0 Android/media items belonging to '
+             'org.openxtalk.check.androidprobe on /data/user/0/com.google.android.providers.media.module/'
+             'databases/external.db\n'
+             'D/MediaProvider( 1735): Orphaned 1 items belonging to org.openxtalk.check.androidprobe on '
+             '/data/user/0/com.google.android.providers.media.module/databases/external.db\n')
+
+    def run_probe(self, pictures=SharedPictures.QUERY, said='', picture=True, colour=ac.RUN_COLOR,
+                  uninstall='Success', taken=TAKEN):
         d = self.tmp.name
         with open(os.path.join(d, 'logcat.txt'), 'w') as f:
             f.write(Device.LOG.split('I/lowmemorykiller')[0] + said)
         with open(os.path.join(d, 'pictures.txt'), 'w') as f:
             f.write(pictures)
+        with open(os.path.join(d, 'taken.txt'), 'w') as f:
+            f.write(taken)
         with open(os.path.join(d, 'screen.raw'), 'wb') as f:
             f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(colour) + [255]) * 16)
-        cases = ('  "shell content query "*) echo "$*" >> "%(d)s/calls"; cat "%(d)s/pictures.txt" ;;\n' % {'d': d})
+        cases = ('  "shell content query "*) echo "$*" >> "%(d)s/calls"; cat "%(d)s/pictures.txt" ;;\n'
+                 '  "uninstall "*) echo "%(uninstall)s" ;;\n'
+                 '  "logcat -d -s MediaProvider") cat "%(d)s/taken.txt" ;;\n' % {'d': d, 'uninstall': uninstall})
         status, out = self.device('echo 3475', timeout='10', cases=cases,
                                   argv=('--picture', 'oxt-beyond-probe.png') if picture else ())
         try:
@@ -1141,8 +1198,56 @@ class DevicePicture(unittest.TestCase):
         status, out, _ = self.run_probe(query)
         self.assertEqual(status, 1, out)
         self.assertIn("PROBLEM: the probe's picture oxt-beyond-probe.png is not in the shared Pictures folder as "
-                      "the package's own (it owns no shared picture)", out)
+                      "the package's own (it owns no shared picture; Pictures/oxt-beyond-probe.png there has no "
+                      "owner)", out)
         self.assertIn('Shared pictures the package owns: none', out)
+        # none of its name at all
+        query = SharedPictures.QUERY.replace('_display_name=oxt-beyond-probe.png, relative_path=Pictures/, '
+                                             'owner_package_name=org.openxtalk.check.androidprobe',
+                                             '_display_name=x.png, relative_path=Pictures/, owner_package_name=NULL')
+        status, out, _ = self.run_probe(query)
+        self.assertIn("as the package's own (it owns no shared picture)\n", out)
+
+    def test_waits_for_mediaprovider_to_take_the_removal(self):
+        # run 42359925885: MediaProvider took the removal of the package
+        # after it was installed again and had exported its picture, and
+        # orphaned that; with --picture, device waits for it in between
+        status, out, _ = self.run_probe(said=self.SAID)
+        self.assertEqual(status, 0, out)
+        calls = self.calls_of_adb()
+        steps = [calls.index(x) for x in ('logcat -c', 'uninstall org.openxtalk.check.androidprobe',
+                                          'logcat -d -s MediaProvider')]
+        steps.append(next(i for i, c in enumerate(calls) if c.startswith('install')))
+        self.assertEqual(steps, list(range(steps[0], steps[0] + 4)), calls)
+        self.assertIn('Before it is installed: MediaProvider took the removal of the package after 0 s '
+                      '(deleted 0; orphaned 1)', out)
+        self.assertLess(out.index('Before it is installed:'), out.index('Installed debug.apk'))
+
+    def test_no_wait_without_picture_or_without_a_removal(self):
+        adb_calls = os.path.join(self.tmp.name, 'platform-tools', 'calls')
+        for picture, uninstall in ((False, 'Success'), (True, 'Failure [DELETE_FAILED_INTERNAL_ERROR]')):
+            if os.path.exists(adb_calls):
+                os.remove(adb_calls)
+            status, out, _ = self.run_probe(said=self.SAID, picture=picture, uninstall=uninstall)
+            self.assertEqual(status, 0, out)
+            calls = self.calls_of_adb()
+            self.assertIn('uninstall org.openxtalk.check.androidprobe', calls)
+            self.assertNotIn('logcat -d -s MediaProvider', calls)
+            self.assertNotIn('MediaProvider', out)
+            # the log is cleared before the uninstall only for the wait
+            self.assertEqual(calls.index('logcat -c') < calls.index('uninstall org.openxtalk.check.androidprobe'),
+                             picture, calls)
+
+    def test_a_wait_that_ends_without_it_decides_nothing(self):
+        saved = ac.REMOVAL_WAIT
+        ac.REMOVAL_WAIT = 0
+        try:
+            status, out, _ = self.run_probe(said=self.SAID, taken='')
+        finally:
+            ac.REMOVAL_WAIT = saved
+        self.assertEqual(status, 0, out)
+        self.assertIn('NOTE: MediaProvider has not said in 0 s that it took the removal of the package; '
+                      'a picture the probe exports may lose its owner when it does', out)
 
     def test_another_picture_of_its_own_is_named(self):
         query = SharedPictures.QUERY.replace('_display_name=oxt-beyond-probe.png', '_display_name=I1a2b3c4.png')

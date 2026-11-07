@@ -1622,6 +1622,50 @@ def quiet_after_install(a, seconds=QUIET_SECONDS):
     return said
 
 
+# MediaProvider's account, in the device's log, of the probe's package
+# removed: it orphans the package's shared media (their owner is cleared),
+# found by the package's name, in a job of its own (onPackageOrphaned, which
+# says "Deleted N Android/media items belonging to <package>" and "Orphaned
+# N items belonging to <package>"; an older one may say a line only when
+# N is not 0, and the wait then ends at its limit)
+REMOVAL_TAKEN = r'(Deleted|Orphaned) (\d+) (?:Android/media )?items belonging to %s(?=\s|$)'
+REMOVAL_WAIT = 60
+REMOVAL_INTERVAL = 2
+
+
+def removal_taken(a, seconds=None):
+    """With device --picture, after the probe is uninstalled and before it
+    is installed again: until MediaProvider has taken the removal (it says
+    so in the log, which was cleared before the uninstall: REMOVAL_TAKEN),
+    at most `seconds` (REMOVAL_WAIT). Its job may run after the probe is
+    installed again, and orphans by the package's name what the new install
+    exported too: in run 42359925885 the Java layer's probe on the 16 KB
+    image exported its picture, MediaProvider took the plain probe's
+    removal only after that (the log, cleared after the install, has its
+    "Orphaned 1 items belonging to org.openxtalk.check.androidprobe"), and
+    the package owned no picture. A wait that ends without it is said, and
+    the run goes on: this decides nothing. `a` runs adb on the device.
+    Returns what it logged."""
+    seconds = REMOVAL_WAIT if seconds is None else seconds
+    pattern = REMOVAL_TAKEN % re.escape(IDENTIFIER)
+    started = time.monotonic()
+    while True:
+        _, out = a('logcat', '-d', '-s', 'MediaProvider')
+        found = re.findall(pattern, out)
+        took = time.monotonic() - started
+        if found:
+            said = ('Before it is installed: MediaProvider took the removal of the package after %d s (%s)'
+                    % (took, '; '.join('%s %s' % (kind.lower(), n) for kind, n in found)))
+            break
+        if took >= seconds:
+            said = ('NOTE: MediaProvider has not said in %d s that it took the removal of the package; '
+                    'a picture the probe exports may lose its owner when it does' % seconds)
+            break
+        time.sleep(REMOVAL_INTERVAL)
+    log(said)
+    return said
+
+
 def screen_now(adb, serial):
     """(width, height, rgba) of the device's screen now, or None when
     screencap gives none."""
@@ -1650,7 +1694,11 @@ def device(args):
     if state and state != 'Awake':
         log('NOTE: the device is %s (dumpsys power): Android pauses an activity started now (see boot --awake)'
             % state)
-    a('uninstall', IDENTIFIER)
+    if args.picture:
+        a('logcat', '-c')
+    _, out = a('uninstall', IDENTIFIER)
+    if args.picture and 'Success' in out:
+        removal_taken(a)
     if args.apk.endswith('.aab'):
         refused = install_bundle(args, adb, a)
         if refused:
@@ -1814,10 +1862,15 @@ def device(args):
                if r.get('owner_package_name') == IDENTIFIER]
         log('Shared pictures the package owns: %s' % (', '.join(own) or 'none'))
         if not probe_picture(rows, args.picture, IDENTIFIER):
-            problems.append('the probe\'s picture %s is not in the shared %s folder as the package\'s own (%s)'
+            # one of its name with no owner: MediaProvider orphaned it
+            # (REMOVAL_TAKEN), or it is an earlier install's
+            unowned = probe_picture(rows, args.picture, 'NULL')
+            problems.append('the probe\'s picture %s is not in the shared %s folder as the package\'s own (%s%s)'
                             % (args.picture, PICTURES.rstrip('/'), 'it owns ' + ', '.join(own) if own else
                                'it owns no shared picture' if rows else
-                               'MediaStore listed no picture: %s' % (query.strip()[-300:] or 'no answer')))
+                               'MediaStore listed no picture: %s' % (query.strip()[-300:] or 'no answer'),
+                               '; %s%s there has no owner' % (PICTURES, unowned['_display_name'])
+                               if unowned else ''))
     if crash:
         problems.append('the device\'s log: %s' % ' | '.join(crash[:8]))
     if problems or len(pids) > 1:
