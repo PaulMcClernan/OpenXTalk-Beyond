@@ -3,6 +3,10 @@
 	{
 		'c++_std': '<!(echo ${CXX_STD:-c++11})',
 		'android_lib_path%': '<!(echo ${ANDROID_LIB_PATH:+-L${ANDROID_LIB_PATH}})',
+		# OXT-Beyond: the linker, which config.py names: bfd with a
+		# standalone toolchain (as before), lld with a current NDK's own
+		# toolchain, which has no other
+		'android_fuse_ld%': '<!(echo ${ANDROID_FUSE_LD:-bfd})',
 	},
 
 	'cflags':
@@ -26,7 +30,7 @@
 	
 	'ldflags':
 	[
-		'-fuse-ld=bfd',
+		'-fuse-ld=<(android_fuse_ld)',
 	],
 	
 	'target_conditions':
