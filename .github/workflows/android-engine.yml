@@ -462,6 +462,40 @@ jobs:
             --sdk "$SDK" --out "$WORK/screen-16k-java.png" --log-out "$WORK/logcat-16k-java.txt" \
             --allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png --back --within-bars
 
+      # TEMPORARY (to be reverted before merging): where the engine built
+      # here waits when Android 16 makes its activity again for a density
+      # change
+      - name: TEMPORARY debug the density relaunch
+        if: always()
+        timeout-minutes: 10
+        run: |
+          adb="$SDK/platform-tools/adb -s emulator-5554"
+          app=org.openxtalk.check.androidprobe
+          $adb root || true
+          sleep 3
+          $adb wait-for-device
+          $adb shell wm density reset || true
+          $adb shell am force-stop $app || true
+          $adb logcat -c || true
+          $adb shell am start -W -n $app/.mblandroid || true
+          sleep 8
+          pid=$($adb shell pidof $app | tr -d '\r')
+          echo "pid before: $pid"
+          $adb shell wm density 374 || true
+          sleep 12
+          echo "pids after: $($adb shell pidof $app | tr -d '\r')"
+          for p in $($adb shell pidof $app | tr -d '\r'); do
+            echo "=== debuggerd -b $p"
+            $adb shell debuggerd -b "$p" | head -600 || true
+            echo "=== debuggerd -j $p"
+            $adb shell debuggerd -j "$p" | head -400 || true
+          done
+          echo "=== events"
+          $adb logcat -d -b events | grep -E "$app|am_anr" | tail -60 || true
+          echo "=== the app's lines"
+          $adb logcat -d | grep -E "\( *$pid\)|revandroid|ANR" | grep -v 'W/linker' | tail -200 || true
+          $adb shell wm density reset || true
+
       - name: Upload the packages and logs
         if: always()
         uses: actions/upload-artifact@v7
