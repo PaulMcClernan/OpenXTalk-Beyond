@@ -66,9 +66,10 @@ drawn to its corners; 2048, which is not, opens exactly as it did before
 there was a rule for a tablet (the same rect and canvas as on the same
 iPad with the page's touch test answering no), at its own size.
 
-Then Nova Rescue's and Wobble Forts' pages on the web site's gallery
-(games/nova-rescue/ and games/wobble-forts/,
-tools/pages/check_nova_rescue_page.py and check_wobble_forts_page.py), made from this player as
+Then Nova Rescue's, Wobble Forts' and Puzzle Almanac's pages on the web
+site's gallery (games/nova-rescue/, games/wobble-forts/ and
+games/puzzle-almanac/, tools/pages/check_nova_rescue_page.py,
+check_wobble_forts_page.py and check_puzzle_almanac_page.py), made from this player as
 tools/pages/build_pages.py makes the site: on a computer the game opens in
 the page's phone frame at its own size and its keys play it at once; on a
 phone the page loads no engine until a tap, which opens the bare player
@@ -803,6 +804,11 @@ def check(site, samples, work):
         # and Wobble Forts' page, the same way
         import check_wobble_forts_page
         check_wobble_forts_page.check_player(p, browser, site, os.path.join(work, 'wobble-forts-page'), shots, expect)
+
+        # and Puzzle Almanac's
+        import check_puzzle_almanac_page
+        check_puzzle_almanac_page.check_player(p, browser, site, os.path.join(work, 'puzzle-almanac-page'), shots,
+                                               expect)
 
         # An error of the page's own while the engine starts still shows
         own_context = browser.new_context(viewport={'width': 1000, 'height': 700})
