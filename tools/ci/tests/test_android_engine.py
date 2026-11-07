@@ -18,9 +18,10 @@
 2): config.py's and prebuilt/scripts/android.inc's choice of toolchain (the
 NDK's own when there is no standalone toolchain, which is used as before
 when there is one), OpenSSL's Android targets, the linker the gyp settings
-name, tools/ci/build-android.sh's names, tools/ci/android_engine.py's
-checks on made-up ELF files, and android-engine.yml. No NDK, SDK or engine
-is needed.
+name, tools/ci/build-android.sh's names, libffi's assembly for each
+Android architecture (assembled with this host's clang when it has one),
+tools/ci/android_engine.py's checks on made-up ELF files, and
+android-engine.yml. No NDK, SDK or engine is needed.
 
   python3 -m unittest discover -s tools/ci/tests
 """
@@ -511,6 +512,164 @@ class BuildScript(unittest.TestCase):
             p = subprocess.run([BASH, script, 'arm64', os.path.join(tmp, 'out')], capture_output=True, text=True)
             self.assertEqual(p.returncode, 1)
             self.assertIn('exists and is not empty', p.stderr)
+
+
+# ---------------------------------------------------------------------------
+# The assembly the Android build compiles (libffi's), which an NDK from r24
+# on reads only with Clang's integrated assembler: it has no GNU as, which
+# took the old VFP mnemonics that CI's first ARMv7 build stopped on
+
+
+ANDROID_ARCHS = ('armv7', 'arm64', 'x86', 'x86_64')
+
+# A load or store of several VFP registers written in the syntax before the
+# unified one (fldmiad, fstmiadeq, fstmfdd, ...): the integrated assembler
+# knows none of them (vldmia, vstmia, vstmdb, vpush and vpop are the same
+# instructions)
+OLD_VFP_MULTIPLE = re.compile(r'^\s*(?:[\w.$]+:\s*)?(f(?:ld|st)m\w*)\b', re.M | re.I)
+
+# The lines CI's first ARMv7 build stopped on (sysv.S lines 365, 414, 425,
+# 475 and 478), and what they are now
+OLD_VFP_LINES = ('\tfldmiadgt\tip, {d0-d7}', '\tfstmiadeq\tr2, {d0-d3}', '\tfstmfdd\tsp!, {d0-d7}',
+                 '\tfldmiad\tsp, {d0-d1}', '\tfldmiad\tsp, {d0-d3}')
+UAL_VFP_LINES = ('\tvldmiagt\tip, {d0-d7}', '\tvstmiaeq\tr2, {d0-d3}', '\tvstmdb\tsp!, {d0-d7}',
+                 '\tvldmia\tsp, {d0-d1}', '\tvldmia\tsp, {d0-d3}')
+
+
+def strip_asm_comments(text):
+    """An assembly file without its C and @ comments (the preprocessor's
+    and GNU as's ARM ones), so that a mnemonic in prose is not taken for
+    an instruction."""
+    text = re.sub(r'/\*.*?\*/', lambda m: '\n' * m.group(0).count('\n'), text, flags=re.S)
+    return re.sub(r'(?://|@).*', '', text)
+
+
+def libffi_android_sources(arch):
+    """What libffi.gyp compiles for Android on an architecture, from its
+    own conditions (Python expressions, as gyp reads them): the include
+    folder and the assembly files, relative to thirdparty/libffi."""
+    text = read('thirdparty', 'libffi', 'libffi.gyp')
+    found = []
+    for m in re.finditer(r"\[\s*'([^']*)',\s*\{\s*'platform_include_dirs':\s*\[\s*'<@\((\w+)\)',?\s*\],"
+                         r"\s*'sources':\s*\[\s*'<@\((\w+)\)'", text, re.S):
+        if eval(m.group(1), {'__builtins__': {}}, {'toolset_os': 'android', 'toolset_arch': arch}):
+            found.append(m.groups()[1:])
+    assert len(found) == 1, (arch, found)
+    def listed(name):
+        block = re.search(r"'%s':\s*\[(.*?)\]" % name, text, re.S).group(1)
+        return re.findall(r"'([^']+)'", block)
+    include = listed(found[0][0])
+    assert len(include) == 1, include
+    return include[0], [s for s in listed(found[0][1]) if s.endswith('.S')]
+
+
+def android_clang_flags(arch):
+    """The compiler flags config.py gives the gyp build, which compiles
+    libffi, for an architecture at the lowest Android the build targets."""
+    march = CONFIG.guess_android_march(arch)
+    return (['-target', CONFIG.ndk_clang_target(arch, str(ae.MIN_API))] +
+            (['-march=' + march] if march else []) +
+            CONFIG.android_extra_cflags(arch).split() + ['-Qunused-arguments', '-fintegrated-as'])
+
+
+def clang_targets():
+    """The architectures this host's clang can assemble for (none without
+    a clang: the NDK's is the same compiler, with every target)."""
+    clang = shutil.which('clang')
+    if not clang:
+        return clang, ()
+    ok = []
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, 'probe.S')
+        touch(src, b'\t.text\n')
+        for arch in ANDROID_ARCHS:
+            p = subprocess.run([clang] + android_clang_flags(arch) + ['-c', src, '-o', os.path.join(tmp, 'p.o')],
+                               capture_output=True)
+            if p.returncode == 0:
+                ok.append(arch)
+    return clang, tuple(ok)
+
+
+class AndroidAssembly(unittest.TestCase):
+    """libffi's assembly for each Android architecture is what Clang's
+    integrated assembler reads."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.clang, cls.targets = clang_targets()
+
+    def test_the_sources(self):
+        """What the gyp file builds for each architecture: the ARM files
+        among them (so that the checks below have something to look at),
+        and each file there."""
+        self.assertEqual(libffi_android_sources('armv7'), ('./include_android', ['src/arm/sysv.S', 'src/arm/trampoline.S']))
+        self.assertEqual(libffi_android_sources('arm64'), ('./include_linux/arm64', ['src/aarch64/sysv.S']))
+        for arch in ANDROID_ARCHS:
+            include, sources = libffi_android_sources(arch)
+            self.assertTrue(sources, arch)
+            self.assertTrue(os.path.isdir(os.path.join(REPO, 'thirdparty', 'libffi', include)), include)
+            for source in sources:
+                self.assertTrue(os.path.isfile(os.path.join(REPO, 'thirdparty', 'libffi', source)), source)
+
+    def test_the_old_mnemonics_are_found(self):
+        """The check below finds each line CI's ARMv7 build stopped on, and
+        none of what they are now, or of a comment naming them."""
+        for line in OLD_VFP_LINES:
+            self.assertTrue(OLD_VFP_MULTIPLE.search(strip_asm_comments(line + '\n')), line)
+            self.assertTrue(OLD_VFP_MULTIPLE.search(strip_asm_comments('label:' + line + '\n')), line)
+        for line in UAL_VFP_LINES + ('\t@ was fldmiad', '/* fstmfdd */', '\tvpush\t{d8}', '\tfldd\td0, [ip]'):
+            self.assertFalse(OLD_VFP_MULTIPLE.search(strip_asm_comments(line + '\n')), line)
+
+    def test_no_old_vfp_multiple(self):
+        for source in libffi_android_sources('armv7')[1]:
+            text = strip_asm_comments(read('thirdparty', 'libffi', *source.split('/')))
+            self.assertEqual([m.group(1) for m in OLD_VFP_MULTIPLE.finditer(text)], [], source)
+        # what CI's ARMv7 build stopped on is gone, and is written so
+        sysv = read('thirdparty', 'libffi', 'src', 'arm', 'sysv.S')
+        for old, new in zip(OLD_VFP_LINES, UAL_VFP_LINES):
+            self.assertNotIn(old + '\n', sysv)
+            self.assertIn(new + '\n', sysv)
+        # a local change to vendored code, marked and recorded as the others
+        self.assertIn('@ OXT-Beyond:', sysv)
+        self.assertIn('src/arm/sysv.S', read('thirdparty', 'libffi', 'ORIGIN'))
+        self.assertIn('[`thirdparty/libffi/ORIGIN`](thirdparty/libffi/ORIGIN)', read('THIRD-PARTY-NOTICES.md'))
+
+    def assemble(self, arch, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, 'case.S')
+            touch(src, text.encode('ascii'))
+            return subprocess.run([self.clang] + android_clang_flags(arch) +
+                                  ['-c', src, '-o', os.path.join(tmp, 'case.o')], capture_output=True, text=True)
+
+    def test_clang_refuses_the_old_mnemonics(self):
+        """The check below would have caught what CI's ARMv7 build stopped
+        on: the integrated assembler refuses each old line, and takes what
+        it is now, with the VFP directive sysv.S has."""
+        if 'armv7' not in self.targets:
+            self.skipTest('no clang here that assembles for ARMv7')
+        head = '\t.syntax unified\n\t.arm\n\t.fpu\tvfp\n'
+        for old, new in zip(OLD_VFP_LINES, UAL_VFP_LINES):
+            p = self.assemble('armv7', head + old + '\n')
+            self.assertNotEqual(p.returncode, 0, old)
+            self.assertIn('invalid instruction', p.stderr)
+            p = self.assemble('armv7', head + new + '\n')
+            self.assertEqual(p.returncode, 0, p.stderr)
+
+    def test_clang_assembles_them(self):
+        """Each assembly file of each architecture, as the gyp build
+        compiles it: its include folders and config.py's flags."""
+        if not self.targets:
+            self.skipTest('no clang here that assembles for Android')
+        for arch in self.targets:
+            include, sources = libffi_android_sources(arch)
+            for source in sources:
+                with self.subTest(arch=arch, source=source), tempfile.TemporaryDirectory() as tmp:
+                    path = os.path.join(REPO, 'thirdparty', 'libffi', *source.split('/'))
+                    p = subprocess.run([self.clang] + android_clang_flags(arch) +
+                                       ['-DFFI_BUILDING', '-I', os.path.join(REPO, 'thirdparty', 'libffi', include),
+                                        '-I', os.path.dirname(path), '-c', path, '-o', os.path.join(tmp, 'out.o')],
+                                       capture_output=True, text=True)
+                    self.assertEqual(p.returncode, 0, p.stderr)
 
 
 # ---------------------------------------------------------------------------
