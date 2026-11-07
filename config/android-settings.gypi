@@ -13,6 +13,13 @@
 	[
 		'-fstrict-aliasing',
 		'-fvisibility=hidden',
+		# OXT-Beyond: position-independent code, as everything here ends up
+		# in a shared library (the engine, the externals) and as a Linux
+		# build asks for it (linux-settings.gypi). A current NDK's Clang
+		# makes PIE code by default, which lld refuses to link into one
+		# where it refers to a symbol another library could stand in for
+		# (CI's x86 build stopped on DbSqlite and libc++'s typeinfo).
+		'-fPIC',
 	],
 	
 	'cflags_c':

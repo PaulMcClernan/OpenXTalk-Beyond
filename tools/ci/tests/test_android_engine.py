@@ -285,8 +285,10 @@ class PrebuiltToolchain(unittest.TestCase):
                            ('STRIP', 'llvm-strip')):
             self.assertEqual(v['ANDROID_' + name], bin_ + '/' + tool)
         self.assertEqual(v['ANDROID_TOOLCHAIN_BASE'], os.path.dirname(bin_))
-        for name in ('CFLAGS', 'CXXFLAGS', 'LDFLAGS'):
-            self.assertEqual(v['ANDROID_' + name], '-target aarch64-linux-android21')
+        # position-independent code for what the shared libraries link
+        for name in ('CFLAGS', 'CXXFLAGS'):
+            self.assertEqual(v['ANDROID_' + name], '-target aarch64-linux-android21 -fPIC')
+        self.assertEqual(v['ANDROID_LDFLAGS'], '-target aarch64-linux-android21')
 
     def test_each_architecture(self):
         cases = {
@@ -298,13 +300,15 @@ class PrebuiltToolchain(unittest.TestCase):
         for arch, (flags, triple) in cases.items():
             with self.subTest(arch=arch):
                 v = self.configure(arch)
-                self.assertEqual(v['ANDROID_CFLAGS'], flags)
+                self.assertEqual(v['ANDROID_CFLAGS'], flags + ' -fPIC')
+                self.assertEqual(v['ANDROID_CXXFLAGS'], flags + ' -fPIC')
+                self.assertEqual(v['ANDROID_LDFLAGS'], flags)
                 self.assertEqual(v['ANDROID_TRIPLE'], triple)    # ICU's --host
 
     def test_the_platform_version(self):
         v = self.configure('x86_64', ANDROID_NDK_PLATFORM_VERSION='26')
         self.assertEqual(v['ANDROID_API'], '26')
-        self.assertEqual(v['ANDROID_CFLAGS'], '-target x86_64-linux-android26')
+        self.assertEqual(v['ANDROID_CFLAGS'], '-target x86_64-linux-android26 -fPIC')
 
     def test_armv6_is_refused(self):
         self.assertIn('does not build for armv6', self.configure('armv6', ok=False))
@@ -317,6 +321,7 @@ class PrebuiltToolchain(unittest.TestCase):
         self.assertEqual(v['ANDROID_CC'], tc + 'clang')
         self.assertEqual(v['ANDROID_AR'], tc + 'ar')
         self.assertEqual(v['ANDROID_CFLAGS'], '-target aarch64-linux-android')
+        self.assertEqual(v['ANDROID_CXXFLAGS'], '-target aarch64-linux-android')
         self.assertEqual(v['ANDROID_TOOLCHAIN_BASE'], os.path.join(self.home, 'android', 'toolchain',
                                                                    'standalone-arm64'))
 
@@ -871,6 +876,14 @@ class AndroidCxxStandard(unittest.TestCase):
         for os_name in ('android', 'emscripten'):
             self.assertEqual(late_cflags_cc(target, toolset_os=os_name, _toolset='target'), ['-std=c++17'], os_name)
         self.assertEqual(late_cflags_cc(target, toolset_os='linux', _toolset='target'), [])
+
+    def test_position_independent_code(self):
+        """Everything an Android build compiles is position-independent, as
+        it all ends up in shared libraries (lld refuses the NDK's default
+        PIE code there): the gyp settings of the target, as a Linux build's
+        say for its own."""
+        for name in ('android-settings.gypi', 'linux-settings.gypi'):
+            self.assertIn('-fPIC', gyp('config', name)['cflags'], name)
 
     def test_icu_needs_it(self):
         """The ICU the build uses is one that needs C++17 for its headers."""

@@ -112,10 +112,15 @@ elif [ -n "${ANDROID_LLVM_BIN}" ] ; then
 			;;
 	esac
 
+	# Position-independent code, as the libraries are linked into the
+	# engine and the externals, which are shared libraries: the NDK's
+	# Clang makes PIE code by default, which lld refuses to link into one
+	# where it refers to a symbol another library could stand in for (as
+	# a Linux build of the libraries asks for -fPIC; platform.inc)
 	export ANDROID_CC="${ANDROID_LLVM_BIN}/clang"
-	export ANDROID_CFLAGS="${ANDROID_TARGET_FLAGS}"
+	export ANDROID_CFLAGS="${ANDROID_TARGET_FLAGS} -fPIC"
 	export ANDROID_CXX="${ANDROID_LLVM_BIN}/clang++"
-	export ANDROID_CXXFLAGS="${ANDROID_TARGET_FLAGS}"
+	export ANDROID_CXXFLAGS="${ANDROID_TARGET_FLAGS} -fPIC"
 	export ANDROID_LINK="${ANDROID_LLVM_BIN}/clang++"
 	export ANDROID_LDFLAGS="${ANDROID_TARGET_FLAGS}"
 	export ANDROID_AR="${ANDROID_LLVM_BIN}/llvm-ar"
