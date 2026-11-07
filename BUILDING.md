@@ -3313,8 +3313,12 @@ gives the engine's link the linker script for it: GNU ld takes
 `engine/standalone-android-lld.link`, that puts `.got` inside RELRO
 (lld counts it as RELRO wherever a script puts it, and with the old
 script RELRO ended in the page `.data` starts in, which Android's loader
-makes read-only whole: the engine died loading on the emulator). Like the
-web engine's script, it builds the prebuilt libraries that no server publishes:
+makes read-only whole: the engine died loading on the emulator). On
+that route the settings also keep code's checks of a null `this`
+(`-fno-delete-null-pointer-checks`), which a current Clang deletes and
+which the bundled HarfBuzz makes for every null object it destroys: the
+engine died on its first text without it, where NDK r16's Clang, which
+built the 9.6.3 engine, kept them. Like the web engine's script, it builds the prebuilt libraries that no server publishes:
 OpenSSL, ICU and the Thirdparty libraries for Android, into
 `prebuilt/lib/android/<arch>/ndk21r<NDK major>`, and ICU, libz and libffi
 for the build's host tools.

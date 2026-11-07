@@ -1749,6 +1749,95 @@ class LinkScript(unittest.TestCase):
                 self.assertEqual(ae.check_relro(self.link(tmp, BFD, self.OLD, page), 'x', page), [])
 
 
+# ---------------------------------------------------------------------------
+# Null `this`: a current NDK's Clang deletes checks of it, which the bundled
+# HarfBuzz makes for every null object it destroys or references; the engine
+# built here died on its first text (SIGSEGV at 0 in
+# hb_unicode_funcs_destroy, from hb_buffer_create). The lld route's settings
+# keep such checks.
+
+
+NULL_CHECKS = '-fno-delete-null-pointer-checks'
+HARFBUZZ = os.path.join(REPO, 'thirdparty', 'libharfbuzz', 'src')
+# hb_buffer_create's path: a new buffer's reset destroys its (null) unicode
+# functions
+HARFBUZZ_MAIN = r"""
+#include "hb.h"
+int main(void)
+{
+    hb_buffer_t *b = hb_buffer_create();
+    hb_buffer_add_utf8(b, "probe", -1, 0, -1);
+    unsigned int n = hb_buffer_get_length(b);
+    hb_buffer_destroy(b);
+    return n == 5 ? 0 : 3;
+}
+"""
+
+
+def clang_major():
+    """This host's clang++ major version, or None."""
+    if not (sys.platform.startswith('linux') and shutil.which('clang++') and shutil.which('clang')):
+        return None
+    out = subprocess.run(['clang++', '-dumpversion'], stdout=subprocess.PIPE, universal_newlines=True).stdout
+    return int(out.split('.')[0]) if out.strip() else None
+
+
+CLANG = clang_major()
+
+
+class NullThis(unittest.TestCase):
+
+    def cflags(self, linker):
+        settings = gyp('config', 'android-settings.gypi')
+        return gyp_lists(settings, dict(ANDROID_TARGET, android_fuse_ld=linker), ('cflags',))
+
+    def test_the_lld_route_keeps_the_checks(self):
+        self.assertIn(NULL_CHECKS, self.cflags('lld'))
+        for linker in ('bfd', 'gold'):
+            self.assertNotIn(NULL_CHECKS, self.cflags(linker), linker)
+        # (a static library, which the Thirdparty libraries are, too)
+        settings = gyp('config', 'android-settings.gypi')
+        self.assertIn(NULL_CHECKS, gyp_lists(settings, dict(ANDROID_TARGET, android_fuse_ld='lld',
+                                                            _type='static_library'), ('cflags',)))
+
+    def test_harfbuzz_checks_this(self):
+        """What the flag is for is still there: HarfBuzz checks `this`."""
+        with open(os.path.join(HARFBUZZ, 'hb-object-private.hh'), encoding='utf-8') as f:
+            self.assertIn('if (unlikely (!this || this->is_inert ()))', f.read())
+
+    @unittest.skipUnless(CLANG, 'needs Linux and clang')
+    def test_harfbuzz_with_this_hosts_clang(self):
+        """The bundled HarfBuzz, built as the lld route builds it (-O3, the
+        flags the settings give), creates a buffer; and, with a Clang that
+        marks `this` nonnull (13 and later), crashes there without the
+        flag, as the engine did."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        with open(os.path.join(tmp, 'main.cc'), 'w') as f:
+            f.write(HARFBUZZ_MAIN)
+        flags = [x for x in self.cflags('lld') if x == NULL_CHECKS]
+        self.assertEqual(flags, [NULL_CHECKS])
+
+        def build(extra):
+            out = os.path.join(tmp, 'hb%d' % len(extra))
+            common = ['-O3', '-w', '-DHB_NO_MT', '-DHAVE_UCDN', '-I', HARFBUZZ, '-I',
+                      os.path.join(HARFBUZZ, 'hb-ucdn')] + extra
+            objects = []
+            for name in ('hb-buffer.cc', 'hb-unicode.cc', 'hb-common.cc', 'hb-ucdn.cc', 'hb-ucdn/ucdn.c'):
+                obj = os.path.join(tmp, '%s-%d.o' % (os.path.basename(name), len(extra)))
+                cc = ['clang', '-std=gnu99'] if name.endswith('.c') else \
+                    ['clang++', '-std=c++11', '-fno-exceptions', '-fno-rtti']
+                subprocess.run(cc + common + ['-c', os.path.join(HARFBUZZ, name), '-o', obj], check=True)
+                objects.append(obj)
+            subprocess.run(['clang++'] + common + [os.path.join(tmp, 'main.cc')] + objects + ['-o', out],
+                           check=True)
+            return subprocess.run([out], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
+
+        self.assertEqual(build(flags), 0)
+        if CLANG >= 13:
+            self.assertLess(build([]), 0)    # killed by a signal
+
+
 class Workflow(unittest.TestCase):
 
     @classmethod
