@@ -20,9 +20,13 @@ constant kSplashHead24 = "<style>.oxt-splash #status{position:fixed;top:0;left:0
 
 constant kGreenPNG = "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAHklEQVR42mNgWMVAHTRq0KhBowaNGjRq0KhBA28QADGLfpBqGLo1AAAAAElFTkSuQmCC"
 
--- The library's text
+-- The library's text, with its lines ending in return alone, as the file
+-- has them in git (a Windows checkout may end them in CRLF)
 private function libraryText
-   return textDecode(url ("binfile:" & TestGetEngineRepositoryPath() & kLibrary), "UTF-8")
+   local tText
+   put textDecode(url ("binfile:" & TestGetEngineRepositoryPath() & kLibrary), "UTF-8") into tText
+   replace numToChar(13) & numToChar(10) with return in tText
+   return tText
 end libraryText
 
 -- The functions as the library has them, made public, in the script of a
