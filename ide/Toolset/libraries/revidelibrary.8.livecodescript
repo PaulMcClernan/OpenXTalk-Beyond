@@ -7256,8 +7256,10 @@ points), so that a column still fits its widest name. Their rows are 24
 pixels high instead of the plugin's 22, for its larger icons
 (revIDEAppBrowserIcons, 0.2.7-rc.6.18); the plugin sets its 22 as it
 first opens, so this is run again once it is open. A list whose size or
-row height is not the plugin's own (set by hand) is kept. The plugin's
-file is not changed and it is not marked as edited.
+row height is not the plugin's own (set by hand) is kept. A list that
+the taller rows make overflow gets its scroll bar, as the plugin gives
+one (its revSetVScrollbar). The plugin's file is not changed and it is
+not marked as edited.
 
 Parameters:
 pStack: the App Browser plugin's stack, by its name or its file; any other
@@ -7266,7 +7268,7 @@ stack is left as it is
 References: revIDEAppBrowserAppearance (command)
 */
 command revIDEAppBrowserText pStack
-   local tCard, tField
+   local tCard, tField, tTaller, tLine, tTabs, tError
    if there is not a stack pStack then
       exit revIDEAppBrowserText
    end if
@@ -7288,6 +7290,7 @@ command revIDEAppBrowserText pStack
             if the textSize of field tField of card tCard of stack pStack is 13 and \
                   the textHeight of field tField of card tCard of stack pStack is 22 then
                set the textHeight of field tField of card tCard of stack pStack to 24
+               put the long id of field tField of card tCard of stack pStack & return after tTaller
             end if
          end if
       end repeat
@@ -7298,7 +7301,44 @@ command revIDEAppBrowserText pStack
       end if
    end repeat
    unlock messages
+   -- taller rows can overflow a list that fitted: the plugin's
+   -- revSetVScrollbar shows its scroll bar (and fits its column
+   -- headings beside it) as the plugin does when it fills a list, so that
+   -- its last rows are not cut off with no scroll bar until a resize
+   repeat for each line tLine in tTaller
+      switch the short name of tLine
+         case "Cards"
+            put "Card Tabs" into tTabs
+            break
+         case "Controls"
+            put "Control Tabs" into tTabs
+            break
+         case "AudioClips"
+            put "Audioclip Tabs" into tTabs
+            break
+         default
+            put "Videoclip Tabs" into tTabs
+      end switch
+      put the short id of revIDEAppBrowserCardOf(tLine) into tCard
+      if there is a group tTabs of card id tCard of stack pStack then
+         try
+            dispatch "revSetVScrollbar" to stack pStack with tLine, \
+                  the long id of group tTabs of card id tCard of stack pStack
+         catch tError
+         end try
+      end if
+   end repeat
 end revIDEAppBrowserText
+
+-- The long id of the card the control pControl (a long id) is on
+function revIDEAppBrowserCardOf pControl
+   local tOwner
+   put pControl into tOwner
+   repeat while word 1 of tOwner is not "card"
+      put the long id of the owner of tOwner into tOwner
+   end repeat
+   return tOwner
+end revIDEAppBrowserCardOf
 
 /*
 OXT-Beyond: the Application Browser's icons, larger and drawn.

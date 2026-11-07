@@ -268,6 +268,40 @@ on TestAppBrowserTextIsBigger
          the textHeight of field "Controls" of card 1 of stack kBrowser is 30
    set the textHeight of field "Controls" of card 1 of stack kBrowser to 24
 
+   -- a list that fits in 22-pixel rows but not in 24 gets its scroll
+   -- bar when its rows grow (Codex review of #390): without it, its last
+   -- rows were cut off with no scroll bar until a resize
+   local tRows, tSaved
+   put field "Cards" of card 1 of stack kBrowser into tSaved
+   -- (as many rows as fit at 22 pixels)
+   set the textHeight of field "Cards" of card 1 of stack kBrowser to 22
+   set the vScrollbar of field "Cards" of card 1 of stack kBrowser to false
+   put "x" into field "Cards" of card 1 of stack kBrowser
+   put 1 into tRows
+   repeat 200 times
+      put return & "x" after field "Cards" of card 1 of stack kBrowser
+      if the formattedHeight of field "Cards" of card 1 of stack kBrowser > \
+            the height of field "Cards" of card 1 of stack kBrowser then
+         delete the last line of field "Cards" of card 1 of stack kBrowser
+         exit repeat
+      end if
+      add 1 to tRows
+   end repeat
+   TestAssert "the list fits in 22-pixel rows", \
+         the formattedHeight of field "Cards" of card 1 of stack kBrowser > 0 and \
+         the formattedHeight of field "Cards" of card 1 of stack kBrowser <= \
+         the height of field "Cards" of card 1 of stack kBrowser
+   revIDEAppBrowserText kBrowser
+   TestAssert "in 24-pixel rows it overflows", \
+         the formattedHeight of field "Cards" of card 1 of stack kBrowser > \
+         the height of field "Cards" of card 1 of stack kBrowser
+   TestAssert "and it gets its scroll bar", \
+         the vScrollbar of field "Cards" of card 1 of stack kBrowser
+   put tSaved into field "Cards" of card 1 of stack kBrowser
+   send "revSetVScrollbar the long id of field" && quote & "Cards" & quote && "of card 1 of stack" && \
+         quote & kBrowser & quote & ", the long id of group" && quote & "Card Tabs" & quote && \
+         "of card 1 of stack" && quote & kBrowser & quote to stack kBrowser
+
    -- a user's stack of that name is left alone
    close stack kBrowser
    create stack "OXT Not The App Browser"
