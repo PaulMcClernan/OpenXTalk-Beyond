@@ -102,7 +102,9 @@ call into the Java layer failed. With --allow PERMISSION the probe must
 ask for that runtime permission: the wait goes on past its green until
 Android's dialog asking for it is in front (dumpsys activity), its Allow
 button is tapped (found in a uiautomator dump), and afterwards the package
-must hold the permission (dumpsys package). The screen is saved as
+must hold the permission (dumpsys package). Another app's "isn't
+responding" dialog over the probe, or over that dialog, is answered with
+its Wait button (at most ANR_TAPS times). The screen is saved as
 a PNG (--out), and the probe's own lines in the device's log are searched
 for its crash (the engine's caught attempt at an SSL library the package
 does not hold is expected, and only then: crash_lines). When it is not
@@ -1834,6 +1836,11 @@ def device(args):
                     allowed = True
                 else:
                     log('  no Allow button in the dialog yet')
+                    # another app's "isn't responding" dialog can stand
+                    # over it: System UI's on Android 13 in run
+                    # 42376416337, for 90 s, and the probe failed
+                    if anr_taps < ANR_TAPS and answer_other_anr(a):
+                        anr_taps += 1
                 continue
         try:
             proc = subprocess.run([adb, '-s', args.serial, 'exec-out', 'screencap'], stdout=subprocess.PIPE,

@@ -1493,6 +1493,73 @@ class DeviceAnotherAppsAnr(unittest.TestCase):
         self.assertEqual(calls, [])
 
 
+@unittest.skipIf(os.name == 'nt', 'the stand-in adb is a shell script')
+class DevicePermissionUnderAnr(unittest.TestCase):
+    """device --allow with another app's "isn't responding" dialog over
+    Android's permission dialog (run 42376416337: System UI's, on Android
+    13, the whole wait, so the Allow button was never in the dump): it taps
+    the other dialog's Wait, then Allow, and passes; a dialog that stays is
+    answered at most ANR_TAPS times, and the probe's own never"""
+
+    setUp = Device.setUp
+    tearDown = Device.tearDown
+    device = Device.device
+    calls = Device.calls
+    LOG = Device.LOG
+    EVENTS = Device.EVENTS
+    PERMISSION = DevicePermission.PERMISSION
+
+    def run_probe(self, wait_closes=True, package='com.android.systemui'):
+        d = self.tmp.name
+        with open(os.path.join(d, 'logcat.txt'), 'w') as f:
+            f.write(Device.LOG.split('I/lowmemorykiller')[0])
+        for name, text in (('activities.txt', DevicePermission.ACTIVITIES),
+                           ('probe.txt', DevicePermission.PROBE_IN_FRONT),
+                           ('anr.xml', PermissionReaders.ANR_UI), ('ui.xml', DevicePermission.UI),
+                           ('package.txt', DevicePermission.PACKAGE % 'false'),
+                           ('package-after.txt', DevicePermission.PACKAGE % 'true')):
+            with open(os.path.join(d, name), 'w') as f:
+                f.write(text)
+        # the other dialog has the focus, and is all a dump shows, until its
+        # Wait is tapped (when it closes)
+        window = ('[ -f "%s/answered" ] || printf "  mCurrentFocus=Window{e076711 u0 Application Not Responding: '
+                  '%s}\\n"' % (d, package))
+        answer = 'touch "%s/answered"' % d if wait_closes else 'true'
+        cases = ('  "shell dumpsys activity activities")\n'
+                 '    if [ -f "%(d)s/allowed" ]; then cat "%(d)s/probe.txt"; else cat "%(d)s/activities.txt"; fi ;;\n'
+                 '  "shell uiautomator dump /sdcard/oxt-ui.xml") true ;;\n'
+                 '  "shell cat /sdcard/oxt-ui.xml")\n'
+                 '    if [ -f "%(d)s/answered" ]; then cat "%(d)s/ui.xml"; else cat "%(d)s/anr.xml"; fi ;;\n'
+                 '  "shell input tap 540 1280") %(answer)s ;;\n'
+                 '  "shell input tap 540 1490") touch "%(d)s/allowed" ;;\n'
+                 '  "shell dumpsys package org.openxtalk.check.androidprobe")\n'
+                 '    if [ -f "%(d)s/allowed" ]; then cat "%(d)s/package-after.txt"; '
+                 'else cat "%(d)s/package.txt"; fi ;;\n' % {'d': d, 'answer': answer})
+        status, out = self.device('echo 3475', timeout='20', cases=cases, window=window,
+                                  argv=('--allow', self.PERMISSION))
+        return status, out, [c for c in self.calls() if c.startswith('shell input')]
+
+    def test_wait_then_allow(self):
+        status, out, taps = self.run_probe()
+        self.assertEqual(status, 0, out)
+        self.assertEqual(taps, ['shell input tap 540 1280', 'shell input tap 540 1490'])
+        self.assertIn("  com.android.systemui isn't responding, its dialog in front of the probe: tapped Wait at "
+                      "540,1280", out)
+        self.assertIn('tapped Allow at 540,1490', out)
+        self.assertIn('Android device: passed', out)
+
+    def test_a_dialog_that_stays_is_answered_three_times(self):
+        status, out, taps = self.run_probe(wait_closes=False)
+        self.assertEqual(status, 1, out)
+        self.assertEqual(taps, ['shell input tap 540 1280'] * ac.ANR_TAPS)
+        self.assertIn('dialog had no Allow button to tap', out)
+
+    def test_the_probes_own_is_not_answered(self):
+        status, out, taps = self.run_probe(package=ac.IDENTIFIER)
+        self.assertEqual(status, 1, out)
+        self.assertEqual(taps, [])
+
+
 @unittest.skipIf(os.name == 'nt', 'the stand-in adb and JDK are scripts')
 class DeviceBundle(unittest.TestCase):
     """device with an App Bundle, a stand-in adb and a stand-in JDK whose
