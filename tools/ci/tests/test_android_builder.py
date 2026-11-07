@@ -36,7 +36,9 @@ would not notice going back:
     package's files before zipalign, signed with the package's key after
     the package (jarsigner, the passwords never on a command line); the
     bundletool it runs is checked against its pinned SHA-256 before it is
-    kept or used; and an SDK without aapt2 still builds packages.
+    kept or used, and a download that fails is tried again, the second
+    time through the JDK's own HTTP client; and an SDK without aapt2 still
+    builds packages.
 
   python3 -m unittest discover -s tools/ci/tests
 """
@@ -387,6 +389,98 @@ class AppBundle(unittest.TestCase):
         self.assertIn('if tHex is not pSHA256 then', after)
         self.assertRegex(after, r'put " \(tried" && tTries && "times\)" after tResult')
 
+    def test_every_second_try_goes_through_the_jdk(self):
+        # Android builder run 42321580394: libURL's download stalled three
+        # times in a row on the macOS runner, where gh had fetched the
+        # release from the same host in seconds; so a try that follows a
+        # failed one is made with the JDK's own HTTP client, the JDK the
+        # build runs bundletool with
+        self.assertIn('androidBundletoolCacheFile(), kBundletoolURL, kBundletoolSHA256, pathToJava())',
+                      handler(self.src, 'androidBundletoolForBuild'))
+        tool = handler(self.src, 'androidBundletool')
+        self.assertTrue(tool.startswith('function androidBundletool pPreference, pCacheFile, pURL, pSHA256, pJava\n'),
+                        tool[:80])
+        loop = re.search(r'(?ms)^\s*repeat kBundletoolTries times\n(.*?)^\s*end repeat', tool)
+        self.assertTrue(loop, tool)
+        body = loop.group(1)
+        # the JDK on the second try (and the fourth, ...), libURL on the
+        # others; the JDK's file read, and gone, whatever it held
+        self.assertRegex(body, r'if tTries mod 2 is 0 and pJava is not empty then\s+'
+                               r'put androidDownloadWithJava\(pJava, pURL, tPart\) into tResult\s+'
+                               r'put tResult into tJavaResult\s+'
+                               r'if tResult is empty then\s+put url \("binfile:" & tPart\) into tData\s+end if\s+'
+                               r'if there is a file tPart then\s+delete file tPart\s+end if\s+'
+                               r'else\s+try\s+put url pURL into tData')
+        # each try starts empty, before either way of downloading
+        self.assertLess(body.index('put empty into tResult'), body.index('if tTries mod 2 is 0'))
+        self.assertEqual(tool.count('androidDownloadWithJava('), 1)
+        # its file is named in the temporary folder before the tries
+        self.assertIn('put specialFolderPath("temporary") & "/oxt-bundletool-" & the milliseconds & ".part" into tPart',
+                      tool[:loop.start()])
+        # when libURL had the last try, what the JDK said is in the error
+        # too, before the count
+        after = tool[loop.end():]
+        self.assertRegex(after, r'if tJavaResult is not empty and tJavaResult is not tResult then\s+'
+                                r'put "; and" && tJavaResult after tResult')
+        self.assertLess(after.index('"; and"'), after.index('" (tried"'))
+
+    def test_the_jdk_download(self):
+        java = handler(self.src, 'androidDownloadWithJava')
+        # the program goes to a file in the temporary folder; java runs it
+        # with the system's proxies; its exit status and its file decide,
+        # and the program's file goes either way
+        steps = ['put specialFolderPath("temporary") & "/oxt-download-" & the milliseconds & ".java" into tSource',
+                 'put textEncode(androidDownloadJavaSource(), "UTF-8") into url ("binfile:" & tSource)',
+                 'if there is a file pFile then',
+                 'executeShellCommand pJava, "-Djava.net.useSystemProxies=true", tSource, pURL, pFile',
+                 'put the result into tOutput',
+                 'put sShellStatus into tStatus',
+                 'delete file tSource',
+                 'if (tStatus is not empty and tStatus is not 0) or there is no file pFile then']
+        at = [java.find(x) for x in steps]
+        self.assertNotIn(-1, at, [s for s, a in zip(steps, at) if a < 0])
+        self.assertEqual(at, sorted(at))
+        self.assertRegex(java, r'if the result is not empty then\s+return "could not write" && tSource')
+        # a failure leaves no file, and says what java printed
+        self.assertRegex(java, r'or there is no file pFile then\s+if there is a file pFile then\s+delete file pFile\s+'
+                               r'end if\s+return "the JDK could not download it:" && androidToolError\(tOutput\)')
+        self.assertTrue(java.rstrip().endswith('return empty\nend androidDownloadWithJava'), java[-80:])
+
+    def test_the_jdk_download_program(self):
+        source = handler(self.src, 'androidDownloadJavaSource')
+        m = re.search(r'(?s)put (.*) into tLines', source)
+        self.assertTrue(m, source)
+        # the program as the builder writes it: its strings, quote and lf
+        parts = re.findall(r'"[^"]*"|\bquote\b|\blf\b|&|\S+', m.group(1))
+        self.assertEqual(set(p for p in parts if not p.startswith('"')) - {'quote', 'lf', '&'}, set(), parts)
+        program = ''.join({'quote': '"', 'lf': '\n', '&': ''}.get(p, p[1:-1]) for p in parts)
+        self.assertTrue(program.endswith('}\n'), program)
+        # it gives up on a server that sends nothing for 60 seconds (as
+        # libURL does here), takes only a 200, and any failure prints one
+        # line with "Error:" in it, which androidToolError picks out, and
+        # exits 1
+        for line in ('URLConnection connection = new URL(args[0]).openConnection();',
+                     'connection.setConnectTimeout(60000);',
+                     'connection.setReadTimeout(60000);',
+                     'if (http.getResponseCode() != 200) {',
+                     'throw new IOException(http.getResponseCode() + " " + http.getResponseMessage() + " from " + '
+                     'http.getURL());',
+                     'Files.copy(in, Paths.get(args[1]), StandardCopyOption.REPLACE_EXISTING);',
+                     '} catch (Exception e) {',
+                     'System.err.println("Error: " + e);',
+                     'System.exit(1);'):
+            self.assertIn('\n' + line + '\n', '\n' + '\n'.join(x.strip() for x in program.split('\n')) + '\n', line)
+        # nothing turns redirects off (HttpURLConnection follows them by
+        # default; GitHub answers the release URL with one)
+        self.assertNotIn('setInstanceFollowRedirects', program)
+        self.assertNotIn('setFollowRedirects', program)
+        # balanced braces and parentheses, one class, no package (java
+        # runs the file as it is)
+        self.assertEqual(program.count('{'), program.count('}'))
+        self.assertEqual(program.count('('), program.count(')'))
+        self.assertEqual(len(re.findall(r'\bclass\b', program)), 1)
+        self.assertNotIn('package ', program)
+
     def test_an_sdk_without_aapt2_still_builds_packages(self):
         # aapt2 is asked for only by a bundle build, not by the SDK check
         deploy = code(read(DEPLOY))
@@ -411,7 +505,8 @@ class AppBundle(unittest.TestCase):
         for case in ('bundle-path', 'bundle-module-', 'bundle-config', 'bundle-sha256', 'bundletool-preference',
                      'bundletool-preference-missing', 'bundletool-download', 'bundletool-cached',
                      'bundletool-cached-wrong', 'bundletool-download-wrong', 'bundletool-no-download',
-                     'bundletool-download-again', 'bundletool-cache-file'):
+                     'bundletool-download-again', 'bundletool-java-download', 'bundletool-java-no-download',
+                     'bundletool-download-java', 'bundletool-no-download-java', 'bundletool-cache-file'):
             self.assertIn('"%s' % case, body)
         # the download that works the second time: its file appears while
         # the builder pauses between the tries, from a message sent before
@@ -430,6 +525,29 @@ class AppBundle(unittest.TestCase):
         uses = [m.start() for m in re.finditer(r'\bsBundletoolSource\b', units)]
         self.assertEqual(units[uses[0] - len('local '):uses[0]], 'local ')
         self.assertEqual(len(uses), 3)
+        # the JDK's download, with this check's JDK: a file: URL, one that
+        # is not there, and through androidBundletool a jar: URL (which
+        # libURL cannot fetch, so the second try, the JDK's, brings it), and
+        # one that is not there, three times
+        self.assertIn('put deployCall("pathToJava", $OXT_ANDROID_JDK) into tJava', body)
+        self.assertIn('builderCall("androidDownloadWithJava", tJava, fileURL(tSource), tPart)', body)
+        self.assertIn('builderCall("androidDownloadWithJava", tJava, fileURL(tFolder & "/none.jar"), tPart)', body)
+        self.assertIn('builderCall("androidBundletool", empty, tCache, "jar:" & fileURL(tZip) & "!/source.jar", tSHA, '
+                      'tJava)', body)
+        self.assertIn('builderCall("androidBundletool", empty, tCache, "jar:" & fileURL(tFolder & "/none.zip") & '
+                      '"!/source.jar", tSHA, tJava)', body)
+        self.assertIn('tError contains "the JDK could not download it:" and tError contains "(tried 3 times)"', body)
+        # the cache the earlier units made goes first (a cached file would
+        # answer without a download)
+        cleared = body.find('delete file tCache', body.index('"bundletool-download-again"'))
+        self.assertGreater(cleared, 0)
+        self.assertLess(cleared, body.index('"bundletool-java-download"'))
+        # the check's builderCall passes a fifth argument on
+        call = handler(units, 'builderCall')
+        self.assertIn('pArg1, pArg2, pArg3, pArg4, pArg5\n', call)
+        self.assertIn('with pArg1, pArg2, pArg3, pArg4, pArg5', call)
+        self.assertRegex(handler(units, 'fileURL'), r'if char 1 of pPath is slash then\s+return "file://" & pPath\s+'
+                                                    r'end if\s+return "file:///" & pPath')
 
 
 class TargetAPI(unittest.TestCase):

@@ -1980,7 +1980,8 @@ end androidKeepLargeScreenLayout
 constant kBundletoolVersion = "1.18.3"
 constant kBundletoolURL = "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar"
 constant kBundletoolSHA256 = "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29"
--- How many times a download that fails is tried, 2 seconds apart
+-- How many times a download that fails is tried, 2 seconds apart: with
+-- libURL, then with the JDK's own HTTP client, and so on in turn
 constant kBundletoolTries = 3
 
 -- The App Bundle beside the package pApkFile: its name with .aab for .apk
@@ -1997,18 +1998,20 @@ function androidBundletoolCacheFile
 end androidBundletoolCacheFile
 
 -- The bundletool a build runs (androidBundletool, with the Preferences'
--- copy and this version)
+-- copy, this version and the build's JDK)
 function androidBundletoolForBuild
    return androidBundletool(the cMobileSupport["android.bundletool"] of stack "revPreferences", \
-         androidBundletoolCacheFile(), kBundletoolURL, kBundletoolSHA256)
+         androidBundletoolCacheFile(), kBundletoolURL, kBundletoolSHA256, pathToJava())
 end androidBundletoolForBuild
 
 -- The bundletool jar to run: pPreference as it is, when it names one;
 -- otherwise pCacheFile when its SHA-256 is pSHA256, after downloading it
--- from pURL when it is missing or not that file. Throws, saying what to
--- do, when there is none. (Parameters, not the constants, so that
--- tools/ci/android-check.livecodescript can try every case.)
-function androidBundletool pPreference, pCacheFile, pURL, pSHA256
+-- from pURL when it is missing or not that file, with libURL and, when
+-- pJava names the JDK's java, with that too (androidDownloadWithJava).
+-- Throws, saying what to do, when there is none. (Parameters, not the
+-- constants, so that tools/ci/android-check.livecodescript can try every
+-- case.)
+function androidBundletool pPreference, pCacheFile, pURL, pSHA256, pJava
    if pPreference is not empty then
       if there is no file pPreference then
          throw "the cMobileSupport[" & quote & "android.bundletool" & quote & "] of stack " & quote & \
@@ -2025,17 +2028,20 @@ function androidBundletool pPreference, pCacheFile, pURL, pSHA256
       delete file pCacheFile
    end if
 
-   local tData, tResult, tError, tTimeout, tHex, tFolder, tTries
+   local tData, tResult, tError, tTimeout, tHex, tFolder, tTries, tPart, tJavaResult
    revStandaloneProgress "Downloading Google's bundletool, which makes the App Bundle (once)..."
    put the socketTimeoutInterval into tTimeout
    -- libURL gives up on a server that sends nothing for this long
    set the socketTimeoutInterval to 60000
    -- and a download that fails is tried again, 2 seconds later, up to
-   -- kBundletoolTries times: a connection can stall or drop and the next
-   -- one work (the Android builder check's run 42315551744 got "socket
-   -- timeout" on the redirect to GitHub's release assets, which had sent
-   -- the same file in the run before). (The pause lets messages through,
-   -- as libURL's own waits do.)
+   -- kBundletoolTries times, with the JDK's own HTTP client when there is
+   -- one, and libURL, in turn. libURL's download of this file from GitHub's
+   -- release assets stalled (its "socket timeout") once on the Android
+   -- builder check's Linux runner (run 42315551744), and three times in a
+   -- row on its macOS runner (run 42321580394), where gh had just
+   -- downloaded the release from that host in seconds. (The pause lets
+   -- messages through, as libURL's own waits do.)
+   put specialFolderPath("temporary") & "/oxt-bundletool-" & the milliseconds & ".part" into tPart
    put 0 into tTries
    repeat kBundletoolTries times
       add 1 to tTries
@@ -2045,12 +2051,23 @@ function androidBundletool pPreference, pCacheFile, pURL, pSHA256
       end if
       put empty into tData
       put empty into tResult
-      try
-         put url pURL into tData
-         put the result into tResult
-      catch tError
-         put tError into tResult
-      end try
+      if tTries mod 2 is 0 and pJava is not empty then
+         put androidDownloadWithJava(pJava, pURL, tPart) into tResult
+         put tResult into tJavaResult
+         if tResult is empty then
+            put url ("binfile:" & tPart) into tData
+         end if
+         if there is a file tPart then
+            delete file tPart
+         end if
+      else
+         try
+            put url pURL into tData
+            put the result into tResult
+         catch tError
+            put tError into tResult
+         end try
+      end if
       if tResult is empty and tData is empty then
          put "nothing came" into tResult
       end if
@@ -2060,6 +2077,10 @@ function androidBundletool pPreference, pCacheFile, pURL, pSHA256
    end repeat
    set the socketTimeoutInterval to tTimeout
    if tResult is not empty then
+      -- (and what the JDK said, when libURL had the last try)
+      if tJavaResult is not empty and tJavaResult is not tResult then
+         put "; and" && tJavaResult after tResult
+      end if
       put " (tried" && tTries && "times)" after tResult
    end if
    if tResult is empty then
@@ -2090,6 +2111,71 @@ function androidFileSHA256 pFile
    get binaryDecode("H*", messageDigest(url ("binfile:" & pFile), "SHA-256"), tHex)
    return tHex
 end androidFileSHA256
+
+-- Downloads pURL into the file pFile with the JDK whose java is pJava,
+-- through its own HTTP client: it follows redirects, uses the system's
+-- proxy settings, and gives up on a server that sends nothing for 60
+-- seconds (androidDownloadJavaSource, which java runs as it is, from a
+-- file in the temporary folder). Returns empty, or what went wrong
+function androidDownloadWithJava pJava, pURL, pFile
+   local tSource, tOutput, tStatus
+   put specialFolderPath("temporary") & "/oxt-download-" & the milliseconds & ".java" into tSource
+   put textEncode(androidDownloadJavaSource(), "UTF-8") into url ("binfile:" & tSource)
+   if the result is not empty then
+      return "could not write" && tSource & ":" && the result
+   end if
+   if there is a file pFile then
+      delete file pFile
+   end if
+   executeShellCommand pJava, "-Djava.net.useSystemProxies=true", tSource, pURL, pFile
+   put the result into tOutput
+   put sShellStatus into tStatus
+   delete file tSource
+   if (tStatus is not empty and tStatus is not 0) or there is no file pFile then
+      if there is a file pFile then
+         delete file pFile
+      end if
+      return "the JDK could not download it:" && androidToolError(tOutput)
+   end if
+   return empty
+end androidDownloadWithJava
+
+-- The Java program androidDownloadWithJava runs: java <its file> <URL>
+-- <file>. Any failure prints one line that starts "Error:" and exits 1
+function androidDownloadJavaSource
+   local tLines
+   put "import java.io.IOException;" & lf & \
+         "import java.io.InputStream;" & lf & \
+         "import java.net.HttpURLConnection;" & lf & \
+         "import java.net.URL;" & lf & \
+         "import java.net.URLConnection;" & lf & \
+         "import java.nio.file.Files;" & lf & \
+         "import java.nio.file.Paths;" & lf & \
+         "import java.nio.file.StandardCopyOption;" & lf & \
+         "public class OxtDownload {" & lf & \
+         "  public static void main(String[] args) {" & lf & \
+         "    try {" & lf & \
+         "      URLConnection connection = new URL(args[0]).openConnection();" & lf & \
+         "      connection.setConnectTimeout(60000);" & lf & \
+         "      connection.setReadTimeout(60000);" & lf & \
+         "      if (connection instanceof HttpURLConnection) {" & lf & \
+         "        HttpURLConnection http = (HttpURLConnection) connection;" & lf & \
+         "        if (http.getResponseCode() != 200) {" & lf & \
+         "          throw new IOException(http.getResponseCode() + " & quote & " " & quote & \
+         " + http.getResponseMessage() + " & quote & " from " & quote & " + http.getURL());" & lf & \
+         "        }" & lf & \
+         "      }" & lf & \
+         "      try (InputStream in = connection.getInputStream()) {" & lf & \
+         "        Files.copy(in, Paths.get(args[1]), StandardCopyOption.REPLACE_EXISTING);" & lf & \
+         "      }" & lf & \
+         "    } catch (Exception e) {" & lf & \
+         "      System.err.println(" & quote & "Error: " & quote & " + e);" & lf & \
+         "      System.exit(1);" & lf & \
+         "    }" & lf & \
+         "  }" & lf & \
+         "}" & lf into tLines
+   return tLines
+end androidDownloadJavaSource
 
 -- Where a file of the package aapt2 convert made goes in the bundle's base
 -- module, or empty for one the bundle leaves out. bundletool takes the

@@ -207,8 +207,8 @@ private function sortedLines pText
 end sortedLines
 
 -- The builder's handlers, by name (the IDE uses both libraries)
-private function builderCall pHandler, pArg1, pArg2, pArg3, pArg4
-   dispatch function pHandler to stack "revSaveAsAndroidStandalone" with pArg1, pArg2, pArg3, pArg4
+private function builderCall pHandler, pArg1, pArg2, pArg3, pArg4, pArg5
+   dispatch function pHandler to stack "revSaveAsAndroidStandalone" with pArg1, pArg2, pArg3, pArg4, pArg5
    return the result
 end builderCall
 
@@ -290,9 +290,12 @@ end unitTargetAPI
 -- file's SHA-256, and which bundletool a build runs (the Preferences' copy
 -- as it is; the cached one while its SHA-256 is the one asked for; one
 -- downloaded otherwise, checked before it is kept), on made-up files with
--- binfile: URLs for the downloads (the bundle build downloads the real one)
+-- binfile: URLs for the downloads (the bundle build downloads the real
+-- one); and the JDK's download (androidDownloadWithJava), which a failed
+-- libURL download falls back to, with file: and jar: URLs and this
+-- check's JDK
 private command unitAppBundle pWork
-   local tWanted, tLine, tAnswer, tFolder, tSource, tOther, tCache, tSHA, tError
+   local tWanted, tLine, tAnswer, tFolder, tSource, tOther, tCache, tSHA, tError, tJava, tZip, tData, tPart
    put builderCall("androidBundlePath", "/a/b/My App.apk") & "|" & builderCall("androidBundlePath", "C:/a/App.APK") & \
          "|" & builderCall("androidBundlePath", "/a/App") into tAnswer
    androidUnit "bundle-path", tAnswer is "/a/b/My App.aab|C:/a/App.aab|/a/App.aab", tAnswer
@@ -384,10 +387,55 @@ private command unitAppBundle pWork
    end try
    androidUnit "bundletool-download-again", tAnswer is tCache and there is a file tCache and \
          url ("binfile:" & tCache) is "abc", "answered" && tAnswer & ", threw" && tError
+   delete file tCache
+
+   -- the JDK's download: a file: URL, and one that is not there
+   put deployCall("pathToJava", $OXT_ANDROID_JDK) into tJava
+   put tFolder & "/java.part" into tPart
+   put builderCall("androidDownloadWithJava", tJava, fileURL(tSource), tPart) into tAnswer
+   androidUnit "bundletool-java-download", tAnswer is empty and url ("binfile:" & tPart) is "abc", \
+         tJava & ":" && tAnswer
+   delete file tPart
+   put builderCall("androidDownloadWithJava", tJava, fileURL(tFolder & "/none.jar"), tPart) into tAnswer
+   androidUnit "bundletool-java-no-download", tAnswer begins with "the JDK could not download it:" and \
+         tAnswer contains "Error:" and there is no file tPart, tAnswer
+   -- a download libURL cannot make (a jar: URL, the source in a zip) comes
+   -- with the JDK on the second try
+   put tFolder & "/source.zip" into tZip
+   put "abc" into tData
+   revZipOpenArchive tZip, "write"
+   revZipAddItemWithData tZip, "source.jar", "tData"
+   revZipCloseArchive tZip
+   put empty into tAnswer
+   put empty into tError
+   try
+      put builderCall("androidBundletool", empty, tCache, "jar:" & fileURL(tZip) & "!/source.jar", tSHA, tJava) into tAnswer
+   catch tError
+   end try
+   androidUnit "bundletool-download-java", tAnswer is tCache and url ("binfile:" & tCache) is "abc", \
+         "answered" && tAnswer & ", threw" && tError
+   delete file tCache
+   -- and neither can make one that is not there, three times
+   put empty into tError
+   try
+      get builderCall("androidBundletool", empty, tCache, "jar:" & fileURL(tFolder & "/none.zip") & "!/source.jar", tSHA, tJava)
+   catch tError
+   end try
+   androidUnit "bundletool-no-download-java", tError contains "could not download bundletool" and \
+         tError contains "the JDK could not download it:" and tError contains "(tried 3 times)" and \
+         there is no file tCache, "answered" && it & ", threw" && tError
    removeTree tFolder
    put builderCall("androidBundletoolCacheFile") into tAnswer
    androidUnit "bundletool-cache-file", tAnswer is revEnvironmentUserCachePath() & "/Android/bundletool-all-1.18.3.jar", tAnswer
 end unitAppBundle
+
+-- A file's file: URL (file:///C:/a on Windows, file:///a elsewhere)
+private function fileURL pPath
+   if char 1 of pPath is slash then
+      return "file://" & pPath
+   end if
+   return "file:///" & pPath
+end fileURL
 
 -- unitAppBundle's made-up bundletool appears, as a download that worked
 -- the second time
