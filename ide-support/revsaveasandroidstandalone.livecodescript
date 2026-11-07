@@ -1980,6 +1980,8 @@ end androidKeepLargeScreenLayout
 constant kBundletoolVersion = "1.18.3"
 constant kBundletoolURL = "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar"
 constant kBundletoolSHA256 = "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29"
+-- How many times a download that fails is tried, 2 seconds apart
+constant kBundletoolTries = 3
 
 -- The App Bundle beside the package pApkFile: its name with .aab for .apk
 function androidBundlePath pApkFile
@@ -2023,20 +2025,42 @@ function androidBundletool pPreference, pCacheFile, pURL, pSHA256
       delete file pCacheFile
    end if
 
-   local tData, tResult, tError, tTimeout, tHex, tFolder
+   local tData, tResult, tError, tTimeout, tHex, tFolder, tTries
    revStandaloneProgress "Downloading Google's bundletool, which makes the App Bundle (once)..."
    put the socketTimeoutInterval into tTimeout
    -- libURL gives up on a server that sends nothing for this long
    set the socketTimeoutInterval to 60000
-   try
-      put url pURL into tData
-      put the result into tResult
-   catch tError
-      put tError into tResult
-   end try
+   -- and a download that fails is tried again, 2 seconds later, up to
+   -- kBundletoolTries times: a connection can stall or drop and the next
+   -- one work (the Android builder check's run 42315551744 got "socket
+   -- timeout" on the redirect to GitHub's release assets, which had sent
+   -- the same file in the run before). (The pause lets messages through,
+   -- as libURL's own waits do.)
+   put 0 into tTries
+   repeat kBundletoolTries times
+      add 1 to tTries
+      if tTries > 1 then
+         wait 2 seconds with messages
+         revStandaloneProgress "Downloading Google's bundletool again (try" && tTries && "of" && kBundletoolTries & ")..."
+      end if
+      put empty into tData
+      put empty into tResult
+      try
+         put url pURL into tData
+         put the result into tResult
+      catch tError
+         put tError into tResult
+      end try
+      if tResult is empty and tData is empty then
+         put "nothing came" into tResult
+      end if
+      if tResult is empty then
+         exit repeat
+      end if
+   end repeat
    set the socketTimeoutInterval to tTimeout
-   if tResult is empty and tData is empty then
-      put "nothing came" into tResult
+   if tResult is not empty then
+      put " (tried" && tTries && "times)" after tResult
    end if
    if tResult is empty then
       get binaryDecode("H*", messageDigest(tData, "SHA-256"), tHex)

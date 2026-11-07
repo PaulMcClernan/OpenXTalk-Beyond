@@ -1772,7 +1772,8 @@ in environment variables, not on its command line. The builder warns
 when the bundle is signed with the debug key or not signed, which Google
 Play refuses. bundletool is Google's jar, downloaded on the first such
 build from its GitHub release (`kBundletoolURL`, version 1.18.3, checked
-against `kBundletoolSHA256` before it is kept) into
+against `kBundletoolSHA256` before it is kept; a download that fails is
+tried again, up to `kBundletoolTries` times, 2 seconds apart) into
 `revEnvironmentUserCachePath()/Android`, unless
 `the cMobileSupport["android.bundletool"] of stack "revPreferences"`
 names a jar; OXT-Beyond ships no copy. aapt2 is in build-tools; the SDK

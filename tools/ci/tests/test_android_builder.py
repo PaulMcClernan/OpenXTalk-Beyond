@@ -341,7 +341,7 @@ class AppBundle(unittest.TestCase):
         self.assertRegex(self.src, r'constant kBundletoolSHA256 = "[0-9a-f]{64}"')
         # the constants come before their uses (a constant used above its
         # line is read as its own name)
-        for name in ('kBundletoolVersion', 'kBundletoolURL', 'kBundletoolSHA256'):
+        for name in ('kBundletoolVersion', 'kBundletoolURL', 'kBundletoolSHA256', 'kBundletoolTries'):
             declared = self.src.index('constant %s = ' % name)
             uses = [m.start() for m in re.finditer(r'\b%s\b' % name, self.src)
                     if not self.src.startswith('constant ', m.start() - len('constant '))]
@@ -362,6 +362,32 @@ class AppBundle(unittest.TestCase):
         self.assertLess(fetch, check)
         self.assertLess(check, keep)
         self.assertIn('the socketTimeoutInterval', tool)
+
+    def test_a_failed_download_is_tried_again(self):
+        # Android builder run 42315551744: one "socket timeout" on the
+        # redirect to GitHub's release assets failed the build, where the
+        # run before had downloaded the same file
+        self.assertIn('constant kBundletoolTries = 3', self.src)
+        tool = handler(self.src, 'androidBundletool')
+        loop = re.search(r'(?ms)^\s*repeat kBundletoolTries times\n(.*?)^\s*end repeat', tool)
+        self.assertTrue(loop, tool)
+        body = loop.group(1)
+        # each try after the first waits 2 seconds, letting messages
+        # through; each starts empty, and the first that brings data ends
+        # the tries
+        self.assertRegex(body, r'if tTries > 1 then\s+wait 2 seconds with messages')
+        start = [body.find(x) for x in ('put empty into tData', 'put empty into tResult', 'put url pURL into tData')]
+        self.assertNotIn(-1, start)
+        self.assertEqual(start, sorted(start))
+        self.assertRegex(body, r'if tResult is empty and tData is empty then\s+put "nothing came" into tResult')
+        self.assertRegex(body, r'if tResult is empty then\s+exit repeat')
+        # the download is tried only in the loop; the timeout is put back
+        # after it, and the SHA-256 is checked after it
+        self.assertEqual(tool.count('put url pURL into tData'), 1)
+        after = tool[loop.end():]
+        self.assertIn('set the socketTimeoutInterval to tTimeout', after)
+        self.assertIn('if tHex is not pSHA256 then', after)
+        self.assertRegex(after, r'put " \(tried" && tTries && "times\)" after tResult')
 
     def test_an_sdk_without_aapt2_still_builds_packages(self):
         # aapt2 is asked for only by a bundle build, not by the SDK check
@@ -387,8 +413,25 @@ class AppBundle(unittest.TestCase):
         for case in ('bundle-path', 'bundle-module-', 'bundle-config', 'bundle-sha256', 'bundletool-preference',
                      'bundletool-preference-missing', 'bundletool-download', 'bundletool-cached',
                      'bundletool-cached-wrong', 'bundletool-download-wrong', 'bundletool-no-download',
-                     'bundletool-cache-file'):
+                     'bundletool-download-again', 'bundletool-cache-file'):
             self.assertIn('"%s' % case, body)
+        # the download that works the second time: its file appears while
+        # the builder pauses between the tries, from a message sent before
+        # the call, to a handler that writes what the unit's SHA-256 is of
+        again = body.index('"bundletool-download-again"')
+        send = body.index('send "unitBundletoolAppears" to me in 500 milliseconds')
+        call = body.rindex('builderCall("androidBundletool", empty, tCache, "binfile:" & tSource, tSHA)', 0, again)
+        self.assertLess(body.rindex('delete file tSource', 0, send), send)
+        self.assertLess(send, call)
+        self.assertIn('tError contains "(tried 3 times)"', body)
+        appears = handler(units, 'unitBundletoolAppears')
+        self.assertIn('put "abc" into url ("binfile:" & sBundletoolSource)', appears)
+        self.assertFalse(appears.startswith('private'))
+        # the script local is declared above its first use (a variable
+        # used above its line is another, empty one)
+        uses = [m.start() for m in re.finditer(r'\bsBundletoolSource\b', units)]
+        self.assertEqual(units[uses[0] - len('local '):uses[0]], 'local ')
+        self.assertEqual(len(uses), 3)
 
 
 PATCHES = ('tools', 'oxt', 'ide-stack-patches')
