@@ -6443,6 +6443,11 @@ on tour_standalone_settings
          get tourInclusionOrder(tStack)
          if it is not empty then put it & return after tFails
       end if
+      -- the Android card's App Bundle box: where it is, what it shows and
+      -- what a click on it stores
+      if tCard is "Android" then
+         put tourAndroidAppBundle(tStack) after tFails
+      end if
       -- the Web card makes its page's settings when it first opens: the
       -- HTML5 option and those settings are there
       if tCard is "Emscripten" then
@@ -6500,6 +6505,9 @@ on tour_standalone_settings
    put tourMacTargets() into tMacNow
    tourRecord "INFO standalone settings: Mac targets (x86-32, x86-64, ARM64) after the cards:" && tMacNow
    tourSetMacTargets tMacWas
+   if "Android" is not among the lines of tCards then
+      throw "the Android card is not shown, so its App Bundle box was not checked"
+   end if
    if the platform is not "MacOS" then
       if "OS X" is not among the lines of tCards then
          throw "the OS X card is not shown, so its keeping the Mac targets was not checked"
@@ -6510,6 +6518,90 @@ on tour_standalone_settings
    end if
    if tFails is not empty then throw line 1 to -1 of tFails
 end tour_standalone_settings
+
+-- The Android card's "App Bundle" box (tools/oxt/ide-stack-patches/
+-- android-card-app-bundle-*.txt), with which the Android builder makes an
+-- Android App Bundle (.aab) beside the package: at the end of the build
+-- targets' row, right of "Android x86_64" and inside the window; enabled
+-- exactly when the card's settings are (the stack is built for Android);
+-- ticked exactly when the stack's "android,app bundle" setting is true, so
+-- not for a stack without it; and a click on it, as the box's group gets
+-- one, stores the setting, true or false. The sample's settings are put
+-- back as they were. Empty, or what is not so
+private function tourAndroidAppBundle pStack
+   local tCard, tBox, tTargets, tWas, tArch, tFails
+   put the long id of card "Android" of stack pStack into tCard
+   if there is not a group "Android Targets" of tCard then
+      return "the Android card has no build targets' row" & return
+   end if
+   put the long id of group "Android Targets" of tCard into tTargets
+   if there is not a button "App Bundle" of tTargets then
+      return "the Android card has no App Bundle box" & return
+   end if
+   put the long id of button "App Bundle" of tTargets into tBox
+   tourRecord "INFO standalone settings: the App Bundle box" && the rect of tBox && "enabled" && the enabled of tBox && \
+         "ticked" && the hilited of tBox && "label" && the label of tBox && "needs" && the formattedWidth of tBox
+   if the style of tBox is not "checkbox" or not the visible of tBox or the label of tBox is not "App Bundle" then
+      put "the App Bundle box is not a check box labelled App Bundle that shows:" && the style of tBox && \
+            the visible of tBox && the label of tBox & return after tFails
+   end if
+   if item 1 of the rect of tBox < item 3 of the rect of button "Android x86_64" of tTargets or \
+         item 2 of the rect of tBox is not item 2 of the rect of button "Android x86_64" of tTargets then
+      put "the App Bundle box is not right of Android x86_64 on its row:" && the rect of tBox && "beside" && \
+            the rect of button "Android x86_64" of tTargets & return after tFails
+   end if
+   if item 3 of the rect of tBox > the width of stack pStack then
+      put "the App Bundle box ends past the window:" && the rect of tBox && "in a window" && \
+            the width of stack pStack && "wide" & return after tFails
+   end if
+   if the enabled of tBox is not the enabled of group "Android Settings" of tCard then
+      put "the App Bundle box is" && tourEnabledWord(the enabled of tBox) && "while the Android settings are" && \
+            tourEnabledWord(the enabled of group "Android Settings" of tCard) & return after tFails
+   end if
+   put the customProperties["cRevStandaloneSettings"] of stack kSample into tWas
+   if (the hilited of tBox) is not (tWas["android,app bundle"] is true) then
+      put "the App Bundle box is" && the hilited of tBox && "for a stack whose setting is" && \
+            quote & tWas["android,app bundle"] & quote & return after tFails
+   end if
+   -- the card shows the setting
+   set the cRevStandaloneSettings["android,app bundle"] of stack kSample to true
+   dispatch "updateSettings" to tCard
+   if not the hilited of tBox then put "the App Bundle box is not ticked for a stack whose setting is true" & return after tFails
+   set the cRevStandaloneSettings["android,app bundle"] of stack kSample to false
+   dispatch "updateSettings" to tCard
+   if the hilited of tBox then put "the App Bundle box is ticked for a stack whose setting is false" & return after tFails
+   -- a click stores it (sent, since a disabled box gets no click: the
+   -- sample is not built for Android)
+   set the hilited of tBox to true
+   dispatch "mouseUp" to tBox with 1
+   if the cRevStandaloneSettings["android,app bundle"] of stack kSample is not true then
+      put "ticking the App Bundle box stored" && quote & \
+            the cRevStandaloneSettings["android,app bundle"] of stack kSample & quote & return after tFails
+   end if
+   set the hilited of tBox to false
+   dispatch "mouseUp" to tBox with 1
+   if the cRevStandaloneSettings["android,app bundle"] of stack kSample is not false then
+      put "unticking the App Bundle box stored" && quote & \
+            the cRevStandaloneSettings["android,app bundle"] of stack kSample & quote & return after tFails
+   end if
+   -- and no architecture: the targets are the stack's as before
+   repeat for each item tArch in "armv7,arm64,x86,x86_64"
+      if the cRevStandaloneSettings["Android," & tArch] of stack kSample is not tWas["Android," & tArch] then
+         put "a click on the App Bundle box changed the Android" && tArch && "target from" && \
+               quote & tWas["Android," & tArch] & quote && "to" && \
+               quote & the cRevStandaloneSettings["Android," & tArch] of stack kSample & quote & return after tFails
+      end if
+   end repeat
+   set the customProperties["cRevStandaloneSettings"] of stack kSample to tWas
+   dispatch "updateSettings" to tCard
+   return tFails
+end tourAndroidAppBundle
+
+-- "enabled" or "disabled"
+private function tourEnabledWord pEnabled
+   if pEnabled then return "enabled"
+   return "disabled"
+end tourEnabledWord
 
 -- The sample stack's three Mac targets, x86-32, x86-64 and ARM64, as one
 -- line of what each setting holds

@@ -1763,8 +1763,11 @@ app (and build-tools 34's aapt failed on `android-36`'s resources when
 tried).
 
 A stack with `set the cRevStandaloneSettings["android,app bundle"] of
-stack "<name>" to true` also gets an Android App Bundle beside its
-package (`<name>.aab`), as Google Play takes a new app: a build, never
+stack "<name>" to true` (the Android card's **App Bundle** box, at the end
+of its row of architectures: a copy of "Android x86_64" made by the
+`android-card-app-bundle-*.txt` IDE stack patches, which the row's script
+stores and the card's behaviour shows) also gets an Android App Bundle
+beside its package (`<name>.aab`), as Google Play takes a new app: a build, never
 Test, makes it (`androidBuildBundle`) from the package before zipalign.
 `aapt2 convert --output-format proto` rewrites the manifest and the
 resources as bundletool reads them; each file then goes to its place in
