@@ -1567,8 +1567,10 @@ signature, signed by the debug key or the keystore; none for the other
 two), zipalign, `resources.arsc` stored and aligned, every activity,
 service and receiver with an intent-filter saying `android:exported`,
 the 64-bit engine libraries aligned for 16 KB memory pages, the package
-name and target API, and the builder's warnings (the `legacy` build must
-be told that it has no arm64 build). `compare` takes the packages a
+name and target API (`--target`, 33 unless given; at 36 the manifest must
+keep the stack's orientation on large screens, below it must not say
+so), and the builder's warnings (the `legacy` build must be told that it
+has no arm64 build). `compare` takes the packages a
 released IDE made of the same probe stack (`ide --no-units --stack
 <work>/AndroidProbe.livecode`: the stack goes into the engine library)
 and fails on any file that differs, apart from what the builder's change
@@ -1590,6 +1592,8 @@ failed. Its builds declare `POST_NOTIFICATIONS`, so on Android 13 and
 newer the Java layer asks the user to let it post notifications as it
 schedules one, and `WRITE_EXTERNAL_STORAGE`, which Android 13 and newer
 refuse without asking and the rebuilt Java layer counts as granted there.
+Once green, its `backKey` turns it blue and does not pass the message, so
+the app stays.
 `device` installs a package with adb, starts it, and waits until the
 screen turns the probe's green, which only the probe's `openStack` makes
 (or the fail colour, which fails at once), and prints what the probe said
@@ -1599,8 +1603,13 @@ waits for Android's dialog, taps its Allow button (found in a
 `uiautomator` dump) and checks that the package then holds the
 permission (`dumpsys package`). With `--picture <name>` the picture the
 probe exported must be among the shared pictures (`content query` of
-MediaStore) in `Pictures/`, as the package's own; `ide
---device <serial>` does what the IDE's Test does for that device. `boot`
+MediaStore) in `Pictures/`, as the package's own. With `--within-bars`
+the screen's first and last rows, where the status and navigation bars
+are, must not be the probe's green once it is green: the stack is not
+drawn under the bars. With `--back` `device` then presses the back key,
+and the probe's `backKey` must turn the screen blue (`-back.png` beside
+`--out` keeps that screen). `ide --device <serial>` does what the IDE's
+Test does for that device. `boot`
 waits for an emulator to finish booting, and when it gives up it prints
 whether the emulator still runs, `/dev/kvm`, adb's devices, the free disk
 and the end of the emulator's log. With `--settle` it then waits for a
@@ -1622,9 +1631,16 @@ the Java layer from this checkout and makes the Java layer's probe twice
 from the same stack, once with that layer and once with the release's,
 and runs both on the Android 13 emulator: the rebuilt layer's must turn
 green, ask for the notification permission (`--allow
-android.permission.POST_NOTIFICATIONS`) and leave its picture in the
-shared Pictures folder (`--picture oxt-beyond-probe.png`), there and on
-the 16 KB emulator; the release's is only recorded, with what it said.
+android.permission.POST_NOTIFICATIONS`), leave its picture in the shared
+Pictures folder (`--picture oxt-beyond-probe.png`), get its back key
+(`--back`) and stay inside the system bars (`--within-bars`), there and
+on the 16 KB emulator; the release's is only recorded, with what it said.
+That layer is ready for API 36, so the builder makes the probe target 36
+(`verify --target 36`), and the 16 KB emulator is the first such image
+at API 36 (Android 16) or newer: there Android draws an app that targets
+35 or newer edge to edge, which the Java layer pads, and sends the back
+key of one that targets 36 only to its back callback. The other packages
+target 33, and must stay inside the bars on both emulators too.
 LiveCode 9.6.3's `PendingIntent`s throw on Android 12 and newer, and the
 engine clears the exception without a word in the log, so that probe's
 notification call answers no id and the probe turns its fail colour
@@ -1691,6 +1707,24 @@ minutes on one Linux runner with no build of the engine, and keeps the
 jar it built for 14 days. The Android builder workflow runs that jar on
 an emulator (above). Nothing a package ships changes until a runtimes
 asset carries the rebuilt jar.
+
+The API a package targets follows the runtime's Java layer
+(`androidTargetAPI` in the builder): 33, as before, with a Java layer
+that is not ready for newer (LiveCode 9.6.3's), and 36 with one that is,
+which the builder knows by the two classes it has for it
+(`LiveCodeActivity$BackCallback` and `LiveCodeActivity$SystemBarsPadding`
+in `Runtime/Android/Classes`). Google Play asks for 36 of a new app or
+an update. At 36 the manifest also says
+`android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY`, so that
+Android 16 keeps the stack's orientation and size on a large screen as
+before. A stack can pin the API with
+`set the cRevStandaloneSettings["android,target sdk"] of stack "<name>" to 33`
+(any of 33 to 36; the build stops with an error for anything else), and
+an empty one leaves it to the runtime. The builder compiles against
+`platforms;android-33` when the SDK has it, as before, whatever the
+target: the manifest's `targetSdkVersion` decides how Android treats the
+app (and build-tools 34's aapt failed on `android-36`'s resources when
+tried).
 
 ### Browser and player check
 
