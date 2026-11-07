@@ -2637,6 +2637,21 @@ class OneSystem(unittest.TestCase):
         self.assertIn('--settle', boot.group(0))
         self.assertLess(boot.start(), step.index('android_check.py device'))
 
+    def test_16k_image_has_3_gb(self):
+        # run 42312203693: with the 1536 MB avdmanager gives a Pixel 5,
+        # Android 16 ran short of memory and killed the Java layer's probe
+        # (LOW_MEMORY) behind its permission dialog. The AVD gets 3 GB, as
+        # its one hw.ramSize line, before the emulator starts
+        workflow = read('.github', 'workflows', 'android.yml')
+        step = re.search(r'(?s)- name: Run the package with 16 KB pages\n(.*?)\n      - name:', workflow).group(1)
+        config = '"$ANDROID_AVD_HOME/pages16k.avd/config.ini"'
+        drop = step.index("sed -i '/^hw.ramSize=/d' " + config)
+        add = step.index("echo 'hw.ramSize=3072M' >> " + config)
+        self.assertLess(step.index('avdmanager" create avd -n pages16k'), drop)
+        self.assertLess(drop, add)
+        self.assertLess(add, step.index('"$SDK/emulator/emulator" -avd pages16k'))
+        self.assertNotIn('-memory', step)
+
     def test_every_emulator_stays_awake_under_its_probes(self):
         # run 42218720113: the 16 KB image's screen went off as the Java
         # layer's probe started, SystemUI's theme overlays relaunched it,
