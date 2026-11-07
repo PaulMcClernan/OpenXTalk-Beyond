@@ -622,7 +622,10 @@ private command setLabel pField, pText, pSize, pColor, pStyle, pAlign
    set the text of pField to pText
 end setLabel
 
--- A field of words, in the stack's own font, that wraps
+-- A field of words, in the stack's own font, that wraps. It is 4 points
+-- deeper above and below its lines: with no margins, a field as tall as
+-- its formattedHeight cut off the tops of its first line and the tails
+-- of its last (y, g, p), on Windows and in a browser
 private command setText pField, pText, pSize, pColor, pAlign
    set the lockText of pField to true
    set the traversalOn of pField to false
@@ -630,7 +633,7 @@ private command setText pField, pText, pSize, pColor, pAlign
    set the showBorder of pField to false
    set the threeD of pField to false
    set the dontWrap of pField to false
-   set the margins of pField to 0
+   set the margins of pField to "0,4,0,4"
    set the textSize of pField to pSize
    set the textColor of pField to pColor
    set the textAlign of pField to pAlign

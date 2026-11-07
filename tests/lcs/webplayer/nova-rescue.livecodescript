@@ -465,7 +465,7 @@ end TestTheFourthSectorEndsWithAMothership
 -- Every button of every screen on the window and clear of the others,
 -- the HUD on it, the ship's bounds in the column
 private command checkLayout pWidth, pHeight
-   local tCard, tColumn, tScreen, tGroup, tRects, tName, tRect, tOther, tBad, i, j
+   local tCard, tColumn, tScreen, tGroup, tRects, tName, tRect, tOther, tBad, tField, tLines, i, j
    windowSize pWidth, pHeight
    if the width of stack kStack is not pWidth or the height of stack kStack is not pHeight then
       TestSkip "at" && pWidth & "x" & pHeight, "the window could not be made that size here"
@@ -481,6 +481,25 @@ private command checkLayout pWidth, pHeight
       end if
    end repeat
    TestAssert "at" && pWidth & "x" & pHeight & ": the HUD is on the window" && tBad, tBad is empty
+   -- the words of the screens show every line whole: a field as tall
+   -- as its formattedHeight with no margins cut off the tops of its
+   -- first line and the tails of its last (seen on Windows and in a
+   -- browser)
+   put empty into tBad
+   repeat for each item tName in "Tagline,Howto Text 1,Howto Text 2,Howto Text 3,Howto Text 4,Credits"
+      put the long id of field tName of card "Space" of stack kStack into tField
+      if not the visible of tField then
+         next repeat
+      end if
+      put the number of lines of the formattedText of tField into tLines
+      if the height of tField < tLines * the effective textHeight of tField then
+         put tName && "is shorter than its" && tLines && "lines;" after tBad
+      end if
+      if item 2 of the margins of tField < 4 or item -1 of the margins of tField < 4 then
+         put tName && "has no room above or below its lines;" after tBad
+      end if
+   end repeat
+   TestAssert "at" && pWidth & "x" & pHeight & ": the words show whole" && tBad, tBad is empty
    repeat for each item tScreen in "Title,Howto,Paused,Over,Settings"
       put empty into tRects
       put empty into tBad
