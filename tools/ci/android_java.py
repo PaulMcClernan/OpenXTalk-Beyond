@@ -1285,29 +1285,53 @@ def check_bindings(bindings, classes):
     return problems, lines + ['%d LCB bindings to the Java layer checked' % len(bindings)]
 
 
+def code_of(path):
+    """The text of a file, less the builder's lines that a comment starts
+    (the builder keeps old code so); '' when there is no such file."""
+    if not os.path.isfile(path):
+        return ''
+    with open(path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
+    if path.endswith('.livecodescript'):
+        text = '\n'.join(x for x in text.split('\n') if not re.match(r'\s*(--|#|//)', x))
+    return text
+
+
 def named_classes(runtime):
     """[(where, class)] of the classes of the Java layer that Android loads
     by name: those the manifest and the builder name."""
     out = []
     for path in (os.path.join(runtime, 'Manifest.xml'), BUILDER):
-        if not os.path.isfile(path):
-            continue
-        with open(path, encoding='utf-8', errors='replace') as f:
-            text = f.read()
-        if path.endswith('.livecodescript'):
-            # lines that a comment starts (the builder keeps old code so)
-            text = '\n'.join(x for x in text.split('\n') if not re.match(r'\s*(--|#|//)', x))
-        for m in re.finditer(r'com\.runrev\.android(?:\.[A-Za-z_]\w*)+', text):
+        for m in re.finditer(r'com\.runrev\.android(?:\.[A-Za-z_]\w*)+', code_of(path)):
             out.append((os.path.basename(path), m.group(0).replace('.', '/')))
     return sorted(set(out))
 
 
-def check_named(named, classes):
-    problems = []
+def looked_for_classes():
+    """The classes whose entries the builder looks for in the runtime's jar
+    (androidJavaLayerHas, by the entry's name, com/runrev/android/X.class):
+    those it names only where the jar has them, as it declares
+    RelaunchActivity only with a layer that has it (LiveCode Community
+    9.6.3's has not). That the declaration follows the jar is the device
+    check's (verify: the manifest declares RelaunchActivity exactly when
+    the package's dex has it); this is only which names may be missing."""
+    return {m.group(1) for m in re.finditer(r'(com/runrev/android/[\w/$]+)\.class', code_of(BUILDER))}
+
+
+def check_named(named, classes, looked_for=()):
+    """Problems for the named classes the jar does not have, bar those of
+    looked_for that only the builder names: it names them only where the
+    jar has them, so a jar without one is said, and is no problem."""
+    problems, lines = [], []
+    builder = os.path.basename(BUILDER)
     for where, cls in named:
-        if classes.get(cls) is None:
+        if classes.get(cls) is not None:
+            continue
+        if where == builder and cls in looked_for:
+            lines.append('%s names %s only where the jar has it, and this jar has not' % (where, cls))
+        else:
             problems.append('%s names %s, which the jar does not have' % (where, cls))
-    return problems, ['%d classes named by the manifest and the builder checked' % len(named)]
+    return problems, lines + ['%d classes named by the manifest and the builder checked' % len(named)]
 
 
 # The OpenGL ES library an engine loads, and the version of the context
@@ -1400,7 +1424,10 @@ def jni(args):
     sections.append(('the engine\'s calls into Java', p, lines))
     p, lines = check_bindings(lcb_bindings(os.path.join(REPO, LCB_SOURCES)), classes)
     sections.append(('LCB bindings', p, lines))
-    p, lines = check_named(named_classes(args.runtime), classes)
+    # This checkout's jar must have every class the builder can name
+    # (--every-named); a release's may lack those the builder looks for
+    p, lines = check_named(named_classes(args.runtime), classes,
+                           () if args.every_named else looked_for_classes())
     sections.append(('classes named by the manifest and the builder', p, lines))
     p, lines = check_gles(classes, needed)
     sections.append(('OpenGL ES', p, lines))
@@ -1467,6 +1494,9 @@ def main(argv=None):
     j.add_argument('--classes', required=True)
     j.add_argument('--runtime', required=True, help='a Runtime/Android folder')
     j.add_argument('--android-jar', help="the SDK's android.jar, for methods of Android's own classes")
+    j.add_argument('--every-named', action='store_true',
+                   help='the jar must have every class the builder names, those it names only '
+                        'where the jar has them too (for a jar built from this checkout)')
     r = sub.add_parser('rules')
     r.add_argument('--classes', required=True)
     args = ap.parse_args(argv)

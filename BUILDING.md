@@ -1760,7 +1760,7 @@ platform (36 by default), the rest nothing but the files:
 ```sh
 python3 tools/ci/android_java.py build --sdk <sdk> --jdk <jdk> --api 36 --out <work>/Classes
 python3 tools/ci/android_java.py compare --old <runtime>/Classes --new <work>/Classes
-python3 tools/ci/android_java.py jni --classes <work>/Classes --runtime <runtime> --android-jar <sdk>/platforms/android-36/android.jar
+python3 tools/ci/android_java.py jni --classes <work>/Classes --runtime <runtime> --android-jar <sdk>/platforms/android-36/android.jar --every-named
 python3 tools/ci/android_java.py rules --classes <work>/Classes
 ```
 
@@ -1787,7 +1787,10 @@ where `<runtime>` is the runtimes asset's `Runtime/Android` folder.
   `GetMethodID`) finds its method with that signature in the jar or in
   Android's classes (`KNOWN_CALLS` names the calls that never found one,
   in 9.6.3's jar too); every LCB binding to `com.runrev` classes; every
-  class the builder and the manifest name; and the OpenGL ES version the
+  class the builder and the manifest name (bar a class the builder looks
+  for in the jar before it names it, as it does `RelaunchActivity`, which
+  a jar without it is said to lack and no more; `--every-named` asks for
+  those too, of the jar built here); and the OpenGL ES version the
   jar's `OpenGLView` asks for against the library the engine draws with
   (9.6.3's engine draws with OpenGL ES 1, this tree's with 3, so the
   view asks for 1 while the runtime carries 9.6.3's engine). The
