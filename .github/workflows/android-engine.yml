@@ -424,12 +424,16 @@ jobs:
       # once in a process: the app probe goes on in its process through a
       # font size change (--font-scale), starts again in a new one for a
       # density change (--density), and once the back key quits its stack
-      # its process ends and it opens again in a new one (--relaunch)
+      # its process ends and it opens again in a new one (--relaunch).
+      # Here only, as 9.6.3's engine hangs there: the density changed while
+      # the probe's script waits (--density-in-wait, a tap's mouseUp), where
+      # the engine, let go on as the activity is destroyed, yields to
+      # Android's thread again (doDestroy in engine/src/mblandroiddc.cpp)
       - name: Run the probes on Android 13
         run: |
           python3 tools/ci/android_check.py device --apk "$WORK/app/out/debug.apk" --serial emulator-5554 \
             --sdk "$SDK" --out "$WORK/screen-api33-app.png" --log-out "$WORK/logcat-api33-app.txt" \
-            --within-bars --font-scale --density --relaunch
+            --within-bars --font-scale --density --density-in-wait --relaunch
           python3 tools/ci/android_check.py device --apk "$WORK/java/out/debug.apk" --serial emulator-5554 \
             --sdk "$SDK" --out "$WORK/screen-api33-java.png" --log-out "$WORK/logcat-api33-java.txt" \
             --allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png --back --within-bars
@@ -457,7 +461,7 @@ jobs:
           [ "$page" = 16384 ] || { echo "::error::$IMAGE_16K has pages of $page bytes, not 16384"; exit 1; }
           python3 tools/ci/android_check.py device --apk "$WORK/app/out/debug.apk" --serial emulator-5554 \
             --sdk "$SDK" --out "$WORK/screen-16k-app.png" --log-out "$WORK/logcat-16k-app.txt" \
-            --within-bars --font-scale --density --relaunch
+            --within-bars --font-scale --density --density-in-wait --relaunch
           python3 tools/ci/android_check.py device --apk "$WORK/java/out/debug.apk" --serial emulator-5554 \
             --sdk "$SDK" --out "$WORK/screen-16k-java.png" --log-out "$WORK/logcat-16k-java.txt" \
             --allow android.permission.POST_NOTIFICATIONS --picture oxt-beyond-probe.png --back --within-bars

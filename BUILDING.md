@@ -3434,4 +3434,10 @@ And the app probe, which carries this checkout's Java layer (with
 `--relaunch`, as that check runs it with the 9.6.3 engine: the engine
 starts once in a process, so the app goes on in its process through a
 font size change, starts again in a new one for a density change, and
-opens again in a new one once the back key has quit its stack.
+opens again in a new one once the back key has quit its stack. There
+only, and not with the 9.6.3 engine, which hangs there, it is also run
+with `--density-in-wait`: a tap makes the probe's `mouseUp` wait 20
+seconds with messages, and the density changes while it waits, so that
+the engine, let go on to finish as Android destroys the activity, yields
+to Android's thread again before it has finished (`doDestroy` in
+`engine/src/mblandroiddc.cpp`).

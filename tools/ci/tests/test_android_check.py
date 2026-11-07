@@ -22,6 +22,7 @@ same builds, colours and files. No Android SDK or engine is needed.
   python3 -m unittest discover -s tools/ci/tests
 """
 
+import argparse
 import base64
 import contextlib
 import io
@@ -1595,20 +1596,26 @@ class DeviceOnceInAProcess(unittest.TestCase):
              'F/libc    ( %s): Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid %s (androidprobe)\n')
 
     def run_probe(self, argv, font='same', density='new', back='ends', again='new', font_before='1.0',
-                  offline_at=None):
+                  offline_at=None, tap='waits'):
         """What the stand-in device's probe does: for a font size change
         (same: goes on in its process; crash: the second start stopped,
         and no process), a density change (new: started again in a new
-        process, and again for the reset; crash), the back key (ends: its
-        process ends; stays) and the second am start (new: a new process
-        where none is left; crash: none); adb answers pidof's call number
-        offline_at with "adb: device offline" (on its output, exit status
-        1), as it did for a moment on the 16 KB image"""
+        process, green, and again for the reset; crash; hang: its process
+        stays, the screen as it was), the back key (ends: its process ends;
+        stays), the second am start (new: a new process where none is left;
+        crash: none) and a tap at the 4 x 4 screen's middle (waits: the
+        screen turns the wait colour, as the probe's mouseUp turns it;
+        nothing); adb answers pidof's call number offline_at with "adb:
+        device offline" (on its output, exit status 1), as it did for a
+        moment on the 16 KB image"""
         d = self.tmp.name
         with open(os.path.join(d, 'logcat.txt'), 'w') as f:
             f.write(Device.LOG.split('I/lowmemorykiller')[0])
         with open(os.path.join(d, 'pid'), 'w') as f:
             f.write('3475\n')
+        for name, colour in (('green.raw', ac.RUN_COLOR), ('wait.raw', ac.WAIT_COLOR)):
+            with open(os.path.join(d, name), 'wb') as f:
+                f.write(struct.pack('<IIII', 4, 4, 1, 0) + bytes(list(colour) + [255]) * 16)
         crash = 'p=$(cat "%(d)s/pid"); : > "%(d)s/pid"; printf "%(fdsan)s" $p $p $p >> "%(d)s/logcat.txt"' % {
             'd': d, 'fdsan': self.FDSAN.replace('\n', '\\n')}
         new = lambda pid: 'echo %s > "%s/pid"' % (pid, d)
@@ -1619,10 +1626,13 @@ class DeviceOnceInAProcess(unittest.TestCase):
             '  "shell wm density reset") [ -s "%(d)s/pid" ] && %(reset)s ;;\n'
             '  "shell wm density 357") %(density)s ;;\n'
             '  "shell input keyevent KEYCODE_BACK") %(back)s ;;\n'
+            '  "shell input tap 2 2") %(tap)s ;;\n'
             % {'d': d, 'before': font_before, 'scale': ac.FONT_SCALE, 'reset': new(4100),
                'font': {'same': 'true', 'crash': crash}[font],
-               'density': {'new': new(4000), 'crash': crash}[density],
-               'back': {'ends': ': > "%s/pid"' % d, 'stays': 'true'}[back]})
+               'density': {'new': new(4000) + '; cp "%(d)s/green.raw" "%(d)s/screen.raw"' % {'d': d},
+                           'crash': crash, 'hang': 'true'}[density],
+               'back': {'ends': ': > "%s/pid"' % d, 'stays': 'true'}[back],
+               'tap': {'waits': 'cp "%(d)s/wait.raw" "%(d)s/screen.raw"' % {'d': d}, 'nothing': 'true'}[tap]})
         # the second am start: a new process where the first has ended
         started = 'grep -c "^shell am start" "%s/platform-tools/calls"' % d
         second = {'new': '[ -s "%(d)s/pid" ] || { [ $(%(n)s) -ge 2 ] && echo 5000 > "%(d)s/pid"; }',
@@ -1635,13 +1645,13 @@ class DeviceOnceInAProcess(unittest.TestCase):
             asked = 'grep -c "^shell pidof" "%s/platform-tools/calls"' % d
             pidof = ('if [ $(%s) -eq %d ]; then echo "adb: device offline"; exit 1; fi; ' % (asked, offline_at)
                      + pidof)
-        saved = ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE
-        ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE = 6, 3, 0
+        saved = ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE, ac.WAIT_SEEN
+        ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE, ac.WAIT_SEEN = 6, 3, 0, 3
         try:
             status, out = self.device(pidof, timeout='10', cases=cases,
                                       argv=list(argv) + ['--out', os.path.join(d, 'screen.png')])
         finally:
-            ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE = saved
+            ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE, ac.WAIT_SEEN = saved
         return status, out, [c for c in self.calls() if c.startswith(('shell settings', 'shell wm',
                                                                              'shell input', 'shell am start'))]
 
@@ -1708,6 +1718,95 @@ class DeviceOnceInAProcess(unittest.TestCase):
         # the density is put back all the same
         self.assertEqual(calls[-1], 'shell wm density reset')
 
+    def test_started_again_for_a_density_change_while_its_script_waits(self):
+        # the probe's mouseUp turns its wait colour and waits; the density
+        # is changed while it waits, and the app starts again in a new
+        # process once the wait is over (the engine built here)
+        status, out, calls = self.run_probe(['--density-in-wait'])
+        self.assertEqual(status, 0, out)
+        self.assertEqual(calls[1:], ['shell input tap 2 2', 'shell wm density', 'shell wm density 357',
+                                     'shell wm density reset'])
+        self.assertIn('After a tap on the probe: 100%% of the screen is its wait colour, 1 s after the tap (it waits '
+                      '%d s)' % ac.PROBE_WAIT, out)
+        self.assertIn("After a density change while the probe's script waited (357, from 420): 100% of the screen "
+                      "is the probe's green; process 4000 (before it: 3475)", out)
+        self.assertTrue(self.png('density-in-wait'))
+
+    def test_hung_by_a_density_change_while_its_script_waits(self):
+        # 9.6.3's engine, and this tree's before its doDestroy finished the
+        # engine: the process stays, hung, the screen its wait colour
+        status, out, calls = self.run_probe(['--density-in-wait'], density='hang')
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: after a density change while the probe's script waited the app did not start again "
+                      "in a new process (3475 before it, 3475 after)", out)
+        self.assertIn("After a density change while the probe's script waited (357, from 420): 0% of the screen is "
+                      "the probe's green; process 3475 (before it: 3475)", out)
+        # the density is put back all the same
+        self.assertEqual(calls[-1], 'shell wm density reset')
+
+    def test_a_tap_that_reaches_no_mouse_up(self):
+        # a probe without the mouseUp (a stack saved before it): the screen
+        # stays green, and the density is not changed, so a pass would say
+        # nothing about a script that waits
+        status, out, calls = self.run_probe(['--density-in-wait'], tap='nothing')
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: a tap did not reach the probe's mouseUp: the screen did not turn its wait colour in "
+                      "3 s (0%)", out)
+        self.assertEqual(calls[1:], ['shell input tap 2 2'])
+
+    def test_the_wait_colour_seen_too_late(self):
+        # the screen taken slowly: the wait colour seen after WAIT_SEEN may
+        # be the last of the wait, so the density is not changed
+        saved = ac.screen_now
+
+        def slow(adb, serial):
+            got = saved(adb, serial)
+            if got and ac.colour_share(got[2], ac.WAIT_COLOR) >= 0.25:
+                time.sleep(3)
+            return got
+        ac.screen_now = slow
+        try:
+            status, out, calls = self.run_probe(['--density-in-wait'])
+        finally:
+            ac.screen_now = saved
+        self.assertEqual(status, 1, out)
+        self.assertRegex(out, r"PROBLEM: the probe's wait colour was seen \d s after the tap, too late to change the "
+                              r"density while its script surely waits \(at most 3 s\)")
+        self.assertEqual(calls[1:], ['shell input tap 2 2'])
+
+    def test_the_tap_is_the_screens_middle(self):
+        # wherever the screen is: the probe's stack fills it (exactFit),
+        # and its field is at its top
+        said = []
+
+        def a(*cmd, timeout=180):
+            said.append(cmd)
+            return 0, ''
+        saved = ac.screen_now, ac.WAIT_SEEN
+        ac.screen_now = lambda adb, serial: (1080, 2340, b'') if not said else None
+        ac.WAIT_SEEN = 0
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                got = ac.starts_again_for_density_in_wait(argparse.Namespace(serial='emulator-5554', out=None),
+                                                           'adb', a, '3475', [])
+        finally:
+            ac.screen_now, ac.WAIT_SEEN = saved
+        self.assertEqual(said, [('shell', 'input', 'tap', '540', '1170')])
+        self.assertEqual(len(got), 1)
+
+    def test_no_screen_no_tap(self):
+        saved = ac.screen_now
+        ac.screen_now = lambda adb, serial: None
+        said = []
+        try:
+            got = ac.starts_again_for_density_in_wait(argparse.Namespace(serial='emulator-5554', out=None),
+                                                       'adb', lambda *cmd, timeout=180: said.append(cmd), '3475', [])
+        finally:
+            ac.screen_now = saved
+        self.assertEqual(got, ['no screen of the probe to find where to tap it'])
+        self.assertEqual(said, [])
+
     def test_opened_again_after_its_stack_quit(self):
         status, out, calls = self.run_probe(['--relaunch'])
         self.assertEqual(status, 0, out)
@@ -1741,6 +1840,19 @@ class DeviceOnceInAProcess(unittest.TestCase):
         self.assertEqual([c.split()[1] for c in calls[1:]], ['settings'] * 3 + ['wm'] * 3 + ['input', 'am'])
         # each takes the process the one before left: 4100 after the
         # density's reset
+        self.assertIn('Opened again after its stack quit: 100% of the screen is the probe\'s green; process 5000 '
+                      '(the first: 4100)', out)
+
+    def test_all_four_in_order(self):
+        # the density changed while the script waits after the plain one,
+        # each in the process the one before left
+        status, out, calls = self.run_probe(['--font-scale', '--density', '--density-in-wait', '--relaunch'])
+        self.assertEqual(status, 0, out)
+        self.assertEqual([c.split()[1] for c in calls[1:]],
+                         ['settings'] * 3 + ['wm'] * 3 + ['input'] + ['wm'] * 3 + ['input', 'am'])
+        self.assertEqual(calls[7], 'shell input tap 2 2')
+        self.assertIn("After a density change while the probe's script waited (357, from 420): 100% of the screen "
+                      "is the probe's green; process 4000 (before it: 4100)", out)
         self.assertIn('Opened again after its stack quit: 100% of the screen is the probe\'s green; process 5000 '
                       '(the first: 4100)', out)
 
@@ -3505,11 +3617,13 @@ class OneSystem(unittest.TestCase):
         self.assertIn('constant kSavedColor = "%d,%d,%d"' % ac.SAVED_COLOR, script)
         self.assertIn('constant kFailColor = "%d,%d,%d"' % ac.FAIL_COLOR, script)
         self.assertIn('constant kBackColor = "%d,%d,%d"' % ac.BACK_COLOR, script)
+        self.assertIn('constant kWaitColor = "%d,%d,%d"' % ac.WAIT_COLOR, script)
+        self.assertIn('constant kProbeWait = %d' % ac.PROBE_WAIT, script)
         self.assertIn('constant kIdentifier = "%s"' % ac.IDENTIFIER, script)
-        # four colours the screen tells apart: none within another's
+        # five colours the screen tells apart: none within another's
         # tolerance of colour_share
-        colours = (ac.RUN_COLOR, ac.SAVED_COLOR, ac.FAIL_COLOR, ac.BACK_COLOR)
-        self.assertEqual(len(set(colours)), 4)
+        colours = (ac.RUN_COLOR, ac.SAVED_COLOR, ac.FAIL_COLOR, ac.BACK_COLOR, ac.WAIT_COLOR)
+        self.assertEqual(len(set(colours)), 5)
         for a in colours:
             for b in colours:
                 if a != b:
@@ -3572,6 +3686,7 @@ class OneSystem(unittest.TestCase):
         script = read('tools', 'ci', 'android-check.livecodescript')
         body = re.search(r'(?s)private function probeScript\n(.*?)\nend probeScript', script).group(1)
         tail = body.split('"end openStack" after tScript')[1]
+        tail = tail.split('"end mouseUp" after tScript')[1]
         self.assertEqual(tail,
                          '\n   if probeName() is "AndroidJavaProbe" then\n'
                          '      -- the back key, not passed (see the header)\n'
@@ -3586,6 +3701,32 @@ class OneSystem(unittest.TestCase):
         uses = [x.strip() for x in script.splitlines() if 'kBackColor' in x and not x.lstrip().startswith('--')]
         self.assertEqual(len(uses), 2, uses)
         self.assertTrue(uses[0].startswith('constant kBackColor = '), uses)
+
+    def test_probe_mouse_up(self):
+        # both probes, after openStack: a tap turns the stack its wait
+        # colour, waits kProbeWait seconds with messages and turns it green
+        # again (device --density-in-wait changes the density meanwhile)
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        body = re.search(r'(?s)private function probeScript\n(.*?)\nend probeScript', script).group(1)
+        tail = body.split('"end openStack" after tScript')[1]
+        self.assertTrue(tail.startswith(
+            '\n   -- a tap: a script waiting (kWaitColor), then green again\n'
+            '   put return & "on mouseUp" & return & \\\n'
+            '         "   set the backgroundColor of me to" && quote & kWaitColor & quote & return & \\\n'
+            '         "   wait" && kProbeWait && "seconds with messages" & return & \\\n'
+            '         "   set the backgroundColor of me to" && quote & kRunColor & quote & return & \\\n'
+            '         "end mouseUp" after tScript\n'
+            '   if probeName() is "AndroidJavaProbe" then\n'), tail)
+        # in code, each constant and its one use
+        for name in ('kWaitColor', 'kProbeWait'):
+            uses = [x.strip() for x in script.splitlines() if name in x and not x.lstrip().startswith('--')]
+            self.assertEqual(len(uses), 2, uses)
+            self.assertTrue(uses[0].startswith('constant %s = ' % name), uses)
+        # the device check waits for the colour well within the wait, and
+        # gives the app, after the density change, the rest of the wait and
+        # its start in a new process
+        self.assertLess(ac.WAIT_SEEN * 2, ac.PROBE_WAIT + 1)
+        self.assertLess(ac.PROBE_WAIT * 2, ac.RETURN_WAIT + 1)
 
     def test_java_probe_picture(self):
         # the probe's picture is a real PNG (what the engine sends to the
@@ -3805,6 +3946,9 @@ class OneSystem(unittest.TestCase):
         # device's checks put them back
         self.assertNotIn('settings put system font_scale', workflow)
         self.assertNotIn('wm density', workflow)
+        # nor the density while the probe's script waits: 9.6.3's engine
+        # hangs there (android-engine.yml checks the engine built here)
+        self.assertNotIn('--density-in-wait', workflow)
         # the app probe is built with this Java layer, from the plain
         # probe's stack, and verified at the newest target
         ides = [re.sub(r'\\\n\s*', '', x) for x in
