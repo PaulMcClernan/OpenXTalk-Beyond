@@ -3439,5 +3439,6 @@ only, and not with the 9.6.3 engine, which hangs there, it is also run
 with `--density-in-wait`: a tap makes the probe's `mouseUp` wait 20
 seconds with messages, and the density changes while it waits, so that
 the engine, let go on to finish as Android destroys the activity, yields
-to Android's thread again before it has finished (`doDestroy` in
-`engine/src/mblandroiddc.cpp`).
+to Android's thread again before it has finished: `doDestroy` (in
+`engine/src/mblandroiddc.cpp`) lets it go on until it has, where it
+once joined the engine thread at once and both waited for good.

@@ -150,6 +150,10 @@ static jobject s_android_class_loader = nullptr;
 // If this is false, then it means the engine broke somehow.
 static bool s_engine_running = false;
 
+// OXT-Beyond: whether the engine thread has finished (co_leave_engine),
+// which doDestroy waits for
+static bool s_engine_left = false;
+
 int32_t g_android_keyboard_type = 1;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1393,20 +1397,26 @@ static void *mobile_main(void *arg)
 
 	// MW-2011-10-01: [[ Bug 9772 ]] Switch to the android thread until we get
 	//   a bitmap to render into!
-	while(s_android_bitmap == nil)
+	// OXT-Beyond: or until the activity is destroyed first (doDestroy): the
+	//   project is not started, and the engine finishes. Before, it waited
+	//   here for a bitmap that never came, and Android's thread with it
+	while(s_android_bitmap == nil && s_engine_running)
 		co_yield_to_android();
 
-	MCLog("Starting up project");
-	send_startup_message(false);
-    
-    // PM-2015-02-02: [[ Bug 14456 ]] Make sure the billing provider is properly initialized before a preopenstack/openstack message is sent
-    MCAndroidInitEngine();
-    
-	if (!MCquit)
-		MCdispatcher -> gethome() -> open();
-    
-	MCLog("Hiding splash screen");
-	MCAndroidEngineRemoteCall("hideSplashScreen", "v", nil);
+	if (s_engine_running)
+	{
+		MCLog("Starting up project");
+		send_startup_message(false);
+
+		// PM-2015-02-02: [[ Bug 14456 ]] Make sure the billing provider is properly initialized before a preopenstack/openstack message is sent
+		MCAndroidInitEngine();
+
+		if (!MCquit)
+			MCdispatcher -> gethome() -> open();
+
+		MCLog("Hiding splash screen");
+		MCAndroidEngineRemoteCall("hideSplashScreen", "v", nil);
+	}
 
 	while(s_engine_running)
 	{
@@ -1469,6 +1479,7 @@ static void co_enter_engine(void)
 static void co_leave_engine(void)
 {
 	pthread_mutex_lock(&s_coroutine_mutex);
+	s_engine_left = true;
 	s_coroutine_thread = &s_android_ui_thread;
 	pthread_mutex_unlock(&s_coroutine_mutex);
 
@@ -2085,6 +2096,7 @@ JNIEXPORT void JNICALL Java_com_runrev_android_Engine_doCreate(JNIEnv *env, jobj
 
 	// Make sure the engine isn't running
 	s_engine_running = false;
+	s_engine_left = false;
 
 	// The android ui thread is this one
 	MCMemoryReinit(s_android_ui_thread);
@@ -2177,11 +2189,23 @@ JNIEXPORT void JNICALL Java_com_runrev_android_Engine_doDestroy(JNIEnv *env, job
 
 	s_engine_running = false;
 
+	// OXT-Beyond: as an event breaks a wait for any event (doProcess), so
+	// that the main loop's wait ends at once
+	s_schedule_wakeup_was_broken = true;
+
 	// IM-2013-05-01: [[ BZ 10586 ]] we should now only be called when the
 	// engine thread is about to exit, so set s_engine_running to false & yield
 	// so it can finish terminating
+	// OXT-Beyond: yield until it has finished (co_leave_engine), as it can
+	// yield to this thread again first: in the middle of drawing (the screen
+	// flush of MCScreenDC::updatewindow), in a script's wait, whose time it
+	// then waits out, or before it had a bitmap. After one yield, as before,
+	// this thread went on to join an engine thread that was waiting for its
+	// turn, and the app hung there for good (Android 16 relaunching the
+	// activity for a density change in run 42416576870)
 	MCLog("Yielding to engine thread to perform finalization phase", 0);
-	co_yield_to_engine();
+	while (!s_engine_left)
+		co_yield_to_engine();
 
 	// Finalize bitmap mutex
 	pthread_mutex_destroy(&s_android_bitmap_mutex);
