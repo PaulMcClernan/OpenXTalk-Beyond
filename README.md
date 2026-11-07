@@ -156,7 +156,7 @@ every change, release by release.
 
 | Version | What it brings |
 | --- | --- |
-| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; SQLite 3.51.3 |
+| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; the App Browser back in the Tools menu with sharp icons; SQLite 3.51.3 |
 | [0.2.7-rc.6.17](#027-rc617-the-bug-hunt-round-seventeen) | The round to squash what was left before 0.2.7 is stable: buttons on a coloured card in the web IDE, a dark menu item on Linux, a main window that wouldn't minimize on Windows 11, an App Browser that listed itself (and the Card Navigator), windows that flashed at start, Inclusions in a new order every run, the Responsive Starter's second save, the Phone Starter's pinch and its fit on an iPhone's Home Screen; and Lessons, a course in xTalk, on the website |
 | [0.2.7-rc.6.16](#027-rc616-the-bug-hunt-round-sixteen) | The Responsive Starter lays one stack out for a phone, a tablet and a desktop; phone stacks use touch, sensors, the camera and the share sheet; a stack plays with nothing around it; Android packages install again; the website gets an Extensions page; the Script Editor's black words on grey, a blank Dictionary on Windows and unreadable menu words are fixed |
 | [0.2.7-rc.6.15](#027-rc615-the-bug-hunt-round-fifteen) | The Mobile Web library and the Phone Starter bring stacks to phones; animations that wait 0 ms show in the browser; a Clear button for the Inspector's colours; named tools; the web IDE and the website rest; `write to process` sends text as written |
@@ -1733,6 +1733,13 @@ found since rc.6.17. Here is each change, listed as the bug it squashes:
   accent colour, and its label stayed white. The label is white only
   while the app is active now, and in the background it has the
   button's own text colour, as any other button's has (Skids) (#406).
+- **An App Browser that hid in the Plugins menu, with tiny icons.**
+  Tools > Application Browser is back, under Project Browser, and opens
+  and closes it (it stays in Development > Plugins too). Its icons are
+  drawn sharp at 20 points for each stack, card, clip and control, dark
+  grey on a light window and light grey on a dark one, and the
+  triangles that open a stack are triangles on every platform
+  (richmond62) (#390).
 - **A Mobile Web library that kept laying out after a reload.**
   Unloading the library, as the IDE does when it reloads its extensions,
   now forgets the stacks `mwResponsive` lays out, as it was meant to
@@ -1753,7 +1760,8 @@ opened again after it quits, and App Bundles installed as Google Play
 does, on Android 13 and on Android 16 (#384, #394, #395, #397, #405);
 they answer another app's "isn't responding" dialog and wait out the
 emulator's slower steps (#404); the IDE tour checks the App Bundle box
-(#400) and, as its last step on a Mac, puts the IDE in the background
+(#400), the App Browser's icons and its Tools menu item (#390) and, as
+its last step on a Mac, puts the IDE in the background
 and reads a default button's label there (#406); the Android engine
 itself is built here with a current NDK for all four architectures and
 checked as Android takes it, though packages still carry LiveCode
