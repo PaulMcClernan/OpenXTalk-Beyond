@@ -61,6 +61,8 @@ words, is in the [README](README.md#the-ide) and on the
 - App Browser: its icons are larger and sharp: each stack, card, clip and control is drawn from SVG at 20 points (the bitmaps were 9 to 14 points high), as the modern Tools palette draws its icons, inked dark grey on a light window and light grey on a dark one; the triangles that open and close a stack are triangles on every platform (Windows and Linux had a box with a plus or a minus), and its rows are 24 pixels high instead of 22 to fit them. Its file is unchanged; the icons are drawn in memory as it opens (thanks richmond62) (#390)
 - Tools menu: Application Browser is back, under Project Browser, checked while it is shown; it opens and closes the App Browser plugin, which stays in Development > Plugins too. No item of the menu is removed (thanks richmond62) (#390)
 - CI: the IDE tour fails when the App Browser's icons are not drawn at 20 points, its rows are not 24 high, or Tools > Application Browser is missing or unchecked with it shown (#390)
+- Stack Player: Nova Rescue, a game made for phones: drag a finger to fly, rescue the drifting crews for a growing bonus, dodge meteors and raiders and beat a mothership every fourth sector, with Kenney's CC0 pictures and sounds; it fills a phone's screen upright or turned, and is in Home's gallery too (#401)
+- Web site: Nova Rescue has a page of its own in the web stacks gallery, with the big ones: on a computer it plays in a phone's frame on the page, keys and all, and on a phone a tap opens it on the whole screen; it plays the Stack Player's own copy, so the page goes up with a player that has it (#401)
 
 ## 0.2.7-rc.6.17 (2026-11-06, pre-release)
 
