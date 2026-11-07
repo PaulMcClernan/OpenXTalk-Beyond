@@ -1492,6 +1492,45 @@ class DeviceAnotherAppsAnr(unittest.TestCase):
         self.assertEqual(calls, [])
 
 
+class PidNow(unittest.TestCase):
+    """The probe's process ids, with adb's own failures asked again"""
+
+    def ask(self, answers, tries=None, fails=False):
+        calls = []
+
+        def a(*cmd, timeout=180):
+            calls.append(cmd)
+            if cmd[0] == 'wait-for-device':
+                if fails:
+                    raise ac.CheckError('adb wait-for-device: timed out')
+                return 0, ''
+            return 0, answers[min(sum(c[0] == 'shell' for c in calls), len(answers)) - 1]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            got = ac.pid_now(a, tries)
+        return got, calls, out.getvalue()
+
+    def test_process_ids_and_none(self):
+        for answer, want in (('3475\n', '3475'), ('3475 3612\n', '3475 3612'), ('', ''), ('\n', '')):
+            got, calls, out = self.ask([answer])
+            self.assertEqual(got, want)
+            self.assertEqual(calls, [('shell', 'pidof', ac.IDENTIFIER)])
+            self.assertEqual(out, '')
+
+    def test_device_offline_for_a_moment(self):
+        got, calls, out = self.ask(['adb: device offline\n', '5450\n'])
+        self.assertEqual(got, '5450')
+        self.assertEqual(calls, [('shell', 'pidof', ac.IDENTIFIER), ('wait-for-device',),
+                                 ('shell', 'pidof', ac.IDENTIFIER)])
+        self.assertEqual(out, '  pidof: adb: device offline; waiting for the device\n')
+
+    def test_offline_throughout_gives_adbs_answer(self):
+        got, calls, out = self.ask(['error: device \'emulator-5554\' not found\n'], tries=2, fails=True)
+        self.assertEqual(got, "error: device 'emulator-5554' not found")
+        self.assertEqual([c[0] for c in calls], ['shell', 'wait-for-device', 'shell', 'wait-for-device'])
+        self.assertIn('  wait-for-device: adb wait-for-device: timed out\n', out)
+
+
 class GreenAgain(unittest.TestCase):
     """green_again, the wait of --font-scale, --density and --relaunch for
     the probe's green, answers another app's "isn't responding" dialog in
@@ -1554,13 +1593,16 @@ class DeviceOnceInAProcess(unittest.TestCase):
              'by FILE* 0x7b1c\n'
              'F/libc    ( %s): Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid %s (androidprobe)\n')
 
-    def run_probe(self, argv, font='same', density='new', back='ends', again='new', font_before='1.0'):
+    def run_probe(self, argv, font='same', density='new', back='ends', again='new', font_before='1.0',
+                  offline_at=None):
         """What the stand-in device's probe does: for a font size change
         (same: goes on in its process; crash: the second start stopped,
         and no process), a density change (new: started again in a new
         process, and again for the reset; crash), the back key (ends: its
         process ends; stays) and the second am start (new: a new process
-        where none is left; crash: none)"""
+        where none is left; crash: none); adb answers pidof's call number
+        offline_at with "adb: device offline" (on its output, exit status
+        1), as it did for a moment on the 16 KB image"""
         d = self.tmp.name
         with open(os.path.join(d, 'logcat.txt'), 'w') as f:
             f.write(Device.LOG.split('I/lowmemorykiller')[0])
@@ -1588,6 +1630,10 @@ class DeviceOnceInAProcess(unittest.TestCase):
         pidof = (second + '; cat "%(d)s/pid"') % {'d': d, 'n': started,
                                                    'f': self.FDSAN.replace('\n', '\\n'),
                                                    's': Device.LOG.splitlines()[0].replace('3475', '%s') + '\\n'}
+        if offline_at:
+            asked = 'grep -c "^shell pidof" "%s/platform-tools/calls"' % d
+            pidof = ('if [ $(%s) -eq %d ]; then echo "adb: device offline"; exit 1; fi; ' % (asked, offline_at)
+                     + pidof)
         saved = ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE
         ac.RETURN_WAIT, ac.END_WAIT, ac.FONT_SETTLE = 6, 3, 0
         try:
@@ -1617,6 +1663,19 @@ class DeviceOnceInAProcess(unittest.TestCase):
         self.assertEqual(status, 0, out)
         self.assertEqual(calls[-1], 'shell settings delete system font_scale')
         self.assertIn('(font_scale 1.3, then unset again)', out)
+
+    def test_adb_offline_for_a_moment_is_not_the_probes_process(self):
+        # run 42360582880: pidof, just before the font size change, answered
+        # "adb: device offline", taken for the probe's process; it waits for
+        # the device and asks again
+        status, out, _ = self.run_probe(['--font-scale'], offline_at=2)
+        self.assertEqual(status, 0, out)
+        self.assertIn('  pidof: adb: device offline; waiting for the device\n', out)
+        self.assertIn("process 3475 (before it: 3475)", out)
+        calls = self.calls()
+        at = [i for i, c in enumerate(calls) if c.startswith('shell pidof')]
+        self.assertEqual(calls[at[1] + 1], 'wait-for-device', calls)
+        self.assertEqual(calls[at[1] + 2], calls[at[1]], calls)
 
     def test_stopped_by_a_font_size_change(self):
         # the released builder's manifest: Android made the activity again,

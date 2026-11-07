@@ -1812,6 +1812,35 @@ def screen_now(adb, serial):
         return None
 
 
+# How often pid_now asks again when adb itself fails, and how long it
+# waits for the device each time
+PID_TRIES = 3
+DEVICE_WAIT = 60
+
+
+def pid_now(a, tries=None):
+    """The probe's process ids now, as pidof gives them ('' when it is not
+    running). An answer that is not process ids is adb's own failure, not
+    the probe's: in run 42360582880 the 16 KB image's pidof, just before
+    the font size change, answered "adb: device offline", which the check
+    then took for the probe's process. So it waits for the device (adb
+    wait-for-device, at most DEVICE_WAIT s) and asks again, at most
+    `tries` times (PID_TRIES), and then gives adb's answer, which no process
+    id equals. `a` runs adb on the device."""
+    tries = PID_TRIES if tries is None else tries
+    out = ''
+    for _ in range(tries):
+        out = a('shell', 'pidof', IDENTIFIER)[1].strip()
+        if re.fullmatch(r'[\d\s]*', out):
+            return out
+        log('  pidof: %s; waiting for the device' % answer(out))
+        try:
+            a('wait-for-device', timeout=DEVICE_WAIT)
+        except CheckError as e:
+            log('  wait-for-device: %s' % e)
+    return out
+
+
 def green_again(adb, serial, a, seconds, other_than=''):
     """Waits at most `seconds` for the probe's green, in a process other
     than other_than when one is given (the probe started again): (the share
@@ -1822,7 +1851,7 @@ def green_again(adb, serial, a, seconds, other_than=''):
     anr_taps = 0
     while time.time() - started < seconds:
         time.sleep(2)
-        pid = a('shell', 'pidof', IDENTIFIER)[1].strip()
+        pid = pid_now(a)
         if other_than and pid == other_than:
             continue
         got = screen_now(adb, serial)
@@ -1848,7 +1877,7 @@ def new_crashes(a, names):
     """The probe's crash lines in the device's log since it was last
     cleared (crash_lines), and its processes there."""
     _, logcat = a('logcat', '-d', '-v', 'brief')
-    pids = probe_pids(logcat, a('shell', 'pidof', IDENTIFIER)[1])
+    pids = probe_pids(logcat, pid_now(a))
     crash, _, _ = crash_lines(logcat, names, pids)
     fdsan = [x.strip() for x in logcat.splitlines() if 'fdsan:' in x and (log_pid(x) in pids or not pids)]
     return crash + [x for x in fdsan if x not in crash], pids
@@ -1936,7 +1965,7 @@ def opens_again_after_quit(args, adb, a, pid, names):
     left = pid
     while time.time() - ended < END_WAIT:
         time.sleep(1)
-        left = a('shell', 'pidof', IDENTIFIER)[1].strip()
+        left = pid_now(a)
         if left != pid:
             break
     log('After the back key: process %s' % ('%s, still there after %d s' % (pid, END_WAIT) if left == pid
@@ -2036,7 +2065,7 @@ def device(args):
             break
         if share < 0.25 and failed < 0.25 and anr_taps < ANR_TAPS and answer_other_anr(a):
             anr_taps += 1
-    _, pid = a('shell', 'pidof', IDENTIFIER)
+    pid = pid_now(a)
     _, logcat = a('logcat', '-d', '-v', 'brief')
     pids = probe_pids(logcat, pid)
     with zipfile.ZipFile(args.apk) as z:
@@ -2107,7 +2136,7 @@ def device(args):
             back = colour_share(brgba, BACK_COLOR)
             if back >= 0.25:
                 break
-        _, after = a('shell', 'pidof', IDENTIFIER)
+        after = pid_now(a)
         if args.out and brgba:
             # the screen after the back key, beside the first
             path = os.path.splitext(args.out)[0] + '-back.png'
@@ -2125,7 +2154,7 @@ def device(args):
     for wanted, check in ((args.font_scale, stays_through_font_scale), (args.density, starts_again_for_density),
                           (args.relaunch, opens_again_after_quit)):
         if wanted and green and pid.strip():
-            found = check(args, adb, a, a('shell', 'pidof', IDENTIFIER)[1].strip(), names)
+            found = check(args, adb, a, pid_now(a), names)
             problems += found
             if found:
                 break
