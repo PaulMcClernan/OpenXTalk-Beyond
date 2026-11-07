@@ -1970,6 +1970,7 @@ private command wfClearStep
       add 1 to sClearShown
       if sClearNew then
          set the text of field "Clear Best" to "NEW BEST!"
+         wfSound "unlock", 0.8, 1
       else
          set the text of field "Clear Best" to "BEST" && wfCommas(sBest[sLevel])
       end if
@@ -2410,11 +2411,16 @@ private function wfPlaceLabel pName, pSize, pL, pT, pR
    local tH
    set the textSize of field pName to max(9, round(pSize * sU))
    if the dontWrap of field pName then
+      -- a line of one size, 4 points to spare above and below it (in
+      -- its margins, so the line stays where it is): with none, a small
+      -- size's tops were cut off in a browser (SCORE)
       put the textSize of field pName * 1.3 into tH
-   else
-      set the rect of field pName to pL, pT, pR, pT + 100
-      put the formattedHeight of field pName into tH
+      set the margins of field pName to "0,4,0,4"
+      set the rect of field pName to round(pL), round(pT) - 4, round(pR), round(pT + tH) + 4
+      return round(pT + tH)
    end if
+   set the rect of field pName to pL, pT, pR, pT + 100
+   put the formattedHeight of field pName into tH
    set the rect of field pName to round(pL), round(pT), round(pR), round(pT + tH)
    return round(pT + tH)
 end wfPlaceLabel
@@ -2478,7 +2484,12 @@ private command wfLayoutHud pW, pH
    get wfPlaceLabel("Level Name", 18, tL + tS + 12 * sU, tT + tS / 2 - 12 * sU, tL + tS + 260 * sU)
    get wfPlaceLabel("Score Label", 11, tR - 260 * sU, tT + 2 * sU, tR)
    get wfPlaceLabel("Score", 28, tR - 260 * sU, tT + 17 * sU, tR)
-   get wfPlaceLabel("Hint", 16, max(tL + tS + 140 * sU, pW / 2 - 300 * sU), tT + tS + 14 * sU, min(tR - 140 * sU, pW / 2 + 300 * sU))
+   -- the hint under the HUD, across the window when it is narrow
+   if pW < 700 then
+      get wfPlaceLabel("Hint", 16, sInsetL + 16, tT + tS + 30 * sU, pW - sInsetR - 16)
+   else
+      get wfPlaceLabel("Hint", 16, max(tL + tS + 140 * sU, pW / 2 - 300 * sU), tT + tS + 14 * sU, min(tR - 140 * sU, pW / 2 + 300 * sU))
+   end if
 end wfLayoutHud
 
 private command wfLayoutTitle pW, pH
@@ -2544,7 +2555,7 @@ private command wfLayoutMap pW, pH
    put max(sInsetT + 8, round((pH - tB) / 2)) into tT
    wfPlacePanel "Map", tL, tT, tR, tT + tB
    put wfPlaceLabel("Map Title", 26, tL, tT + tPad, tR) into tY
-   put wfPlaceLabel("Map Sub", 13, tL, tY + 2 * sU, tR) + 12 * sU into tY
+   put wfPlaceLabel("Map Sub", 15, tL, tY + 2 * sU, tR) + 12 * sU into tY
    put round((tL + tR) / 2 - (5 * tTile + 4 * tGap) / 2) into tX
    put round(tTile * 0.3) into tStar
    repeat with i = 1 to 5
@@ -2626,7 +2637,7 @@ private command wfLayoutClear pW, pH
    wfPlaceImage "Clear Star 3", tCX + tStar * 1.1, tY + tStar * 0.7, tStar, tStar
    put tY + tStar * 1.2 + 10 * sU into tY
    put wfPlaceLabel("Clear Score", 30, tL, tY, tR) into tY
-   put wfPlaceLabel("Clear Best", 13, tL, tY, tR) + 16 * sU into tY
+   put wfPlaceLabel("Clear Best", 15, tL, tY + 2 * sU, tR) + 14 * sU into tY
    put tCX - (2 * tS + 150 * sU + 2 * tGap) / 2 into tX
    wfPlaceButton "Clear Levels", tX, tY, tX + tS, tY + tS
    wfPlaceButton "Clear Replay", tX + tS + tGap, tY, tX + 2 * tS + tGap, tY + tS

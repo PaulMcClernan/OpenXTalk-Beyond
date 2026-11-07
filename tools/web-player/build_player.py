@@ -363,6 +363,12 @@ SAMPLES = [
                     'meteors and raiders, and face a mothership every fourth sector. Kenney\'s '
                     'art and sounds, mixed by Web Audio; it plays with the mouse and keys too.',
      'tags': ['Game', 'Phones', 'Touch']},
+    {'title': 'Wobble Forts', 'source': 'stacks',
+     'files': ['Wobble Forts.oxtstack'], 'image': 'Wobble Forts.webp',
+     'description': 'A physics game for a phone: pull back and fling the round Bloops at the '
+                    'Grumps\' wobbly forts of wood, glass, stone, metal and TNT, with a trick for '
+                    'each Bloop. Fifteen forts in three lands on Box2Dxt, with stars to earn.',
+     'tags': ['Game', 'Phones', 'Touch', 'Physics']},
     {'title': 'Tour', 'files': ['Tour.livecode'],
      'description': 'Cards, a widget, a palette window and a script error, caught and shown.',
      'tags': ['Cards', 'Widget', 'Palette']},

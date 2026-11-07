@@ -7,8 +7,9 @@ script "TestWobbleForts"
 --
 -- The game plays on Box2D, through the xTalk Suite's Box2Dxt, which the
 -- Stack Player's web engine has built in. A desktop engine has it only
--- as an extension: set OXT_BOX2DXT to a folder with Box2Dxt's module.lcm
--- and its library (box2dxt.so, .dylib or .dll) and these tests load it;
+-- as an extension: set OXT_BOX2DXT to Box2Dxt's folder (its module.lcm
+-- and its library), a folder with it in, or an installed IDE's folder,
+-- and these tests load it (loadBox2D);
 -- without it the tests of play are skipped, and the game is checked
 -- opening on its notice. tools/ci/wobble_forts_check.py plays it with
 -- real touches in a phone's browser, Box2D and all.
@@ -46,23 +47,57 @@ on TestTeardown
 end TestTeardown
 
 -- Box2Dxt from OXT_BOX2DXT, once (an engine that has it already, or no
--- such folder: nothing to do)
+-- such folder: nothing to do). The folder is the extension's own (its
+-- module.lcm, and its library beside it or in code/<platform>/, as
+-- tools/oxt/xtalk_extensions.py builds it), or one with the extension's
+-- folder in it, or an installed IDE's (its Extensions folder)
 private command loadBox2D
-   local tFolder, tLib, tError
+   local tRoot, tFolder, tTry, tLib, tPick, tError
    try
       get b2Version()
       exit loadBox2D
    catch tError
    end try
-   put $OXT_BOX2DXT into tFolder
-   if tFolder is empty or there is not a file (tFolder & "/module.lcm") then
+   put $OXT_BOX2DXT into tRoot
+   if tRoot is empty then
       exit loadBox2D
    end if
-   repeat for each item tLib in "box2dxt.so,box2dxt.dylib,box2dxt.dll"
-      if there is a file (tFolder & "/" & tLib) then
-         set the revLibraryMapping["box2dxt"] to tFolder & "/" & tLib
+   repeat for each item tTry in ",/org.openxtalk.box2dxt,/Extensions/org.openxtalk.box2dxt"
+      if there is a file (tRoot & tTry & "/module.lcm") then
+         put tRoot & tTry into tFolder
+         exit repeat
       end if
    end repeat
+   if tFolder is empty then
+      exit loadBox2D
+   end if
+   switch the platform
+      case "Win32"
+         put "box2dxt.dll" into tLib
+         break
+      case "MacOS"
+         put "box2dxt.dylib" into tLib
+         break
+      default
+         put "box2dxt.so" into tLib
+   end switch
+   if there is a file (tFolder & "/" & tLib) then
+      set the revLibraryMapping["box2dxt"] to tFolder & "/" & tLib
+   else
+      -- code/<processor>-<platform>/ (x86_64-linux), or the one there is
+      -- (universal-mac)
+      -- (the mapping is only set: an engine without one throws on reading it)
+      repeat for each line tTry in folders(tFolder & "/code")
+         if there is a file (tFolder & "/code/" & tTry & "/" & tLib) then
+            if tPick is empty or (tTry begins with (the processor & "-")) then
+               put tFolder & "/code/" & tTry & "/" & tLib into tPick
+            end if
+         end if
+      end repeat
+      if tPick is not empty then
+         set the revLibraryMapping["box2dxt"] to tPick
+      end if
+   end if
    try
       load extension from file (tFolder & "/module.lcm") with resource path tFolder
    end try
