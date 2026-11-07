@@ -23,10 +23,11 @@ compare them with what another builder made, and run them on a device.
   python3 tools/ci/android_check.py ide (--install DIR | --package FILE | --bin DIR)
       --work DIR [--sdk DIR] [--jdk DIR] [--platform P] [--device SERIAL]
       [--stack FILE] [--builds NAMES] [--no-units] [--probe java] [--timeout SECONDS]
-  python3 tools/ci/android_check.py verify --work DIR --sdk DIR
+  python3 tools/ci/android_check.py verify --work DIR --sdk DIR [--jdk DIR] [--builds NAMES] [--target API]
   python3 tools/ci/android_check.py compare --old DIR --new DIR --sdk DIR
   python3 tools/ci/android_check.py device --apk FILE --serial SERIAL --sdk DIR
       [--out FILE] [--abi ABI] [--timeout SECONDS] [--allow PERMISSION]
+      [--bundletool JAR --jdk DIR]
   python3 tools/ci/android_check.py boot --serial SERIAL --sdk DIR [--log FILE]
       [--minutes M] [--awake] [--settle]
 
@@ -45,7 +46,10 @@ ide starts the IDE as a user starts it (as tools/ci/web_check.py does, under
 xvfb-run on Linux without a DISPLAY) with tools/ci/android-check.livecodescript
 named on its command line. That script runs the units of the builder's new
 handlers, which need no Android SDK, and with --sdk builds the probe stack
-four times with the builder (see BUILDS) into <work>/out/<name>.apk; with
+five times with the builder (see BUILDS) into <work>/out/<name>.apk, and the
+bundle build's App Bundle beside it (<name>.aab), for which the builder
+downloads bundletool once (the jar it keeps is copied to <work>/
+bundletool.jar, for verify and device); with
 --device it also does what the IDE's Test does for that device. Its lines go
 to <work>/android-check.txt, which this prints. The release build is signed
 with a keystore made here with the JDK's keytool (<work>/check.keystore).
@@ -63,7 +67,13 @@ stored and aligned (Android 11 and newer refuse it compressed for apps that
 target API 30 and newer), every activity, service and receiver with an
 intent-filter saying android:exported (Android 12 and newer refuse the app
 otherwise), the 64-bit engine libraries aligned for 16 KB pages, the
-package name and target API, and the builder's warnings.
+package name and target API, and the builder's warnings. A bundle build's
+App Bundle (verify_bundle) must hold what its package holds, keep the
+native libraries compressed and the assets stored in the device's
+packages, be signed by the package's signer (the JDK's jarsigner and
+keytool: --jdk, or those on the PATH), and with <work>/bundletool.jar
+(which must be the version the builder pins) say the package name and
+target API in its manifest; no other build may leave an App Bundle.
 
 compare checks that two sets of packages (the released builder's and the
 changed one's, of the same probe stack) hold the same files with the same
@@ -71,7 +81,9 @@ bytes, apart from what the change meant to change: the signatures (see
 EXPECTED_SIGNING) and, in the debug build, the push receiver's
 android:exported (see EXPECTED_MANIFEST). Every difference is printed.
 
-device installs a package on a device or emulator with adb, starts it and
+device installs a package on a device or emulator with adb (an App Bundle,
+<name>.aab, as Google Play does: the device's split APKs that bundletool,
+--bundletool, makes of it with the JDK's java, --jdk, and installs), starts it and
 waits until the screen is the probe's green (kRunColor in
 android-check.livecodescript), which only the probe's openStack makes: the
 engine loaded, opened the stack and ran its script. The Java layer's
@@ -105,7 +117,8 @@ keyguard and keeps it awake (awake).
 
 Exit status 0 when every check passed, 1 otherwise. Only the Python 3
 standard library is used (3.8 or later), with the Android SDK's adb,
-apksigner, aapt and zipalign.
+apksigner, aapt and zipalign, and for an App Bundle the JDK's java,
+jarsigner and keytool, and bundletool.
 """
 
 import argparse
@@ -155,6 +168,12 @@ CLASSES = ('Runtime', 'Android', 'Classes')
 TARGET_SDK = '33'
 NEWEST_TARGET_SDK = '36'
 LARGE_SCREEN_PROPERTY = 'android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY'
+# The App Bundle: the bundletool the builder downloads (its
+# kBundletoolVersion and kBundletoolSHA256), and the name ide gives the
+# jar the builder keeps, in the work folder
+BUNDLETOOL_VERSION = '1.18.3'
+BUNDLETOOL_SHA256 = 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29'
+BUNDLETOOL_JAR = 'bundletool.jar'
 KEY_ALIAS = 'oxtcheck'
 KEY_PASSWORD = 'oxtcheck-pass'
 KEY_DNAME = 'CN=OXT Android Check, O=OXT-Beyond, C=US'
@@ -163,8 +182,9 @@ SIG_BLOCK_MAGIC = b'APK Sig Block 42'
 PAGE_16K = 16384
 
 # What each build of android-check.livecodescript is: its architectures,
-# who signs it (None: nobody), whether it has the push receiver, and the
-# warnings the builder must give (each a piece of one warning line)
+# who signs it (None: nobody), whether it has the push receiver, the
+# warnings the builder must give (each a piece of one warning line), and
+# whether an App Bundle comes with it (signed as the package is)
 BUILDS = {
     'debug': {'abis': {'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'}, 'signer': DEBUG_DNAME, 'push': True,
               'warnings': []},
@@ -172,6 +192,8 @@ BUILDS = {
     'unsigned': {'abis': {'arm64-v8a'}, 'signer': None, 'push': False, 'warnings': []},
     'legacy': {'abis': {'armeabi-v7a'}, 'signer': None, 'push': False,
                'warnings': ['built for armv7 and not arm64']},
+    'bundle': {'abis': {'arm64-v8a', 'x86_64'}, 'signer': KEY_DNAME, 'push': False, 'warnings': [],
+               'bundle': True},
 }
 ABIS_64 = ('arm64-v8a', 'x86_64')
 
@@ -183,6 +205,8 @@ EXPECTED_SIGNING = {
     'debug': 'the released builder did not sign it; now the debug key signs it',
     'release': 'the signature is made again (a new signing time); the released builder\'s lost its v2 and v3 '
                'signatures to zipalign',
+    'bundle': 'the signature is made again (a new signing time); the released builder\'s lost its v2 and v3 '
+              'signatures to zipalign',
 }
 # compare: the manifest lines (aapt's xmltree, without line numbers) the
 # change added, per build. A line the old package already has is not
@@ -297,6 +321,114 @@ def data_offset(data, info):
         raise CheckError('%s: no local header at %d' % (info.filename, off))
     name_len, extra_len = struct.unpack('<HH', data[off + 26:off + 30])
     return off + 30 + name_len + extra_len
+
+
+def varint(data, i):
+    """(the protocol buffer varint at data[i], where the next field
+    starts)"""
+    value = shift = 0
+    while True:
+        if i >= len(data):
+            raise CheckError('a protocol buffer cut short in a varint')
+        b = data[i]
+        i += 1
+        value |= (b & 0x7f) << shift
+        if not b & 0x80:
+            return value, i
+        shift += 7
+
+
+def proto_fields(data):
+    """A protocol buffer message's fields, in order, as (number, value): a
+    varint's value as an int, a length-delimited field's bytes, a fixed
+    one's bytes."""
+    fields, i = [], 0
+    while i < len(data):
+        key, i = varint(data, i)
+        number, wire = key >> 3, key & 7
+        if wire == 0:
+            value, i = varint(data, i)
+        elif wire == 2:
+            n, i = varint(data, i)
+            if i + n > len(data):
+                raise CheckError('a protocol buffer cut short in field %d' % number)
+            value, i = data[i:i + n], i + n
+        elif wire in (1, 5):
+            n = 8 if wire == 1 else 4
+            value, i = data[i:i + n], i + n
+        else:
+            raise CheckError('a protocol buffer with wire type %d (field %d)' % (wire, number))
+        fields.append((number, value))
+    return fields
+
+
+def bundle_config(data):
+    """What an App Bundle's BundleConfig.pb (bundletool's config.proto)
+    says: the bundletool that made it (bundletool = 1, its version = 2),
+    whether the device's packages hold the native libraries uncompressed
+    (optimizations = 2, uncompress_native_libraries = 2, enabled = 1:
+    None when not said, which is bundletool's default, uncompressed), and
+    the files kept stored (compression = 3, uncompressed_glob = 1)."""
+    r = {'version': None, 'uncompress_native_libraries': None, 'uncompressed_glob': []}
+    for number, value in proto_fields(data):
+        if number == 1 and isinstance(value, bytes):
+            for n, v in proto_fields(value):
+                if n == 2 and isinstance(v, bytes):
+                    r['version'] = v.decode('utf-8', 'replace')
+        elif number == 2 and isinstance(value, bytes):
+            for n, v in proto_fields(value):
+                if n == 2 and isinstance(v, bytes):
+                    enabled = [x for k, x in proto_fields(v) if k == 1]
+                    r['uncompress_native_libraries'] = bool(enabled[-1]) if enabled else False
+        elif number == 3 and isinstance(value, bytes):
+            r['uncompressed_glob'] += [v.decode('utf-8', 'replace') for n, v in proto_fields(value)
+                                       if n == 1 and isinstance(v, bytes)]
+    return r
+
+
+def bundle_place(name):
+    """Where a file of a package is in its App Bundle's base module (the
+    builder's androidBundleModulePath, after aapt2 convert has made
+    resources.arsc resources.pb), or None for one the bundle leaves out
+    (the signature's files, and the jar files at the top of lib/)."""
+    if name.startswith('META-INF/') or name.endswith('/'):
+        return None
+    if name == 'AndroidManifest.xml':
+        return 'manifest/AndroidManifest.xml'
+    if name == 'resources.arsc':
+        return 'resources.pb'
+    if name.startswith(('res/', 'assets/')):
+        return name
+    if name.startswith('lib/'):
+        return name if name.count('/') >= 2 else None
+    if '/' not in name and re.match(r'^classes\d*\.dex$', name):
+        return 'dex/' + name
+    return 'root/' + name
+
+
+def bundle_converted(place):
+    """Whether aapt2 convert rewrites a file of the base module (the
+    manifest, the resource table and the resources' XML, from aapt's
+    binary form to protocol buffers), so its bytes differ from the
+    package's."""
+    return place in ('manifest/AndroidManifest.xml', 'resources.pb') or \
+        (place.startswith('res/') and place.endswith('.xml'))
+
+
+def jar_signers(printcert):
+    """The owners of the certificates that signed a jar, in keytool
+    -printcert -jarfile's output (in English), joined by " | ", or None"""
+    owners = []
+    for m in re.finditer(r'(?m)^Owner:[ \t]*(.*?)[ \t\r]*$', printcert):
+        if m.group(1) and m.group(1) not in owners:
+            owners.append(m.group(1))
+    return ' | '.join(owners) if owners else None
+
+
+def installed_apks(pm_path):
+    """The file names of an installed app's APKs, in pm path's output
+    (package:/data/app/.../base.apk, and one line for each split)"""
+    return [os.path.basename(x.strip()[8:]) for x in pm_path.splitlines() if x.strip().startswith('package:')]
 
 
 def elf_load_alignments(data):
@@ -674,8 +806,10 @@ def probe_picture(rows, name, package):
 def ide_results(lines):
     """From the IDE's lines: units (name -> None or why it failed), builds
     (name -> apk or the failure), warnings and questions (name -> text),
-    test (None, True or the failure), errors, and done."""
-    r = {'units': {}, 'builds': {}, 'warnings': {}, 'asked': {}, 'test': None, 'errors': [], 'done': False}
+    test (None, True or the failure), errors, done, and the bundletool jar
+    the builder keeps (None when it did not say)."""
+    r = {'units': {}, 'builds': {}, 'warnings': {}, 'asked': {}, 'test': None, 'errors': [], 'done': False,
+         'bundletool': None}
     for line in lines:
         if line.startswith('UNIT OK '):
             r['units'][line[8:].strip()] = None
@@ -688,6 +822,8 @@ def ide_results(lines):
         elif line.startswith('BUILD FAILED '):
             parts = line.split(' ', 3)
             r['builds'][parts[2]] = ('failed', parts[3] if len(parts) > 3 else '')
+        elif line.startswith('INFO bundletool '):
+            r['bundletool'] = line[16:].strip()
         elif line.startswith('INFO ') and len(line.split(' ')) >= 3 and line.split(' ')[2] in ('warnings', 'asked'):
             parts = line.split(' ', 3)
             r[parts[2]][parts[1]] = parts[3] if len(parts) > 3 else ''
@@ -870,6 +1006,14 @@ def ide(args):
                 problems.append('build %s failed: %s' % (name, state[1]))
     if args.device and r['test'] is not True:
         problems.append('Test on %s: %s' % (args.device, r['test'] or 'the IDE did not get to it'))
+    # the bundletool the builder downloaded for the App Bundle, for verify
+    # and device
+    jar = os.path.join(work, BUNDLETOOL_JAR)
+    if os.path.exists(jar):
+        os.remove(jar)
+    if r['bundletool'] and os.path.isfile(r['bundletool']):
+        shutil.copyfile(r['bundletool'], jar)
+        log('The builder\'s bundletool: %s -> %s' % (r['bundletool'], jar))
     log()
     log('Units: %d passed, %d failed' % (len(r['units']) - len(failed), len(failed)))
     log('Builds: %s' % ', '.join('%s %s' % (k, v[0]) for k, v in sorted(r['builds'].items())) or 'none')
@@ -1036,6 +1180,117 @@ def verify_apk(name, apk, spec, tools, warnings, target=TARGET_SDK):
     return problems, notes
 
 
+def verify_bundle(name, aab, apk, spec, tools, target=TARGET_SDK):
+    """The problems of one build's App Bundle (aab, beside its package apk),
+    and lines saying what was checked. tools may name the JDK's jarsigner,
+    keytool and java, and bundletool (the jar)."""
+    problems, notes = [], []
+    zb, za = zipfile.ZipFile(aab), zipfile.ZipFile(apk)
+    held = {i.filename for i in zb.infolist() if not i.filename.endswith('/')}
+    for required in ('BundleConfig.pb', 'base/manifest/AndroidManifest.xml', 'base/resources.pb',
+                     'base/dex/classes.dex'):
+        if required not in held:
+            problems.append('%s.aab has no %s' % (name, required))
+    # what the package holds, in the base module: the same bytes, bar what
+    # aapt2 converts
+    wanted = {}
+    for n in za.namelist():
+        place = bundle_place(n)
+        if place:
+            wanted['base/' + place] = n
+    missing = sorted(x for x in wanted if x not in held)
+    if missing:
+        problems.append('%s.aab does not hold these files of %s.apk: %s' % (name, name, ', '.join(missing)))
+    differ = sorted(x for x in wanted if x in held and not bundle_converted(x[5:]) and zb.read(x) != za.read(wanted[x]))
+    if differ:
+        problems.append('%s.aab: these differ from %s.apk\'s: %s' % (name, name, ', '.join(differ)))
+    extra = sorted(x for x in held if x.startswith('base/') and x not in wanted and
+                   x not in ('base/assets.pb', 'base/native.pb'))
+    if extra:
+        problems.append('%s.aab holds files %s.apk does not: %s' % (name, name, ', '.join(extra)))
+    if not (missing or differ or extra):
+        notes.append('it holds the %d files of %s.apk' % (len(wanted), name))
+    abis = {x.split('/')[2] for x in held if re.match(r'^base/lib/[^/]+/[^/]+\.so$', x)}
+    if abis != spec['abis']:
+        problems.append('%s.aab has native code for %s, not %s' % (name, ', '.join(sorted(abis)) or 'nothing',
+                                                                 ', '.join(sorted(spec['abis']))))
+    # bundletool's settings for the device's packages
+    if 'BundleConfig.pb' in held:
+        config = bundle_config(zb.read('BundleConfig.pb'))
+        before = len(problems)
+        if config['uncompress_native_libraries'] is not False:
+            problems.append('%s.aab: the device\'s packages would hold the native libraries uncompressed, where '
+                            'Android does not extract them and the engine does not load them (BundleConfig.pb: '
+                            'uncompressNativeLibraries is %s)' % (name, {None: 'not said', True: 'enabled'}[
+                                config['uncompress_native_libraries']]))
+        if 'assets/**' not in config['uncompressed_glob']:
+            problems.append('%s.aab: the device\'s packages would compress the assets, which the engine opens at '
+                            'their place in the package (BundleConfig.pb: uncompressedGlob %s)'
+                            % (name, config['uncompressed_glob'] or 'not said'))
+        if config['version'] != BUNDLETOOL_VERSION:
+            problems.append('%s.aab was made by bundletool %s, not %s' % (name, config['version'],
+                                                                         BUNDLETOOL_VERSION))
+        if len(problems) == before:
+            notes.append('bundletool %s, native libraries compressed, assets stored' % config['version'])
+    # the signature
+    meta = [n for n in held if re.match(r'^META-INF/[^/]+\.(SF|RSA|DSA|EC)$', n)]
+    if spec['signer']:
+        if not meta:
+            problems.append('%s.aab is not signed' % name)
+        if not (tools.get('jarsigner') and tools.get('keytool')):
+            problems.append('%s.aab: no jarsigner and keytool (the JDK\'s, --jdk) to check its signature' % name)
+        else:
+            status, out = run([tools['jarsigner'], '-J-Duser.language=en', '-verify', aab])
+            # jarsigner answers 0 for a jar with no signature too
+            verified = status == 0 and 'jar verified' in out
+            if not verified:
+                problems.append('%s.aab: jarsigner does not verify it: %s' % (name, out.strip()[-500:]))
+            _, printcert = run([tools['keytool'], '-J-Duser.language=en', '-printcert', '-jarfile', aab])
+            signer = jar_signers(printcert)
+            if signer != spec['signer']:
+                problems.append('%s.aab is signed by %s, not %s' % (name, signer, spec['signer']))
+            elif verified:
+                notes.append('signed by %s (jarsigner verifies it)' % signer)
+    elif meta:
+        problems.append('%s.aab is signed, and should not be (%s)' % (name, ', '.join(sorted(meta))))
+    # the manifest, by bundletool
+    if tools.get('bundletool') and tools.get('java'):
+        before = len(problems)
+        status, out = run([tools['java'], '-jar', tools['bundletool'], 'validate', '--bundle', aab])
+        if status != 0:
+            problems.append('%s.aab: bundletool does not take it: %s' % (name, out.strip()[-500:]))
+        status, manifest = run([tools['java'], '-jar', tools['bundletool'], 'dump', 'manifest', '--bundle', aab])
+        if status != 0:
+            problems.append('%s.aab: bundletool cannot read its manifest: %s' % (name, manifest.strip()[-500:]))
+        else:
+            if 'package="%s"' % IDENTIFIER not in manifest:
+                problems.append('%s.aab: its manifest does not name the package %s' % (name, IDENTIFIER))
+            if 'android:targetSdkVersion="%s"' % target not in manifest:
+                problems.append('%s.aab does not target API %s' % (name, target))
+            large = re.search(r'<property android:name="%s" android:value="([^"]*)"' %
+                              re.escape(LARGE_SCREEN_PROPERTY), manifest)
+            if int(target) >= 36 and not (large and large.group(1) == 'true'):
+                problems.append('%s.aab targets API %s, and its manifest does not keep the stack\'s orientation on '
+                                'large screens' % (name, target))
+            elif int(target) < 36 and large:
+                problems.append('%s.aab: the manifest has %s, which is for API 36 and newer' % (
+                    name, LARGE_SCREEN_PROPERTY))
+        if len(problems) == before:
+            notes.append('bundletool takes it; its manifest names the package and targets API %s' % target)
+    else:
+        problems.append('%s.aab: no bundletool (%s) and java to read its manifest' % (name, BUNDLETOOL_JAR))
+    return problems, notes
+
+
+def jdk_tool(jdk, name):
+    """The JDK's tool name (in jdk/bin, or on the PATH), or None"""
+    if jdk:
+        path = os.path.join(jdk, 'bin', name + ('.exe' if os.name == 'nt' else ''))
+        if os.path.isfile(path):
+            return path
+    return shutil.which(name)
+
+
 def find_tools(sdk):
     tools = {'apksigner': build_tool(sdk, 'apksigner'), 'aapt': build_tool(sdk, 'aapt'),
              'zipalign': build_tool(sdk, 'zipalign')}
@@ -1044,12 +1299,36 @@ def find_tools(sdk):
     return tools
 
 
+def sha256_file(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for block in iter(lambda: f.read(1 << 20), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
 def verify(args):
     work = os.path.abspath(args.work)
     tools = find_tools(args.sdk)
     r = ide_results(read_lines(os.path.join(work, LOG_NAME)))
     problems = []
     names = (args.builds or ','.join(BUILDS)).split(',')
+    bundles = [n for n in names if BUILDS[n].get('bundle')]
+    if bundles:
+        # the JDK's tools, and the bundletool the builder kept (ide copied
+        # it): the version it pins
+        for tool in ('jarsigner', 'keytool', 'java'):
+            tools[tool] = jdk_tool(args.jdk, tool)
+        jar = os.path.join(work, BUNDLETOOL_JAR)
+        if os.path.isfile(jar):
+            digest = sha256_file(jar)
+            if digest != BUNDLETOOL_SHA256:
+                problems.append('the builder kept a bundletool that is not the one it pins (SHA-256 %s, not %s)'
+                                % (digest, BUNDLETOOL_SHA256))
+            else:
+                log('The builder\'s bundletool: %s, SHA-256 %s' % (BUNDLETOOL_VERSION, digest))
+                tools['bundletool'] = jar
     for name in names:
         apk = os.path.join(work, 'out', name + '.apk')
         if not os.path.isfile(apk):
@@ -1060,7 +1339,19 @@ def verify(args):
         for x in p:
             log('  PROBLEM: %s' % x)
         problems += p
-    leftovers = [x for x in os.listdir(os.path.join(work, 'out')) if not x.endswith('.apk')]
+        if name in bundles:
+            aab = os.path.join(work, 'out', name + '.aab')
+            if not os.path.isfile(aab):
+                problems.append('there is no %s (the build asked for an App Bundle)' % aab)
+                continue
+            p, notes = verify_bundle(name, aab, apk, BUILDS[name], tools, args.target)
+            log('%s.aab (%.1f MB): %s' % (name, os.path.getsize(aab) / 1e6, '; '.join(notes)))
+            for x in p:
+                log('  PROBLEM: %s' % x)
+            problems += p
+    # an App Bundle only where a build asked for one
+    leftovers = [x for x in os.listdir(os.path.join(work, 'out'))
+                 if not x.endswith('.apk') and not (x.endswith('.aab') and x[:-4] in bundles)]
     if leftovers:
         problems.append('the builder left other files beside the packages: %s' % ', '.join(sorted(leftovers)))
     return problems
@@ -1178,6 +1469,88 @@ def compare(args):
 # ---------------------------------------------------------------------------
 # device
 
+def install_bundle(args, adb, a):
+    """Installs the App Bundle args.apk as Google Play does: bundletool
+    makes the device's split APKs of it (build-apks --connected-device,
+    signed with a key made here) and installs them (install-apks). Returns
+    the problems, none when it is installed as more than one APK."""
+    name = os.path.basename(args.apk)
+    java = jdk_tool(args.jdk, 'java')
+    if not (args.bundletool and os.path.isfile(args.bundletool)):
+        return ['%s is an App Bundle, and there is no bundletool to install it (--bundletool: %s)'
+                % (name, args.bundletool or 'not given')]
+    if not java:
+        return ['%s is an App Bundle, and there is no java (the JDK\'s, --jdk) to run bundletool' % name]
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix='oxt-apks-')
+    try:
+        keystore = os.path.join(tmp, 'apks.keystore')
+        make_keystore(args.jdk, keystore)
+        apks = os.path.join(tmp, 'bundle.apks')
+        status, out = run([java, '-jar', args.bundletool, 'build-apks', '--bundle', args.apk, '--output', apks,
+                           '--connected-device', '--device-id', args.serial, '--adb', adb,
+                           '--ks', keystore, '--ks-pass', 'pass:' + KEY_PASSWORD, '--ks-key-alias', KEY_ALIAS,
+                           '--key-pass', 'pass:' + KEY_PASSWORD], timeout=600)
+        if status != 0 or not os.path.isfile(apks):
+            return ['bundletool makes no APKs of %s for %s: %s' % (name, args.serial, out.strip()[-800:])]
+        with zipfile.ZipFile(apks) as z:
+            made = sorted(os.path.basename(n) for n in z.namelist() if n.endswith('.apk'))
+        log('bundletool made %d APKs of %s for the device: %s' % (len(made), name, ', '.join(made)))
+        status, out = run([java, '-jar', args.bundletool, 'install-apks', '--apks', apks,
+                           '--device-id', args.serial, '--adb', adb], timeout=600)
+        if status != 0:
+            return ['%s does not install on %s: %s' % (name, args.serial, out.strip()[-800:])]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    _, paths = a('shell', 'pm', 'path', IDENTIFIER)
+    installed = installed_apks(paths)
+    log('Installed %s as %d APKs: %s' % (name, len(installed), ', '.join(installed) or 'none'))
+    if len(installed) < 2:
+        return ['%s is installed as %s, not as split APKs as Google Play installs it (pm path: %s)'
+                % (name, ', '.join(installed) or 'nothing', paths.strip()[-300:] or 'no answer')]
+    return []
+
+
+# How long device waits, after installing the probe, for each of: the
+# broadcasts the install set off, and the package manager's handler
+QUIET_SECONDS = 120
+
+
+def quiet_after_install(a, seconds=QUIET_SECONDS):
+    """After the probe is installed and before it starts: until the
+    broadcast queues are idle (am wait-for-broadcast-idle) and the package
+    manager's handler is idle (pm wait-for-handler), at most `seconds` each,
+    as boot --settle waits after booting. An install wakes many of the
+    system's apps (its PACKAGE_ADDED receivers), and each holds a
+    foreground priority while its receiver runs. In run 42324548829 the
+    Java layer's probe on the 16 KB image at API 36 started into that (the
+    launcher, MediaProvider, the IMS resolver, Blockstore and the app
+    indexer were taking the install), behind its notification permission
+    dialog, so visible but not in front (oom_score_adj 101), and lmkd killed
+    it, with 3 GB on the device and 1.7 GB available a second later ("min
+    watermark is breached even after kill"; exit-info LOW_MEMORY); run
+    42312203693, at 1536 MB, the same. A wait that does not end, or a
+    command that cannot say, is said, and the run goes on: this decides
+    nothing. `a` runs adb on the device."""
+    said = []
+    for what, cmd in (('the broadcast queues are idle', ('am', 'wait-for-broadcast-idle')),
+                      ("the package manager's handler is idle",
+                       ('pm', 'wait-for-handler', '--timeout', str(seconds * 1000)))):
+        name = ' '.join(cmd[:2])
+        start = time.monotonic()
+        try:
+            status, out = a('shell', *cmd, timeout=seconds + 10)
+        except CheckError:
+            said.append('%s: not in %d s (%s)' % (what, seconds, name))
+            continue
+        if status != 0 or re.search(NOT_SERVING, out) or re.search(r'(?i)unknown (command|option)|error', out):
+            said.append('%s: %s cannot say (exit status %d: %s)' % (what, name, status, answer(out) or 'nothing'))
+        else:
+            said.append('%s after %d s (%s)' % (what, time.monotonic() - start, name))
+    log('Before it starts: %s' % '; '.join(said))
+    return said
+
+
 def device(args):
     adb = adb_path(args.sdk)
     if not adb:
@@ -1195,10 +1568,16 @@ def device(args):
         log('NOTE: the device is %s (dumpsys power): Android pauses an activity started now (see boot --awake)'
             % state)
     a('uninstall', IDENTIFIER)
-    status, out = a('install', '-r', args.apk, timeout=600)
-    if 'Success' not in out:
-        return ['%s does not install on %s: %s' % (os.path.basename(args.apk), args.serial, out.strip()[-800:])]
-    log('Installed %s' % os.path.basename(args.apk))
+    if args.apk.endswith('.aab'):
+        refused = install_bundle(args, adb, a)
+        if refused:
+            return refused
+    else:
+        status, out = a('install', '-r', args.apk, timeout=600)
+        if 'Success' not in out:
+            return ['%s does not install on %s: %s' % (os.path.basename(args.apk), args.serial, out.strip()[-800:])]
+        log('Installed %s' % os.path.basename(args.apk))
+    quiet_after_install(a)
     a('logcat', '-c')
     status, out = a('shell', 'am', 'start', '-W', '-n', IDENTIFIER + '/.mblandroid')
     log('Started: %s' % ' | '.join(x.strip() for x in out.splitlines() if x.strip()))
@@ -1245,7 +1624,9 @@ def device(args):
     _, logcat = a('logcat', '-d', '-v', 'brief')
     pids = probe_pids(logcat, pid)
     with zipfile.ZipFile(args.apk) as z:
-        crash, expected, others = crash_lines(logcat, z.namelist(), pids)
+        # an App Bundle's files are in its base module
+        names = [n[5:] if n.startswith('base/') else n for n in z.namelist()]
+        crash, expected, others = crash_lines(logcat, names, pids)
     log('The probe\'s processes in the log: %s' % (', '.join(sorted(pids)) or
                                                   'none known, so every line is read as its'))
     for line in expected:
@@ -1748,6 +2129,7 @@ def main(argv=None):
     v.add_argument('--work', required=True)
     v.add_argument('--sdk', required=True)
     v.add_argument('--builds')
+    v.add_argument('--jdk', help='the JDK whose jarsigner, keytool and java check an App Bundle')
     v.add_argument('--target', default=TARGET_SDK,
                    help='the API the packages must target (%s with a runtime whose Java layer is not ready for '
                         'newer, %s when it is)' % (TARGET_SDK, NEWEST_TARGET_SDK))
@@ -1757,7 +2139,9 @@ def main(argv=None):
     c.add_argument('--sdk')
     c.add_argument('--builds')
     d = sub.add_parser('device')
-    d.add_argument('--apk', required=True)
+    d.add_argument('--apk', required=True, help='a package, or an App Bundle (.aab)')
+    d.add_argument('--bundletool', help='the bundletool jar that installs an App Bundle')
+    d.add_argument('--jdk', help='the JDK whose java runs bundletool')
     d.add_argument('--serial', required=True)
     d.add_argument('--sdk', required=True)
     d.add_argument('--out')
