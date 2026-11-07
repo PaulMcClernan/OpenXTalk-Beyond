@@ -157,6 +157,15 @@ FAIL_COLOR = (230, 160, 0)
 # it must show within BACK_WAIT seconds of the key
 BACK_COLOR = (40, 90, 200)
 BACK_WAIT = 20
+# device --within-bars: how long the screen is taken again, every
+# BARS_INTERVAL seconds, when the first green screen has the probe's green
+# where a system bar is, before that is a failure. On the 16 KB Android 16
+# image the same package that targets API 33 passed in other runs, and in
+# run 42354758286 (attempt 2) its first green screen, 4 s after a cold
+# start, was green in its bottom row: a screen taken before the bar was
+# drawn over the window is not where the window is
+BARS_WAIT = 8
+BARS_INTERVAL = 1
 # The probes (--probe): the stack file each is saved as
 PROBES = {'app': 'AndroidProbe.livecode', 'java': 'AndroidJavaProbe.livecode'}
 # Where a release's Java layer is (overlay --classes)
@@ -576,6 +585,27 @@ def bars_drawn_over(rgba, width, height, colour=RUN_COLOR):
         if part >= 0.5:
             over.append('%s %.0f%%' % (where, part * 100))
     return over
+
+
+def bars_again(adb, serial, over, seconds=None):
+    """device --within-bars, when the first green screen had the stack's
+    green where a bar is (over): the screen taken again every BARS_INTERVAL
+    seconds, up to BARS_WAIT, until one that is the probe's green has the
+    bars over it. (what bars_drawn_over says of the last such screen, how
+    many screens were taken, the seconds waited)"""
+    seconds = BARS_WAIT if seconds is None else seconds
+    started, shots = time.time(), 0
+    while over and time.time() - started < seconds:
+        time.sleep(BARS_INTERVAL)
+        got = screen_now(adb, serial)
+        if not got:
+            continue
+        shots += 1
+        w, h, rgba = got
+        # another screen (a dialog, the probe gone) says nothing of the bars
+        if colour_share(rgba, RUN_COLOR) >= 0.25:
+            over = bars_drawn_over(rgba, w, h)
+    return over, shots, time.time() - started
 
 
 def screen_colours(rgba, top=4, step=7):
@@ -1592,6 +1622,18 @@ def quiet_after_install(a, seconds=QUIET_SECONDS):
     return said
 
 
+def screen_now(adb, serial):
+    """(width, height, rgba) of the device's screen now, or None when
+    screencap gives none."""
+    try:
+        proc = subprocess.run([adb, '-s', serial, 'exec-out', 'screencap'], stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, timeout=60)
+        return screen_from_raw(proc.stdout)
+    except (CheckError, subprocess.TimeoutExpired) as e:
+        log('  screencap: %s' % e)
+        return None
+
+
 def device(args):
     adb = adb_path(args.sdk)
     if not adb:
@@ -1703,6 +1745,13 @@ def device(args):
         # rows are not its green (Android 15 and newer draw an app that
         # targets API 35 edge to edge, and the Java layer pads the stack)
         over = bars_drawn_over(rgba, w, h)
+        if over:
+            log('The bars: the first green screen has the stack\'s green in its %s row; the screen again for up '
+                'to %g s' % (' and '.join(over), BARS_WAIT))
+            over, shots, waited = bars_again(adb, args.serial, over)
+            log('The bars: %d more screen(s) in %.0f s; %s' % (
+                shots, waited, 'the bars are drawn over the stack in the last' if not over else
+                'the stack\'s green is still where the bars are'))
         log('The bars: %s' % ('the stack is drawn under them (%s)' % ', '.join(over) if over else
                               'the stack is inside them (the first and last rows are not its green)'))
         if over:

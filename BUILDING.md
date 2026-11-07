@@ -1636,7 +1636,12 @@ probe exported must be among the shared pictures (`content query` of
 MediaStore) in `Pictures/`, as the package's own. With `--within-bars`
 the screen's first and last rows, where the status and navigation bars
 are, must not be the probe's green once it is green: the stack is not
-drawn under the bars. With `--back` `device` then presses the back key,
+drawn under the bars. When the first green screen has its green there,
+`device` takes the screen again every second for up to 8 seconds, and
+fails only if the bars never come over it (on the 16 KB image the first
+green screen of a package that passes in other runs, soon after a cold
+start, once had its green in the bottom row). With `--back` `device`
+then presses the back key,
 and the probe's `backKey` must turn the screen blue (`-back.png` beside
 `--out` keeps that screen). `ide --device <serial>` does what the IDE's
 Test does for that device. `boot`

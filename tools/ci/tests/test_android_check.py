@@ -1192,9 +1192,10 @@ class DeviceBackAndBars(unittest.TestCase):
         """a raw screencap 4 pixels wide, a row of each colour"""
         return struct.pack('<IIII', 4, len(rows), 1, 0) + b''.join(bytes(list(c) + [255]) * 4 for c in rows)
 
-    def run_probe(self, before, after=None, gone=False, argv=('--back', '--within-bars'), out=False):
+    def run_probe(self, before, after=None, gone=False, argv=('--back', '--within-bars'), out=False, then=None):
         """the probe shows before, and after once the back key is pressed
-        (unchanged when None); gone: its process ends with the key"""
+        (unchanged when None); gone: its process ends with the key; then:
+        what it shows from the second screen on (the bars drawn late)"""
         d = self.tmp.name
         for name in ('calls', 'gone', 'shots'):
             if os.path.exists(os.path.join(d, name)):
@@ -1203,6 +1204,12 @@ class DeviceBackAndBars(unittest.TestCase):
             f.write(Device.LOG.split('I/lowmemorykiller')[0])
         with open(os.path.join(d, 'screen.raw'), 'wb') as f:
             f.write(self.screen(before))
+        later = ''
+        if then is not None:
+            with open(os.path.join(d, 'then.raw'), 'wb') as f:
+                f.write(self.screen(then))
+            later = ('[ "$(grep -c shot "%(d)s/shots")" = 2 ] && cp "%(d)s/then.raw" "%(d)s/screen.raw"; '
+                     % {'d': d})
         with open(os.path.join(d, 'back.raw'), 'wb') as f:
             f.write(self.screen(after if after is not None else before))
         cases = ('  "shell input keyevent KEYCODE_BACK") echo "$*" >> "%(d)s/calls"; echo key >> "%(d)s/shots"; '
@@ -1210,12 +1217,13 @@ class DeviceBackAndBars(unittest.TestCase):
                  % {'d': d, 'gone': 'touch "%s/gone"' % d if gone else 'true'})
         pidof = '[ -f "%s/gone" ] || echo 3475' % d
         extra = list(argv) + (['--out', os.path.join(d, 'screen.png')] if out else [])
-        ac.BACK_WAIT, saved = 3, ac.BACK_WAIT
+        saved = ac.BACK_WAIT, ac.BARS_WAIT, ac.BARS_INTERVAL
+        ac.BACK_WAIT, ac.BARS_WAIT, ac.BARS_INTERVAL = 3, 2, 0.3
         try:
             status, text = self.device(pidof, timeout='10', cases=cases, argv=extra,
-                                       screencap='echo shot >> "%s/shots"; ' % d)
+                                       screencap='echo shot >> "%s/shots"; %s' % (d, later))
         finally:
-            ac.BACK_WAIT = saved
+            ac.BACK_WAIT, ac.BARS_WAIT, ac.BARS_INTERVAL = saved
         try:
             with open(os.path.join(d, 'calls')) as f:
                 calls = f.read().splitlines()
@@ -1249,6 +1257,38 @@ class DeviceBackAndBars(unittest.TestCase):
                       "bottom 100% row)", out)
         status, out, _ = self.run_probe((self.G, self.G, self.G, self.K), (self.B,) * 4)
         self.assertIn("(its green in the screen's top 100% row)", out)
+
+    def test_drawn_under_the_bars_looks_again(self):
+        # the screen is taken again until BARS_WAIT (2 s here) has passed,
+        # and the failure says so
+        status, out, _ = self.run_probe((self.G,) * 4, argv=('--within-bars',))
+        self.assertEqual(status, 1, out)
+        self.assertIn("The bars: the first green screen has the stack's green in its top 100% and bottom 100% row; "
+                      "the screen again for up to 2 s", out)
+        self.assertRegex(out, r"The bars: [4-7] more screen\(s\) in 2 s; the stack's green is still where the "
+                              r"bars are")
+        self.assertGreaterEqual(self.shots.count('shot'), 5)
+
+    def test_bars_drawn_late_pass(self):
+        # the first green screen is green where the bars are, the next has
+        # them over it: the stack is inside them
+        status, out, calls = self.run_probe((self.G,) * 4, argv=('--within-bars',), then=self.INSIDE)
+        self.assertEqual(status, 0, out)
+        self.assertIn('The bars: 1 more screen(s) in 0 s; the bars are drawn over the stack in the last', out)
+        self.assertIn('The bars: the stack is inside them (the first and last rows are not its green)', out)
+        self.assertEqual(self.shots, ['shot', 'shot'])
+
+    def test_a_screen_that_is_not_the_probe_says_nothing_of_the_bars(self):
+        # a black screen (a dialog, the probe gone) next: still under them
+        status, out, _ = self.run_probe((self.G,) * 4, argv=('--within-bars',), then=(self.K,) * 4)
+        self.assertEqual(status, 1, out)
+        self.assertIn("the stack's green is still where the bars are", out)
+
+    def test_inside_the_bars_takes_no_more_screens(self):
+        status, out, _ = self.run_probe(self.INSIDE, argv=('--within-bars',))
+        self.assertEqual(status, 0, out)
+        self.assertEqual(self.shots, ['shot'])
+        self.assertNotIn('the screen again', out)
 
     def test_back_not_reaching_backkey_fails(self):
         status, out, calls = self.run_probe(self.INSIDE)
