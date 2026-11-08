@@ -286,6 +286,10 @@ class ProjectBrowserRefresh(unittest.TestCase):
             self.assertIn('if tProblem is not empty then throw tProblem', step, name)
             check = tour.split('\nfunction tourRefreshProblem pStack\n', 1)[1].split('\nend tourRefreshProblem', 1)[0]
             self.assertIn('"Refresh the Project Browser"', check, name)
+            # the release's binary stack (the screenshot jobs' IDE) has the
+            # old tooltip: recorded, not failed; any other text fails
+            self.assertIn('if the toolTip of tButton is "Refresh the Application Browser" then\n      tourRecord "INFO', check, name)
+            self.assertIn('else if the toolTip of tButton is not "Refresh the Project Browser" then\n      return', check, name)
             # every stack in memory but revIcons, substacks too
             self.assertIn('repeat for each line tMain in the mainStacks', check, name)
             self.assertIn('the substacks of stack tMain', check, name)

@@ -506,7 +506,13 @@ end tour_project_browser
 function tourRefreshProblem pStack
    local tButton, tIcon, tMain, tSub, tHits
    put the long id of button "Refresh" of card "list" of stack pStack into tButton
-   if the toolTip of tButton is not "Refresh the Project Browser" then
+   -- (the tooltip is a property patch of the binary stack, which the
+   -- pull requests' screenshot jobs take from the last release: its old
+   -- tooltip is recorded, not failed; tools/oxt/ide-stack-patch.sh --check
+   -- holds the stack in the repository to the patch)
+   if the toolTip of tButton is "Refresh the Application Browser" then
+      tourRecord "INFO the Project Browser's Refresh tooltip is the release's stack's:" && the toolTip of tButton
+   else if the toolTip of tButton is not "Refresh the Project Browser" then
       return "the Project Browser's Refresh button's tooltip is" && quote & the toolTip of tButton & quote
    end if
    put the icon of tButton into tIcon
