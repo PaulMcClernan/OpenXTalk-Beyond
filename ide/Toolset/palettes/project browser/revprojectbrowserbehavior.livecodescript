@@ -207,8 +207,23 @@ on ideCardDeleted pTarget
    deleteCardFromProjectBrowser pTarget
 end ideCardDeleted
 
+-- OXT-Beyond: as ideDestroyStack (below): pTarget is the long id of a
+-- stack that is gone, which names its file when it was saved. With no row
+-- for that long id (the stack was listed under its name before it was
+-- saved), getRow asked the engine about it, which read the stack from its
+-- file: a saved stack deleted by a script (`delete stack`) with the
+-- Project Browser opened once came back into memory, and when a stack of
+-- its name was open by then (an extension's sample stack, opened from that
+-- file with its filename cleared) the engine asked to reload it and the IDE
+-- put up "A stack with the same name as the one you are trying to load is
+-- already open". So the row is found by that long id alone, or an open
+-- Project Browser is built again from what is in memory
 on ideStackDeleted pTarget
-   deleteStackFromProjectBrowser pTarget
+   if sLongIDToRow[pTarget] is not empty then
+      deleteStackFromProjectBrowser pTarget
+   else if the mode of me is not 0 then
+      buildProjectView true
+   end if
 end ideStackDeleted
 
 on ideLibraryStack pTarget
