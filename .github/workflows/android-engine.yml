@@ -28,10 +28,11 @@
 #     the Java layer built with it, and its calls into Java.
 #
 # Then the engine runs (the device job): the IDE's builder of this checkout,
-# in the latest release's IDE with this runtime in place of its own,
-# builds both probes, and they run on an Android 13 emulator and on the
-# first image with 16 KB pages, with the checks android.yml makes of them
-# with the released engine.
+# in the latest release's IDE with this runtime beside its own (as
+# Runtime/Android/Beyond), builds both probes with that engine (their
+# "android,engine" setting "beyond"), and they run on an Android 13
+# emulator and on the first image with 16 KB pages, with the checks
+# android.yml makes of them with the released engine.
 #
 # The folders are artifacts only: the packages keep shipping the Android
 # runtime of the runtimes asset (LiveCode 9.6.3's engine), and nothing here
@@ -278,12 +279,15 @@ jobs:
           retention-days: 14
 
   # The engine built here, run. The IDE's builder of this checkout, in the
-  # latest release's IDE with the four architectures' runtime in place of
-  # the release's (overlay --engine: the engine, the externals, the Java
-  # layer built with them and the files beside them), builds the app probe
-  # and the Java layer's probe as the IDE's Test does (debug, for every
-  # architecture); verify --engine checks that each package's engine is
-  # the one built here. They run on x86_64 emulators (the runner's
+  # latest release's IDE with the four architectures' runtime beside the
+  # release's, where the runtimes carry it (overlay --beyond:
+  # Runtime/Android/Beyond, with the engine, the externals, the Java layer
+  # built with them and the files beside them), builds the app probe and
+  # the Java layer's probe as the IDE's Test does (debug, for every
+  # architecture), each a stack that asks for that engine (ide
+  # --android-engine beyond: the "android,engine" setting); verify --engine
+  # checks that each package's engine is the one built here, so the setting
+  # picked it. They run on x86_64 emulators (the runner's
   # architecture, with KVM): Android 13, and the first image with 16 KB
   # pages, with the checks android.yml makes of them with the released
   # engine (see there for what each says)
@@ -373,7 +377,7 @@ jobs:
         run: |
           python3 tools/ci/android_check.py extract --package "$PACKAGE" --dest "$WORK/ide" \
             --platform "$PLATFORM" --env IDE
-          python3 tools/ci/android_check.py overlay --root "$WORK/ide" --engine "$WORK/engine"
+          python3 tools/ci/android_check.py overlay --root "$WORK/ide" --beyond "$WORK/engine"
 
       # Started now, as android.yml's: it boots while the IDE builds
       - name: Start an Android 13 emulator
@@ -402,9 +406,10 @@ jobs:
       - name: Build the probes with this engine
         run: |
           python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" \
-            --work "$WORK/app" --sdk "$SDK" --jdk "$JDK" --no-units --builds debug
+            --work "$WORK/app" --sdk "$SDK" --jdk "$JDK" --no-units --builds debug --android-engine beyond
           python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" \
-            --work "$WORK/java" --sdk "$SDK" --jdk "$JDK" --no-units --builds debug --probe java
+            --work "$WORK/java" --sdk "$SDK" --jdk "$JDK" --no-units --builds debug --probe java \
+            --android-engine beyond
           for probe in app java; do
             python3 tools/ci/android_check.py verify --work "$WORK/$probe" --sdk "$SDK" --jdk "$JDK" \
               --builds debug --target 36 --engine "$WORK/engine"

@@ -3340,9 +3340,18 @@ pinned commit (`xtalk_web_libraries.py test-files`).
 Packages ship the Android engines of the runtimes asset, LiveCode
 Community 9.6.3's, built with NDK r15 and its standalone toolchains (GNU
 binutils, the bfd linker, Android 4.1 as the lowest). This tree also builds
-them itself with a current NDK (the Android plan's phase 2), as artifacts
-for now: nothing of it goes into a package until it has run on the
-emulators beside the 9.6.3 engine, which stays the default.
+them itself with a current NDK (the Android plan's phase 2), as a preview
+beside the 9.6.3 engine, which stays the default: a package has it only
+when its stack asks for it, with
+`set the cRevStandaloneSettings["android,engine"] of stack "<name>" to "beyond"`.
+The builder (`androidRuntimeFolder`) then takes every file of the
+runtime's from `Runtime/Android/Beyond`, where runtimes that carry this
+engine keep it as a whole runtime of its own (the folder that
+`build-android.sh` writes, below), and not one from 9.6.3's: the engines
+and externals, the Java layer, the manifest and the files beside them. An
+empty setting or `"9.6.3"` builds with 9.6.3's from `Runtime/Android`, as
+before; asked of runtimes without the Beyond folder, or for any other
+name, the build stops and says why.
 
 [`tools/ci/build-android.sh`](tools/ci/build-android.sh) builds the
 engine (`Standalone`) and the externals an Android standalone can include
@@ -3414,17 +3423,24 @@ the four folders, as one runtime, and this checkout's builder into the
 latest release's IDE:
 
 ```sh
-python3 tools/ci/android_check.py overlay --root <ide> --engine <runtime>
+python3 tools/ci/android_check.py overlay --root <ide> --beyond <runtime>
 ```
 
-`--engine` puts every architecture's engine and externals over the
-release's, and the Java layer and the files beside them, and changes
-nothing when the runtime or the release lacks one of them, so that no
-package mixes the two engines. The builder there builds the app probe and
-the Java layer's probe (debug, for all four architectures), and `verify
---engine <runtime>` checks that each package's engine is the one built
-here: the same code (its `.text` section, which the builder's deploy
-writes out as it was). Both probes then run on an Android 13 emulator
+`--beyond` puts the runtime beside the release's, as
+`Runtime/Android/Beyond`, where the builder takes it for a stack that asks
+for it: every architecture's engine and externals, and the Java layer and
+the files beside them, the release's own runtime left as it is. It
+changes nothing when the runtime lacks one of them or the release has a
+`Beyond` folder already, so that no package mixes the two engines.
+(`--engine` instead puts them over the release's own, each over its file
+of that name.) The builder there builds the app probe and the Java
+layer's probe (debug, for all four architectures) as stacks whose
+`"android,engine"` is `"beyond"` (`ide --android-engine beyond`), and
+`verify --engine <runtime>` checks that each package's engine is the one
+built here, so that the setting picked it: the same code (its `.text`
+section, which the builder's deploy writes out as it was). The Android
+standalone check's units (`unitEngine`) run the builder's choice itself,
+with the release's runtime and a `Beyond` folder they make and take away. Both probes then run on an Android 13 emulator
 and on the first image with 16 KB pages, with the checks that the
 [Android standalone check](#android-standalone-check) makes of them with
 the 9.6.3 engine: the Java layer's probe's notification permission, its

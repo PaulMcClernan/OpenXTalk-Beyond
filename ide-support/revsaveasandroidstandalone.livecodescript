@@ -233,6 +233,13 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
    put item 1 to -2 of the effective filename of stack pStack into tBaseFolder
    set the itemDelimiter to comma
    
+   -- OXT-Beyond: the runtime this build takes everything of the runtime's
+   -- from (the engines and externals, the Java layer, the manifest and the
+   -- files beside them): 9.6.3's, as before, or the engine built here when
+   -- the stack asks for it (androidRuntimeFolder)
+   local tRuntime
+   put androidRuntimeFolder(pTarget, pSettings) into tRuntime
+   
    -- Fetch the various options we need to initially build the app-bundle
    local tName, tVersionName, tVersionCode, tExternals, tDrivers, tIcon, tSplash, tKey, tUnsigned, tStatusBarIcon
    put pSettings["name"] into tName
@@ -287,7 +294,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       // put default sb icon path into tStatusBarIcon
       // SN-2015-01-22: [[ Bug 13213 ]] If mapFilePath returns empty, an error will be triggered
       // line 629.
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "notify_icon.png") into tStatusBarIcon
+      put mapFilePath(tRuntime & slash & "notify_icon.png") into tStatusBarIcon
    end if
    
    switch pSettings["android,signing"]
@@ -472,7 +479,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       end if
       
       if tManifest is empty then
-         put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "Manifest.xml")) into tManifest
+         put url ("binfile:" & mapFilePath(tRuntime & slash & "Manifest.xml")) into tManifest
       end if
       // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
       if the result is not empty then
@@ -506,7 +513,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       
       replace "${MIN_SDK_VERSION}" with pSettings["android,minimum version"] in tManifest
       local tTargetAPI
-      put androidTargetAPI(pSettings, revMobileRuntimeFolder(pTarget)) into tTargetAPI
+      put androidTargetAPI(pSettings, tRuntime) into tTargetAPI
       replace "${TARGET_SDK_VERSION}" with tTargetAPI in tManifest
       
       local tUsesFeature, tUsesPermission, tFeatures, tPermissions, tAd
@@ -695,7 +702,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       replace "${ALLOW_HTTP_CONNECTIONS}" with tAllowHttpConnections in tManifest
       
       put androidKeepLargeScreenLayout(tManifest, tTargetAPI) into tManifest
-      put androidDeclareRelaunch(tManifest, revMobileRuntimeFolder(pTarget)) into tManifest
+      put androidDeclareRelaunch(tManifest, tRuntime) into tManifest
       
       put tManifest into url ("binfile:" & tManifestFile)
       
@@ -731,7 +738,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       
       local tLiveCodeClassesFile
       put tBuildFolder & slash & "LiveCode.jar" into tLiveCodeClassesFile
-      put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "Classes")) into url ("binfile:" & tLiveCodeClassesFile)
+      put url ("binfile:" & mapFilePath(tRuntime & slash & "Classes")) into url ("binfile:" & tLiveCodeClassesFile)
       if the result is not empty then
          throw "could not prepare LiveCode classes"
       end if
@@ -878,7 +885,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       end if
       
       local tLayoutXML
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "livecode_inputcontrol.xml") into tLayoutXML
+      put mapFilePath(tRuntime & slash & "livecode_inputcontrol.xml") into tLayoutXML
       put url ("binfile:" & tLayoutXML) into url ("binfile:" & tLayoutResBuildFolder & slash & "livecode_inputcontrol.xml")
       if the result is not empty then
          throw "could not copy layout file '" & tLayoutXML & "'"
@@ -886,7 +893,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       put tLayoutResBuildFolder & slash & "livecode_inputcontrol.xml" & return after tAssetFiles
       
       local tNFCTechFilter
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "nfc_tech_filter.xml") into tNFCTechFilter
+      put mapFilePath(tRuntime & slash & "nfc_tech_filter.xml") into tNFCTechFilter
       put url ("binfile:" & tNFCTechFilter) into url ("binfile:" & tXMLResBuildFolder & slash & "nfc_tech_filter.xml")
       if the result is not empty then
          throw "could not copy NFC tech filter file '" & tNFCTechFilter & "'"
@@ -895,7 +902,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       
       
       local tFileProviderPaths
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "file_provider_paths.xml") into tFileProviderPaths
+      put mapFilePath(tRuntime & slash & "file_provider_paths.xml") into tFileProviderPaths
       put url ("binfile:" & tFileProviderPaths) into url ("binfile:" & tXMLResBuildFolder & slash & "file_provider_paths.xml")
       if the result is not empty then
          throw "could not copy file provider paths file '" & tFileProviderPaths & "'"
@@ -1046,7 +1053,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
 
       repeat for each key tArch in tArchLibsBuildFolders
          -- Engine to use
-         put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & "Standalone") into tDeploy["engine"]
+         put mapFilePath(tRuntime & slash & tArch & slash & "Standalone") into tDeploy["engine"]
          // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
          if there is no file tDeploy["engine"] then
             throw "Could not find standalone engine"
@@ -1115,7 +1122,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       repeat for each key tArch in tArchLibsBuildFolders
          -- MM-2014-01-29: [[ OpenSSL ]] Include the revsecurity library.
          if pSettings["android,include revsecurity"] then
-            put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & "revsecurity")) \
+            put url ("binfile:" & mapFilePath(tRuntime & slash & tArch & slash & "revsecurity")) \
                   into url ("binfile:" & tArchLibsBuildFolders[tArch] & slash & "librevsecurity.so")
             
             // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
@@ -1131,7 +1138,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
             if there is a file (tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so") then
                next repeat
             end if
-            put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & tEntry)) \
+            put url ("binfile:" & mapFilePath(tRuntime & slash & tArch & slash & tEntry)) \
                   into url ("binfile:" & tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so")
             // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
             if the result is not empty then
@@ -1145,7 +1152,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
             if there is a file (tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so") then
                next repeat
             end if
-            put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & tEntry)) \
+            put url ("binfile:" & mapFilePath(tRuntime & slash & tArch & slash & tEntry)) \
                   into url ("binfile:" & tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so")
             if the result is not empty then
                throw "Could not find " & tEntry && "library"
@@ -1773,6 +1780,33 @@ function revMobileRuntimeFolder pTarget
    
    return revEnvironmentRuntimePath() & slash & "Android"
 end revMobileRuntimeFolder
+
+-- OXT-Beyond: the Android runtime a build takes its engines and the rest
+-- from. The stack's "android,engine" setting picks it: empty or "9.6.3"
+-- (the default) is LiveCode Community 9.6.3's engine, Runtime/Android, as
+-- before; "beyond" is the engine built from OXT-Beyond's own source with
+-- a current NDK (a preview), which the runtimes carry beside it as a whole
+-- runtime of its own, Runtime/Android/Beyond (its engine and externals for
+-- each architecture, and its Java layer, manifest and the files beside
+-- them, as tools/ci/build-android.sh lays them out). A stack that asks for
+-- that engine of runtimes without it is not built with the other one: the
+-- build stops and says so, as it does for any other value
+function androidRuntimeFolder pTarget, pSettings
+   local tRuntime
+   put revMobileRuntimeFolder(pTarget) into tRuntime
+   switch pSettings["android,engine"]
+      case empty
+      case "9.6.3"
+         return tRuntime
+      case "beyond"
+         if there is not a folder (tRuntime & slash & "Beyond") then
+            throw "The stack asks for OXT-Beyond's own Android engine (android,engine is beyond), and these runtimes do not have it:" && tRuntime & slash & "Beyond"
+         end if
+         return tRuntime & slash & "Beyond"
+      default
+         throw "Unknown Android engine" && quote & pSettings["android,engine"] & quote && "(android,engine): it is empty or 9.6.3 for LiveCode 9.6.3's, or beyond for OXT-Beyond's own"
+   end switch
+end androidRuntimeFolder
 
 ################################################################################
 

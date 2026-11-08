@@ -2119,7 +2119,7 @@ class Overlay(unittest.TestCase):
         import argparse
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            problems = ac.overlay(argparse.Namespace(root=self.root, classes=classes, engine=None))
+            problems = ac.overlay(argparse.Namespace(root=self.root, classes=classes, engine=None, beyond=None))
         return problems, out.getvalue()
 
     def jar(self):
@@ -2231,7 +2231,7 @@ class OverlayEngine(unittest.TestCase):
         import argparse
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            problems = ac.overlay(argparse.Namespace(root=self.root, classes=None, engine=self.engine))
+            problems = ac.overlay(argparse.Namespace(root=self.root, classes=None, engine=self.engine, beyond=None))
         return problems, out.getvalue()
 
     def release(self):
@@ -2289,6 +2289,136 @@ class OverlayEngine(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(ac.main(['overlay', '--root', self.root, '--engine', self.engine]), 0)
         self.assertEqual(self.release()['x86/Standalone'], b'new x86/Standalone')
+
+
+class OverlayBeyond(unittest.TestCase):
+    """overlay --beyond puts a runtime folder that build-android.sh wrote
+    beside the release's Runtime/Android, as Runtime/Android/Beyond (where
+    the builder takes it for a stack whose "android,engine" is "beyond"):
+    every architecture's engine and externals, and the files beside them,
+    the release's own runtime left as it was; or nothing when a file is
+    missing or a Beyond folder is there already"""
+
+    def setUp(self):
+        import android_engine as ae
+        self.ae = ae
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = os.path.join(self.tmp.name, 'release')
+        for rel in ac.OVERLAY:
+            path = os.path.join(self.root, 'Tools', 'x', os.path.basename(rel))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as f:
+                f.write('old')
+        self.android = os.path.join(self.root, 'Runtime', 'Android')
+        self.beyond = os.path.join(self.android, ac.BEYOND)
+        self.engine = os.path.join(self.tmp.name, 'android-runtime')
+        for folder, what in ((self.android, b'old'), (self.engine, b'new')):
+            for rel in self.names():
+                path = os.path.join(folder, rel)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, 'wb') as f:
+                    f.write(what + b' ' + rel.encode())
+        # build-android.sh's unstripped copies, which stay out
+        os.makedirs(os.path.join(self.engine, 'debug', 'x86_64'))
+        with open(os.path.join(self.engine, 'debug', 'x86_64', 'Standalone'), 'wb') as f:
+            f.write(b'unstripped')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def names(self):
+        out = list(self.ae.TOP_FILES)
+        for abi in sorted(self.ae.ABIS):
+            out += [abi + '/' + x for x in (self.ae.ENGINE,) + self.ae.EXTERNALS]
+        return out
+
+    def overlay(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            problems = ac.overlay(argparse.Namespace(root=self.root, classes=None, engine=None, beyond=self.engine))
+        return problems, out.getvalue()
+
+    def files(self, top):
+        out = {}
+        for folder, _, names in os.walk(top):
+            for n in names:
+                with open(os.path.join(folder, n), 'rb') as f:
+                    out[os.path.relpath(os.path.join(folder, n), top).replace(os.sep, '/')] = f.read()
+        return out
+
+    def test_beside_the_release(self):
+        problems, out = self.overlay()
+        self.assertEqual(problems, [])
+        # the release's runtime as it was, with the Beyond folder beside
+        files = self.files(self.android)
+        release = {k: v for k, v in files.items() if not k.startswith(ac.BEYOND + '/')}
+        self.assertEqual(sorted(release), sorted(self.names()))
+        for rel, data in release.items():
+            self.assertEqual(data, b'old ' + rel.encode(), rel)
+        # and in it, every file of the runtime built here, and only those
+        beyond = self.files(self.beyond)
+        self.assertEqual(sorted(beyond), sorted(self.names()))
+        for rel, data in beyond.items():
+            self.assertEqual(data, b'new ' + rel.encode(), rel)
+        self.assertEqual(len(beyond), 4 * 8 + 6)
+        self.assertIn('-> %s' % os.path.join('Runtime', 'Android', 'Beyond', 'x86_64', 'Standalone'), out)
+        self.assertIn('-> %s' % os.path.join('Runtime', 'Android', 'Beyond', 'Classes'), out)
+        # and the builder too
+        with open(os.path.join(self.root, 'Tools', 'x', os.path.basename(ac.OVERLAY[0])), encoding='utf-8') as f:
+            self.assertEqual(f.read(), read(*ac.OVERLAY[0].split('/')))
+
+    def test_its_java_layer_is_not_a_second_one(self):
+        # the release's Java layer is still the one Runtime/Android/Classes
+        # (overlay finds it by that name): a second overlay is refused for
+        # the Beyond folder, not for two Java layers
+        self.assertEqual(self.overlay()[0], [])
+        problems, _ = self.overlay()
+        self.assertEqual(problems, ['%s is there already' % '/'.join(('Runtime', 'Android', ac.BEYOND))])
+
+    def test_a_missing_architecture_or_file_changes_nothing(self):
+        shutil.rmtree(os.path.join(self.engine, 'armeabi-v7a'))
+        os.remove(os.path.join(self.engine, 'x86', 'RevZip'))
+        os.remove(os.path.join(self.engine, 'Classes'))
+        problems, _ = self.overlay()
+        self.assertEqual(len(problems), 10, problems)
+        for missing in ('armeabi-v7a/Standalone', 'armeabi-v7a/RevDb', 'x86/RevZip', 'Classes'):
+            self.assertIn('%s has no %s' % (self.engine, missing), problems)
+        self.assertFalse(os.path.exists(self.beyond))
+        for rel, data in self.files(self.android).items():
+            self.assertEqual(data, b'old ' + rel.encode(), rel)
+
+    def test_a_beyond_folder_there_already(self):
+        os.makedirs(self.beyond)
+        with open(os.path.join(self.beyond, 'Classes'), 'wb') as f:
+            f.write(b'someone else\'s')
+        problems, _ = self.overlay()
+        self.assertEqual(problems, ['%s is there already' % '/'.join(('Runtime', 'Android', ac.BEYOND))])
+        self.assertEqual(self.files(self.beyond), {'Classes': b'someone else\'s'})
+
+    def test_the_release_needs_no_architecture_of_its_own(self):
+        # the runtime beside it is a whole one: the release's architectures
+        # are its own business
+        shutil.rmtree(os.path.join(self.android, 'x86'))
+        problems, _ = self.overlay()
+        self.assertEqual(problems, [])
+        self.assertEqual(self.files(self.beyond)['x86/Standalone'], b'new x86/Standalone')
+        self.assertFalse(os.path.exists(os.path.join(self.android, 'x86')))
+
+    def test_one_engine_at_a_time(self):
+        for other in (['--engine', self.engine], ['--classes', 'x']):
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    ac.main(['overlay', '--root', self.root, '--beyond', self.engine] + other)
+        self.assertFalse(os.path.exists(self.beyond))
+
+    def test_by_its_command_line(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(ac.main(['overlay', '--root', self.root, '--beyond', self.engine]), 0)
+        self.assertEqual(self.files(self.beyond)['x86/Standalone'], b'new x86/Standalone')
+        self.assertEqual(self.files(self.android)['x86/Standalone'], b'old x86/Standalone')
+        # and a second time, it says why it stops
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertNotEqual(ac.main(['overlay', '--root', self.root, '--beyond', self.engine]), 0)
 
 
 class VerifyEngine(unittest.TestCase):
@@ -3644,6 +3774,31 @@ class OneSystem(unittest.TestCase):
         self.assertEqual(script.count('"AndroidProbe"'), 1)
         self.assertEqual(script.count('"AndroidJavaProbe"'), 4)
         self.assertEqual(script.count('if probeName() is "AndroidJavaProbe" then'), 3)
+
+    def test_android_engine(self):
+        # ide --android-engine beyond builds the probe as a stack whose
+        # "android,engine" is beyond (the script reads OXT_ANDROID_ENGINE);
+        # without it, as a stack that names none. beyond is the one it takes
+        src = read('tools', 'ci', 'android_check.py')
+        self.assertIn("OXT_ANDROID_ENGINE=args.android_engine or ''", src)
+        self.assertIn("i.add_argument('--android-engine', choices=('beyond',),", src)
+        with tempfile.TemporaryDirectory() as work:
+            for name in ('9.6.3', 'Beyond', ''):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit):
+                        ac.main(['ide', '--work', work, '--android-engine', name])
+            self.assertEqual(os.listdir(work), [])
+        script = read('tools', 'ci', 'android-check.livecodescript')
+        self.assertIn('--    OXT_ANDROID_ENGINE    the probe\'s "android,engine" setting', script)
+        settings = re.search(r'(?s)private function buildSettings pName\n(.*?)\nend buildSettings', script).group(1)
+        self.assertIn('   if $OXT_ANDROID_ENGINE is not empty then\n'
+                      '      put $OXT_ANDROID_ENGINE into tSettings["android,engine"]\n'
+                      '   end if\n', settings)
+        # android.yml builds with the release's engine, 9.6.3's: no
+        # runtime beside it, and no probe asks for one
+        workflow = read('.github', 'workflows', 'android.yml')
+        self.assertNotIn('--android-engine', workflow)
+        self.assertNotIn('--beyond', workflow)
 
     def test_java_probe_script(self):
         # the Java layer's probe takes every step, each answer checked and

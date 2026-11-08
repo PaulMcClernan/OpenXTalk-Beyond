@@ -1942,13 +1942,17 @@ class Workflow(unittest.TestCase):
             return [' '.join(x.split()) for x in steps[step]['run'].replace('\\\n', ' ').splitlines() if x.strip()]
 
         unpack = lines('Unpack the IDE, and put this builder and the runtime into it')
-        self.assertIn('python3 tools/ci/android_check.py overlay --root "$WORK/ide" --engine "$WORK/engine"', unpack)
+        # the runtime beside the release's, where the runtimes carry it, and
+        # both probes asking for it, as a stack does ("android,engine"): the
+        # release's own runtime is not touched
+        self.assertIn('python3 tools/ci/android_check.py overlay --root "$WORK/ide" --beyond "$WORK/engine"', unpack)
+        self.assertNotIn('--engine', ' '.join(unpack))
         built = lines('Build the probes with this engine')
         self.assertEqual([x for x in built if ' ide ' in x], [
             'python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" --work "$WORK/app" '
-            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug',
+            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug --android-engine beyond',
             'python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" --work "$WORK/java" '
-            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug --probe java'])
+            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug --probe java --android-engine beyond'])
         self.assertIn('for probe in app java; do', built)
         self.assertIn('python3 tools/ci/android_check.py verify --work "$WORK/$probe" --sdk "$SDK" --jdk "$JDK" '
                       '--builds debug --target 36 --engine "$WORK/engine"', built)

@@ -44,7 +44,11 @@ would not notice going back:
   - the engine runs once in a process: the manifest lists the
     configuration changes the app goes on through (LiveCode's four first),
     and declares the activity that starts it again in a new process only
-    where the runtime's Java layer has it.
+    where the runtime's Java layer has it;
+  - the engine: LiveCode 9.6.3's, as before, unless the stack's
+    "android,engine" is "beyond", OXT-Beyond's own, which the runtimes
+    carry as Runtime/Android/Beyond; every file of the runtime's that the
+    build takes comes from the one the stack picked.
 
   python3 -m unittest discover -s tools/ci/tests
 """
@@ -673,7 +677,7 @@ class TargetAPI(unittest.TestCase):
 
     def test_the_manifest_takes_it(self):
         main = handler(self.src, 'revSaveAsMobileStandaloneMain')
-        choose = main.find('put androidTargetAPI(pSettings, revMobileRuntimeFolder(pTarget)) into tTargetAPI')
+        choose = main.find('put androidTargetAPI(pSettings, tRuntime) into tTargetAPI')
         use = main.find('replace "${TARGET_SDK_VERSION}" with tTargetAPI in tManifest')
         large = main.find('put androidKeepLargeScreenLayout(tManifest, tTargetAPI) into tManifest')
         saved = main.find('put tManifest into url ("binfile:" & tManifestFile)')
@@ -799,7 +803,7 @@ class Relaunch(unittest.TestCase):
         # declared with the runtime the package is built with, before the
         # manifest is written
         main = handler(self.src, 'revSaveAsMobileStandaloneMain')
-        declared = main.find('put androidDeclareRelaunch(tManifest, revMobileRuntimeFolder(pTarget)) into tManifest')
+        declared = main.find('put androidDeclareRelaunch(tManifest, tRuntime) into tManifest')
         self.assertGreater(declared, main.find('put androidKeepLargeScreenLayout(tManifest, tTargetAPI) into tManifest'))
         self.assertLess(declared, main.find('put tManifest into url ("binfile:" & tManifestFile)'))
 
@@ -861,6 +865,104 @@ class Relaunch(unittest.TestCase):
         for case in ('config-changes', 'relaunch-no-java-layer', 'relaunch-java-layer-without-it',
                      'relaunch-declared'):
             self.assertIn('"%s"' % case, relaunch)
+
+
+class Engine(unittest.TestCase):
+    """The Android engine a build takes (androidRuntimeFolder): LiveCode
+    9.6.3's, Runtime/Android, as before, for a stack whose "android,engine"
+    is empty or "9.6.3"; OXT-Beyond's own, which the runtimes carry beside
+    it as Runtime/Android/Beyond, for one whose setting is "beyond"; and
+    for runtimes without it, or a name it does not know, the build stops.
+    Every file of the runtime's the build takes comes from the one folder,
+    so a package never mixes the two engines. The IDE units (unitEngine)
+    run the handler; android-engine.yml builds both probes through it"""
+
+    def setUp(self):
+        self.text = read(BUILDER)
+        self.src = code(self.text)
+
+    def test_the_choice(self):
+        choose = handler(self.src, 'androidRuntimeFolder')
+        self.assertRegex(choose, r'^function androidRuntimeFolder pTarget, pSettings\s+local tRuntime\s+'
+                                 r'put revMobileRuntimeFolder\(pTarget\) into tRuntime\s+'
+                                 r'switch pSettings\["android,engine"\]\s+')
+        # a stack that never names one, or names 9.6.3's: the runtime as
+        # before, the same folder revMobileRuntimeFolder answers
+        self.assertRegex(choose, r'case empty\s+case "9\.6\.3"\s+return tRuntime\s+case "beyond"')
+        # OXT-Beyond's: the folder beside it, and only when it is there
+        self.assertRegex(choose, r'case "beyond"\s+if there is not a folder \(tRuntime & slash & "Beyond"\) then\s+'
+                                 r'throw "[^"\n]*these runtimes do not have it:" && tRuntime & slash & "Beyond"\s+'
+                                 r'end if\s+return tRuntime & slash & "Beyond"\s+default')
+        # any other name stops the build, and says which it was
+        self.assertRegex(choose, r'default\s+throw "Unknown Android engine" && quote & pSettings\["android,engine"\] '
+                                 r'& quote && "[^"\n]*"\s+end switch\s+end androidRuntimeFolder')
+        self.assertEqual(choose.count('return '), 2)
+
+    def test_every_runtime_file_comes_from_it(self):
+        main = handler(self.src, 'revSaveAsMobileStandaloneMain')
+        chosen = main.find('put androidRuntimeFolder(pTarget, pSettings) into tRuntime')
+        self.assertGreater(chosen, 0)
+        self.assertEqual(main.count('into tRuntime'), 1)
+        # before its first use, and nothing in the build asks for the
+        # runtime folder any other way
+        self.assertLess(chosen, main.find('tRuntime &'))
+        self.assertNotIn('revMobileRuntimeFolder', main)
+        self.assertNotIn('RuntimePath()', main)
+        # the engines, the externals, the Java layer, the manifest and the
+        # files beside them: every file the build takes of the runtime's
+        uses = re.findall(r'tRuntime & slash & (?:tArch & slash & )?("[^"]+"|tEntry)', main)
+        self.assertEqual(sorted(set(uses)), sorted({
+            '"notify_icon.png"', '"Manifest.xml"', '"Classes"', '"livecode_inputcontrol.xml"',
+            '"nfc_tech_filter.xml"', '"file_provider_paths.xml"', '"Standalone"', '"revsecurity"', 'tEntry'}))
+        # ten files (the externals' two lists share a line's shape), and
+        # the two functions that read its Java layer: every use there is
+        self.assertEqual(len(uses), 10)
+        self.assertEqual(main.count('tRuntime'), 2 + len(uses) + 2)
+        # the target API and the relaunch activity are read from its Java
+        # layer, the one the package is built with
+        self.assertIn('put androidTargetAPI(pSettings, tRuntime) into tTargetAPI', main)
+        self.assertIn('put androidDeclareRelaunch(tManifest, tRuntime) into tManifest', main)
+
+    def test_the_runtime_folder_itself_unchanged(self):
+        # revMobileRuntimeFolder answers what it did, for its other callers
+        # (the device configuration file, and anyone's script)
+        folder = handler(self.src, 'revMobileRuntimeFolder')
+        self.assertRegex(folder, r'^function revMobileRuntimeFolder pTarget\s')
+        self.assertRegex(folder, r'return revEnvironmentRuntimePath\(\) & slash & "Android"\s+end revMobileRuntimeFolder$')
+        self.assertIn('put mapFIlePath(revMobileRuntimeFolder() & slash & "lc_device_config.txt") into tConfigFile',
+                      self.src)
+        self.assertNotIn('Beyond', folder)
+
+    def test_the_folder_name_matches_the_check(self):
+        # the folder overlay --beyond makes is the one the builder reads
+        import sys
+        sys.path.insert(0, os.path.join(REPO, 'tools', 'ci'))
+        import android_check as ac
+        self.assertEqual(ac.BEYOND, 'Beyond')
+        self.assertIn('tRuntime & slash & "%s"' % ac.BEYOND, handler(self.src, 'androidRuntimeFolder'))
+
+    def test_units_run(self):
+        units = read(UNITS)
+        body = handler(units, 'androidUnits')
+        self.assertIn('unitEngine\n', body)
+        self.assertLess(body.find('unitRelaunch tWork'), body.find('unitEngine\n'))
+        engine = handler(units, 'unitEngine')
+        for case in ('engine-default', 'engine-9.6.3', 'engine-beyond-missing', 'engine-beyond'):
+            self.assertIn('"%s"' % case, engine)
+        self.assertIn('androidUnit "engine-unknown-" & tName', engine)
+        self.assertIn('repeat for each item tName in "beyond2,9.6,oxt-beyond"', engine)
+        # a Beyond folder it made, it takes away; one there before, it leaves
+        self.assertRegex(engine, r'put there is not a folder tBeyond into tMade\s+if tMade then')
+        self.assertRegex(engine, r'if tMade then\s+removeTree tBeyond\s+end if')
+        self.assertEqual(engine.count('removeTree'), 1)
+
+    def test_the_probe_asks_for_it(self):
+        # ide --android-engine beyond builds the probe with the setting; a
+        # check without it builds the probe as a stack that names none
+        units = read(UNITS)
+        settings = handler(units, 'buildSettings')
+        self.assertRegex(settings, r'if \$OXT_ANDROID_ENGINE is not empty then\s+'
+                                   r'put \$OXT_ANDROID_ENGINE into tSettings\["android,engine"\]\s+end if')
 
 
 if __name__ == '__main__':
