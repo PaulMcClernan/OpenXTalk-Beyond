@@ -22,7 +22,9 @@ script "oxtwebidetour"
 -- page made narrow, a cascade of the File menu on a page as narrow as a
 -- phone in portrait, File's items with a submenu tapped on a touch
 -- screen, the browser switched between light and dark and back (the
--- page follows it: index.html's oxt-appearance), and the page's
+-- page follows it: index.html's oxt-appearance), a tooltip in the light
+-- and the dark appearance (its text must stand out from its background),
+-- and the page's
 -- not-saved bar as the IDE opens and when the browser's storage refuses
 -- a write and then takes one. For each it asks for a screenshot of the
 -- page. A step still running after 30 seconds (a
@@ -55,7 +57,7 @@ Screenshots of the web IDE for its CI job (tools/ci/web_ide_tour.py).
 Only CI's copy of the site has it.
 */
 
-constant kSteps = "start,storage-open,keep,kept,sample,inspector,inspector-tabs,inspector-reset-colour,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow,phone-menu,touch-menu,appearance,storage"
+constant kSteps = "start,storage-open,keep,kept,sample,inspector,inspector-tabs,inspector-reset-colour,script-editor,message-box,project-browser,browse,dictionary,preferences,file-menu,new-controls,narrow,phone-menu,touch-menu,appearance,tooltip,storage"
 constant kSample = "Web Tour Sample"
 -- Steps that run only when web_ide_tour.py --only names them: keep, on
 -- the released web IDE, saves a stack and a preference in the home
@@ -68,6 +70,14 @@ constant kKeptText = "Kept by the web IDE before the update"
 -- The classic controls of Object > New Control (revMenubar), by the last
 -- part of their kind
 constant kNewControls = "Checkbox,ComboBox,DefaultButton,OptionMenu,PopupMenu,PulldownMenu,RadioButton,RectangleButton,Button,TabPanel,DataGrid,Field,LabelField,TextArea,ListField,TableField,Arrow,FivePointStar,OvalGraphic,RectangleGraphic,RegularGraphic,RoundRectGraphic,SpeechBubble,TenPointStar,CurveGraphic,PolygonGraphic,Image,Player,LittleArrows,Progressbar,Scrollbar,Slider"
+
+-- A JavaScript function of the page (pointer x, y) that finds the window
+-- of the tooltip shown below and to the right of the pointer (a small
+-- canvas of em-dc.js's) and answers "<width>x<height> back <rgb> ink <rgb>
+-- contrast <ratio>": its commonest colour inside its border, the colour
+-- that stands out most from it, and their WCAG contrast; "none" when no
+-- tooltip shows
+constant kTooltipContrastJS = "(function (px, py) { var best = null; var list = document.querySelectorAll('.oxt-window'); for (var i = 0; i < list.length; i++) { var el = list[i]; if (getComputedStyle(el).display === 'none') continue; var cv = el.querySelector('canvas'); if (!cv) continue; var r = cv.getBoundingClientRect(); if (r.width < 8 || r.height < 8 || r.height > 120) continue; if (r.top < py - 4 || r.top > py + 60 || r.left < px - 40 || r.left > px + 60) continue; best = cv; } if (!best) return 'none'; var ctx = best.getContext('2d'); var w = best.width, h = best.height; var d = ctx.getImageData(0, 0, w, h).data; function lum(r, g, b) { var c = [r, g, b].map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; } var counts = {}, top = null, m = Math.max(3, Math.round(w / best.getBoundingClientRect().width * 3)); for (var y = m; y < h - m; y++) for (var x = m; x < w - m; x++) { var k = (y * w + x) * 4, key = d[k] + ',' + d[k + 1] + ',' + d[k + 2]; counts[key] = (counts[key] || 0) + 1; if (top === null || counts[key] > counts[top]) top = key; } var bg = top.split(',').map(Number), lb = lum(bg[0], bg[1], bg[2]), most = 1, ink = top; for (var y = m; y < h - m; y++) for (var x = m; x < w - m; x++) { var k = (y * w + x) * 4, l = lum(d[k], d[k + 1], d[k + 2]); var c = (Math.max(l, lb) + 0.05) / (Math.min(l, lb) + 0.05); if (c > most) { most = c; ink = d[k] + ',' + d[k + 1] + ',' + d[k + 2]; } } return Math.round(best.getBoundingClientRect().width) + 'x' + Math.round(best.getBoundingClientRect().height) + ' back ' + top + ' ink ' + ink + ' contrast ' + most.toFixed(2); })"
 
 local sStarted, sAct, sWatchdog, sFlag
 
@@ -876,6 +886,76 @@ on tour_appearance
    tourAct "scheme" && tStart
    tourCheckAppearance tStart, 5000
 end tour_appearance
+
+-- A tooltip, as the pointer rests on the sample's button in browse mode,
+-- must be readable in both appearances: in the dark one its background is
+-- dark (em-theme.cpp), and its text was black on it until the engine wrote
+-- it white (bwmilby, openxtalk.org p=26171: the Tools palette's tooltips
+-- and the Project Browser's in Safari's dark mode). The page reads the
+-- tooltip's window (its canvas) and answers the WCAG contrast of its
+-- inkiest pixel with its background, which must be at least 4.5 (AA); it
+-- was 1.29 on rc.6.17's engine. The light appearance keeps black on
+-- RGB(240,240,240).
+on tour_tooltip
+   local tStart, tButton, tScheme, tProblems
+   if tourJS("window.matchMedia('(prefers-color-scheme: dark)').matches") is "true" then
+      put "dark" into tStart
+   else
+      put "light" into tStart
+   end if
+   put tourSample("Push") into tButton
+   set the toolTip of tButton to "A tooltip of the tour's sample button"
+   go stack kSample
+   choose browse tool
+   -- (the engine shows a tooltip only in the window that has the focus,
+   -- or a palette: a click on the card, below its controls)
+   tourAct "click" && the left of stack kSample + 100 && the top of stack kSample + 325
+   tourWait 300
+   repeat for each item tScheme in "light,dark"
+      tourAct "scheme" && tScheme
+      tourCheckAppearance tScheme, 5000
+      put tourTooltipProblem(tButton, tScheme) after tProblems
+   end repeat
+   choose pointer tool
+   set the toolTip of tButton to empty
+   if tStart is not "dark" then
+      tourAct "scheme" && tStart
+      tourCheckAppearance tStart, 5000
+   end if
+   if tProblems is not empty then
+      throw char 1 to -3 of tProblems
+   end if
+end tour_tooltip
+
+-- Rests the pointer on pControl until its tooltip shows (at most 5
+-- seconds), takes a screenshot, and answers what is wrong with the
+-- tooltip's contrast, followed by "; " (empty when nothing is)
+function tourTooltipProblem pControl, pScheme
+   local tLoc, tDeadline, tInfo
+   put the globalLoc of the loc of pControl into tLoc
+   -- (off the button and back, so that the engine opens a new tooltip)
+   tourAct "move" && item 1 of tLoc && item 2 of tLoc + 200
+   tourWait 300
+   tourAct "move" && item 1 of tLoc && item 2 of tLoc
+   put the milliseconds + 5000 into tDeadline
+   repeat
+      put tourJS(kTooltipContrastJS & "(" & item 1 of tLoc & "," & item 2 of tLoc & ")") into tInfo
+      if word 1 of tInfo is not "none" or the milliseconds > tDeadline then
+         exit repeat
+      end if
+      wait 100 milliseconds with messages
+   end repeat
+   tourShot "16-tooltip-" & pScheme
+   tourAct "move" && item 1 of tLoc && item 2 of tLoc + 200
+   tourRecord "INFO tooltip" && pScheme & ":" && tInfo
+   if word 1 of tInfo is "none" then
+      return "no tooltip showed in the" && pScheme && "appearance; "
+   end if
+   if word -1 of tInfo is not a number or word -1 of tInfo < 4.5 then
+      return "the tooltip's text does not stand out in the" && pScheme && "appearance (" & tInfo & ", want a contrast of 4.5 or more); "
+   end if
+   return empty
+end tourTooltipProblem
 
 -- A write to the browser's storage that fails (a full disk, a refused or
 -- deleted storage) shows the page's not-saved bar with the browser's
