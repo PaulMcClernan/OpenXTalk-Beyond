@@ -34,9 +34,11 @@
 # emulator and on the first image with 16 KB pages, with the checks
 # android.yml makes of them with the released engine.
 #
-# The folders are artifacts only: the packages keep shipping the Android
-# runtime of the runtimes asset (LiveCode 9.6.3's engine), and nothing here
-# goes into a package or a release.
+# The folders are artifacts: nothing here goes into a package or a release
+# by itself. A runtimes asset can take one run's (runtimes.yml, its input
+# android-engine-run, as Runtime/Android/Beyond), and a package that pins
+# that asset ships the engine beside LiveCode 9.6.3's, which stays the
+# default.
 #
 # Each build job runs in an Ubuntu 22.04 container, as web.yml's does (the
 # newest Ubuntu with the Python 2.7 that gyp and config.py need), with the

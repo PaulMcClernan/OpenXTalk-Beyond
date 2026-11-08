@@ -1794,7 +1794,10 @@ def reference_engine(paths):
 # of other projects in lib/) or be new. Runtime/Android is carried over
 # unchanged, so it is still compared byte for byte, apart from the Java
 # layer that the asset's record names ("java_layer"): that one is built from
-# this repository too (make_runtimes_asset.py --android-classes).
+# this repository too (make_runtimes_asset.py --android-classes). OXT-Beyond's
+# own Android engine, beside it in the folder the record names
+# ("android_engine", make_runtimes_asset.py --android-engine), is built
+# here as well, and 1.15 has none of it: its files are additions.
 REBUILT_RUNTIMES = ('Runtime/Windows/x86-32/', 'Runtime/Linux/',
                     'Extensions/com.livecode.library.timezone/')
 RUNTIMES_1_15 = 'oxt-runtimes-1.15'
@@ -1811,6 +1814,7 @@ def compare(stage, items, ref, no_assets, report=None, no_xtalk=False, platform=
                 and str(it.asset.get('id', '')).startswith('oxt-runtimes-') and it.asset.get('id') != RUNTIMES_1_15]
     rebuilt = bool(runtimes)
     java = {a['java_layer'] for a in runtimes if a.get('java_layer')}
+    android_engine = tuple(a['android_engine'].rstrip('/') + '/' for a in runtimes if a.get('android_engine'))
 
     def replaced(path):
         return rebuilt and path.startswith(REBUILT_RUNTIMES)
@@ -1909,6 +1913,8 @@ def compare(stage, items, ref, no_assets, report=None, no_xtalk=False, platform=
             status, why = 'intended addition', 'mergJSON, built from its source (EXT_FILES)'
         elif it.origin == 'asset' and _asset_rel(it) in it.asset.get('rename', {}):
             status, why = 'intended addition', 'notice file of an external asset (%s)' % it.note
+        elif it.origin == 'asset' and android_engine and it.target.startswith(android_engine):
+            status, why = 'intended addition', 'OXT-Beyond\'s Android engine, built from this repository (%s)' % it.note
         elif it.origin == 'asset' and rebuilt and it.target.startswith(REBUILT_RUNTIMES + ('PROVENANCE-',)):
             status, why = 'intended addition', 'a file of the runtimes built from this repository (%s)' % it.note
         elif it.origin == 'ide':

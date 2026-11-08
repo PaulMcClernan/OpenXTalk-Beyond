@@ -1039,7 +1039,11 @@ platforms.
 ([`.github/workflows/runtimes.yml`](.github/workflows/runtimes.yml)) by
 hand with a label (the version whose packages will take the asset, for
 example `0.2.1-rc.3`) and the ids of a "Build (Windows)" and a "Build
-(Linux)" run of the same commit whose 32-bit and 64-bit builds passed.
+(Linux)" run of the same commit whose 32-bit and 64-bit builds passed,
+and, to carry OXT-Beyond's own Android engine beside 9.6.3's, the id of
+an "Android engine" run of that commit whose builds and emulator job
+passed (`android-engine-run`; see
+[Building the Android engine](#15-building-the-android-engine)).
 It builds the Android runtime's Java layer from that commit and checks
 it as the "Android Java layer" workflow checks a pull request's (see
 [Android Java layer](#android-java-layer)), makes the archive with
@@ -2707,8 +2711,9 @@ mac-x86_64", "Package mac-universal", "Test mac-universal (arm64)" and
 
 The workflow [`.github/workflows/runtimes.yml`](.github/workflows/runtimes.yml)
 ("Runtimes asset") is only started by hand: it makes the runtimes asset
-from the outputs of one Windows and one Linux run and can publish it
-(see [External assets](#external-assets)).
+from the outputs of one Windows and one Linux run, and optionally an
+"Android engine" run, and can publish it (see
+[External assets](#external-assets)).
 
 The workflow [`.github/workflows/ide-screenshots.yml`](.github/workflows/ide-screenshots.yml)
 ("IDE screenshots (branch)") runs when one of the three build workflows
@@ -3431,7 +3436,13 @@ The workflow "Android engine"
 for each architecture in an Ubuntu 22.04 container with the runner's
 Android SDK, on a pull request or push that changes what the engine is
 built from, and keeps each folder for 14 days as
-`android-engine-<abi>`. The libraries come from a cache keyed by what
+`android-engine-<abi>`. The "Runtimes asset" workflow takes a run's four
+folders into the runtimes asset, as `Runtime/Android/Beyond`, when it is
+given the run's id (`android-engine-run`): the run must be of the builds'
+commit, and its build jobs and emulator job must have passed. The
+workflow runs on `main` only when what the engine is built from changes,
+so for a later commit start it by hand first (Actions > Android engine >
+Run workflow). The libraries come from a cache keyed by what
 they are built with, so a change to the engine builds only the engine.
 
 Its "Android engine on the emulator" job then runs the engine. It makes
@@ -3449,7 +3460,10 @@ which every other folder must have the same (the Java layer, which each
 build job compiles apart, with the same files in it whatever their
 dates); nothing else (not `debug/`), and nothing at all when a file is
 missing or differs, so that the runtime the emulators run is made as
-the one a runtimes asset would carry.
+the one a runtimes asset carries: the "Runtimes asset" workflow runs the
+same `merge` on the same run's folders, and
+[`make_runtimes_asset.py --android-engine`](tools/oxt/README.md#the-runtimes-asset)
+checks the runtime again before the archive takes it.
 
 `--beyond` puts the runtime beside the release's, as
 `Runtime/Android/Beyond`, where the builder takes it for a stack that asks
