@@ -949,6 +949,9 @@ on tour_tools_widget_install
          tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: a widget uninstalled goes from the palette at once"
          revIDEExtensionReload kTourWidgetID
          tourWidgetBatch
+         tourTmCheck revIDEExtensionProperty(kTourWidgetID, "status") is "installed", \
+               tLook && "look: the Spinner loads again (" & revIDEExtensionProperty(kTourWidgetID, "status") & ":" && \
+               revIDEExtensionProperty(kTourWidgetID, "error") & ")"
          tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: a widget installed shows on the palette at once"
          if tLook is "modern" then tourShotStack "revTools", "01-tools-widget-install"
          -- a library changes nothing the palette shows

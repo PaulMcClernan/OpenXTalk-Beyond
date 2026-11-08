@@ -107,6 +107,9 @@ private command __CheckLook pLook, pTile
 
    revIDEExtensionReload kWidget
    __Settle
+   TestDiagnostic pLook && "look: reloaded," && revIDEExtensionProperty(kWidget, "status") && \
+         revIDEExtensionProperty(kWidget, "error")
+   TestAssert pLook && "look: the Spinner loads again", revIDEExtensionProperty(kWidget, "status") is "installed"
    TestAssert pLook && "look: a widget installed shows on the palette at once", __Tile(pTile) is not empty
 end __CheckLook
 
