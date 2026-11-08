@@ -132,6 +132,28 @@ class WidgetInstallTest(unittest.TestCase):
         self.assertIn('revIDEExtensionUninstall kBuilt', body)
         self.assertIn('revIDEExtensionUninstall kBuilt', handler(ide, 'TestTeardown'))
 
+    def test_classic_look_shows_widgets_for_its_checks(self):
+        # The classic look builds only the sections its Show Sections
+        # setting (revTools_show) lists, and Home's default leaves out the
+        # widgets: the classic checks turn them on, and the setting is
+        # given back whatever fails (tools-modern-check holds it)
+        home = read(os.path.join(REPO, 'ide', 'Toolset', 'home.livecodescript'))
+        default = re.search(r'put "([^"]*)" into tPropsArray\["revTools_show"\]', home).group(1)
+        self.assertNotIn('widget', default.split(','))
+        tour = read(TOUR)
+        show = code(handler(tour, 'tourClassicShowWidgets'))
+        self.assertIn('revIDESetPreference "revTools_show", "widget," & tShow', show)
+        self.assertIn('revIDESetPreference "revTools_show", pShow', code(handler(tour, 'tourClassicShowRestore')))
+        for step in ('tour_tools_widget_install', 'tour_tools_widget_builder'):
+            body = code(handler(tour, step))
+            classic = body.index('tourToolsClassic')
+            self.assertLess(classic, body.index('put tourClassicShowWidgets() into tShowWas'))
+            self.assertIn('tourClassicShowRestore tShowWas', body.split('end try', 1)[1])
+        ide = read(IDE_TEST)
+        self.assertIn('revIDESetPreference "revTools_show", "widget," & tShow', code(handler(ide, '__SetLook')))
+        self.assertIn('revIDESetPreference "revTools_show", sShow', code(handler(ide, 'TestTeardown')))
+        self.assertIn('put revIDEGetPreference("revTools_show") into sShow', code(handler(ide, 'TestSetup')))
+
     def test_ide_test(self):
         text = read(IDE_TEST)
         for name in ('TestModernLook', 'TestClassicLook', 'TestWhileClosed', 'TestLibraryLeavesPalette'):

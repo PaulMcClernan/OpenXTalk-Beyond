@@ -926,7 +926,7 @@ constant kTourWidgetID = "com.livecode.widget.spinner"
 constant kTourWidgetLibrary = "com.livecode.library.diff"
 
 on tour_tools_widget_install
-   local tLook, tTile, tFirst, tError
+   local tLook, tTile, tFirst, tError, tShowWas
    if not tourTmStart("tools-widget-install") then exit tour_tools_widget_install
    if revIDEExtensionProperty(kTourWidgetID, "status") is not "installed" then
       throw kTourWidgetID && "is not loaded (" & revIDEExtensionProperty(kTourWidgetID, "status") & ")"
@@ -939,9 +939,11 @@ on tour_tools_widget_install
             put kTourWidgetID into tTile
          else
             tourToolsClassic
+            put tourClassicShowWidgets() into tShowWas
             put kTourWidgetID into tTile
          end if
-         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: the Spinner is on the palette to start with"
+         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: the Spinner is on the palette to start with (" & \
+               revIDEGetPreference("revTools_show") & ")"
          revIDEExtensionUnload kTourWidgetID
          tourWidgetBatch
          tourTmCheck revIDEExtensionProperty(kTourWidgetID, "status") is not "installed", \
@@ -981,6 +983,7 @@ on tour_tools_widget_install
    catch tError
       tourTmCheck false, "error:" && tourJoin(tError)
    end try
+   tourClassicShowRestore tShowWas
    if revIDEExtensionProperty(kTourWidgetID, "status") is not "installed" then
       revIDEExtensionReload kTourWidgetID
       tourWidgetBatch
@@ -1006,7 +1009,7 @@ end tour_tools_widget_install
 constant kTourBuilderWidget = "org.openxtalk.tour.palettewidget"
 
 on tour_tools_widget_builder
-   local tFolder, tLook, tTile, tTry, tError
+   local tFolder, tLook, tTile, tTry, tError, tShowWas
    if not tourTmStart("tools-widget-builder") then exit tour_tools_widget_builder
    put tourBuilderWidgetFolder() into tFolder
    if tFolder is empty then
@@ -1021,6 +1024,7 @@ on tour_tools_widget_builder
             put kTourBuilderWidget into tTile
          else
             tourToolsClassic
+            put tourClassicShowWidgets() into tShowWas
             put kTourBuilderWidget into tTile
          end if
          tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: the test widget is not on the palette before it is installed"
@@ -1041,6 +1045,7 @@ on tour_tools_widget_builder
    catch tError
       tourTmCheck false, "error:" && tourJoin(tError)
    end try
+   tourClassicShowRestore tShowWas
    if revIDEExtensionProperty(kTourBuilderWidget, "status") is not empty then
       revIDEExtensionUninstall kTourBuilderWidget
       tourWidgetBatch
@@ -1048,6 +1053,29 @@ on tour_tools_widget_builder
    tourTmFinish "tools-widget-builder"
    tourTmReset
 end tour_tools_widget_builder
+
+-- The classic look shows widgets only when its Show Sections setting
+-- (revTools_show) lists them, and a fresh profile's does not (Home's
+-- default is classic,graphictools,runedit,graphic,paint), so the widget
+-- steps show them for their classic checks and give the setting back
+-- after (tools-modern-check holds it to what it was). Returns the setting
+-- it changed, or empty when it changed nothing
+function tourClassicShowWidgets
+   local tShow
+   put revIDEGetPreference("revTools_show") into tShow
+   if tShow is empty or "widget" is among the items of tShow then return empty
+   revIDESetPreference "revTools_show", "widget," & tShow
+   tourWait 300
+   return tShow
+end tourClassicShowWidgets
+
+command tourClassicShowRestore pShow
+   if pShow is empty then exit tourClassicShowRestore
+   if revIDEGetPreference("revTools_show") is not pShow then
+      revIDESetPreference "revTools_show", pShow
+      tourWait 300
+   end if
+end tourClassicShowRestore
 
 -- A folder with the test widget's source, compiled as the Extension
 -- Builder compiles one, or empty when it did not compile

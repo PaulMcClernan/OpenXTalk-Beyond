@@ -29,10 +29,13 @@ constant kLibrary = "com.livecode.library.diff"
 -- A widget written and compiled here, as the Extension Builder does
 constant kBuilt = "org.openxtalk.test.palettewidget"
 
-local sLook
+-- The look, and the classic look's Show Sections setting (revTools_show)
+-- as each test found them
+local sLook, sShow
 
 on TestSetup
    put revIDEGetPreference("revTools_look") into sLook
+   put revIDEGetPreference("revTools_show") into sShow
    revIDEOpenPalette "tools"
    __Settle
 end TestSetup
@@ -50,6 +53,9 @@ on TestTeardown
    __Settle
    if revIDEGetPreference("revTools_look") is not sLook then
       revIDESetPreference "revTools_look", sLook
+   end if
+   if sShow is not empty and revIDEGetPreference("revTools_show") is not sShow then
+      revIDESetPreference "revTools_show", sShow
    end if
    if there is not a stack "revTools" or the mode of stack "revTools" is 0 then
       revIDEOpenPalette "tools"
@@ -85,9 +91,19 @@ private function __Tile pName
    return empty
 end __Tile
 
+-- The classic look shows widgets only when its Show Sections setting
+-- lists them, and a fresh profile's does not (Home's default is
+-- classic,graphictools,runedit,graphic,paint): the tests show them, and
+-- TestTeardown gives the setting back
 private command __SetLook pLook
+   local tShow
    if revIDEGetPreference("revTools_look") is not pLook then
       revIDESetPreference "revTools_look", pLook
+      __Settle
+   end if
+   put revIDEGetPreference("revTools_show") into tShow
+   if pLook is "classic" and tShow is not empty and "widget" is not among the items of tShow then
+      revIDESetPreference "revTools_show", "widget," & tShow
       __Settle
    end if
 end __SetLook
