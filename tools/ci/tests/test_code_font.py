@@ -129,6 +129,32 @@ class TheTourStep(unittest.TestCase):
         self.assertIn("'OXT_TOUR_FONT_FILES': '|'.join(", src)
         self.assertIn('replace "|" with return in tFiles', self.step)
 
+    def test_every_sparse_checkout_that_runs_the_tour_has_the_font_files(self):
+        # #420's Mac test jobs checked out tools/ and not the IDE's
+        # html_viewer fonts, so the step failed with "no font file at"
+        repo = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
+        files = [os.path.relpath(os.path.normpath(f), repo).replace(os.sep, '/') for f in ui_tour.TOUR_FONT_FILES]
+        seen = 0
+        workflows = os.path.join(repo, '.github', 'workflows')
+        for name in sorted(os.listdir(workflows)):
+            if not name.endswith('.yml'):
+                continue
+            with open(os.path.join(workflows, name), encoding='utf-8') as f:
+                text = f.read()
+            # each job: the text from one "runs-on:" to the next
+            for job in re.split(r'\n    runs-on:', text)[1:]:
+                if 'tools/ci/ui_tour.py' not in job or 'sparse-checkout: |' not in job:
+                    continue
+                block = job.split('sparse-checkout: |', 1)[1].split('\n\n', 1)[0]
+                entries = [line.strip() for line in block.splitlines() if line.strip()]
+                for rel in files:
+                    self.assertTrue(any(rel == e or rel.startswith(e.rstrip('/') + '/') for e in entries),
+                                    '%s: a job runs ui_tour.py with a sparse checkout of %s, without %s'
+                                    % (name, ', '.join(entries), rel))
+                seen += 1
+        # the Mac test job (both architectures) and the macOS 26 tour
+        self.assertGreaterEqual(seen, 2)
+
 
 class TheWindowsCollectionKey(unittest.TestCase):
 

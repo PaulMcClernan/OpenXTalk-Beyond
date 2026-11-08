@@ -900,8 +900,10 @@ jobs:
       # Only what the steps below read: the scripts and their files in
       # tools/ (tools/ci, and the tools/oxt modules they import), the
       # root's version file and sqlite3.h (the versions the checks
-      # expect, run_livecode_check.read_expectations), and the disk image
-      # the IDE screenshots import a HyperCard stack from
+      # expect, run_livecode_check.read_expectations), the disk image
+      # the IDE screenshots import a HyperCard stack from, and the font
+      # files their code-font step loads (tools/ci/ui_tour.py
+      # TOUR_FONT_FILES; one is the IDE's)
       - name: Check out
         uses: actions/checkout@v7
         with:
@@ -910,6 +912,7 @@ jobs:
             tools
             thirdparty/libsqlite/include
             tests/lcs-input-files/hypercard/forks
+            ide/Documentation/html_viewer/fonts
 
       # A download stalled for 22 minutes once: a time limit, and one more try
       - name: Download the disk image
@@ -1003,9 +1006,12 @@ jobs:
 
       # Every native library of the bundled extensions finds what it needs
       # on a user's Mac and holds both architectures, and each slice needs
-      # no newer macOS than the platform matrix allows the extensions
+      # no newer macOS than the platform matrix allows: the xTalk Suite's
+      # libraries (code/universal-mac) the extensions' floor
       # (tools/ci/platform-matrix.json: x86_64 10.15, arm64 11.0, as
-      # README.md states; up to 0.2.6 this allowed macOS 15).
+      # README.md states; up to 0.2.6 this allowed macOS 15), and the
+      # timezone and INI libraries, built here with the app, the app's
+      # (macOS 11 from 0.2.7-rc.6.19).
       - name: Check the extension libraries
         run: |
           python3 tools/ci/check_native_deps.py --root "$APP/Contents/Tools" --platform mac \
@@ -1321,6 +1327,7 @@ jobs:
           sparse-checkout: |
             tools
             tests/lcs-input-files/hypercard/forks
+            ide/Documentation/html_viewer/fonts
 
       - name: Download the disk image
         timeout-minutes: 10
