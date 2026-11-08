@@ -85,7 +85,7 @@
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,tools-widget-install,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,tools-widget-install,tools-widget-builder,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- the card's own colour in the step controls (tourNearCardColour)
@@ -990,6 +990,91 @@ on tour_tools_widget_install
    tourTmFinish "tools-widget-install"
    tourTmReset
 end tour_tools_widget_install
+
+-- Brian's own way (bwmilby, forum, 2026-11-07): a widget made in the
+-- Extension Builder and put in with its Install button
+-- (revIDEDeveloperExtensionInstall, which packages the folder and installs
+-- the package with revIDEExtensionInstall) shows on the Tools palette at
+-- once, and the Extension Manager's Uninstall (revIDEExtensionUninstall,
+-- which deletes it) takes it away at once, in each look. The widget is
+-- written and compiled here, as the Extension Builder compiles a folder it
+-- opens (revIDEDeveloperExtension); a build with no lc-compile beside the
+-- IDE says so and skips the step
+constant kTourBuilderWidget = "org.openxtalk.tour.palettewidget"
+
+on tour_tools_widget_builder
+   local tFolder, tLook, tTile, tTry, tError
+   if not tourTmStart("tools-widget-builder") then exit tour_tools_widget_builder
+   put tourBuilderWidgetFolder() into tFolder
+   if tFolder is empty then
+      tourRecord "INFO tools-widget-builder: the widget did not compile here (no lc-compile?); skipped"
+      tourTmReset
+      exit tour_tools_widget_builder
+   end if
+   try
+      repeat for each item tLook in "modern,classic"
+         if tLook is "modern" then
+            if tourToolsModern(empty, false) is not true then throw "the modern look did not turn on"
+            put kTourBuilderWidget into tTile
+         else
+            tourToolsClassic
+            put "palettewidget" into tTile
+         end if
+         tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: the test widget is not on the palette before it is installed"
+         revIDEDeveloperExtensionInstall tFolder
+         repeat with tTry = 1 to 50
+            if revIDEExtensionProperty(kTourBuilderWidget, "status") is "installed" then exit repeat
+            tourWait 100
+         end repeat
+         tourWidgetBatch
+         tourTmCheck revIDEExtensionProperty(kTourBuilderWidget, "status") is "installed", \
+               tLook && "look: the Extension Builder's Install installs it (" & revIDEExtensionProperty(kTourBuilderWidget, "status") & ")"
+         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: a widget installed from the Extension Builder shows on the palette at once"
+         if tLook is "modern" then tourShotStack "revTools", "01-tools-widget-builder"
+         revIDEExtensionUninstall kTourBuilderWidget
+         tourWidgetBatch
+         tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: a widget uninstalled in the Extension Manager goes from the palette at once"
+      end repeat
+   catch tError
+      tourTmCheck false, "error:" && tourJoin(tError)
+   end try
+   if revIDEExtensionProperty(kTourBuilderWidget, "status") is not empty then
+      revIDEExtensionUninstall kTourBuilderWidget
+      tourWidgetBatch
+   end if
+   tourTmFinish "tools-widget-builder"
+   tourTmReset
+end tour_tools_widget_builder
+
+-- A folder with the test widget's source, compiled as the Extension
+-- Builder compiles one, or empty when it did not compile
+function tourBuilderWidgetFolder
+   local tFolder, tSource, tDetails, tError
+   put specialFolderPath("temporary") & "/oxt_tour_palettewidget" into tFolder
+   if there is not a folder tFolder then create folder tFolder
+   put "widget" && kTourBuilderWidget & return & \
+         "use com.livecode.canvas" & return & \
+         "use com.livecode.widget" & return & \
+         "metadata title is " & quote & "Palette Test Widget" & quote & return & \
+         "metadata author is " & quote & "OXT-Beyond tests" & quote & return & \
+         "metadata version is " & quote & "1.0.0" & quote & return & \
+         "metadata svgicon is " & quote & "M0,0L10,0L10,10L0,10Z" & quote & return & \
+         "public handler OnPaint()" & return & \
+         "   fill rectangle [0, 0, 10, 10] on this canvas" & return & \
+         "end handler" & return & \
+         "end widget" & return into tSource
+   put textEncode(tSource, "UTF-8") into URL ("binfile:" & tFolder & "/palettewidget.lcb")
+   try
+      put revIDEDeveloperExtension(tFolder) into tDetails
+   catch tError
+      tourRecord "INFO tools-widget-builder: compiling failed:" && tourJoin(tError)
+      return empty
+   end try
+   if there is not a file (tFolder & "/manifest.xml") then return empty
+   if there is not a file (tFolder & slash & revIDEExtensionBytecodeFilename(true)) and \
+         there is not a file (tFolder & "/module.lcm") then return empty
+   return tFolder
+end tourBuilderWidgetFolder
 
 -- Waits, at most 10 seconds, for the extension library's batch of changes
 -- (and the ideExtensionsChanged it sends) to be over, then 300 ms more

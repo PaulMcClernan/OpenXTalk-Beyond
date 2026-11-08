@@ -26,6 +26,8 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 
 constant kWidget = "com.livecode.widget.spinner"
 constant kLibrary = "com.livecode.library.diff"
+-- A widget written and compiled here, as the Extension Builder does
+constant kBuilt = "org.openxtalk.test.palettewidget"
 
 local sLook
 
@@ -36,6 +38,9 @@ on TestSetup
 end TestSetup
 
 on TestTeardown
+   if revIDEExtensionProperty(kBuilt, "status") is not empty then
+      revIDEExtensionUninstall kBuilt
+   end if
    if revIDEExtensionProperty(kWidget, "status") is not "installed" then
       revIDEExtensionReload kWidget
    end if
@@ -160,3 +165,69 @@ on TestLibraryLeavesPalette
    dispatch function "toolsWidgetsChanged" to stack "revTools"
    TestAssert "and the palette knows its widgets are those it shows", the result is false
 end TestLibraryLeavesPalette
+
+-- The test widget's folder, compiled as the Extension Builder compiles a
+-- folder it opens (revIDEDeveloperExtension), or empty when it did not
+-- compile (an IDE with no lc-compile beside it)
+private function __BuiltWidgetFolder
+   local tFolder, tSource, tDetails, tError
+   put specialFolderPath("temporary") & "/oxt_test_palettewidget" into tFolder
+   if there is not a folder tFolder then create folder tFolder
+   put "widget" && kBuilt & return & \
+         "use com.livecode.canvas" & return & \
+         "use com.livecode.widget" & return & \
+         "metadata title is " & quote & "Palette Test Widget" & quote & return & \
+         "metadata author is " & quote & "OXT-Beyond tests" & quote & return & \
+         "metadata version is " & quote & "1.0.0" & quote & return & \
+         "metadata svgicon is " & quote & "M0,0L10,0L10,10L0,10Z" & quote & return & \
+         "public handler OnPaint()" & return & \
+         "   fill rectangle [0, 0, 10, 10] on this canvas" & return & \
+         "end handler" & return & \
+         "end widget" & return into tSource
+   put textEncode(tSource, "UTF-8") into URL ("binfile:" & tFolder & "/palettewidget.lcb")
+   try
+      put revIDEDeveloperExtension(tFolder) into tDetails
+   catch tError
+      return empty
+   end try
+   if there is not a file (tFolder & "/manifest.xml") then return empty
+   if there is not a file (tFolder & slash & revIDEExtensionBytecodeFilename(true)) and \
+         there is not a file (tFolder & "/module.lcm") then return empty
+   return tFolder
+end __BuiltWidgetFolder
+
+-- Brian's own way (bwmilby, forum, 2026-11-07): the Extension Builder's
+-- Install button (revIDEDeveloperExtensionInstall) and the Extension
+-- Manager's Uninstall (revIDEExtensionUninstall), in each look
+on TestBuilderInstallManagerUninstall
+   local tFolder, tLook, tTile, tTry
+   put __BuiltWidgetFolder() into tFolder
+   if tFolder is empty then
+      TestSkip "Extension Builder install", "the test widget did not compile (no lc-compile?)"
+      exit TestBuilderInstallManagerUninstall
+   end if
+   dispatch function "tmIsModern" to stack "revTools"
+   repeat for each item tLook in "modern,classic"
+      if tLook is "modern" and it is not "handled" then next repeat
+      __SetLook tLook
+      if tLook is "modern" then
+         put kBuilt into tTile
+      else
+         put "palettewidget" into tTile
+      end if
+      revIDEDeveloperExtensionInstall tFolder
+      repeat with tTry = 1 to 50
+         if revIDEExtensionProperty(kBuilt, "status") is "installed" then exit repeat
+         wait 100 milliseconds with messages
+      end repeat
+      __Settle
+      TestAssert tLook && "look: the Extension Builder's Install installs it", \
+            revIDEExtensionProperty(kBuilt, "status") is "installed"
+      TestAssert tLook && "look: a widget installed from the Extension Builder shows on the palette at once", \
+            __Tile(tTile) is not empty
+      revIDEExtensionUninstall kBuilt
+      __Settle
+      TestAssert tLook && "look: a widget uninstalled in the Extension Manager goes from the palette at once", \
+            __Tile(tTile) is empty
+   end repeat
+end TestBuilderInstallManagerUninstall

@@ -101,6 +101,7 @@ class WidgetInstallTest(unittest.TestCase):
         tour = read(TOUR)
         steps = [l for l in tour.splitlines() if l.startswith('constant kSteps')][0].split('"')[1].split(',')
         self.assertEqual(steps.index('tools-widget-install'), steps.index('tools-modern-default') + 1)
+        self.assertEqual(steps.index('tools-widget-builder'), steps.index('tools-widget-install') + 1)
         body = handler(tour, 'tour_tools_widget_install')
         for needle in ('revIDEExtensionUnload kTourWidgetID', 'revIDEExtensionReload kTourWidgetID',
                        'repeat for each item tLook in "modern,classic"', 'close stack "revTools"',
@@ -109,6 +110,27 @@ class WidgetInstallTest(unittest.TestCase):
         # the Spinner is loaded again whatever fails
         after = body.split('end try', 1)[1]
         self.assertIn('revIDEExtensionReload kTourWidgetID', after)
+
+    def test_builder_install_and_manager_uninstall(self):
+        # Brian's own way: the Extension Builder's Install button and the
+        # Extension Manager's Uninstall, which both end in the extension
+        # library's batched ideExtensionsChanged
+        lib = read(EXTENSIONS)
+        for name in ('revIDEExtensionInstall', 'revIDEExtensionUninstall'):
+            self.assertIn('__extensionsChanged', code(handler(lib, name)))
+        dev = read(os.path.join(REPO, 'ide', 'Toolset', 'libraries', 'revidedeveloperextensionlibrary.livecodescript'))
+        self.assertIn('revIDEExtensionInstall tPackage', code(handler(dev, 'revIDEDeveloperExtensionInstall')))
+        tour = read(TOUR)
+        body = handler(tour, 'tour_tools_widget_builder')
+        for needle in ('revIDEDeveloperExtensionInstall tFolder', 'revIDEExtensionUninstall kTourBuilderWidget',
+                       'repeat for each item tLook in "modern,classic"', 'tourTmFinish "tools-widget-builder"'):
+            self.assertIn(needle, body)
+        self.assertIn('revIDEExtensionUninstall kTourBuilderWidget', body.split('end try', 1)[1])
+        ide = read(IDE_TEST)
+        body = handler(ide, 'TestBuilderInstallManagerUninstall')
+        self.assertIn('revIDEDeveloperExtensionInstall tFolder', body)
+        self.assertIn('revIDEExtensionUninstall kBuilt', body)
+        self.assertIn('revIDEExtensionUninstall kBuilt', handler(ide, 'TestTeardown'))
 
     def test_ide_test(self):
         text = read(IDE_TEST)
