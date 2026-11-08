@@ -23,6 +23,9 @@ local sEditor
 on TestSetup
    local tText, tScript, tStart, tEnd, tKind, tName
    put textDecode(url ("binfile:" & TestGetIDERepositoryPath() & "/Toolset/palettes/script editor/behaviors/revsecommoneditorbehavior.livecodescript"), "UTF-8") into tText
+   -- A Windows checkout has CRLF line ends, and the search below goes by
+   -- returns
+   replace crlf with return in tText
    put kStubs into tScript
    replace "|" with return in tScript
    replace "~" with quote in tScript
