@@ -265,5 +265,54 @@ class PropertyListeners(unittest.TestCase):
             self.assertIn('set the backgroundColor of tButton to "0,0,200"', step, name)
 
 
+class ExtensionStacksNotTheUsers(unittest.TestCase):
+    """The stacks the IDE loads from its own Extensions folder are its own:
+    until rc.6.18 the web IDE's Project Browser and App Browser listed the
+    layout guides' library, community.ferruslogic.plugin.devguides, first
+    among the user's stacks (LittleNemo, openxtalk.org p=26169). With the
+    guides off the library closes itself, which leaves a library the IDE
+    never opened in memory, and its name neither begins with "rev" nor is
+    the name the IDE loaded it by. The web tour's project-browser step
+    failed on rc.6.17's web IDE and passes with the library marking itself
+    the IDE's; the desktop tour's App Browser step checks its list too."""
+
+    def read(self, *path):
+        with open(os.path.join(REPO, *path), encoding='utf-8') as f:
+            return f.read()
+
+    def handler(self, text, kind, name):
+        return text.split('\n%s %s' % (kind, name), 1)[1].split('\nend %s\n' % name, 1)[0]
+
+    def test_the_web_tour_checks_after_the_project_browser(self):
+        tour = self.read('tools', 'ci', 'web-ide-tour.livecodescript')
+        step = self.handler(tour, 'on', 'tour_project_browser')
+        self.assertIn('tourExtensionStacksNotUsers', step)
+        self.assertLess(step.index('close stack tStack'), step.index('tourExtensionStacksNotUsers'))
+        check = self.handler(tour, 'command', 'tourExtensionStacksNotUsers')
+        self.assertIn('put revFilterStacksList(the mainStacks) into tUsers', check)
+        self.assertIn('put revIDESpecialFolderPath("extensions") & slash into tExtensions', check)
+        self.assertIn('if the effective filename of stack tStackName begins with tExtensions then', check)
+        self.assertIn('throw "the IDE lists its own extensions\' stacks among the user\'s stacks:"', check)
+
+    def test_the_desktop_tour_checks_the_app_browsers_list(self):
+        tour = self.read('tools', 'ci', 'ui-tour.livecodescript')
+        step = self.handler(tour, 'on', 'tour_app_browser')
+        call = step.index('get tourExtensionStacksListed(tListed)')
+        thrown = step.index('throw "the App Browser lists the IDE\'s own extensions\' stacks')
+        self.assertLess(call, thrown)
+        self.assertLess(step.rindex('close stack tStack', 0, thrown), thrown)
+        check = self.handler(tour, 'function', 'tourExtensionStacksListed')
+        self.assertIn('put revIDESpecialFolderPath("extensions") & slash into tExtensions', check)
+        self.assertIn('the effective filename of stack tStackName begins with tExtensions', check)
+
+    def test_the_guides_library_is_the_ides_with_the_guides_off(self):
+        text = self.read('ide', 'Extensions', 'community.ferruslogic.plugin.devguides',
+                         'DevGuides.livecodescript')
+        start = self.handler(text, 'on', 'extensionInitialize')
+        mark = start.index('set the _ideoverride of me to true')
+        self.assertLess(mark, start.index('if the cLayoutGuides of stack "revPreferences" is true then'))
+        self.assertLess(mark, start.index('close this stack'))
+
+
 if __name__ == '__main__':
     unittest.main()
