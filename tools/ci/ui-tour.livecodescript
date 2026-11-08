@@ -6001,6 +6001,10 @@ on tour_message_box
    close stack revIDEPaletteToStackName("message box")
 end tour_message_box
 
+-- the hilite of a Project Browser row while its list does not have the
+-- focus (the data view's kDefaultDimmedHiliteColor)
+constant kPBDimmed = "212,212,212"
+
 -- With the sample's button shown in it, as Show In Project Browser does:
 -- the rows of a stack, a card and controls, with their icons
 on tour_project_browser
@@ -6046,13 +6050,70 @@ on tour_project_browser
       end repeat
       set the itemDelimiter to comma
    end if
+   -- every platform: a selected row's names can be read on the hilites
+   -- the Project Browser draws, and the sample's button's row, selected,
+   -- shows them so (bwmilby, openxtalk.org p=26171: on macOS and Windows
+   -- they were the accentColor, a blue, on the blue hilite; 0.2.7-rc.6.19)
+   local tProblem
+   put tourPBHiliteProblem(tStack, tButton) into tProblem
    -- its Refresh button: its own tooltip, and its icon, not a corner of
    -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.19)
-   local tProblem
-   put tourRefreshProblem(tStack) into tProblem
+   if tProblem is empty then put tourRefreshProblem(tStack) into tProblem
    close stack tStack
    if tProblem is not empty then throw tProblem
 end tour_project_browser
+
+-- The Project Browser (pStack is its stack) and pObject, a control it
+-- shows: empty when a selected row's names can be read on each hilite the
+-- list draws (its own blue, its alternate, and kPBDimmed, the grey of a
+-- list that does not have the focus; 2.9 to 1 at least, LiveCode's white
+-- on its blue), and the row of pObject, selected, draws its names in the
+-- colour revIDEHilitedTextColor gives for its hilite; else the problem.
+-- The row's shot is taken while it is selected
+function tourPBHiliteProblem pStack, pObject
+   local tHilites, tHilite, tText, tRatio, tList, tRow, tControl, tName, tBack
+   put revIDEColor("dataView_hiliteColor") & return & revIDEColor("dataView_alternateHiliteColor") & \
+         return & kPBDimmed into tHilites
+   repeat for each line tHilite in tHilites
+      put revIDEHilitedTextColor(tHilite) into tText
+      put tourContrast(tHilite, tText) into tRatio
+      tourRecord "INFO a selected Project Browser row's names on" && tHilite & ":" && tText && "(contrast" && tRatio & ")"
+      if the number of items of tText is not 3 or tRatio < 2.9 then
+         return "a selected Project Browser row's names" && tText && "can hardly be read on its hilite" && tHilite && \
+               "(contrast" && tRatio & ")"
+      end if
+   end repeat
+   put the long id of group "objectList" of card "list" of stack pStack into tList
+   dispatch function "getVisibleRow" to card "list" of stack pStack with pObject
+   put the result into tRow
+   if tRow is not an integer or tRow < 1 then
+      return "the Project Browser shows no row for" && pObject && "(" & tRow & ")"
+   end if
+   set the dvHilitedRows of tList to tRow
+   tourWait 500
+   put the dvControlOfRow[tRow] of tList into tControl
+   if tControl is empty or there is not a tControl then
+      return "the Project Browser drew no row" && tRow && "for" && pObject
+   end if
+   put the foregroundColor of field "name" of tControl into tName
+   put the backgroundColor of graphic "background" of tControl into tBack
+   tourShotStack pStack, "12b-project-browser-selected"
+   tourRecord "INFO the sample's button's row, selected: names" && tName && "on" && tBack
+   set the dvHilitedRows of tList to empty
+   if the number of items of tBack is not 3 then
+      return "the selected row of" && pObject && "has no hilite of its own (" & tBack & ")"
+   end if
+   if tName is not revIDEHilitedTextColor(tBack) then
+      return "the selected row of" && pObject && "draws its names" && tName && "on its hilite" && tBack & \
+            ", not" && revIDEHilitedTextColor(tBack)
+   end if
+   put tourContrast(tBack, tName) into tRatio
+   if tRatio < 2.9 then
+      return "the selected row of" && pObject && "draws its names" && tName && "on its hilite" && tBack && \
+            "(contrast" && tRatio & ")"
+   end if
+   return empty
+end tourPBHiliteProblem
 
 -- The Project Browser's Refresh button (pStack is its stack): empty when
 -- its tooltip names the Project Browser and its icon is revIcons' image,

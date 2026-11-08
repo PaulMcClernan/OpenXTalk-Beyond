@@ -323,12 +323,16 @@ class ProjectBrowserRefresh(unittest.TestCase):
 
 class HilitedNames(unittest.TestCase):
     """White names on a selected row of the Project Browser and the App
-    Browser, in the web IDE only (littlenemo, openxtalk.org p=26169; seth's
+    Browser, in the web IDE (littlenemo, openxtalk.org p=26169; seth's
     decision of 2026-11-08): the Project Browser's were the accentColor, a
     blue, on its blue hilite, and the App Browser painted its selected
     controls' names black (its cSuspended, saved true, cleared only on
     Windows). The web tour's project-browser step checks both in the IDE;
-    these hold the pieces to each other and the desktops to what they did."""
+    these hold the pieces to each other. Since 0.2.7-rc.6.19 the Project
+    Browser's names are white on its blue on macOS and Windows too, and
+    black on a light hilite everywhere but Linux, which keeps its own rule
+    (test_project_browser_hilite); the App Browser's desktops are as
+    before."""
 
     LIBRARY = ('ide', 'Toolset', 'libraries', 'revidelibrary.8.livecodescript')
 
@@ -340,13 +344,15 @@ class HilitedNames(unittest.TestCase):
         text = self.read(*self.LIBRARY)
         return text.split('\n%s %s ' % (kind, name), 1)[1].split('\nend %s' % name, 1)[0]
 
-    def test_white_on_the_web_only(self):
+    def test_white_on_the_web(self):
         body = self.handler('function', 'revIDEHilitedTextColor')
         self.assertIn('put revEnvironmentIsWeb() is true into pWeb', body)
-        web = body.index('if pWeb then\n      return "255,255,255"')
-        # the desktops' answers come after it, unchanged
-        self.assertLess(web, body.index('if the platform is not "Linux" or the number of items of pHiliteColor is not 3 then'))
-        self.assertIn('return revIDEColor("dataView_TextHiliteColor")', body[web:])
+        # a colour given by name: white on the web, the desktops' as before
+        self.assertIn('if pWeb then return "255,255,255"\n      return revIDEColor("dataView_TextHiliteColor")', body)
+        # the web takes the rule of macOS and Windows, white on the blue
+        # and black on a light hilite, never Linux's
+        linux = body.index('if pPlatform is "Linux" and not pWeb then')
+        self.assertIn('if tLuminance > 0.5 then return "0,0,0"\n   return "255,255,255"', body[linux:])
 
     def test_the_app_browser_on_the_web_only(self):
         body = self.handler('command', 'revIDEAppBrowserHilitedNames')
@@ -362,13 +368,15 @@ class HilitedNames(unittest.TestCase):
         tour = self.read('tools', 'ci', 'web-ide-tour.livecodescript')
         step = tour.split('\non tour_project_browser\n', 1)[1].split('\nend tour_project_browser', 1)[0]
         self.assertIn('revIDEHilitedTextColor(revIDEColor("dataView_hiliteColor")) is not "255,255,255"', step)
+        self.assertIn('revIDEHilitedTextColor("212,212,212") is not "0,0,0"', step)
         self.assertIn('if the cSuspended of stack "App Browser" is true then', step)
         self.assertIn('close stack "App Browser"', step)
 
     def test_the_ide_tests(self):
         hilite = self.read('ide', 'tests', 'projectbrowser', 'hilite.livecodescript')
         self.assertIn('on TestHilitedNamesAreWhiteOnTheWeb', hilite)
-        self.assertIn('on TestHilitedNamesOnADesktopAreAsBefore', hilite)
+        self.assertIn('on TestHilitedNamesAreWhiteOnMacAndWindows', hilite)
+        self.assertIn('on TestHilitedNamesOnLinuxAreAsBefore', hilite)
         self.assertIn('on TestAppBrowserHilitedNamesOnTheWeb',
                       self.read('ide', 'tests', 'appbrowser', 'updates.livecodescript'))
 
