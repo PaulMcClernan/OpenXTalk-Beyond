@@ -1,0 +1,3 @@
+- Project Browser: its Refresh button shows its two arrows in the web IDE, where it showed a black scrap (littlenemo); the splash's art took the ID of the button's icon, image "dark-refresh" of revIcons, and the web IDE keeps the splash in memory, where a button finds an icon by its ID before revIcons. The splash's image now takes the first ID after revIcons' own that no image of the IDE's icon stacks has
+- Project Browser: the Refresh button's tooltip says "Refresh the Project Browser" (it said "Refresh the Application Browser", another window) (littlenemo)
+- CI: both IDE tours fail when the Project Browser's Refresh tooltip names another window, or its icon is shadowed by an image of the same ID in another stack in memory

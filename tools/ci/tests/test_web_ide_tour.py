@@ -265,5 +265,54 @@ class PropertyListeners(unittest.TestCase):
             self.assertIn('set the backgroundColor of tButton to "0,0,200"', step, name)
 
 
+class ProjectBrowserRefresh(unittest.TestCase):
+    """The Project Browser's Refresh button showed a corner of the splash's
+    art in the web IDE, and its tooltip named the Application Browser
+    (littlenemo, openxtalk.org; 0.2.7-rc.6.18). The splash's image took
+    revIcons' ID, which is the ID of revIcons' "dark-refresh", the
+    button's icon, and the web IDE keeps the splash in memory. Both tours'
+    project-browser steps check the button in the IDE (tourRefreshProblem);
+    these hold the pieces to each other."""
+
+    def read(self, *path):
+        with open(os.path.join(REPO, *path), encoding='utf-8') as f:
+            return f.read().lstrip('\ufeff')
+
+    def test_both_tours_check_the_button(self):
+        for name in ('web-ide-tour.livecodescript', 'ui-tour.livecodescript'):
+            tour = self.read('tools', 'ci', name)
+            step = tour.split('\non tour_project_browser\n', 1)[1].split('\nend tour_project_browser', 1)[0]
+            self.assertIn('put tourRefreshProblem(tStack) into tProblem', step, name)
+            self.assertIn('if tProblem is not empty then throw tProblem', step, name)
+            check = tour.split('\nfunction tourRefreshProblem pStack\n', 1)[1].split('\nend tourRefreshProblem', 1)[0]
+            self.assertIn('"Refresh the Project Browser"', check, name)
+            # every stack in memory but revIcons, substacks too
+            self.assertIn('repeat for each line tMain in the mainStacks', check, name)
+            self.assertIn('the substacks of stack tMain', check, name)
+            self.assertIn('if there is an image id tIcon of stack tSub then', check, name)
+
+    def test_the_splash_takes_no_icons_id(self):
+        script = self.read('ide', 'Toolset', 'palettes', 'splash', 'revsplashstackbehavior.livecodescript')
+        self.assertIn('set the id of image "Splash" to splashImageId()', script)
+        self.assertNotIn('set the id of image "Splash" to the id of stack "revIcons"', script)
+        taken = script.split('\nprivate function splashIdIsTaken pId\n', 1)[1].split('\nend splashIdIsTaken', 1)[0]
+        self.assertIn('repeat for each item tStack in "revIcons,revGeneralIcons"', taken)
+        self.assertIn('if there is an image id pId of stack tStack then return true', taken)
+        pick = script.split('\nprivate function splashImageId\n', 1)[1].split('\nend splashImageId', 1)[0]
+        # it starts where it did, at revIcons' ID, and steps past what is taken
+        self.assertIn('put the id of stack "revIcons" into tId', pick)
+        self.assertIn('repeat while splashIdIsTaken(tId)', pick)
+
+    def test_the_tooltip_patch(self):
+        patch = self.read('tools', 'oxt', 'ide-stack-patches', 'project-browser-refresh-tooltip.txt')
+        self.assertIn('file: Toolset/palettes/project browser/revideprojectbrowser.livecode', patch)
+        self.assertIn('from: Refresh the Application Browser\nto: Refresh the Project Browser\n', patch)
+        with open(os.path.join(REPO, 'ide', 'Toolset', 'palettes', 'project browser',
+                               'revideprojectbrowser.livecode'), 'rb') as f:
+            stack = f.read()
+        self.assertIn(b'Refresh the Project Browser', stack)
+        self.assertNotIn(b'Refresh the Application Browser', stack)
+
+
 if __name__ == '__main__':
     unittest.main()

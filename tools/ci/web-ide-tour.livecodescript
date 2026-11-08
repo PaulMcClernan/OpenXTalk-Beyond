@@ -463,8 +463,47 @@ on tour_project_browser
       throw "the Project Browser did not open"
    end if
    tourShot "06-project-browser"
+   -- its Refresh button: its own tooltip, and its icon, not a corner of
+   -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.18)
+   local tProblem
+   put tourRefreshProblem(tStack) into tProblem
    close stack tStack
+   if tProblem is not empty then throw tProblem
 end tour_project_browser
+
+-- The Project Browser's Refresh button (pStack is its stack): empty when
+-- its tooltip names the Project Browser and its icon is revIcons' image,
+-- which no image of another stack in memory shadows; else the problem.
+-- A button's icon is found by its ID in every stack in memory, and the
+-- splash's art, which until 0.2.7-rc.6.18 took the ID of revIcons'
+-- "dark-refresh", showed in its place while the splash was in memory, as
+-- the web IDE keeps it (littlenemo, openxtalk.org)
+function tourRefreshProblem pStack
+   local tButton, tIcon, tMain, tSub, tHits
+   put the long id of button "Refresh" of card "list" of stack pStack into tButton
+   if the toolTip of tButton is not "Refresh the Project Browser" then
+      return "the Project Browser's Refresh button's tooltip is" && quote & the toolTip of tButton & quote
+   end if
+   put the icon of tButton into tIcon
+   if there is not a stack "revIcons" or there is not an image id tIcon of stack "revIcons" then
+      return "the Project Browser's Refresh icon" && tIcon && "is not an image of revIcons"
+   end if
+   repeat for each line tMain in the mainStacks
+      repeat for each line tSub in (tMain & return & the substacks of stack tMain)
+         if tSub is empty or tSub is "revIcons" then next repeat
+         try
+            if there is an image id tIcon of stack tSub then
+               put tSub & ": " & the short name of image id tIcon of stack tSub & "; " after tHits
+            end if
+         catch tError
+         end try
+      end repeat
+   end repeat
+   if tHits is not empty then
+      return "the Project Browser's Refresh icon" && tIcon && "is shadowed by an image of the same ID in" && tHits
+   end if
+   return empty
+end tourRefreshProblem
 
 -- A click on the sample's button in browse mode runs its script, which
 -- opens an answer dialog: the click comes from the page, as a user's does

@@ -22,7 +22,14 @@ on preOpenStack
    
    --
    set the filename of image "Splash" to tSplashPath
-   set the id of image "Splash" to the id of stack "revIcons"
+   -- OXT-Beyond: the image gets an ID no icon of the IDE has, as it did
+   -- from revIcons' ID alone until 0.2.7-rc.6.18. That ID is not always
+   -- past revIcons' images: it is 225203, the ID of its "dark-refresh",
+   -- the Project Browser's Refresh icon (Tom Perry's, 2024), so while
+   -- the splash was in memory the button showed a corner of the splash
+   -- art instead (the web IDE keeps it in memory: littlenemo,
+   -- openxtalk.org). See splashImageId
+   set the id of image "Splash" to splashImageId()
    set the location of me to the screenLoc
    set the htmlText of field "License" to revEnvironmentEditionProperty("splash_strap")
    -- OXT-Beyond, from 0.2.7-rc.6.14: the splash looks like the web IDE's
@@ -94,6 +101,39 @@ setProp statusMessage pMessage
    catch tError
    end try
 end statusMessage
+
+-- OXT-Beyond: an ID for the splash image that is the ID of no image of
+-- the IDE's icon stacks (revIcons, revGeneralIcons) and of no other
+-- object of the splash: revIcons' ID, the one the image had before, or
+-- the first number after it that is free. A button's icon is found by its
+-- ID in every stack in memory, so an image of the splash with an icon's ID
+-- takes that icon's place (the Project Browser's Refresh button, whose
+-- icon is image 225203 of revIcons). Without revIcons, the image keeps
+-- its own ID
+private function splashImageId
+   local tId
+   if there is not a stack "revIcons" then
+      return the short id of image "Splash" of me
+   end if
+   put the id of stack "revIcons" into tId
+   repeat while splashIdIsTaken(tId)
+      add 1 to tId
+   end repeat
+   return tId
+end splashImageId
+
+private function splashIdIsTaken pId
+   local tStack
+   repeat for each item tStack in "revIcons,revGeneralIcons"
+      if there is a stack tStack then
+         if there is an image id pId of stack tStack then return true
+      end if
+   end repeat
+   if there is a control id pId of me then
+      return the long id of control id pId of me is not the long id of image "Splash" of me
+   end if
+   return false
+end splashIdIsTaken
 
 -- The loading bar's orange fill, over the track the art draws (196,242 to
 -- 395,245, draw_branding.py's SPLASH_TRACK), made when the splash first
