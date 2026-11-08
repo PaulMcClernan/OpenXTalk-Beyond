@@ -1432,7 +1432,9 @@ jobs:
       # (start using font file, as the IDE does when Home and Learn open):
       # up to 0.2.7-rc.6.12 the engine could measure a font with another
       # font's cached widths, and drew the words of bold text against each
-      # other (tools/ci/fontfile_check.py)
+      # other. And the fonts loaded are the fonts listed and measured: up
+      # to 0.2.7-rc.6.18 none was, so the IDE's code font, Source Code
+      # Pro, was drawn in the fallback face (tools/ci/fontfile_check.py)
       - name: Font file check
         if: ${{ !cancelled() && env.OXT_ROOT != '' }}
         timeout-minutes: 5

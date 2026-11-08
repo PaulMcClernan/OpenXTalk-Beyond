@@ -85,7 +85,7 @@
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,tools-widget-install,tools-widget-builder,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,tools-widget-install,tools-widget-builder,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,code-font,ide-stacks,screen-end,background-default"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- the card's own colour in the step controls (tourNearCardColour)
@@ -110,6 +110,9 @@ constant kChatCore = "org.openxtalk.plugin.xtalkchat-core"
 constant kChatWindow = "revXTalkChat"
 -- The stack of the step background-default, with a default button
 constant kBackground = "OXT Tour Background"
+-- The colour of the mark on that stack's card (the brand's orange): the
+-- background step's screen shot must show it where the card has it
+constant kBgMark = "255,122,0"
 
 local sOut, sLog, sOnly, sCount, sStarted, sWatchdog, sWatchdogCount, sReport, sStep
 
@@ -5998,6 +6001,10 @@ on tour_message_box
    close stack revIDEPaletteToStackName("message box")
 end tour_message_box
 
+-- the hilite of a Project Browser row while its list does not have the
+-- focus (the data view's kDefaultDimmedHiliteColor)
+constant kPBDimmed = "212,212,212"
+
 -- With the sample's button shown in it, as Show In Project Browser does:
 -- the rows of a stack, a card and controls, with their icons
 on tour_project_browser
@@ -6043,13 +6050,70 @@ on tour_project_browser
       end repeat
       set the itemDelimiter to comma
    end if
+   -- every platform: a selected row's names can be read on the hilites
+   -- the Project Browser draws, and the sample's button's row, selected,
+   -- shows them so (bwmilby, openxtalk.org p=26171: on macOS and Windows
+   -- they were the accentColor, a blue, on the blue hilite; 0.2.7-rc.6.19)
+   local tProblem
+   put tourPBHiliteProblem(tStack, tButton) into tProblem
    -- its Refresh button: its own tooltip, and its icon, not a corner of
    -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.19)
-   local tProblem
-   put tourRefreshProblem(tStack) into tProblem
+   if tProblem is empty then put tourRefreshProblem(tStack) into tProblem
    close stack tStack
    if tProblem is not empty then throw tProblem
 end tour_project_browser
+
+-- The Project Browser (pStack is its stack) and pObject, a control it
+-- shows: empty when a selected row's names can be read on each hilite the
+-- list draws (its own blue, its alternate, and kPBDimmed, the grey of a
+-- list that does not have the focus; 2.9 to 1 at least, LiveCode's white
+-- on its blue), and the row of pObject, selected, draws its names in the
+-- colour revIDEHilitedTextColor gives for its hilite; else the problem.
+-- The row's shot is taken while it is selected
+function tourPBHiliteProblem pStack, pObject
+   local tHilites, tHilite, tText, tRatio, tList, tRow, tControl, tName, tBack
+   put revIDEColor("dataView_hiliteColor") & return & revIDEColor("dataView_alternateHiliteColor") & \
+         return & kPBDimmed into tHilites
+   repeat for each line tHilite in tHilites
+      put revIDEHilitedTextColor(tHilite) into tText
+      put tourContrast(tHilite, tText) into tRatio
+      tourRecord "INFO a selected Project Browser row's names on" && tHilite & ":" && tText && "(contrast" && tRatio & ")"
+      if the number of items of tText is not 3 or tRatio < 2.9 then
+         return "a selected Project Browser row's names" && tText && "can hardly be read on its hilite" && tHilite && \
+               "(contrast" && tRatio & ")"
+      end if
+   end repeat
+   put the long id of group "objectList" of card "list" of stack pStack into tList
+   dispatch function "getVisibleRow" to card "list" of stack pStack with pObject
+   put the result into tRow
+   if tRow is not an integer or tRow < 1 then
+      return "the Project Browser shows no row for" && pObject && "(" & tRow & ")"
+   end if
+   set the dvHilitedRows of tList to tRow
+   tourWait 500
+   put the dvControlOfRow[tRow] of tList into tControl
+   if tControl is empty or there is not a tControl then
+      return "the Project Browser drew no row" && tRow && "for" && pObject
+   end if
+   put the foregroundColor of field "name" of tControl into tName
+   put the backgroundColor of graphic "background" of tControl into tBack
+   tourShotStack pStack, "12b-project-browser-selected"
+   tourRecord "INFO the sample's button's row, selected: names" && tName && "on" && tBack
+   set the dvHilitedRows of tList to empty
+   if the number of items of tBack is not 3 then
+      return "the selected row of" && pObject && "has no hilite of its own (" & tBack & ")"
+   end if
+   if tName is not revIDEHilitedTextColor(tBack) then
+      return "the selected row of" && pObject && "draws its names" && tName && "on its hilite" && tBack & \
+            ", not" && revIDEHilitedTextColor(tBack)
+   end if
+   put tourContrast(tBack, tName) into tRatio
+   if tRatio < 2.9 then
+      return "the selected row of" && pObject && "draws its names" && tName && "on its hilite" && tBack && \
+            "(contrast" && tRatio & ")"
+   end if
+   return empty
+end tourPBHiliteProblem
 
 -- The Project Browser's Refresh button (pStack is its stack): empty when
 -- its tooltip names the Project Browser and its icon is revIcons' image,
@@ -9220,6 +9284,163 @@ on tour_ide_stacks
    end if
 end tour_ide_stacks
 
+-- The IDE's code font. The IDE loads every font file in its fonts folder
+-- as it starts (revIDEInitialiseIDELibrary): Source Code Pro, which the
+-- Script Editor shows code in when it is among the fontNames
+-- (revseutilities, sePrefGet), and its icon fonts. Up to 0.2.7-rc.6.18
+-- on Linux no font a stack loaded was listed or drawn: each load made a
+-- fontconfig configuration of that one file, and Pango kept the one it
+-- first used (engine/src/lnxdc.cpp, libgraphics/src/lnxtext.cpp); on
+-- Windows the collection of loaded fonts could be an old one: DirectWrite
+-- keeps each collection under the bytes of its key, which was the address
+-- of the list of files, so a new list at an old list's address was given
+-- the old list's fonts (libgraphics/src/directwrite-skia.cpp). The step
+-- reads Source Code Pro among the fontNames and measures ten i and ten M
+-- in it, plain and bold: alike only in a monospaced face, so only when
+-- Source Code Pro is what measures them, and unlike in the fallback face
+-- (a font that is not there), which shows the probe can tell. Then it
+-- loads and unloads two font files from the repository (OXT_TOUR_FONT_FILES)
+-- three times over, reading after each step that each loaded file added a
+-- family to the fontNames, that an unloaded one took its family away, and
+-- that every font listed before stayed, and measures Source Code Pro again.
+constant kCodeFontStack = "OXT Tour Code Font"
+constant kCodeFontNone = "OXT Tour No Such Font"
+
+-- "<ten i>,<ten M>" in pFont, pStyle, in the field of kCodeFontStack
+function tourCodeWidths pFont, pStyle
+   set the textFont of field "Code" of stack kCodeFontStack to pFont
+   set the textStyle of field "Code" of stack kCodeFontStack to pStyle
+   return the formattedWidth of line 1 of field "Code" of stack kCodeFontStack & comma & \
+         the formattedWidth of line 2 of field "Code" of stack kCodeFontStack
+end tourCodeWidths
+
+-- Each line of pAfter that is not a line of pBefore
+function tourCodeAdded pBefore, pAfter
+   local tLine, tAdded
+   repeat for each line tLine in pAfter
+      if tLine is not among the lines of pBefore then
+         put tLine & return after tAdded
+      end if
+   end repeat
+   delete the last char of tAdded
+   return tAdded
+end tourCodeAdded
+
+-- Throws unless Source Code Pro measures as a monospaced face, plain and
+-- bold, and the fallback face does not
+command tourCodeMeasure pWhen
+   local tPlain, tBold, tNone
+   put tourCodeWidths("Source Code Pro", "plain") into tPlain
+   put tourCodeWidths("Source Code Pro", "bold") into tBold
+   put tourCodeWidths(kCodeFontNone, "plain") into tNone
+   tourRecord "INFO code-font:" && pWhen & ": ten i and ten M in Source Code Pro" && tPlain & \
+         ", bold" && tBold & "; in the fallback face" && tNone
+   if item 1 of tNone is item 2 of tNone then
+      throw "the fallback face measures ten i as ten M (" & tNone & "): the step cannot tell a monospaced face"
+   end if
+   if item 1 of tPlain is not item 2 of tPlain or item 1 of tBold is not item 2 of tBold then
+      throw pWhen & ", Source Code Pro is not what measures its text: ten i and ten M are" && tPlain & \
+            ", bold" && tBold
+   end if
+end tourCodeMeasure
+
+on tour_code_font
+   local tDefault, tFiles, tBefore, tNow, tGone, tRound, tFile, tIndex, tFamily, tFails, tError
+   if "Source Code Pro" is not among the lines of the fontNames then
+      throw "Source Code Pro, the IDE's code font, is not among the fontNames"
+   end if
+   put the defaultStack into tDefault
+   lock messages
+   if there is a stack kCodeFontStack then delete stack kCodeFontStack
+   create stack kCodeFontStack
+   set the rect of it to "240,160,640,280"
+   set the defaultStack to kCodeFontStack
+   create field "Code"
+   set the rect of it to "20,20,380,100"
+   set the dontWrap of it to true
+   set the textSize of it to 13
+   set the text of it to "iiiiiiiiii" & return & "MMMMMMMMMM"
+   unlock messages
+   set the defaultStack to tDefault
+   try
+      tourCodeMeasure "as the IDE starts"
+      set the textFont of field "Code" of stack kCodeFontStack to "Source Code Pro"
+      set the textStyle of field "Code" of stack kCodeFontStack to "plain"
+      go stack kCodeFontStack
+      tourWait 300
+      tourShotStack kCodeFontStack, "98-code-font"
+
+      put $OXT_TOUR_FONT_FILES into tFiles
+      replace "|" with return in tFiles
+      if the number of lines of tFiles is not 2 then
+         throw "OXT_TOUR_FONT_FILES names" && the number of lines of tFiles && "font files, not 2"
+      end if
+      repeat for each line tFile in tFiles
+         if there is not a file tFile then
+            throw "no font file at" && quote & tFile & quote && "(OXT_TOUR_FONT_FILES)"
+         end if
+      end repeat
+      repeat with tRound = 1 to 3
+         -- each file loaded adds a family, and every font listed stays
+         put the fontNames into tBefore
+         repeat with tIndex = 1 to 2
+            put line tIndex of tFiles into tFile
+            start using font file tFile
+            if the result is not empty then
+               throw "round" && tRound & ":" && tFile && "did not load:" && the result
+            end if
+            put the fontNames into tNow
+            put tourCodeAdded(tNow, tBefore) into tGone
+            if tGone is not empty then
+               put "round" && tRound & ", loading" && tFile && "took away" && tourJoin(tGone) & return after tFails
+            end if
+            put tourCodeAdded(tBefore, tNow) into tFamily[tIndex]
+            if tFamily[tIndex] is empty then
+               put "round" && tRound & ":" && tFile && "loaded and added no family to the fontNames" & \
+                     return after tFails
+            end if
+            put tNow into tBefore
+         end repeat
+         tourRecord "INFO code-font: round" && tRound & ", loaded" && tourJoin(tFamily[1]) && "and" && tourJoin(tFamily[2])
+         -- each file unloaded takes its family away, and every other font stays
+         repeat with tIndex = 1 to 2
+            put line tIndex of tFiles into tFile
+            stop using font file tFile
+            if the result is not empty then
+               throw "round" && tRound & ":" && tFile && "did not unload:" && the result
+            end if
+            put the fontNames into tNow
+            put tourCodeAdded(tNow, tBefore) into tGone
+            if tGone is not tFamily[tIndex] then
+               put "round" && tRound & ", unloading" && tFile && "took away" && \
+                     quote & tourJoin(tGone) & quote && "and not just" && quote & tourJoin(tFamily[tIndex]) & quote & \
+                     return after tFails
+            end if
+            if tourCodeAdded(tBefore, tNow) is not empty then
+               put "round" && tRound & ", unloading" && tFile && "added" && \
+                     tourJoin(tourCodeAdded(tBefore, tNow)) & return after tFails
+            end if
+            put tNow into tBefore
+         end repeat
+         if "Source Code Pro" is not among the lines of the fontNames then
+            put "round" && tRound & ": Source Code Pro is no longer among the fontNames" & return after tFails
+         end if
+      end repeat
+      try
+         tourCodeMeasure "after the font files were loaded and unloaded three times"
+      catch tError
+         put tError & return after tFails
+      end try
+   catch tError
+      delete stack kCodeFontStack
+      throw tError
+   end try
+   delete stack kCodeFontStack
+   if tFails is not empty then
+      throw "the fonts loaded are not the fonts listed:" && tourJoin(char 1 to -2 of tFails)
+   end if
+end tour_code_font
+
 on tour_screen_end
    tourShotScreen "99-screen-end"
 end tour_screen_end
@@ -9230,7 +9451,7 @@ end tour_screen_end
 -- plain (engine/src/buttondraw.cpp, drawstandardbutton:
 -- WTHEME_STATE_SUPPRESSDEFAULT), and the label of one with no text colour
 -- of its own stayed white on it: after a script launched another app,
--- every default button was white on white. The step brings the Finder to
+-- every default button was white on white. The step brings another app to
 -- the front (launch, as the report's script launched its app) and waits
 -- for the default button's face to turn grey, which says the IDE is in
 -- the background (red, green and blue within 24 of each other; the accent
@@ -9245,13 +9466,22 @@ end tour_screen_end
 -- its face than that one's: what the step holds is that in the
 -- background a default button's label is as easy to see as any other
 -- button's. (The dark appearance: on the screen a button is a dark grey
--- with a light label, but a snapshot taken with the app in the
--- background drew the face of both kinds white, rc.6.17, 2026-11-07.)
+-- with a light label, but a snapshot of a button alone draws its face
+-- white, opaque: rc.6.17 and rc.6.18 read it so, and #420's run on Apple
+-- silicon read 255,255,255 at alpha 255 in the snapshot where the screen
+-- showed 91,91,91 on a card of 37,37,37. So the snapshot of a themed
+-- button is drawn in the light appearance, which is not what the screen
+-- shows; #420's first try, an engine change drawing it in its window's
+-- appearance, read white too and was taken out. That is queued for after
+-- the GM, and the step records it. The snapshot's pixels are measured
+-- over the card's colour on the screen by their alphaData, as they would
+-- show on the card. In the dark appearance the ordinary button's face
+-- must be dark on the screen, no channel of it 160 or more.)
 -- It is the tour's last step, since it leaves the IDE in the
 -- background. The Mac only: elsewhere a default button has no accent
 -- colour.
 on tour_background_default
-   local tDefault, tFace, tTries, tHeight, tMeasure, tPlain, tNeed, tFails
+   local tDefault, tFace, tTries, tHeight, tMeasure, tPlain, tNeed, tFails, tError, tCard, tRaw, tScreen
    if the platform is not "MacOS" then
       tourRecord "INFO background-default: the Mac only"
       exit tour_background_default
@@ -9268,33 +9498,74 @@ on tour_background_default
    create button "Plain"
    set the label of it to "OK"
    set the rect of it to "60,80,180,101"
+   create graphic "Mark"
+   set the style of it to "rectangle"
+   set the opaque of it to true
+   set the lineSize of it to 0
+   set the backgroundColor of it to kBgMark
+   set the rect of it to "200,48,224,72"
    unlock messages
    set the defaultStack to tDefault
    go stack kBackground
    tourWait 800
    put tourBgFace("OK") into tFace
    tourRecord "INFO background-default: the default button's face with the IDE in front" && tFace
-   launch "/System/Library/CoreServices/Finder.app"
-   tourRecord "INFO background-default: launched the Finder (" & the result & ")"
+   try
+      launch tourInactiveApp()
+      tourRecord "INFO background-default: launched the tour's app with no window (" & the result & ")"
+   catch tError
+      tourInactiveQuit
+      delete stack kBackground
+      throw tError
+   end try
    repeat with tTries = 1 to 40
       tourWait 250
       put tourBgFace("OK") into tFace
       if tourBgGrey(tFace) then exit repeat
    end repeat
    if not tourBgGrey(tFace) then
+      tourInactiveQuit
       delete stack kBackground
       throw "the IDE could not be put in the background: the default button's face is still" && tFace
    end if
    tourRecord "INFO background-default: the IDE is in the background after" && tTries * 250 && "ms (the face" && tFace & ")"
    tourShotStack kBackground, "99b-background-default"
+   try
+      tourBgShown
+   catch tError
+      tourInactiveQuit
+      delete stack kBackground
+      throw tError
+   end try
+   -- the card's colour on the screen, beside the buttons, which a pixel
+   -- of a snapshot that is not opaque lets show through
+   put tourBgScreenAt("30,50") into tCard
+   tourRecord "INFO background-default: the card on the screen" && tCard
    repeat for each item tHeight in "21,26"
       set the rect of button "OK" of stack kBackground to "60,40,180," & (40 + tHeight)
       set the rect of button "Plain" of stack kBackground to "60,80,180," & (80 + tHeight)
-      put tourBgLabel("OK") into tMeasure
-      put tourBgLabel("Plain") into tPlain
+      put tourBgLabel("OK", tCard) into tMeasure
+      put tourBgLabel("Plain", tCard) into tPlain
+      -- the ordinary button's face in its snapshot as it is (colour, then
+      -- alpha) and on the screen, where the step's stack is drawn now
+      put tourBgRawAt(sPixWidth div 6, sPixHeight div 2) into tRaw
+      tourWait 300
+      put tourBgScreenAt("80," & (80 + tHeight div 2)) into tScreen
       tourRecord "INFO background-default: a default button" && tHeight && "points high: the face" && \
             (item 1 to 3 of tMeasure) & ", the label's colour farthest from it" && (item 4 of tMeasure) && \
-            "apart; an ordinary button: the face" && (item 1 to 3 of tPlain) & "," && (item 4 of tPlain) && "apart"
+            "apart; an ordinary button: the face" && (item 1 to 3 of tPlain) & "," && (item 4 of tPlain) && \
+            "apart (in its snapshot" && (item 1 to 3 of tRaw) && "at alpha" && (item 4 of tRaw) & "; on the screen" && tScreen & ")"
+      if $OXT_TOUR_APPEARANCE is "dark" and max(item 1 of tScreen, item 2 of tScreen, item 3 of tScreen) >= 160 then
+         put "in the dark appearance an ordinary button" && tHeight && "points high was drawn on the screen with a light face (" & \
+               tScreen && "on the card" && tCard & "; in its snapshot" && (item 1 to 3 of tRaw) && \
+               "at alpha" && (item 4 of tRaw) & "), not the dark appearance's" & return after tFails
+      else if $OXT_TOUR_APPEARANCE is "dark" and max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 then
+         -- known, queued after the GM: the snapshot of a button alone is
+         -- drawn in the light appearance
+         tourRecord "INFO background-default: KNOWN: in the dark appearance the snapshot of an ordinary button" && \
+               tHeight && "points high has a light face (" & (item 1 to 3 of tRaw) && "at alpha" && (item 4 of tRaw) & \
+               ") where the screen shows" && tScreen
+      end if
       put min(200, item 4 of tPlain - 30) into tNeed
       if item 4 of tMeasure < tNeed then
          put "a default button" && tHeight && "points high has a label that cannot be seen in the background (" & \
@@ -9302,12 +9573,83 @@ on tour_background_default
                (item 4 of tPlain) && "apart from its face" && (item 1 to 3 of tPlain) & ")" & return after tFails
       end if
    end repeat
+   tourInactiveQuit
    delete stack kBackground
    if tFails is not empty then throw tourJoin(line 1 to -1 of tFails)
 end tour_background_default
 
+-- The screen shows the stack kBackground: the colour on the screen at its
+-- mark is the mark's (within 90, red, green and blue added); otherwise
+-- another window covers the stack, and this throws
+command tourBgShown
+   local tDefault, tLoc, tImage, tRGB, tApart
+   put the defaultStack into tDefault
+   set the defaultStack to kBackground
+   put globalLoc(the loc of graphic "Mark" of stack kBackground) into tLoc
+   set the defaultStack to "oxt_ui_tour"
+   lock messages
+   import snapshot from rect ((item 1 of tLoc - 4) & comma & (item 2 of tLoc - 4) & comma & \
+         (item 1 of tLoc + 4) & comma & (item 2 of tLoc + 4))
+   put the long id of last image of card 1 of stack "oxt_ui_tour" into tImage
+   put the width of tImage into sPixWidth
+   put the height of tImage into sPixHeight
+   put the imageData of tImage into sPixData
+   delete tImage
+   unlock messages
+   set the defaultStack to tDefault
+   put tourRgbAt(sPixWidth div 2, sPixHeight div 2) into tRGB
+   put abs(item 1 of tRGB - item 1 of kBgMark) + abs(item 2 of tRGB - item 2 of kBgMark) + \
+         abs(item 3 of tRGB - item 3 of kBgMark) into tApart
+   tourRecord "INFO background-default: on the screen at the stack's mark" && tRGB && "(" & tApart && "from the mark's" && kBgMark & ")"
+   if tApart > 90 then
+      throw "something covers the stack in the background shot: the screen shows" && tRGB && \
+            "where its mark of" && kBgMark && "is (" & tLoc & ")"
+   end if
+end tourBgShown
+
+-- An app of the tour's own with no window, which the background step
+-- launches to put the IDE in the background: macOS makes the app it
+-- launches the active one, and this one shows nothing over the IDE's
+-- windows. It quits after two minutes, or when tourInactiveQuit ends it.
+-- Compiled with swiftc into a bundle the first time it is wanted, as the
+-- theme poster is; throws when it cannot be built, so that the step fails
+-- rather than checks nothing
+local sInactiveApp
+function tourInactiveApp
+   local tSource, tApp, tOut
+   if sInactiveApp is not empty and there is a folder sInactiveApp then return sInactiveApp
+   put specialFolderPath("temporary") & "/oxt_tour_inactive.swift" into tSource
+   put specialFolderPath("temporary") & "/OXTTourInactive.app" into tApp
+   put "import AppKit" & return & \
+         "let app = NSApplication.shared" & return & \
+         "app.setActivationPolicy(.regular)" & return & \
+         "Timer.scheduledTimer(withTimeInterval: 120, repeats: false) { _ in exit(0) }" & return & \
+         "app.run()" & return into URL ("file:" & tSource)
+   get shell("rm -rf " & quote & tApp & quote & "; mkdir -p " & quote & tApp & "/Contents/MacOS" & quote)
+   put "<?xml version='1.0' encoding='UTF-8'?>" & return & "<plist version='1.0'><dict>" & return & \
+         "<key>CFBundleExecutable</key><string>OXTTourInactive</string>" & return & \
+         "<key>CFBundleIdentifier</key><string>org.openxtalk.tour.inactive</string>" & return & \
+         "<key>CFBundleName</key><string>OXT Tour Inactive</string>" & return & \
+         "<key>CFBundlePackageType</key><string>APPL</string>" & return & \
+         "</dict></plist>" & return into URL ("file:" & tApp & "/Contents/Info.plist")
+   put shell("xcrun swiftc -O -o " & quote & tApp & "/Contents/MacOS/OXTTourInactive" & quote && \
+         quote & tSource & quote & " 2>&1") into tOut
+   if there is not a file (tApp & "/Contents/MacOS/OXTTourInactive") then
+      throw "could not build the app with no window:" && tourJoin(tOut)
+   end if
+   put tApp into sInactiveApp
+   return sInactiveApp
+end tourInactiveApp
+
+-- The app with no window ends, if it runs
+command tourInactiveQuit
+   get shell("pkill -x OXTTourInactive 2>/dev/null; true")
+end tourInactiveQuit
+
 -- The snapshot of the button pButton of the stack kBackground, as it is
--- drawn now, in sPixWidth, sPixHeight and sPixData
+-- drawn now, in sPixWidth, sPixHeight and sPixData, and its alphaData in
+-- sBgAlpha (a byte a pixel)
+local sBgAlpha
 command tourBgGrab pButton
    local tDefault, tImage
    put the defaultStack into tDefault
@@ -9318,6 +9660,7 @@ command tourBgGrab pButton
    put the width of tImage into sPixWidth
    put the height of tImage into sPixHeight
    put the imageData of tImage into sPixData
+   put the alphaData of tImage into sBgAlpha
    delete tImage
    unlock messages
    set the defaultStack to tDefault
@@ -9340,19 +9683,63 @@ end tourBgGrey
 -- The face of the button pButton and how far the label's colour
 -- farthest from it is (red, green and blue added), within the middle of
 -- the button, where "OK" is drawn: r,g,b,apart
-function tourBgLabel pButton
+function tourBgLabel pButton, pCard
    local tFace, tFarthest, tX, tY, tRGB
-   put tourBgFace(pButton) into tFace
+   tourBgGrab pButton
+   put tourBgSeenAt(sPixWidth div 6, sPixHeight div 2, pCard) into tFace
    put 0 into tFarthest
    repeat with tY = sPixHeight div 4 to (3 * sPixHeight) div 4
       repeat with tX = (35 * sPixWidth) div 100 to (65 * sPixWidth) div 100
-         put tourRgbAt(tX, tY) into tRGB
+         put tourBgSeenAt(tX, tY, pCard) into tRGB
          put max(tFarthest, abs(item 1 of tRGB - item 1 of tFace) + abs(item 2 of tRGB - item 2 of tFace) + \
                abs(item 3 of tRGB - item 3 of tFace)) into tFarthest
       end repeat
    end repeat
    return tFace & comma & tFarthest
 end tourBgLabel
+
+-- The colour at pX, pY of the snapshot tourBgGrab took and its alpha:
+-- r,g,b,alpha
+function tourBgRawAt pX, pY
+   put max(0, min(pX, sPixWidth - 1)) into pX
+   put max(0, min(pY, sPixHeight - 1)) into pY
+   return tourRgbAt(pX, pY) & comma & byteToNum(byte (pY * sPixWidth + pX + 1) of sBgAlpha)
+end tourBgRawAt
+
+-- The colour at pX, pY of the snapshot tourBgGrab took as it shows on a
+-- card of the colour pCard (r,g,b): the snapshot's colour over the
+-- card's, by its alpha. With pCard empty, the snapshot's colour as it is
+function tourBgSeenAt pX, pY, pCard
+   local tRaw, tSeen, i
+   if pCard is empty then return tourRgbAt(pX, pY)
+   put tourBgRawAt(pX, pY) into tRaw
+   repeat with i = 1 to 3
+      put round((item i of tRaw * item 4 of tRaw + item i of pCard * (255 - item 4 of tRaw)) / 255) into item i of tSeen
+   end repeat
+   return tSeen
+end tourBgSeenAt
+
+-- The colour on the screen at the point pPoint of the card of the stack
+-- kBackground (r,g,b): what the screen shows there now, in a snapshot of
+-- the screen around it
+function tourBgScreenAt pPoint
+   local tDefault, tLoc, tImage
+   put the defaultStack into tDefault
+   set the defaultStack to kBackground
+   put globalLoc(pPoint) into tLoc
+   set the defaultStack to "oxt_ui_tour"
+   lock messages
+   import snapshot from rect ((item 1 of tLoc - 4) & comma & (item 2 of tLoc - 4) & comma & \
+         (item 1 of tLoc + 4) & comma & (item 2 of tLoc + 4))
+   put the long id of last image of card 1 of stack "oxt_ui_tour" into tImage
+   put the width of tImage into sPixWidth
+   put the height of tImage into sPixHeight
+   put the imageData of tImage into sPixData
+   delete tImage
+   unlock messages
+   set the defaultStack to tDefault
+   return tourRgbAt(sPixWidth div 2, sPixHeight div 2)
+end tourBgScreenAt
 
 ----------------------------------------------------------------
 -- Helpers

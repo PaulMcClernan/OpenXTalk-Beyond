@@ -650,7 +650,7 @@ def mac_info_plist(plist, version, build_number, archs, executable, minimum):
       LSMinimumSystemVersion  minimum: the lowest minimum macOS of the
                               engine's slices (Xcode writes the deployment
                               target of the one build the tree came from:
-                              11.0 for arm64, 10.13 for x86_64; a universal
+                              11.0 for arm64 and x86_64; a universal
                               app must declare its lowest slice's, or
                               Intel Macs below 11 refuse it)
       CFBundleDocumentTypes   MAC_DOCUMENT_TYPES as the owner (rank Owner),
@@ -1341,7 +1341,7 @@ def check_architecture(p, bin_dir, allow_single_arch):
         # The runtime's Info.plist is staged as the build wrote it (the
         # standalone builder edits it line by line), so it must already
         # declare the lowest minimum macOS of its engine: after the merge
-        # the x86_64 build's 10.13, not the arm64 build's 11.0, or every
+        # the x86_64 build's (10.13 up to 0.2.7-rc.6.18), not the arm64 build's 11.0, or every
         # standalone would refuse Intel Macs below macOS 11
         exe = layout.native(bin_dir, 'Standalone-Community.app/Contents/MacOS/Standalone-Community')
         info = layout.native(bin_dir, 'Standalone-Community.app/Contents/Info.plist')

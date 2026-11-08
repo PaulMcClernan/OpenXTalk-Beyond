@@ -485,6 +485,12 @@ on tour_project_browser
       put "a selected Project Browser row's names are" && revIDEHilitedTextColor(revIDEColor("dataView_hiliteColor")) && \
             "on its hilite, not white" into tProblem
    end if
+   -- and black on the grey of a list that does not have the focus, where
+   -- white would hardly show (0.2.7-rc.6.19)
+   if tProblem is empty and revIDEHilitedTextColor("212,212,212") is not "0,0,0" then
+      put "a selected Project Browser row's names are" && revIDEHilitedTextColor("212,212,212") && \
+            "on the grey of a list without the focus, not black" into tProblem
+   end if
    close stack tStack
    if tProblem is not empty then throw tProblem
    if "App Browser" is among the keys of revIDEPlugins() then

@@ -326,7 +326,7 @@ version, for example `0.1.0`:
 | | `OXT-Beyond-<version>-win-x86_64-binaries.zip` | Only the built engine, externals and tools (`win-x86_64-bin`, without debug symbols) and the licence files, for use with a source checkout. |
 | | `OXT-Beyond-<version>-win-x86_64-symbols.zip` | Debug symbols (`.pdb`), for developers. |
 | | `OXT-Beyond-<version>-win-x86_64-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
-| macOS 11 or later on Apple Silicon, 10.13 or later on Intel | `OXT-Beyond-<version>-mac-universal.dmg` | A disk image with `OXT-Beyond.app`, one app for Apple Silicon and Intel Macs, to drag to Applications (see [macOS](#macos)). |
+| macOS 11 or later on Apple Silicon and Intel | `OXT-Beyond-<version>-mac-universal.dmg` | A disk image with `OXT-Beyond.app`, one app for Apple Silicon and Intel Macs, to drag to Applications (see [macOS](#macos)). |
 | | `OXT-Beyond-<version>-mac-universal.zip` | The same app, for scripted installs. |
 | | `OXT-Beyond-<version>-mac-universal-binaries.tar.xz` | Only the built engine, externals and tools (`Release/`, both architectures joined), without debug symbols and the build's own tools, and the licence files. |
 | | `OXT-Beyond-<version>-mac-universal-symbols.zip` | Debug symbols (`.dSYM`), for developers. |
@@ -343,11 +343,10 @@ version, for example `0.1.0`:
 | All | `OXT-Beyond-<version>-xtalk-sources.zip` | Every file of the bundled xTalk Suite extensions as the release took it from their repositories, so that it can be rebuilt without them. |
 | All | `SHA256SUMS` | SHA-256 checksums of all the files above. |
 
-The bundled xTalk Suite extensions need macOS 10.15 Catalina on an
-Intel Mac, where the IDE runs from 10.13, and on 64-bit Linux and Apple
-Silicon nothing newer than the IDE (from 0.2.7-rc.1; up to 0.2.6 they
-needed macOS 15, and on Linux glibc 2.33 for SodiumXT or glibc 2.38 and
-OpenSSL 3 for DataChannelXT); see [macOS](#macos) and
+The bundled xTalk Suite extensions need nothing newer than the IDE
+(from 0.2.7-rc.1; up to 0.2.6 they needed macOS 15, and on Linux glibc
+2.33 for SodiumXT or glibc 2.38 and OpenSSL 3 for DataChannelXT); see
+[macOS](#macos) and
 [Linux](#linux-x86-64). The release notes list each platform's
 requirements too.
 
@@ -447,13 +446,16 @@ for scripted installs). Releases carry them from 0.1.0 on (see
 `OXT-Beyond-mac-universal` of a successful run of the
 [Build (macOS) workflow](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml).
 
-**Requirements.** The IDE runs on macOS 10.13 High Sierra or later on an
-Intel Mac and macOS 11 Big Sur or later on Apple Silicon. The bundled
-xTalk Suite extensions (SodiumXT, TorrentXT, enetxt, DataChannelXT,
-Box2Dxt and CoinXT) have native libraries built for macOS 10.15 Catalina
-on Intel and macOS 11 on Apple Silicon (from 0.2.7-rc.1; up to 0.2.6
-they needed macOS 15 Sequoia): on an Intel Mac with macOS 10.13 or
-10.14 the IDE starts, but those extensions do not load. No Mac older
+**Requirements.** The IDE runs on macOS 11 Big Sur or later, on Apple
+Silicon and on Intel Macs. Up to 0.2.7-rc.6.18 an Intel Mac needed
+macOS 10.13 High Sierra, but on macOS 10.15 Catalina the IDE hung at
+launch (openxtalk.org p=26154, p=26182), and no Mac older than macOS 13
+was there to find out why: an Intel Mac below macOS 11 now gets macOS's
+own message that the app needs a newer macOS. The bundled xTalk Suite
+extensions (SodiumXT, TorrentXT, enetxt, DataChannelXT, Box2Dxt and
+CoinXT) have native libraries built for macOS 10.15 Catalina on Intel
+and macOS 11 on Apple Silicon, so they load wherever the IDE runs (from
+0.2.7-rc.1; up to 0.2.6 they needed macOS 15 Sequoia). No Mac older
 than macOS 15 has loaded them yet.
 
 **Install.**
@@ -511,9 +513,9 @@ To remove OXT-Beyond, move `OXT-Beyond.app` to the Trash.
   apps; its Apple Silicon target (*MacOS-IntelArmUniversal* in the
   standalone settings) builds arm64-only apps and needs macOS 14 Sonoma
   or later on the Mac that builds them. Universal standalones are
-  planned. Standalones run on macOS 10.13 or later (Intel) and 11 or
-  later (Apple Silicon); one that includes an xTalk Suite extension needs
-  macOS 10.15 on Intel (macOS 15 up to 0.2.6).
+  planned. Standalones run on macOS 11 or later, on Intel and Apple
+  Silicon (10.13 on Intel up to 0.2.7-rc.6.18, and 10.15 for one that
+  includes an xTalk Suite extension; macOS 15 for that up to 0.2.6).
 - The macOS package does not include the Visual C++ runtime DLLs that
   the Windows packages put next to enetxt and Box2Dxt: a Windows
   standalone built on a Mac with either of them needs the Visual C++

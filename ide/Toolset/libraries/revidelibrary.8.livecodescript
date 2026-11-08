@@ -2627,39 +2627,56 @@ end revIDEPlatformVersion
 -- its purple in the light one), and the accentColor as the text was
 -- unreadable on it (bwmilby, openxtalk.org p=25550): black or white,
 -- whichever stands out more (the WCAG relative luminance of the hilite).
--- macOS and Windows keep revIDEColor("dataView_TextHiliteColor"), as do
--- colours given by name. In the web IDE it is white: there the
--- accentColor is a blue (0,120,215) and the names were blue on the blue
--- hilite (littlenemo, openxtalk.org p=26169; seth's decision of
--- 2026-11-08, 0.2.7-rc.6.19). pWeb true answers as the web IDE does, false
--- as a desktop does; empty asks revEnvironmentIsWeb.
-function revIDEHilitedTextColor pHiliteColor, pWeb
-   local tLuminance, tChannel, tValue
+-- In the web IDE, and on macOS and Windows, it is white, as LiveCode drew
+-- it (its revIDEColor("dataView_TextHiliteColor") was "255,255,255"):
+-- OpenXTalk made it the accentColor, a blue on each of them (macOS's
+-- controlAccentColor, the hiliteColor on Windows and the web), and the
+-- names were blue on the blue hilite, the same in the light and dark
+-- appearances (bwmilby, openxtalk.org p=26171; littlenemo, p=26169; seth's
+-- decision of 2026-11-08 for the web, 0.2.7-rc.6.19). On a light hilite,
+-- as the grey (212,212,212) of a list that does not have the focus, where
+-- white would hardly show, it is black. A colour given by name answers
+-- white in the web IDE and revIDEColor("dataView_TextHiliteColor") on a
+-- desktop, as before. pWeb true answers as the web IDE does, false as a
+-- desktop does; empty asks revEnvironmentIsWeb. pPlatform answers for that
+-- platform (as the platform names it); empty is this one.
+function revIDEHilitedTextColor pHiliteColor, pWeb, pPlatform
+   local tLuminance, tChannel, tValue, tByName
    if pWeb is not among the items of "true,false" then
       put revEnvironmentIsWeb() is true into pWeb
    end if
-   if pWeb then
-      return "255,255,255"
+   if pPlatform is empty then
+      put the platform into pPlatform
    end if
-   if the platform is not "Linux" or the number of items of pHiliteColor is not 3 then
+   put the number of items of pHiliteColor is not 3 into tByName
+   if not tByName then
+      put 0 into tLuminance
+      repeat with tChannel = 1 to 3
+         put item tChannel of pHiliteColor into tValue
+         if tValue is not an integer or tValue < 0 or tValue > 255 then
+            put true into tByName
+            exit repeat
+         end if
+         put tValue / 255 into tValue
+         if tValue <= 0.03928 then
+            put tValue / 12.92 into tValue
+         else
+            put ((tValue + 0.055) / 1.055) ^ 2.4 into tValue
+         end if
+         add tValue * item tChannel of "0.2126,0.7152,0.0722" to tLuminance
+      end repeat
+   end if
+   if tByName then
+      if pWeb then return "255,255,255"
       return revIDEColor("dataView_TextHiliteColor")
    end if
-   put 0 into tLuminance
-   repeat with tChannel = 1 to 3
-      put item tChannel of pHiliteColor into tValue
-      if tValue is not an integer or tValue < 0 or tValue > 255 then
-         return revIDEColor("dataView_TextHiliteColor")
-      end if
-      put tValue / 255 into tValue
-      if tValue <= 0.03928 then
-         put tValue / 12.92 into tValue
-      else
-         put ((tValue + 0.055) / 1.055) ^ 2.4 into tValue
-      end if
-      add tValue * item tChannel of "0.2126,0.7152,0.0722" to tLuminance
-   end repeat
-   -- black on it, (L + 0.05) / 0.05, against white on it, 1.05 / (L + 0.05)
-   if tLuminance > 0.179 then return "0,0,0"
+   if pPlatform is "Linux" and not pWeb then
+      -- black on it, (L + 0.05) / 0.05, against white on it, 1.05 / (L + 0.05)
+      if tLuminance > 0.179 then return "0,0,0"
+      return "255,255,255"
+   end if
+   -- white, unless it would read below about 1.9 to 1 (and black above 11)
+   if tLuminance > 0.5 then return "0,0,0"
    return "255,255,255"
 end revIDEHilitedTextColor
 

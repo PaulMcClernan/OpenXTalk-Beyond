@@ -947,7 +947,7 @@ python3 tools/ci/standalone_check.py --install <folder> --platform mac-universal
 The two floor checks read the platform matrix,
 [`tools/ci/platform-matrix.json`](tools/ci/platform-matrix.json): the
 oldest system each part of a package must run on, as this file and
-README.md state them (macOS 10.13 on Intel and 11 on Apple Silicon; the
+README.md state them (macOS 11 on Apple Silicon and Intel; the
 bundled extensions' Intel slices 10.15; glibc 2.31 on Linux, with the
 32-bit extension libraries' higher floors as named exceptions). Each
 slice of a universal file is held to its own architecture's floor, and
@@ -3151,7 +3151,7 @@ have been run on those runners only.
 4. **Check.** The workflow checks the expected files, the architecture
    of the engines and that they link nothing outside the system, that
    every Mach-O file
-   records macOS 11.0 (arm64) or 10.13 (x86_64) as its minimum and SDK
+   records macOS 11.0 (arm64 and x86_64) as its minimum and SDK
    11.0 (`tools/ci/check_macho_floor.py`), that the server engine runs a
    script, and compiles the checkout's IDE with the new development
    engine:
