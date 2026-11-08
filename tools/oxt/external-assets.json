@@ -1,15 +1,15 @@
 {
   "assets": [
     {
-      "id": "oxt-runtimes-0.2.7-rc.6.18",
-      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.18/oxt-runtimes-0.2.7-rc.6.18.zip",
-      "sha256": "5088582cfae913cf686505db8689f22ee02313de86ac180332383d76a0570f84",
-      "size": 316377489,
+      "id": "oxt-runtimes-0.2.7-rc.6.18b",
+      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.18b/oxt-runtimes-0.2.7-rc.6.18b.zip",
+      "sha256": "286e82415cd82f1bf61b477e25ac031510dac5ea2071619bb177b42b0b754ead",
+      "size": 316378931,
       "kind": "zip",
       "strip": 1,
       "dest": "",
       "rename": {
-        "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.18.md"
+        "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.18b.md"
       },
       "exclude": {
         "win-x86_64": [
@@ -29,9 +29,9 @@
         ]
       },
       "exclude_note": "What each package's own build makes: Windows x86-64 its runtime and the timezone library's code for it; Linux x86-64 the same and the zoneinfo data (tz.gyp target tzdata, which the Windows builds do not make); Linux arm64 and macOS the zoneinfo data (their own runtimes are not in this asset).",
-      "description": "Standalone runtimes for the platforms other than the package's own, built from this repository (commit 5c2c4d6e5114): Windows x86-32 and x86-64 and Linux x86-32 and x86-64 engines with their externals, the timezone library's code for them and its zoneinfo data; the Android runtime's Java layer (Runtime/Android/Classes), built from the same source; and the rest of the Android runtime with the timezone library's Android code, carried over unchanged from oxt-runtimes-1.15 (OpenXTalk Lite 1.15). See PROVENANCE.md in the archive.",
+      "description": "Standalone runtimes for the platforms other than the package's own, built from this repository (commit b970cad06689): Windows x86-32 and x86-64 and Linux x86-32 and x86-64 engines with their externals, the timezone library's code for them and its zoneinfo data; the Android runtime's Java layer (Runtime/Android/Classes), built from the same source; and the rest of the Android runtime with the timezone library's Android code, carried over unchanged from oxt-runtimes-1.15 (OpenXTalk Lite 1.15). See PROVENANCE.md in the archive.",
       "licence": "GPL-3.0 with the exception in LICENSE-EXCEPTION.md (OXT-Beyond builds, the Android Java layer among them); GPL-3.0 (the rest of the Android runtime, from LiveCode Community 9.6.3); CEF: BSD-3-Clause with Chromium's licences; IANA tz data: public domain; see PROVENANCE.md",
-      "source": "OXT-Beyond's CI builds win-x86, win-x86_64, linux-x86 and linux-x86_64 of commit 5c2c4d6e5114c7eb82c892b092bdaf7f848031ed, made with tools/oxt/make_runtimes_asset.py --builds; the Android Java layer built from the same commit by tools/ci/android_java.py build; the other Android parts from oxt-runtimes-1.15",
+      "source": "OXT-Beyond's CI builds win-x86, win-x86_64, linux-x86 and linux-x86_64 of commit b970cad066891db748ada8f1706f891f7cf4f267, made with tools/oxt/make_runtimes_asset.py --builds; the Android Java layer built from the same commit by tools/ci/android_java.py build; the other Android parts from oxt-runtimes-1.15",
       "java_layer": "Runtime/Android/Classes"
     }
   ]

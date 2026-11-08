@@ -992,18 +992,18 @@ asset is one zip archive with a fixed URL, size and SHA-256:
 | `java_layer` | Optional, the runtimes asset only: the Android runtime's Java layer (`Runtime/Android/Classes`) when it was built from the commit `source` names rather than carried over. |
 | `description`, `licence`, `source` | Text for people and reports. |
 
-Today there is one asset, `oxt-runtimes-0.2.7-rc.6.18`: the Windows (x86-64
+Today there is one asset, `oxt-runtimes-0.2.7-rc.6.18b`: the Windows (x86-64
 and x86) and Linux (x86-64 and x86) runtimes and the time zone library's
 code for them and its zoneinfo data, made from this repository's CI
 builds, and the Android runtime's Java layer (`Runtime/Android/Classes`)
 built from the same commit, with the rest of the Android runtime and its
 time zone library code carried over unchanged from the earlier asset
 `oxt-runtimes-1.15` (OpenXTalk Lite 1.15's files). Its `PROVENANCE.md` (installed as
-`PROVENANCE-oxt-runtimes-0.2.7-rc.6.18.md`) names the commit and the CI
+`PROVENANCE-oxt-runtimes-0.2.7-rc.6.18b.md`) names the commit and the CI
 runs and lists every file; the 1.15 asset's provenance comes with it as
 `PROVENANCE-oxt-runtimes-1.15.md`. It is published as the file
-`oxt-runtimes-0.2.7-rc.6.18.zip` of this repository's release
-`runtimes-0.2.7-rc.6.18`. Each package leaves out the part its own build
+`oxt-runtimes-0.2.7-rc.6.18b.zip` of this repository's release
+`runtimes-0.2.7-rc.6.18b`. Each package leaves out the part its own build
 makes (the entry's `exclude`). The manifest names that release in this
 repository, so a fork downloads it from here too. To package
 without the external assets, for example while a new asset is not
@@ -2425,8 +2425,8 @@ build again.
 `cmd /c ..\make.cmd` rather than `..\make.cmd`.
 
 **Packaging fails to download the runtimes asset**
-(`oxt-runtimes-0.2.7-rc.6.18.zip`). The download comes from this
-repository's `runtimes-0.2.7-rc.6.18` release (also in a fork, which needs
+(`oxt-runtimes-0.2.7-rc.6.18b.zip`). The download comes from this
+repository's `runtimes-0.2.7-rc.6.18b` release (also in a fork, which needs
 no copy of its own), so a failure is usually the network:
 a proxy or firewall, or no access to `github.com` and its download
 servers. Copy the file into the cache folder, where it is used without
