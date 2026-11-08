@@ -1454,15 +1454,23 @@ class OneSystem(unittest.TestCase):
 
     def test_the_activity_without_an_engine_is_a_recorded_change(self):
         # each LiveCodeActivity method that now does nothing without an
-        # engine (test_android_builder pins which) differs from 9.6.3's on
-        # purpose, and compare says why
-        for sig in ('onRestart:()V', 'onResume:()V', 'onPause:()V', 'onNewIntent:(Landroid/content/Intent;)V',
-                    'onLowMemory:()V', 'onConfigurationChanged:(Landroid/content/res/Configuration;)V',
-                    'onBackPressed:()V', 'onKeyDown:(ILandroid/view/KeyEvent;)Z',
-                    'onActivityResult:(IILandroid/content/Intent;)V',
-                    'onRequestPermissionsResult:(I[Ljava/lang/String;[I)V'):
-            key = 'code com/runrev/android/LiveCodeActivity.' + sig
-            self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
+        # engine (test_android_builder pins which) differs on purpose, and
+        # compare says why: from 9.6.3's Classes (oxt-runtimes-1.15's) and
+        # from the first one built here (oxt-runtimes-0.2.7-rc.6.18b's,
+        # which the runtimes asset of 0.2.7-rc.6.18 carries) alike
+        keys = ['code com/runrev/android/LiveCodeActivity.' + sig for sig in (
+            'onRestart:()V', 'onResume:()V', 'onPause:()V', 'onNewIntent:(Landroid/content/Intent;)V',
+            'onLowMemory:()V', 'onConfigurationChanged:(Landroid/content/res/Configuration;)V',
+            'onBackPressed:()V', 'onKeyDown:(ILandroid/view/KeyEvent;)Z',
+            'onActivityResult:(IILandroid/content/Intent;)V', 'onRequestPermissionsResult:(I[Ljava/lang/String;[I)V')]
+        self.assertEqual(sorted(aj.RELAUNCH_GUARDS), sorted(keys))
+        for sha in ('c10841215d429fdc084025805c1abfcaef2e2f8086da4af9cf5935f36159dbc0',
+                    'e28f35a674222e798ed824ab2a22b0c6370dc37e86573a34565af0dbd6050360'):
+            for key in keys:
+                self.assertEqual(aj.EXPECTED[sha][key], aj.RELAUNCH_GUARDS[key], (sha, key))
+        # the first Classes built here differs in nothing else
+        self.assertEqual(aj.EXPECTED['e28f35a674222e798ed824ab2a22b0c6370dc37e86573a34565af0dbd6050360'],
+                         aj.RELAUNCH_GUARDS)
 
     def test_edge_to_edge_keeps_the_stack_out_of_the_bars(self):
         # an app that targets API 35 or newer is drawn edge to edge on
