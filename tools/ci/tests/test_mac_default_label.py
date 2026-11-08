@@ -88,7 +88,13 @@ class TheDefaultLabelInTheBackground(unittest.TestCase):
         step = tour[tour.index('\non tour_background_default\n'):tour.index('\nend tour_background_default\n')]
         self.assertIn('if the platform is not "MacOS" then', step)
         self.assertIn('set the default of it to true', step)
-        self.assertIn('launch "/System/Library/CoreServices/Finder.app"', step)
+        # put in the background by an app of the tour's own that has no
+        # window (tourInactiveApp), not by launching the Finder: when the
+        # Finder ran with no window (the dark run, the second on a
+        # runner), the launch reopened it with one, over the stack
+        # (rc.6.18's 99b dark shot on Apple silicon)
+        self.assertNotIn('Finder', step)
+        self.assertIn('launch tourInactiveApp()', step)
         # the face turned grey says the IDE is in the background; when it
         # never does the step fails rather than measuring an active button
         self.assertIn('if tourBgGrey(tFace) then exit repeat', step)
@@ -116,7 +122,30 @@ class TheDefaultLabelInTheBackground(unittest.TestCase):
         # the background is read from the default button's face
         self.assertIn('if tourBgGrey(tFace) then exit repeat', step)
         self.assertEqual(step.count('put tourBgFace("OK") into tFace'), 2)
+        # the shot is of the stack: a mark of the brand's orange on its
+        # card must be on the screen where the card has it, or something
+        # covers the stack and the step fails (after the shot, which shows
+        # what covered it)
+        self.assertIn('create graphic "Mark"', step)
+        self.assertIn('set the backgroundColor of it to kBgMark', step)
+        shot = step.index('tourShotStack kBackground, "99b-background-default"')
+        self.assertGreater(step.index('tourBgShown'), shot)
+        shown = tour[tour.index('command tourBgShown'):tour.index('end tourBgShown')]
+        self.assertIn('import snapshot from rect', shown)
+        self.assertIn('throw "something covers the stack', shown)
+        # the app quits when the step ends, failed or not
+        self.assertIn('tourInactiveQuit', step)
+        self.assertIn('pkill -x OXTTourInactive', tour[tour.index('command tourInactiveQuit'):
+                                                        tour.index('end tourInactiveQuit')])
+        app = tour[tour.index('function tourInactiveApp'):tour.index('end tourInactiveApp')]
+        # an app of its own, with no window, built as the theme poster is
+        self.assertIn('xcrun swiftc', app)
+        self.assertIn('CFBundleExecutable', app)
+        self.assertIn('throw "could not build the app', app)
+        self.assertNotIn('NSWindow', app)
         # declared before the handlers that use them
+        self.assertLess(tour.index('constant kBgMark'), tour.index('on tour_background_default'))
+        self.assertLess(tour.index('local sInactiveApp'), tour.index('function tourInactiveApp'))
         self.assertLess(tour.index('constant kBackground = "OXT Tour Background"'), tour.index('on tour_background_default'))
         self.assertLess(tour.index('local sCtlChecks, sCtlFails, sPixWidth, sPixHeight, sPixData'),
                         tour.index('command tourBgGrab'))

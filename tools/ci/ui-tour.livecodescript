@@ -110,6 +110,9 @@ constant kChatCore = "org.openxtalk.plugin.xtalkchat-core"
 constant kChatWindow = "revXTalkChat"
 -- The stack of the step background-default, with a default button
 constant kBackground = "OXT Tour Background"
+-- The colour of the mark on that stack's card (the brand's orange): the
+-- background step's screen shot must show it where the card has it
+constant kBgMark = "255,122,0"
 
 local sOut, sLog, sOnly, sCount, sStarted, sWatchdog, sWatchdogCount, sReport, sStep
 
@@ -8956,7 +8959,7 @@ end tour_screen_end
 -- plain (engine/src/buttondraw.cpp, drawstandardbutton:
 -- WTHEME_STATE_SUPPRESSDEFAULT), and the label of one with no text colour
 -- of its own stayed white on it: after a script launched another app,
--- every default button was white on white. The step brings the Finder to
+-- every default button was white on white. The step brings another app to
 -- the front (launch, as the report's script launched its app) and waits
 -- for the default button's face to turn grey, which says the IDE is in
 -- the background (red, green and blue within 24 of each other; the accent
@@ -8977,7 +8980,7 @@ end tour_screen_end
 -- background. The Mac only: elsewhere a default button has no accent
 -- colour.
 on tour_background_default
-   local tDefault, tFace, tTries, tHeight, tMeasure, tPlain, tNeed, tFails
+   local tDefault, tFace, tTries, tHeight, tMeasure, tPlain, tNeed, tFails, tError
    if the platform is not "MacOS" then
       tourRecord "INFO background-default: the Mac only"
       exit tour_background_default
@@ -8994,25 +8997,45 @@ on tour_background_default
    create button "Plain"
    set the label of it to "OK"
    set the rect of it to "60,80,180,101"
+   create graphic "Mark"
+   set the style of it to "rectangle"
+   set the opaque of it to true
+   set the lineSize of it to 0
+   set the backgroundColor of it to kBgMark
+   set the rect of it to "200,48,224,72"
    unlock messages
    set the defaultStack to tDefault
    go stack kBackground
    tourWait 800
    put tourBgFace("OK") into tFace
    tourRecord "INFO background-default: the default button's face with the IDE in front" && tFace
-   launch "/System/Library/CoreServices/Finder.app"
-   tourRecord "INFO background-default: launched the Finder (" & the result & ")"
+   try
+      launch tourInactiveApp()
+      tourRecord "INFO background-default: launched the tour's app with no window (" & the result & ")"
+   catch tError
+      tourInactiveQuit
+      delete stack kBackground
+      throw tError
+   end try
    repeat with tTries = 1 to 40
       tourWait 250
       put tourBgFace("OK") into tFace
       if tourBgGrey(tFace) then exit repeat
    end repeat
    if not tourBgGrey(tFace) then
+      tourInactiveQuit
       delete stack kBackground
       throw "the IDE could not be put in the background: the default button's face is still" && tFace
    end if
    tourRecord "INFO background-default: the IDE is in the background after" && tTries * 250 && "ms (the face" && tFace & ")"
    tourShotStack kBackground, "99b-background-default"
+   try
+      tourBgShown
+   catch tError
+      tourInactiveQuit
+      delete stack kBackground
+      throw tError
+   end try
    repeat for each item tHeight in "21,26"
       set the rect of button "OK" of stack kBackground to "60,40,180," & (40 + tHeight)
       set the rect of button "Plain" of stack kBackground to "60,80,180," & (80 + tHeight)
@@ -9028,9 +9051,78 @@ on tour_background_default
                (item 4 of tPlain) && "apart from its face" && (item 1 to 3 of tPlain) & ")" & return after tFails
       end if
    end repeat
+   tourInactiveQuit
    delete stack kBackground
    if tFails is not empty then throw tourJoin(line 1 to -1 of tFails)
 end tour_background_default
+
+-- The screen shows the stack kBackground: the colour on the screen at its
+-- mark is the mark's (within 90, red, green and blue added); otherwise
+-- another window covers the stack, and this throws
+command tourBgShown
+   local tDefault, tLoc, tImage, tRGB, tApart
+   put the defaultStack into tDefault
+   set the defaultStack to kBackground
+   put globalLoc(the loc of graphic "Mark" of stack kBackground) into tLoc
+   set the defaultStack to "oxt_ui_tour"
+   lock messages
+   import snapshot from rect ((item 1 of tLoc - 4) & comma & (item 2 of tLoc - 4) & comma & \
+         (item 1 of tLoc + 4) & comma & (item 2 of tLoc + 4))
+   put the long id of last image of card 1 of stack "oxt_ui_tour" into tImage
+   put the width of tImage into sPixWidth
+   put the height of tImage into sPixHeight
+   put the imageData of tImage into sPixData
+   delete tImage
+   unlock messages
+   set the defaultStack to tDefault
+   put tourRgbAt(sPixWidth div 2, sPixHeight div 2) into tRGB
+   put abs(item 1 of tRGB - item 1 of kBgMark) + abs(item 2 of tRGB - item 2 of kBgMark) + \
+         abs(item 3 of tRGB - item 3 of kBgMark) into tApart
+   tourRecord "INFO background-default: on the screen at the stack's mark" && tRGB && "(" & tApart && "from the mark's" && kBgMark & ")"
+   if tApart > 90 then
+      throw "something covers the stack in the background shot: the screen shows" && tRGB && \
+            "where its mark of" && kBgMark && "is (" & tLoc & ")"
+   end if
+end tourBgShown
+
+-- An app of the tour's own with no window, which the background step
+-- launches to put the IDE in the background: macOS makes the app it
+-- launches the active one, and this one shows nothing over the IDE's
+-- windows. It quits after two minutes, or when tourInactiveQuit ends it.
+-- Compiled with swiftc into a bundle the first time it is wanted, as the
+-- theme poster is; throws when it cannot be built, so that the step fails
+-- rather than checks nothing
+local sInactiveApp
+function tourInactiveApp
+   local tSource, tApp, tOut
+   if sInactiveApp is not empty and there is a folder sInactiveApp then return sInactiveApp
+   put specialFolderPath("temporary") & "/oxt_tour_inactive.swift" into tSource
+   put specialFolderPath("temporary") & "/OXTTourInactive.app" into tApp
+   put "import AppKit" & return & \
+         "let app = NSApplication.shared" & return & \
+         "app.setActivationPolicy(.regular)" & return & \
+         "Timer.scheduledTimer(withTimeInterval: 120, repeats: false) { _ in exit(0) }" & return & \
+         "app.run()" & return into URL ("file:" & tSource)
+   get shell("rm -rf " & quote & tApp & quote & "; mkdir -p " & quote & tApp & "/Contents/MacOS" & quote)
+   put "<?xml version='1.0' encoding='UTF-8'?>" & return & "<plist version='1.0'><dict>" & return & \
+         "<key>CFBundleExecutable</key><string>OXTTourInactive</string>" & return & \
+         "<key>CFBundleIdentifier</key><string>org.openxtalk.tour.inactive</string>" & return & \
+         "<key>CFBundleName</key><string>OXT Tour Inactive</string>" & return & \
+         "<key>CFBundlePackageType</key><string>APPL</string>" & return & \
+         "</dict></plist>" & return into URL ("file:" & tApp & "/Contents/Info.plist")
+   put shell("xcrun swiftc -O -o " & quote & tApp & "/Contents/MacOS/OXTTourInactive" & quote && \
+         quote & tSource & quote & " 2>&1") into tOut
+   if there is not a file (tApp & "/Contents/MacOS/OXTTourInactive") then
+      throw "could not build the app with no window:" && tourJoin(tOut)
+   end if
+   put tApp into sInactiveApp
+   return sInactiveApp
+end tourInactiveApp
+
+-- The app with no window ends, if it runs
+command tourInactiveQuit
+   get shell("pkill -x OXTTourInactive 2>/dev/null; true")
+end tourInactiveQuit
 
 -- The snapshot of the button pButton of the stack kBackground, as it is
 -- drawn now, in sPixWidth, sPixHeight and sPixData
