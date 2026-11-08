@@ -73,6 +73,8 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --    OXT_ANDROID_DEVICE    the serial of the device for Test (optional)
 --    OXT_ANDROID_WORK      a folder for the units' made-up SDKs
 --    OXT_ANDROID_PROBE     "java" for the Java layer's probe (see below)
+--    OXT_ANDROID_ENGINE    the probe's "android,engine" setting ("beyond"
+--                          for OXT-Beyond's own engine; none when empty)
 --
 -- The Java layer's probe, AndroidJavaProbe, is the probe with more to do
 -- before it turns green: it asks the Java layer of the runtime for what
@@ -238,6 +240,7 @@ private command androidUnits
    unitJavaHome tWork
    unitTargetAPI tWork
    unitRelaunch tWork
+   unitEngine
    unitAppBundle tWork
    androidUnit "required-sdk", deployCall("deployRequiredSDK") is "Android 13 (API 33) or newer", \
          "deployRequiredSDK() is" && deployCall("deployRequiredSDK")
@@ -291,6 +294,52 @@ private command unitTargetAPI pWork
          "    <property android:name=" & quote & "android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY" & quote && \
          "android:value=" & quote & "true" & quote && "/>" & return & "  </application>" & return & "</manifest>", tAnswer
 end unitTargetAPI
+
+-- The Android engine a build takes (androidRuntimeFolder): LiveCode
+-- 9.6.3's, Runtime/Android, for a stack that names none or "9.6.3", and
+-- OXT-Beyond's own, which the runtimes carry beside it in
+-- Runtime/Android/Beyond, for a stack whose "android,engine" is "beyond";
+-- asked of runtimes without it, or for an engine of another name, the
+-- build stops and says why. The release's runtimes have no Beyond folder
+-- (android.yml), so the unit makes one for its "beyond" answers, and takes
+-- it away again; one that is there already it leaves as it is
+private command unitEngine
+   local tSettings, tRuntime, tBeyond, tMade, tError, tName
+   put builderCall("revMobileRuntimeFolder", "build") into tRuntime
+   put tRuntime & "/Beyond" into tBeyond
+   androidUnit "engine-default", builderCall("androidRuntimeFolder", "build", tSettings) is tRuntime, \
+         builderCall("androidRuntimeFolder", "build", tSettings)
+   put "9.6.3" into tSettings["android,engine"]
+   androidUnit "engine-9.6.3", builderCall("androidRuntimeFolder", "build", tSettings) is tRuntime, \
+         builderCall("androidRuntimeFolder", "build", tSettings)
+   put "beyond" into tSettings["android,engine"]
+   put there is not a folder tBeyond into tMade
+   if tMade then
+      put empty into tError
+      try
+         get builderCall("androidRuntimeFolder", "build", tSettings)
+      catch tError
+      end try
+      androidUnit "engine-beyond-missing", tError contains "these runtimes do not have it:" && tBeyond, \
+            "answered" && it & ", threw" && tError
+      revSBEnsureFolder tBeyond
+   end if
+   androidUnit "engine-beyond", builderCall("androidRuntimeFolder", "build", tSettings) is tBeyond, \
+         builderCall("androidRuntimeFolder", "build", tSettings)
+   if tMade then
+      removeTree tBeyond
+   end if
+   repeat for each item tName in "beyond2,9.6,oxt-beyond"
+      put tName into tSettings["android,engine"]
+      put empty into tError
+      try
+         get builderCall("androidRuntimeFolder", "build", tSettings)
+      catch tError
+      end try
+      androidUnit "engine-unknown-" & tName, tError contains "Unknown Android engine" && quote & tName & quote, \
+            "answered" && it & ", threw" && tError
+   end repeat
+end unitEngine
 
 -- The engine runs once in a process: the configuration changes the app
 -- goes on through (LiveCode's four first, as before, and not the density,
@@ -841,6 +890,11 @@ private function buildSettings pName
    put probeName() into tSettings["name"]
    put kIdentifier into tSettings["android,identifier"]
    put "Android Probe" into tSettings["android,label"]
+   -- the engine the probe is built with: OXT-Beyond's own (android_check.py
+   -- ide --android-engine beyond), or 9.6.3's as a stack that names none
+   if $OXT_ANDROID_ENGINE is not empty then
+      put $OXT_ANDROID_ENGINE into tSettings["android,engine"]
+   end if
    repeat for each item tArch in "armv7,arm64,x86,x86_64"
       delete variable tSettings["android," & tArch]
    end repeat

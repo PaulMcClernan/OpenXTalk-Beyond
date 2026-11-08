@@ -1547,6 +1547,118 @@ SHT_NOBITS = 8
 SHF_TLS = 0x400
 
 
+def dated_jar(date, files=(('com/runrev/android/Engine.class', b'\xca\xfe\xba\xbe'),)):
+    """A jar of the files, each dated date (a zipfile date_time)"""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        for name, data in files:
+            z.writestr(zipfile.ZipInfo(name, date), data)
+    return buf.getvalue()
+
+
+class Merge(unittest.TestCase):
+    """android_engine.py merge: the four build jobs' folders, one runtime"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.out = os.path.join(self.tmp, 'engine')
+        self.folders = []
+        # as each build job writes it: its ABI, the files beside it, and
+        # debug/<abi>; each Java layer built apart, at its own time
+        for n, abi in enumerate(sorted(ABI_ELF)):
+            folder = os.path.join(self.tmp, 'android-engine-' + abi)
+            for name in (ae.ENGINE,) + ae.EXTERNALS:
+                touch(os.path.join(folder, abi, name), b'%s of %s' % (name.encode(), abi.encode()))
+                touch(os.path.join(folder, 'debug', abi, name), b'unstripped')
+            for name in ae.TOP_FILES:
+                touch(os.path.join(folder, name),
+                      dated_jar((2026, 11, 8, 0, n, 0)) if name == 'Classes' else name.encode())
+            self.folders.append(folder)
+
+    def merge(self, folders=None):
+        return ae.merge(self.out, self.folders if folders is None else folders)
+
+    def files(self):
+        out = {}
+        for folder, _, names in os.walk(self.out):
+            for n in names:
+                with open(os.path.join(folder, n), 'rb') as f:
+                    out[os.path.relpath(os.path.join(folder, n), self.out).replace(os.sep, '/')] = f.read()
+        return out
+
+    def test_one_runtime(self):
+        problems, lines = self.merge()
+        self.assertEqual(problems, [])
+        files = self.files()
+        want = list(ae.TOP_FILES) + ['%s/%s' % (a, n) for a in ae.ABIS for n in (ae.ENGINE,) + ae.EXTERNALS]
+        self.assertEqual(sorted(files), sorted(want))
+        self.assertEqual(len(files), 4 * 8 + 6)
+        for abi in ae.ABIS:
+            self.assertEqual(files[abi + '/Standalone'], b'Standalone of ' + abi.encode())
+        # the files beside them from the first folder
+        with open(os.path.join(self.folders[0], 'Classes'), 'rb') as f:
+            self.assertEqual(files['Classes'], f.read())
+        self.assertEqual(len(lines), len(want))
+        self.assertIn('x86/RevZip <- %s' % os.path.join(self.folders[2], 'x86', 'RevZip'), lines)
+        self.assertNotIn('debug', ' '.join(files))
+        # and it passes check's question of what is there
+        self.assertNotIn('has no', ' '.join(ae.check(self.out)[0]))
+
+    def test_in_the_order_given(self):
+        problems, _ = self.merge(list(reversed(self.folders)))
+        self.assertEqual(problems, [])
+        with open(os.path.join(self.folders[-1], 'Classes'), 'rb') as f:
+            self.assertEqual(self.files()['Classes'], f.read())
+
+    def test_a_missing_abi_or_file_writes_nothing(self):
+        problems, _ = self.merge(self.folders[1:])
+        self.assertEqual(problems, ['no folder has arm64-v8a'])
+        self.assertFalse(os.path.exists(self.out))
+        os.remove(os.path.join(self.folders[3], 'x86_64', 'RevPdfPrinter'))
+        os.remove(os.path.join(self.folders[1], 'notify_icon.png'))
+        problems, _ = self.merge()
+        self.assertEqual(problems, ['%s has no x86_64/RevPdfPrinter' % self.folders[3],
+                                    '%s has no notify_icon.png' % self.folders[1]])
+        self.assertFalse(os.path.exists(self.out))
+
+    def test_an_abi_twice(self):
+        touch(os.path.join(self.folders[1], 'x86', 'Standalone'), b'another')
+        problems, _ = self.merge()
+        self.assertEqual(problems[0], '%s and %s both have x86' % (self.folders[1], self.folders[2]))
+        self.assertFalse(os.path.exists(self.out))
+
+    def test_the_files_beside_them_must_be_the_same(self):
+        touch(os.path.join(self.folders[2], 'Manifest.xml'), b'another manifest')
+        touch(os.path.join(self.folders[3], 'Classes'),
+              dated_jar((2026, 11, 8, 0, 0, 0), (('com/runrev/android/Engine.class', b'\xca\xfe\xba\xbe\x00'),
+                                                 ('com/runrev/android/Other.class', b'\xca\xfe'))))
+        problems, _ = self.merge()
+        self.assertEqual(problems, [
+            '%s/Classes differs from %s/Classes: the files com/runrev/android/Other.class, '
+            'com/runrev/android/Engine.class in them' % (self.folders[3], self.folders[0]),
+            '%s/Manifest.xml differs from %s/Manifest.xml: other bytes' % (self.folders[2], self.folders[0])])
+        self.assertFalse(os.path.exists(self.out))
+
+    def test_not_over_another_runtime(self):
+        touch(os.path.join(self.out, 'Classes'), b'old')
+        self.assertEqual(self.merge()[0], ['%s is there already' % self.out])
+        with open(os.path.join(self.out, 'Classes'), 'rb') as f:
+            self.assertEqual(f.read(), b'old')
+        # an empty folder is fine
+        shutil.rmtree(self.out)
+        os.makedirs(self.out)
+        self.assertEqual(self.merge()[0], [])
+
+    def test_by_its_command_line(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(ae.main(['merge', self.out] + self.folders), 0)
+        self.assertIn('One Android runtime in %s' % self.out, out.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(ae.main(['merge', self.out] + self.folders), 1)
+
+
 class Relro(unittest.TestCase):
     """android_engine.py's check_relro on made-up ELF files."""
 
@@ -1928,12 +2040,24 @@ class Workflow(unittest.TestCase):
         download = steps['Download the runtime']
         self.assertTrue(download['uses'].startswith('actions/download-artifact@'))
         pattern = download['with']['pattern']
-        self.assertTrue(download['with']['merge-multiple'])
-        self.assertEqual(download['with']['path'], '${{ runner.temp }}/android/engine')
+        # each in its own folder, which merge makes one runtime: the same
+        # way, from the same folders, as runtimes.yml makes the one the
+        # runtimes asset carries
+        self.assertNotIn('merge-multiple', download['with'])
+        self.assertEqual(download['with']['path'], '${{ runner.temp }}/android/parts')
+        merge = [' '.join(x.split()) for x in
+                 steps['Make the four folders one runtime']['run'].replace('\\\n', ' ').splitlines() if x.strip()]
+        names = ['android-engine-%s' % abi for abi in sorted(ae.ABIS)]
+        self.assertEqual(merge, ['parts="$RUNNER_TEMP/android/parts"',
+                                 'python3 tools/ci/android_engine.py merge "$RUNNER_TEMP/android/engine" '
+                                 + ' '.join('"$parts/%s"' % n for n in names)])
+        order = [s.get('name') for s in job['steps']]
+        self.assertEqual(order.index('Make the four folders one runtime'), order.index('Download the runtime') + 1)
         # every build job's folder, and not the device job's own upload
         for abi in bash_assoc(read('tools', 'ci', 'build-android.sh'), 'ABIS').values():
             name = self.steps['Upload the runtime']['with']['name'].replace('${{ matrix.abi }}', abi)
             self.assertTrue(fnmatch.fnmatchcase(name, pattern), name)
+            self.assertIn(name, names)
         own = steps['Upload the packages and logs']['with']['name']
         self.assertFalse(fnmatch.fnmatchcase(own, pattern), own)
         self.assertIn('echo "WORK=$RUNNER_TEMP/android" >> "$GITHUB_ENV"', steps['Download the IDE']['run'])
@@ -1942,13 +2066,17 @@ class Workflow(unittest.TestCase):
             return [' '.join(x.split()) for x in steps[step]['run'].replace('\\\n', ' ').splitlines() if x.strip()]
 
         unpack = lines('Unpack the IDE, and put this builder and the runtime into it')
-        self.assertIn('python3 tools/ci/android_check.py overlay --root "$WORK/ide" --engine "$WORK/engine"', unpack)
+        # the runtime beside the release's, where the runtimes carry it, and
+        # both probes asking for it, as a stack does ("android,engine"): the
+        # release's own runtime is not touched
+        self.assertIn('python3 tools/ci/android_check.py overlay --root "$WORK/ide" --beyond "$WORK/engine"', unpack)
+        self.assertNotIn('--engine', ' '.join(unpack))
         built = lines('Build the probes with this engine')
         self.assertEqual([x for x in built if ' ide ' in x], [
             'python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" --work "$WORK/app" '
-            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug',
+            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug --android-engine beyond',
             'python3 tools/ci/android_check.py ide --install "$IDE" --platform "$PLATFORM" --work "$WORK/java" '
-            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug --probe java'])
+            '--sdk "$SDK" --jdk "$JDK" --no-units --builds debug --probe java --android-engine beyond'])
         self.assertIn('for probe in app java; do', built)
         self.assertIn('python3 tools/ci/android_check.py verify --work "$WORK/$probe" --sdk "$SDK" --jdk "$JDK" '
                       '--builds debug --target 36 --engine "$WORK/engine"', built)

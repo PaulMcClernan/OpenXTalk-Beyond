@@ -1069,13 +1069,15 @@ def overlay(args):
             continue
         shutil.copyfile(os.path.join(REPO, *rel.split('/')), places[0])
         log('%s -> %s' % (rel, os.path.relpath(places[0], root)))
-    if args.classes or args.engine:
+    if args.classes or args.engine or args.beyond:
         places = [x for x in found.get(CLASSES[-1], [])
                   if tuple(os.path.normpath(x).split(os.sep)[-len(CLASSES):]) == CLASSES]
         if len(places) != 1:
             problems.append('%s: %d files %s, not one' % (root, len(places), '/'.join(CLASSES)))
         elif args.engine:
             problems += overlay_engine(os.path.abspath(args.engine), os.path.dirname(places[0]), root)
+        elif args.beyond:
+            problems += beside_engine(os.path.abspath(args.beyond), os.path.dirname(places[0]), root)
         else:
             shutil.copyfile(args.classes, places[0])
             log('%s -> %s' % (args.classes, os.path.relpath(places[0], root)))
@@ -1111,6 +1113,37 @@ def overlay_engine(engine, android, root):
     for rel in copies:
         shutil.copyfile(os.path.join(engine, rel), os.path.join(android, rel))
         log('%s -> %s' % (os.path.join(engine, rel), os.path.relpath(os.path.join(android, rel), root)))
+    return problems
+
+
+# Where the runtimes carry OXT-Beyond's own Android engine, in the
+# release's Runtime/Android (the builder's androidRuntimeFolder)
+BEYOND = 'Beyond'
+
+
+def beside_engine(engine, android, root):
+    """Puts the runtime folder ENGINE (tools/ci/build-android.sh's) beside
+    the release's Runtime/Android (ANDROID), as ANDROID/BEYOND: every
+    architecture's engine and externals, and the files beside them (the
+    Java layer among them), the release's own runtime left as it is. A
+    stack whose "android,engine" is "beyond" is built from it. Every
+    architecture and file must be in ENGINE, and ANDROID must have no
+    BEYOND yet: a runtime short of a file, or two engines' files mixed,
+    would build an app that the check did not mean."""
+    import android_engine as ae
+    beyond = os.path.join(android, BEYOND)
+    copies = [os.path.join(abi, x) for abi in sorted(ae.ABIS) for x in (ae.ENGINE,) + ae.EXTERNALS]
+    copies += list(ae.TOP_FILES)
+    problems = ['%s has no %s' % (engine, rel.replace(os.sep, '/')) for rel in copies
+                if not os.path.isfile(os.path.join(engine, rel))]
+    if os.path.exists(beyond):
+        problems.append('%s is there already' % os.path.relpath(beyond, root).replace(os.sep, '/'))
+    if problems:
+        return problems
+    for rel in copies:
+        os.makedirs(os.path.dirname(os.path.join(beyond, rel)) or beyond, exist_ok=True)
+        shutil.copyfile(os.path.join(engine, rel), os.path.join(beyond, rel))
+        log('%s -> %s' % (os.path.join(engine, rel), os.path.relpath(os.path.join(beyond, rel), root)))
     return problems
 
 
@@ -1172,7 +1205,8 @@ def ide(args):
                    OXT_ANDROID_ALIAS=KEY_ALIAS, OXT_ANDROID_PASSWORD=KEY_PASSWORD,
                    OXT_ANDROID_DEVICE=args.device or '', OXT_ANDROID_WORK=path(os.path.join(work, 'units')),
                    OXT_ANDROID_UNITS='skip' if args.no_units else '',
-                   OXT_ANDROID_PROBE='java' if args.probe == 'java' else '')
+                   OXT_ANDROID_PROBE='java' if args.probe == 'java' else '',
+                   OXT_ANDROID_ENGINE=args.android_engine or '')
         cmd = [lay.engine, document]
         if p.family == 'linux':
             cef = os.path.join(lay.root, 'Externals') if lay.kind == 'development' else lay.externals
@@ -2794,6 +2828,9 @@ def main(argv=None):
     what.add_argument('--classes', help='a Java layer to put in place of the release\'s Runtime/Android/Classes')
     what.add_argument('--engine', help='a runtime folder that tools/ci/build-android.sh wrote, to put in place '
                                        'of the release\'s Runtime/Android')
+    what.add_argument('--beyond', help='a runtime folder that tools/ci/build-android.sh wrote, to put beside the '
+                                       'release\'s Runtime/Android as Runtime/Android/Beyond, where a stack whose '
+                                       '"android,engine" is "beyond" is built from')
     i = sub.add_parser('ide')
     i.add_argument('--bin', dest='bin_dir')
     i.add_argument('--install')
@@ -2806,6 +2843,9 @@ def main(argv=None):
     i.add_argument('--stack')
     i.add_argument('--builds')
     i.add_argument('--no-units', action='store_true')
+    i.add_argument('--android-engine', choices=('beyond',),
+                   help='build the probe with this "android,engine" setting: beyond, OXT-Beyond\'s own engine, '
+                        'which overlay --beyond puts beside the release\'s (9.6.3\'s otherwise)')
     i.add_argument('--probe', choices=sorted(PROBES), default='app',
                    help='java: the Java layer\'s probe (AndroidJavaProbe)')
     i.add_argument('--timeout', type=int, default=1500)
