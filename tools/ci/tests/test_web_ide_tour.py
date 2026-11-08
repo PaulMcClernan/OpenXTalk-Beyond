@@ -314,5 +314,57 @@ class ProjectBrowserRefresh(unittest.TestCase):
         self.assertNotIn(b'Refresh the Application Browser', stack)
 
 
+class HilitedNames(unittest.TestCase):
+    """White names on a selected row of the Project Browser and the App
+    Browser, in the web IDE only (littlenemo, openxtalk.org p=26169; seth's
+    decision of 2026-11-08): the Project Browser's were the accentColor, a
+    blue, on its blue hilite, and the App Browser painted its selected
+    controls' names black (its cSuspended, saved true, cleared only on
+    Windows). The web tour's project-browser step checks both in the IDE;
+    these hold the pieces to each other and the desktops to what they did."""
+
+    LIBRARY = ('ide', 'Toolset', 'libraries', 'revidelibrary.8.livecodescript')
+
+    def read(self, *path):
+        with open(os.path.join(REPO, *path), encoding='utf-8') as f:
+            return f.read().lstrip('\ufeff')
+
+    def handler(self, kind, name):
+        text = self.read(*self.LIBRARY)
+        return text.split('\n%s %s ' % (kind, name), 1)[1].split('\nend %s' % name, 1)[0]
+
+    def test_white_on_the_web_only(self):
+        body = self.handler('function', 'revIDEHilitedTextColor')
+        self.assertIn('put revEnvironmentIsWeb() is true into pWeb', body)
+        web = body.index('if pWeb then\n      return "255,255,255"')
+        # the desktops' answers come after it, unchanged
+        self.assertLess(web, body.index('if the platform is not "Linux" or the number of items of pHiliteColor is not 3 then'))
+        self.assertIn('return revIDEColor("dataView_TextHiliteColor")', body[web:])
+
+    def test_the_app_browser_on_the_web_only(self):
+        body = self.handler('command', 'revIDEAppBrowserHilitedNames')
+        self.assertIn('if not pWeb then\n      exit revIDEAppBrowserHilitedNames', body)
+        self.assertIn('ends with "/App Browser.livecode"', body)
+        self.assertIn('set the cSuspended of stack pStack to false', body)
+        self.assertLess(body.index('lock messages'), body.index('set the cSuspended'))
+        opener = self.handler('on', 'revIDEOpenPlugin')
+        self.assertIn('revIDEAppBrowserHilitedNames tStackPath', opener)
+        self.assertLess(opener.index('revIDEAppBrowserHilitedNames tStackPath'), opener.index('go invisible stack'))
+
+    def test_the_web_tour_checks_both(self):
+        tour = self.read('tools', 'ci', 'web-ide-tour.livecodescript')
+        step = tour.split('\non tour_project_browser\n', 1)[1].split('\nend tour_project_browser', 1)[0]
+        self.assertIn('revIDEHilitedTextColor(revIDEColor("dataView_hiliteColor")) is not "255,255,255"', step)
+        self.assertIn('if the cSuspended of stack "App Browser" is true then', step)
+        self.assertIn('close stack "App Browser"', step)
+
+    def test_the_ide_tests(self):
+        hilite = self.read('ide', 'tests', 'projectbrowser', 'hilite.livecodescript')
+        self.assertIn('on TestHilitedNamesAreWhiteOnTheWeb', hilite)
+        self.assertIn('on TestHilitedNamesOnADesktopAreAsBefore', hilite)
+        self.assertIn('on TestAppBrowserHilitedNamesOnTheWeb',
+                      self.read('ide', 'tests', 'appbrowser', 'updates.livecodescript'))
+
+
 if __name__ == '__main__':
     unittest.main()

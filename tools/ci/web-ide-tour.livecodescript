@@ -467,8 +467,32 @@ on tour_project_browser
    -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.18)
    local tProblem
    put tourRefreshProblem(tStack) into tProblem
+   -- the names of a selected row are white on its blue hilite, here and
+   -- in the App Browser (littlenemo, openxtalk.org p=26169; 0.2.7-rc.6.19):
+   -- they were the accentColor, a blue, in the Project Browser, and black
+   -- in the App Browser's controls list (its cSuspended, saved true)
+   if tProblem is empty and revIDEHilitedTextColor(revIDEColor("dataView_hiliteColor")) is not "255,255,255" then
+      put "a selected Project Browser row's names are" && revIDEHilitedTextColor(revIDEColor("dataView_hiliteColor")) && \
+            "on its hilite, not white" into tProblem
+   end if
    close stack tStack
    if tProblem is not empty then throw tProblem
+   if "App Browser" is among the keys of revIDEPlugins() then
+      revIDEOpenPlugin "App Browser"
+      tourWait 1000
+      if there is a stack "App Browser" then
+         if the cSuspended of stack "App Browser" is true then
+            put "the App Browser paints its selected rows' names black (its cSuspended is true)" into tProblem
+         end if
+         try
+            dispatch "revAppBrowserFinalise" to stack "App Browser"
+         end try
+         close stack "App Browser"
+      else
+         put "the App Browser did not open" into tProblem
+      end if
+      if tProblem is not empty then throw tProblem
+   end if
 end tour_project_browser
 
 -- The Project Browser's Refresh button (pStack is its stack): empty when
