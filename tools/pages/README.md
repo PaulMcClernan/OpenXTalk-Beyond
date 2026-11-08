@@ -13,7 +13,7 @@ Pages site, so that anyone can open them with nothing to download:
 | `.../player/` | the Stack Player |
 | `.../extensions/` | the xTalk Suite's extensions, built into OXT-Beyond, each with its `.lce` packages to download ([extensions/index.html](extensions/index.html)) |
 | `.../play/` | the bare player: a stack and nothing around it (`?stack=`, `?play=`; see [tools/web-player](../web-player/README.md)), on the Stack Player's engine |
-| `.../games/` | the web stacks gallery: the big ones on pages of their own (Pixel Platformer Maker and the others run their `standalone.zip` on the Stack Player's engine; Nova Rescue and Wobble Forts play the player's own samples in the bare player), and a card and a page for each of the Stack Player's samples |
+| `.../games/` | the web stacks gallery: the big ones on pages of their own (Pixel Platformer Maker and the others run their `standalone.zip` on the Stack Player's engine; Nova Rescue, Wobble Forts and Puzzle Almanac play the player's own samples in the bare player), and a card and a page for each of the Stack Player's samples |
 | `.../map/` | the [codebase map](../codebase-map/README.md), for contributors, with the binary stacks' scripts as files beside it (`stack-scripts/`, `stack-scripts.zip`) |
 
 The front page is one self-contained file: its look (a night sky over an
@@ -87,6 +87,23 @@ the other's check does, a shot fired with the mouse included:
 
 ```sh
 python3 tools/pages/check_wobble_forts_page.py --player <StackPlayer folder or web-player zip> --shots <folder>
+```
+
+Puzzle Almanac has a page of its own too
+([games/puzzle-almanac/](games/puzzle-almanac/index.html),
+`play/?play=Puzzle%20Almanac`), in the game's own look: paper rather than
+the night sky, and Atkinson Hyperlegible, the game's font. On a computer
+it plays on the page in the frame of an upright phone at the stack's own
+size (390 by 760), made smaller to fit a short window, and its keys play
+it at once (N and W open the puzzles; Esc goes back); on a phone a tap on
+its cover opens it on the whole screen.
+[test_pages_puzzle_almanac.py](../ci/tests/test_pages_puzzle_almanac.py)
+and [test_pages_gallery.py](../ci/tests/test_pages_gallery.py) hold it,
+and [check_puzzle_almanac_page.py](check_puzzle_almanac_page.py) plays it
+as the others' checks do:
+
+```sh
+python3 tools/pages/check_puzzle_almanac_page.py --player <StackPlayer folder or web-player zip> --shots <folder>
 ```
 
 The extensions page has a card for each xTalk Suite extension (sodiumxt,

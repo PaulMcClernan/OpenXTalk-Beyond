@@ -19,7 +19,7 @@ with a card for each of the Stack Player's samples that has a picture,
 each opening a page of its own that runs the sample in the player through
 ?play=<title>; the big
 ones (Pixel Platformer Maker, SVG Lab) keep their own cards; a sample with
-a big one's page of its own (OWN_PAGES: Nova Rescue, Wobble Forts) has that page and its
+a big one's page of its own (OWN_PAGES: Nova Rescue, Wobble Forts, Puzzle Almanac) has that page and its
 card, and no small one, when the player has the sample and the site the
 bare player, and otherwise no page of its own; and a page or a player from
 before the gallery is built as it was.
@@ -175,6 +175,33 @@ class TheGallery(unittest.TestCase):
         text = self.built(bare=True)
         self.assertEqual(self.big_ones(text), ['wobble-forts', 'pixel-maker', 'svg-lab', 'waterwheel'])
         self.assertFalse(os.path.exists(os.path.join(self.work, 'games', 'nova-rescue')))
+
+    def test_three_samples_with_pages_of_their_own(self):
+        # Puzzle Almanac too: its page and its card after the other two
+        self.samples([{'title': 'Nova Rescue', 'image': 'Nova Rescue.webp', 'tags': ['Game']},
+                      {'title': 'Wobble Forts', 'image': 'Wobble Forts.webp', 'tags': ['Game']},
+                      {'title': 'Puzzle Almanac', 'image': 'Puzzle Almanac.webp', 'tags': ['Game']},
+                      {'title': 'Beat Box', 'image': 'Beat Box.webp'}])
+        text = self.built(bare=True)
+        self.assertEqual(self.big_ones(text), ['nova-rescue', 'wobble-forts', 'puzzle-almanac', 'pixel-maker',
+                                               'svg-lab', 'waterwheel'])
+        self.assertEqual(self.cards(text), [(' spot', 'beat-box')])
+        self.assertEqual(text.count('href="puzzle-almanac/"'), 1)
+        self.assertNotIn('@OWN_PAGE:', text)
+        page = read(os.path.join(self.work, 'games', 'puzzle-almanac', 'index.html'))
+        self.assertIn("var PLAY = '../../play/?play=Puzzle%20Almanac", page)
+        for name in ('poster.webp', 'cover.webp', 'AtkinsonHyperlegible-Bold.ttf'):
+            self.assertTrue(os.path.isfile(os.path.join(self.work, 'games', 'puzzle-almanac', name)), name)
+        # and without it in the player, the other two alone
+        shutil.rmtree(os.path.join(self.work, 'games'))
+        self.samples([{'title': 'Nova Rescue', 'image': 'Nova Rescue.webp'},
+                      {'title': 'Wobble Forts', 'image': 'Wobble Forts.webp'}])
+        text = self.built(bare=True)
+        self.assertEqual(self.big_ones(text), ['nova-rescue', 'wobble-forts', 'pixel-maker', 'svg-lab', 'waterwheel'])
+        # (the gallery's top comment still names the folder; no link or card does)
+        self.assertNotIn('href="puzzle-almanac/"', text)
+        self.assertNotIn('Puzzle Almanac', text)
+        self.assertFalse(os.path.exists(os.path.join(self.work, 'games', 'puzzle-almanac')))
 
     def test_a_page_of_its_own_needs_the_bare_player(self):
         # a site without play/: the sample is a small one like the rest

@@ -186,6 +186,7 @@ answering no.
 | `responsive-starter.livecodescript`, `responsive-starter-stack.livecodescript` | build `stacks/Responsive Starter.oxtstack` (see below) |
 | `nova-rescue.livecodescript`, `nova-rescue-stack.livecodescript`, `nova-rescue/` | build `stacks/Nova Rescue.oxtstack` from Kenney's pictures, sounds and font (see below) |
 | `wobble-forts.livecodescript`, `wobble-forts-stack.livecodescript`, `wobble-forts/` | build `stacks/Wobble Forts.oxtstack` from Kenney's pictures, sounds and font and its levels (see below) |
+| `puzzle-almanac.livecodescript`, `puzzle-almanac-stack.livecodescript`, `puzzle-almanac/` | build `stacks/Puzzle Almanac.oxtstack` from Kenney's pictures and sounds, Atkinson Hyperlegible, its puzzles and its words (see below) |
 | `assets/` | the page's logo and pictures, copied beside it |
 | `build_player.py` | starts the IDE with the script above, puts the page in place, packs the zip and, with `--check`, drives the player in headless Chromium |
 
@@ -427,3 +428,88 @@ plays this sample in the bare player. The stack's `cJavascriptHandlers`
 are `wfPageHidden` (the page is hidden: a level pauses) and `wfState`, so
 that `tools/pages/check_wobble_forts_page.py` can ask the game how it is
 there; `build_player.py --check` runs that check on the player it builds.
+
+## Puzzle Almanac
+
+`stacks/Puzzle Almanac.oxtstack` is a slow game for a phone, and for a
+child as much as anyone: a daily book of two puzzles, the same for
+everyone each day. Number Place is a grid of 4, 6 or 9 squares a side in
+boxes, where every row, column and box holds each number once; every
+puzzle has one answer, found by looking alone (no guess is ever needed),
+with notes to pencil in, a hint, undo, and mistakes shown or not as the
+settings say. Hidden Word is a word of 4, 5 or 6 letters to find in six
+tries: a try's tiles turn gold for a letter in its place, blue for one in
+another place and stone for one not in the word, and gold and blue carry
+a mark as well as a colour; a try must be a word, and a word found says
+what it means. The day's puzzle of each kind earns a sticker (thirty
+animals, then gold stars) and keeps a run of days going; Practice gives
+as many more as anyone likes, of any size or length. There is no clock,
+no score and nothing lost for a wrong try. A voice can say each number
+placed. On a computer the keys play it: N and W open the puzzles, the
+arrows and 1 to 9 (or the letters and Enter) play, Esc goes back.
+
+How it is made: one card; every screen (Home, Numbers, Words, Stickers)
+a group and every panel (Done, Practice, How to play, Settings) a group
+behind a veil; the tiles and stickers are buttons showing a picture of a
+hidden "Art" card. Nothing runs while nothing moves. The puzzles are
+`puzzle-almanac/data/numbers.txt`, 496 of them made by
+`puzzle-almanac/make_puzzles.py` from a seed (`--check` makes them again
+and compares), each with one answer found by singles alone. The game
+makes the day's from one of them with its numbers renamed, its rows,
+columns, bands and stacks reordered and perhaps turned half round, with a
+random-number maker of its own, so that a day's puzzle is the same on
+every engine. The hidden words, with what each means, are
+`data/answers.txt`, written for the game; a try may be any word of
+`data/words.txt`, ENABLE's words of 4 to 6 letters. What a player has
+done is kept between visits (in the browser's storage on the web). A
+board is a string of up to 81 digits, and `is` compares two strings that
+look like numbers as numbers, to 15 digits or so, so the game compares
+boards digit for digit (`paSameDigits`).
+
+Its pictures and sounds are Kenney's (https://kenney.nl), CC0, from packs
+none of the other games use; its font is Atkinson Hyperlegible, made for
+low vision by the Braille Institute, under the SIL Open Font License.
+`puzzle-almanac/make_assets.py` made the tiles and sparkles at three
+times their size (the animals are Kenney's own, at twice theirs) and the
+sounds WAV files, and gave the font Macintosh name records
+that say what its Windows ones do: the web engine's font loader reads a
+font's name from those, and without them the font loaded in no browser.
+Each licence is in `puzzle-almanac/licenses/`, and `SOURCES.md` there says
+where each file comes from.
+
+The stack is never edited by hand. Its script is
+`puzzle-almanac-stack.livecodescript` and its controls are made by
+`puzzle-almanac.livecodescript`; change them, then build it again with
+any OXT-Beyond engine:
+
+```sh
+<engine> -ui tools/web-player/puzzle-almanac.livecodescript
+```
+
+`tests/lcs/webplayer/puzzle-almanac.livecodescript` plays it on a desktop
+engine with the clock and the day in the test's hands: the day's puzzles
+of day 310, every square of each size answering a tap, a number placed,
+a note, a hint and undo, a puzzle solved and its sticker, a word found
+and one missed, tries that are not words, the stickers, the keys, a run
+of days kept and broken, a saved file that makes no sense and the screens
+at several sizes. `tools/ci/tests/test_puzzle_almanac.py` holds the stack
+to its files and checks, with a port of the game's transform, that the
+day's puzzle of any day has one answer found by looking.
+`tools/ci/puzzle_almanac_check.py` builds a standalone and plays it on
+emulated phones (Pixel 7 and iPhone 13, in Chromium and WebKit) with real
+touches: How to play, a Number Place solved and its sticker, a Hidden
+Word typed and found, the stickers, a reload that keeps them, a turn on
+its side and no script error. CI runs it in web.yml, after Wobble Forts'
+check. To run it yourself:
+
+```sh
+python3 tools/ci/puzzle_almanac_check.py --runtime <web runtime> --engine-cache <folder> --shots <folder>
+```
+
+It also has a page of its own on the web site's gallery
+(`games/puzzle-almanac/`, see [tools/pages](../pages/README.md)), which
+plays this sample in the bare player. The stack's `cJavascriptHandlers`
+are `paPageHidden` (the page is hidden: the board is saved at once) and
+`paState`, so that `tools/pages/check_puzzle_almanac_page.py` can ask the
+game how it is there; `build_player.py --check` runs that check on the
+player it builds.

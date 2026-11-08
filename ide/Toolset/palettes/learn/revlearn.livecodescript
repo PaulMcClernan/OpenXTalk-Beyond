@@ -2365,7 +2365,8 @@ private function leShowcaseTable
    end repeat
    repeat for each item tName in "xTalk Primer,Fireworks,Live Weather," & \
          "Web Audio Piano,Neon Snake,QR Studio,Talking Robot,2048,Quake Map,Beat Box,Kanban Board," & \
-         "Markdown Notes,UI Gallery,Photo Lab,Phone Starter,Responsive Starter,Nova Rescue,Wobble Forts"
+         "Markdown Notes,UI Gallery,Photo Lab,Phone Starter,Responsive Starter,Nova Rescue,Wobble Forts," & \
+         "Puzzle Almanac"
       if (tName & ".oxtstack") is among the lines of tFiles then
          put tName & return after tNames
       end if
@@ -2433,6 +2434,10 @@ private function leShowcaseInfo pName
          return "small|A physics game made for a phone: pull back and fling the round Bloops at the " & \
                "Grumps' wobbly forts of wood, glass, stone, metal and TNT, fifteen forts in three lands. " & \
                "Build it for HTML5 and play it on a phone, or here with the mouse.|target|emerald|game physics"
+      case "Puzzle Almanac"
+         return "small|A daily puzzle book made for a phone: a Number Place in three sizes and a " & \
+               "Hidden Word of four to six letters, new every day, with stickers to collect. Build it " & \
+               "for HTML5 and play it on a phone, or here with the mouse and the keys.|puzzle|amber|game puzzles"
       case "QR Studio"
          return "small|Type a link, a Wi-Fi network or a contact and get a QR code your phone can scan, " & \
                "then save it as a picture.|qr-code|indigo|qr-code image"
