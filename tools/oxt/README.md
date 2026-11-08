@@ -969,7 +969,8 @@ build makes (the asset's `exclude` in `external-assets.json`).
 python tools/oxt/make_runtimes_asset.py --builds --label LABEL --out DIR
     --bin win-x86=PATH --bin win-x86_64=PATH --bin linux-x86=PATH --bin linux-x86_64=PATH
     [--carry oxt-runtimes-1.15.zip] [--assets-cache DIR] [--commit SHA]
-    [--run BUILDS=URL]... [--android-classes JAR] [--update-manifest [FILE]]
+    [--run BUILDS=URL]... [--android-classes JAR] [--android-engine DIR]
+    [--update-manifest [FILE]]
 ```
 
 Each `PATH` is a build output folder or the CI archive that holds it
@@ -995,7 +996,21 @@ them the classes the engines and the Android builder name, and every
 PendingIntent it makes must say whether it is mutable; it gets the date of
 the builds' newest file. The manifest entry then names it
 (`"java_layer": "Runtime/Android/Classes"`), and `PROVENANCE.md` says what
-it replaced and how it was checked. Every `.exe`, `.dll`, `.so` and engine
+it replaced and how it was checked. With `--android-engine DIR` the asset
+also carries OXT-Beyond's own Android engine, beside LiveCode 9.6.3's and
+not in its place, as `Runtime/Android/Beyond`: DIR is the runtime folder
+that `tools/ci/android_engine.py merge` made of the four build folders of
+the "Android engine" workflow, and it must pass `android_engine.py check`
+for every architecture, hold nothing but that runtime (the engines and
+externals of the four architectures, the Java layer, the manifest and the
+files beside them) and carry this source tree's engine version in every
+engine. The Android builder takes it from there only for a stack whose
+`"android,engine"` setting is `"beyond"`; the carried runtime, which every
+other stack is built with, is left as it is. Its files get the date of the
+builds' newest file, the manifest entry names the folder
+(`"android_engine": "Runtime/Android/Beyond"`), `--run android-engine=URL`
+records the run that built it, and `PROVENANCE.md` says what it is, how it
+was made and checked, and its licences. Every `.exe`, `.dll`, `.so` and engine
 must be a PE or ELF file of its build's architecture, and every
 `Standalone` must carry this source tree's engine version, or no archive
 is written. The generated `PROVENANCE.md` names the commit and the CI
@@ -1016,7 +1031,11 @@ whose 32-bit and 64-bit builds must have passed. It builds the Java layer
 from that commit and checks it as `android-java.yml` checks a pull
 request's (`android_java.py compare` with the Java layer of the asset
 pinned at that commit, `jni` against its Android engines, and `rules`)
-before it passes it with `--android-classes`; it uploads the result
+before it passes it with `--android-classes`. Given the id of an "Android
+engine" run of the same commit (`android-engine-run`, optional) whose four
+build jobs and emulator job passed, it downloads that run's four folders,
+makes them one runtime with `android_engine.py merge` as the run's emulator
+job did, and passes it with `--android-engine`. It uploads the result
 as the artifact `runtimes-asset` and, with `publish`, creates the
 pre-release `runtimes-<label>` at that commit (which must be on `main`)
 with the zip and its `PROVENANCE.md`. A published asset is never

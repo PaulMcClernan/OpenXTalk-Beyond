@@ -30,7 +30,7 @@ From this repository's builds (--builds; the current asset)
       --bin linux-x86=PATH --bin linux-x86_64=PATH
       [--carry ZIP] [--assets-cache DIR] [--commit SHA]
       [--run BUILDS=URL]... [--android-classes JAR]
-      [--update-manifest [FILE]]
+      [--android-engine DIR] [--update-manifest [FILE]]
 
 Each PATH is a build output folder or the CI archive that holds one
 (OXT-Beyond-win-x86-bin.zip, OXT-Beyond-<ver>-win-x86_64-binaries.zip,
@@ -70,6 +70,22 @@ was built. The manifest entry then names the file ("java_layer"), and
 PROVENANCE.md says what it is and how it was checked. The rest of
 Runtime/Android (the engines with their externals, the manifest and the
 rest) is still carried over.
+
+--android-engine DIR puts OXT-Beyond's own Android engine, built from this
+repository with a current NDK (the Android plan's phase 2), beside the
+carried runtime as Runtime/Android/Beyond: DIR is the runtime folder that
+tools/ci/android_engine.py merge made of the four build folders of an
+"Android engine" run (android-engine.yml) of the builds' commit, every
+architecture's engine and externals with its Java layer, manifest and the
+files beside them. It is a whole runtime of its own: the IDE's Android
+builder takes every file of a package from it for a stack whose
+"android,engine" standalone setting is "beyond", and from LiveCode
+Community 9.6.3's runtime, which stays the default, otherwise. It must pass
+android_engine.py check for every architecture and hold nothing else, and
+every engine must carry this tree's engine version; its files get the date
+of the builds' newest. The manifest entry then names the folder
+("android_engine"), --run android-engine=URL records the run, and
+PROVENANCE.md says what it is and how it was checked.
 
 Every .exe, .dll, .so and engine must be a PE or ELF file of its build's
 architecture, and every Standalone must carry this source tree's engine
@@ -618,6 +634,15 @@ JAVA_FROM = 'android-java'
 JAVA_CLASSES = ('com/runrev/android/Engine', 'com/runrev/android/LiveCodeActivity',
                 'com/runrev/android/LiveCodeService', 'com/runrev/android/EngineReceiver')
 
+# OXT-Beyond's own Android engine, which --android-engine puts beside the
+# carried runtime as a whole runtime of its own: the Android builder takes
+# every file of a package from it for a stack whose "android,engine" is
+# "beyond" (androidRuntimeFolder in
+# ide-support/revsaveasandroidstandalone.livecodescript), and from the
+# carried one, LiveCode Community 9.6.3's, otherwise
+ENGINE_FOLDER = 'Runtime/Android/Beyond'
+ENGINE_FROM = 'android-engine'
+
 # What each package's own build makes, which it therefore leaves out of
 # the asset (the asset's "exclude" in external-assets.json). linux-arm64
 # and macOS make the zoneinfo data; their own runtimes are not in the
@@ -639,6 +664,8 @@ def part_of(path):
     (Runtime/Windows/x86-32, Runtime/Android), a timezone code folder, or
     the zoneinfo data."""
     parts = path.split('/')
+    if path.startswith(ENGINE_FOLDER + '/'):
+        return ENGINE_FOLDER
     if path.startswith(TZ + 'code/'):
         return '/'.join(parts[:4])
     if path.startswith(TZ):
@@ -864,6 +891,57 @@ def java_layer(path, mtime):
             'majors': sorted({c.major for c in classes.values()})}, problems
 
 
+def android_engine():
+    """tools/ci/android_engine.py, which checks an Android runtime folder."""
+    ci = os.path.join(os.path.dirname(HERE), 'ci')
+    if ci not in sys.path:
+        sys.path.append(ci)
+    import android_engine as ae
+    return ae
+
+
+def engine_runtime(folder, mtime, version):
+    """(file records, problems) of OXT-Beyond's Android engine at folder
+    (--android-engine): the runtime folder android_engine.py merge made,
+    which must pass android_engine.py check for every architecture, hold
+    nothing else, and have this tree's engine version in every engine. The
+    records are under ENGINE_FOLDER, dated mtime."""
+    ae = android_engine()
+    what = '--android-engine %s' % folder
+    if not os.path.isdir(folder):
+        return [], ['%s: no such folder' % what]
+    found, _ = ae.check(folder, sorted(ae.ABIS))
+    problems = ['%s: %s' % (what, x) for x in found]
+    rels = ['%s/%s' % (abi, n) for abi in sorted(ae.ABIS) for n in (ae.ENGINE,) + ae.EXTERNALS]
+    rels += list(ae.TOP_FILES)
+    others = []
+    for top, dirs, names in os.walk(folder):
+        dirs.sort()
+        for n in sorted(names):
+            rel = os.path.relpath(os.path.join(top, n), folder).replace(os.sep, '/')
+            if rel not in rels:
+                others.append(rel)
+    if others:
+        problems.append('%s holds files that are not the runtime\'s: %s'
+                        % (what, ', '.join(others[:5] + (['...'] if len(others) > 5 else []))))
+    infos = []
+    for rel in rels:
+        src = os.path.join(folder, *rel.split('/'))
+        if not os.path.isfile(src):
+            continue
+        size, sha, head = digest(src)
+        info = {'path': '%s/%s' % (ENGINE_FOLDER, rel), 'size': size, 'sha256': sha, 'mtime': mtime,
+                'elf': head == binfmt.ELF_MAGIC, 'from': ENGINE_FROM, 'source': src}
+        if rel.endswith('/' + ae.ENGINE):
+            versions = file_versions(src)
+            if version not in versions:
+                problems.append('%s: %s does not carry the engine version %s (found: %s)'
+                                % (what, rel, version, ', '.join(versions) or 'none'))
+            info['versions'] = versions
+        infos.append(info)
+    return infos, problems
+
+
 def replace_java_layer(carried, path, mtime):
     """(carried records without the Java layer, the new layer's record, the
     carried layer's record, problems): --android-classes path in place of
@@ -902,16 +980,18 @@ def write_builds_zip(path, name, infos, carry_zip, extra):
     os.replace(tmp, path)
 
 
-def parse_pairs(values, what):
-    """{build name: value} from NAME[,NAME...]=VALUE arguments."""
+def parse_pairs(values, what, known=None):
+    """{build name: value} from NAME[,NAME...]=VALUE arguments; known: the
+    names it takes (the builds by default)."""
+    known = list(known or BUILDS)
     out = collections.OrderedDict()
     for v in values or ():
         names, sep, value = v.partition('=')
         if not sep or not value:
             raise SystemExit('error: %s %r: expected NAME=VALUE' % (what, v))
         for n in names.split(','):
-            if n not in BUILDS:
-                raise SystemExit('error: %s %r: %s is not one of %s' % (what, v, n, ', '.join(BUILDS)))
+            if n not in known:
+                raise SystemExit('error: %s %r: %s is not one of %s' % (what, v, n, ', '.join(known)))
             if n in out:
                 raise SystemExit('error: %s: %s is given twice' % (what, n))
             out[n] = value
@@ -923,10 +1003,12 @@ def builds_provenance(name, version, commit, runs, sources, infos, replaced=None
     of the carried Java layer that --android-classes replaced."""
     by_from = collections.OrderedDict((b, []) for b in BUILDS)
     by_from[JAVA_FROM] = []
+    by_from[ENGINE_FROM] = []
     by_from[CARRY_ASSET['id']] = []
     for i in infos:
         by_from[i['from']].append(i)
     java = (by_from[JAVA_FROM] or [None])[0]
+    engine = by_from[ENGINE_FROM]
     L = []
     add = L.append
     add('# %s: standalone runtimes for OXT-Beyond' % name)
@@ -993,10 +1075,46 @@ def builds_provenance(name, version, commit, runs, sources, infos, replaced=None
         add('reason), and checks it against the Android engines across JNI and against what')
         add('Android asks of the code (`android_java.py compare`, `jni` and `rules`).')
         add('')
+    if engine:
+        add('## OXT-Beyond\'s own Android engine')
+        add('')
+        add('`%s` is the Android runtime built from OXT-Beyond\'s source at the commit' % ENGINE_FOLDER)
+        add('above with a current NDK (the Android plan\'s phase 2): the engine and the')
+        add('externals for each of %s, with the Java layer,'
+            % ', '.join('`%s`' % a for a in sorted({i['path'].split('/')[3] for i in engine if i['elf']})))
+        add('the manifest and the files beside them that were built with them, as')
+        add('`tools/ci/build-android.sh` writes them and `tools/ci/android_engine.py merge`')
+        add('makes the four build folders one: %d files, %s bytes%s.'
+            % (len(engine), '{:,}'.format(sum(i['size'] for i in engine)),
+               (', from %s' % runs[ENGINE_FROM]) if runs.get(ENGINE_FROM) else ''))
+        add('It is a preview beside LiveCode Community 9.6.3\'s Android engines, the rest of')
+        add('`Runtime/Android`, which stay the default: the IDE\'s Android builder builds')
+        add('with it only a stack whose "android,engine" standalone setting is "beyond", and')
+        add('then takes every file of the package from this folder.')
+        add('')
+        add('`tools/oxt/make_runtimes_asset.py` checked it as `android_engine.py check` does')
+        add('(each library a shared library for its architecture; every LOAD segment of the')
+        add('64-bit ones aligned to 16 KB; no text relocations; nothing writable beside')
+        add('RELRO in its pages; only Android\'s own system libraries needed; API 21; the')
+        add('engine\'s `.project` section, last, and `JNI_OnLoad`), that it holds nothing')
+        add('else, and that every engine carries the engine version above. The "Runtimes')
+        add('asset" workflow (`.github/workflows/runtimes.yml`) takes it only from an')
+        add('"Android engine" run (`.github/workflows/android-engine.yml`) of the same commit')
+        add('whose build jobs and emulator job passed: there each architecture was checked')
+        add('against its Java layer across JNI, and the app built with it from the IDE\'s')
+        add('builder ran on Android 13 and on Android with 16 KB pages.')
+        add('')
     carried = by_from[CARRY_ASSET['id']]
     add('## Carried over from %s' % CARRY_ASSET['id'])
     add('')
-    if java:
+    if engine:
+        add('LiveCode Community 9.6.3\'s Android engines, which stay the default, are carried')
+        add('over: the rest of `Runtime/Android` (the engines with their externals, the')
+        add('manifest and the rest%s) and the timezone library\'s'
+            % (', bar the Java layer above' if java else ', the Java layer among them'))
+        add('Android code (`code/*-android`) are taken unchanged from the earlier runtimes')
+        add('asset `%s`' % CARRY_ASSET['id'])
+    elif java:
         add('OXT-Beyond does not build the Android engines yet. The rest of `Runtime/Android`')
         add('(the engines with their externals, the manifest and the rest) and the timezone')
         add('library\'s Android code (`code/*-android`) are taken unchanged from the earlier')
@@ -1034,19 +1152,30 @@ def builds_provenance(name, version, commit, runs, sources, infos, replaced=None
     add('  Chromium and its components (see THIRD-PARTY-NOTICES.md).')
     add('- Timezone data (`resources/zoneinfo`): compiled with `zic` from the IANA time')
     add('  zone database, which is in the public domain (`extensions/libraries/timezone/tz`).')
+    if engine:
+        add('- OXT-Beyond\'s Android engine (`%s`): GNU GPL v3, with the exception' % ENGINE_FOLDER)
+        add('  in LICENSE-EXCEPTION.md; the source is %s at the commit' % REPO_URL)
+        add('  above. The third-party libraries compiled into it are listed with their')
+        add('  licences in THIRD-PARTY-NOTICES.md; the NDK\'s C++ library (LLVM libc++,')
+        add('  Apache 2.0 with LLVM exceptions) is linked into each of its libraries.')
     if java:
         add('- The Android runtime\'s Java layer (`%s`): GNU GPL v3, with the' % JAVA_LAYER)
         add('  exception in LICENSE-EXCEPTION.md; the source is `engine/src/java` of')
         add('  %s at the commit above.' % REPO_URL)
         add('- The rest of the Android runtime and the timezone library\'s Android code: see')
+    elif engine:
+        add('- LiveCode Community 9.6.3\'s Android runtime and the timezone library\'s Android')
+        add('  code: see')
     else:
         add('- The Android runtime and the timezone library\'s Android code: see')
     add('  `PROVENANCE-%s.md`.' % CARRY_ASSET['id'])
     add('')
     add('## Files')
     add('')
+    dated = [x for x, there in (('the Java layer', java), ('the Android engine\'s files', engine)) if there]
     add('Times are the files\' modification times in the builds or in %s (UTC)%s.'
-        % (CARRY_ASSET['id'], '; the Java layer has the builds\' newest' if java else ''))
+        % (CARRY_ASSET['id'], ('; %s %s the builds\' newest' % (' and '.join(dated), 'have' if engine else 'has'))
+           if dated else ''))
     add('')
     add('| path | bytes | SHA-256 | modified | from |')
     add('|---|---:|---|---|---|')
@@ -1059,9 +1188,11 @@ def builds_provenance(name, version, commit, runs, sources, infos, replaced=None
     return '\n'.join(L)
 
 
-def builds_manifest_entry(name, label, sha, size, commit, java_layer=False):
+def builds_manifest_entry(name, label, sha, size, commit, java_layer=False, android_engine=False):
     """The asset's entry for external-assets.json; java_layer: the Android
-    runtime's Java layer was built from the commit (--android-classes)."""
+    runtime's Java layer was built from the commit (--android-classes);
+    android_engine: so was OXT-Beyond's Android engine beside it
+    (--android-engine)."""
     tag = RELEASE_TAG_FMT.format(version=label)
     if java_layer:
         android = ('; the Android runtime\'s Java layer (%s), built from the same source; and the rest of '
@@ -1101,8 +1232,19 @@ def builds_manifest_entry(name, label, sha, size, commit, java_layer=False):
         ('source', 'OXT-Beyond\'s CI builds win-x86, win-x86_64, linux-x86 and linux-x86_64%s, made with '
                    'tools/oxt/make_runtimes_asset.py --builds%s' % (' of commit %s' % commit if commit else '', source)),
     ])
+    if android_engine:
+        entry['description'] = entry['description'].replace(
+            '. See PROVENANCE.md in the archive.',
+            '; and OXT-Beyond\'s own Android engine (%s), built from the same source, beside '
+            'LiveCode Community 9.6.3\'s, which stays the default. See PROVENANCE.md in the archive.'
+            % ENGINE_FOLDER)
+        entry['source'] += ('; the Android engine %s from an Android engine run (android-engine.yml) of the '
+                            'same commit, its four build folders made one by tools/ci/android_engine.py merge'
+                            % ENGINE_FOLDER)
     if java_layer:
         entry['java_layer'] = JAVA_LAYER
+    if android_engine:
+        entry['android_engine'] = ENGINE_FOLDER
     return entry
 
 
@@ -1135,7 +1277,7 @@ def builds_main(args, p):
     missing = [b for b in BUILDS if b not in bins]
     if missing:
         p.error('--builds needs --bin for %s' % ', '.join(missing))
-    runs = parse_pairs(args.run, '--run')
+    runs = parse_pairs(args.run, '--run', list(BUILDS) + [ENGINE_FROM])
     name = args.name or 'oxt-runtimes-%s' % args.label
     repo = os.path.dirname(os.path.dirname(HERE))
     version = engine_version(repo)
@@ -1170,6 +1312,14 @@ def builds_main(args, p):
                 infos.append(java)
                 print('%s: %s, %d classes (SHA-256 %s), in place of the carried one'
                       % (JAVA_FROM, JAVA_LAYER, java['classes'], java['sha256']))
+        engine = []
+        if args.android_engine:
+            built = max([i['mtime'] for i in infos if i['from'] in BUILDS] or [ZIP_EPOCH])
+            engine, found = engine_runtime(args.android_engine, built, version)
+            problems += found
+            infos += engine
+            print('%s: %d files of OXT-Beyond\'s Android engine, as %s'
+                  % (ENGINE_FROM, len(engine), ENGINE_FOLDER))
         infos += carried
         print('%s: %d files carried over' % (CARRY_ASSET['id'], len(carried)))
         seen = {}
@@ -1195,7 +1345,8 @@ def builds_main(args, p):
     with open(os.path.join(args.out, 'PROVENANCE.md'), 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
     size, sha, _ = digest(zip_path)
-    entry = builds_manifest_entry(name, args.label, sha, size, args.commit, java_layer=java is not None)
+    entry = builds_manifest_entry(name, args.label, sha, size, args.commit, java_layer=java is not None,
+                                  android_engine=bool(engine))
     with open(os.path.join(args.out, name + '.manifest.json'), 'w', encoding='utf-8', newline='\n') as f:
         json.dump(entry, f, indent=2, ensure_ascii=False)
         f.write('\n')
@@ -1237,6 +1388,10 @@ def main(argv=None):
     p.add_argument('--android-classes', metavar='JAR',
                    help='--builds: the Android runtime\'s Java layer built from this repository (tools/ci/'
                         'android_java.py build), in place of the carried %s' % JAVA_LAYER)
+    p.add_argument('--android-engine', metavar='DIR',
+                   help='--builds: OXT-Beyond\'s Android engine, the runtime folder tools/ci/android_engine.py '
+                        'merge made of an Android engine run\'s build folders, beside the carried runtime as %s'
+                        % ENGINE_FOLDER)
     p.add_argument('--stock-setup', metavar='PATH',
                    help='.setup.exe of stock LiveCode Community 9.6.3 for Windows, to compare against (read only)')
     p.add_argument('--source-archive', metavar='NAME', help='file name of the release archive, for PROVENANCE.md')
@@ -1245,8 +1400,10 @@ def main(argv=None):
     args = p.parse_args(argv)
     if args.builds:
         return builds_main(args, p)
-    if args.label or args.bin or args.carry or args.assets_cache or args.commit or args.run or args.android_classes:
-        p.error('--label, --bin, --carry, --assets-cache, --commit, --run and --android-classes go with --builds')
+    if (args.label or args.bin or args.carry or args.assets_cache or args.commit or args.run or args.android_classes
+            or args.android_engine):
+        p.error('--label, --bin, --carry, --assets-cache, --commit, --run, --android-classes and --android-engine '
+                'go with --builds')
 
     root = args.installed_root
     if not root:
