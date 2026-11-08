@@ -1452,6 +1452,18 @@ class OneSystem(unittest.TestCase):
                     'KeyEvent;)Z'):
             self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
 
+    def test_the_activity_without_an_engine_is_a_recorded_change(self):
+        # each LiveCodeActivity method that now does nothing without an
+        # engine (test_android_builder pins which) differs from 9.6.3's on
+        # purpose, and compare says why
+        for sig in ('onRestart:()V', 'onResume:()V', 'onPause:()V', 'onNewIntent:(Landroid/content/Intent;)V',
+                    'onLowMemory:()V', 'onConfigurationChanged:(Landroid/content/res/Configuration;)V',
+                    'onBackPressed:()V', 'onKeyDown:(ILandroid/view/KeyEvent;)Z',
+                    'onActivityResult:(IILandroid/content/Intent;)V',
+                    'onRequestPermissionsResult:(I[Ljava/lang/String;[I)V'):
+            key = 'code com/runrev/android/LiveCodeActivity.' + sig
+            self.assertTrue([sha for sha, entries in aj.EXPECTED.items() if key in entries], key)
+
     def test_edge_to_edge_keeps_the_stack_out_of_the_bars(self):
         # an app that targets API 35 or newer is drawn edge to edge on
         # Android 15 and newer: the view that holds the stack (and the
