@@ -73,11 +73,11 @@ EXCERPT_CHARS = 700
 
 # The minimum systems, as README.md states them and the builds check them
 # (build-linux.yml: glibc 2.31 by check_elf_floor.py; build-macos.yml:
-# 10.13 and 11.0 by check_macho_floor.py; the xTalk Suite libraries'
+# 11.0 by check_macho_floor.py; the xTalk Suite libraries'
 # floors by check_native_deps.py and check_linux_libraries.py)
 WINDOWS_MIN = 'Windows 10 or later (x64)'
 # (Every Apple Silicon Mac came with macOS 11 or later)
-MAC_MIN = 'macOS 11 or later, or 10.13 or later on Intel'
+MAC_MIN = 'macOS 11 or later'
 LINUX_MIN = 'Linux x86-64 (glibc 2.31 or later)'
 
 # Twelve lines for the update check (blank lines count), with the version
@@ -114,7 +114,7 @@ The executables are not code-signed, so Windows SmartScreen may warn when they a
 
 ## macOS (Apple Silicon and Intel)
 
-One universal app, `OXT-Beyond.app`. It needs macOS 11 Big Sur or later on Apple Silicon, or macOS 10.13 High Sierra or later on an Intel Mac. The native libraries of the bundled xTalk Suite extensions SodiumXT, TorrentXT, enetxt, DataChannelXT, Box2Dxt and CoinXT need macOS 10.15 Catalina or later on an Intel Mac: on macOS 10.13 and 10.14 the IDE starts, but those extensions do not load.
+One universal app, `OXT-Beyond.app`. It needs macOS 11 Big Sur or later, on Apple Silicon and on an Intel Mac (up to 0.2.7-rc.6.18, macOS 10.13 High Sierra on Intel; on macOS 10.15 Catalina it hung at launch). Standalones built with it need macOS 11 too.
 
 - `{root}-mac-universal.dmg`: the disk image. Open it and drag OXT-Beyond onto the Applications folder next to it.
 - `{root}-mac-universal.zip`: the same app, for scripted installs (`ditto -x -k {root}-mac-universal.zip /Applications`).

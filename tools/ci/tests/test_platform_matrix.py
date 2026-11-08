@@ -229,7 +229,7 @@ class MachoFloorMatrix(unittest.TestCase):
             code, out = run_main(check_macho_floor, [t.root, '--matrix', 'mac-universal'])
         self.assertEqual(code, 0, out)
         v = check_macho_floor.parse_version
-        self.assertEqual(seen['minos'], {'arm64': v('11.0'), 'x86_64': v('10.13')})
+        self.assertEqual(seen['minos'], {'arm64': v('11.0'), 'x86_64': v('11.0')})
         self.assertEqual(seen['file_minos'], [('Contents/Tools/Extensions/*/code/universal-mac/*', 'x86_64',
                                                v('10.15'))])
 

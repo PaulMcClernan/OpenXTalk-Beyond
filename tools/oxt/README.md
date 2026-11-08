@@ -386,7 +386,7 @@ disagree, the layout follows the IDE:
   `x86-32`. The runtime's `Info.plist` is staged as built (the builder
   edits it line by line), so it must already declare the lowest minimum
   macOS of its engine; `package.py` checks that it does (after the lipo
-  merge: the x86_64 build's 10.13).
+  merge: the x86_64 build's, 11.0 since 0.2.7-rc.6.19 as the arm64 build's).
   [`tools/ci/standalone_check.py`](../ci/standalone_check.py) checks
   these folders in an installed app (engines, architectures, minimum
   macOS, icons, `Support`, `Externals` lists, signatures) and builds and
@@ -573,7 +573,7 @@ keys stay):
 | `CFBundleIconFile` | `OXT-Beyond.icns` | made from `Installer/oxt-beyond/branding/png/` by `icns.py` |
 | `CFBundleExecutable` | `OXT-Beyond` | the renamed executable |
 | `LSArchitecturePriority` | the layout's architectures, arm64 first | LiveCode's says `x86_64, i386`: LaunchServices starts the first listed architecture the binary has, so a universal app would run under Rosetta on Apple Silicon |
-| `LSMinimumSystemVersion` | the lowest `minos` of the engine's slices: 10.13 for `mac-universal` | Xcode writes the deployment target of the one build the tree came from (11.0 for arm64); a universal app must declare its lowest slice's, or Intel Macs below 11 refuse it |
+| `LSMinimumSystemVersion` | the lowest `minos` of the engine's slices: 11.0 for `mac-universal` (10.13 up to 0.2.7-rc.6.18) | Xcode writes the deployment target of the one build the tree came from (11.0 for arm64); a universal app must declare its lowest slice's, or Intel Macs below 11 refuse it |
 | `CFBundleDocumentTypes` | `.oxtstack` and `.oxtscript` with rank Owner; LiveCode's `.rev`, `.livecode`, `.livecodescript` entry with rank Alternate | the app opens LiveCode's files but does not take them over from an installed LiveCode, as on Windows, where the installer associates only the OXT types |
 | `UTExportedTypeDeclarations` | `io.github.sethmorrowsoftware.oxt-beyond.stack` (`.oxtstack`, public.data) and `.script` (`.oxtscript`, public.script: plain text, so Quick Look shows it) | OXT-Beyond's types; no document icon is named, so macOS 11 and later draw one from the app icon |
 | `UTImportedTypeDeclarations` | LiveCode's `com.runrev.*` types, which the engine's plist exports | LiveCode owns them; its two declarations of `com.runrev.livecode.stack` become one |
@@ -607,9 +607,9 @@ mac-universal") builds the release app from the two CI builds:
 
    | rule | files | why |
    |---|---:|---|
-   | `DIFFER` plist: `**/Contents/Info.plist` | 16 (every bundle's) | they differ only in `LSMinimumSystemVersion` (11.0 / 10.13; Xcode writes each build's deployment target); the x86_64 build's copy is taken byte for byte (the standalone builder edits the runtime's line by line), and it must match the lowest `minos` of the bundle's executable. Any other key that differs fails, except the build machine's (`DT*`, `BuildMachineOSBuild`), which are reported. After writing, one array is edited: `LiveCode-Community.app`'s `LSArchitecturePriority` says `x86_64, i386` (LiveCode's Intel days), and LaunchServices starts the first listed architecture the executable holds, so the universal development engine would run under Rosetta on Apple Silicon; it becomes `arm64, x86_64` (only that array, as text; a plist without the key, such as the runtime's, is not touched) |
+   | `DIFFER` plist: `**/Contents/Info.plist` | 16 (every bundle's) | they differ at most in `LSMinimumSystemVersion` (11.0 in both since 0.2.7-rc.6.19, before that 11.0 / 10.13; Xcode writes each build's deployment target); the x86_64 build's copy is taken byte for byte (the standalone builder edits the runtime's line by line), and it must match the lowest `minos` of the bundle's executable. Any other key that differs fails, except the build machine's (`DT*`, `BuildMachineOSBuild`), which are reported. After writing, one array is edited: `LiveCode-Community.app`'s `LSArchitecturePriority` says `x86_64, i386` (LiveCode's Intel days), and LaunchServices starts the first listed architecture the executable holds, so the universal development engine would run under Rosetta on Apple Silicon; it becomes `arm64, x86_64` (only that array, as text; a plist without the key, such as the runtime's, is not touched) |
    | `DIFFER` seal: `**/Contents/_CodeSignature/CodeResources` | 2 (`LiveCode-Community.app`, `reviphone.bundle`) | a bundle's resource seal records the code-directory hash of its nested code, which differs per architecture; it is stale after the merge either way and written again when the tree is signed |
-   | `SINGLE_ARCH`: `**/reviphoneproxy`, `**/reviphoneproxy.dSYM/**` | 2 (`reviphoneproxy`, `reviphone.bundle/Contents/MacOS/reviphoneproxy`) | the iOS simulator helper is built for x86_64 only on both runners (revmobile.gyp); the x86_64 build's copy (10.13) is taken, and nothing of the arm64 build's copy (also x86_64 only, 11.0) is lost |
+   | `SINGLE_ARCH`: `**/reviphoneproxy`, `**/reviphoneproxy.dSYM/**` | 2 (`reviphoneproxy`, `reviphone.bundle/Contents/MacOS/reviphoneproxy`) | the iOS simulator helper is built for x86_64 only on both runners (revmobile.gyp); the x86_64 build's copy is taken, and nothing of the arm64 build's copy (also x86_64 only, 11.0) is lost |
    | `ONE_SIDED`: `**/*.dSYM/Contents/Resources/Relocations/<arch>/**` | none in these builds' binaries | dsymutil writes each architecture's relocations into a folder of its own, when it writes them |
 
    `--dry-run` only reports; `--no-lipo` joins the slices with the
