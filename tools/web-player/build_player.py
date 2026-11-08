@@ -54,6 +54,27 @@ stack file with no extension, which the player must import with its
 scripts fixed as File > Import Stack fixes them, and Stacks.dc42, a
 DiskCopy 4.2 image, whose stacks it must list and open the one chosen.
 
+Then the bare player (play/, check_bare): a sample by ?play= in the middle
+of the page with no bar or window around it, a stack of the site by
+?stack=, another site's refused, and the Phone Starter filling an iPhone's
+window (Chromium, and WebKit where it is installed).
+
+Then a tablet (check_tablet: Playwright's iPad Mini, portrait and
+landscape, in the player's page and the bare player): the Responsive
+Starter, made with the Mobile Web library, has the whole screen and is
+drawn to its corners; 2048, which is not, opens exactly as it did before
+there was a rule for a tablet (the same rect and canvas as on the same
+iPad with the page's touch test answering no), at its own size.
+
+Then Nova Rescue's, Wobble Forts' and Puzzle Almanac's pages on the web
+site's gallery (games/nova-rescue/, games/wobble-forts/ and
+games/puzzle-almanac/, tools/pages/check_nova_rescue_page.py,
+check_wobble_forts_page.py and check_puzzle_almanac_page.py), made from this player as
+tools/pages/build_pages.py makes the site: on a computer the game opens in
+the page's phone frame at its own size and its keys play it at once; on a
+phone the page loads no engine until a tap, which opens the bare player
+with the game filling the window.
+
 The first page also has other scripts' errors raised while the player
 starts and once it has (tools/ci/stray_errors.py: a browser extension's
 script in the page, another site's): the player must start and say
@@ -89,6 +110,10 @@ import ui_tour  # noqa: E402
 BUILD_SCRIPT = os.path.join(HERE, 'build-player.livecodescript')
 PLAYER_SCRIPT = os.path.join(HERE, 'stack-player.livecodescript')
 PAGE = os.path.join(HERE, 'index.html')
+# The bare player (play.html): the stack and nothing else, beside the
+# player as play/index.html, on the same engine and player stack
+BARE_PAGE = os.path.join(HERE, 'play.html')
+BARE = 'play'
 BUILT_PAGE = 'StackPlayer.html'
 
 
@@ -213,10 +238,20 @@ def put_page(site):
         with open(os.path.join(site, name), 'rb') as f:
             for block in iter(lambda: f.read(1 << 20), b''):
                 digest.update(block)
+    stamp = digest.hexdigest()[:16]
     with open(PAGE, encoding='utf-8') as f:
         page = f.read()
     with open(os.path.join(site, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
-        f.write(page.replace('@ENGINE_JS@', engines[0]).replace('@STAMP@', digest.hexdigest()[:16]))
+        f.write(page.replace('@ENGINE_JS@', engines[0]).replace('@STAMP@', stamp))
+    # the bare player, one folder down: its meta oxt-player-base ("../")
+    # finds the engine, standalone.zip, the samples and the assets
+    with open(BARE_PAGE, encoding='utf-8') as f:
+        page = f.read()
+    bare = os.path.join(site, BARE)
+    shutil.rmtree(bare, ignore_errors=True)
+    os.makedirs(bare)
+    with open(os.path.join(bare, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(page.replace('@ENGINE_JS@', engines[0]).replace('@STAMP@', stamp))
     built = os.path.join(site, BUILT_PAGE)
     if os.path.exists(built):
         os.remove(built)
@@ -312,6 +347,36 @@ SAMPLES = [
      'description': 'Open a photo of your own, pick a look, adjust it and download it at full '
                     'size; the browser does the pixel work and the photo never leaves your computer.',
      'tags': ['Images', 'JavaScript', 'Files']},
+    {'title': 'Phone Starter', 'source': 'stacks',
+     'files': ['Phone Starter.oxtstack'], 'image': 'Phone Starter.webp',
+     'description': 'A stack to copy for phones, made with the Mobile Web library: tabs for a '
+                    'thumb, swipes, pinches and every finger, a list that scrolls with a finger, a '
+                    'form above the keyboard, and the camera, location, tilt and share sheet.',
+     'tags': ['Phones', 'Touch', 'Starter']},
+    {'title': 'Responsive Starter', 'source': 'stacks',
+     'files': ['Responsive Starter.oxtstack'], 'image': 'Responsive Starter.webp',
+     'description': 'One stack for every screen, made with the Mobile Web library: a tab bar on a '
+                    'phone, a rail on a tablet and a sidebar on a desktop, a grid that reflows, '
+                    'details in a sheet or a pane, and a dark look. Make the window narrower to see it.',
+     'tags': ['Responsive', 'Layout', 'Starter']},
+    {'title': 'Nova Rescue', 'source': 'stacks',
+     'files': ['Nova Rescue.oxtstack'], 'image': 'Nova Rescue.webp',
+     'description': 'A space rescue for a phone: drag to fly, save the drifting crews, dodge '
+                    'meteors and raiders, and face a mothership every fourth sector. Kenney\'s '
+                    'art and sounds, mixed by Web Audio; it plays with the mouse and keys too.',
+     'tags': ['Game', 'Phones', 'Touch']},
+    {'title': 'Wobble Forts', 'source': 'stacks',
+     'files': ['Wobble Forts.oxtstack'], 'image': 'Wobble Forts.webp',
+     'description': 'A physics game for a phone: pull back and fling the round Bloops at the '
+                    'Grumps\' wobbly forts of wood, glass, stone, metal and TNT, with a trick for '
+                    'each Bloop. Fifteen forts in three lands on Box2Dxt, with stars to earn.',
+     'tags': ['Game', 'Phones', 'Touch', 'Physics']},
+    {'title': 'Puzzle Almanac', 'source': 'stacks',
+     'files': ['Puzzle Almanac.oxtstack'], 'image': 'Puzzle Almanac.webp',
+     'description': 'A daily puzzle book for a phone: a Number Place in three sizes and a Hidden '
+                    'Word of four to six letters, new every day and the same for everyone, with a '
+                    'sticker book to fill. Every puzzle can be solved without a guess.',
+     'tags': ['Game', 'Phones', 'Touch', 'Puzzles']},
     {'title': 'Tour', 'files': ['Tour.livecode'],
      'description': 'Cards, a widget, a palette window and a script error, caught and shown.',
      'tags': ['Cards', 'Widget', 'Palette']},
@@ -725,6 +790,26 @@ def check(site, samples, work):
 
         third_context.close()
 
+        # The bare player (play/): the stack and nothing else
+        check_bare(p, browser, url.replace('index.html', BARE + '/'), shots, expect, wait_for)
+
+        # A tablet: a Mobile Web stack has the screen, any other is as it was
+        check_tablet(p, browser, url, shots, expect, wait_for)
+
+        # Nova Rescue's page on the web site, from this player
+        sys.path.insert(0, os.path.join(REPO, 'tools', 'pages'))
+        import check_nova_rescue_page
+        check_nova_rescue_page.check_player(p, browser, site, os.path.join(work, 'nova-rescue-page'), shots, expect)
+
+        # and Wobble Forts' page, the same way
+        import check_wobble_forts_page
+        check_wobble_forts_page.check_player(p, browser, site, os.path.join(work, 'wobble-forts-page'), shots, expect)
+
+        # and Puzzle Almanac's
+        import check_puzzle_almanac_page
+        check_puzzle_almanac_page.check_player(p, browser, site, os.path.join(work, 'puzzle-almanac-page'), shots,
+                                               expect)
+
         # An error of the page's own while the engine starts still shows
         own_context = browser.new_context(viewport={'width': 1000, 'height': 700})
         own = own_context.new_page()
@@ -741,6 +826,203 @@ def check(site, samples, work):
     with open(os.path.join(shots, 'console.txt'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
     return passed, problems
+
+
+def check_bare(p, browser, url, shots, expect, wait_for):
+    """The bare player (play.html, LittleNemo's p=26036): a sample by
+    ?play= in the middle of the window, at its own size, with no bar,
+    frame or library around it; a stack of the site by ?stack=; another
+    site's refused; and on a phone (Playwright's iPhone 13 in Chromium,
+    and in WebKit when it is installed) the Phone Starter fills the window.
+
+    What is measured is the stack as it is drawn, not only the canvas: the
+    canvas filled the window on a desktop when the player took every
+    browser for a phone (#348), while the stack was scaled up into it, and
+    on rc.6.15's player the canvas filled an iPhone's window while the
+    Phone Starter was drawn scaled down inside it, a strip of page at each
+    side. So: the canvas is the size the player says the stack is, the
+    page's colour is just outside it and the stack's just inside it; and on
+    the phone, the stack's header and tab bar are the same colour at the
+    window's left edge, its middle and its right edge."""
+    import stray_errors
+
+    def visit(context, query, what, shot, stray=False):
+        page = context.new_page()
+        lines = []
+        page.on('console', lambda m: lines.append(m.text))
+        if stray:
+            # other scripts' errors while it starts, as the player's own
+            # page is given them: they are not the bare player's
+            page.add_init_script(stray_errors.STRAY_ERRORS)
+        page.goto(url + query)
+        wait_for(page, lambda: any(x.startswith('PLAYER opened') for x in lines)
+                 or page.evaluate("!document.getElementById('note').hidden"), what, 120)
+        page.wait_for_timeout(2500)
+        state = page.evaluate("""() => {
+            const c = document.getElementById('canvas').getBoundingClientRect();
+            return {playing: document.body.classList.contains('playing'), title: document.title,
+                    note: document.getElementById('note').hidden ? '' : document.getElementById('note').textContent,
+                    chrome: document.querySelectorAll('.menubar, .window, #toasts, .desk').length,
+                    fill: document.body.getAttribute('data-mobile-web-fill'),
+                    canvas: [c.left, c.top, c.width, c.height], view: [innerWidth, innerHeight],
+                    ratio: window.devicePixelRatio,
+                    loadingError: document.getElementById('loading-error').hidden ? '' :
+                        document.getElementById('loading-error').textContent,
+                    scrollWidth: document.documentElement.scrollWidth}; }""")
+        png = page.screenshot(path=os.path.join(shots, shot))
+        # the stack's own size, as the player read it from its file
+        opened = [x for x in lines if x.startswith('PLAYER opened')]
+        m = re.search(r'rect=(-?\d+),(-?\d+),(-?\d+),(-?\d+)', opened[-1]) if opened else None
+        state['stack'] = [int(m.group(3)) - int(m.group(1)), int(m.group(4)) - int(m.group(2))] if m else None
+        log('  bare %s: %s' % (query, state))
+        return page, lines, state, png
+
+    def pixel(png, st, x, y):
+        r = st['ratio'] or 1
+        return png_pixel(png, int(x * r), int(y * r))
+
+    def near(a, b, tolerance=24):
+        return all(abs(i - j) <= tolerance for i, j in zip(a, b))
+
+    page_colour = (0, 0, 0)
+    desk = browser.new_context(viewport={'width': 1000, 'height': 700})
+    page, lines, st, png = visit(desk, '?play=2048', 'the bare player opening 2048', '20-bare-2048.png', stray=True)
+    left, top, width, height = st['canvas']
+    expect('bare-opens', st['playing'] and st['title'] == '2048'
+           and any(x.startswith('PLAYER opened 2048') for x in lines), str(st))
+    # a desktop browser is not a phone: the stack keeps its size
+    expect('bare-no-chrome', st['chrome'] == 0 and st['fill'] == 'no', str(st))
+    expect('bare-stray-errors', st['loadingError'] == '', st['loadingError'])
+    expect('bare-own-size', st['stack'] is not None and [round(width), round(height)] == st['stack'],
+           'canvas %s, stack %s' % (st['canvas'], st['stack']))
+    expect('bare-centred', width > 0 and abs(left - (1000 - width) / 2) <= 1 and abs(top - (700 - height) / 2) <= 1,
+           str(st['canvas']))
+    if width > 0 and left >= 4 and top >= 4:
+        mid = top + height / 2
+        outside, inside = pixel(png, st, left - 3, mid), pixel(png, st, left + 3, mid)
+        below, above = pixel(png, st, left + width / 2, top + height + 3), pixel(png, st, left + width / 2, top + height - 3)
+        expect('bare-drawn-in-its-place', near(outside, page_colour) and near(below, page_colour)
+               and not near(inside, page_colour, 6) and not near(above, page_colour, 6),
+               'outside %s, inside %s, below %s, above %s' % (outside, inside, below, above))
+    else:
+        expect('bare-drawn-in-its-place', False, 'the stack fills the window: %s' % st['canvas'])
+    page.close()
+    page, lines, st, png = visit(desk, '?stack=../samples/Tour.livecode&align=top-left', 'the bare player opening Tour',
+                                 '21-bare-tour.png')
+    expect('bare-stack-of-the-site', st['playing'] and st['canvas'][:2] == [0, 0]
+           and st['stack'] is not None and [round(v) for v in st['canvas'][2:]] == st['stack']
+           and any(x.startswith('PLAYER opened Tour') for x in lines), str(st))
+    page.close()
+    page, lines, st, png = visit(desk, '?stack=https://example.com/x.livecode', 'the bare player refusing',
+                                 '22-bare-other-site.png')
+    expect('bare-other-site-refused', not st['playing'] and 'must be on this site' in st['note'], str(st))
+    page.close()
+    desk.close()
+
+    def phone(engine, kind):
+        context = engine.new_context(**p.devices['iPhone 13'])
+        page, lines, st, png = visit(context, '?play=Phone%20Starter', 'the Phone Starter in ' + kind,
+                                     '23-bare-phone-%s.png' % kind)
+        vw, vh = st['view']
+        width, height = st['canvas'][2:]
+        expect('bare-phone-fills-' + kind, st['playing'] and st['fill'] is None and abs(width - vw) <= 1
+               and abs(height - vh) <= 1 and st['scrollWidth'] <= vw, str(st))
+        # the header (its top) and the tab bar (its bottom) are drawn from
+        # edge to edge: the same colour at the left edge, in the middle and
+        # at the right edge, and not the page's
+        rows = []
+        for y in (8, vh - 6):
+            row = [pixel(png, st, x, y) for x in (1, vw / 2, vw - 2)]
+            rows.append(row)
+        expect('bare-phone-edge-to-edge-' + kind,
+               all(near(r[0], r[1], 8) and near(r[2], r[1], 8) and not near(r[1], page_colour, 6) for r in rows),
+               ' | '.join(' '.join('#%02X%02X%02X' % c for c in r) for r in rows))
+        page.close()
+        context.close()
+
+    phone(browser, 'chromium')
+    # WebKit, Safari's engine, where Playwright's is installed
+    try:
+        webkit = p.webkit.launch()
+    except Exception as e:
+        log('  bare: no WebKit to check the phone in (%s)' % str(e).splitlines()[0][:120])
+        return
+    try:
+        phone(webkit, 'webkit')
+    finally:
+        webkit.close()
+
+
+# A page whose touch test answers no, as the page's own was before it had
+# a rule for a tablet: what a stack that is not made with the Mobile Web
+# library must look like on a tablet still
+NOT_TOUCH = """(() => { const was = window.matchMedia.bind(window);
+  window.matchMedia = q => q === '(pointer: coarse)' ? {matches: false, media: q, onchange: null,
+    addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}} : was(q); })();"""
+
+
+def check_tablet(p, browser, url, shots, expect, wait_for):
+    """A tablet (Playwright's iPad Mini, a touch screen whose short side
+    is not a phone's), portrait and landscape, in the player's page and the
+    bare player. The page's body has data-mobile-web-fill="touch".
+
+    The Responsive Starter calls mwStart: the player gives it the window,
+    the library fills the page, and it is drawn to the window's four
+    corners (its own light backgrounds there, not the page's), in the
+    player's page with the bar out of the way (phone-play). Before, it
+    opened at its own 1240x780 and was cut off at the right.
+
+    2048 does not: it must open as it did before (the same rect, as the
+    player logs it, and the same canvas as on the same iPad with the
+    page's touch test answering no), at its own size, never fitted."""
+    def visit(device, page_url, query, shot, not_touch=False):
+        context = browser.new_context(**p.devices[device])
+        if not_touch:
+            context.add_init_script(NOT_TOUCH)
+        page = context.new_page()
+        lines = []
+        page.on('console', lambda m: lines.append(m.text))
+        page.goto(page_url + query)
+        wait_for(page, lambda: any(x.startswith('PLAYER opened') for x in lines), 'a stack on a tablet', 120)
+        page.wait_for_timeout(2500)
+        state = page.evaluate("""() => {
+            const c = document.getElementById('canvas').getBoundingClientRect();
+            return {fill: document.body.getAttribute('data-mobile-web-fill'),
+                    phonePlay: document.body.classList.contains('phone-play'),
+                    canvas: [c.left, c.top, c.width, c.height].map(Math.round),
+                    view: [innerWidth, innerHeight], ratio: window.devicePixelRatio}; }""")
+        png = page.screenshot(path=os.path.join(shots, shot))
+        opened = [x for x in lines if x.startswith('PLAYER opened')][-1]
+        state['opened'] = opened
+        state['filled'] = any(x.startswith('PLAYER fills the screen') for x in lines)
+        state['fitted'] = any(x.startswith('PLAYER fitted') for x in lines)
+        log('  tablet %s%s%s: %s' % (page_url.rsplit('/', 2)[-2:], query, ' (not touch)' if not_touch else '', state))
+        context.close()
+        return state, png
+
+    def bright(png, st, x, y):
+        r = st['ratio'] or 1
+        return sum(png_pixel(png, int(x * r), int(y * r))) / 3 > 170
+
+    pages = (('player', url), ('bare', url.replace('index.html', BARE + '/')))
+    for device, turn in (('iPad Mini', 'portrait'), ('iPad Mini landscape', 'landscape')):
+        for kind, page_url in pages:
+            st, png = visit(device, page_url, '?play=Responsive%20Starter', '24-tablet-responsive-%s-%s.png' % (kind, turn))
+            vw, vh = st['view']
+            corners = [(2, 2), (vw - 3, 2), (2, vh - 3), (vw - 3, vh - 3)]
+            expect('tablet-mobile-web-fills-%s-%s' % (kind, turn),
+                   st['fill'] == 'touch' and st['filled'] and not st['fitted']
+                   and st['canvas'] == [0, 0, vw, vh] and st['opened'].endswith('rect=0,0,%d,%d' % (vw, vh))
+                   and (kind == 'bare' or st['phonePlay'])
+                   and all(bright(png, st, x, y) for x, y in corners), str(st))
+            st, png = visit(device, page_url, '?play=2048', '25-tablet-2048-%s-%s.png' % (kind, turn))
+            was, _ = visit(device, page_url, '?play=2048', '25-tablet-2048-%s-%s-was.png' % (kind, turn), True)
+            m = re.search(r'rect=(-?\d+),(-?\d+),(-?\d+),(-?\d+)', st['opened'])
+            own = [int(m.group(3)) - int(m.group(1)), int(m.group(4)) - int(m.group(2))] if m else None
+            expect('tablet-other-stack-as-before-%s-%s' % (kind, turn),
+                   st['fill'] == 'touch' and was['fill'] == 'no' and not st['filled'] and not st['fitted']
+                   and not st['phonePlay'] and st['opened'] == was['opened'] and st['canvas'] == was['canvas']
+                   and own == st['canvas'][2:], 'now %s, was %s' % (st, was))
 
 
 def main(argv=None):

@@ -370,15 +370,15 @@ jobs:
           fi
 
       # Playwright, pinned, in a virtual environment of its own, with the
-      # browser and the system libraries that it needs
+      # browser and the system libraries that it needs; the libraries are
+      # fetched first, with a time limit and from the cache
+      # (.github/actions/install-playwright says why)
       - name: Install Playwright and ${{ matrix.browser }}
-        env:
-          PLAYWRIGHT_VERSION: 1.56.0
-          BROWSER: ${{ matrix.browser }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/playwright"
-          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
-          "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps "$BROWSER"
+        uses: ./.github/actions/install-playwright
+        with:
+          version: 1.56.0
+          browsers: ${{ matrix.browser }}
+          venv: ${{ runner.temp }}/playwright
 
       # The fonts of every HTML5 standalone are what tools/oxt/build_web_fonts.py
       # makes from the Ubuntu 24.04 packages it names (each file pinned by its
@@ -437,6 +437,104 @@ jobs:
             --what "The web runtime check in $BROWSER" -- \
             "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_check.py --runtime "$RUNNER_TEMP/web-runtime" \
             --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check" --browser "$BROWSER"
+
+      # The Mobile Web library (extensions/script-libraries/mobileweb) and
+      # the Phone Starter (tools/web-player/stacks) on emulated phones:
+      # taps, drags, swipes, a pinch and a long press, the keyboard and a
+      # turn (tools/ci/mobile_web_check.py, which says what it checks).
+      # Firefox has no touch screen for Playwright to emulate, so it is
+      # Chromium and WebKit; WebKit gets a second try, as above. Its files
+      # (the screenshots) go in the uploaded folder, in mobile-web.
+      - name: Check the Mobile Web library on phones in ${{ matrix.browser }}
+        if: matrix.browser != 'firefox'
+        timeout-minutes: ${{ matrix.browser == 'webkit' && 20 || 10 }}
+        env:
+          BROWSER: ${{ matrix.browser }}
+          TRIES: ${{ matrix.browser == 'webkit' && 2 || 1 }}
+        run: |
+          python3 tools/ci/retry_check.py --tries "$TRIES" --files "$RUNNER_TEMP/web-check/mobile-web" \
+            --what "The Mobile Web check in $BROWSER" -- \
+            "$RUNNER_TEMP/playwright/bin/python" tools/ci/mobile_web_check.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check/mobile-web" \
+            --shots "$RUNNER_TEMP/web-check/mobile-web/shots" --browser "$BROWSER"
+
+      # The Responsive Starter (tools/web-player/stacks) and the Mobile Web
+      # library's rules on an iPhone, an iPad and a desktop: each layout,
+      # the sheet and the pane, a turn, a notch, the keys and the mouse, a
+      # window made narrower and the dark look
+      # (tools/ci/responsive_web_check.py, which says what it checks).
+      # Chromium and WebKit, as above; its files go in responsive-web.
+      - name: Check the Responsive Starter on every screen in ${{ matrix.browser }}
+        if: matrix.browser != 'firefox'
+        timeout-minutes: ${{ matrix.browser == 'webkit' && 20 || 10 }}
+        env:
+          BROWSER: ${{ matrix.browser }}
+          TRIES: ${{ matrix.browser == 'webkit' && 2 || 1 }}
+        run: |
+          python3 tools/ci/retry_check.py --tries "$TRIES" --files "$RUNNER_TEMP/web-check/responsive-web" \
+            --what "The Responsive Starter check in $BROWSER" -- \
+            "$RUNNER_TEMP/playwright/bin/python" tools/ci/responsive_web_check.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check/responsive-web" \
+            --shots "$RUNNER_TEMP/web-check/responsive-web/shots" --browser "$BROWSER"
+
+      # Nova Rescue (tools/web-player/stacks), the game made for phones,
+      # played on emulated phones: Play, a finger that flies the ship, a
+      # rescue, Pause, the frame rate, a turn and no script error
+      # (tools/ci/nova_rescue_check.py, which says what it checks).
+      # Chromium and WebKit, as above; its files go in nova-rescue.
+      - name: Play Nova Rescue on phones in ${{ matrix.browser }}
+        if: matrix.browser != 'firefox'
+        timeout-minutes: ${{ matrix.browser == 'webkit' && 20 || 10 }}
+        env:
+          BROWSER: ${{ matrix.browser }}
+          TRIES: ${{ matrix.browser == 'webkit' && 2 || 1 }}
+        run: |
+          python3 tools/ci/retry_check.py --tries "$TRIES" --files "$RUNNER_TEMP/web-check/nova-rescue" \
+            --what "The Nova Rescue check in $BROWSER" -- \
+            "$RUNNER_TEMP/playwright/bin/python" tools/ci/nova_rescue_check.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check/nova-rescue" \
+            --shots "$RUNNER_TEMP/web-check/nova-rescue/shots" --browser "$BROWSER"
+
+      # Wobble Forts (tools/web-player/stacks), the physics game made for
+      # phones, played on emulated phones: How to play, the map, a pull and
+      # a shot, the frame rate, Pause, a fort cleared and its stars, the
+      # next level, a turn and no script error
+      # (tools/ci/wobble_forts_check.py, which says what it checks). Its
+      # standalone has Box2Dxt's module, built from the pinned xTalk Suite
+      # with the engine's lc-compile. Chromium and WebKit, as above; its
+      # files go in wobble-forts.
+      - name: Play Wobble Forts on phones in ${{ matrix.browser }}
+        if: matrix.browser != 'firefox'
+        timeout-minutes: ${{ matrix.browser == 'webkit' && 20 || 10 }}
+        env:
+          BROWSER: ${{ matrix.browser }}
+          TRIES: ${{ matrix.browser == 'webkit' && 2 || 1 }}
+        run: |
+          python3 tools/ci/retry_check.py --tries "$TRIES" --files "$RUNNER_TEMP/web-check/wobble-forts" \
+            --what "The Wobble Forts check in $BROWSER" -- \
+            "$RUNNER_TEMP/playwright/bin/python" tools/ci/wobble_forts_check.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check/wobble-forts" \
+            --shots "$RUNNER_TEMP/web-check/wobble-forts/shots" --browser "$BROWSER"
+
+      # Puzzle Almanac (tools/web-player/stacks), the daily puzzle book
+      # made for phones, played on emulated phones: How to play, today's
+      # Number Place solved by taps, today's Hidden Word typed on its
+      # keyboard, the stickers, the page loaded again with the save kept, a
+      # turn and no script error (tools/ci/puzzle_almanac_check.py, which
+      # says what it checks). Chromium and WebKit, as above; its files go
+      # in puzzle-almanac.
+      - name: Play Puzzle Almanac on phones in ${{ matrix.browser }}
+        if: matrix.browser != 'firefox'
+        timeout-minutes: ${{ matrix.browser == 'webkit' && 20 || 10 }}
+        env:
+          BROWSER: ${{ matrix.browser }}
+          TRIES: ${{ matrix.browser == 'webkit' && 2 || 1 }}
+        run: |
+          python3 tools/ci/retry_check.py --tries "$TRIES" --files "$RUNNER_TEMP/web-check/puzzle-almanac" \
+            --what "The Puzzle Almanac check in $BROWSER" -- \
+            "$RUNNER_TEMP/playwright/bin/python" tools/ci/puzzle_almanac_check.py --runtime "$RUNNER_TEMP/web-runtime" \
+            --engine-cache "$RUNNER_TEMP/engine" --work "$RUNNER_TEMP/web-check/puzzle-almanac" \
+            --shots "$RUNNER_TEMP/web-check/puzzle-almanac/shots" --browser "$BROWSER"
 
       - name: Upload the check's files
         if: always()

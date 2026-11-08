@@ -24,17 +24,40 @@ given.
       [--ide ZIP --ide-version V] [--player ZIP --player-version V]
       [--map HTML --map-version V]
       [--release TAG --release-assets FILE]
+      [--suite-release TAG --suite-assets FILE]
 
   DIR/index.html     the front page (tools/pages/index.html)
   DIR/brand/         the logo it shows (tools/pages/brand)
   DIR/ide/           OXT-Beyond-<version>-web-ide.zip's site (tools/web-ide)
   DIR/player/        OXT-Beyond-<version>-web-player.zip's site
                      (tools/web-player)
+  DIR/play/          the bare player: the zip's play/index.html (the
+                     stack and nothing else, tools/web-player/play.html),
+                     a site of its own beside the player, on the player's
+                     engine and stack (left out for a zip without it)
+  DIR/games/         the web stacks gallery (tools/pages/games), on the
+                     player's engine: the big ones on pages of their own,
+                     and a card and a page for each of the player's samples
+                     with a picture; a sample in OWN_PAGES (Nova Rescue, Wobble Forts,
+                     Puzzle Almanac)
+                     has a big one's page instead, which plays it in the
+                     bare player, and only when the site has both
   DIR/dictionary/    the Dictionary that the IDE's Help > Dictionary Online
                      opens, made from the web IDE's own html_viewer and
                      dictionary data (tools/pages/build_dictionary.py), so
                      it is the IDE's of the same release; left out, with a
                      note, when the web IDE has none (one before 0.2.7)
+  DIR/lessons/       the lessons, from the first line of xTalk to
+                     extensions in xTalk Builder: a page a lesson, with a
+                     search (tools/pages/build_lessons.py, from
+                     tools/pages/lessons); they link the web IDE and the
+                     Dictionary when the site has them
+  DIR/extensions/    the xTalk Suite's extensions, built into OXT-Beyond,
+                     each with its .lce package for the other IDEs built
+                     on LiveCode Community 9: the files of the suite
+                     release --suite-release (FILE lists its file names),
+                     or a link to the suite's releases without one
+                     (tools/pages/extensions/index.html)
   DIR/map/           the codebase map: the one self-contained page that
                      tools/codebase-map/build_map.py writes (index.html),
                      and beside it, when build_map.py wrote them next to
@@ -77,10 +100,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import build_dictionary  # noqa: E402
+import build_lessons  # noqa: E402
 
 # The parts of the site, each with its card on the front page, and the
 # Downloads section (from a release's files, not a folder of the site)
-PARTS = ('IDE', 'DICTIONARY', 'PLAYER', 'GAMES', 'MAP', 'DOWNLOADS')
+PARTS = ('IDE', 'DICTIONARY', 'LESSONS', 'PLAYER', 'GAMES', 'MAP', 'DOWNLOADS', 'EXTENSIONS')
 REPOSITORY = 'https://github.com/SethMorrowSoftware/OpenXTalk-Beyond'
 # The Downloads section: (platform, what it needs, [(link, file suffix)]);
 # a file is OXT-Beyond-<version>-<suffix>, as release.yml names them
@@ -97,6 +121,77 @@ DOWNLOADS = (
      (('xTalk Assistant', 'xtalk-assistant-plugin.lce'), ('MCP Bridge', 'mcp-bridge-plugin.lce'))),
 )
 LIMIT = 100 * 1000 * 1000
+
+# The extensions page (extensions/, from tools/pages/extensions/index.html):
+# the xTalk Suite's extensions, which OXT-Beyond ships built in, with a
+# link to each one's .lce package for the other IDEs built on LiveCode
+# Community 9. The packages are the suite's release files
+# (xtalk-suite/.github/workflows/lce-packages.yml), named
+# <package>-<version>.lce, so the page links the files of the suite's
+# newest release that has them (pages.yml lists it; --suite-release and
+# --suite-assets) and is as new as the last time the site was built. A
+# package this table does not name is still linked, under "More from the
+# suite", so a package the suite adds is never left off; a release with
+# none of them, or none given, leaves every card with a link to the
+# suite's releases instead of a file.
+SUITE = 'https://github.com/SethMorrowSoftware/xtalk-suite'
+SUITE_PACKAGE = re.compile(r'^(?P<package>[a-z0-9][a-z0-9-]*?)-(?P<version>[0-9][0-9A-Za-z.+-]*)\.lce$')
+SUITE_TAG = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+# (member, name, what it is built on, what it does, what it needs or None,
+#  its repository, its icon's SVG paths, [(package, label)] in load order)
+EXTENSIONS = (
+    ('sodiumxt', 'SodiumXT', 'Native library · libsodium',
+     'Modern cryptography made easy: authenticated encryption with a passphrase or a key, '
+     'signatures, key exchange, hashing and password hashing.',
+     None, 'https://github.com/SethMorrowSoftware/SodiumXT',
+     '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5M12 14.5v2.5"/>',
+     (('sodiumxt', 'SodiumXT'),)),
+    ('torrentxt', 'TorrentXT', 'Native library · libtorrent',
+     'The full BitTorrent protocol from plain script: add, seed and inspect torrents, with magnets, '
+     'the DHT, uTP and BitTorrent v2.',
+     None, 'https://github.com/SethMorrowSoftware/TorrentXT',
+     '<path d="M12 3v11M7.5 9.5 12 14l4.5-4.5"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19.5" r="2"/>'
+     '<circle cx="19" cy="19" r="2"/>',
+     (('torrentxt', 'TorrentXT'), ('torrentxt-helpers', 'Helpers'))),
+    ('enetxt', 'enetxt', 'Native library · ENet',
+     'Reliable UDP for real-time games and apps: many peers, channels, and reliable or fast '
+     'delivery, with one broadcast to reach every peer.',
+     None, 'https://github.com/SethMorrowSoftware/enetxt',
+     '<path d="M13 2.5 5 13.5h6l-1 8 8-11h-6z"/>',
+     (('enetxt', 'enetxt'), ('enetxt-helpers', 'Helpers'))),
+    ('datachannelxt', 'DataChannelXT', 'Native library · libdatachannel',
+     'WebRTC data channels: peer-to-peer messages that cross home routers and talk to web browsers.',
+     None, 'https://github.com/SethMorrowSoftware/dataChannelXT',
+     '<circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><path d="M9 10.5h6M9 13.5h6"/>',
+     (('datachannelxt', 'DataChannelXT'), ('datachannelxt-helpers', 'Helpers'))),
+    ('box2dxt', 'Box2Dxt', 'Native library · Box2D v3',
+     'Real 2D physics: your controls fall, roll, bounce, hinge and collide. The Kit binds bodies to '
+     'the controls on a card in a few lines.',
+     None, 'https://github.com/SethMorrowSoftware/Box2Dxt',
+     '<rect x="3.5" y="13" width="7" height="7" rx="1"/><rect x="11" y="4" width="7" height="7" rx="1" '
+     'transform="rotate(15 14.5 7.5)"/><circle cx="17" cy="17" r="3"/><path d="M2.5 21.5h19"/>',
+     (('box2dxt', 'Box2Dxt'), ('box2dxt-kit', 'Kit'))),
+    ('coinxt', 'CoinXT', 'Native library · trezor-crypto and libsecp256k1',
+     'Bitcoin and Ethereum cryptography: hashes, keys, addresses, HD wallets and transaction '
+     'signing, with a script layer on top.',
+     None, 'https://github.com/SethMorrowSoftware/CoinXT',
+     '<circle cx="12" cy="12" r="8.5"/><path d="M10 7.5h3a2 2 0 0 1 0 4h-3zM10 11.5h3.5a2 2 0 0 1 0 4H10zM10 6v12"/>',
+     (('coinxt', 'CoinXT'), ('coinxt-script', 'Script layer'))),
+    ('onionxt', 'OnionXT', 'Script library · Tor',
+     'Tor for any connection and v3 onion services, by talking to Tor running on the computer, '
+     'with a small web server to put a site on an onion address.',
+     'Tor running on the computer', 'https://github.com/SethMorrowSoftware/OnionXT',
+     '<path d="M12 3c4 4 7 7 7 11a7 7 0 0 1-14 0c0-4 3-7 7-11z"/><path d="M12 7c2 2.5 3.5 4.5 3.5 7a3.5 3.5 0 0 1-7 0'
+     'c0-2.5 1.5-4.5 3.5-7z"/>',
+     (('onionxt', 'OnionXT'), ('onionxt-httpd', 'Web server'))),
+    ('nostrxt', 'NostrXT', 'Script library · Nostr',
+     'The client side of Nostr: signed events, bech32 names, encrypted messages and a relay client, '
+     'in plain script over the suite\'s own cryptography.',
+     'CoinXT and SodiumXT', 'https://github.com/SethMorrowSoftware/NostrXT',
+     '<circle cx="12" cy="12" r="2.2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4'
+     'M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/>',
+     (('nostrxt', 'NostrXT'), ('nostrxt-relay', 'Relay client'))),
+)
 LOCAL_ONLY = {'serve.py', 'Start Web IDE.bat', 'README.txt'}
 
 
@@ -125,6 +220,166 @@ def downloads_html(tag, assets):
     return '\n'.join(out)
 
 
+# The two plugins OXT-Beyond ships built in and also releases as .lce
+# packages for the other xTalks (tools/plugins), which the extensions page
+# lists after the suite's extensions: (id, name, what it is, what it does,
+# what it needs, the file suffix in an OXT-Beyond release, as DOWNLOADS
+# names them). They link the files of the release the front page's
+# Downloads links (--release), or OXT-Beyond's releases without one.
+PLUGINS = (
+    ('xtalk-assistant', 'xTalk Assistant', 'IDE plugin · AI helper',
+     'An AI helper in a window beside your stacks: ask it about xTalk, and it writes, runs and debugs '
+     'scripts with you, using the AI service and key you choose. Off until you turn it on.',
+     'your own key for an AI service', 'xtalk-assistant-plugin.lce'),
+    ('mcp-bridge', 'xTalk MCP Bridge', 'IDE plugin · Claude',
+     'Lets Claude, in the Claude desktop app or Claude Code with your own Claude plan, read your open '
+     'stacks and build in them: cards, controls, scripts, runs and saves, asking before each step. '
+     'Off until you turn it on.',
+     'the Claude desktop app or Claude Code, and Node.js', 'mcp-bridge-plugin.lce'),
+)
+PLUGIN_ICONS = {
+    'xtalk-assistant': '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4h0A2.5 2.5 0 0 1 4 13.5z"/>'
+                       '<path d="M12 6.5l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z"/>',
+    'mcp-bridge': '<path d="M3 17h18M5 17c0-5 3-8 7-8s7 3 7 8M9 17v-4M15 17v-4M12 17V9"/>',
+}
+
+
+def plugins_html(tag, assets):
+    """The extensions page's cards for OXT-Beyond's own plugins: each
+    links its .lce in the OXT-Beyond release tag when that release has it
+    (assets, its file names), or OXT-Beyond's releases."""
+    if tag is not None and not re.match(r'^v[0-9][0-9A-Za-z.+-]*$', tag):
+        raise BuildError('--release %r is not a release tag (v<version>)' % tag)
+    cards = []
+    for ident, name, kind, what, needs, suffix in PLUGINS:
+        file = 'OXT-Beyond-%s-%s' % (tag[1:], suffix) if tag else None
+        if file and file in assets:
+            files_html = ('<div class="files"><a class="file" href="%s/releases/download/%s/%s" download>'
+                          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>'
+                          '%s <small>%s</small></a></div>'
+                          % (REPOSITORY, urllib.parse.quote(tag), urllib.parse.quote(file), html.escape(name),
+                             html.escape(tag[1:])))
+        else:
+            files_html = ('<p class="soon">Its .lce package is on '
+                          '<a href="%s/releases">OXT-Beyond\'s releases</a>.</p>' % REPOSITORY)
+        cards.append(
+            '      <article class="ext" id="%s">\n'
+            '        <div class="ext-head">\n'
+            '          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">%s</svg></div>\n'
+            '          <div><h3>%s</h3><p class="kind">%s</p></div>\n'
+            '        </div>\n'
+            '        <p class="what">%s</p>\n'
+            '        <p class="needs">Needs %s</p>\n'
+            '        %s\n'
+            '        <a class="source" href="%s/tree/main/tools/plugins">Guide and source</a>\n'
+            '      </article>'
+            % (html.escape(ident), PLUGIN_ICONS[ident], html.escape(name), html.escape(kind), html.escape(what),
+               html.escape(needs), files_html, REPOSITORY))
+    return '\n'.join(cards)
+
+
+def suite_packages(assets):
+    """The .lce packages among a suite release's files, as {package:
+    (version, file)}: the newest version of each when there are two."""
+    found = {}
+    for name in sorted(assets):
+        m = SUITE_PACKAGE.match(name)
+        if not m:
+            continue
+        key = tuple(int(n) if n.isdigit() else n for n in re.split(r'[.+-]', m.group('version')))
+        old = found.get(m.group('package'))
+        if old is None or key > old[0]:
+            found[m.group('package')] = (key, m.group('version'), name)
+    return {k: (v[1], v[2]) for k, v in found.items()}
+
+
+def suite_file_link(tag, name, label, version, primary):
+    return ('<a class="file%s" href="%s/releases/download/%s/%s" download>'
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>'
+            '%s <small>%s</small></a>'
+            % ('' if primary else ' ghost', SUITE, urllib.parse.quote(tag), urllib.parse.quote(name),
+               html.escape(label), html.escape(version)))
+
+
+def extensions_html(tag, assets):
+    """The extensions page's cards and its "More from the suite" list,
+    as (cards, more): each card links the packages the release tag has
+    (assets, its file names); with no tag, or none of a card's packages,
+    the card links the suite's releases instead."""
+    if tag is not None and not SUITE_TAG.match(tag):
+        raise BuildError('--suite-release %r is not a tag name' % tag)
+    packages = suite_packages(assets) if tag else {}
+    named = set()
+    cards = []
+    for member, name, kind, what, needs, repo, icon, files in EXTENSIONS:
+        links = []
+        for i, (package, label) in enumerate(files):
+            named.add(package)
+            if package in packages:
+                version, file = packages[package]
+                links.append(suite_file_link(tag, file, label, version, i == 0))
+        if links:
+            files_html = '<div class="files">%s</div>' % ''.join(links)
+        else:
+            files_html = ('<p class="soon">The .lce packages are on '
+                          '<a href="%s/releases">the xTalk Suite\'s releases</a>.</p>' % SUITE)
+        cards.append(
+            '      <article class="ext" id="%s">\n'
+            '        <div class="ext-head">\n'
+            '          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">%s</svg></div>\n'
+            '          <div><h3>%s</h3><p class="kind">%s</p></div>\n'
+            '        </div>\n'
+            '        <p class="what">%s</p>\n'
+            '%s'
+            '        %s\n'
+            '        <a class="source" href="%s">Guide and source</a>\n'
+            '      </article>'
+            % (html.escape(member), icon, html.escape(name), html.escape(kind), html.escape(what),
+               ('        <p class="needs">Needs %s</p>\n' % html.escape(needs)) if needs else '',
+               files_html, html.escape(repo)))
+    more = [suite_file_link(tag, file, package, version, False)
+            for package, (version, file) in sorted(packages.items()) if package not in named]
+    return '\n'.join(cards), ''.join(more)
+
+
+def extensions_page(source, target, tag=None, assets=(), beyond_tag=None, beyond_assets=()):
+    """Writes the extensions page (tools/pages/extensions/index.html) to
+    target/index.html: the cards, and the release's own block (its name,
+    its checksums and any package the cards do not name) or, without a
+    release with packages, the block that says where they will be."""
+    with open(os.path.join(source, 'index.html'), encoding='utf-8') as f:
+        page = f.read()
+    cards, more = extensions_html(tag, assets)
+    has = bool(tag) and bool(suite_packages(assets))
+    blocks = {'SUITE_RELEASE': has, 'SUITE_NONE': not has, 'SUITE_MORE': has and bool(more),
+              'SUITE_SUMS': has and 'SHA256SUMS' in assets}
+    # (every marker is looked for first: a block may sit inside another
+    # that goes before it is reached)
+    for key in blocks:
+        start, end = '<!-- @%s@ -->' % key, '<!-- /@%s@ -->' % key
+        if start not in page or end not in page:
+            raise BuildError('tools/pages/extensions/index.html has no %s ... %s' % (start, end))
+    for key, keep in blocks.items():
+        start, end = '<!-- @%s@ -->' % key, '<!-- /@%s@ -->' % key
+        while start in page:
+            at = page.index(start)
+            stop = page.index(end, at) + len(end)
+            page = page[:at] + (page[at + len(start):stop - len(end)] if keep else '') + page[stop:]
+    page = page.replace('@EXTENSIONS_LIST@', cards)
+    page = page.replace('@PLUGINS_LIST@', plugins_html(beyond_tag, set(beyond_assets)))
+    if has:
+        page = page.replace('@SUITE_MORE_LIST@', more)
+        page = page.replace('@SUITE_TAG@', html.escape(tag))
+        page = page.replace('@SUITE_TAG_URL@', '%s/releases/tag/%s' % (SUITE, urllib.parse.quote(tag)))
+        page = page.replace('@SUITE_SUMS_URL@', '%s/releases/download/%s/SHA256SUMS' % (SUITE, urllib.parse.quote(tag)))
+    os.makedirs(target)
+    with open(os.path.join(target, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(page)
+    return tag if has else None
+
+
 def site_root(folder):
     """The shallowest folder under folder that has index.html."""
     found = []
@@ -150,6 +405,30 @@ def unpack(zip_path, target, drop=()):
                         [n for n in names if d == root and n in drop])
 
 
+# The bare player's page names the player's folder in this meta, relative
+# to itself: "../" in the player's zip (play/index.html), "../player/" at
+# <site>/play/
+BARE_BASE = '<meta name="oxt-player-base" content="../">'
+
+
+def bare_player(out):
+    """Moves the player's play/index.html (tools/web-player/play.html) to
+    <out>/play/, a site of its own, its engine, stack and samples still the
+    player's. False for a player without it (one before 0.2.7-rc.6.15)."""
+    page = os.path.join(out, 'player', 'play', 'index.html')
+    if not os.path.isfile(page):
+        return False
+    with open(page, encoding='utf-8') as f:
+        text = f.read()
+    if text.count(BARE_BASE) != 1:
+        raise BuildError('player/play/index.html does not have %s once' % BARE_BASE)
+    os.makedirs(os.path.join(out, 'play'))
+    with open(os.path.join(out, 'play', 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(text.replace(BARE_BASE, BARE_BASE.replace('"../"', '"../player/"')))
+    shutil.rmtree(os.path.join(out, 'player', 'play'))
+    return True
+
+
 def check_sizes(folder):
     for root, dirs, names in os.walk(folder):
         for name in names:
@@ -164,6 +443,18 @@ PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5
 
 # The samples the gallery shows first, the first of them large
 SPOTLIGHT = ('Beat Box', 'Fireworks', 'Live Weather')
+
+# The Stack Player's samples with a page of their own in the gallery, as
+# the big ones have (title: its folder, tools/pages/games/<folder>/). The
+# page plays the sample in the bare player (play/?play=<title>), so it
+# goes up only with a player that lists the sample and a site that has
+# the bare player; then the sample gets no small card and no page from
+# stack-page.html, and its card is the one in games/index.html between
+# <!-- @OWN_PAGE:<folder>@ --> and <!-- /@OWN_PAGE:<folder>@ -->, on
+# lines of their own. Without them (a site built from a player before
+# the sample), the page and its card are left out, so no page on the site
+# plays a stack its player lacks.
+OWN_PAGES = {'Nova Rescue': 'nova-rescue', 'Wobble Forts': 'wobble-forts', 'Puzzle Almanac': 'puzzle-almanac'}
 
 
 def player_samples(player, featured=False):
@@ -209,13 +500,16 @@ def sample_card(s, spot=False):
                              html.escape(str(s.get('description', ''))), tags))
 
 
-def sample_pages(template, target, player):
+def sample_pages(template, target, player, own=()):
     """Writes a page of its own for each sample the gallery shows, from
     games/stack-page.html: games/<slug>/index.html, which runs the sample in
-    the Stack Player in a frame (?play=<title>)."""
+    the Stack Player in a frame (?play=<title>). The titles in own have a
+    page of their own already (own_pages)."""
     with open(template, encoding='utf-8') as f:
         page = f.read()
     for s in player_samples(player, False) + player_samples(player, True):
+        if s['title'] in own:
+            continue
         folder = os.path.join(target, sample_slug(s['title']))
         if not sample_slug(s['title']) or os.path.exists(folder):
             raise BuildError('the sample %r has no folder of its own under games/' % s['title'])
@@ -230,12 +524,13 @@ def sample_pages(template, target, player):
             f.write(text)
 
 
-def gallery(page, player):
+def gallery(page, player, own=()):
     """Fills the web stacks page's blocks with a card for each of the Stack
     Player's samples, each opening its own page (sample_pages):
     PLAYER_SAMPLES (the first one large) and PLAYER_LESSONS (its featured
-    stacks). A block with no samples is left out; a page without the
-    blocks (an older one) is left as it is."""
+    stacks), but those in own, whose card is with the big ones (own_pages).
+    A block with no samples is left out; a page without the blocks (an
+    older one) is left as it is."""
     if not os.path.isfile(page):
         return
     with open(page, encoding='utf-8') as f:
@@ -245,7 +540,7 @@ def gallery(page, player):
         if start not in text or end not in text:
             continue
         cards = [sample_card(s, spot=(i == 0 and not featured))
-                 for i, s in enumerate(player_samples(player, featured))]
+                 for i, s in enumerate(t for t in player_samples(player, featured) if t['title'] not in own)]
         at, stop = text.index(start), text.index(end) + len(end)
         block = ''
         if cards:
@@ -255,8 +550,54 @@ def gallery(page, player):
         f.write(text)
 
 
-def games(source, target, player):
-    """Copies tools/pages/games, each page told the engine's file in the player."""
+def own_pages(target, player, bare):
+    """Keeps or takes out each page of OWN_PAGES in the copied gallery
+    <target>, and its card: kept when bare (the site has the bare player)
+    and the player lists the sample with its picture, as the gallery shows
+    its samples. A gallery with neither the page nor its card (one a test
+    makes) is left as it is; one with only one of them is a mistake.
+    Returns the titles kept."""
+    index = os.path.join(target, 'index.html')
+    text = ''
+    if os.path.isfile(index):
+        with open(index, encoding='utf-8') as f:
+            text = f.read()
+    listed = {s['title'] for s in player_samples(player, False) + player_samples(player, True)}
+    kept = set()
+    for title, folder in sorted(OWN_PAGES.items()):
+        start, end = '<!-- @OWN_PAGE:%s@ -->' % folder, '<!-- /@OWN_PAGE:%s@ -->' % folder
+        page = os.path.isfile(os.path.join(target, folder, 'index.html'))
+        card = text.count(start) == 1 and text.count(end) == 1 and text.index(start) < text.index(end)
+        if not page and start not in text and end not in text:
+            continue
+        if not page or not card:
+            raise BuildError('the gallery has %s for %r: it needs games/%s/index.html and its card in '
+                             'games/index.html between %s and %s'
+                             % ('a card and no page' if not page else 'a page and no card', title, folder, start, end))
+        # the marker lines, from the first one's start to the end of the last
+        at = text.rfind('\n', 0, text.index(start)) + 1
+        stop = text.find('\n', text.index(end))
+        stop = len(text) if stop < 0 else stop + 1
+        first = text.find('\n', text.index(start))
+        last = text.rfind('\n', 0, text.index(end)) + 1
+        if bare and title in listed:
+            kept.add(title)
+            text = text[:at] + text[first + 1:last] + text[stop:]
+        else:
+            text = text[:at] + text[stop:]
+            shutil.rmtree(os.path.join(target, folder))
+            print('no %s page: %s' % (folder, 'the site has no bare player' if not bare else
+                                      'the Stack Player has no sample %r with a picture' % title))
+    if text:
+        with open(index, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(text)
+    return kept
+
+
+def games(source, target, player, bare=False):
+    """Copies tools/pages/games, each page told the engine's file in the
+    player; bare says the site has the bare player (play/), which the pages
+    of OWN_PAGES need."""
     if not os.path.isdir(source):
         return False
     engines = sorted(n for n in os.listdir(player) if re.fullmatch(r'standalone-.*\.js', n))
@@ -264,10 +605,11 @@ def games(source, target, player):
         print('no games: the Stack Player has no engine for them')
         return False
     shutil.copytree(source, target)
-    gallery(os.path.join(target, 'index.html'), player)
+    own = own_pages(target, player, bare)
+    gallery(os.path.join(target, 'index.html'), player, own)
     template = os.path.join(target, 'stack-page.html')
     if os.path.isfile(template):
-        sample_pages(template, target, player)
+        sample_pages(template, target, player, own)
         os.remove(template)
     for root, _, names in os.walk(target):
         for name in names:
@@ -348,11 +690,22 @@ def build(args):
             print('no dictionary: %s' % e)
         except build_dictionary.DictionaryError as e:
             raise BuildError('the dictionary: %s' % e)
+    # The lessons go up with every site: they are written here, in
+    # tools/pages/lessons, not taken from a release
+    try:
+        count, shown = build_lessons.build(os.path.join(out, 'lessons'),
+                                           [p for p in build_lessons.PARTS if p in parts])
+    except build_lessons.BuildError as e:
+        raise BuildError('the lessons: %s' % e)
+    parts['LESSONS'] = '%d lessons · %d examples' % (count, shown)
     if args.player:
         unpack(args.player, os.path.join(out, 'player'))
         parts['PLAYER'] = args.player_version or ''
+        bare = bare_player(out)
+        if bare:
+            print('bare player: play/')
         # The games run on the Stack Player's engine, so they go up with it
-        if games(os.path.join(HERE, 'games'), os.path.join(out, 'games'), os.path.join(out, 'player')):
+        if games(os.path.join(HERE, 'games'), os.path.join(out, 'games'), os.path.join(out, 'player'), bare):
             parts['GAMES'] = ''
     if args.map:
         os.makedirs(os.path.join(out, 'map'))
@@ -377,6 +730,21 @@ def build(args):
             parts['DOWNLOADS_LIST'] = listed
         else:
             print('no downloads: %s has none of the files the page links' % release)
+    # The extensions page goes up with every site: the extensions are
+    # OXT-Beyond's own, and without a suite release its cards link the
+    # suite's releases
+    suite, suite_assets = getattr(args, 'suite_release', None), getattr(args, 'suite_assets', None)
+    if suite and not suite_assets:
+        raise BuildError('--suite-release needs --suite-assets')
+    listed = set()
+    if suite_assets:
+        with open(suite_assets, encoding='utf-8') as f:
+            listed = {line.strip() for line in f if line.strip()}
+    shown = extensions_page(os.path.join(HERE, 'extensions'), os.path.join(out, 'extensions'), suite, listed,
+                            release if release else None, assets if release else ())
+    if suite and not shown:
+        print('no extension packages: %s has no .lce files' % suite)
+    parts['EXTENSIONS'] = 'xTalk Suite %s' % shown if shown else 'xTalk Suite'
     front_page(out, parts)
     brand(os.path.join(HERE, 'brand'), os.path.join(out, 'brand'))
     check_sizes(out)
@@ -396,6 +764,9 @@ def main():
     ap.add_argument('--map-version', metavar='V', help='shown on the front page')
     ap.add_argument('--release', metavar='TAG', help='the release whose files the Downloads section links')
     ap.add_argument('--release-assets', metavar='FILE', help="that release's file names, one a line")
+    ap.add_argument('--suite-release', metavar='TAG',
+                    help="the xTalk Suite release whose .lce packages the extensions page links")
+    ap.add_argument('--suite-assets', metavar='FILE', help="that release's file names, one a line")
     args = ap.parse_args()
     try:
         build(args)

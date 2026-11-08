@@ -20,6 +20,10 @@ on extensionFinalize
    end if
 end extensionFinalize
 
+-- OXT-Beyond: the libraries that "Search for required inclusions" keeps
+-- when a stack's scripts call one of their handlers (revCheckObject)
+constant kSBLibrariesKeptWhenFound = "com.livecode.library.mobileweb"
+
 local sScriptLibraries
 
 -- Some higher level wrappers..
@@ -1922,6 +1926,43 @@ private function revSBAvailableDatabaseDrivers
 end revSBAvailableDatabaseDrivers
 
 /**
+Summary: Returns an array of inclusions in the order of their titles
+
+pInclusions: A numerically keyed array of inclusions, as
+revSBAvailableInclusions returns.
+
+Returns: The same elements, keyed 1 to N in the alphabetical order of their
+"title" (ignoring case), then of their "type" and "id", so that two runs
+list them in the same order.
+
+Description:
+OXT-Beyond: revSBAvailableInclusions collects the extensions with
+`repeat for each`, so their order followed the order the extensions were
+loaded in and changed from run to run. The Standalone Settings' Inclusions
+pane shows its rows in this order; what it saves does not depend on it.
+*/
+function revSBInclusionsByTitle pInclusions
+   local tLines, tLine, tIndex, tSorted, tCount
+   repeat for each key tIndex in pInclusions
+      put pInclusions[tIndex]["title"] & tab & pInclusions[tIndex]["type"] \
+            & tab & pInclusions[tIndex]["id"] & tab & tIndex & return after tLines
+   end repeat
+   delete the last char of tLines
+   set the itemDelimiter to tab
+   -- each sort is stable, so the last one decides first
+   sort lines of tLines ascending numeric by item -1 of each
+   sort lines of tLines ascending text by item -2 of each
+   sort lines of tLines ascending text by item -3 of each
+   sort lines of tLines ascending text by item 1 to -4 of each
+   put 0 into tCount
+   repeat for each line tLine in tLines
+      add 1 to tCount
+      put pInclusions[item -1 of tLine] into tSorted[tCount]
+   end repeat
+   return tSorted
+end revSBInclusionsByTitle
+
+/**
 Summary: Returns an array of available inclusions
 
 Returns: A numerically keyed array.
@@ -3073,6 +3114,14 @@ private command revCheckObject pObject,pUserLibraries, @xSettings, @xWidgetKinds
       
       -- Detect use of library extensions
       local tHandlers
+      -- OXT-Beyond: a library found here was added to
+      -- xSettings["extensions"], which revSmartChecking then writes over
+      -- with the set it keeps in xWidgetKinds, so no library found by its
+      -- handlers was ever included. The libraries of
+      -- kSBLibrariesKeptWhenFound (the Mobile Web library) now go into
+      -- that set and are kept; every other library is left as it was, so
+      -- that the standalones of stacks made before get the inclusions
+      -- they got before.
       repeat for each key tLibrary in revIDEExtensions("library","installed", false) 
          if tLibrary is among the lines of xSettings["extensions"] then
             next repeat
@@ -3082,6 +3131,10 @@ private command revCheckObject pObject,pUserLibraries, @xSettings, @xWidgetKinds
          repeat for each line tHandler in tHandlers
             if lineOffset(tHandler, tScript) is not 0 then
                revSBAddInclusion tLibrary, "extensions", xSettings
+               if tLibrary is among the items of kSBLibrariesKeptWhenFound then
+                  put true into xWidgetKinds[tLibrary]
+               end if
+               exit repeat
             end if
          end repeat
          

@@ -241,6 +241,118 @@ def handler(script, kind, name):
     return script[start:script.index('\nend %s\n' % name, start)]
 
 
+class HyperCardDiskImage(unittest.TestCase):
+    """The step hypercard-disk-image: File > Import Stack's list of a disk
+    image's stacks, shown and answered, and the stack imported (#261)."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.tour = f.read()
+        self.step = self.tour.split('on tour_hypercard_disk_image', 1)[1].split('end tour_hypercard_disk_image', 1)[0]
+
+    def test_the_step_is_in_the_tour_after_the_inspectors_hypercard_step(self):
+        steps = [line for line in self.tour.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        self.assertEqual(names.index('hypercard-disk-image'), names.index('inspector-hypercard') + 1)
+
+    def test_the_import_runs_in_a_message_of_its_own(self):
+        # once the imported stack opens, the dynamic path would take the
+        # tour's own handlers to its card
+        self.assertIn('send "tourHyperCardImageImport" && quote & tImage & quote to me in 0 milliseconds', self.step)
+        self.assertIn('revIDEImportHyperCardFromDiskImage pImage', self.tour)
+
+    def test_the_list_is_answered_from_inside_its_modal_wait(self):
+        # a wait of the step's own goes on only once the modal dialog has
+        # closed: the list is looked at and answered from a timer
+        self.assertIn('send "tourHyperCardImageAnswer 0" to me in 500 milliseconds', self.step)
+        answer = self.tour.split('on tourHyperCardImageAnswer', 1)[1].split('end tourHyperCardImageAnswer', 1)[0]
+        self.assertIn('send "mouseUp" to button "Import" of stack tChooser', answer)
+        self.assertIn('tourShotStack tChooser, "06f-hypercard-disk-image-list"', answer)
+        self.assertIn('send "tourHyperCardImageAnswer" && pTries + 1 to me in 250 milliseconds', answer)
+
+    def test_a_list_never_shown_fails(self):
+        # up to 0.2.7-rc.6.5 the import ended without showing the list
+        self.assertIn('throw "the import ended without the list of stacks', self.step)
+        self.assertIn('if sHciSeen["mode"] is not 5 then', self.step)
+        self.assertIn('if sHciSeen["hilitedLine"] is not 1 then', self.step)
+        self.assertIn('the customProperties["uHyperCard"] of tStack', self.step)
+
+    def test_the_image_is_the_ide_tests_and_ui_tour_names_it(self):
+        self.assertTrue(os.path.isfile(ui_tour.HYPERCARD_IMAGE), ui_tour.HYPERCARD_IMAGE)
+        self.assertTrue(ui_tour.HYPERCARD_IMAGE.endswith('Stacks.dc42'))
+        with open(ui_tour.__file__, encoding='utf-8') as f:
+            self.assertIn("'OXT_TOUR_HYPERCARD_IMAGE': os.path.abspath(HYPERCARD_IMAGE)", f.read())
+
+    def test_the_mac_jobs_check_out_the_image_and_macos_26_runs_the_step(self):
+        repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..')
+        with open(os.path.join(repo, '.github', 'workflows', 'build-macos.yml'), encoding='utf-8') as f:
+            text = f.read()
+        # each sparse checkout that runs ui_tour.py has the image
+        jobs = text.split('sparse-checkout: |')[1:]
+        self.assertEqual(len(jobs), 2)
+        for job in jobs:
+            self.assertIn('tests/lcs-input-files/hypercard/forks', job.split('\n\n', 1)[0])
+        self.assertIn('inspector-hypercard,hypercard-disk-image,', text)
+
+    def test_the_imported_stacks_snapshot_runs_in_a_message_of_its_own(self):
+        # on Windows the step went no further once it had unlocked the
+        # screen for that snapshot, until the job's 900 s ran out
+        self.assertIn('send "tourHyperCardImageShot" && quote & tName & quote to me in 0 milliseconds', self.step)
+        self.assertIn('the snapshot of the imported stack did not end in 20 s', self.step)
+        self.assertIn('if there is a stack tName then delete stack tName', self.step)
+        shot = self.tour.split('on tourHyperCardImageShot', 1)[1].split('end tourHyperCardImageShot', 1)[0]
+        self.assertIn('tourShotStack pName, "06g-hypercard-disk-image-stack"', shot)
+        self.assertIn('put true into sHciShotDone', shot.split('end try', 1)[1])
+
+    def test_the_dynamic_path_is_off_for_the_snapshot(self):
+        # with it on, the tour's call of tourWait went to the imported
+        # stack's card on Windows: "can't find handler"
+        off = self.step.index('set the dynamicPaths of tStack to false')
+        self.assertLess(off, self.step.index('send "tourHyperCardImageShot"'))
+        self.assertGreater(off, self.step.index('the customProperties["uHyperCard"] of tStack'))
+
+
+class TourGoesOn(unittest.TestCase):
+    """An error that ends every handler of the tour's (not one a try
+    catches) left the Windows tour sitting until the job's 900 s ran out
+    (#377's first run): the watchdog fails that step and the tour goes on
+    after it."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.tour = f.read()
+        self.run_ = self.tour.split('\non tourRun pAfter', 1)[1].split('\nend tourRun', 1)[0]
+        self.dog = self.tour.split('\non tourWatchdog pStep', 1)[1].split('\nend tourWatchdog', 1)[0]
+
+    def test_the_watchdog_goes_on_after_a_step_whose_handlers_all_ended(self):
+        self.assertIn('if not tourRunning() then', self.dog)
+        self.assertIn('send "tourRun" && quote & pStep & quote to me in 0 milliseconds', self.dog)
+        self.assertIn('FAILED the tour stopped in it', self.dog)
+        running = self.tour.split('function tourRunning', 1)[1].split('end tourRunning', 1)[0]
+        self.assertIn('the executionContexts', running)
+        self.assertIn('",tourRun,"', running)
+
+    def test_a_watchdog_of_another_step_does_nothing(self):
+        self.assertIn('if pStep is not sStep then exit tourWatchdog', self.dog)
+        self.assertIn('put tStep into sStep', self.run_)
+
+    def test_going_on_skips_the_steps_run_and_starts_nothing_again(self):
+        self.assertIn('if tStep is pAfter then put false into tSkip', self.run_)
+        head, rest = self.run_.split('else', 1)
+        self.assertIn('tourRecord "STARTED"', head)
+        self.assertIn('put 0 into sCount', head)
+        self.assertNotIn('tourRecord "STARTED"', rest)
+
+    def test_the_unlock_loop_ends(self):
+        unlock = self.tour.split('command tourUnlockScreen', 1)[1].split('end tourUnlockScreen', 1)[0]
+        self.assertIn('repeat 100 times', unlock)
+        self.assertNotIn('repeat while the lockScreen', unlock)
+
+    def test_a_script_error_says_where_it_came_from(self):
+        err = self.tour.split('on tourScriptError', 1)[1].split('end tourScriptError', 1)[0]
+        self.assertIn('the executionContexts', err)
+
+
 class SystemSwitch(unittest.TestCase):
     """A post through osascript never reached an observer on a CI Mac
     (probe, macos-15, 2026-10-31), so the step saw no
@@ -326,6 +438,79 @@ class GtkTheme(unittest.TestCase):
         self.assertIn('if item 6 of tGroup <= 127 then', check)
         self.assertIn('if tMarks < 3 then', check)
 
+    def test_the_words_on_a_windows_own_colours(self):
+        # a menu's words must stand out from a window's own colour too:
+        # until rc.6.16 they were the theme's whatever the colour, so
+        # Adwaita-dark's light grey on 236,236,236 and Adwaita's dark grey
+        # on 48,52,58 (2 in luma apart; the step failed so on rc.6.15)
+        with open(TOUR, encoding='utf-8') as f:
+            tour = f.read()
+        step = tour.split('on tour_menu_words', 1)[1].split('end tour_menu_words', 1)[0]
+        self.assertIn('put "48,52,58" & return & "236,236,236" into tColours', step)
+        self.assertIn('set the backgroundColor of stack tName to tColour', step)
+        self.assertIn('tourWordsCheck("03f-menu-words", "03g-menu-no-words", "the theme\'s colour")', step)
+        self.assertIn('tourWordsCheck("03h-menu-words-own-colour-" & tPass', step)
+        # the two menus differ in one item's words alone
+        self.assertIn('"The first item, plain" & return & "Readable words" & return & "The last item, plain"', step)
+        self.assertIn('"The first item, plain" & return & space & return & "The last item, plain"', step)
+        check = tour.split('function tourWordsCheck', 1)[1].split('end tourWordsCheck', 1)[0]
+        self.assertIn('if tMost <= 127 then', check)
+        self.assertIn('if tPixels < 20 then', check)
+        steps = [line for line in tour.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        self.assertEqual(names.index('menu-words'), names.index('menu-marks') + 1)
+
+    def test_the_hilited_words_on_a_windows_own_colours(self):
+        # the words of the item a menu opens with hilited, on the theme's
+        # hilite: until rc.6.17 a window's own colour, so 48,52,58 on the
+        # selection blue (darker than it in both appearances, where the
+        # theme's own words are lighter: rc.6.16's 03h, own colour 1)
+        with open(TOUR, encoding='utf-8') as f:
+            tour = f.read()
+        step = tour.split('on tour_menu_armed_words', 1)[1].split('end tour_menu_armed_words', 1)[0]
+        self.assertIn('if the platform is not "Linux" then', step)
+        self.assertIn('put "48,52,58" & return & "236,236,236" into tColours', step)
+        self.assertIn('set the backgroundColor of stack tName to tColour', step)
+        # the two menus differ in the first (hilited) item's words alone
+        self.assertIn('"Readable words" & return & "The second item, plain" & return & "The last item, plain"', step)
+        self.assertIn('space & return & "The second item, plain" & return & "The last item, plain"', step)
+        self.assertIn('put tourArmedWords("03j-menu-armed-words", "03k-menu-armed-no-words") into tTheme', step)
+        self.assertIn('tourArmedWordsCheck(tourArmedWords("03l-menu-armed-words-own-colour-" & tPass', step)
+        self.assertIn('if item 1 of tTheme < 20 or item 2 of tTheme is 0 then', step)
+        self.assertIn('throw "failed:"', step)
+        # the same side of the hilite as the theme's own words, and at
+        # least half as far from it
+        check = tour.split('function tourArmedWordsCheck', 1)[1].split('end tourArmedWordsCheck', 1)[0]
+        self.assertIn('if (item 2 of pSeen > 0) is not (pTheme > 0) or abs(item 2 of pSeen) * 2 < abs(pTheme) then', check)
+        self.assertIn('if item 1 of pSeen < 20 then', check)
+        # the signed difference: the words' snapshot less the blank one's
+        groups = tour.split('function tourMarksGroups', 1)[1].split('end tourMarksGroups', 1)[0]
+        self.assertIn('put round((tLumaA - tLumaB) / 1000) into tSigned[', groups)
+        self.assertIn('(tMost - tLeast) & "," & tSignedMost & return after tGroups', groups)
+        words = tour.split('function tourArmedWords', 1)[1].split('end tourArmedWords', 1)[0]
+        self.assertIn('if abs(item 8 of tGroup) > abs(tMost) then put item 8 of tGroup into tMost', words)
+        # its own step, after menu-words, for the watchdog
+        steps = [line for line in tour.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        self.assertEqual(names.index('menu-armed-words'), names.index('menu-words') + 1)
+
+    def test_the_hilited_words_check_on_rc616s_colours(self):
+        # the rule of tourArmedWordsCheck on the colours rc.6.16's Linux
+        # snapshots show: the hilite, the theme's hilited words (white),
+        # and a window's own colours as the words were before rc.6.17
+        def luma(rgb):
+            return round((299 * rgb[0] + 587 * rgb[1] + 114 * rgb[2]) / 1000)
+
+        def passes(seen, theme):
+            return (seen > 0) == (theme > 0) and abs(seen) * 2 >= abs(theme)
+        for hilite in ((74, 144, 217), (33, 93, 156)):
+            theme = luma((255, 255, 255)) - luma(hilite)
+            self.assertTrue(passes(theme, theme))
+            # 48,52,58 on the hilite: failed, in both appearances
+            self.assertFalse(passes(luma((48, 52, 58)) - luma(hilite), theme))
+            # 236,236,236 could be read and still can
+            self.assertTrue(passes(luma((236, 236, 236)) - luma(hilite), theme))
+
     def test_the_linux_package_runs_the_marks_under_them(self):
         repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..')
         with open(os.path.join(repo, '.github', 'workflows', 'build-linux.yml'), encoding='utf-8') as f:
@@ -333,7 +518,7 @@ class GtkTheme(unittest.TestCase):
         self.assertIn('mate-themes ubuntu-mate-themes yaru-theme-gtk gtk2-engines-murrine', text)
         step = text.split('- name: Menu marks, other dark GTK themes', 1)[1].split('\n      - name:', 1)[0]
         self.assertIn('for theme in Yaru-MATE-dark Yaru-dark HighContrastInverse; do', step)
-        self.assertIn('--appearance dark --gtk-theme "$theme" --only menu-marks', step)
+        self.assertIn('--appearance dark --gtk-theme "$theme" --only menu-marks,menu-words,menu-armed-words', step)
         self.assertIn('exit 1', step)
         with open(TOUR, encoding='utf-8') as f:
             tour = f.read()
@@ -341,5 +526,277 @@ class GtkTheme(unittest.TestCase):
         self.assertIn('menu-marks', steps.split('"')[1].split(','))
 
 
+class InspectorTabClicks(unittest.TestCase):
+    """inspector-tabs clicks the icons in the Inspector's header with the
+    system's mouse and reads the section shown. It read 1.5 s after each
+    click, and on macOS 26 (#340's run 41757813518, 4 November) it read
+    "Effects" after the click on Icons. That click came after the step's
+    20-second watchdog, whose full-screen shot ran inside the step's
+    "wait ... with messages" and used up the wait: the click was handled
+    after the read. (The same job passed on a re-run.) The step now waits
+    for the section, a quarter second at a time, each time back through
+    the event loop, for up to 6 s; a click that never shows its section
+    still fails. tourClickWorks waits the same way for its button's
+    mouseUp, since a late one there would leave the header unclicked
+    without a failure."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8-sig') as f:
+            self.script = f.read()
+
+    def test_the_step_waits_for_the_section_it_clicked(self):
+        step = handler(self.script, 'on', 'tour_inspector_tabs')
+        self.assertIn('put tourInspectorSectionAfterClick(tPI, tLabel, 6000) into tShown', step)
+        # not a fixed wait and then one read
+        self.assertNotIn('dispatch function "inspectorSectionGetName"', step)
+
+    def test_a_click_that_never_shows_its_section_still_fails(self):
+        step = handler(self.script, 'on', 'tour_inspector_tabs')
+        self.assertIn('if tShown is not tLabel then', step)
+        self.assertIn('throw "a click on a section\'s icon in the inspector\'s header did not show it', step)
+
+    def test_the_wait_goes_back_through_the_event_loop_each_time(self):
+        wait = handler(self.script, 'function', 'tourInspectorSectionAfterClick')
+        loop = wait.split('repeat', 1)[1].split('end repeat', 1)[0]
+        self.assertIn('tourWait 250', loop)
+        self.assertIn('dispatch function "inspectorSectionGetName" to stack pStack', loop)
+        self.assertIn('if tShown is pSection then exit repeat', loop)
+        # counted in turns of the loop, not by the clock, which a watchdog
+        # inside a turn would run down
+        self.assertIn('repeat (pMilliseconds div 250) times', wait)
+
+    def test_the_click_check_waits_for_the_mouseUp(self):
+        check = handler(self.script, 'function', 'tourClickWorks')
+        after = check.split('tourClick item 1 of tLoc, item 2 of tLoc', 1)[1]
+        loop = after.split('end repeat', 1)[0]
+        self.assertIn('repeat 24 times', loop)
+        self.assertIn('tourWait 250', loop)
+        self.assertIn('if the cTourClicked of button "Click" of card 1 of stack tStack is true then exit repeat', loop)
+
+
+class MenuBuilderBareBoxes(unittest.TestCase):
+    # On macOS's dark appearance the Menu Builder drew a light grey box
+    # after each Mnemonic option menu: an opaque button, 18 by 10, whose
+    # icon (200606) no stack has. The menu-builder step must fail on such a
+    # button, and the stack patch must make both transparent.
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.tour = f.read()
+
+    def test_the_step_looks_for_bare_boxes(self):
+        step = self.tour.split('on tour_menu_builder', 1)[1].split('end tour_menu_builder', 1)[0]
+        self.assertIn('put tourBareBoxes(tMM) after tFails', step)
+
+    def test_a_bare_box_is_an_opaque_button_with_nothing_on_it(self):
+        check = self.tour.split('function tourBareBoxes', 1)[1].split('end tourBareBoxes', 1)[0]
+        self.assertIn('if not tourControlShown(tId) then next repeat', check)
+        self.assertIn('if not the opaque of tId or the showBorder of tId then next repeat', check)
+        # the theme draws these styles, and a swatch has a colour of its own
+        self.assertIn('"menu,checkbox,radioButton,standard"', check)
+        self.assertIn('if the backColor of tId is not empty or the backPattern of tId is not empty then next repeat', check)
+        self.assertIn('tourIconFound(the icon of tId, pStack)', check)
+        found = self.tour.split('function tourIconFound', 1)[1].split('end tourIconFound', 1)[0]
+        self.assertIn('if pIcon is empty or pIcon is 0 then return false', found)
+        self.assertIn('there is an image id pIcon of stack tStack', found)
+
+    def test_the_patch_makes_both_buttons_transparent(self):
+        path = os.path.join(os.path.dirname(TOUR), '..', 'oxt', 'ide-stack-patches',
+                            'revmenumanager-mnemonic-boxes.txt')
+        with open(path, encoding='utf-8') as f:
+            lines = [line for line in f.read().splitlines() if line and not line.startswith('#')]
+        self.assertEqual(lines[0], 'file: Toolset/palettes/revmenumanager.rev')
+        for button in ('4886', '4868'):
+            at = lines.index('object: button id %s of card "Menu Manager"' % button)
+            self.assertEqual(lines[at + 1:at + 7], ['property: style', 'from: opaque', 'to: transparent',
+                                                    'property: opaque', 'from: true', 'to: false'])
+        # these two buttons and nothing else
+        self.assertEqual(len([line for line in lines if line.startswith('object:')]), 2)
+
+
 if __name__ == '__main__':
     unittest.main()
+
+
+class DictionaryPage(unittest.TestCase):
+    """LiveCode's Dictionary opened blank on Windows in the dark appearance
+    (the tour's 13-dictionary, rc.6.11 to rc.6.15) while the step passed:
+    its checks read the page, not the screen. The step now reads the
+    page's part of the screen, and fails when it is one colour, after the
+    snapshot that shows it."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.script = f.read()
+
+    def test_the_step_reads_the_screen_and_fails_after_the_snapshot(self):
+        step = handler(self.script, 'on', 'tour_dictionary')
+        read = step.index('tourDictionaryBlank(tNew, "as it opened")')
+        shot = step.index('tourShotStack tNew, "13-dictionary"')
+        throw = step.index('if tBlank is not empty then throw tBlank')
+        self.assertLess(read, shot)
+        self.assertLess(shot, throw)
+
+    def test_one_colour_is_blank(self):
+        blank = handler(self.script, 'function', 'tourDictionaryBlank')
+        self.assertIn('tourDictionarySpread(pStack)', blank)
+        self.assertIn('if tSpread >= 48 then return empty', blank)
+        self.assertIn('tourUnlockScreen', blank)
+
+    def test_the_tools_palette_is_left_out(self):
+        spread = handler(self.script, 'function', 'tourDictionarySpread')
+        self.assertIn('the contentRect of stack pStack', spread)
+        self.assertIn('the effective rect of stack "revTools"', spread)
+        self.assertIn('import snapshot from rect tRect', spread)
+
+
+class AppBrowser(unittest.TestCase):
+    """The Application Browser (the App Browser plugin), which the tour did
+    not open until rc.6.17: it listed itself among the user's stacks, its
+    lists were in 11 points (richmond62, openxtalk.org p=26048), and its
+    names were mid grey, 4 to 1 on its white list. The step fails on
+    rc.6.16's IDE, light and dark ("lists itself"), and passes with
+    rc.6.17's (10.4 to 1 light, 9.8 to 1 dark on Linux)."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.script = f.read()
+        self.step = handler(self.script, 'on', 'tour_app_browser')
+
+    def test_a_step_after_the_project_browser(self):
+        steps = [line for line in self.script.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        self.assertEqual(names.index('app-browser'), names.index('project-browser') + 1)
+
+    def test_it_opens_the_plugin_as_the_menu_does(self):
+        self.assertIn('revIDEOpenPlugin tStack', self.step)
+        self.assertIn('go stack kSample', self.step)
+
+    def test_the_shot_before_the_checks(self):
+        shot = self.step.index('tourShotStack tStack, "12b-app-browser"')
+        for throw in ('throw "the App Browser does not list the stack"',
+                      'throw "the App Browser lists itself among the user\'s stacks"',
+                      'not 13"', 'do not read on its list'):
+            self.assertLess(shot, self.step.index(throw), throw)
+
+    def test_it_must_not_list_itself(self):
+        self.assertIn('if tStack is among the lines of tListed then', self.step)
+        # a stack's line is one with no card number
+        self.assertIn('if word 1 to -1 of item 2 of it is empty then', self.step)
+
+    def test_its_lists_in_13_points(self):
+        self.assertIn('the textSize of field "Cards" of card 1 of stack tStack is not 13', self.step)
+        self.assertIn('the textSize of field "Controls" of card 1 of stack tStack is not 13', self.step)
+
+    def test_its_names_read_on_its_list_as_drawn(self):
+        # the list's colour from the screen, inside its scroll bars, and
+        # the names' colour against it at 4.5 to 1
+        self.assertIn('import snapshot from rect tRect', self.step)
+        self.assertIn('subtract the scrollbarWidth of field "Cards" of card 1 of stack tStack from item 3 of tRect',
+                      self.step)
+        self.assertIn('put tourRGB(the effective linkColor of stack tStack) into tLink', self.step)
+        self.assertIn('put tourContrast(tLink, tBack) into tRatio', self.step)
+        self.assertIn('if tRatio < 4.5 then', self.step)
+
+    def test_contrast_of_rc616s_and_rc617s_colours(self):
+        def lum(c):
+            out = []
+            for v in c:
+                v = v / 255
+                out.append(v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4)
+            return 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+
+        def ratio(a, b):
+            la, lb = lum(a), lum(b)
+            return round((max(la, lb) + 0.05) / (min(la, lb) + 0.05), 2)
+        # the plugin's own mid grey on its white list: under 4.5
+        self.assertLess(ratio((127, 127, 127), (255, 255, 255)), 4.5)
+        # rc.6.17's dark grey on white, and light grey on Linux's dark list
+        self.assertEqual(ratio((64, 64, 64), (255, 255, 255)), 10.37)
+        self.assertEqual(ratio((208, 208, 208), (35, 39, 41)), 9.77)
+
+
+class CardNavigator(unittest.TestCase):
+    """The Card Navigator (Tools > Card Navigator, the stack "Card
+    Navigator" of navigatorIDE.oxtstack) is one of the IDE's windows. Its
+    name does not begin with "rev", so until rc.6.17 the lists of the
+    user's stacks showed it (OpenXTalkPaul, openxtalk.org p=26111). The
+    step fails on rc.6.16's IDE and passes with rc.6.17's."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.step = handler(f.read(), 'on', 'tour_navigator')
+
+    def test_it_opens_as_the_menu_does(self):
+        self.assertIn('send "tOpenNavigator" to stack "revMenuBar"', self.step)
+
+    def test_not_among_the_users_stacks(self):
+        self.assertIn('if tNew is among the lines of revFilterStacksList(the mainStacks) then', self.step)
+        self.assertIn('throw "the IDE lists the Card Navigator among the user\'s stacks"', self.step)
+
+    def test_the_shot_first_and_the_window_closed_either_way(self):
+        shot = self.step.index('tourShotStack tNew, "23-navigator"')
+        check = self.step.index('revFilterStacksList')
+        self.assertLess(shot, check)
+        thrown = self.step.index('throw "the IDE lists')
+        self.assertLess(self.step.rindex('close stack tNew', 0, thrown), thrown)
+        self.assertGreater(self.step.rindex('close stack tNew'), thrown)
+
+
+class IDEStacks(unittest.TestCase):
+    """After the tour has opened nearly every window, no stack in memory
+    from the IDE's own folders is among the user's stacks as the IDE lists
+    them (revFilterStacksList). On rc.6.16's IDE the step found four: the
+    App Browser, the Card Navigator (openxtalk.org p=26111), userguides
+    and allguides; it passes with rc.6.17's."""
+
+    def setUp(self):
+        with open(TOUR, encoding='utf-8') as f:
+            self.script = f.read()
+        self.step = handler(self.script, 'on', 'tour_ide_stacks')
+
+    def test_late_in_the_tour(self):
+        steps = [line for line in self.script.splitlines() if line.startswith('constant kSteps')][0]
+        names = steps.split('"')[1].split(',')
+        # then only the Mac's default button in the background, which
+        # leaves the IDE behind the Finder (test_mac_default_label.py)
+        self.assertEqual(names[-3:], ['ide-stacks', 'screen-end', 'background-default'])
+        for opened in ('app-browser', 'navigator', 'guides', 'learn', 'home-places', 'about', 'release-notes'):
+            self.assertLess(names.index(opened), names.index('ide-stacks'), opened)
+
+    def test_every_stack_from_the_ides_folders(self):
+        self.assertIn('put revEnvironmentToolsetPath() & slash into tToolset', self.step)
+        self.assertIn('put revEnvironmentPluginsPath() & slash into tPlugins', self.step)
+        self.assertIn('repeat for each line tStack in the mainStacks', self.step)
+        self.assertIn('if tStack is among the lines of revFilterStacksList(tStack) then', self.step)
+
+    def test_it_fails_naming_them(self):
+        self.assertIn('throw "the IDE lists its own stacks among the user\'s:" && char 1 to -3 of tWrong', self.step)
+
+
+class DictionaryFitsItsPage(unittest.TestCase):
+    """The fix for the blank Dictionary: the browser widget, set to
+    0,0,0,0 as the window opens, is fitted to the window once it is open,
+    not only on a resizeStack or browserNavigateComplete (neither came on
+    Windows for a window that opened at the width it had: its widget read
+    0,0,1,1, and a resizeStack drew the page)."""
+
+    BEHAVIOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'ide', 'Toolset',
+                            'palettes', 'dictionary', 'behaviors', 'revdictionarybehavior.livecodescript')
+
+    def setUp(self):
+        with open(self.BEHAVIOR, encoding='utf-8-sig') as f:
+            self.script = f.read()
+
+    def test_open_stack_fits_the_page_once_the_window_is_open(self):
+        open_stack = handler(self.script, 'on', 'openStack')
+        self.assertIn('set the rect of widget "Dictionary" of me to 0,0,0,0', open_stack)
+        fit = open_stack.index('send "dictFitPage" to me in 0 milliseconds')
+        self.assertGreater(fit, open_stack.index('unlock screen'))
+
+    def test_the_fit_is_the_resize(self):
+        fit = handler(self.script, 'on', 'dictFitPage')
+        self.assertIn('if the mode of me is not 0 then', fit)
+        self.assertIn('resizeStack', fit)
+        self.assertIn('set the rect of widget "Dictionary" of me to the contentRect of me',
+                      handler(self.script, 'on', 'resizeStack'))

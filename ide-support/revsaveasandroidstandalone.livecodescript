@@ -3,6 +3,9 @@
 
 local sJavaRoot
 
+-- OXT-Beyond: the exit status of the last command doShellCommand ran
+local sShellStatus
+
 ################################################################################
 
 command revSaveAsMobileStandalone pStack, pApkFile, pTarget, pSettings
@@ -15,9 +18,10 @@ command revSaveAsMobileStandalone pStack, pApkFile, pTarget, pSettings
             " in Preferences -> Mobile Support")
    end if
    if not revIDEDeployAndroidIsValidSDK(tPath) then
+      -- OXT-Beyond: and what it lacks
       throw revIDELocalise("The chosen folder in Preferences -> Mobile Support" & \
             " is not a valid Android SDK. Please ensure you have installed it correctly," & \
-            " and enabled support for") && revIDEDeployAndroidRequiredSDK()
+            " and enabled support for") && revIDEDeployAndroidRequiredSDK() & ":" && checkSDK(tPath)
    end if
    
    local tTargetType
@@ -58,27 +62,81 @@ private function pathIsRelative pPath
 end pathIsRelative
 
 // Modern APK assembly: copy asset archive as base, then add classes.dex and native libs via zip
-private command buildAPK pUnalignedApkFile, pUnsignedParam, pAssetArchive, pClassesFile, pLibsBuildFolder
+-- OXT-Beyond: with revZip, which the builder already uses for the assets,
+-- instead of the zip and sh programs, which Windows does not have. The files
+-- are the ones zip added: classes.dex at the top, and every file under the
+-- build's lib folder at its path there (lib/<abi>/*.so, and the jar files of
+-- AAR libraries next to them); zip's entries for the folders themselves are
+-- not added, as Android needs none. Each step's result is checked: zip's
+-- were not, so a machine without zip made a package with no code in it.
+-- Returns empty, or what went wrong.
+private command buildAPK pUnalignedApkFile, pAssetArchive, pClassesFile, pLibsBuildFolder
    -- Copy asset archive as base APK
    put url ("binfile:" & pAssetArchive) into url ("binfile:" & pUnalignedApkFile)
-   
-   -- Add classes.dex at root
-   local tOldFolder
-   put the folder into tOldFolder
-   set the folder to item 1 to -2 of pClassesFile
-   executeShellCommand "zip", "-j", pUnalignedApkFile, item -1 of pClassesFile
-   set the folder to tOldFolder
-   
-   -- Add native libs if present
-   if there is a folder pLibsBuildFolder then
-      local tParentFolder
-      set the itemDelimiter to slash
-      put item 1 to -2 of pLibsBuildFolder into tParentFolder
-      executeShellCommand "sh", "-c", "cd " & quote & tParentFolder & quote & " && zip -r " & quote & pUnalignedApkFile & quote & " lib/"
+   if the result is not empty then
+      return "could not copy" && pAssetArchive & ":" && the result
    end if
    
-   return empty
+   revZipOpenArchive pUnalignedApkFile, "update"
+   if the result is not empty then
+      return "could not open" && pUnalignedApkFile & ":" && the result
+   end if
+   
+   local tError, tFiles, tFile
+   -- Add classes.dex at root
+   revZipAddItemWithFile pUnalignedApkFile, "classes.dex", pClassesFile
+   if the result is not empty then
+      put "could not add classes.dex:" && the result into tError
+   end if
+   
+   -- Add native libs if present
+   if tError is empty and there is a folder pLibsBuildFolder then
+      put filesUnder(pLibsBuildFolder, empty) into tFiles
+      repeat for each line tFile in tFiles
+         revZipAddItemWithFile pUnalignedApkFile, "lib/" & tFile, pLibsBuildFolder & slash & tFile
+         if the result is not empty then
+            put "could not add lib/" & tFile & ":" && the result into tError
+            exit repeat
+         end if
+      end repeat
+   end if
+   
+   revZipCloseArchive pUnalignedApkFile
+   if tError is empty and the result is not empty then
+      put "could not write" && pUnalignedApkFile & ":" && the result into tError
+   end if
+   return tError
 end buildAPK
+
+-- OXT-Beyond: the files under pFolder, at any depth, as paths relative to it
+-- with slashes, in sorted order; with pSuffix, only the files whose names end
+-- with it. It does what "find" did for the builder, on every platform (on
+-- Windows, find.exe searches text in files, and its error message became
+-- d8's input).
+private function filesUnder pFolder, pSuffix
+   local tList
+   filesUnderInto pFolder, empty, pSuffix, tList
+   if the last char of tList is return then
+      delete the last char of tList
+   end if
+   sort lines of tList
+   return tList
+end filesUnder
+
+private command filesUnderInto pFolder, pPrefix, pSuffix, @xList
+   local tFile, tSub
+   repeat for each line tFile in files(pFolder)
+      if pSuffix is empty or tFile ends with pSuffix then
+         put pPrefix & tFile & return after xList
+      end if
+   end repeat
+   repeat for each line tSub in folders(pFolder)
+      if tSub is "." or tSub is ".." then
+         next repeat
+      end if
+      filesUnderInto pFolder & slash & tSub, pPrefix & tSub & slash, pSuffix, xList
+   end repeat
+end filesUnderInto
 
 private function updateMinimumAPI pVersionSet, pLimit
    local tLimitType
@@ -131,6 +189,12 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       put true into tArchABIs["armeabi-v7a"]
       put true into tArchs["armv7"]
    end if
+   -- OXT-Beyond: Google Play refuses an app that ships a 32-bit ABI without
+   -- its 64-bit partner. The build itself is unchanged: an older stack still
+   -- builds exactly the ABIs it asked for, and the warning says what to tick.
+   if pTarget contains "build" then
+      androidWarnMissing64Bit tArchABIs
+   end if
    combine tArchABIs by comma as set
    combine tArchs by comma as set
    
@@ -168,6 +232,13 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
    set the itemDelimiter to slash
    put item 1 to -2 of the effective filename of stack pStack into tBaseFolder
    set the itemDelimiter to comma
+   
+   -- OXT-Beyond: the runtime this build takes everything of the runtime's
+   -- from (the engines and externals, the Java layer, the manifest and the
+   -- files beside them): 9.6.3's, as before, or the engine built here when
+   -- the stack asks for it (androidRuntimeFolder)
+   local tRuntime
+   put androidRuntimeFolder(pTarget, pSettings) into tRuntime
    
    -- Fetch the various options we need to initially build the app-bundle
    local tName, tVersionName, tVersionCode, tExternals, tDrivers, tIcon, tSplash, tKey, tUnsigned, tStatusBarIcon
@@ -223,7 +294,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       // put default sb icon path into tStatusBarIcon
       // SN-2015-01-22: [[ Bug 13213 ]] If mapFilePath returns empty, an error will be triggered
       // line 629.
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "notify_icon.png") into tStatusBarIcon
+      put mapFilePath(tRuntime & slash & "notify_icon.png") into tStatusBarIcon
    end if
    
    switch pSettings["android,signing"]
@@ -242,6 +313,16 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
          put true into tUnsigned
          break;
    end switch
+   
+   -- OXT-Beyond: an App Bundle beside the package, when the stack asks for
+   -- one; never for Test (see androidBuildBundle)
+   local tBundleFile, tUnsignedBundleFile
+   if pTarget contains "build" and pSettings["android,app bundle"] is true then
+      put androidBundlePath(pApkFile) into tBundleFile
+      if there is a file tBundleFile then
+         delete file tBundleFile
+      end if
+   end if
    
    -- Compute the icon path
    if tIcon is not empty and pathIsRelative(tIcon) then
@@ -398,7 +479,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       end if
       
       if tManifest is empty then
-         put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "Manifest.xml")) into tManifest
+         put url ("binfile:" & mapFilePath(tRuntime & slash & "Manifest.xml")) into tManifest
       end if
       // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
       if the result is not empty then
@@ -431,7 +512,9 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       replace "${ORIENTATION}" with tInitialOrientation in tManifest
       
       replace "${MIN_SDK_VERSION}" with pSettings["android,minimum version"] in tManifest
-      replace "${TARGET_SDK_VERSION}" with targetSDKVersion() in tManifest
+      local tTargetAPI
+      put androidTargetAPI(pSettings, tRuntime) into tTargetAPI
+      replace "${TARGET_SDK_VERSION}" with tTargetAPI in tManifest
       
       local tUsesFeature, tUsesPermission, tFeatures, tPermissions, tAd
       repeat for each key tFeature in pSettings["android,device capabilities"]
@@ -554,7 +637,11 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
                "<uses-permission android:name="&quote&pSettings["android,identifier"]&".permission.C2D_MESSAGE"&quote&" />" & \
                "<uses-permission android:name="&quote&"com.google.android.c2dm.permission.RECEIVE"&quote&" />" into tPushPermissions
          
-         put "<receiver android:name="&quote&"PushReceiver"&quote&" android:permission="&quote&"com.google.android.c2dm.permission.SEND"&quote&">" & \
+         -- OXT-Beyond: Android 12 and newer refuse to install an app whose
+         -- receiver has an intent-filter and no android:exported. The push
+         -- messages come from outside the app, so "true" is the value the
+         -- older Androids used by default; the SEND permission still guards it.
+         put "<receiver android:name="&quote&"PushReceiver"&quote&" android:exported="&quote&"true"&quote&" android:permission="&quote&"com.google.android.c2dm.permission.SEND"&quote&">" & \
                "<intent-filter>" & \
                "<action android:name="&quote&"com.google.android.c2dm.intent.RECEIVE"&quote&" />" & \
                "<category android:name="&quote&pSettings["android,identifier"]&quote&" />" & \
@@ -587,8 +674,10 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       
       // SN-2015-09-24: [[ Bug 15875 ]] Add the screenSize configChanges value for API > 12
       //  Otherwise the app restarts on orientation change.
+      // OXT-Beyond: and the other changes the app goes on through
+      //  (androidConfigChanges)
       local tConfigChangesProp
-      put "keyboardHidden|orientation|uiMode|screenSize" into tConfigChangesProp
+      put androidConfigChanges() into tConfigChangesProp
       replace "${CONFIG_CHANGES}" with tConfigChangesProp in tManifest
       
       // SN-2015-09-30: [[ Bug 10267 ]] Hardware Acceleration option added
@@ -612,6 +701,9 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       end if
       replace "${ALLOW_HTTP_CONNECTIONS}" with tAllowHttpConnections in tManifest
       
+      put androidKeepLargeScreenLayout(tManifest, tTargetAPI) into tManifest
+      put androidDeclareRelaunch(tManifest, tRuntime) into tManifest
+      
       put tManifest into url ("binfile:" & tManifestFile)
       
       local tAdditional
@@ -624,6 +716,17 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
          throw "could not create manifest"
       end if
       
+      -- OXT-Beyond: an extension's manifest can add a component that Android
+      -- 12 and newer will not install (an intent-filter and no
+      -- android:exported). Whether it should be exported is the extension's
+      -- call, so the manifest is left as it is and the build names it.
+      repeat for each line tComponent in androidComponentsWithoutExported(androidManifestToArray(tManifestFile))
+         revStandaloneAddWarning "Android: the" && tComponent && \
+               "in the app's manifest has an intent-filter and no android:exported," && \
+               "so Android 12 and newer will refuse to install the app;" && \
+               "the extension that adds it needs to set android:exported"
+      end repeat
+      
       -------- Build the Classes
       revStandaloneProgress "Building classes..."
       
@@ -635,7 +738,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       
       local tLiveCodeClassesFile
       put tBuildFolder & slash & "LiveCode.jar" into tLiveCodeClassesFile
-      put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "Classes")) into url ("binfile:" & tLiveCodeClassesFile)
+      put url ("binfile:" & mapFilePath(tRuntime & slash & "Classes")) into url ("binfile:" & tLiveCodeClassesFile)
       if the result is not empty then
          throw "could not prepare LiveCode classes"
       end if
@@ -782,7 +885,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       end if
       
       local tLayoutXML
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "livecode_inputcontrol.xml") into tLayoutXML
+      put mapFilePath(tRuntime & slash & "livecode_inputcontrol.xml") into tLayoutXML
       put url ("binfile:" & tLayoutXML) into url ("binfile:" & tLayoutResBuildFolder & slash & "livecode_inputcontrol.xml")
       if the result is not empty then
          throw "could not copy layout file '" & tLayoutXML & "'"
@@ -790,7 +893,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       put tLayoutResBuildFolder & slash & "livecode_inputcontrol.xml" & return after tAssetFiles
       
       local tNFCTechFilter
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "nfc_tech_filter.xml") into tNFCTechFilter
+      put mapFilePath(tRuntime & slash & "nfc_tech_filter.xml") into tNFCTechFilter
       put url ("binfile:" & tNFCTechFilter) into url ("binfile:" & tXMLResBuildFolder & slash & "nfc_tech_filter.xml")
       if the result is not empty then
          throw "could not copy NFC tech filter file '" & tNFCTechFilter & "'"
@@ -799,7 +902,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       
       
       local tFileProviderPaths
-      put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & "file_provider_paths.xml") into tFileProviderPaths
+      put mapFilePath(tRuntime & slash & "file_provider_paths.xml") into tFileProviderPaths
       put url ("binfile:" & tFileProviderPaths) into url ("binfile:" & tXMLResBuildFolder & slash & "file_provider_paths.xml")
       if the result is not empty then
          throw "could not copy file provider paths file '" & tFileProviderPaths & "'"
@@ -857,11 +960,12 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       appendToList "--lib", tDexParams
       appendToList pathToRootClasses(), tDexParams
       -- d8 does not accept directories; enumerate .class files
+      -- OXT-Beyond: listed by the engine, not with find (see filesUnder)
       local tClassFiles
-      put shell("find " & quote & tClassesBuildFolder & quote & " -name '*.class'") into tClassFiles
+      put filesUnder(tClassesBuildFolder, ".class") into tClassFiles
       repeat for each line tFile in tClassFiles
          if tFile is not empty then
-            appendToList tFile, tDexParams
+            appendToList tClassesBuildFolder & slash & tFile, tDexParams
          end if
       end repeat
       appendToList tLiveCodeClassesFile, tDexParams
@@ -896,6 +1000,12 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       repeat for each line tEntry in tDrivers
          put return & tEntry & ":" & "./lib" & tEntry after pSettings["android,library"]
       end repeat
+      
+      -- OXT-Beyond: an extension with native code for some of the chosen ABIs
+      -- and not others fails on the devices that pick the ABI it lacks
+      if pTarget contains "build" then
+         androidWarnMissingExtensionCode tArchs, pSettings["extension_code_resources"]
+      end if
       
       set the itemDelimiter to comma
       repeat for each item tArch in tArchs
@@ -943,7 +1053,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
 
       repeat for each key tArch in tArchLibsBuildFolders
          -- Engine to use
-         put mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & "Standalone") into tDeploy["engine"]
+         put mapFilePath(tRuntime & slash & tArch & slash & "Standalone") into tDeploy["engine"]
          // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
          if there is no file tDeploy["engine"] then
             throw "Could not find standalone engine"
@@ -1012,7 +1122,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
       repeat for each key tArch in tArchLibsBuildFolders
          -- MM-2014-01-29: [[ OpenSSL ]] Include the revsecurity library.
          if pSettings["android,include revsecurity"] then
-            put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & "revsecurity")) \
+            put url ("binfile:" & mapFilePath(tRuntime & slash & tArch & slash & "revsecurity")) \
                   into url ("binfile:" & tArchLibsBuildFolders[tArch] & slash & "librevsecurity.so")
             
             // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
@@ -1028,7 +1138,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
             if there is a file (tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so") then
                next repeat
             end if
-            put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & tEntry)) \
+            put url ("binfile:" & mapFilePath(tRuntime & slash & tArch & slash & tEntry)) \
                   into url ("binfile:" & tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so")
             // SN-2015-01-22: [[ Bug 13213 ]] Throw an error in case an error occurred
             if the result is not empty then
@@ -1042,7 +1152,7 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
             if there is a file (tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so") then
                next repeat
             end if
-            put url ("binfile:" & mapFilePath(revMobileRuntimeFolder(pTarget) & slash & tArch & slash & tEntry)) \
+            put url ("binfile:" & mapFilePath(tRuntime & slash & tArch & slash & tEntry)) \
                   into url ("binfile:" & tArchLibsBuildFolders[tArch] & slash & "lib" & tEntry & ".so")
             if the result is not empty then
                throw "Could not find " & tEntry && "library"
@@ -1050,84 +1160,177 @@ private command revSaveAsMobileStandaloneMain pStack, pApkFile, pTarget, pSettin
          end repeat
       end repeat
 
-      -- Work out whether to produce an unsigned apk
-      local tUnsignedParam
-      if (pTarget contains "build") and tUnsigned then
-         put "-u" into tUnsignedParam
+      -- OXT-Beyond: which key signs the package. As with LiveCode's ApkBuilder,
+      -- which signed with the debug key unless told not to (-u): Test builds
+      -- and builds "for development only" with the debug key; builds with a
+      -- keystore chosen ("sign with my key") with that keystore; the rest
+      -- ("do not sign", or no keystore chosen) not at all. When ApkBuilder
+      -- left the SDK, the zip assembly below replaced it and signed nothing,
+      -- so Test builds could not be installed.
+      local tSigning
+      if pTarget contains "build" and tUnsigned then
+         if tKey is not empty then
+            put "key" into tSigning
+         else
+            put "none" into tSigning
+            if pSettings["android,signing"] is "sign with my key" then
+               revStandaloneAddWarning "Android: no keystore is chosen in the Android standalone settings, so the package is not signed, and Android will not install it"
+            end if
+         end if
       else
-         put empty into tUnsignedParam
+         put "debug" into tSigning
+      end if
+      -- OXT-Beyond: the App Bundle is signed as the package is, and Google
+      -- Play takes it only signed with the app's upload key
+      if tBundleFile is not empty and tSigning is "debug" then
+         revStandaloneAddWarning "Android: the App Bundle is signed with the debug key (" & quote & \
+               "Sign for development only" & quote & "); Google Play takes it only signed with your upload key (" & \
+               quote & "Sign with my key" & quote & ")"
+      else if tBundleFile is not empty and tSigning is "none" then
+         revStandaloneAddWarning "Android: the App Bundle is not signed; Google Play takes it only signed with your" && \
+               "upload key (" & quote & "Sign with my key" & quote & ")"
       end if
       
       -- Build the APK
       // IM-2013-05-21: [[ BZ 10904 ]] call our own internal function instead of (removed) apkbuilder script
-      buildAPK tUnalignedApkFile, tUnsignedParam, tAssetArchive, tClassesFile, tLibsBuildFolder
+      buildAPK tUnalignedApkFile, tAssetArchive, tClassesFile, tLibsBuildFolder
       if the result is not empty then
-         throw "apk preparation failed"
-      end if
-
-      ------- Signing the Package
-      if pTarget contains "build" and tKey is not empty then
-         revStandaloneProgress "Signing package..."
-         
-         if not tKey begins with "/" then
-            put tBaseFolder & slash before tKey
-         end if
-         
-         if there is no file tKey then
-            throw "could not file keystore '" & tKey & "'"
-         end if
-         
-         local tKeystoreAlias
-         ask "Please provide the keystore alias to use"
-         if it is empty then
-            throw "no keystore alias provided for keystore"
-         end if
-         put it into tKeystoreAlias
-         
-         local tKeystorePassword
-         ask password clear "Please provide the keystore password"
-         if it is empty then
-            throw "no password provided for keystore"
-         end if
-         put it into tKeystorePassword
-         
-         local tPrivateKeyPassword
-         ask password clear "Please provide the private key password"
-         if it is empty then
-            throw "no password provided for private key"
-         end if
-         put it into tPrivateKeyPassword
-         
-         // Use apksigner if available, otherwise fall back to jarsigner
-         if there is a file pathToApkSigner() then
-            executeShellCommand pathToApkSigner(), "sign", "--ks", tKey, "--ks-pass", "pass:" & tKeystorePassword, "--key-pass", "pass:" & tPrivateKeyPassword, "--ks-key-alias", tKeystoreAlias, tUnalignedApkFile
-            if the result is not empty then
-               throw "signing failed -" && the result
-            end if
-         else
-            // IM-2014-09-04: [[ Bug 13343 ]] Specify SHA1 when signing APK as specified in android signing docs.
-            executeShellCommand pathToJarSigner(), "-sigalg", "SHA1withRSA", "-digestalg", "SHA1", "-keystore", tKey, "-storepass", tKeystorePassword, "-keypass", tPrivateKeyPassword, tUnalignedApkFile, tKeystoreAlias
-            if the result begins with "jarsigner error" then
-               throw "signing failed -" && word 4 to -1 of the result
-            else if the result begins with "jarsigner: Certificate chain not found" then
-               throw "signing failed -" && word 2 to -1 of the result
-            else if (the result begins with "jarsigner: key associated with") and (line 1 of the result ends with "not a private key") then
-               throw "signing failed - key password was incorrect or" && word 2 to -1 of the result
-            end if
-         end if
+         throw "apk preparation failed:" && the result
       end if
       
-      ------- Finalize the Package
+      -- OXT-Beyond: the App Bundle, from the package's files before
+      -- zipalign and signing
+      if tBundleFile is not empty then
+         revStandaloneProgress "Making the App Bundle..."
+         put tBuildFolder & slash & "lcandroid-unsigned.aab" into tUnsignedBundleFile
+         androidBuildBundle tUnalignedApkFile, tUnsignedBundleFile, tBuildFolder, androidBundletoolForBuild()
+      end if
+      
+      -- OXT-Beyond: zipalign first, then sign. A v2 or v3 signature (which
+      -- Android needs for apps that target API 30 or newer) covers the whole
+      -- file, and zipalign rewrites the file, so signing first and aligning
+      -- after left only the old JAR signature, and Android refused the
+      -- package. zipalign -p also aligns uncompressed native libraries to
+      -- pages (the libraries here are compressed, so it changes nothing yet).
       revStandaloneProgress "Finalizing package..."
       
-      executeShellCommand pathToZipAlign(), "-f", "-v", "4", tUnalignedApkFile, pApkFile
-      if not (line -1 of the result begins with "Verification succes")  or there is no file pApkFile then
-         throw "apk finalization failed"
+      local tAlignedApkFile
+      if tSigning is "none" then
+         put pApkFile into tAlignedApkFile
+      else
+         put tBuildFolder & slash & "lcandroid-aligned.apk" into tAlignedApkFile
+      end if
+      executeShellCommand pathToZipAlign(), "-f", "-p", "4", tUnalignedApkFile, tAlignedApkFile
+      if (sShellStatus is not empty and sShellStatus is not 0) or there is no file tAlignedApkFile then
+         throw "apk finalization failed: zipalign made no package -" && the result
+      end if
+      
+      ------- Signing the Package
+      if tSigning is not "none" then
+         revStandaloneProgress "Signing package..."
+         
+         local tKeystoreAlias, tKeystorePassword, tPrivateKeyPassword
+         if tSigning is "debug" then
+            -- The SDK's debug keystore, made as Android Studio makes it when
+            -- it is missing
+            put pathToDebugKeystore() into tKey
+            ensureDebugKeystore tKey
+            put "androiddebugkey" into tKeystoreAlias
+            put "android" into tKeystorePassword
+            put "android" into tPrivateKeyPassword
+         else
+            -- OXT-Beyond: pathIsRelative, as where the key's path is made
+            -- absolute above: this check took a Windows path (C:/...) for a
+            -- relative one and put the stack's folder before it a second
+            -- time, so on Windows a keystore was never found
+            if pathIsRelative(tKey) then
+               put tBaseFolder & slash before tKey
+            end if
+            
+            if there is no file tKey then
+               throw "could not file keystore '" & tKey & "'"
+            end if
+            
+            ask "Please provide the keystore alias to use"
+            if it is empty then
+               throw "no keystore alias provided for keystore"
+            end if
+            put it into tKeystoreAlias
+            
+            ask password clear "Please provide the keystore password"
+            if it is empty then
+               throw "no password provided for keystore"
+            end if
+            put it into tKeystorePassword
+            
+            ask password clear "Please provide the private key password"
+            if it is empty then
+               throw "no password provided for private key"
+            end if
+            put it into tPrivateKeyPassword
+         end if
+         
+         -- apksigner, which the SDK check makes sure of (every build-tools
+         -- release with d8 has it). The SHA1 jarsigner fallback went with
+         -- this change: it could only run with build-tools older than
+         -- 24.0.3, which have no d8 either, and it made the JAR signature
+         -- alone, which Android refuses for API 30 and newer. The passwords
+         -- reach apksigner through the environment, not the command line,
+         -- which the builder writes to stderr.
+         if there is no file pathToApkSigner() then
+            throw "signing failed - the Android SDK has no apksigner; install the Android SDK Build-Tools 28 or newer"
+         end if
+         put tKeystorePassword into $OXT_ANDROID_KS_PASS
+         put tPrivateKeyPassword into $OXT_ANDROID_KEY_PASS
+         executeShellCommand pathToApkSigner(), "sign", "--ks", tKey, "--ks-pass", "env:OXT_ANDROID_KS_PASS", \
+               "--key-pass", "env:OXT_ANDROID_KEY_PASS", "--ks-key-alias", tKeystoreAlias, \
+               "--out", pApkFile, tAlignedApkFile
+         put the result into tResult
+         put empty into $OXT_ANDROID_KS_PASS
+         put empty into $OXT_ANDROID_KEY_PASS
+         -- apksigner 30 and newer also write a v4 signature beside the
+         -- package (<package>.idsig), for adb's incremental install only;
+         -- the builder makes one file, as before
+         if there is a file (pApkFile & ".idsig") then
+            delete file (pApkFile & ".idsig")
+         end if
+         if (sShellStatus is not empty and sShellStatus is not 0) or there is no file pApkFile then
+            throw "signing failed -" && tResult
+         end if
+         
+         -- The signature must be one Android accepts
+         executeShellCommand pathToApkSigner(), "verify", pApkFile
+         put the result into tResult
+         if sShellStatus is not empty and sShellStatus is not 0 then
+            delete file pApkFile
+            throw "signing failed - apksigner does not accept the signed package:" && tResult
+         end if
+         
+         -- OXT-Beyond: the App Bundle, with the same key and passwords
+         if tBundleFile is not empty then
+            revStandaloneProgress "Signing the App Bundle..."
+            put tKeystorePassword into $OXT_ANDROID_KS_PASS
+            put tPrivateKeyPassword into $OXT_ANDROID_KEY_PASS
+            androidSignBundle tUnsignedBundleFile, tBundleFile, tKey, tKeystoreAlias
+            put the result into tResult
+            put empty into $OXT_ANDROID_KS_PASS
+            put empty into $OXT_ANDROID_KEY_PASS
+            if tResult is not empty then
+               throw tResult
+            end if
+         end if
+      else if tBundleFile is not empty then
+         put url ("binfile:" & tUnsignedBundleFile) into url ("binfile:" & tBundleFile)
+         if the result is not empty then
+            throw "could not write the App Bundle" && tBundleFile & ":" && the result
+         end if
       end if
    catch tError
    end try
    
    if there is a file tUnalignedApkFile then delete file tUnalignedApkFile
+   if tUnsignedBundleFile is not empty and there is a file tUnsignedBundleFile then delete file tUnsignedBundleFile
+   if tAlignedApkFile is not pApkFile and there is a file tAlignedApkFile then delete file tAlignedApkFile
    if there is a file tAssetArchive then delete file tAssetArchive
    if there is a file tLiveCodeClassesFile then delete file tLiveCodeClassesFile
    
@@ -1578,6 +1781,33 @@ function revMobileRuntimeFolder pTarget
    return revEnvironmentRuntimePath() & slash & "Android"
 end revMobileRuntimeFolder
 
+-- OXT-Beyond: the Android runtime a build takes its engines and the rest
+-- from. The stack's "android,engine" setting picks it: empty or "9.6.3"
+-- (the default) is LiveCode Community 9.6.3's engine, Runtime/Android, as
+-- before; "beyond" is the engine built from OXT-Beyond's own source with
+-- a current NDK (a preview), which the runtimes carry beside it as a whole
+-- runtime of its own, Runtime/Android/Beyond (its engine and externals for
+-- each architecture, and its Java layer, manifest and the files beside
+-- them, as tools/ci/build-android.sh lays them out). A stack that asks for
+-- that engine of runtimes without it is not built with the other one: the
+-- build stops and says so, as it does for any other value
+function androidRuntimeFolder pTarget, pSettings
+   local tRuntime
+   put revMobileRuntimeFolder(pTarget) into tRuntime
+   switch pSettings["android,engine"]
+      case empty
+      case "9.6.3"
+         return tRuntime
+      case "beyond"
+         if there is not a folder (tRuntime & slash & "Beyond") then
+            throw "The stack asks for OXT-Beyond's own Android engine (android,engine is beyond), and these runtimes do not have it:" && tRuntime & slash & "Beyond"
+         end if
+         return tRuntime & slash & "Beyond"
+      default
+         throw "Unknown Android engine" && quote & pSettings["android,engine"] & quote && "(android,engine): it is empty or 9.6.3 for LiveCode 9.6.3's, or beyond for OXT-Beyond's own"
+   end switch
+end androidRuntimeFolder
+
 ################################################################################
 
 private command executeAdbCommand pCommand
@@ -1659,11 +1889,31 @@ private function doShellCommand pCommand, pArguments
       put tCommandPath & ":" & sJavaRoot & "/bin" & ":" before $PATH
    end if
    
+   -- OXT-Beyond: and JAVA_HOME, which the SDK's scripts read before the
+   -- PATH, names that JDK too when it is at least as new (see
+   -- androidJavaHomeFor)
+   local tOldJavaHome, tJavaHome, tSetJavaHome
+   put $JAVA_HOME into tOldJavaHome
+   put androidJavaHomeFor(sJavaRoot, tOldJavaHome) into tJavaHome
+   put tJavaHome is not tOldJavaHome into tSetJavaHome
+   if tSetJavaHome then
+      if the platform is "win32" then
+         replace slash with backslash in tJavaHome
+      end if
+      put tJavaHome into $JAVA_HOME
+   end if
+   
    set the hideConsoleWindows to true
    write item -1 of pCommand && pArguments & return to stderr
    get shell(item -1 of pCommand && pArguments)
+   -- OXT-Beyond: the command's exit status (empty for 0), for the steps
+   -- that print nothing on success and something else on failure
+   put the result into sShellStatus
    
    put tOldPath into $PATH
+   if tSetJavaHome then
+      put tOldJavaHome into $JAVA_HOME
+   end if
    
    return it
 end doShellCommand
@@ -1675,6 +1925,531 @@ private function targetSDKVersion
    dispatch function "deployTargetSdkVersion" to stack kDeployLibrary
    return the result
 end targetSDKVersion
+
+private function newestTargetSDKVersion
+   dispatch function "deployNewestTargetSdkVersion" to stack kDeployLibrary
+   return the result
+end newestTargetSDKVersion
+
+-- OXT-Beyond: the API a package targets, its manifest's targetSdkVersion,
+-- which decides how Android treats the app (Google Play takes only the
+-- newest). A stack may pin one, "android,target sdk", from the API the
+-- builder has always targeted (33) to the newest it knows (36), as for a
+-- package that is not for Google Play; a pin outside that is an error.
+-- Otherwise it is the newest when the runtime's Java layer is ready for
+-- it, and 33, as before, when it is not (androidJavaLayerIsReady)
+function androidTargetAPI pSettings, pRuntimeFolder
+   local tPin
+   put pSettings["android,target sdk"] into tPin
+   if tPin is not empty then
+      if tPin is not an integer or tPin < targetSDKVersion() or tPin > newestTargetSDKVersion() then
+         throw "the stack's Android target API (" & tPin & ") is not one the builder can make: from" && \
+               targetSDKVersion() && "to" && newestTargetSDKVersion()
+      end if
+      return tPin + 0
+   end if
+   if androidJavaLayerIsReady(pRuntimeFolder) then
+      return newestTargetSDKVersion()
+   end if
+   return targetSDKVersion()
+end androidTargetAPI
+
+-- OXT-Beyond: whether the runtime's Java layer (its Classes jar) is ready
+-- for the newest target: it sends the back callback to the stack's backKey
+-- (Android 16 calls nothing else for an app that targets 36) and keeps the
+-- stack out of the system bars (Android 15 and newer draw an app that
+-- targets 35 edge to edge). LiveCode Community 9.6.3's layer, which the
+-- runtimes carried until the layer was built from OXT-Beyond's source, has
+-- neither, and throws on its PendingIntents at target 31 and newer. A jar
+-- keeps its entries' names as they are, so the names are looked for in it
+constant kJavaLayerReady = "com/runrev/android/LiveCodeActivity$BackCallback.class,com/runrev/android/LiveCodeActivity$SystemBarsPadding.class"
+function androidJavaLayerIsReady pRuntimeFolder
+   return androidJavaLayerHas(pRuntimeFolder, kJavaLayerReady)
+end androidJavaLayerIsReady
+
+-- OXT-Beyond: Android 16 and newer ignore an app's orientation and its
+-- resizability on large screens (600 dp wide and more) once it targets
+-- API 36. This property keeps them, as the stack's settings give them,
+-- until an app targets 37 (the engine does not yet lay a stack out again
+-- for every size and rotation a tablet may give it). Below 36 the manifest
+-- is left as it was
+constant kRestrictedResizability = "android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+function androidKeepLargeScreenLayout pManifest, pTargetAPI
+   if pTargetAPI < 36 then
+      return pManifest
+   end if
+   local tProperty
+   put "  <property android:name=" & quote & kRestrictedResizability & quote && \
+         "android:value=" & quote & "true" & quote && "/>" & return into tProperty
+   if pManifest contains "</application>" then
+      replace "</application>" with tProperty & "  </application>" in pManifest
+   end if
+   return pManifest
+end androidKeepLargeScreenLayout
+
+-- OXT-Beyond: the configuration changes the app's activity goes on
+-- through (its manifest's android:configChanges), where Android would
+-- otherwise end it and make it again. The engine runs once in a process
+-- (com.runrev.android.RelaunchActivity says why): made again in the same
+-- process, it stopped there on Android 11 and newer, for an app that
+-- targets API 30 or newer (which the builder always makes), as soon as the
+-- user changed the font size, the language or the bold text setting,
+-- attached a keyboard, or resized the app's window.
+--
+-- LiveCode's four, as before: the keyboard shown or hidden, a rotation,
+-- night mode (which the engine passes on as systemAppearanceChanged) and
+-- the screen's size (the stack is resized, as for a rotation). Then those
+-- that come with a window resized (smallestScreenSize, screenLayout, as
+-- Android asks of an app that handles screenSize), and those that change
+-- nothing the engine has read: the font size and weight (the engine draws
+-- its own text, at the sizes the stack gives), the language and its
+-- direction (the engine asks for them as it needs them), a keyboard or
+-- navigation device attached, the touch screen, the display's colour
+-- mode, and the SIM's country and network.
+--
+-- Not the screen's density (the display size setting): the engine reads it
+-- as it starts, so the app starts again for it (RelaunchActivity), in a
+-- new process, as for a change no value can name (the theme overlays that
+-- Android 12 and newer make of the wallpaper). Every value is one that
+-- Android 12L's attributes know (API 32), below the oldest target (33)
+constant kConfigChanges = "keyboardHidden|orientation|uiMode|screenSize|smallestScreenSize|screenLayout|fontScale|fontWeightAdjustment|locale|layoutDirection|keyboard|navigation|touchscreen|colorMode|mcc|mnc"
+function androidConfigChanges
+   return kConfigChanges
+end androidConfigChanges
+
+-- OXT-Beyond: the activity that starts the app again in a new process
+-- (com.runrev.android.RelaunchActivity), declared in a process of its own
+-- where the runtime's Java layer has it (LiveCode Community 9.6.3's has
+-- not; the app's activity then starts the engine again as before). It has
+-- no intent filter, so no other app can start it
+constant kRelaunchClass = "com/runrev/android/RelaunchActivity.class"
+function androidDeclareRelaunch pManifest, pRuntimeFolder
+   if not androidJavaLayerHas(pRuntimeFolder, kRelaunchClass) then
+      return pManifest
+   end if
+   local tActivity
+   put "  <activity android:name=" & quote & "com.runrev.android.RelaunchActivity" & quote & return & \
+         "      android:process=" & quote & ":relaunch" & quote & return & \
+         "      android:theme=" & quote & "@android:style/Theme.Translucent.NoTitleBar" & quote & return & \
+         "      android:excludeFromRecents=" & quote & "true" & quote & return & \
+         "      android:noHistory=" & quote & "true" & quote & return & \
+         "      android:exported=" & quote & "false" & quote && "/>" & return into tActivity
+   if pManifest contains "</application>" then
+      replace "</application>" with tActivity & "  </application>" in pManifest
+   end if
+   return pManifest
+end androidDeclareRelaunch
+
+-- OXT-Beyond: whether the runtime's Java layer (its Classes jar) has each
+-- of the class files pClasses (a list of items), by their names, which a
+-- jar keeps as they are
+function androidJavaLayerHas pRuntimeFolder, pClasses
+   local tJar
+   put mapFilePath(pRuntimeFolder & slash & "Classes") into tJar
+   if there is no file tJar then
+      return false
+   end if
+   put url ("binfile:" & tJar) into tJar
+   repeat for each item tEntry in pClasses
+      if byteOffset(textEncode(tEntry, "UTF-8"), tJar) is 0 then
+         return false
+      end if
+   end repeat
+   return true
+end androidJavaLayerHas
+
+################################################################################
+-- OXT-Beyond: the Android App Bundle (.aab), which Google Play takes for new
+-- apps and updates and makes each device's packages from. A stack whose
+-- "android,app bundle" standalone setting is true gets one beside its
+-- package (androidBundlePath), from the same build: the package is made
+-- and signed as before, the bundle is made from its files before zipalign
+-- (androidBuildBundle) and signed with the same key (androidSignBundle).
+-- Test builds never make one, and a stack without the setting builds as
+-- before.
+--
+-- Google's bundletool makes the bundle. It is a Java program, which the
+-- JDK the builder already uses runs: this version, downloaded once into
+-- the IDE's cache folder and checked against its SHA-256 each time it is
+-- used (androidBundletool). For a machine without the internet, the
+-- cMobileSupport["android.bundletool"] of stack "revPreferences" can name
+-- a copy, or this file can be put in the cache folder by hand.
+constant kBundletoolVersion = "1.18.3"
+constant kBundletoolURL = "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar"
+constant kBundletoolSHA256 = "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29"
+-- How many times a download that fails is tried, 2 seconds apart: with
+-- libURL, then with the JDK's own HTTP client, and so on in turn
+constant kBundletoolTries = 3
+
+-- The App Bundle beside the package pApkFile: its name with .aab for .apk
+function androidBundlePath pApkFile
+   if pApkFile ends with ".apk" then
+      delete char -4 to -1 of pApkFile
+   end if
+   return pApkFile & ".aab"
+end androidBundlePath
+
+-- Where the builder keeps the bundletool it downloads
+function androidBundletoolCacheFile
+   return revEnvironmentUserCachePath() & "/Android/bundletool-all-" & kBundletoolVersion & ".jar"
+end androidBundletoolCacheFile
+
+-- The bundletool a build runs (androidBundletool, with the Preferences'
+-- copy, this version and the build's JDK)
+function androidBundletoolForBuild
+   return androidBundletool(the cMobileSupport["android.bundletool"] of stack "revPreferences", \
+         androidBundletoolCacheFile(), kBundletoolURL, kBundletoolSHA256, pathToJava())
+end androidBundletoolForBuild
+
+-- The bundletool jar to run: pPreference as it is, when it names one;
+-- otherwise pCacheFile when its SHA-256 is pSHA256, after downloading it
+-- from pURL when it is missing or not that file, with libURL and, when
+-- pJava names the JDK's java, with that too (androidDownloadWithJava).
+-- Throws, saying what to do, when there is none. (Parameters, not the
+-- constants, so that tools/ci/android-check.livecodescript can try every
+-- case.)
+function androidBundletool pPreference, pCacheFile, pURL, pSHA256, pJava
+   if pPreference is not empty then
+      if there is no file pPreference then
+         throw "the cMobileSupport[" & quote & "android.bundletool" & quote & "] of stack " & quote & \
+               "revPreferences" & quote && "names" && pPreference & ", and there is no such file"
+      end if
+      return pPreference
+   end if
+   if there is a file pCacheFile then
+      if androidFileSHA256(pCacheFile) is pSHA256 then
+         return pCacheFile
+      end if
+      -- not the file this builder takes (a download cut short, or another
+      -- version): downloaded again
+      delete file pCacheFile
+   end if
+
+   local tData, tResult, tError, tTimeout, tHex, tFolder, tTries, tPart, tJavaResult
+   revStandaloneProgress "Downloading Google's bundletool, which makes the App Bundle (once)..."
+   put the socketTimeoutInterval into tTimeout
+   -- libURL gives up on a server that sends nothing for this long
+   set the socketTimeoutInterval to 60000
+   -- and a download that fails is tried again, 2 seconds later, up to
+   -- kBundletoolTries times, with the JDK's own HTTP client when there is
+   -- one, and libURL, in turn. libURL's download of this file from GitHub's
+   -- release assets stalled (its "socket timeout") once on the Android
+   -- builder check's Linux runner (run 42315551744), and three times in a
+   -- row on its macOS runner (run 42321580394), where gh had just
+   -- downloaded the release from that host in seconds. (The pause lets
+   -- messages through, as libURL's own waits do.)
+   put specialFolderPath("temporary") & "/oxt-bundletool-" & the milliseconds & ".part" into tPart
+   put 0 into tTries
+   repeat kBundletoolTries times
+      add 1 to tTries
+      if tTries > 1 then
+         wait 2 seconds with messages
+         revStandaloneProgress "Downloading Google's bundletool again (try" && tTries && "of" && kBundletoolTries & ")..."
+      end if
+      put empty into tData
+      put empty into tResult
+      if tTries mod 2 is 0 and pJava is not empty then
+         put androidDownloadWithJava(pJava, pURL, tPart) into tResult
+         put tResult into tJavaResult
+         if tResult is empty then
+            put url ("binfile:" & tPart) into tData
+         end if
+         if there is a file tPart then
+            delete file tPart
+         end if
+      else
+         try
+            put url pURL into tData
+            put the result into tResult
+         catch tError
+            put tError into tResult
+         end try
+      end if
+      if tResult is empty and tData is empty then
+         put "nothing came" into tResult
+      end if
+      if tResult is empty then
+         exit repeat
+      end if
+   end repeat
+   set the socketTimeoutInterval to tTimeout
+   if tResult is not empty then
+      -- (and what the JDK said, when libURL had the last try)
+      if tJavaResult is not empty and tJavaResult is not tResult then
+         put "; and" && tJavaResult after tResult
+      end if
+      put " (tried" && tTries && "times)" after tResult
+   end if
+   if tResult is empty then
+      get binaryDecode("H*", messageDigest(tData, "SHA-256"), tHex)
+      if tHex is not pSHA256 then
+         put "it is not the file this builder takes (its SHA-256 is" && tHex & ", not" && pSHA256 & ")" into tResult
+      end if
+   end if
+   if tResult is not empty then
+      throw "could not download bundletool, which makes the App Bundle, from" && pURL & ":" && tResult & \
+            ". Download that file and put it at" && pCacheFile & ", or name a bundletool jar in the" && \
+            "cMobileSupport[" & quote & "android.bundletool" & quote & "] of stack " & quote & "revPreferences" & quote
+   end if
+   set the itemDelimiter to slash
+   put item 1 to -2 of pCacheFile into tFolder
+   set the itemDelimiter to comma
+   revSBEnsureFolder tFolder
+   put tData into url ("binfile:" & pCacheFile)
+   if the result is not empty then
+      throw "could not keep bundletool at" && pCacheFile & ":" && the result
+   end if
+   return pCacheFile
+end androidBundletool
+
+-- The SHA-256 of a file, in lower case hex
+function androidFileSHA256 pFile
+   local tHex
+   get binaryDecode("H*", messageDigest(url ("binfile:" & pFile), "SHA-256"), tHex)
+   return tHex
+end androidFileSHA256
+
+-- Downloads pURL into the file pFile with the JDK whose java is pJava,
+-- through its own HTTP client: it follows redirects, uses the system's
+-- proxy settings, and gives up on a server that sends nothing for 60
+-- seconds (androidDownloadJavaSource, which java runs as it is, from a
+-- file in the temporary folder). Returns empty, or what went wrong
+function androidDownloadWithJava pJava, pURL, pFile
+   local tSource, tOutput, tStatus
+   put specialFolderPath("temporary") & "/oxt-download-" & the milliseconds & ".java" into tSource
+   put textEncode(androidDownloadJavaSource(), "UTF-8") into url ("binfile:" & tSource)
+   if the result is not empty then
+      return "could not write" && tSource & ":" && the result
+   end if
+   if there is a file pFile then
+      delete file pFile
+   end if
+   executeShellCommand pJava, "-Djava.net.useSystemProxies=true", tSource, pURL, pFile
+   put the result into tOutput
+   put sShellStatus into tStatus
+   delete file tSource
+   if (tStatus is not empty and tStatus is not 0) or there is no file pFile then
+      if there is a file pFile then
+         delete file pFile
+      end if
+      return "the JDK could not download it:" && androidToolError(tOutput)
+   end if
+   return empty
+end androidDownloadWithJava
+
+-- The Java program androidDownloadWithJava runs: java <its file> <URL>
+-- <file>. Any failure prints one line that starts "Error:" and exits 1
+function androidDownloadJavaSource
+   local tLines
+   put "import java.io.IOException;" & lf & \
+         "import java.io.InputStream;" & lf & \
+         "import java.net.HttpURLConnection;" & lf & \
+         "import java.net.URL;" & lf & \
+         "import java.net.URLConnection;" & lf & \
+         "import java.nio.file.Files;" & lf & \
+         "import java.nio.file.Paths;" & lf & \
+         "import java.nio.file.StandardCopyOption;" & lf & \
+         "public class OxtDownload {" & lf & \
+         "  public static void main(String[] args) {" & lf & \
+         "    try {" & lf & \
+         "      URLConnection connection = new URL(args[0]).openConnection();" & lf & \
+         "      connection.setConnectTimeout(60000);" & lf & \
+         "      connection.setReadTimeout(60000);" & lf & \
+         "      if (connection instanceof HttpURLConnection) {" & lf & \
+         "        HttpURLConnection http = (HttpURLConnection) connection;" & lf & \
+         "        if (http.getResponseCode() != 200) {" & lf & \
+         "          throw new IOException(http.getResponseCode() + " & quote & " " & quote & \
+         " + http.getResponseMessage() + " & quote & " from " & quote & " + http.getURL());" & lf & \
+         "        }" & lf & \
+         "      }" & lf & \
+         "      try (InputStream in = connection.getInputStream()) {" & lf & \
+         "        Files.copy(in, Paths.get(args[1]), StandardCopyOption.REPLACE_EXISTING);" & lf & \
+         "      }" & lf & \
+         "    } catch (Exception e) {" & lf & \
+         "      System.err.println(" & quote & "Error: " & quote & " + e);" & lf & \
+         "      System.exit(1);" & lf & \
+         "    }" & lf & \
+         "  }" & lf & \
+         "}" & lf into tLines
+   return tLines
+end androidDownloadJavaSource
+
+-- Where a file of the package aapt2 convert made goes in the bundle's base
+-- module, or empty for one the bundle leaves out. bundletool takes the
+-- manifest and the code each in a folder of its own, resources.pb, res/,
+-- assets/ and lib/ as they are, and the other files of the package's top
+-- level under root/. The jar files of AAR libraries, which the builder
+-- puts at the top of lib/ (their classes are in classes.dex, and Android
+-- never reads them), are left out: bundletool takes nothing under lib/ but
+-- native libraries, in a folder for each ABI.
+function androidBundleModulePath pPath
+   if pPath is "AndroidManifest.xml" then
+      return "manifest/AndroidManifest.xml"
+   end if
+   if pPath is "resources.pb" or pPath begins with "res/" or pPath begins with "assets/" then
+      return pPath
+   end if
+   set the itemDelimiter to slash
+   if pPath begins with "lib/" then
+      if the number of items of pPath < 3 then
+         return empty
+      end if
+      return pPath
+   end if
+   if the number of items of pPath is 1 and pPath begins with "classes" and pPath ends with ".dex" then
+      return "dex/" & pPath
+   end if
+   return "root/" & pPath
+end androidBundleModulePath
+
+-- bundletool's settings for the bundle (its BundleConfig.json). The engine
+-- loads externals from the app's native library folder and opens the
+-- stack's files at their place in the installed package (Engine.java's
+-- getLibraryPath and getAssetFileStartOffset), as with the .apk: so the
+-- native libraries stay compressed, for Android to extract when it
+-- installs the app, as before (bundletool otherwise leaves them in the
+-- package, where the engine does not look), and the files under assets/
+-- stay stored, as addAssetsToArchive stores them.
+function androidBundleConfig
+   return "{" & lf & \
+         "  " & quote & "optimizations" & quote & ": {" & lf & \
+         "    " & quote & "uncompressNativeLibraries" & quote & ": { " & quote & "enabled" & quote & ": false }" & lf & \
+         "  }," & lf & \
+         "  " & quote & "compression" & quote & ": {" & lf & \
+         "    " & quote & "uncompressedGlob" & quote & ": [ " & quote & "assets/**" & quote & " ]" & lf & \
+         "  }" & lf & \
+         "}" & lf
+end androidBundleConfig
+
+-- The lines of a tool's output that say what went wrong (bundletool's
+-- error comes before its Java stack trace), or its last lines
+private function androidToolError pOutput
+   local tLines
+   filter lines of pOutput with "*Error*" into tLines
+   if tLines is empty then
+      put line -3 to -1 of pOutput into tLines
+   end if
+   replace return with " " in tLines
+   return tLines
+end androidToolError
+
+-- Makes the App Bundle pBundleFile, unsigned, from the package pApkFile (as
+-- buildAPK made it, before zipalign and signing), with the bundletool jar
+-- pBundletool: aapt2 turns the package's manifest and resources into the
+-- form a bundle holds (aapt2 convert), its files go into a base module
+-- (androidBundleModulePath), and bundletool makes the bundle of that
+-- (build-bundle, with androidBundleConfig). Its files in pBuildFolder are
+-- deleted again. Throws what went wrong
+private command androidBuildBundle pApkFile, pBundleFile, pBuildFolder, pBundletool
+   local tProtoFile, tModuleFile, tConfigFile, tResult, tError, tItems, tItem, tPath, tData
+   put pBuildFolder & slash & "lcandroid-proto.apk" into tProtoFile
+   put pBuildFolder & slash & "base.zip" into tModuleFile
+   put pBuildFolder & slash & "BundleConfig.json" into tConfigFile
+   try
+      if there is no file pathToAapt2() then
+         throw "the App Bundle needs aapt2, and the Android SDK's build-tools have none (" & pathToAapt2() & \
+               "): install the Android SDK Build-Tools again"
+      end if
+      executeShellCommand pathToAapt2(), "convert", "--output-format", "proto", "-o", tProtoFile, pApkFile
+      put the result into tResult
+      if (sShellStatus is not empty and sShellStatus is not 0) or there is no file tProtoFile then
+         throw "aapt2 could not convert the package for the App Bundle:" && androidToolError(tResult)
+      end if
+
+      -- the base module, every file stored (bundletool compresses the bundle)
+      revZipOpenArchive tProtoFile, "read"
+      if the result is not empty then
+         throw "could not open" && tProtoFile & ":" && the result
+      end if
+      put revZipEnumerateItems(tProtoFile) into tItems
+      revZipOpenArchive tModuleFile, "write"
+      if the result is not empty then
+         put "could not make" && tModuleFile & ":" && the result into tError
+      end if
+      repeat for each line tItem in tItems
+         if tError is not empty then
+            exit repeat
+         end if
+         if tItem is empty or tItem ends with slash then
+            next repeat
+         end if
+         put androidBundleModulePath(tItem) into tPath
+         if tPath is empty then
+            next repeat
+         end if
+         put empty into tData
+         revZipExtractItemToVariable tProtoFile, tItem, "tData"
+         if the result is not empty then
+            put "could not read" && tItem && "from the package:" && the result into tError
+            exit repeat
+         end if
+         revZipAddUncompressedItemWithData tModuleFile, tPath, "tData"
+         if the result is not empty then
+            put "could not add" && tPath && "to the base module:" && the result into tError
+         end if
+      end repeat
+      put empty into tData
+      revZipCloseArchive tProtoFile
+      revZipCloseArchive tModuleFile
+      if tError is empty and the result is not empty then
+         put "could not write" && tModuleFile & ":" && the result into tError
+      end if
+      if tError is not empty then
+         throw tError
+      end if
+
+      put textEncode(androidBundleConfig(), "UTF-8") into url ("binfile:" & tConfigFile)
+      if there is a file pBundleFile then
+         delete file pBundleFile
+      end if
+      executeShellCommand pathToJava(), "-jar", pBundletool, "build-bundle", "--modules", tModuleFile, \
+            "--config", tConfigFile, "--output", pBundleFile
+      put the result into tResult
+      if (sShellStatus is not empty and sShellStatus is not 0) or there is no file pBundleFile then
+         throw "bundletool could not make the App Bundle:" && androidToolError(tResult)
+      end if
+   catch tError
+   end try
+   if there is a file tProtoFile then delete file tProtoFile
+   if there is a file tModuleFile then delete file tModuleFile
+   if there is a file tConfigFile then delete file tConfigFile
+   if tError is not empty then
+      if there is a file pBundleFile then delete file pBundleFile
+      throw tError
+   end if
+end androidBuildBundle
+
+-- Signs the App Bundle pUnsignedFile into pBundleFile with the key pAlias
+-- of pKeystore, whose passwords are in $OXT_ANDROID_KS_PASS and
+-- $OXT_ANDROID_KEY_PASS, as the package's are. A bundle carries a JAR
+-- signature, which Google Play checks against the app's upload key; the
+-- JDK's jarsigner makes it (apksigner signs only packages). jarsigner says
+-- what it found in English for the check below (it answers 0 for a file
+-- with no signature too, and -strict refuses a self-signed key, which an
+-- upload key is). Returns empty, or what went wrong
+private command androidSignBundle pUnsignedFile, pBundleFile, pKeystore, pAlias
+   local tResult
+   if there is no file pathToJarSigner() then
+      return "signing the App Bundle failed - the JDK has no jarsigner (" & pathToJarSigner() & ")"
+   end if
+   if there is a file pBundleFile then
+      delete file pBundleFile
+   end if
+   executeShellCommand pathToJarSigner(), "-J-Duser.language=en", "-keystore", pKeystore, \
+         "-storepass:env", "OXT_ANDROID_KS_PASS", "-keypass:env", "OXT_ANDROID_KEY_PASS", \
+         "-signedjar", pBundleFile, pUnsignedFile, pAlias
+   put the result into tResult
+   if (sShellStatus is not empty and sShellStatus is not 0) or there is no file pBundleFile then
+      return "signing the App Bundle failed -" && androidToolError(tResult)
+   end if
+   executeShellCommand pathToJarSigner(), "-J-Duser.language=en", "-verify", pBundleFile
+   put the result into tResult
+   if (sShellStatus is not empty and sShellStatus is not 0) or not (tResult contains "jar verified") then
+      delete file pBundleFile
+      return "signing the App Bundle failed - jarsigner does not verify the signed bundle:" && androidToolError(tResult)
+   end if
+   return empty
+end androidSignBundle
 
 private function pathToRootClasses pRoot
    dispatch function "pathToRootClasses" to stack kDeployLibrary with pRoot
@@ -1695,6 +2470,11 @@ private function pathToAapt pRoot
    dispatch function "pathToAapt" to stack kDeployLibrary with pRoot
    return the result
 end pathToAapt
+
+private function pathToAapt2 pRoot
+   dispatch function "pathToAapt2" to stack kDeployLibrary with pRoot
+   return the result
+end pathToAapt2
 
 private function pathToAdb pRoot
    dispatch function "pathToAdb" to stack kDeployLibrary with pRoot
@@ -1741,6 +2521,45 @@ private function pathToApkSigner pRoot
    dispatch function "pathToApkSigner" to stack kDeployLibrary with pRoot
    return the result
 end pathToApkSigner
+
+private function pathToKeytool pRoot
+   dispatch function "pathToKeytool" to stack kDeployLibrary with pRoot
+   return the result
+end pathToKeytool
+
+private function pathToDebugKeystore
+   dispatch function "deployDebugKeystore" to stack kDeployLibrary
+   return the result
+end pathToDebugKeystore
+
+private function checkSDK pRoot
+   dispatch function "deployCheckSDK" to stack kDeployLibrary with pRoot
+   return the result
+end checkSDK
+
+-- OXT-Beyond: makes the SDK's debug keystore when it is missing, with the
+-- name, passwords and certificate the Android SDK's tools give it
+-- (androiddebugkey, android, android, CN=Android Debug,O=Android,C=US), so
+-- that it is the same keystore Android Studio would make there
+private command ensureDebugKeystore pKeystore
+   if there is a file pKeystore then
+      exit ensureDebugKeystore
+   end if
+   local tFolder
+   set the itemDelimiter to slash
+   put item 1 to -2 of pKeystore into tFolder
+   set the itemDelimiter to comma
+   if there is no folder tFolder then
+      revSBEnsureFolder tFolder
+   end if
+   executeShellCommand pathToKeytool(), "-genkeypair", "-keystore", pKeystore, \
+         "-storepass", "android", "-keypass", "android", "-alias", "androiddebugkey", \
+         "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000", \
+         "-dname", "CN=Android Debug,O=Android,C=US"
+   if there is no file pKeystore then
+      throw "could not make the debug keystore" && pKeystore && "with keytool:" && the result
+   end if
+end ensureDebugKeystore
 
 private function pathToJar pRoot
    dispatch function "pathToJar" to stack kDeployLibrary with pRoot
@@ -1972,6 +2791,165 @@ function androidManifestToArray pManifestFile
    put url("binfile:" & pManifestFile) into tXML
    return ConvertXMLToArray(tXML, "utf-8", true, "")
 end androidManifestToArray
+
+-- OXT-Beyond: the activities, activity-aliases, services and receivers of a
+-- manifest (as androidManifestToArray returns it) that have an intent-filter
+-- and no android:exported, one per line as "<kind> <name>". Apps that target
+-- Android 12 (API 31) or newer cannot be installed with any of them.
+function androidComponentsWithoutExported pManifestA
+   local tList
+   repeat for each element tNodeA in pManifestA[1]["@children"]
+      if tNodeA["@name"] is not "application" then
+         next repeat
+      end if
+      repeat for each element tComponentA in tNodeA["@children"]
+         if tComponentA["@name"] is not among the items of "activity,activity-alias,service,receiver" then
+            next repeat
+         end if
+         if "android:exported" is among the lines of the keys of tComponentA["@attributes"] then
+            next repeat
+         end if
+         local tHasFilter
+         put false into tHasFilter
+         repeat for each element tChildA in tComponentA["@children"]
+            if tChildA["@name"] is "intent-filter" then
+               put true into tHasFilter
+               exit repeat
+            end if
+         end repeat
+         if tHasFilter then
+            put tComponentA["@name"] && tComponentA["@attributes"]["android:name"] & return after tList
+         end if
+      end repeat
+   end repeat
+   delete the last char of tList
+   return tList
+end androidComponentsWithoutExported
+
+-- OXT-Beyond: Google Play refuses an app whose native code includes a 32-bit
+-- ABI without its 64-bit partner (armv7 needs arm64, x86 needs x86_64).
+-- pArchABIsA is keyed by ABI folder name. Warns, never changes the build.
+command androidWarnMissing64Bit pArchABIsA
+   if pArchABIsA["armeabi-v7a"] and not pArchABIsA["arm64-v8a"] then
+      revStandaloneAddWarning "Android: the app is built for armv7 and not arm64," && \
+            "and Google Play only accepts it with its 64-bit build;" && \
+            "tick arm64 in the Android standalone settings"
+   end if
+   if pArchABIsA["x86"] and not pArchABIsA["x86_64"] then
+      revStandaloneAddWarning "Android: the app is built for x86 and not x86_64," && \
+            "and Google Play only accepts it with its 64-bit build;" && \
+            "tick x86_64 in the Android standalone settings"
+   end if
+end androidWarnMissing64Bit
+
+-- OXT-Beyond: an extension's native code lives in <extension>/code/<arch>-android/.
+-- When an extension has code for some of the chosen architectures (pArchs,
+-- comma separated) and not others, the app fails on the devices that pick an
+-- architecture it lacks. pCodeResources is the list of code files the
+-- standalone settings collected. Warns, never changes the build.
+command androidWarnMissingExtensionCode pArchs, pCodeResources
+   -- The settings list code only for the chosen architectures, so an
+   -- extension with no code for any of them is not seen here.
+   local tHasA, tExtension, tItem
+   set the itemDelimiter to slash
+   repeat for each line tFile in pCodeResources
+      -- the last "code" folder: the path above it may hold another
+      repeat with tItem = the number of items of tFile down to 2
+         if item tItem of tFile ends with "-android" and item (tItem - 1) of tFile is "code" then
+            put item 1 to (tItem - 2) of tFile into tExtension
+            put true into tHasA[tExtension][char 1 to -9 of item tItem of tFile]
+            exit repeat
+         end if
+      end repeat
+   end repeat
+   
+   set the itemDelimiter to comma
+   repeat for each key tExtension in tHasA
+      local tMissing
+      put empty into tMissing
+      repeat for each item tArch in pArchs
+         if not tHasA[tExtension][tArch] then
+            put tArch & ", " after tMissing
+         end if
+      end repeat
+      if tMissing is not empty then
+         delete char -2 to -1 of tMissing
+         set the itemDelimiter to slash
+         revStandaloneAddWarning "Android: the extension" && item -1 of tExtension && \
+               "has no native code for" && tMissing & \
+               ", so the app will fail on devices that use it;" && \
+               "untick it in the Android standalone settings or update the extension"
+         set the itemDelimiter to comma
+      end if
+   end repeat
+end androidWarnMissingExtensionCode
+
+-- OXT-Beyond: the JAVA_HOME that the SDK's d8 and apksigner get. They are
+-- scripts that start the java of JAVA_HOME when it is set (the .bat files
+-- of Windows and the shell scripts alike), and otherwise the first java on
+-- the PATH, where doShellCommand puts the JDK chosen in Preferences first.
+-- A JAVA_HOME left at an older Java than that JDK defeated it: on GitHub's
+-- Windows runners (JAVA_HOME at Java 8, Preferences at JDK 17) d8 failed
+-- with "UnsupportedClassVersionError: com/android/tools/r8/D8 has been
+-- compiled by a more recent version of the Java Runtime". The JDK of
+-- Preferences, pJdk, takes JAVA_HOME's place only when it is at least as
+-- new as the one pJavaHome names, by the JAVA_VERSION of their release
+-- files, so no script gets an older Java than it did before. An unset
+-- JAVA_HOME, or one whose version cannot be read, is left as it is.
+function androidJavaHomeFor pJdk, pJavaHome
+   if pJdk is empty or pJavaHome is empty then
+      return pJavaHome
+   end if
+   local tJdkVersion, tHomeVersion
+   put javaMajorVersion(pJdk) into tJdkVersion
+   put javaMajorVersion(pJavaHome) into tHomeVersion
+   if tJdkVersion is empty or tHomeVersion is empty then
+      return pJavaHome
+   end if
+   if tJdkVersion >= tHomeVersion then
+      return pJdk
+   end if
+   return pJavaHome
+end androidJavaHomeFor
+
+-- The major version of the JDK at pRoot, from its release file
+-- (JAVA_VERSION="17.0.20" is 17, JAVA_VERSION="1.8.0_462" is 8), or empty
+private function javaMajorVersion pRoot
+   local tFile, tText, tVersion, tLine, i
+   put pRoot into tFile
+   replace backslash with slash in tFile
+   put "/release" after tFile
+   if there is no file tFile then
+      return empty
+   end if
+   put url ("file:" & tFile) into tText
+   replace numToChar(13) with empty in tText
+   repeat for each line tLine in tText
+      if tLine begins with "JAVA_VERSION=" then
+         put char 14 to -1 of tLine into tVersion
+         exit repeat
+      end if
+   end repeat
+   replace quote with empty in tVersion
+   set the itemDelimiter to "."
+   if item 1 of tVersion is "1" then
+      put item 2 of tVersion into tVersion
+   else
+      put item 1 of tVersion into tVersion
+   end if
+   set the itemDelimiter to comma
+   -- "21-ea" and the like
+   repeat with i = 1 to the number of chars of tVersion
+      if char i of tVersion is not in "0123456789" then
+         delete char i to -1 of tVersion
+         exit repeat
+      end if
+   end repeat
+   if tVersion is empty or tVersion is not an integer then
+      return empty
+   end if
+   return tVersion
+end javaMajorVersion
 
 /*
 Handlers for converting XML text to LiveCode arrays and vice versa. 

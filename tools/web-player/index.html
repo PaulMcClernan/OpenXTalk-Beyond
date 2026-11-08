@@ -93,8 +93,15 @@ button{font:inherit;color:inherit}
 h1,h2,h3{font-family:var(--display);font-weight:800;line-height:1.15;letter-spacing:-.02em}
 svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .flame{background:linear-gradient(100deg,#ffd08a,#ffb347 20%,#ff7700 60%,#ff3d00 85%,#ffb347);background-size:200% 100%;
-  -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 22px rgba(255,122,0,.4));animation:flow 6s ease-in-out infinite alternate}
+  -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 22px rgba(255,122,0,.4));animation:flow 6s ease-in-out 2 alternate}
 @keyframes flow{to{background-position:100% 0}}
+/* Nothing here moves without end unless it is pointed at or has the
+   keyboard's focus, as on the site's front page (tperry2x, openxtalk.org
+   p=25971: the rays turning, the rims running, the logo bobbing and the
+   flame flowing kept a browser without a GPU busy all the time). The flame
+   flows there and back as the page opens, then while its heading is pointed
+   at; tools/pages/check_site_rest.py holds the site to it. */
+h1:hover .flame{animation:flow 6s ease-in-out infinite alternate}
 
 /* ---------- Menu bar: always the night, floating at the top ---------- */
 .menubar{position:sticky;top:0;z-index:20;padding:.75rem 1rem 0}
@@ -158,9 +165,10 @@ body.playing .desk{display:none}
   background-size:230px 240px}
 .hero::after{content:"";position:absolute;z-index:-1;left:120px;top:50%;width:1300px;height:1300px;margin:-650px 0 0 -650px;
   background:repeating-conic-gradient(from 0deg,rgba(255,160,60,.08) 0 4deg,transparent 4deg 13deg);
-  -webkit-mask:radial-gradient(circle,#000 8%,transparent 45%);mask:radial-gradient(circle,#000 8%,transparent 45%);animation:rays 160s linear infinite}
-@keyframes rays{to{transform:rotate(360deg)}}
-.hero>img{width:156px;height:156px;flex:none;transform:rotate(-5deg);filter:drop-shadow(0 18px 30px rgba(0,0,0,.5)) drop-shadow(0 0 34px rgba(255,122,0,.4));animation:bob 5s ease-in-out infinite}
+  -webkit-mask:radial-gradient(circle,#000 8%,transparent 45%);mask:radial-gradient(circle,#000 8%,transparent 45%)}
+/* the logo bobs twice as the page opens, then while it is pointed at */
+.hero>img{width:156px;height:156px;flex:none;transform:rotate(-5deg);filter:drop-shadow(0 18px 30px rgba(0,0,0,.5)) drop-shadow(0 0 34px rgba(255,122,0,.4));animation:bob 5s ease-in-out 2}
+.hero>img:hover{animation:bob 5s ease-in-out infinite}
 .hero-text{flex:1 1 20rem}
 .hero h1{font-size:clamp(2.5rem,7vw,4.2rem);font-weight:850;letter-spacing:-.04em;line-height:1;margin:0;color:#fff}
 .hero .lead{color:rgba(222,230,244,.85)}
@@ -190,10 +198,11 @@ body.playing .desk{display:none}
 .feature::before{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;padding:2px;opacity:.5;
   background:conic-gradient(from var(--spin),#ff3d00,#ffc24d 12%,#fff4b0 16%,#ff7700 24%,rgba(255,119,0,.25) 45%,rgba(255,61,0,.25) 70%,#ff3d00);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
-  animation:spin 8s linear infinite;transition:opacity .25s ease}
+  transition:opacity .25s ease}
+/* the rim runs only around the stack pointed at or focused */
 @keyframes spin{to{--spin:360deg}}
 .feature:hover,.feature:focus-visible{transform:translateY(-6px);box-shadow:var(--shadow-up)}
-.feature:hover::before,.feature:focus-visible::before{opacity:1;animation-duration:2.2s}
+.feature:hover::before,.feature:focus-visible::before{opacity:1;animation:spin 2.2s linear infinite}
 .feature:active{transform:translateY(-2px)}
 .feature .shot{position:relative;overflow:hidden;display:block;padding:0;border-bottom:0;background:#0c111b}
 .feature .shot img{display:block;width:100%;height:auto;aspect-ratio:var(--ratio,16/10);object-fit:cover;object-position:top left;border:0;border-radius:0;
@@ -283,6 +292,30 @@ body:not(.playing) #stage{position:absolute;left:0;top:0;width:100%;height:0;pad
 body.fullscreen .menubar{display:none}
 body.fullscreen #stage{box-sizing:border-box;min-height:100vh;justify-content:center}
 
+/* ---------- A stack on a phone: it has the whole screen ----------
+   (data-mobile-web-fill is taken off the body on a phone, so the Mobile
+   Web library may fill the page: a stack made for phones fills it with
+   mwStart, and the player fits any other stack to it, mwFitStack; on a
+   tablet it is "touch", and only a stack the library filled the page for
+   has it, fillsTheScreen). The
+   engine sizes the stack to the whole page, so the bar steps aside for
+   one button, back to the library, over the stack's corner. */
+body.phone-play .menubar,body.phone-play #stage .titlebar,body.phone-play #stage .caption{display:none}
+body.phone-play #stage{position:fixed;inset:0;padding:0;overflow:hidden;display:block}
+body.phone-play #stage .window.card{margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
+body.phone-play #stage .clip{border-radius:0}
+#phone-home{display:none}
+body.phone-play #phone-home{display:grid;place-items:center;position:fixed;z-index:30;
+  top:calc(env(safe-area-inset-top,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 10px);
+  width:42px;height:42px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.28);
+  background:rgba(10,15,26,.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:pointer;opacity:.9;transition:opacity .4s}
+body.phone-play #phone-home.dim{opacity:.45}
+#phone-home .i{width:20px;height:20px}
+#stopped{position:fixed;left:0;right:0;top:0;z-index:2147483647;padding:16px 20px;
+  padding-top:max(16px,env(safe-area-inset-top));background:#fff4f0;color:#7a1d00;
+  border-bottom:2px solid #e8590c;font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+
 /* ---------- Loading: the logo in the night, and a bar of fire ---------- */
 #loading{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:1rem;color:var(--star);transition:opacity .3s;
   background:radial-gradient(1px 1px at 20px 30px,#fff,transparent),radial-gradient(1px 1px at 140px 80px,rgba(255,255,255,.8),transparent),
@@ -370,7 +403,10 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
 }
 </style>
 </head>
-<body data-tone="1">
+<!-- data-mobile-web-fill="no": the stack is shown in a window of the
+     player's own, so a stack that asks the Mobile Web library to fill the
+     browser's window (mwFillScreen) keeps its size here -->
+<body data-tone="1" data-mobile-web-fill="no">
 
 <header class="menubar">
   <div class="inner">
@@ -456,6 +492,7 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
   </div>
   <p class="caption" id="current-meta"></p>
 </section>
+<button id="phone-home" title="Back to your stacks" aria-label="Back to your stacks"><svg class="i" viewBox="0 0 24 24"><path d="M4 11.5 12 4.5l8 7M6.5 9.5V19.5h11V9.5"/></svg></button>
 
 <div id="loading" role="status" aria-live="polite">
   <div class="window card">
@@ -720,6 +757,45 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
     $('loading-error').textContent = 'The engine could not start in this browser. ' +
       (location.protocol == 'file:' ? 'Open this page from a web server, not from a file on disk.' : 'Try an up-to-date Chrome, Edge, Firefox or Safari.');
   });
+  // A note above everything, with the browser's own words and which
+  // browser it is, so that whoever sees it can tell what happened.
+  function showStopped(text) {
+    if ($('stopped')) return;
+    var note = document.createElement('div');
+    note.id = 'stopped';
+    note.setAttribute('role', 'alert');
+    note.textContent = text + ' (' + navigator.userAgent + ')';
+    document.body.appendChild(note);
+  }
+  // The engine stopping (out of the browser's stack, as on an iPhone or
+  // an iPad, which give a page far less than a desktop, or WebAssembly
+  // failing) comes as a promise nothing catches, not as an 'error', and
+  // left the page blank. Only the engine's own count: a RangeError raised
+  // in its WebAssembly (whose stack names wasm functions), or a
+  // WebAssembly.RuntimeError. A stack's own JavaScript rejecting, or a
+  // browser extension's, is left as it was.
+  window.addEventListener('unhandledrejection', function (event) {
+    var reason = event.reason;
+    var stopped = (reason instanceof RangeError && /wasm/.test(String(reason.stack || ''))) ||
+      (typeof WebAssembly == 'object' && WebAssembly.RuntimeError && reason instanceof WebAssembly.RuntimeError);
+    if (!stopped) return;
+    var said = reason.message || String(reason);
+    // its WebAssembly not understood: a browser older than the engine
+    // needs (Safari 15, iOS 15, is the first with BigInt64Array, which the
+    // engine uses), or else a damaged file
+    if (!/CompileError/.test(said)) showStopped('The stack stopped in this browser: ' + said);
+    else if (typeof BigInt64Array == 'undefined') showStopped('This browser is too old to run stacks: it needs Safari 15 or later ' +
+      '(iOS 15 or later on an iPhone or an iPad), or an up-to-date Chrome, Edge or Firefox. (' + said + ')');
+    else showStopped('This browser could not read the engine: its .wasm file is damaged, or the server ' +
+      'sent something else in its place. Upload the files again as they were built. (' + said + ')');
+  });
+  // A browser without WebAssembly cannot run the engine at all, and the
+  // page said it was starting for ever. An iPhone's or an iPad's Lockdown
+  // Mode turns WebAssembly off.
+  if (typeof WebAssembly != 'object') {
+    showStopped('This browser cannot run stacks: WebAssembly is turned off in it. ' +
+      'On an iPhone or an iPad, Lockdown Mode turns it off, and Safari can leave this site out of Lockdown Mode.');
+  }
 
   // ---------------------------------------------------------------- the player stack
   var opened = 0;
@@ -730,9 +806,53 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
     return stack.playerFromPage(what);
   }
 
+  // A phone: a touch screen whose short side is a phone's. There a stack
+  // has the whole screen: the body loses data-mobile-web-fill="no", so
+  // that the Mobile Web library may fill the page, before a stack opens
+  // (its own openStack may call mwStart), and the player then fits a
+  // stack that did not take the screen itself (playerFitToPhone).
+  // Anywhere else, the stack is shown in its window, as it always was.
+  function isPhone() {
+    return window.matchMedia('(pointer: coarse)').matches && Math.min(window.innerWidth, window.innerHeight) <= 600;
+  }
+  // A tablet: another touch screen (an iPad). There the body has
+  // data-mobile-web-fill="touch": the Mobile Web library may fill the page,
+  // and the player gives the whole screen to a stack made with it (one
+  // whose scripts call mwStart, mwFillScreen or mwFitStack,
+  // playerUsesMobileWeb); every other stack is shown in its window, at its
+  // own size, as on a desktop.
+  function isTouch() {
+    return window.matchMedia('(pointer: coarse)').matches;
+  }
+  function choosePhone() {
+    if (document.body.classList.contains('playing')) return;
+    if (isPhone()) document.body.removeAttribute('data-mobile-web-fill');
+    else if (isTouch()) document.body.setAttribute('data-mobile-web-fill', 'touch');
+    else document.body.setAttribute('data-mobile-web-fill', 'no');
+  }
+  // Whether the stack that opened has the whole screen: on a phone every
+  // stack has it; on a tablet one that the Mobile Web library filled the
+  // page for (its style for a filled page is there, as the player stack's
+  // playerLibraryFilled asks).
+  function fillsTheScreen() {
+    var fill = document.body.getAttribute('data-mobile-web-fill');
+    return fill === null || (fill === 'touch' && !!document.getElementById('oxt-mobile-web-fill'));
+  }
+  choosePhone();
+  window.addEventListener('resize', choosePhone);
+  var dimTimer = 0;
+  function dimPhoneHome() {
+    $('phone-home').classList.remove('dim');
+    clearTimeout(dimTimer);
+    dimTimer = setTimeout(function () { $('phone-home').classList.add('dim'); }, 2500);
+  }
+
   function setPlaying(name, detail) {
     var on = name !== '';
     document.body.classList.toggle('playing', on);
+    document.body.classList.toggle('phone-play', on && fillsTheScreen());
+    if (on) dimPhoneHome();
+    else choosePhone();
     $('current').textContent = name;
     $('current-meta').textContent = detail || '';
     // each stack opened gets the next colour along
@@ -773,7 +893,7 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
         showChoices(lines);
       } else if (name == 'status') {
         var kind = lines[0], text = lines.slice(1).join(' ');
-        if (kind == 'error') { busy(null); toast(text.replace(/\/livecode\/Documents\/Stack Player\//g, ''), 'error'); }
+        if (kind == 'error') { busy(null); toast(text.replace(/\/(?:openxtalk|livecode)\/Documents\/Stack Player\//g, ''), 'error'); }
         else if (/^Opening /.test(text)) busy('Opening ' + text.replace(/^Opening /, '').split('/').pop() + '...');
         else if (/^Removed /.test(text)) toast(text);
       }
@@ -969,6 +1089,7 @@ dialog.answer .actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:
       call(id);
     });
   });
+  $('phone-home').addEventListener('click', function () { call('home'); });
   $('brand').addEventListener('click', function () {
     if (document.body.classList.contains('playing')) call('home');
     else window.scrollTo({ top: 0, behavior: 'smooth' });

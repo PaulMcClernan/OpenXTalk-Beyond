@@ -74,16 +74,20 @@ on:
     branches: [ main ]
     paths:
       - .github/workflows/web-ide.yml
+      - .github/actions/install-playwright/**
       - tools/ci/web_ide_tour.py
       - tools/ci/stray_errors.py
       - tools/ci/web_ide_soak.py
       - tools/ci/retry_check.py
       - tools/ci/web-ide-tour.livecodescript
+      - tools/ci/web-ide-idle.livecodescript
       - tools/ci/build-web-ide.sh
       - tools/ci/build-web.sh
       - tools/web-ide/**
       - tools/pages/build_pages.py
       - tools/pages/build_dictionary.py
+      - tools/pages/build_lessons.py
+      - tools/pages/lessons/**
       - tools/pages/check_dictionary.py
       - tools/pages/check_front_page.py
       - tools/pages/index.html
@@ -100,20 +104,34 @@ on:
       - engine/src/em-*
       - engine/src/mode_development.cpp
       - config/emscripten-version
+  # DRAFT PULL REQUESTS (2026-11-06). A draft runs none of this workflow's
+  # jobs: each job's `if:` ends in `github.event.pull_request.draft != true`,
+  # and marking the pull request ready (ready_for_review, below) starts the
+  # whole run on its newest commit. A draft is work in progress whose commits
+  # land minutes apart, and each one used to start this full build only for
+  # the next to cancel it (26 of 52 builds on 2026-11-06 00:38-02:15 UTC). CI
+  # checks still run on every draft commit. A push, a dispatch and a call from
+  # release.yml have no pull request, so the condition is always true there.
+  # tools/ci/tests/test_draft_builds.py holds every job to it.
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - .github/workflows/web-ide.yml
+      - .github/actions/install-playwright/**
       - tools/ci/web_ide_tour.py
       - tools/ci/stray_errors.py
       - tools/ci/web_ide_soak.py
       - tools/ci/retry_check.py
       - tools/ci/web-ide-tour.livecodescript
+      - tools/ci/web-ide-idle.livecodescript
       - tools/ci/build-web-ide.sh
       - tools/ci/build-web.sh
       - tools/web-ide/**
       - tools/pages/build_pages.py
       - tools/pages/build_dictionary.py
+      - tools/pages/build_lessons.py
+      - tools/pages/lessons/**
       - tools/pages/check_dictionary.py
       - tools/pages/check_front_page.py
       - tools/pages/index.html
@@ -171,6 +189,7 @@ defaults:
 jobs:
   engine:
     name: Web IDE engine
+    if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     # As web.yml: Ubuntu 22.04 through Google's mirror of Docker Hub, for
     # the Python 2.7 that gyp needs
@@ -359,7 +378,7 @@ jobs:
   tour:
     name: Web IDE screenshots (${{ matrix.scheme }})
     needs: engine
-    if: ${{ !inputs.release }}
+    if: ${{ (!inputs.release) && github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -421,6 +440,21 @@ jobs:
           "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_ide_tour.py --site "$RUNNER_TEMP/site" \
             --out "$RUNNER_TEMP/web-ide-tour" --color-scheme "$SCHEME"
 
+      # How busy the web IDE keeps the browser while nobody uses it
+      # (tools/ci/web-ide-idle.livecodescript): Home's lights are pictures
+      # that draw the gradients' pixels, Home moves in front and holds
+      # still behind a stack of the user's, and the main thread's work in
+      # each state, with Home closed too, stays under its budget (seth,
+      # 2026-11-04: half a core while idle on 0.2.7-rc.6.14). Once, in the
+      # light job; the numbers are in the step's log.
+      - name: Web IDE at rest
+        if: ${{ !cancelled() && matrix.scheme == 'light' }}
+        timeout-minutes: 10
+        run: |
+          "$RUNNER_TEMP/playwright/bin/python" tools/ci/web_ide_tour.py --site "$RUNNER_TEMP/site" \
+            --out "$RUNNER_TEMP/web-ide-tour/at-rest" --tour tools/ci/web-ide-idle.livecodescript \
+            --timeout 480
+
       # (light keeps the artifact's old name)
       - name: Upload the screenshots
         id: upload
@@ -456,7 +490,7 @@ jobs:
   small:
     name: Web IDE small window (${{ matrix.browser }}, ${{ matrix.size }})
     needs: engine
-    if: ${{ !inputs.release }}
+    if: ${{ (!inputs.release) && github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -598,7 +632,7 @@ jobs:
   upgrade:
     name: Web IDE update in a kept profile (${{ matrix.browser }})
     needs: engine
-    if: ${{ !inputs.release }}
+    if: ${{ (!inputs.release) && github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -690,7 +724,7 @@ jobs:
   soak:
     name: Web IDE soak (${{ matrix.browser }})
     needs: engine
-    if: ${{ !inputs.release }}
+    if: ${{ (!inputs.release) && github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ matrix.browser == 'webkit' && 40 || 30 }}
     strategy:
@@ -732,15 +766,15 @@ jobs:
           python3 tools/web-ide/build_site.py --install "$OXT_ROOT" \
             --engine "$RUNNER_TEMP/web-ide-engine" --out "$RUNNER_TEMP/site" --repo .
 
-      # Playwright, pinned (web.yml's version), with the browser
+      # Playwright, pinned (web.yml's version), with the browser; its
+      # system libraries are fetched first, with a time limit and from the
+      # cache (.github/actions/install-playwright says why)
       - name: Install Playwright and ${{ matrix.browser }}
-        env:
-          PLAYWRIGHT_VERSION: 1.56.0
-          BROWSER: ${{ matrix.browser }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/playwright"
-          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
-          "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps "$BROWSER"
+        uses: ./.github/actions/install-playwright
+        with:
+          version: 1.56.0
+          browsers: ${{ matrix.browser }}
+          venv: ${{ runner.temp }}/playwright
 
       # In WebKit the soak runs a second time if it fails, as web.yml's
       # check does (tools/ci/retry_check.py: the first try's record is
@@ -781,7 +815,7 @@ jobs:
   xtalk:
     name: Web IDE xTalk Suite (${{ matrix.browser }})
     needs: engine
-    if: ${{ !inputs.release }}
+    if: ${{ (!inputs.release) && github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -827,13 +861,11 @@ jobs:
             --engine "$RUNNER_TEMP/web-ide-engine" --out "$RUNNER_TEMP/site" --repo .
 
       - name: Install Playwright and ${{ matrix.browser }}
-        env:
-          PLAYWRIGHT_VERSION: 1.56.0
-          BROWSER: ${{ matrix.browser }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/playwright"
-          "$RUNNER_TEMP/playwright/bin/python" -m pip install --quiet "playwright==$PLAYWRIGHT_VERSION"
-          "$RUNNER_TEMP/playwright/bin/python" -m playwright install --with-deps "$BROWSER"
+        uses: ./.github/actions/install-playwright
+        with:
+          version: 1.56.0
+          browsers: ${{ matrix.browser }}
+          venv: ${{ runner.temp }}/playwright
 
       # In WebKit the check runs a second time if it fails, as web.yml's
       # check does (tools/ci/retry_check.py, with the first try's record
@@ -874,6 +906,7 @@ jobs:
   # (tools/ci/release_assets.py checks it against that file).
   download:
     name: Web IDE download
+    if: ${{ github.event.pull_request.draft != true }}
     needs: engine
     runs-on: ubuntu-24.04
     timeout-minutes: 30

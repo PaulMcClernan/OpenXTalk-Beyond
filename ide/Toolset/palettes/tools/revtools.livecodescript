@@ -40,6 +40,10 @@ constant kTmIconBox = 44
 constant kTmMinWidth = 96
 constant kTmMinHeight = 160
 constant kTmDefaultWidth = 120
+-- The first width with names: one column of icons with their names, which
+-- two columns of kTmNameCell (with the pads, the thumb and the gap) would
+-- take more than 300 points for
+constant kTmNamesWidth = 200
 constant kTmWheel = 36
 -- How much larger Large Icons makes the icons and tiles
 constant kTmLargeScale = 1.5
@@ -67,6 +71,10 @@ local sTmSaveMsg
 -- The pending look again at macOS's appearance after a switch, and how
 -- many looks are left (tmRecheckAppearance)
 local sAppearanceMsg, sAppearanceTries
+-- OXT-Beyond: the widgets the palette was last made with, either look
+-- (toolsWidgetSignature): a widget installed, uninstalled or reloaded
+-- since makes it again (ideExtensionsChanged, openStack)
+local sToolsWidgetSig
 
 on preOpenStack
    if the cREVLaunching of stack "Home" is true then set the blendlevel of this stack to 99 -- tperry 1/5/24
@@ -122,9 +130,19 @@ end preOpenStack
 
 on openStack
    lock screen
+   -- OXT-Beyond: a palette closed and opened again keeps what it made,
+   -- and it hears no ideExtensionsChanged while it is closed, so a widget
+   -- installed or uninstalled meanwhile is shown, or taken away, now
+   if there is a group "contents" of me and toolsWidgetsChanged() then
+      generatePalette
+   end if
    layoutpalette
    registerForMessages
-   set the visible of me to true
+   -- OXT-Beyond: not when it is opened to stay hidden (cOXTOpenHidden,
+   -- revpalettebehavior.livecodescript)
+   if the cOXTOpenHidden of me is not true then
+      set the visible of me to true
+   end if
    unlock screen
    
    -- is this the last thing that gets called?
@@ -174,7 +192,13 @@ on registerForMessages
    revIDESubscribe "ideSystemAppearanceChanged"
    -- OXT-Beyond: Preferences > Compatibility turns the Player tool on or off
    revIDESubscribe "idePreferenceChanged:cDisablePlayerTool"
-   -- revIDESubscribe "ideExtensionsChanged"
+   -- OXT-Beyond: a widget installed or uninstalled shows, or goes, at
+   -- once, in either look, as in LiveCode (this was commented out, so it
+   -- took a switch of look or a restart: bwmilby, forum, 2026-11-07).
+   -- The extension library sends it once a batch of changes
+   -- (revideextensionlibrary's __extensionsChanged), and the palette is
+   -- made again only when its widgets changed (ideExtensionsChanged)
+   revIDESubscribe "ideExtensionsChanged"
 end registerForMessages
 
 on findMoreWidgets
@@ -184,11 +208,34 @@ on findMoreWidgets
 end findMoreWidgets
 
 on ideExtensionsChanged
+   -- OXT-Beyond: a library or other extension, or the batch at start-up
+   -- that loads what the palette was just made with, leaves it as it is
+   if not toolsWidgetsChanged() then exit ideExtensionsChanged
    lock screen
    generatePalette
    layoutPalette
    unlock screen
 end ideExtensionsChanged
+
+-- OXT-Beyond: what the palette shows of the installed widgets, both looks
+-- (revIDEWidgets, as generatePalette and tmViewsData read it): each
+-- widget's id, version, title and icons, in order
+function toolsWidgetSignature
+   local tData, tKeys, tKey, tSig
+   put revIDEWidgets() into tData
+   put the keys of tData into tKeys
+   sort lines of tKeys
+   repeat for each line tKey in tKeys
+      put tKey & tab & tData[tKey]["version"] & tab & tData[tKey]["title"] & tab & \
+            tData[tKey]["icon"] & tab & tData[tKey]["svgicon"] & return after tSig
+   end repeat
+   return tSig
+end toolsWidgetSignature
+
+-- Whether the widgets have changed since the palette was last made
+function toolsWidgetsChanged
+   return toolsWidgetSignature() is not sToolsWidgetSig
+end toolsWidgetsChanged
 
 on ideSystemAppearanceChanged
    lock screen
@@ -341,6 +388,7 @@ on generatePalette
    -- OXT-Beyond: what the modern look made, left when the look was
    -- changed while the palette was closed (tmDropModern)
    tmDropModern
+   put toolsWidgetSignature() into sToolsWidgetSig
    lock screen
    # Clean up existing UI
    repeat while there is a group "contents"
@@ -3060,6 +3108,7 @@ command tmGenerate
    set the foregroundColor of it to tmColor("hiliteLine")
    hide it
 
+   put toolsWidgetSignature() into sToolsWidgetSig
    put tmViewsData() into tData
 
    -- the sections' captions: a fold mark and a title
@@ -3380,8 +3429,20 @@ private command tmFitLabel pLabel, pCellH
    set the height of pLabel to min(pCellH, the formattedHeight of pLabel)
 end tmFitLabel
 
+-- OXT-Beyond 0.2.7-rc.6.15: the names are on by default. A profile that
+-- never chose (revTools_modernNames empty) is settled once, and the
+-- choice saved: a fresh one, which has kept no size of the modern look
+-- either, shows the names; one that has used the modern look already
+-- (a size kept) keeps the icons alone it has always shown. A saved true
+-- or false is the user's own, and is kept as it is
 private function tmShowNames
-   return revIDEGetPreference("revTools_modernNames") is true
+   local tNames
+   put revIDEGetPreference("revTools_modernNames") into tNames
+   if tNames is empty then
+      put revIDEGetPreference("revTools_modernSize") is empty into tNames
+      revIDESetPreference "revTools_modernNames", tNames
+   end if
+   return tNames is true
 end tmShowNames
 
 -- The menu's Large Icons (revTools_modernLarge): the icons and the tiles
@@ -3656,8 +3717,9 @@ private function tmKeptSize
 end tmKeptSize
 
 -- The size the window opens at: the one kept, else as wide as two
--- columns and as tall as what it shows, on the screen; it lays the
--- palette out again only when it changed the size and pLayout is not false
+-- columns (with names, one: kTmNamesWidth) and as tall as what it shows,
+-- on the screen; it lays the palette out again only when it changed the
+-- size and pLayout is not false
 private command tmApplySize pLayout
    local tSize, tW, tH, tRect, tScreen
    put tmKeptSize() into tSize
@@ -3665,7 +3727,8 @@ private command tmApplySize pLayout
       put item 1 of tSize into tW
       put item 2 of tSize into tH
    else
-      put kTmDefaultWidth into tW
+      if tmShowNames() then put kTmNamesWidth into tW
+      else put kTmDefaultWidth into tW
       put kTmHeadHeight + kTmSearchHeight + kTmPad * 2 + sTmContentHeight into tH
    end if
    put line (the screen of me) of the working screenRects into tScreen

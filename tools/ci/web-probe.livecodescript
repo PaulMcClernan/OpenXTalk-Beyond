@@ -105,7 +105,7 @@ on probeRun
 end probeRun
 
 command probeWaits
-   local tStart, tElapsed, tDeadline
+   local tStart, tElapsed, tDeadline, tCount, tFrames
    -- A wait in a handler that a timer sent
    put the milliseconds into tStart
    wait 100 milliseconds
@@ -129,6 +129,27 @@ command probeWaits
    wait until sInner is "flag" or the milliseconds > tDeadline with messages
    put the milliseconds - tStart into tElapsed
    probeCheck "wait-until", sInner is "flag" and tElapsed >= 45, tElapsed & " ms"
+
+   -- "wait 0 milliseconds with messages" gives the browser a turn, as a
+   -- desktop engine shows what was drawn and takes the user's clicks
+   -- during it: a page shows its canvas and gets its events only between
+   -- the engine's turns. An animation that waited 0 ms between its frames
+   -- showed nothing until it ended, though one that waited 0.1 ms
+   -- animated (OpenXTalkPaul, openxtalk.org p=26041). The browser's
+   -- frames are counted with requestAnimationFrame while a loop of such
+   -- waits runs for 400 ms: with no turn for the browser there are none
+   do "window.oxtProbeFrames = 0; window.oxtProbeFrame = function () { window.oxtProbeFrames++; window.oxtProbeRaf = requestAnimationFrame(window.oxtProbeFrame); }; window.oxtProbeRaf = requestAnimationFrame(window.oxtProbeFrame); 0" as "JavaScript"
+   put 0 into tCount
+   put the milliseconds into tStart
+   put tStart + 400 into tDeadline
+   repeat until the milliseconds > tDeadline
+      wait 0 milliseconds with messages
+      add 1 to tCount
+   end repeat
+   put the milliseconds - tStart into tElapsed
+   do "cancelAnimationFrame(window.oxtProbeRaf); window.oxtProbeFrames" as "JavaScript"
+   put the result into tFrames
+   probeCheck "wait-zero", tFrames >= 3, tFrames && "frames during" && tCount && "waits of 0 ms in" && tElapsed && "ms"
 end probeWaits
 
 on probeInner
@@ -976,6 +997,113 @@ private function probeDefaultColors
    return tResult
 end probeDefaultColors
 
+-- A stack whose card has a colour of its own, with the controls that took
+-- it on the web where Windows, the Mac and Linux draw their theme's face
+-- (TerryL, openxtalk.org p=25957 and p=26095: "card color still bleeds into
+-- buttons" in the web IDE): a push button, a default button, a disabled
+-- one, and a tab panel, which must not take it; a rectangle button and a
+-- button with a colour of its own, which keep theirs; and a push button
+-- with white words, which could not be read on the light face and keeps
+-- the card's colour. Opened by "card-colors-open" and read by
+-- "card-colors" once the page has drawn it (probeCardColors);
+-- "card-colors-close" deletes it
+private function probeCardColorsOpen
+   local tDefault, tError
+   put the defaultStack into tDefault
+   try
+      if there is a stack "Probe Card Colors" then
+         delete stack "Probe Card Colors"
+      end if
+      create stack "Probe Card Colors"
+      set the rect of stack "Probe Card Colors" to 380,300,780,480
+      set the defaultStack to "Probe Card Colors"
+      set the backgroundColor of card 1 of stack "Probe Card Colors" to "120,170,230"
+      probeCardButton "Push", "10,10,110,36"
+      probeCardButton "Default", "130,10,230,36"
+      set the default of button "Default" of stack "Probe Card Colors" to true
+      probeCardButton "Rect", "250,10,350,36"
+      set the style of button "Rect" of stack "Probe Card Colors" to "rectangle"
+      probeCardButton "Own", "10,50,110,76"
+      set the backgroundColor of button "Own" of stack "Probe Card Colors" to "255,200,120"
+      probeCardButton "White Words", "130,50,230,76"
+      set the textColor of button "White Words" of stack "Probe Card Colors" to "255,255,255"
+      probeCardButton "Off", "250,50,350,76"
+      set the enabled of button "Off" of stack "Probe Card Colors" to false
+      create button "Tabs"
+      set the style of button "Tabs" of stack "Probe Card Colors" to "menu"
+      set the menuMode of button "Tabs" of stack "Probe Card Colors" to "tabbed"
+      set the text of button "Tabs" of stack "Probe Card Colors" to "First" & return & "Second"
+      set the rect of button "Tabs" of stack "Probe Card Colors" to 10,90,250,170
+      go stack "Probe Card Colors"
+   catch tError
+      set the defaultStack to tDefault
+      return "error" && item 1 of tError
+   end try
+   set the defaultStack to tDefault
+   return "opened"
+end probeCardColorsOpen
+
+-- One of probeCardColorsOpen's buttons, as a new button is: opaque, threeD,
+-- its border shown, in the default stack
+private command probeCardButton pName, pRect
+   create button pName
+   set the rect of button pName of stack "Probe Card Colors" to pRect
+end probeCardButton
+
+-- The colours of probeCardColorsOpen's controls, from a snapshot of its
+-- stack: its size, then for each the colour most points of a small area
+-- inside it have, clear of its border and its words (probeAreaColor):
+-- push, default, rect, own, white-words, off, the tab panel's pane and its
+-- first (selected) tab; then the effective backgroundColor of the push
+-- button, which is the card's whatever is drawn:
+-- 400x180|240,240,240|240,240,240|120,170,230|255,200,120|120,170,230|
+-- 240,240,240|240,240,240|240,240,240|120,170,230 in the light appearance
+-- (em-theme.cpp's face; 32,32,32 in the dark, where white words read on it)
+private function probeCardColors
+   local tDefault, tResult, tError, tData, tWidth, tArea
+   if there is not a stack "Probe Card Colors" then
+      return "no stack"
+   end if
+   put the defaultStack into tDefault
+   try
+      set the defaultStack to "Probe Card Colors"
+      import snapshot from rect 0,0,400,180 of window (the windowID of stack "Probe Card Colors")
+      put the imageData of last image into tData
+      put the width of last image into tWidth
+      put the width of last image & "x" & the height of last image into tResult
+      repeat for each item tArea in "14 16 22 30,134 16 142 30,254 16 262 30,14 56 22 70,134 56 142 70,254 56 262 70,16 150 60 164,15 95 19 103"
+         put "|" & probeAreaColor(tData, tWidth, word 1 of tArea, word 2 of tArea, word 3 of tArea, word 4 of tArea) after tResult
+      end repeat
+      delete last image
+      put "|" & the effective backgroundColor of button "Push" of stack "Probe Card Colors" after tResult
+   catch tError
+      put "error" && item 1 of tError into tResult
+   end try
+   set the defaultStack to tDefault
+   return tResult
+end probeCardColors
+
+-- The colour most points from pLeft,pTop to pRight,pBottom (not
+-- included) of the image data pData, pWidth points wide, have: r,g,b
+private function probeAreaColor pData, pWidth, pLeft, pTop, pRight, pBottom
+   local tX, tY, tOffset, tColor, tCounts, tBest
+   repeat with tY = pTop to pBottom - 1
+      repeat with tX = pLeft to pRight - 1
+         put (tY * pWidth + tX) * 4 into tOffset
+         put byteToNum(byte tOffset + 2 of pData) & comma & byteToNum(byte tOffset + 3 of pData) \
+               & comma & byteToNum(byte tOffset + 4 of pData) into tColor
+         add 1 to tCounts[tColor]
+      end repeat
+   end repeat
+   put empty into tBest
+   repeat for each key tColor in tCounts
+      if tBest is empty or tCounts[tColor] > tCounts[tBest] then
+         put tColor into tBest
+      end if
+   end repeat
+   return tBest
+end probeAreaColor
+
 -- The size of the last image and the colours of points in it (x, y, ...),
 -- then deletes it: 100x100:204,51,0
 private function probeImage
@@ -1104,6 +1232,35 @@ command probeMenuSaw pItem
    probeInfo "menu-pick", pItem
 end probeMenuSaw
 
+-- web_check.py reads the colours of an option menu's list, which the
+-- engine draws as a list field of its own (probeReport("menu-colors
+-- <kind>"), which returns the button's rect): "light-text" has light words
+-- on a dark button, as SVG Lab's dark look had them (its list was light
+-- grey words on white, seth's report of rc.6.12); "black-text" black words
+-- and no background colour, which on a page that follows a dark browser
+-- were black on the dark list; "plain" sets no colour. The list must be
+-- readable in each, and a plain one as it always was. "menu-colors-done"
+-- deletes the button.
+function probeMenuColors pKind
+   if there is not a button "Probe List Menu" then
+      create button "Probe List Menu"
+      set the style of button "Probe List Menu" to "menu"
+      set the menuMode of button "Probe List Menu" to "option"
+      set the text of button "Probe List Menu" to "One" & return & "Two" & return & "Three" & return & "Four"
+      set the rect of button "Probe List Menu" to 170,20,290,44
+   end if
+   set the menuHistory of button "Probe List Menu" to 1
+   set the textColor of button "Probe List Menu" to empty
+   set the backgroundColor of button "Probe List Menu" to empty
+   if pKind is "light-text" then
+      set the textColor of button "Probe List Menu" to "230,230,235"
+      set the backgroundColor of button "Probe List Menu" to "48,52,62"
+   else if pKind is "black-text" then
+      set the textColor of button "Probe List Menu" to "0,0,0"
+   end if
+   return the rect of button "Probe List Menu"
+end probeMenuColors
+
 -- Once the dialog is open where the engine put it: where its field and
 -- its OK button are on the screen
 command probeDialogOpened
@@ -1191,6 +1348,15 @@ function probeReport pWhat
       end if
       return "done"
    end if
+   if word 1 of pWhat is "menu-colors" then
+      return probeMenuColors(word 2 of pWhat)
+   end if
+   if pWhat is "menu-colors-done" then
+      if there is a button "Probe List Menu" then
+         delete button "Probe List Menu"
+      end if
+      return "done"
+   end if
    if pWhat is "window-ignore" or pWhat is "window-heed" then
       set the ignoreMouseEvents of stack "Probe Palette" to (pWhat is "window-ignore")
       return the ignoreMouseEvents of stack "Probe Palette"
@@ -1239,6 +1405,20 @@ function probeReport pWhat
    -- page as built and on the page that follows the browser)
    if pWhat is "checks" then
       return probeCheckBoxColors()
+   end if
+   -- the colours of the controls of a card with a colour of its own
+   -- (probeCardColors), in the same way
+   if pWhat is "card-colors-open" then
+      return probeCardColorsOpen()
+   end if
+   if pWhat is "card-colors" then
+      return probeCardColors()
+   end if
+   if pWhat is "card-colors-close" then
+      if there is a stack "Probe Card Colors" then
+         delete stack "Probe Card Colors"
+      end if
+      return "closed"
    end if
    if pWhat is "colors-close" then
       if there is a stack "Probe Colors" then

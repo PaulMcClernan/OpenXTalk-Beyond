@@ -1,16 +1,103 @@
 # OXT-Beyond
 
-![OXT-Beyond 0.2.7 "Bug Hunt"](Installer/oxt-beyond/branding/art/oxt-beyond-banner.png)
+<p align="center">
+  <img src="Installer/oxt-beyond/branding/art/oxt-beyond-banner.png" alt="OXT-Beyond 0.2.7 &quot;Bug Hunt&quot;">
+</p>
 
-[![Build (Windows)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml/badge.svg)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml)
-[![Build (macOS)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml/badge.svg)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml)
-[![Build (Linux)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-linux.yml/badge.svg)](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-linux.yml)
+<p align="center">
+  <a href="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/SethMorrowSoftware/OpenXTalk-Beyond?include_prereleases&amp;label=latest&amp;sort=semver"></a>
+  <a href="LICENSE"><img alt="Licence: GPL v3" src="https://img.shields.io/badge/licence-GPLv3-blue"></a>
+  <a href="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml"><img alt="Build (Windows)" src="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-windows.yml/badge.svg"></a>
+  <a href="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml"><img alt="Build (macOS)" src="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml/badge.svg"></a>
+  <a href="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-linux.yml"><img alt="Build (Linux)" src="https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-linux.yml/badge.svg"></a>
+  <a href="https://openxtalk.org/forum/"><img alt="Community: OpenXTalk forums" src="https://img.shields.io/badge/community-OpenXTalk%20forums-orange"></a>
+</p>
+
+<p align="center">
+  <a href="https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/"><b>Website</b></a> ·
+  <a href="https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/#downloads"><b>Download</b></a> ·
+  <a href="https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/ide/">Web IDE</a> ·
+  <a href="https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/player/">Stack Player</a> ·
+  <a href="https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/dictionary/">Dictionary</a> ·
+  <a href="https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/extensions/">Extensions</a> ·
+  <a href="https://openxtalk.org/forum/">Forum</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
 OXT-Beyond is a free, open source development environment for Windows,
 macOS and Linux in which you build programs with an English-like
 scripting language in the HyperCard/HyperTalk tradition ("xTalk"). You
 lay out stacks of cards with buttons, fields and other controls, and
-write scripts that respond to what the user does.
+write scripts that respond to what the user does:
+
+```
+on mouseUp
+   put "Hello, world!" into field "Greeting"
+end mouseUp
+```
+
+Compatibility comes first: stacks and scripts made with LiveCode
+Community 9 and OpenXTalk Lite keep working as they did, and the whole
+thing is built, packaged and tested in the open from this repository.
+
+<p align="center">
+  <img src=".github/images/home-light.png" alt="OXT-Beyond's Home window, light appearance" width="49%">
+  <img src=".github/images/home-dark.png" alt="OXT-Beyond's Home window on macOS, dark appearance" width="49%">
+</p>
+
+## Contents
+
+- [Highlights](#highlights)
+- [Where OXT-Beyond comes from](#where-oxt-beyond-comes-from)
+- [Status](#status) and [Release notes by version](#release-notes-by-version)
+- [Download](#download) and [Quick start](#quick-start)
+- [What is in it](#what-is-in-it): [the IDE](#the-ide),
+  [xTalk Suite extensions](#xtalk-suite-extensions),
+  [the engine](#the-engine)
+- [Building from source](#building-from-source) and
+  [repository layout](#repository-layout)
+- [Known limitations and plans](#known-limitations-and-plans)
+- [Getting help and reporting problems](#getting-help-and-reporting-problems)
+- [Contributing](#contributing), [Credits](#credits),
+  [Licence](#licence)
+
+## Highlights
+
+- **Desktop IDE for Windows, macOS and Linux**, including 64-bit ARM
+  Linux such as a Raspberry Pi, with a light and a dark appearance
+  throughout, a modern Tools palette and toolbar, and Home: one window
+  for getting started, the lessons and the examples.
+- **Learn to program in it.** The xTalk Academy is a course in
+  programming for complete beginners, with a live playground in every
+  lesson, and Learn holds 74 how-to lessons and remastered examples.
+- **HyperCard stacks come in.** File > Import Stack > HyperCard Stack brings in
+  cards, scripts, pictures, palettes, colour and sound, reads Mac disk
+  images, and makes the imported scripts compile and run.
+- **Stacks on the web.** HTML5 standalones work, the
+  [Stack Player](https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/player/)
+  opens any stack in a browser, the Responsive Starter lays one stack
+  out for a phone, a tablet and a desktop, and the whole IDE runs in a
+  web page as the
+  [web IDE](https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/ide/).
+- **The xTalk Suite built in**: cryptography, BitTorrent, reliable UDP,
+  WebRTC, Tor, Bitcoin and Ethereum primitives, 2-D physics and Nostr,
+  as ready-to-use xTalk handlers (see
+  [xTalk Suite extensions](#xtalk-suite-extensions)).
+- **AI help that stays yours.** The xTalk Assistant writes, runs and
+  debugs xTalk with the model you choose, a local one included, and the
+  xTalk MCP Bridge lets Claude build stacks in the IDE. Both are off
+  until you turn them on.
+- **OXT-Beyond Server** (experimental) runs `.lc` pages on a web
+  server, as LiveCode Server did.
+- **Current libraries**: OpenSSL 3.5, curl, ICU, libxml2, libzip and
+  the image libraries are built from source for every platform.
+
+<p align="center">
+  <img src=".github/images/academy.png" alt="The xTalk Academy: lessons on the left, a lesson in the middle, a live playground on the right" width="49%">
+  <img src=".github/images/learn.png" alt="Learn: 74 how-to lessons with code to copy" width="49%">
+</p>
+
+## Where OXT-Beyond comes from
 
 OXT-Beyond continues **OpenXTalk Lite**. OpenXTalk Lite was (to my understanding) initiated by
 **Terry Little** (TerryL) in September 2023 as a debranded LiveCode
@@ -47,142 +134,64 @@ clone at the new one.
 
 ## Status
 
-OXT-Beyond 0.2.6 "Frankenstein" is an early release of a young project,
-for Windows, macOS and Linux (see what 0.2.1 adds, what 0.2.2 fixes,
-what 0.2.3 adds, what 0.2.4 changes, what 0.2.5 adds and what 0.2.6
-adds, under [The IDE](#the-ide)). Please read this before you download
-it. 0.2.6 adds the xTalk MCP Bridge, which lets Claude, signed in with
-your own Claude plan in the Claude desktop app or Claude Code, build
-stacks in the IDE and stays off until you turn it on (see
-[0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge),
-[0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) and
-[0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app)), fixes
-HyperCard import and the installer's file dates on Windows, brings the
-xTalk Assistant and the bridge to other xTalks' IDEs (see
-[0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins)),
-and makes HTML5 standalones work (see
-[0.2.6-rc.5](#026-rc5-web-standalones) and
-[0.2.6-rc.6](#026-rc6-the-web-panes-page-settings)). Two of those
-changes can be seen by a script: on Linux a period typed while a
-handler runs no longer stops it (Control-period does, as on Windows),
-and `do ... in widget` and the other widget commands that crashed the
-engine for a widget whose extension is not loaded now do nothing.
-0.2.7-rc.1 is a test release (a pre-release) of a new font for HTML5
-standalones, with a bold face, of their tests in Firefox and WebKit as
-well as Chromium, of the Linux clipboard fix withdrawn with the first
-0.2.6-rc.4, and of xTalk Suite extensions that load on older Linux and
-macOS (see
-[0.2.7-rc.1](#027-rc1-a-new-web-font-and-firefox-and-safari)), and
-0.2.7-rc.2 adds a File menu item for importing HyperCard stacks and
-de-branded macOS app settings (see
-[0.2.7-rc.2](#027-rc2-importing-hypercard-stacks)), and 0.2.7-rc.3
-adds the Stack Player, a web page that opens any stack, the IDE itself
-in a web page, Learn, one window for the lessons, guides and examples,
-and a HyperCard import that brings in pictures, palettes, colour and
-sound and reads Mac disk images (see
-[0.2.7-rc.3](#027-rc3-stacks-and-the-ide-on-the-web-learn-and-more-of-hypercard)),
-and 0.2.7-rc.4 connects the web IDE to Claude through the xTalk MCP
-Bridge, closes a web menu when the page around it is clicked, brings
-over OXT DPE's Extension Manager, lets a stack in the Stack Player find
-its files through `specialFolderPath("resources")` and polishes the
-stacks new in 0.2.7 (see
-[0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish)),
-and 0.2.7-rc.5 makes the scripts of
-imported HyperCard stacks compile, and adds xTalk Chat, three xTalk
-Suite apps in Learn and a new About window, and fixes the
-Standalone Settings' Web card on macOS 26 (see
-[0.2.7-rc.5](#027-rc5-hypercard-scripts-that-compile-xtalk-chat-and-the-xtalk-suites-apps)),
-and 0.2.7-rc.6 "Bug Hunt", the candidate frozen for play testing, adds
-the xTalk Academy, a course in programming for beginners, Home and a
-Release Notes window on the desktop, a modern Tools palette and the
-IDE's questions in Learn's look, and makes File > Import Stack work in
-the IDE again and imported HyperCard stacks open on the web (see
-[0.2.7-rc.6](#027-rc6-bug-hunt-the-xtalk-academy-and-the-ide-in-learns-look)),
-and 0.2.7-rc.6.1 fixes what its play testers reported: Linux at HiDPI
-and its audio clips, Safari reloading the web IDE, the Mac menu bar and
-external editor, and the modern Tools palette's labels, and moves the
-macOS user folder to `~/Documents/OXT-Beyond` (see
-[0.2.7-rc.6.1](#027-rc61-the-bug-hunts-fixes)), and 0.2.7-rc.6.2 fixes
-the Mac IDE's start-up stall, Linux's browser widget, the modern Tools
-palette and many more imported HyperCard scripts, brings the xTalk
-Suite and a downloadable zip to the web IDE, and lets the xTalk
-Assistant use a local model (see
-[0.2.7-rc.6.2](#027-rc62-the-bug-hunt-round-two)), and 0.2.7-rc.6.3
-brings in imported HyperCard stacks' MACE sounds, HyperCard's message
-order for them and many more of their scripts, keeps two web tabs from
-deleting each other's files, fixes the dark appearance's rows and
-switching, and gives the xTalk Assistant many more services (see
-[0.2.7-rc.6.3](#027-rc63-the-bug-hunt-round-three)), and 0.2.7-rc.6.4
-fixes what the Bug Hunt's testers reported on rc.6.3: the Tools
-palette's icons, the Inspector and the Message Box in the dark, the Menu
-Builder, Linux's menu ticks and players, the Mac's field frames, tabs
-and sliders, the Mac menu bar made a window, the Geometry Manager and
-vertical sliders on the web, and the time zone library on 32-bit Linux,
-and brings back mergJSON and some of HyperXTalk's syntax (see
-[0.2.7-rc.6.4](#027-rc64-the-bug-hunt-round-four)), and 0.2.7-rc.6.5
-fixes what they reported on rc.6.4: a Mac IDE that seemed to freeze
-after a click on its backdrop, the paint tools' names in the Tools
-palette and the IDE's messages that called it LiveCode, ends a crash on
-a file that is not a stack and one on invisible direction marks in a
-field, shows a card's border as soon as a script changes it, keeps the
-Windows icons out of the Linux and Mac packages, draws the palette's
-controls and tools, gives the toolbar a modern look, and brings the dark
-appearance to Home, Learn, the xTalk Academy, About, xTalk Chat, the
-xTalk Assistant and the Dictionary (see
-[0.2.7-rc.6.5](#027-rc65-the-bug-hunt-round-five)), and 0.2.7-rc.6.6
-fixes what they reported on rc.6.5: crashes printing PDFs with links,
-typing after Close and Remove From Memory and showing 0 cards, pieces of
-lines left along a scrolled field, the Inspector's image ID, Gravity and
-Scrollbar width, the Tools palette's settings, the Dictionary's filters,
-the Message Box's Pending Messages and the IDE's own file dialog, brings
-the dark appearance to Release Notes, the Extension Manager, the script
-error window and the remastered examples, gives imported HyperCard
-stacks HyperCard's text properties, text styles, round, characters and
-card ids, and their controls their own Inspector and right-click menu,
-imports HyperCard stacks from disk images again, and lets scripts write
-literal arrays, as in LiveCode 10 (see
-[0.2.7-rc.6.6](#027-rc66-the-bug-hunt-round-six)), and 0.2.7-rc.6.7
-lays out right-to-left and mixed text in the order ICU gives, ends a
-crash on the next background of a card with none, keeps the web IDE in
-the browser between visits, draws the modern Tools palette's buttons as
-buttons, and runs many more of imported HyperCard stacks' scripts (see
-[0.2.7-rc.6.7](#027-rc67-the-bug-hunt-round-seven)), and 0.2.7-rc.6.8
-lets the Script Editor follow the dark appearance, makes the Project
-Browser's script counts and the Tools palette's icons easier to read,
-runs the xTalk Suite's libraries in web standalones and the Stack
-Player, and stops more imported HyperCard stacks from hanging (see
-[0.2.7-rc.6.8](#027-rc68-the-bug-hunt-round-eight)), and 0.2.7-rc.6.9
-shows the docs of externals you add in the Dictionary, lets a web
-standalone follow the browser's dark mode, and keeps web standalones
-that use none of the xTalk Suite's libraries as small as before (see
-[0.2.7-rc.6.9](#027-rc69-the-bug-hunt-round-nine)), and 0.2.7-rc.6.10
-follows every switch between light and dark on the Mac, lets the web
-IDE follow the browser's dark mode, and fixes a hilite on Linux, the
-Dictionary's links and the Inspector's colours (see
-[0.2.7-rc.6.10](#027-rc610-the-bug-hunt-round-ten)), and 0.2.7-rc.6.11
-lets the Mac's colours and the IDE's widgets follow light and dark,
-ends a crash in the Script Editor's Breakpoints pane, makes saves
-safer, and fixes rolling back PostgreSQL and MySQL's encrypted
-connections (see
-[0.2.7-rc.6.11](#027-rc611-the-bug-hunt-round-eleven)), and
-0.2.7-rc.6.12 calls the engine BeyondEngine, brings the welcome, the
-Academy and Learn into one Home window, opens more HyperCard stacks,
-imports SVGs with their colours and clip paths and turns them into
-graphics, and pastes Copy Graphics as SVG Paths into Illustrator as
-curves (see
-[0.2.7-rc.6.12](#027-rc612-the-bug-hunt-round-twelve)), and
-0.2.7-rc.6.13 sets the Menu Builder's controls out where none runs
-into another, ends a crash on the Mac when typed text is committed,
-puts the OXT-Beyond logo in Home's sidebar, adds two preset sizes for
-new stacks, converts an SVG image to graphics from the Object menu, and
-brings Learn Box2D, thirteen live lessons in Box2D physics (see
-[0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen)), and
-0.2.7-rc.6.14 keeps the Inspector's colours up to date in the web IDE,
-opens Windows' full colour dialog, makes Linux menu ticks visible on dark
-menus, calms the website's front page, gives the IDE a new splash, and
-brings Learn stacks for the Box2Dxt Kit and the rest of the xTalk Suite
-(see [0.2.7-rc.6.14](#027-rc614-the-bug-hunt-round-fourteen));
-0.2.6 stays the main download until it has held up.
+**OXT-Beyond 0.2.6 "Frankenstein"** is the current release and stays
+the main download until 0.2.7 has held up. **0.2.7 "Bug Hunt"** is in
+public testing: its release candidates are pre-releases on the
+[Releases page](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases),
+and every round fixes what the testers on the
+[OpenXTalk forums](https://openxtalk.org/forum/) report. This is a
+young project; please read the notes below before you download it.
+
+Two changes in 0.2.6 can be seen by a script: on Linux a period typed
+while a handler runs no longer stops it (Control-period does, as on
+Windows), and `do ... in widget` and the other widget commands that
+crashed the engine for a widget whose extension is not loaded now do
+nothing.
+
+### Release notes by version
+
+Each version's notes are under [The IDE](#the-ide), and the IDE's
+Release Notes window shows them too; [CHANGELOG.md](CHANGELOG.md) lists
+every change, release by release.
+
+| Version | What it brings |
+| --- | --- |
+| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Two games made for phones in the Stack Player, Nova Rescue and Wobble Forts; Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; the App Browser back in the Tools menu with sharp icons; a splash image while a web standalone loads; SQLite 3.51.3, and libsodium 1.0.22 and OpenSSL 3.5.9 in the xTalk Suite |
+| [0.2.7-rc.6.17](#027-rc617-the-bug-hunt-round-seventeen) | The round to squash what was left before 0.2.7 is stable: buttons on a coloured card in the web IDE, a dark menu item on Linux, a main window that wouldn't minimize on Windows 11, an App Browser that listed itself (and the Card Navigator), windows that flashed at start, Inclusions in a new order every run, the Responsive Starter's second save, the Phone Starter's pinch and its fit on an iPhone's Home Screen; and Lessons, a course in xTalk, on the website |
+| [0.2.7-rc.6.16](#027-rc616-the-bug-hunt-round-sixteen) | The Responsive Starter lays one stack out for a phone, a tablet and a desktop; phone stacks use touch, sensors, the camera and the share sheet; a stack plays with nothing around it; Android packages install again; the website gets an Extensions page; the Script Editor's black words on grey, a blank Dictionary on Windows and unreadable menu words are fixed |
+| [0.2.7-rc.6.15](#027-rc615-the-bug-hunt-round-fifteen) | The Mobile Web library and the Phone Starter bring stacks to phones; animations that wait 0 ms show in the browser; a Clear button for the Inspector's colours; named tools; the web IDE and the website rest; `write to process` sends text as written |
+| [0.2.7-rc.6.14](#027-rc614-the-bug-hunt-round-fourteen) | The Inspector's colours stay up to date in the web IDE; Windows' full colour dialog; visible Linux menu ticks on dark menus; a calmer website front page; a new splash; Learn stacks for the Box2Dxt Kit and the rest of the xTalk Suite |
+| [0.2.7-rc.6.13](#027-rc613-the-bug-hunt-round-thirteen) | A Menu Builder whose controls no longer overlap; no crash on the Mac when typed text is committed; the logo in Home's sidebar; two preset sizes for new stacks; SVG-to-graphics from the Object menu; Learn Box2D, thirteen live physics lessons |
+| [0.2.7-rc.6.12](#027-rc612-the-bug-hunt-round-twelve) | The engine is called BeyondEngine; the welcome, the Academy and Learn become one Home window; more HyperCard stacks open; SVGs import with their colours and clip paths and turn into graphics; Copy Graphics as SVG Paths pastes into Illustrator as curves |
+| [0.2.7-rc.6.11](#027-rc611-the-bug-hunt-round-eleven) | The Mac's colours and the IDE's widgets follow light and dark; no crash in the Script Editor's Breakpoints pane; safer saves; `revRollBackDatabase` rolls back instead of committing (PostgreSQL, SQLite, ODBC) and MySQL connects over TLS 1.2 and 1.3 |
+| [0.2.7-rc.6.10](#027-rc610-the-bug-hunt-round-ten) | Every switch between light and dark is followed on the Mac; the web IDE follows the browser's dark mode; fixes for a Linux hilite, the Dictionary's links and the Inspector's colours |
+| [0.2.7-rc.6.9](#027-rc69-the-bug-hunt-round-nine) | The Dictionary shows the docs of externals you add; web standalones follow the browser's dark mode and stay small when they use none of the xTalk Suite |
+| [0.2.7-rc.6.8](#027-rc68-the-bug-hunt-round-eight) | A dark Script Editor; easier-to-read Project Browser counts and Tools palette icons; the xTalk Suite's libraries in web standalones and the Stack Player; fewer imported HyperCard stacks hang |
+| [0.2.7-rc.6.7](#027-rc67-the-bug-hunt-round-seven) | Right-to-left and mixed text laid out in ICU's order; no crash on the next background of a card with none; the web IDE stays in the browser between visits; many more imported HyperCard scripts run |
+| [0.2.7-rc.6.6](#027-rc66-the-bug-hunt-round-six) | Crash and redraw fixes (PDF printing with links, Close and Remove From Memory, scrolled fields); Inspector, Dictionary, Message Box and file dialog fixes; the dark appearance in Release Notes, the Extension Manager and the examples; imported HyperCard stacks get HyperCard's text properties and their own Inspector; literal arrays, as in LiveCode 10 |
+| [0.2.7-rc.6.5](#027-rc65-the-bug-hunt-round-five) | A Mac IDE that seemed to freeze, two crashes, the IDE's messages that said LiveCode; a modern toolbar; the dark appearance in Home, Learn, the Academy, About, xTalk Chat, the xTalk Assistant and the Dictionary |
+| [0.2.7-rc.6.4](#027-rc64-the-bug-hunt-round-four) | The Tools palette's icons, the Inspector and the Message Box in the dark, the Menu Builder, Linux menus and players, Mac controls, the Geometry Manager on the web; mergJSON and some of HyperXTalk's syntax come back |
+| [0.2.7-rc.6.3](#027-rc63-the-bug-hunt-round-three) | Imported HyperCard stacks get their MACE sounds and HyperCard's message order; two web tabs keep each other's files; the dark appearance's rows and switching; many more services for the xTalk Assistant |
+| [0.2.7-rc.6.2](#027-rc62-the-bug-hunt-round-two) | The Mac IDE's start-up stall, Linux's browser widget, the modern Tools palette and many more imported HyperCard scripts; the xTalk Suite and a zip download in the web IDE; a local model for the xTalk Assistant |
+| [0.2.7-rc.6.1](#027-rc61-the-bug-hunts-fixes) | Linux at HiDPI and its audio clips, Safari reloading the web IDE, the Mac menu bar and external editor, the Tools palette's labels; the macOS user folder moves to `~/Documents/OXT-Beyond` |
+| [0.2.7-rc.6](#027-rc6-bug-hunt-the-xtalk-academy-and-the-ide-in-learns-look) | "Bug Hunt", frozen for play testing: the xTalk Academy, Home and Release Notes on the desktop, a modern Tools palette, File > Import Stack works again, imported HyperCard stacks open on the web |
+| [0.2.7-rc.5](#027-rc5-hypercard-scripts-that-compile-xtalk-chat-and-the-xtalk-suites-apps) | Imported HyperCard scripts compile; xTalk Chat; three xTalk Suite apps in Learn; a new About window; the Web card on macOS 26 |
+| [0.2.7-rc.4](#027-rc4-claude-in-the-web-ide-the-extension-manager-and-polish) | Claude in the web IDE through the xTalk MCP Bridge; OXT DPE's Extension Manager; `specialFolderPath("resources")` in the Stack Player |
+| [0.2.7-rc.3](#027-rc3-stacks-and-the-ide-on-the-web-learn-and-more-of-hypercard) | The Stack Player, the IDE in a web page, Learn, and HyperCard import with pictures, palettes, colour, sound and Mac disk images |
+| [0.2.7-rc.2](#027-rc2-importing-hypercard-stacks) | A File menu item for importing HyperCard stacks; de-branded macOS app settings |
+| [0.2.7-rc.1](#027-rc1-a-new-web-font-and-firefox-and-safari) | A new web font with a bold face; web tests in Firefox and WebKit; the Linux clipboard fix; xTalk Suite extensions that load on older Linux and macOS |
+| [0.2.6-rc.6](#026-rc6-the-web-panes-page-settings) | The Web pane's page settings |
+| [0.2.6-rc.5](#026-rc5-web-standalones) | HTML5 standalones work |
+| [0.2.6-rc.4](#026-rc4-hypercard-import-a-quick-start-on-windows-and-plugins) | HyperCard import, a quick start on Windows, and the xTalk Assistant and the bridge for other xTalks' IDEs |
+| [0.2.6-rc.3](#026-rc3-setting-up-the-claude-desktop-app) | Setting up the Claude desktop app |
+| [0.2.6-rc.2](#026-rc2-the-bridge-asks-before-every-run) | The bridge asks before every run |
+| [0.2.6-rc.1](#026-rc1-the-xtalk-mcp-bridge) | The xTalk MCP Bridge |
+
+Earlier versions, from 0.2.1 to 0.2.5, are described under
+[The IDE](#the-ide), and [HISTORY.md](HISTORY.md) tells the story up to
+0.0.1.
+
+### Before you download
 
 - **Windows, macOS and Linux.** From 0.1.0 on, every release has
   packages for 64-bit Windows, for macOS (one universal app for Apple
@@ -193,19 +202,22 @@ brings Learn stacks for the Box2Dxt Kit and the rest of the xTalk Suite
   64-bit system; see [Linux (64-bit ARM)](#linux-64-bit-arm)), without
   the browser widget. 32-bit Windows and Linux are built in CI but not
   packaged, for their standalone runtimes.
-- **The Android runtime is still a prebuilt one.** Each package's
+- **The Android engines are still prebuilt ones.** Each package's
   engine, externals and tools are built from this repository (Windows
   x86-64, macOS for Apple Silicon and Intel, Linux x86-64), and so are
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
-  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.14.zip`)
+  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.18b.zip`)
   brings each platform's runtimes into the other packages. The web
   engine of HTML5 standalones, which every package carries, is built
-  from this repository too (see [The engine](#the-engine)). The Android
-  runtime, though, is still OpenXTalk Lite 1.15's (stock LiveCode 9.6.3
-  builds as Tom Perry shipped them), carried over unchanged in that
-  asset. Only the macOS package has the macOS runtimes, OXT-Beyond does
-  not support iOS and has no iOS build or runtimes (so the Standalone
+  from this repository too (see [The engine](#the-engine)), and so is
+  the Android runtime's Java layer (`Runtime/Android/Classes`) from
+  0.2.7-rc.6.18 on. The Android engines, though, are still OpenXTalk
+  Lite 1.15's (stock LiveCode 9.6.3 builds as Tom Perry shipped them),
+  carried over unchanged in that asset: the Android engine is built
+  here and checked in CI, but the packages do not carry it yet. Only
+  the macOS package has the macOS runtimes, OXT-Beyond does not support
+  iOS and has no iOS build or runtimes (so the Standalone
   Settings have no iOS card, and a stack set to build for iOS in
   LiveCode builds for its other platforms), and
   32-bit Linux standalones have no browser (CEF's 32-bit
@@ -213,7 +225,9 @@ brings Learn stacks for the Box2Dxt Kit and the rest of the xTalk Suite
   libraries, as LiveCode's do (OpenXTalk Lite 1.15's Linux runtimes came
   with copies of some). The automatic tests build a standalone from every
   runtime a package carries, Android aside, and run those the test
-  machine can run.
+  machine can run; Android packages are built by the IDE's Android
+  builder with a real Android SDK, checked, and run on Android emulators
+  by a workflow of their own (see [BUILDING.md](BUILDING.md#android-standalone-check)).
 - **Some old third-party libraries.** OpenSSL (3.5.9, a long-term
   support release), curl (8.22.0) and ICU (78.3) are current, built from
   source for every platform, and so are the image and pattern libraries
@@ -260,7 +274,7 @@ brings Learn stacks for the Box2Dxt Kit and the rest of the xTalk Suite
   checks that the programs and libraries exist and are genuine x86-64 PE
   images with the expected versions, runs a headless smoke test of the
   engine in the portable zip and in an installed copy (the script engine,
-  Unicode, OpenSSL, SQLite 3.51.1 through revDB, revXML and revZip), compiles
+  Unicode, OpenSSL, SQLite 3.51.3 through revDB, revXML and revZip), compiles
   every script of the IDE and compares the errors with a list of known
   ones, builds a standalone from each runtime in the portable zip and
   runs the Windows ones, and installs and uninstalls the installer (see
@@ -311,34 +325,39 @@ version, for example `0.1.0`:
 | | `OXT-Beyond-<version>-win-x86_64-portable.zip` | The same program folder without an installer. |
 | | `OXT-Beyond-<version>-win-x86_64-binaries.zip` | Only the built engine, externals and tools (`win-x86_64-bin`, without debug symbols) and the licence files, for use with a source checkout. |
 | | `OXT-Beyond-<version>-win-x86_64-symbols.zip` | Debug symbols (`.pdb`), for developers. |
-| macOS 11 or later on Apple Silicon, 10.13 or later on Intel | `OXT-Beyond-<version>-mac-universal.dmg` | A disk image with `OXT-Beyond.app`, one app for Apple Silicon and Intel Macs, to drag to Applications (see [macOS](#macos)). |
+| | `OXT-Beyond-<version>-win-x86_64-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
+| macOS 11 or later on Apple Silicon and Intel | `OXT-Beyond-<version>-mac-universal.dmg` | A disk image with `OXT-Beyond.app`, one app for Apple Silicon and Intel Macs, to drag to Applications (see [macOS](#macos)). |
 | | `OXT-Beyond-<version>-mac-universal.zip` | The same app, for scripted installs. |
 | | `OXT-Beyond-<version>-mac-universal-binaries.tar.xz` | Only the built engine, externals and tools (`Release/`, both architectures joined), without debug symbols and the build's own tools, and the licence files. |
 | | `OXT-Beyond-<version>-mac-universal-symbols.zip` | Debug symbols (`.dSYM`), for developers. |
+| | `OXT-Beyond-<version>-mac-universal-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
 | Linux x86-64 with glibc 2.31 or later | `OXT-Beyond-<version>-linux-x86_64.tar.xz` | The program folder, with a launcher and `install.sh` for a per-user install (see [Linux](#linux-x86-64)). |
 | | `OXT-Beyond-<version>-linux-x86_64-binaries.tar.xz` | Only the built engine, externals and tools (`linux-x86_64-bin`), without debug symbols and the build's own tools, and the licence files. |
 | | `OXT-Beyond-<version>-linux-x86_64-symbols.tar.xz` | Debug symbols (`.dbg`), for developers. |
+| | `OXT-Beyond-<version>-linux-x86_64-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
 | 64-bit ARM Linux with glibc 2.31 or later (from 0.2.4-rc.2) | `OXT-Beyond-<version>-linux-arm64.tar.xz` | The same program folder for 64-bit ARM, such as a Raspberry Pi 3, 4 or 5 on a 64-bit system, without the browser widget (see [Linux (64-bit ARM)](#linux-64-bit-arm)). |
 | | `OXT-Beyond-<version>-linux-arm64-binaries.tar.xz` | Only the built engine, externals and tools (`linux-arm64-bin`), as for x86-64. |
 | | `OXT-Beyond-<version>-linux-arm64-symbols.tar.xz` | Debug symbols (`.dbg`), for developers. |
+| | `OXT-Beyond-<version>-linux-arm64-server.zip` | OXT-Beyond Server: the server engine with its externals and database drivers, to run `.lc` pages on a web server (see [OXT-Beyond Server](#oxt-beyond-server)). From 0.2.7-rc.6.15; experimental. |
 | Other xTalks' IDEs (LiveCode Community 9, HyperXTalk, OpenXTalk) | `OXT-Beyond-<version>-xtalk-assistant-plugin.lce`, `OXT-Beyond-<version>-mcp-bridge-plugin.lce` | The xTalk Assistant and the xTalk MCP Bridge as extension packages, to install with that IDE's Extension Manager (see [tools/plugins](tools/plugins/README.md)). OXT-Beyond has both built in. Experimental. |
 | All | `OXT-Beyond-<version>-xtalk-sources.zip` | Every file of the bundled xTalk Suite extensions as the release took it from their repositories, so that it can be rebuilt without them. |
 | All | `SHA256SUMS` | SHA-256 checksums of all the files above. |
 
-The bundled xTalk Suite extensions need macOS 10.15 Catalina on an
-Intel Mac, where the IDE runs from 10.13, and on 64-bit Linux and Apple
-Silicon nothing newer than the IDE (from 0.2.7-rc.1; up to 0.2.6 they
-needed macOS 15, and on Linux glibc 2.33 for SodiumXT or glibc 2.38 and
-OpenSSL 3 for DataChannelXT); see [macOS](#macos) and
+The bundled xTalk Suite extensions need nothing newer than the IDE
+(from 0.2.7-rc.1; up to 0.2.6 they needed macOS 15, and on Linux glibc
+2.33 for SodiumXT or glibc 2.38 and OpenSSL 3 for DataChannelXT); see
+[macOS](#macos) and
 [Linux](#linux-x86-64). The release notes list each platform's
 requirements too.
 
 Releases whose tags do not start with `v`, such as `prebuilts-v1`,
-`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.13` and
-`runtimes-0.2.7-rc.6.14`, are not programs. They hold
-files that the build and the packager download: the prebuilt
-third-party libraries of earlier versions and the standalone runtimes
-for other platforms.
+`runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.13`,
+`runtimes-0.2.7-rc.6.14`, `runtimes-0.2.7-rc.6.15`,
+`runtimes-0.2.7-rc.6.16b`, `runtimes-0.2.7-rc.6.17`,
+`runtimes-0.2.7-rc.6.18` and `runtimes-0.2.7-rc.6.18b`, are not
+programs. They hold files that the build and the packager download: the
+prebuilt third-party libraries of earlier versions and the standalone
+runtimes for other platforms.
 
 **Latest development build.** Every successful run of a build workflow
 uploads the same files as an artifact: open the workflow, pick a
@@ -427,13 +446,16 @@ for scripted installs). Releases carry them from 0.1.0 on (see
 `OXT-Beyond-mac-universal` of a successful run of the
 [Build (macOS) workflow](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/actions/workflows/build-macos.yml).
 
-**Requirements.** The IDE runs on macOS 10.13 High Sierra or later on an
-Intel Mac and macOS 11 Big Sur or later on Apple Silicon. The bundled
-xTalk Suite extensions (SodiumXT, TorrentXT, enetxt, DataChannelXT,
-Box2Dxt and CoinXT) have native libraries built for macOS 10.15 Catalina
-on Intel and macOS 11 on Apple Silicon (from 0.2.7-rc.1; up to 0.2.6
-they needed macOS 15 Sequoia): on an Intel Mac with macOS 10.13 or
-10.14 the IDE starts, but those extensions do not load. No Mac older
+**Requirements.** The IDE runs on macOS 11 Big Sur or later, on Apple
+Silicon and on Intel Macs. Up to 0.2.7-rc.6.18 an Intel Mac needed
+macOS 10.13 High Sierra, but on macOS 10.15 Catalina the IDE hung at
+launch (openxtalk.org p=26154, p=26182), and no Mac older than macOS 13
+was there to find out why: an Intel Mac below macOS 11 now gets macOS's
+own message that the app needs a newer macOS. The bundled xTalk Suite
+extensions (SodiumXT, TorrentXT, enetxt, DataChannelXT, Box2Dxt and
+CoinXT) have native libraries built for macOS 10.15 Catalina on Intel
+and macOS 11 on Apple Silicon, so they load wherever the IDE runs (from
+0.2.7-rc.1; up to 0.2.6 they needed macOS 15 Sequoia). No Mac older
 than macOS 15 has loaded them yet.
 
 **Install.**
@@ -491,9 +513,9 @@ To remove OXT-Beyond, move `OXT-Beyond.app` to the Trash.
   apps; its Apple Silicon target (*MacOS-IntelArmUniversal* in the
   standalone settings) builds arm64-only apps and needs macOS 14 Sonoma
   or later on the Mac that builds them. Universal standalones are
-  planned. Standalones run on macOS 10.13 or later (Intel) and 11 or
-  later (Apple Silicon); one that includes an xTalk Suite extension needs
-  macOS 10.15 on Intel (macOS 15 up to 0.2.6).
+  planned. Standalones run on macOS 11 or later, on Intel and Apple
+  Silicon (10.13 on Intel up to 0.2.7-rc.6.18, and 10.15 for one that
+  includes an xTalk Suite extension; macOS 15 for that up to 0.2.6).
 - The macOS package does not include the Visual C++ runtime DLLs that
   the Windows packages put next to enetxt and Box2Dxt: a Windows
   standalone built on a Mac with either of them needs the Visual C++
@@ -1652,6 +1674,553 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.18: the Bug Hunt, round eighteen
+
+OXT-Beyond 0.2.7-rc.6.18 has everything in 0.2.7-rc.6.17. This round
+puts two games made for phones in the Stack Player, brings Android
+standalones up to what Google Play asks of an app today, gets a stack's
+sounds back out as files, and squashes what the forum found since
+rc.6.17. Here is each change, listed as the bug it squashes:
+
+- **Not enough to play on a phone.** The Stack Player has two new games
+  made for phones. In Nova Rescue you drag a finger to fly, rescue the
+  drifting crews for a growing bonus, dodge meteors and raiders, and
+  beat a mothership every fourth sector. In Wobble Forts, built on
+  Box2DXT, you pull back and fling the round Bloops at the Grumps'
+  wobbly forts of wood, glass, stone, metal and TNT: fifteen forts in
+  three lands, with a boss at the end of each. Both fill a phone's
+  screen upright or turned, use Kenney's CC0 pictures and sounds, are in
+  Home's gallery, and have a page of their own in the website's web
+  stacks gallery, where a phone opens them on the whole screen (#401,
+  #403).
+- **Android apps that Google Play would turn away.** Google Play asks
+  new apps and updates to target Android 16 (API 36), and takes a new
+  app as an App Bundle. A package now targets API 36, and a stack can
+  ask for an App Bundle (.aab) beside its package with the new "App
+  Bundle" box on the Android card of Standalone Settings. The bundle
+  holds what the package holds and is signed with the package's key;
+  the builder warns when that is the debug key, or none, which Google
+  Play refuses. The first bundle build downloads Google's bundletool
+  (checked by its SHA-256) into the IDE's cache folder, and needs aapt2
+  from the Android SDK's build-tools. A stack can pin its target API
+  with its "android,target sdk" setting, from 33 to 36. A stack that
+  never ticks the box is built as before (#395, #397, #400).
+- **An Android runtime from 2019.** Standalones now carry the Android
+  runtime's Java layer built from OXT-Beyond's own source instead of
+  LiveCode 9.6.3's, which is what lets the fixes below reach your apps.
+  The Android engines themselves are still LiveCode 9.6.3's (#393).
+- **Android apps that closed when you changed the font size or the
+  language.** Android makes an app's screen again when the user changes
+  the font size, bold text or the language, attaches a keyboard or
+  resizes the window, and on Android 11 and newer the app closed. It
+  now goes on through those changes. For a change no app can be told
+  of, such as the display size, it starts again instead of closing, and
+  once its stack quits, opening the app again starts it afresh. On
+  Android 10 and older, where those changes started the stack again, it
+  now goes on as it does on newer Android (#405).
+- **Notifications that never showed on Android 12 and newer.**
+  mobileCreateLocalNotification schedules the notification and answers
+  its id there, where it answered nothing. A new "Post Notifications"
+  box among the Application Permissions makes the app ask the user, the
+  first time it schedules one, so that Android 13 and newer show it
+  (#393, #394).
+- **Pictures that wouldn't save on Android 10 and newer.**
+  mobileExportImageToAlbum adds the picture through Android's media
+  store, as Android asks there; writing the file failed on Android 10,
+  and on 11 and newer when another app's picture had the name. On
+  Android 13 and newer, an app that ticks "Write External Storage" gets
+  its external folders and saves to the album again (#394).
+- **The back button on Android 16, and stacks under the bars on 15.**
+  An app that targets API 35 or 36 still gets backKey on Android 16,
+  and its stack is kept out of the status and navigation bars, the
+  camera cutout and the keyboard, so it has the area it had (#395).
+- **Keyboard messages that came late on Android.** keyboardActivated
+  and keyboardDeactivated are sent when the keyboard shows or hides,
+  not at the next event (#393).
+- **A stack's sounds that you couldn't get back out.** `export
+  audioClip "x" to file "x.wav"` writes a clip as a WAV, AIFF or AU
+  file (by `as wave`, `as aiff`, `as ulaw` or the file's extension), so
+  the sounds the HyperCard importer brings in, and any other imported
+  sound, can be got out of a stack again; `export videoClip` writes the
+  file a video clip came from. These lines didn't compile before
+  (OpenXTalkPaul) (#391).
+- **Default buttons that went blank on a Mac.** After a script launched
+  another app, every default button of the stack was white on white:
+  in the background the Mac draws a default button plain, without its
+  accent colour, and its label stayed white. The label is white only
+  while the app is active now, and in the background it has the
+  button's own text colour, as any other button's has (Skids) (#406).
+- **An App Browser that hid in the Plugins menu, with tiny icons.**
+  Tools > Application Browser is back, under Project Browser, and opens
+  and closes it (it stays in Development > Plugins too). Its icons are
+  drawn sharp at 20 points for each stack, card, clip and control, dark
+  grey on a light window and light grey on a dark one, and the
+  triangles that open a stack are triangles on every platform
+  (richmond62) (#390).
+- **A web page that sat blank while it loaded.** An HTML5 standalone
+  can show a splash image while the engine and the stack download and
+  start: the new Splash setting in the Web pane of Standalone Settings
+  puts an image in the middle of the window, on the page's colour, with
+  what is loading under it. A stack without one gets the page it got
+  before (bwmilby) (#398).
+- **A Mobile Web library that kept laying out after a reload.**
+  Unloading the library, as the IDE does when it reloads its extensions,
+  now forgets the stacks `mwResponsive` lays out, as it was meant to
+  (#385).
+- **SQLite 3.51.3.** The SQLite driver and the web engine use SQLite's
+  last 3.51 patch release, with its fix for a database corruption bug
+  when a WAL file is reset. Values come back exactly as before; 3.53
+  and later would change the text scripts get for real numbers, so they
+  aren't used (#396).
+- **Older libsodium and OpenSSL in the xTalk Suite.** SodiumXT carries
+  libsodium 1.0.22 on every platform, and TorrentXT and dataChannelXT
+  carry OpenSSL 3.5.9 on macOS and Linux, as the engine does; their
+  scripts and behaviour are unchanged (#408).
+
+Behind the scenes, about fifty everyday things a person does are
+clicked through the IDE's own windows on every build, light and dark
+(#363); both new games are played on emulated phones, in Chromium and
+in WebKit (Safari's engine), on every build (#401, #403); a draft pull
+request runs its platform builds once it is marked ready (#386); the Android builder's checks keep their emulators awake,
+tap Allow on Android's permission dialogs, check the target API, the
+back key, the bars, the album, a font size and a density change, an app
+opened again after it quits, and App Bundles installed as Google Play
+does, on Android 13 and on Android 16 (#384, #394, #395, #397, #405);
+they answer another app's "isn't responding" dialog and wait out the
+emulator's slower steps (#404); the IDE tour checks the App Bundle box
+(#400), the App Browser's icons and its Tools menu item (#390) and, as
+its last step on a Mac, puts the IDE in the background
+and reads a default button's label there (#406); the Android engine
+itself is built here with a current NDK for all four architectures and
+checked as Android takes it (#402), and it now runs: both probes are
+built with it and run on the Android 13 and 16 KB page emulators, though
+packages still carry LiveCode 9.6.3's engines (#407), and an app built with
+it no longer hangs when Android destroys its activity while a script waits
+or the engine draws (#411); a test pins the text SQLite gives scripts (#396); a
+check finds any handler that uses a script local declared below it
+(#385); and the runtimes that every package carries are rebuilt from
+this release's engine, with the Android Java layer built here (#393,
+#409).
+
+#### 0.2.7-rc.6.17: the Bug Hunt, round seventeen
+
+OXT-Beyond 0.2.7-rc.6.17 has everything in 0.2.7-rc.6.16. This round
+set out to squash every bug still open before 0.2.7 is called stable,
+so here is each change since then, listed as the bug it squashes:
+
+- **Buttons that took the card's colour in the web IDE.** On a coloured
+  card, a push button, a default button and a tab panel with no colour
+  of their own filled themselves with the card's colour in the browser,
+  where Windows draws them in the theme's face. They now take the
+  theme's face on the web too, in a light or a dark browser, enabled or
+  disabled, wherever their words can be read on it; rectangle buttons,
+  buttons with a colour of their own, and white words on a dark card keep
+  the card's colour. Only the drawing changes: a script still gets the
+  same backgroundColor (TerryL) (#372).
+- **A dark menu item you couldn't read on Linux.** In a window with a
+  dark colour of its own, the hilited item of a menu drew its words in
+  that dark colour on GTK's selection blue. It now uses the theme's
+  hilited words (white), as menus on the theme's own colour do; a light
+  window's colour, which reads fine there, is kept (#372).
+- **A main window that wouldn't minimize on Windows 11.** A click on the
+  IDE's menu bar's minimize button did nothing: Windows kept the title
+  bar it had laid out while the window faded in at start, with its
+  buttons one place off. A window with a title bar that stops being
+  translucent is now made again in the same place, as one that starts
+  being translucent always has been, and the new window stays the active
+  one, so no stack is suspended or resumed and a stack that hid itself
+  stays hidden. A script can see one thing: such a stack gets a new
+  windowID when its blendLevel goes back to 0, as it already did when
+  its blendLevel went above 0 (#380, #389).
+- **An App Browser that listed itself.** The App Browser showed itself
+  among your stacks, and so did three more of the IDE's own: the Card
+  Navigator and the two stacks that Learn and Home read their lessons and
+  guides from. Their names don't begin with "rev", so the IDE took them
+  for yours. They are the IDE's stacks again, by name and by their files
+  in the IDE's folders; a stack of yours with the same name is still
+  yours (OpenXTalkPaul) (#372).
+- **Small, faint text in the App Browser.** Its lists of stacks, cards,
+  controls and clips are in 13-point text instead of 11, and its names
+  are dark grey on a light window instead of a mid grey that was too
+  faint to read comfortably; on a dark window they stay light grey. A
+  size or colour you set yourself is kept (richmond62) (#372).
+- **A Box2D body that wouldn't be grabbed.** In Learn Box2D, a quick
+  press and drag on a busy machine could grab nothing: the lesson looked
+  for a body where the mouse was when it got round to the press, not
+  where you pressed. It now looks where you pressed (#372).
+- **Windows that flashed while the IDE started.** The Tools palette and
+  the Message Box came up for a moment and went again while the splash
+  was showing, most visibly on Linux. They now stay hidden until the IDE
+  shows them, and every other palette opens as before (LittleNemo)
+  (#369, #375).
+- **A Script Editor that opened at two different widths.** On a screen
+  under 1250 pixels wide, the Script Editor opened narrower than its own
+  minimum the first time, and Windows sometimes widened it as it showed,
+  so on a 1024 by 768 screen it opened 410 wide one time and 500 the
+  next. The first time, it now opens at least at its minimum (500 by
+  250) as far as the screen allows; a size kept from before is used as
+  it was (#370).
+- **Inclusions in a different order every time.** Standalone Settings'
+  Inclusions pane listed its rows in the order the extensions happened
+  to load, which changed from one run to the next. They are now A to Z,
+  the same every time. In the dark appearance the ticked rows were
+  nearly invisible under their white names; they are drawn in a dark
+  version of the selection colour now. Which inclusions a stack has, and
+  what is saved, are unchanged (#366).
+- **Preset stack sizes hidden on a first run.** File > New Stack's preset
+  sizes are shown the first time the desktop IDE runs. An IDE that has
+  run before keeps your setting, and the web IDE keeps them hidden, as
+  the list is too wide for a phone's page (richmond62) (#374).
+- **A Responsive Starter that stopped on its second save.** Saving a
+  second place stopped with "can't find background", and the Saved card
+  didn't show its places' names and words. Both work now, with or
+  without the Mobile Web library. On an iPhone turned on its side, the
+  library reads the safe area again once it has changed, so a control
+  near the notch moves out of it (bwmilby) (#379).
+- **A pinch that walked the dot off the pad.** On the Phone Starter's
+  Gestures pad, a pinch sized the dot round its corner, so it walked up
+  and to the left and off the pad. It now sizes round its own centre,
+  two fingers moved together move it, and it stays on the pad (bwmilby)
+  (#382).
+- **A Phone Starter that didn't fit an iPhone's Home Screen.** Saved to
+  the Home Screen and turned on its side, the Phone Starter left a gap
+  on the left and lost its right edge, and once turned back, its
+  footer sat where a browser's toolbar would be, with black under it.
+  It fills the screen either way now, and so does any stack the Mobile
+  Web library makes as big as the page (bwmilby) (#387).
+- **A guide that named the wrong folder.** Deploying Your Application,
+  the specialFolderPath entry and the Stack Player's README said a web
+  standalone's home folder is /livecode. It has been /openxtalk since
+  0.2.7-rc.6.2 (/livecode still links to it), and they say so now. The
+  Stack Player's errors about a stack in its library show the stack's
+  name without the folder again (bwmilby) (#381).
+- **A wrong name in the Dictionary.** The Tile widget's label is its
+  tileLabel; its page said titleLabel (#376).
+- **No course to learn xTalk from on the website.** The website has
+  Lessons: a course in 83 lessons, from the first line of a script to
+  xTalk Builder extensions and shipping a program, with over 600
+  examples to copy and run, a try-it-yourself with a solution in every
+  lesson, and a search. The lessons about objects build their cards the way a beginner
+  does, with the Tools palette and the Property Inspector. Its last
+  level, Extensions, covers the extensions that come with OXT-Beyond:
+  the xTalk Suite, the text, QR code, SVG, time zone, web server and
+  sign-in libraries, and the widgets (#371, #376).
+- **A repository that was hard to find your way into.** The README opens
+  with a front page (links, screenshots, highlights) and a table of
+  every version's notes, there is a code of conduct and a SUPPORT page,
+  and the bug form knows Linux arm64, browsers and Android (#368).
+
+Behind the scenes, every example in the new lessons runs on the engine
+and must put exactly what its page shows; the web check draws a
+coloured card in a light and a dark browser and reads its buttons off
+the screen; a check runs the Mobile Web library's page code with the
+sizes an iPhone gives a Home Screen app, turned both ways; the IDE
+tour reads a hilited menu item in a window of its own dark and light
+colour, opens and checks the App Browser, fails when
+any of the IDE's own stacks is listed among the user's, imports a
+HyperCard stack from a disk image, and moves a window that would sit
+under the Tools palette; the Windows, macOS and Linux builds watch the
+IDE start for windows that come and go, and know a window the engine
+makes again in either order; the Windows builds check that every
+stack's title bar is as tall as a plain stack's, and that a window
+going opaque suspends no stack and shows no hidden one; Learn Box2D's
+mouse check holds the engine while it presses and drags; the Android
+boot tests keep a clock of their own; new IDE tests cover the Script
+Editor's first size, the Inclusions order and colours, the preset sizes
+and the startup palettes; a check holds the deploying guide to the web
+engine's home folder; the Android runtime's Java layer is built from
+this repository's sources and checked against the shipped one (it ships
+in a later release); and the runtimes that every package carries for
+the other platforms are rebuilt from this release's engine (#366, #367,
+#369, #370, #372, #373, #374, #375, #376, #377, #379, #380, #381, #382,
+#387, #388, #389, #392).
+
+The Android bug found last round is still open: an Android app made
+with OXT-Beyond closes when Android makes its screen again without
+ending the app, as after a change of font size or language. Fixing it
+needs the Android engine built here; this round's Java layer is the
+first step.
+
+#### 0.2.7-rc.6.16: the Bug Hunt, round sixteen
+
+OXT-Beyond 0.2.7-rc.6.16 has everything in 0.2.7-rc.6.15. In the spirit
+of the Bug Hunt, here is every change since then, each listed as the bug
+it squashes:
+
+- **A phone stack that only fitted phones.** The Mobile Web library lays
+  one stack out for a phone, a tablet and a desktop: mwLayoutClass and
+  mwSetBreakpoints say which the window is, mwResponsive sends
+  layoutChanged when it changes, layout rules kept on the controls
+  (mwLayout custom properties, followed by mwApplyLayout) place them for
+  each, mwFlow reflows a grid, and mwPointer and mwAppearance say
+  whether there is a mouse and whether the look is dark. The Responsive
+  Starter, in Home's gallery and the Stack Player, is a stack to copy
+  made with it: a tab bar on a phone, a rail on a tablet, a sidebar on a
+  desktop, a grid that reflows, details in a sheet or a pane, and a dark
+  look. The new guide "Stacks for Every Screen" shows how. A stack that
+  uses none of it is laid out as before (#350).
+- **A phone stack that couldn't use the phone.** The Mobile Web library
+  gives each finger its own touchStart, touchMove, touchEnd and
+  touchRelease; reads the location, heading, acceleration and rotation
+  rate (mwStartSensor); takes a photo from the camera or the library
+  (mwPickPhoto); opens the share sheet (mwShare); keeps the screen on
+  (mwKeepAwake); and hides the browser's bars (mwFullScreen). Each does
+  nothing on a desktop, and says "not from a tap" when the browser needs
+  a tap first. The Phone Starter has a Phone card that uses them, and the
+  new guide "Stacks for Phones" shows how. "Search for required
+  inclusions" finds the library in a stack that calls it (#348).
+- **A blank page where a stack should be.** When the engine stops in a
+  browser (out of the stack space an iPhone or an iPad gives a page,
+  WebAssembly turned off by an iPhone's Lockdown Mode, a browser older
+  than Safari 15 and iOS 15, or a damaged engine file), an HTML5
+  standalone and the Stack Player say which instead of showing a blank
+  page. On a phone, the Stack Player gives a stack the whole screen,
+  with a button back to the library (#348).
+- **A stack with a frame around it.** The bare player, at play/ beside
+  the Stack Player and on the website, shows a stack and nothing else:
+  no bar, no window, no library, in the middle of the page or at its top
+  left. It plays a stack of the same site (?stack=) or one of the
+  player's samples (?play=). On a phone it gives a Mobile Web stack the
+  whole screen and keeps it out of the notch; on a desktop it shows a
+  stack at its own size, as the Stack Player does. The Stack Player's
+  own page on a desktop is unchanged (LittleNemo) (#349, #355).
+- **Android packages that wouldn't install.** Test builds and "Sign for
+  development only" builds are signed with the Android SDK's debug key,
+  as LiveCode's builder signed them (before, they were not signed at
+  all); "Sign with my key" builds keep the v2 and v3 signatures Android
+  11 and newer need, and their passwords no longer go on apksigner's
+  command line; an app with a push sender ID installs on Android 12 and
+  newer (its push receiver says android:exported="true"); and a stack
+  whose Android card opens with no architecture saved gets arm64 ticked
+  beside armv7. The builder makes its packages without zip, sh and find,
+  so it builds on Windows, finds a keystore chosen there, and runs the
+  SDK's tools with the JDK of Preferences even when JAVA_HOME names an
+  older Java. It takes an SDK whose platform is newer than Android 13,
+  warns about what Google Play or Android 12 would refuse, and says what
+  an SDK lacks and how to install it (#353).
+- **No page for the extensions.** The website has an Extensions page
+  with a card for each xTalk Suite extension OXT-Beyond ships built in
+  (SodiumXT, TorrentXT, enetxt, DataChannelXT, Box2Dxt, CoinXT, OnionXT,
+  NostrXT), with what it does, its repository and a download button for
+  each of its .lce packages from the suite's newest release that has
+  them (a link to the suite's releases until there is one), and cards
+  for the xTalk Assistant and the xTalk MCP Bridge with their .lce
+  packages (#351).
+- **A Responsive Starter cut off on an iPad.** On a tablet, the Stack
+  Player and the bare player give a stack made with the Mobile Web
+  library the whole screen, so the Responsive Starter is laid out as a
+  tablet's instead of opening at its desktop size and cut off at the
+  right. Every other stack opens on a tablet as before, at its own size
+  (#361).
+- **A pattern the Inspector's Clear couldn't take away.** The Clear
+  beside a colour is enabled when the row's fill is a pattern, and takes
+  the pattern away with the colour, so a pattern no longer needs the
+  right-click menu to remove (LittleNemo) (#356).
+- **Black words on grey in the Script Editor.** The built-in light
+  colour scheme on a dark editor background, or the built-in dark one on
+  a light background, gave black text on grey. Each now loads the other
+  for the background drawn, keeping the saved scheme's name; custom and
+  other named schemes are unchanged (richmond62) (#357).
+- **A grey box in the Menu Builder.** On macOS's dark appearance, a light
+  grey box sat after the option menus of the menu's and the item's
+  Mnemonic letter. Each was an empty button whose icon no stack has;
+  both are transparent now, keep their tooltip and draw nothing on any
+  platform (#358).
+- **Menu words you couldn't read on Linux.** In a window with a colour
+  of its own, a menu's items took the theme's text colour: light grey on
+  a light window in a dark theme, dark grey on a dark one in a light
+  theme. Where the theme's text cannot be read on that colour, the words
+  are drawn black or white by it, as the item's tick is; menus on the
+  theme's colour are unchanged (#359).
+- **A blank Dictionary on Windows.** LiveCode's Dictionary could open
+  blank, in its window's own colour, when it opened where it was last:
+  its page was fitted to the window only when the window changed size.
+  It is fitted once the window is open (#360).
+- **Option menu lists you couldn't read.** On Windows, Linux and the web,
+  an option menu's or a combo box's list took the theme's list colour
+  and the button's words, so light words on a dark button were light
+  grey on white (SVG Lab's dark look on the web), and black words were
+  black on Windows' dark list. Where the two cannot be read against each
+  other, the list takes the button's background colour, or else the
+  theme's words; every list that could be read is drawn as before, and
+  the Mac's lists are unchanged (#360).
+- **A stack that wouldn't leave memory.** If the Project Browser had
+  been opened while a stack was still unsaved, even if it was closed
+  again, File > Close and Remove From Memory left that stack in memory
+  once it was saved: the browser, which keeps listening when closed,
+  looked the stack up in a way that read it back from its file. It now
+  looks only for the stack's own row; with none, an open browser lists
+  what is in memory again and a closed one does nothing. 0.2.6 did the
+  same (#362).
+- **An App Browser that missed changes.** The App Browser (the
+  Application Browser) never heard about new, renamed or removed stacks:
+  the IDE still sent its news to the browser's old name, so a stack
+  removed from memory stayed listed until Refresh. The open browser now
+  hears it, leaves out the IDE's own File Selector, and its names can be
+  read on a dark window. A stack of yours named "App Browser" or "File
+  Selector" is not mistaken for the IDE's. 0.2.6 did the same (#364).
+- **A hidden error on every stack open.** The extension library failed
+  quietly each time a stack opened while no extension's sample stack was
+  opening; only an IDE run from the source showed it, as an ERROR line
+  in the Message Box. Now it returns at once in that case, and nothing
+  else changes (#365).
+
+Behind the scenes, the Responsive Starter is checked in a browser on an
+iPhone, an iPad and a desktop, light and dark, with a notch, turned on
+its side and in a narrowed window; the bare player is opened by the
+player's check, which reads the drawn stack from its screenshot (at its
+own size on a desktop, to every edge on an iPhone), and held at rest by
+the site's; the new "Android builder"
+workflow builds packages with the released builder and with this one on
+Windows, Linux and macOS, checks their signatures, alignment and
+android:exported, compares them file by file, and on Linux runs them on
+an Android 13 emulator and on one with 16 KB pages; the player's check
+opens the Responsive Starter and 2048 on an iPad, portrait and
+landscape, the one drawn to the window's corners and the other exactly
+where and how big it was before; the IDE tour clears a pattern with the
+Inspector's Clear and fails on a Menu Builder button that draws only a
+bare box; the editor theme check covers a saved dark background in a
+light appearance and a light one in a dark appearance; the IDE tour
+draws a menu in a window of its own colour under three dark GTK themes
+and reads the Dictionary's page off the screen; the web check reads
+option menu lists on a light and a dark page; the IDE's tests remove
+a saved stack from memory with the Stack Inspector open on it and after
+the Project Browser was opened and closed, or left open; new IDE tests
+watch the App Browser hear about new, renamed and removed stacks and
+send a stack open past the extension library without an error; the
+changelog check refuses a fragment that was folded already; the WebKit
+checks fetch their browser's packages with a time limit and keep them
+in a cache, so a slow mirror no longer holds them past their time; and
+the runtimes that every package carries for the other platforms are
+rebuilt from this release's engine (#348, #349, #350, #353, #354, #355,
+#356, #357, #358, #359, #360, #361, #362, #364, #365).
+
+One bug found this round is not fixed in it. An Android app made with
+OXT-Beyond closes when Android makes its screen again without ending
+the app, as after a change of font size or language: the Android
+engine, carried over from LiveCode Community 9.6.3, opens its input a
+second time then. Packages from earlier releases do the same. Fixing it
+needs that engine built here, which is next on the Android list.
+
+#### 0.2.7-rc.6.15: the Bug Hunt, round fifteen
+
+OXT-Beyond 0.2.7-rc.6.15 has everything in 0.2.7-rc.6.14. In the spirit
+of the Bug Hunt, here is every change since then, each listed as the bug
+it squashes:
+
+- **No way to make a stack for a phone.** The new Mobile Web library
+  (com.livecode.library.mobileweb) is for stacks built for HTML5 and
+  played on phones. One line, mwStart, makes a resizable stack fill the
+  phone's screen, again when the phone turns, and scales a stack too big
+  for it; swipe, pinch and longPress go to the control under the finger
+  as mouse messages do; orientationChanged, keyboardActivated and
+  keyboardDeactivated arrive as on iOS and Android; and fingers scroll.
+  On a desktop it does nothing. The Phone Starter, in the Stack Player
+  and Home's gallery, is a stack to copy that is made with it, in
+  portrait and landscape (#339).
+- **An animation the browser never showed.** In a web standalone or the
+  web IDE, a loop that waited 0 milliseconds with messages between its
+  frames drew nothing until it ended, and took no clicks. The browser
+  now gets a turn when a frame has gone by, so the animation is seen as
+  it runs and the loop takes clicks, as on the desktop (OpenXTalkPaul)
+  (#346).
+- **A web IDE that kept the browser busy.** Home's four drifting lights
+  were drawn again every frame, and Home kept drawing behind other
+  windows and while the browser was not in use. They are drawn once into
+  pictures, and Home holds still behind other windows: from up to 39% of
+  a core at rest to 0.5%. Home's Examples, How-to, Guides and Academy
+  pages hold still the same way, and on the desktop Home holds still
+  behind other windows too (#345).
+- **A website that kept moving.** The Web Stacks gallery, the Stack
+  Player's home page and the codebase map no longer move without end at
+  rest: the gallery and the player went from more than two cores to none
+  at rest, and the map from over half a core to none. They light up and
+  move while pointed at, as the front page does since 0.2.7-rc.6.14
+  (tperry2x) (#343).
+- **Stopped by a browser extension.** An error from a script that is not
+  the page's, such as a browser extension's, no longer stops the web IDE
+  starting with "Something went wrong", or shows "The engine could not
+  start" over a web stack that runs well; an error of the page's own
+  still does (#341).
+- **A zero byte after every letter.** On Linux, write to process sent
+  text as UTF-16, so a program reading its input as text, such as an MCP
+  server, got a zero byte after every character; on macOS binary data
+  went out UTF-8 encoded, and a process opened for "UTF-8" text was sent
+  UTF-16 everywhere, all since LiveCode 7. It sends the text written, in
+  the encoding the process was opened with. Windows' text and binary
+  writes and macOS's plain text writes are unchanged (#342).
+- **No Clear button beside a colour.** Each colour in the Inspector's
+  Colors section has a Clear button beside its swatch again, as LiveCode
+  7's Inspector had: it takes the object's own colour away so it shows
+  its owner's, and is greyed out while there is none to take (LittleNemo,
+  TerryL) (#334).
+- **Tools without names.** The modern Tools palette shows each tool's
+  name beside its icon by default, in one column. A profile that has
+  used the modern look already, or saved a choice of Show Names, keeps
+  its look (#347).
+- **A Dictionary that stayed light.** The online Dictionary follows the
+  reader's light or dark setting, and search matches are readable in the
+  dark (#338).
+- **No server download, and a crash on a second require.** Each release
+  has the server engine for Windows, macOS and Linux as a zip in the
+  layout of LiveCode Community's server zips, with a README on setting it
+  up with Apache, IIS or nginx (experimental). A second require of the
+  same file no longer crashes the server engine (#337).
+- **A warning about html5.** lc-compile warned "Non-lowercase namespace
+  component" about a digit, as in html5, utf8 or md5. A digit is fine
+  now; an uppercase letter still draws the warning (OpenXTalkPaul)
+  (#346).
+- **A slow start with many extensions.** Loading extensions ran the dark
+  mode hook once for every extension, leaving hundreds of messages
+  waiting in a slow start; it runs once a batch now (#336).
+- **One card's picture in another.** In the Launch Editor, a card's image
+  and a background's of the same number (HyperCard stacks) shared one
+  temporary file, so Update gave one the other's picture. Each has its
+  own now (#336).
+- **A library that lost its name.** A script library's first doc block
+  is the library's even when a handler follows it, so a library like
+  PhotonJson keeps its name, title and version in the docs (Skids)
+  (#336).
+- **HyperCard handlers left out.** The HyperCard import handles a `do`
+  that puts into a variable named by a word this engine refuses, and a
+  `play` whose notes are on the next line: 11 more handlers in 6 stacks
+  of the 2,202-stack corpus compile, and 4 lines in 2 stacks are no
+  longer left out (#336).
+- **Claude's MCP calls stuck behind the user.** In the xTalk MCP Bridge,
+  stop_paused_script and answer_dialog go ahead while another call waits;
+  a call still waiting for your Run or Save after 40 seconds says so and
+  goes on, and pending_result gives what came of it, so a late yes is no
+  longer lost; save_stack can save to a full path; and the new
+  close_stack closes a stack Claude is done with, asking first if you'd
+  lose changes (#340).
+- **Physics lessons that kept a core busy.** Learn Box2D draws only the
+  bodies that moved and nothing while paused (a paused lesson went from
+  up to 5% of a core to almost none), and in Learn Box2D and Learn
+  Box2Dxt Kit a lesson waits while its window is hidden. The Body Types
+  lesson's shelf falls where it can be seen again (#344).
+- **Not seeing what OXT-Beyond does with SVG.** Home's Examples has SVG
+  Lab: the logo as live SVG compiled every frame, the old compile beside
+  the new either side of a line you drag, each compile option on and off
+  with Convert to Graphics and Export SVG, a drawing against a bitmap of
+  it, and recolouring, on the logo or an SVG of your own (#335).
+
+Behind the scenes, the Mobile Web library and the Phone Starter are
+checked on emulated phones (Chromium's Pixel 7 and iPhone 13, and
+WebKit as an iPhone) in portrait and landscape; the web check counts the
+browser's frames during `wait 0 milliseconds with messages`; the web IDE
+at rest is measured, Home's lights checked pixel for pixel against their
+gradients; the site's pages are measured at rest in a browser; the Web
+IDE starts in Chromium and Firefox with other scripts' errors thrown at
+it, and a newer web IDE must open a kept profile's stack and preference;
+the bytes write to process sends are tested in every mode on Linux and
+macOS, and cmd.exe on Windows; every build runs its server zip as a web
+server does, through Apache on Linux; the IDE tour checks each Clear
+button, the Tools palette's names on fresh and kept profiles, and waits
+for what a click on the Inspector shows; the compiler tests gain a
+%NOWARNINGS assertion; and the runtimes that every package carries for
+the other platforms are rebuilt from this release's engine (#334, #337,
+#339, #341, #342, #343, #345, #346, #347).
 
 #### 0.2.7-rc.6.14: the Bug Hunt, round fourteen
 
@@ -3653,6 +4222,30 @@ does on a desktop that cannot do it. The guide *Deploying Your
 Application* says what works, and how to put a standalone on a web
 site.
 
+#### OXT-Beyond Server
+
+The engine also comes as a server engine that runs xTalk scripts on a
+web server, as LiveCode Server did: a page is a `.lc` file with xTalk
+between `<?lc` and `?>`, which reads the request in `$_GET`, `$_POST`,
+`$_FILES`, `$_COOKIE` and `$_SERVER`, answers with `put header`,
+`put cookie` and `put`, shares code with `include` and `require`, and
+keeps state with `start session` and `$_SESSION`. Every build has made
+it (`server-community` in the binaries archives); from 0.2.7-rc.6.15
+each release also has it as `OXT-Beyond-<version>-<platform>-server.zip`
+for Windows x86-64, macOS (universal) and Linux x86-64 and arm64, in the
+layout of LiveCode Community's server zips: the engine
+`livecode-community-server` with `externals/` (revDB, revXML, revZip)
+and `drivers/` (SQLite, MySQL, PostgreSQL, ODBC), so that a web server
+set up for LiveCode Community's server runs it unchanged. The zip's
+`README.txt` ([`tools/oxt/server-readme.txt`](tools/oxt/server-readme.txt))
+says how to set it up with Apache, IIS or nginx and what to change
+before putting it on the internet. It is experimental. Every build runs
+each zip's engine as a CGI program, and on Linux through Apache, with
+pages that use all of the above, revDB with SQLite, revXML and revZip
+([`tools/ci/server_check.py`](tools/ci/server_check.py)). From
+0.2.7-rc.6.15 a second `require` of the same file no longer crashes the
+engine (LiveCode Community 9.6.3's server engine crashed there too).
+
 Changes made in this repository to build it: the `thirdparty` and `ide`
 submodules are ordinary folders in the repository, the prebuilt
 third-party libraries are built from source (only LiveCode's CEF 74
@@ -3724,12 +4317,18 @@ Known limitations, in rough order of importance:
    74 and several older libraries in `thirdparty/`. (OpenSSL, curl,
    ICU, zlib, libpng, giflib, libjpeg and PCRE are current from
    0.2.1-rc.3 on.) Plan: update them too.
-2. The Android standalone runtime is OpenXTalk Lite 1.15's (LiveCode
-   Community 9.6.3 builds), not built from this repository, and Android
-   standalones are not tested automatically. The Windows and Linux
-   runtimes are built from this repository from 0.2.1-rc.3 on, and every
-   package's tests build a standalone from each of them. Plan: build the
-   Android engine here too.
+2. The Android standalone engines are OpenXTalk Lite 1.15's (LiveCode
+   Community 9.6.3 builds), not built from this repository; the Java
+   layer beside them is built here from 0.2.7-rc.6.18 on, and with it a
+   package targets Android 16 (API 36), as Google Play asks of new apps
+   and updates. The Android builder is tested automatically
+   (packages built with a real Android SDK, checked, and run on Android 13
+   and 16 KB page emulators), the engine itself only as that build runs
+   it. The Windows and Linux runtimes are built from this repository from
+   0.2.1-rc.3 on, and every package's tests build a standalone from each
+   of them. The Android engine is built here and checked as Android takes
+   it, but packages do not carry it yet. Plan: ship the Android engines
+   built here.
 3. The Windows binaries are not code-signed, and the macOS app is signed
    ad hoc, not with an Apple Developer ID, and not notarized. Plan:
    Developer ID signing and notarization for macOS.
@@ -3807,7 +4406,13 @@ Issues and pull requests for any of these are welcome.
 - **Security problems:** report them privately, as described in
   [SECURITY.md](SECURITY.md).
 - **Questions and discussion about xTalk and OpenXTalk in general:** the
-  [OpenXTalk forums](https://openxtalk.org/forum/).
+  [OpenXTalk forums](https://openxtalk.org/forum/), where each release
+  of OXT-Beyond has its own thread.
+- **Learning:** the xTalk Academy, the how-to lessons and the examples
+  in Home, the
+  [Dictionary online](https://sethmorrowsoftware.github.io/OpenXTalk-Beyond/dictionary/),
+  and [SUPPORT.md](SUPPORT.md), which says where to take which
+  question.
 
 Please report problems with OXT-Beyond here, not to Terry Little, Tom
 Perry or LiveCode Ltd.
@@ -3816,7 +4421,8 @@ Perry or LiveCode Ltd.
 
 Contributions are welcome. There is no contributor licence agreement;
 contributions are accepted under the same licence as the project. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md), and please follow the
+[Code of Conduct](CODE_OF_CONDUCT.md) in the project's spaces.
 
 ## Credits
 

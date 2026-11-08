@@ -521,6 +521,9 @@ void MCDeletedObjectsOnObjectResumeDeletion(MCObject *object, void *cookie);
 
 void MCDeletedObjectsDoDrain(void);
 
+// OXT-Beyond: the WCAG's contrast of two colours, 1 to 21 (object.cpp)
+double MCObjectColorContrast(const MCColor &p_a, const MCColor &p_b);
+
 struct MCPatternInfo
 {
 	uint32_t id;
@@ -988,6 +991,9 @@ public:
 	Boolean getforecolor(uint2 di, Boolean reversed, Boolean hilite, MCColor &c,
 	                     MCPatternRef &r_pattern, int2 &x, int2 &y, MCContextType dc_type,
                          MCObject *o, bool selected = false);
+	// OXT-Beyond: the background and words of the list an option menu or a
+	// combo box shows, where the usual colours could not be read (object.cpp)
+	bool getmenulistcolors(MCContextType dc_type, MCColor &r_back, MCColor &r_fore);
 	void setforeground(MCDC *dc, uint2 di, Boolean rev, Boolean hilite = False, bool selected = false);
 	Boolean setcolor(uint2 index, const MCString &eptr);
 	Boolean setcolors(const MCString &data);

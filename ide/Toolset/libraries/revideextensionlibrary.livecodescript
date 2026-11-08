@@ -898,20 +898,45 @@ private function __extensionError pCacheIndex, pErrorMessage
    return pErrorMessage
 end __extensionError
 
+-- Every extension the IDE loads, unloads, installs or uninstalls comes
+-- here, so at start-up it runs once per extension. The notice waits 10
+-- milliseconds and a later change cancels it, so one batch of changes
+-- sends ideExtensionsChanged once; the dark mode hook below runs with it,
+-- once a batch too. It used to run on every call: a theme pass and an
+-- IDEToDarkMode or IDEToLightMode waiting for each extension, hundreds
+-- of them pending in a slow start (the IDE tour's step
+-- extensions-theme-pass counts them)
+local sExtensionsChangedMsg, sExtensionsThemeMsg
+
 # Send notication that widget has been added/removed
 on doExtensionsChanged
    ideMessageSend "ideExtensionsChanged"
 end doExtensionsChanged
 
-local sExtensionsChangedMsg
+-- The end of a batch: the dark mode hook, then the notice
+on doExtensionsChangedBatch
+   put empty into sExtensionsChangedMsg
+   __extensionsThemeHook
+   doExtensionsChanged
+end doExtensionsChangedBatch
+
 private command __extensionsChanged
    if sExtensionsChangedMsg is not empty then
       cancel sExtensionsChangedMsg
    end if
-   send "doExtensionsChanged" to me in 10 millisecs
+   send "doExtensionsChangedBatch" to me in 10 millisecs
    put the result into sExtensionsChangedMsg
-   -- dark mode hook (Paul McClernan)
-     get the cDarkMode of stack "revPreferences"
+end __extensionsChanged
+
+-- dark mode hook (Paul McClernan): setAllToDarkMode or setAllToLightMode
+-- where a stack in use has it, then IDEToDarkMode or IDEToLightMode, as
+-- before; a hook message still waiting from the last batch is not sent
+-- twice
+private command __extensionsThemeHook
+   if sExtensionsThemeMsg is not empty then
+      cancel sExtensionsThemeMsg
+   end if
+   get the cDarkMode of stack "revPreferences"
    if it is true then
       try
          setAllToDarkMode
@@ -923,7 +948,8 @@ private command __extensionsChanged
       end try
       send "IDEToLightMode" to me in 0 millisecs
    end if
-end __extensionsChanged
+   put the result into sExtensionsThemeMsg
+end __extensionsThemeHook
 
 # Sent progress update on installation of widget
 on __extensionSendProgressUpdate pCacheIndex, pMessage, pProgress
@@ -1406,7 +1432,15 @@ private command __revIDELCSExtensionLoad pFullPath, pFolder, pVersion, pStatus, 
    __extensionPropertySet tCacheIndex, "type", pAdditionalInfoA["type"]
    __extensionPropertySet tCacheIndex, "uservisible", true
    __extensionPropertySet tCacheIndex, "support_files", pAdditionalInfoA["support_files"]
-   
+
+   # OXT-Beyond: keep the handlers the manifest names, as an LCB
+   # extension's are kept (revIDEExtensionSetInfo), so that "Search for
+   # required inclusions" finds the library in a stack that calls them
+   # (revIDEExtensionLibraryHandlers). A script library's manifest names
+   # them only when it asks to (extensionGenerateManifestForLCSExtension);
+   # for any other, this is empty, as it was before.
+   __extensionPropertySet tCacheIndex, "handlers", pAdditionalInfoA["handlers"]
+
    # Check for sample stacks, as LCB extensions do: without this the
    # Extension Manager could not open a script library's samples
    __extensionPropertySet tCacheIndex, "samples", __extensionSampleStacks(tId,pFolder)
@@ -1728,18 +1762,15 @@ command revIDEExtensionShowSnippet pSourceFile
    unlock screen
 end revIDEExtensionShowSnippet
 
-local sSampleFileName
 local sOpenedStacksA
+
+-- OXT-Beyond: this library is in the message path, so an ideOpenStack
+-- sent to a subscriber with no handler of its own (OXT Lite's functions,
+-- DevGuides) ends here on every stack open. The message stops here, as it
+-- always has, so nothing further sees it. (It once cleared a sample
+-- stack's filename here; revIDEExtensionLaunchSampleStack does that before
+-- the stack opens now.)
 on ideOpenStack pCard
-   local tStack
-   put the long id of the owner of pCard into tStack
-   if tStack is the long id of stack sSampleFileName then
-      ## Clear the filename to force the user to choose save location if saving the stack
-      put the short name of tStack into sOpenedStacksA[sSampleFileName]
-      set the filename of tStack to empty
-      put empty into sSampleFileName
-      revIDEUnsubscribe "ideOpenStack"
-   end if
 end ideOpenStack
 
 command revIDEExtensionLaunchSampleStack pSampleStack
@@ -1750,13 +1781,25 @@ command revIDEExtensionLaunchSampleStack pSampleStack
         open stack sOpenedStacksA[pSampleStack]
         exit revIDEExtensionLaunchSampleStack
     end if
-    
-    // Otherwise open the stack from the file. Wait until we
-    // get the openStack message before emptying the filename
-    // otherwise we will get a long id clash
-    revIDESubscribe "ideOpenStack"
-    put pSampleStack into sSampleFileName
-    
+
+    -- OXT-Beyond: the stack is read from its file, its filename cleared
+    -- (so that saving it asks where, and the extension's copy is never
+    -- overwritten), and only then opened. Its filename was cleared while
+    -- the IDE told its subscribers that it had opened, by the long id it
+    -- had at its openStack, which names its file: a subscriber told after
+    -- that (the Project Browser, which keeps listening once it has been
+    -- opened, even closed) asked the engine about that long id, the engine
+    -- read the file again for a stack of that name already open, and the
+    -- IDE asked "A stack with the same name as the one you are trying to
+    -- load is already open". Now every subscriber is told the long id the
+    -- stack keeps. The library no longer subscribes to ideOpenStack for
+    -- it, either: its unsubscribe removed whichever subscriber the message
+    -- had come through (OXT Lite's functions), not the library
+    local tName
+    put the short name of stack pSampleStack into tName
+    put tName into sOpenedStacksA[pSampleStack]
+    set the filename of stack tName to empty
+
     ## Open the sample stack
-    open stack pSampleStack
+    open stack tName
 end revIDEExtensionLaunchSampleStack

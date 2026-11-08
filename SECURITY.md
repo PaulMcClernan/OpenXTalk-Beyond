@@ -10,9 +10,7 @@ Use GitHub's private reporting form:
 report. GitHub's documentation explains
 [how private reporting works](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability).
 
-At the time of writing, private reporting has not been turned on for
-this repository yet, so the form may say that it is not available. In
-that case, open an ordinary
+If the form ever says that it is not available, open an ordinary
 [issue](https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/issues) that says
 only that you have a security report and would like a private way to
 send it. Do not include any details of the problem in that issue. A
@@ -76,7 +74,7 @@ Development builds (workflow artifacts on the Actions tab) are made by
 the same workflows but are not reviewed as releases.
 
 The standalone runtimes for the other platforms in each package come
-from a release asset of this repository (`runtimes-0.2.7-rc.6.14`), which
+from a release asset of this repository (`runtimes-0.2.7-rc.6.18b`), which
 the packager downloads and refuses unless its SHA-256 matches the one
 recorded in
 [`tools/oxt/external-assets.json`](tools/oxt/external-assets.json). The
@@ -150,12 +148,13 @@ These are still old and have publicly known vulnerabilities:
 | Component | Version in this build | Status |
 | --- | --- | --- |
 | CEF / Chromium | CEF 74.1.19, Chromium 74.0.3729.157 (2019) | Years of unpatched browser vulnerabilities. Used by the browser widget and revBrowser on Windows and Linux. Do not use them to display content you do not trust. |
-| MySQL Connector/C | 6.0.0 | Old client library used by the MySQL database driver. It speaks TLS 1.0 only, which OpenSSL 3 refuses, so its encrypted connections fail. |
+| MySQL Connector/C | 6.0.0 | Old client library used by the MySQL database driver. Up to 0.2.7-rc.6.10 the driver asked for TLS 1.0 only, which OpenSSL 3 and current MySQL and MariaDB servers refuse, so its encrypted connections failed; from 0.2.7-rc.6.11 it connects over TLS 1.2 or 1.3 (#290). The library itself is still old. |
 | libpq (PostgreSQL) | from PostgreSQL 9.4.5 (2015) | Old client library used by the PostgreSQL database driver. |
 
 Other libraries in `thirdparty/` (cairo 1.9.4 and others) are
 also several years old. SQLite was updated
-to 3.51.1.
+to 3.51.1, and to 3.51.3 in 0.2.7-rc.6.18 (the fix for the WAL-reset
+database corruption bug).
 
 Upgrading these libraries is planned. Until then, treat the browser
 components and any network or file-parsing features as unsafe for

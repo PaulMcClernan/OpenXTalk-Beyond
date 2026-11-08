@@ -66,7 +66,10 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --    OXT_WEB_STACK     where to save the stack file
 --    OXT_WEB_OUTPUT    1: the startup data to write; 2: the folder to build
 --                      the standalone in, and with "-fields" after it, the
---                      folder of the one with its fields in the card's grey
+--                      folder of the one with its fields in the card's grey,
+--                      and with "-splash", that of the one with a splash
+--                      image (whose file is the folder's name and
+--                      "-image.png")
 --    OXT_WEB_TEMPLATE  1: the startup template
 --                      (engine/rsrc/emscripten-startup-template.livecodescript)
 --    OXT_WEB_VERSION   1: the web engine's version, which the startup script
@@ -308,6 +311,7 @@ end webLog
 
 on webBuild
    local tSettings, tFolder, tError, tFieldsSettings, tFieldsFolder, tExtension
+   local tSplashSettings, tSplashFolder
    webLog "INFO version" && the version && the buildNumber
    webLog "INFO platform" && the platform && the processor
    webCatchErrors
@@ -367,6 +371,25 @@ on webBuild
             with "WebProbe", tFieldsFolder, tFieldsSettings
       webLog "INFO fields-warnings" && revStandaloneGetWarnings()
       webLog "INFO fields-files" && webFiles(tFieldsFolder)
+      -- The same standalone with the HTML5 pane's Splash setting (bwmilby's
+      -- request, openxtalk.org p=26115): the green PNG, from a file outside
+      -- the stack's folder, as a path the user chose. web_check.py checks
+      -- that the builder copied it as splash.png, that the page is the one
+      -- above with the splash's style and script in its head, and that a
+      -- browser shows the splash while the page loads and the stack once
+      -- it is open
+      put tSettings into tSplashSettings
+      put $OXT_WEB_OUTPUT & "-splash" into tSplashFolder
+      if there is not a folder tSplashFolder then
+         create folder tSplashFolder
+      end if
+      put base64Decode(kGreenPNG) into url ("binfile:" & tSplashFolder & "-image.png")
+      put tSplashFolder & "-image.png" into tSplashSettings["emscripten,splash"]
+      dispatch "revSaveAsEmscriptenStandalone" to stack "revsaveasemscriptenstandalone" \
+            with "WebProbe", tSplashFolder, tSplashSettings
+      webLog "INFO splash-warnings" && revStandaloneGetWarnings()
+      webLog "INFO splash-files" && webFiles(tSplashFolder)
+      webMobileWebFound
    catch tError
    end try
    if "revStandaloneProgress" is among the lines of the openStacks then
@@ -379,6 +402,52 @@ on webBuild
    end if
    webLog "DONE"
 end webBuild
+
+-- "Search for required inclusions" finds the Mobile Web library in a
+-- stack that calls it, as it finds a library extension by the handlers
+-- its manifest names (revsblibrary revCheckObject), and not in one that
+-- does not: web_check.py reads the two lines. The library's manifest names
+-- them since the library was built with extension-utils'
+-- kLibrariesFoundByHandlers, the IDE keeps them since
+-- revideextensionlibrary's script library loader does, and the builder
+-- keeps what it found since revCheckObject puts it where revSmartChecking
+-- makes the "extensions" setting from.
+private command webMobileWebFound
+   local tSettings, tKind, tFile
+   -- "json" calls the JSON library, an LCB library whose manifest names its
+   -- handlers too: the search found it always and then left it out, and
+   -- still must, so that the standalones of stacks made before keep the
+   -- inclusions they had (revsblibrary kSBLibrariesKeptWhenFound)
+   repeat for each item tKind in "phone,plain,json"
+      if there is a stack ("MobileWebFound" & tKind) then
+         delete stack ("MobileWebFound" & tKind)
+      end if
+      create invisible stack ("MobileWebFound" & tKind)
+      if tKind is "phone" then
+         set the script of it to "on preOpenStack" & return & "   mwStart" & return & "end preOpenStack"
+      else if tKind is "json" then
+         set the script of it to "on mouseUp" & return & "   put JsonImport(" & quote & "[]" & quote & ") into tList" & return & "end mouseUp"
+      else
+         set the script of it to "on mouseUp" & return & "   beep" & return & "end mouseUp"
+      end if
+      -- saved, as a stack is when it is built: the search reads the
+      -- stacks of the stack's file, and a stack never saved has none
+      put the temporary folder & "/MobileWebFound" & tKind & ".oxtstack" into tFile
+      save stack ("MobileWebFound" & tKind) as tFile
+      put empty into tSettings
+      put "search" into tSettings["inclusions"]
+      put true into tSettings["Emscripten"]
+      revSBSearchForInclusions ("MobileWebFound" & tKind), tSettings
+      webLog "INFO mobileweb-found-" & tKind && \
+            ("com.livecode.library.mobileweb" is among the lines of tSettings["extensions"])
+      webLog "INFO json-found-" & tKind && \
+            ("com.livecode.library.json" is among the lines of tSettings["extensions"])
+      delete stack ("MobileWebFound" & tKind)
+      if there is a file tFile then
+         delete file tFile
+      end if
+   end repeat
+end webMobileWebFound
 
 private function webFiles pFolder
    local tFiles
