@@ -139,5 +139,50 @@ class WidgetInstallTest(unittest.TestCase):
         self.assertIn('revIDEExtensionReload kWidget', code(handler(text, 'TestTeardown')))
 
 
+class ExtensionManagerHiliteTest(unittest.TestCase):
+    """The Extension Manager's selected row in the dark appearance: the
+    edition's light selection colour under the white name was unreadable
+    (bwmilby, forum, 2026-11-07, on the Mac); it is darkened there and kept
+    in the light appearance."""
+
+    LIST = os.path.join(REPO, 'ide', 'Toolset', 'palettes', 'extension manager',
+                        'revideextensionmanagerlistbehavior.livecodescript')
+
+    def setUp(self):
+        self.text = read(self.LIST)
+
+    def test_list_uses_it(self):
+        body = code(handler(self.text, 'setUpExtensionList'))
+        self.assertRegex(body, r'viewProp\["hilite color"\][^\n]*to \\\s*extensionsHiliteColor\(ideColorGet\("pb_line_selected"\), revIDEAppearanceIsDark\(\)\)')
+        self.assertNotRegex(body, r'viewProp\["hilite color"\][^\n]*to ideColorGet')
+
+    def mirror(self, color, dark):
+        # the handler, in Python, checked against its source below
+        if not dark:
+            return color
+        parts = color.split(',')
+        if len(parts) != 3 or not all(p.strip().isdigit() for p in parts):
+            return color
+        return ','.join(str(int(int(p) * 4 / 10 + 0.5)) for p in parts)
+
+    def test_function(self):
+        body = code(handler(self.text, 'extensionsHiliteColor'))
+        self.assertIn('if pDark is not true then return pColor', body)
+        self.assertIn('round(tChannel * 4 / 10)', body)
+        for edition in ('240,200,180', '226,238,185', '222,243,255'):
+            dark = [int(c) for c in self.mirror(edition, True).split(',')]
+            avg = sum(dark) / 3
+            self.assertGreater(255 - avg, 150, edition)
+            self.assertGreater(avg - 42, 25, edition)
+        self.assertEqual(self.mirror('240,200,180', True), '96,80,72')
+        self.assertEqual(self.mirror('226,238,185', True), '90,95,74')
+
+    def test_tests(self):
+        ide = read(os.path.join(REPO, 'ide', 'tests', 'extensionmanager', 'hilitecolor.livecodescript'))
+        self.assertIn('tDark is "96,80,72"', ide)
+        tour = handler(read(TOUR), 'tour_extension_manager')
+        self.assertIn('viewProp["hilite color"]', tour)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -7187,6 +7187,26 @@ on tour_extension_manager
       throw "the Extension Manager drawn again has its first row's name in" && tourEmFirstInk(tStack) & ", not" && tWant
    end if
    tourShotStack tStack, "17-extension-manager-redrawn"
+   -- the selected row: a dark selection colour under the white name in
+   -- the dark appearance (bwmilby, forum, 2026-11-07, on the Mac), the
+   -- edition's own in the light one
+   local tHilite, tSel, tSum
+   put the viewProp["hilite color"] of group "extensionList" of card "list" of stack tStack into tHilite
+   dispatch function "ideColorGet" to card "list" of stack tStack with "pb_line_selected"
+   put the result into tSel
+   tourRecord "INFO the Extension Manager's selected row is in" && tHilite && "(the selection colour" && tSel & ")"
+   if $OXT_TOUR_APPEARANCE is "light" and tHilite is not tSel then
+      throw "the Extension Manager's selected row is in" && tHilite & ", not the selection colour" && tSel && "(light)"
+   end if
+   if $OXT_TOUR_APPEARANCE is "dark" then
+      if the number of items of tHilite is not 3 then
+         throw "the Extension Manager's selected row is in" && tHilite && "(dark)"
+      end if
+      put item 1 of tHilite + item 2 of tHilite + item 3 of tHilite into tSum
+      if 255 - tSum / 3 <= 150 then
+         throw "the white name cannot be read on the Extension Manager's selected row," && tHilite && "(dark)"
+      end if
+   end if
    close stack tStack
 end tour_extension_manager
 
