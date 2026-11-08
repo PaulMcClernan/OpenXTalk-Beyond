@@ -23,8 +23,8 @@ compare them with what another builder made, and run them on a device.
   python3 tools/ci/android_check.py ide (--install DIR | --package FILE | --bin DIR)
       --work DIR [--sdk DIR] [--jdk DIR] [--platform P] [--device SERIAL]
       [--stack FILE] [--builds NAMES] [--no-units] [--probe java] [--timeout SECONDS]
-  python3 tools/ci/android_check.py verify --work DIR --sdk DIR [--jdk DIR] [--builds NAMES] [--target API]
-      [--engine DIR]
+  python3 tools/ci/android_check.py verify --work DIR --sdk DIR [--jdk DIR] [--builds NAMES]
+      [--target API | --target-for DIR] [--engine DIR]
   python3 tools/ci/android_check.py compare --old DIR --new DIR --sdk DIR
   python3 tools/ci/android_check.py device --apk FILE --serial SERIAL --sdk DIR
       [--out FILE] [--abi ABI] [--timeout SECONDS] [--allow PERMISSION]
@@ -80,6 +80,12 @@ packages, be signed by the package's signer (the JDK's jarsigner and
 keytool: --jdk, or those on the PATH), and with <work>/bundletool.jar
 (which must be the version the builder pins) say the package name and
 target API in its manifest; no other build may leave an App Bundle.
+The target API is --target's (33 when it is not given), or with
+--target-for DIR the one the builder picks for the runtime of the IDE
+installed in DIR (androidTargetAPI): the newest (36) when that runtime's
+Java layer is ready for it (JAVA_LAYER_READY), 33 when it is not, as for
+LiveCode 9.6.3's, which the runtimes carried until they carried one built
+from this repository's sources (BUILDING.md, "Android Java layer").
 With --engine DIR (the folder overlay --engine took), each package's
 engine must be the one built there for its architecture: the same code
 (the .text section, which the builder's deploy leaves as it is when it
@@ -212,6 +218,11 @@ PACKAGE_ENGINE = 'librevandroid.so'
 TARGET_SDK = '33'
 NEWEST_TARGET_SDK = '36'
 LARGE_SCREEN_PROPERTY = 'android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY'
+# What makes a runtime's Java layer ready for the newest target: the
+# builder's kJavaLayerReady, the classes it looks for in the runtime's
+# Classes jar (androidJavaLayerHas), byte for byte (verify --target-for)
+JAVA_LAYER_READY = ('com/runrev/android/LiveCodeActivity$BackCallback.class',
+                    'com/runrev/android/LiveCodeActivity$SystemBarsPadding.class')
 # The App Bundle: the bundletool the builder downloads (its
 # kBundletoolVersion and kBundletoolSHA256), and the name ide gives the
 # jar the builder keeps, in the work folder
@@ -1567,8 +1578,46 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+def release_classes(root):
+    """The Java layer (CLASSES) of the IDE installed in ROOT, and the
+    problems if there is not exactly one"""
+    places = []
+    for folder, _, names in os.walk(root):
+        if CLASSES[-1] in names:
+            place = os.path.join(folder, CLASSES[-1])
+            if tuple(os.path.normpath(place).split(os.sep)[-len(CLASSES):]) == CLASSES:
+                places.append(place)
+    if len(places) != 1:
+        return None, ['%s: %d files %s, not one' % (root, len(places), '/'.join(CLASSES))]
+    return places[0], []
+
+
+def builder_target(root):
+    """The API the builder targets with the runtime of the IDE installed
+    in ROOT, as androidTargetAPI picks it for a stack that pins none: the
+    newest when the runtime's Java layer has every class of
+    JAVA_LAYER_READY (looked for in the jar's bytes, as
+    androidJavaLayerHas does), 33 when it has not. Returns (target, what
+    decided it, problems)"""
+    classes, problems = release_classes(os.path.abspath(root))
+    if problems:
+        return None, None, problems
+    with open(classes, 'rb') as f:
+        jar = f.read()
+    missing = [x for x in JAVA_LAYER_READY if x.encode('utf-8') not in jar]
+    if missing:
+        return TARGET_SDK, '%s has no %s' % (classes, ', '.join(missing)), []
+    return NEWEST_TARGET_SDK, '%s has %s' % (classes, ', '.join(JAVA_LAYER_READY)), []
+
+
 def verify(args):
     work = os.path.abspath(args.work)
+    if args.target_for:
+        target, why, problems = builder_target(args.target_for)
+        if problems:
+            return problems
+        log('The builder targets API %s with that runtime: %s' % (target, why))
+        args.target = target
     tools = find_tools(args.sdk)
     r = ide_results(read_lines(os.path.join(work, LOG_NAME)))
     problems = []
@@ -2765,9 +2814,12 @@ def main(argv=None):
     v.add_argument('--sdk', required=True)
     v.add_argument('--builds')
     v.add_argument('--jdk', help='the JDK whose jarsigner, keytool and java check an App Bundle')
-    v.add_argument('--target', default=TARGET_SDK,
-                   help='the API the packages must target (%s with a runtime whose Java layer is not ready for '
-                        'newer, %s when it is)' % (TARGET_SDK, NEWEST_TARGET_SDK))
+    which = v.add_mutually_exclusive_group()
+    which.add_argument('--target', default=TARGET_SDK,
+                       help='the API the packages must target (%s with a runtime whose Java layer is not ready for '
+                            'newer, %s when it is)' % (TARGET_SDK, NEWEST_TARGET_SDK))
+    which.add_argument('--target-for', metavar='DIR',
+                       help='an installed IDE: the packages must target the API its builder picks for its runtime')
     v.add_argument('--engine', help='the runtime folder that overlay --engine took: each package\'s engine must be '
                                     'the one built there')
     c = sub.add_parser('compare')

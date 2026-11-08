@@ -277,9 +277,13 @@ jobs:
           "$PY" tools/ci/android_check.py ide --install "$CHANGED" --platform "$PLATFORM" \
             --work "$WORK/changed" --sdk "$SDK" --jdk "$JDK"
 
+      # They target the API the builder picks for the release's runtime:
+      # 33 with LiveCode 9.6.3's Java layer, which the runtimes carried
+      # until 0.2.7-rc.6.18, and 36 with one built here, ready for it
       - name: Check the packages
         run: |
-          "$PY" tools/ci/android_check.py verify --work "$WORK/changed" --sdk "$SDK" --jdk "$JDK"
+          "$PY" tools/ci/android_check.py verify --work "$WORK/changed" --sdk "$SDK" --jdk "$JDK" \
+            --target-for "$CHANGED"
 
       # The same stack file: it goes into the engine library
       - name: The released builder (builds)
@@ -373,7 +377,7 @@ jobs:
             --stack "$WORK/changed/AndroidProbe.livecode" --device emulator-5554
 
       # --within-bars: the stack is not drawn under the status and
-      # navigation bars (an app that targets API 33 never is). The App
+      # navigation bars (Android 13 draws only an app that asks there). The App
       # Bundle is installed as Google Play installs it: bundletool (the
       # one the builder downloaded) makes the device's split APKs of it.
       # --font-scale, once: the app goes on in its process through a font
@@ -530,8 +534,9 @@ jobs:
           page=$("$adb" shell getconf PAGE_SIZE | tr -d '\r')
           echo "Page size: $page"
           [ "$page" = 16384 ] || { echo "::error::$IMAGE_16K has pages of $page bytes, not 16384"; exit 1; }
-          # the package that targets API 33 inside the bars, as on older
-          # Android; the Java layer's probe, which targets API 36, too:
+          # the package made with the release's runtime inside the bars:
+          # at API 33 as on older Android, at 36 padded by its Java layer;
+          # the Java layer's probe, which targets API 36, too:
           # Android 16 draws it edge to edge and the Java layer pads it,
           # and sends its back key only to the back callback; and its App
           # Bundle, as split APKs. The app probe with this Java layer as on

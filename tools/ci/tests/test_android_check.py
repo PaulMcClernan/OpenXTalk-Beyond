@@ -2933,6 +2933,110 @@ class VerifyTarget(unittest.TestCase):
             ac.find_tools, ac.verify_apk = saved
 
 
+class VerifyTargetFor(unittest.TestCase):
+    """verify --target-for: the packages must target the API the builder
+    picks for an installed IDE's runtime, as androidTargetAPI does for a
+    stack that pins none: the newest when the runtime's Java layer has the
+    classes the builder looks for, 33 when it has not (9.6.3's)"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = os.path.join(self.tmp.name, 'OXT-Beyond-0.2.7-rc.6.18')
+        self.classes = os.path.join(self.root, 'Runtime', 'Android', 'Classes')
+        os.makedirs(os.path.dirname(self.classes))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def layer(self, names, path=None):
+        # a jar holding NAMES, as a Java layer does
+        with zipfile.ZipFile(path or self.classes, 'w') as z:
+            for n in names:
+                z.writestr(n, b'class')
+
+    def test_the_builders_classes(self):
+        # the classes the builder looks for (kJavaLayerReady), in its order
+        builder = read('ide-support', 'revsaveasandroidstandalone.livecodescript')
+        names = re.search(r'^constant kJavaLayerReady = "([^"]+)"$', builder, re.M).group(1)
+        self.assertEqual(tuple(names.split(',')), ac.JAVA_LAYER_READY)
+
+    def test_a_ready_layer_targets_the_newest(self):
+        self.layer(('com/runrev/android/LiveCodeActivity.class',) + ac.JAVA_LAYER_READY)
+        target, why, problems = ac.builder_target(self.root)
+        self.assertEqual((target, problems), (ac.NEWEST_TARGET_SDK, []))
+        self.assertIn('LiveCodeActivity$BackCallback.class', why)
+
+    def test_9_6_3s_layer_targets_33(self):
+        # LiveCode 9.6.3's has neither class; one alone is not enough
+        self.layer(('com/runrev/android/LiveCodeActivity.class',))
+        target, why, problems = ac.builder_target(self.root)
+        self.assertEqual((target, problems), (ac.TARGET_SDK, []))
+        self.assertEqual(why, '%s has no %s' % (self.classes, ', '.join(ac.JAVA_LAYER_READY)))
+        self.layer(('com/runrev/android/LiveCodeActivity.class', ac.JAVA_LAYER_READY[0]))
+        target, why, problems = ac.builder_target(self.root)
+        self.assertEqual((target, problems), (ac.TARGET_SDK, []))
+        self.assertEqual(why, '%s has no %s' % (self.classes, ac.JAVA_LAYER_READY[1]))
+
+    def test_one_java_layer_or_none(self):
+        # no Classes, or two Runtime/Android/Classes, is a problem; a
+        # Classes elsewhere (a runtime of its own beside, such as
+        # Runtime/Android/Beyond) is not the release's
+        other = os.path.join(self.root, 'Runtime', 'Android', 'Beyond', 'Classes')
+        os.makedirs(os.path.dirname(other))
+        self.layer(ac.JAVA_LAYER_READY, other)
+        self.assertEqual(ac.builder_target(self.root)[2],
+                         ['%s: 0 files Runtime/Android/Classes, not one' % self.root])
+        self.layer(ac.JAVA_LAYER_READY)
+        self.assertEqual(ac.builder_target(self.root)[0], ac.NEWEST_TARGET_SDK)
+        second = os.path.join(self.root, 'Copy', 'Runtime', 'Android', 'Classes')
+        os.makedirs(os.path.dirname(second))
+        self.layer((), second)
+        self.assertEqual(ac.builder_target(self.root)[2],
+                         ['%s: 2 files Runtime/Android/Classes, not one' % self.root])
+
+    def verify(self, *extra):
+        work = os.path.join(self.tmp.name, 'work')
+        os.makedirs(os.path.join(work, 'out'), exist_ok=True)
+        with open(os.path.join(work, ac.LOG_NAME), 'w') as f:
+            f.write('')
+        with open(os.path.join(work, 'out', 'debug.apk'), 'wb') as f:
+            f.write(b'apk')
+        seen = []
+        saved = ac.find_tools, ac.verify_apk
+        ac.find_tools = lambda sdk: {}
+        ac.verify_apk = lambda name, apk, spec, tools, warnings, target=None: (seen.append(target) or ([], []))
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                status = ac.main(['verify', '--work', work, '--sdk', self.tmp.name, '--builds', 'debug']
+                                 + list(extra))
+        finally:
+            ac.find_tools, ac.verify_apk = saved
+        return status, seen, out.getvalue()
+
+    def test_verify_takes_the_runtimes_target(self):
+        self.layer(ac.JAVA_LAYER_READY)
+        status, seen, out = self.verify('--target-for', self.root)
+        self.assertEqual((status, seen), (0, [ac.NEWEST_TARGET_SDK]))
+        self.assertIn('The builder targets API %s with that runtime' % ac.NEWEST_TARGET_SDK, out)
+        self.layer(())
+        status, seen, out = self.verify('--target-for', self.root)
+        self.assertEqual((status, seen), (0, [ac.TARGET_SDK]))
+        self.assertIn('The builder targets API %s with that runtime' % ac.TARGET_SDK, out)
+
+    def test_verify_without_a_java_layer_checks_nothing(self):
+        # the problem, and no package checked against a target guessed
+        status, seen, out = self.verify('--target-for', self.root)
+        self.assertEqual((status, seen), (1, []))
+        self.assertIn('0 files Runtime/Android/Classes, not one', out)
+
+    def test_one_or_the_other(self):
+        self.layer(ac.JAVA_LAYER_READY)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                self.verify('--target', '36', '--target-for', self.root)
+
+
 class VerifyBundle(unittest.TestCase):
     """verify_bundle on made-up packages and App Bundles, with stand-in
     answers from jarsigner, keytool and bundletool: what the bundle holds
@@ -4008,8 +4112,9 @@ class OneSystem(unittest.TestCase):
 
     def test_java_probe_verified_at_the_newest_target(self):
         # the Java layer's probe and the app probe are built with a Java
-        # layer ready for 36, so they target 36; the other packages target
-        # 33, as verify's default
+        # layer ready for 36, so they target 36; the other packages, built
+        # with the release's runtime, target what the builder picks for it
+        # (33 with 9.6.3's Java layer, 36 with one built here)
         workflow = read('.github', 'workflows', 'android.yml')
         verifies = [re.sub(r'\\\n\s*', '', v) for v in
                     re.findall(r'android_check\.py verify(?:[^\n]*\\\n)*[^\n]*', workflow)]
@@ -4018,7 +4123,8 @@ class OneSystem(unittest.TestCase):
             if '/java-new"' in v or '/java-app"' in v:
                 self.assertTrue(v.endswith('--target %s' % ac.NEWEST_TARGET_SDK), v)
             else:
-                self.assertNotIn('--target', v)
+                self.assertEqual(v, 'android_check.py verify --work "$WORK/changed" --sdk "$SDK" --jdk "$JDK" '
+                                    '--target-for "$CHANGED"')
 
     def test_bundletool_pins_agree(self):
         # the bundletool the builder downloads is the one verify takes
