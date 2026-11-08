@@ -9132,7 +9132,11 @@ end tour_screen_end
 -- background a default button's label is as easy to see as any other
 -- button's. (The dark appearance: on the screen a button is a dark grey
 -- with a light label, but a snapshot taken with the app in the
--- background drew the face of both kinds white, rc.6.17, 2026-11-07.)
+-- background drew the face of both kinds white, rc.6.17, 2026-11-07: the
+-- theme drew a button's face in whichever appearance the app last drew
+-- in, not the button's own; engine/src/osxtheme.mm,
+-- MCMacThemeDrawInAppearance. In the dark appearance the ordinary
+-- button's face must be dark: no channel of it 160 or more.)
 -- It is the tour's last step, since it leaves the IDE in the
 -- background. The Mac only: elsewhere a default button has no accent
 -- colour.
@@ -9201,6 +9205,11 @@ on tour_background_default
       tourRecord "INFO background-default: a default button" && tHeight && "points high: the face" && \
             (item 1 to 3 of tMeasure) & ", the label's colour farthest from it" && (item 4 of tMeasure) && \
             "apart; an ordinary button: the face" && (item 1 to 3 of tPlain) & "," && (item 4 of tPlain) && "apart"
+      if $OXT_TOUR_APPEARANCE is "dark" and \
+            max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 then
+         put "in the dark appearance an ordinary button" && tHeight && "points high was drawn with a light face (" & \
+               (item 1 to 3 of tPlain) & "), not the dark appearance's" & return after tFails
+      end if
       put min(200, item 4 of tPlain - 30) into tNeed
       if item 4 of tMeasure < tNeed then
          put "a default button" && tHeight && "points high has a label that cannot be seen in the background (" & \

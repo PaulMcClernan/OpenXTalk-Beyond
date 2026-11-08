@@ -47,6 +47,30 @@ def read(*parts):
         return f.read()
 
 
+class TheThemeDrawsInTheControlsAppearance(unittest.TestCase):
+    """engine/src/osxtheme.mm: each AppKit control drawn into an image is
+    drawn with its own appearance as the current drawing appearance."""
+
+    def test_every_control_draws_in_its_own_appearance(self):
+        src = read('engine', 'src', 'osxtheme.mm')
+        helper = src[src.index('static void MCMacThemeDrawInAppearance('):]
+        helper = helper[:helper.index('\n}\n')]
+        self.assertIn('[p_appearance performAsCurrentDrawingAppearance:p_draw];', helper)
+        self.assertIn('[NSAppearance setCurrentAppearance:p_appearance];', helper)
+        self.assertIn('[NSAppearance setCurrentAppearance:t_old];', helper)
+        for draw, appearance in (
+                ('[[t_slider cell] drawWithFrame:t_draw_rect inView:t_slider];', '[t_slider appearance]'),
+                ('[t_scroller drawKnobSlotInRect:t_draw_rect highlight:NO];', '[t_scroller appearance]'),
+                ('[t_progress drawRect:t_draw_rect];', '[t_progress appearance]'),
+                ('[[t_control cell] drawWithFrame:t_draw_rect inView:nil];', 't_appearance')):
+            at = src.index(draw)
+            wrap = src.rindex('MCMacThemeDrawInAppearance(', 0, at)
+            self.assertIn('MCMacThemeDrawInAppearance(%s, ^{' % appearance, src[wrap:at], draw)
+            # nothing else between the wrapper and the draw
+            self.assertLess(at - wrap, 120, draw)
+            self.assertEqual(src.count(draw), 1, draw)
+
+
 class TheDefaultLabelInTheBackground(unittest.TestCase):
 
     def setUp(self):
@@ -114,6 +138,12 @@ class TheDefaultLabelInTheBackground(unittest.TestCase):
         self.assertIn('put min(200, item 4 of tPlain - 30) into tNeed', step)
         self.assertIn('if item 4 of tMeasure < tNeed then', step)
         self.assertIn('if tFails is not empty then throw', step)
+        # in the dark appearance the snapshot draws the faces dark: the
+        # theme draws a control in its own appearance, not the one the app
+        # last drew in (rc.6.17 and rc.6.18 drew them white)
+        self.assertIn('if $OXT_TOUR_APPEARANCE is "dark" and \\\n'
+                      '            max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 then', step)
+        self.assertLess(step.index('$OXT_TOUR_APPEARANCE is "dark"'), step.index('put min(200, item 4 of tPlain - 30)'))
         grey = tour[tour.index('function tourBgGrey pRGB'):tour.index('end tourBgGrey')]
         self.assertIn('min(item 1 of pRGB, item 2 of pRGB, item 3 of pRGB) <= 24', grey)
         # the snapshot is of the button as drawn now, with the app's state
