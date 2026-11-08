@@ -1595,22 +1595,33 @@ class DeviceOnceInAProcess(unittest.TestCase):
              'by FILE* 0x7b1c\n'
              'F/libc    ( %s): Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid %s (androidprobe)\n')
 
+    # what Android logs when the app crashes in Java (run 42430696858's,
+    # the activity made again with no engine given a configuration change)
+    NPE = ('E/AndroidRuntime( %s): FATAL EXCEPTION: main\n'
+           "E/AndroidRuntime( %s): java.lang.NullPointerException: Attempt to invoke virtual method 'void "
+           'com.runrev.android.Engine.onConfigurationChanged(android.content.res.Configuration)\' on a null object '
+           'reference\n')
+
     def run_probe(self, argv, font='same', density='new', back='ends', again='new', font_before='1.0',
-                  offline_at=None, tap='waits'):
+                  offline_at=None, tap='waits', reset='new', cleared=False):
         """What the stand-in device's probe does: for a font size change
         (same: goes on in its process; crash: the second start stopped,
         and no process), a density change (new: started again in a new
         process, green, and again for the reset; crash; hang: its process
-        stays, the screen as it was), the back key (ends: its process ends;
+        stays, the screen as it was; old-crash: as new, and the process
+        before it crashes in Java), the density's reset (new: started again
+        in a new process; crash: as new, and the process before it crashes
+        in Java), the back key (ends: its process ends;
         stays), the second am start (new: a new process where none is left;
         crash: none) and a tap at the 4 x 4 screen's middle (waits: the
         screen turns the wait colour, as the probe's mouseUp turns it;
         nothing); adb answers pidof's call number offline_at with "adb:
         device offline" (on its output, exit status 1), as it did for a
-        moment on the 16 KB image"""
+        moment on the 16 KB image; cleared: the log holds nothing of the
+        probe's start, as a device's does once the check has cleared it"""
         d = self.tmp.name
         with open(os.path.join(d, 'logcat.txt'), 'w') as f:
-            f.write(Device.LOG.split('I/lowmemorykiller')[0])
+            f.write('' if cleared else Device.LOG.split('I/lowmemorykiller')[0])
         with open(os.path.join(d, 'pid'), 'w') as f:
             f.write('3475\n')
         for name, colour in (('green.raw', ac.RUN_COLOR), ('wait.raw', ac.WAIT_COLOR)):
@@ -1619,6 +1630,9 @@ class DeviceOnceInAProcess(unittest.TestCase):
         crash = 'p=$(cat "%(d)s/pid"); : > "%(d)s/pid"; printf "%(fdsan)s" $p $p $p >> "%(d)s/logcat.txt"' % {
             'd': d, 'fdsan': self.FDSAN.replace('\n', '\\n')}
         new = lambda pid: 'echo %s > "%s/pid"' % (pid, d)
+        # the process before it crashes in Java as the app starts again
+        npe = 'p=$(cat "%(d)s/pid"); printf "%(npe)s" $p $p >> "%(d)s/logcat.txt"; ' % {
+            'd': d, 'npe': self.NPE.replace('\n', '\\n').replace("'", "'\\''")}
         cases = (
             '  "shell settings get system font_scale") echo %(before)s ;;\n'
             '  "shell settings put system font_scale %(scale)s") %(font)s ;;\n'
@@ -1627,9 +1641,11 @@ class DeviceOnceInAProcess(unittest.TestCase):
             '  "shell wm density 357") %(density)s ;;\n'
             '  "shell input keyevent KEYCODE_BACK") %(back)s ;;\n'
             '  "shell input tap 2 2") %(tap)s ;;\n'
-            % {'d': d, 'before': font_before, 'scale': ac.FONT_SCALE, 'reset': new(4100),
+            % {'d': d, 'before': font_before, 'scale': ac.FONT_SCALE,
+               'reset': {'new': new(4100), 'crash': '{ ' + npe + new(4100) + '; }'}[reset],
                'font': {'same': 'true', 'crash': crash}[font],
                'density': {'new': new(4000) + '; cp "%(d)s/green.raw" "%(d)s/screen.raw"' % {'d': d},
+                           'old-crash': npe + new(4000) + '; cp "%(d)s/green.raw" "%(d)s/screen.raw"' % {'d': d},
                            'crash': crash, 'hang': 'true'}[density],
                'back': {'ends': ': > "%s/pid"' % d, 'stays': 'true'}[back],
                'tap': {'waits': 'cp "%(d)s/wait.raw" "%(d)s/screen.raw"' % {'d': d}, 'nothing': 'true'}[tap]})
@@ -1717,6 +1733,38 @@ class DeviceOnceInAProcess(unittest.TestCase):
         self.assertIn('| F/libc    ( 3475): fdsan: attempted to close file descriptor 0', out)
         # the density is put back all the same
         self.assertEqual(calls[-1], 'shell wm density reset')
+
+    def test_a_crash_in_the_process_before_a_density_change(self):
+        # run 42430696858: the activity made again in the process whose
+        # engine ran starts the app again in a new one, and crashed there
+        # in Java (onConfigurationChanged with no engine); the log, cleared
+        # before the change, says nothing of that process's start, and its
+        # crash was taken for another app's
+        status, out, calls = self.run_probe(['--density'], density='old-crash', cleared=True)
+        self.assertEqual(status, 1, out)
+        self.assertIn("PROBLEM: the device's log across the density change: E/AndroidRuntime( 3475): FATAL "
+                      "EXCEPTION: main", out)
+        self.assertIn("process 4000 (before it: 3475); its processes in the log: 3475, 4000", out)
+        self.assertEqual(calls[-1], 'shell wm density reset')
+
+    def test_a_crash_at_the_return_to_the_screens_own_density(self):
+        # the density's reset makes the activity again too: a crash there
+        # was not looked for, and its dialog took the back key of
+        # --relaunch (run 42430696858)
+        status, out, calls = self.run_probe(['--density', '--relaunch'], reset='crash', cleared=True)
+        self.assertEqual(status, 1, out)
+        self.assertIn("Back at the screen's own density: 100% of the screen is the probe's green; process 4100 "
+                      "(before it: 4000); its processes in the log: 4000, 4100", out)
+        self.assertIn("PROBLEM: the device's log across the return to the screen's own density after the density "
+                      "change: E/AndroidRuntime( 4000): FATAL EXCEPTION: main", out)
+        # the first problem ends them
+        self.assertNotIn('KEYCODE_BACK', ' '.join(calls))
+
+    def test_back_at_the_screens_own_density(self):
+        status, out, _ = self.run_probe(['--density'], cleared=True)
+        self.assertEqual(status, 0, out)
+        self.assertIn("Back at the screen's own density: 100% of the screen is the probe's green; process 4100 "
+                      "(before it: 4000)", out)
 
     def test_started_again_for_a_density_change_while_its_script_waits(self):
         # the probe's mouseUp turns its wait colour and waits; the density

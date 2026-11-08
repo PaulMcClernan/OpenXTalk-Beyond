@@ -833,6 +833,47 @@ class Relaunch(unittest.TestCase):
         self.assertIn('new Handler(Looper.getMainLooper()).post(', end)
         self.assertIn('android.os.Process.killProcess(android.os.Process.myPid());', end)
 
+    def test_an_activity_without_an_engine_passes_nothing_to_it(self):
+        # the activity that started the app again in a new process has no
+        # engine (s_main_view is null), and Android can still call it before
+        # it is destroyed: run 42430696858's probe crashed in
+        # onConfigurationChanged, given the density's return after the
+        # density change it was made again for. Every method that goes to
+        # the engine, bar onCreate (which makes it), checks m_engine_started
+        # first, after the super call Android requires
+        activity = read(JAVA + ('LiveCodeActivity.java',))
+        # the class's own methods (not those of the classes inside it and
+        # inside onCreate, which only an activity with an engine makes)
+        methods, end = {}, 0
+        for m in re.finditer(r'\n[ \t]*(?:public|protected) [\w.]+ (\w+) ?\([^)]*\)\s*\{', activity):
+            if m.start() < end or re.search(r'\bclass \w+[^{]*\{[^}]*$', activity[end:m.start()]):
+                continue
+            depth, i = 1, m.end()
+            while depth:
+                depth += {'{': 1, '}': -1}.get(activity[i], 0)
+                i += 1
+            methods[m.group(1)], end = activity[m.end():i - 1], i
+        to_engine = sorted(n for n, body in methods.items() if 's_main_view.' in body and n != 'onCreate')
+        self.assertEqual(to_engine, ['onActivityResult', 'onBackPressed', 'onConfigurationChanged', 'onDestroy',
+                                     'onKeyDown', 'onLowMemory', 'onNewIntent', 'onPause',
+                                     'onRequestPermissionsResult', 'onRestart', 'onResume'])
+        for name in to_engine:
+            body = re.sub(r'//[^\n]*', '', methods[name])
+            guard = re.search(r'if \(!m_engine_started\)\s+return\b', body)
+            self.assertTrue(guard, '%s goes to the engine without checking m_engine_started' % name)
+            self.assertLess(guard.start(), body.index('s_main_view.'), name)
+            # Android's own handling first, as before
+            sup = body.find('super.%s(' % name)
+            if name not in ('onBackPressed', 'onKeyDown', 'onNewIntent', 'onActivityResult'):
+                self.assertTrue(0 <= sup < guard.start(), name)
+        # the key Android handles itself when there is no engine
+        self.assertRegex(methods['onKeyDown'], r'^\s*if \(!m_engine_started\)\s+return super\.onKeyDown\(keyCode, '
+                                               r'event\);')
+        # an activity that started the engine goes on as before
+        self.assertRegex(methods['onConfigurationChanged'],
+                         r'super\.onConfigurationChanged\(p_new_config\);\s+if \(!m_engine_started\)\s+return;\s+'
+                         r's_main_view\.onConfigurationChanged\(p_new_config\);')
+
     def test_relaunch_activity(self):
         java = read(JAVA + ('RelaunchActivity.java',))
         relaunch = re.search(r'(?s)public static boolean relaunch\(Activity p_activity\)\s*\{(.*?)\n    \}',

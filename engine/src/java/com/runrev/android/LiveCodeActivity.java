@@ -40,7 +40,12 @@ public class LiveCodeActivity extends Activity
 	public static Engine s_main_view;
     
     // OXT-Beyond: whether an engine has run in this process, and whether
-    // this activity started one (see onCreate)
+    // this activity started one (see onCreate). An activity that started the
+    // app again in a new process instead has no engine: it is finishing, and
+    // Android can still call it before it is destroyed (with the
+    // configuration change that follows the one it was made again for, as a
+    // density change and its return do), so each call below that goes to the
+    // engine (s_main_view, null then) does nothing in it
     protected static boolean s_engine_ran;
     protected boolean m_engine_started;
 
@@ -220,6 +225,8 @@ public class LiveCodeActivity extends Activity
 	protected void onRestart()
 	{
 		super.onRestart();
+        if (!m_engine_started)
+            return;
 		s_main_view.doRestart(s_main_view);
 	}
 	
@@ -233,6 +240,8 @@ public class LiveCodeActivity extends Activity
 	protected void onResume()
 	{
 		super.onResume();
+        if (!m_engine_started)
+            return;
 		s_main_view.onResume();
 	}
 
@@ -240,6 +249,8 @@ public class LiveCodeActivity extends Activity
 	protected void onPause()
 	{
 		super.onPause();
+        if (!m_engine_started)
+            return;
 		s_main_view.onPause();
 	}
 
@@ -254,6 +265,8 @@ public class LiveCodeActivity extends Activity
     @Override
     protected void onNewIntent(Intent intent)
     {
+        if (!m_engine_started)
+            return;
         s_main_view.onNewIntent(intent);
     }
     
@@ -268,6 +281,8 @@ public class LiveCodeActivity extends Activity
 		// At this point, we will instruct the engine to minimize
 		// its memory usage.
 
+        if (!m_engine_started)
+            return;
 		s_main_view.doLowMemory();
 	}
 
@@ -282,6 +297,8 @@ public class LiveCodeActivity extends Activity
 	public void onConfigurationChanged(Configuration p_new_config)
 	{
 		super.onConfigurationChanged(p_new_config);
+        if (!m_engine_started)
+            return;
 		s_main_view.onConfigurationChanged(p_new_config);
 	}
 
@@ -290,12 +307,16 @@ public class LiveCodeActivity extends Activity
 	@Override
 	public void onBackPressed()
 	{
+        if (!m_engine_started)
+            return;
 		s_main_view.onBackPressed();
 	}
 	
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event)
     {
+        if (!m_engine_started)
+            return super.onKeyDown(keyCode, event);
         if (keyCode == KeyEvent.KEYCODE_MENU && event.getRepeatCount() == 0)
         {
             s_main_view.onMenuKey();
@@ -323,6 +344,8 @@ public class LiveCodeActivity extends Activity
 	@Override
 	protected void onActivityResult (int requestCode, int resultCode, Intent data)
 	{
+        if (!m_engine_started)
+            return;
 		s_main_view.onActivityResult(requestCode, resultCode, data);
 	}
     
@@ -331,6 +354,8 @@ public class LiveCodeActivity extends Activity
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
     {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (!m_engine_started)
+            return;
         s_main_view.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 

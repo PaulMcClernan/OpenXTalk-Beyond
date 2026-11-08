@@ -2011,11 +2011,17 @@ def save_screen(path, shot, what):
         log('Screen %s: %s' % (what, path))
 
 
-def new_crashes(a, names):
+def new_crashes(a, names, before=''):
     """The probe's crash lines in the device's log since it was last
-    cleared (crash_lines), and its processes there."""
+    cleared (crash_lines), and its processes there. before: the probe's
+    process before the change, whose lines are the probe's too: it started
+    before the log was cleared, so no "Start proc" line names it, and when
+    Android makes the activity again there and the app starts again in a
+    new process, a crash there was taken for another app's (run
+    42430696858's onConfigurationChanged, unseen until the back key of
+    --relaunch closed its dialog)"""
     _, logcat = a('logcat', '-d', '-v', 'brief')
-    pids = probe_pids(logcat, pid_now(a))
+    pids = probe_pids(logcat, ' '.join((pid_now(a), before)))
     crash, _, _ = crash_lines(logcat, names, pids)
     fdsan = [x.strip() for x in logcat.splitlines() if 'fdsan:' in x and (log_pid(x) in pids or not pids)]
     return crash + [x for x in fdsan if x not in crash], pids
@@ -2038,7 +2044,7 @@ def stays_through_font_scale(args, adb, a, pid, names):
             a('shell', 'settings', 'put', 'system', 'font_scale', before)
         else:
             a('shell', 'settings', 'delete', 'system', 'font_scale')
-    crash, _ = new_crashes(a, names)
+    crash, _ = new_crashes(a, names, pid)
     save_screen(args.out and os.path.splitext(args.out)[0] + '-font-scale.png', shot, 'after the font size change')
     log('After a font size change (font_scale %s, then %s again): %.0f%% of the screen is the probe\'s green; '
         'process %s (before it: %s)' % (FONT_SCALE, before if re.fullmatch(r'\d+(\.\d+)?', before) else 'unset',
@@ -2070,7 +2076,7 @@ def starts_again_for_density(args, adb, a, pid, names, what='density change', su
     a('shell', 'wm', 'density', density)
     try:
         share, after, shot = green_again(adb, args.serial, a, RETURN_WAIT, other_than=pid)
-        crash, pids = new_crashes(a, names)
+        crash, pids = new_crashes(a, names, pid)
     finally:
         a('shell', 'wm', 'density', 'reset')
     save_screen(args.out and os.path.splitext(args.out)[0] + '-%s.png' % suffix, shot, 'after the %s' % what)
@@ -2087,8 +2093,17 @@ def starts_again_for_density(args, adb, a, pid, names, what='density change', su
         problems.append('the device\'s log across the %s: %s' % (what, ' | '.join(crash[:6])))
     if not problems:
         # back to the screen's own density, which makes the activity again
-        # too, before anything else is asked of the app
-        green_again(adb, args.serial, a, RETURN_WAIT, other_than=after)
+        # too, before anything else is asked of the app: the app starts
+        # again in a new process for it as well, and without a crash (the
+        # log holds the change's lines too, which had none)
+        back, again, _ = green_again(adb, args.serial, a, RETURN_WAIT, other_than=after)
+        crash, pids = new_crashes(a, names, after)
+        log('Back at the screen\'s own density: %.0f%% of the screen is the probe\'s green; process %s (before it: '
+            '%s); its processes in the log: %s' % (back * 100, again or 'not running', after,
+                                                   ', '.join(sorted(pids)) or 'none'))
+        if crash:
+            problems.append('the device\'s log across the return to the screen\'s own density after the %s: %s'
+                            % (what, ' | '.join(crash[:6])))
     return problems
 
 
@@ -2150,7 +2165,7 @@ def opens_again_after_quit(args, adb, a, pid, names):
     status, out = a('shell', 'am', 'start', '-W', '-n', IDENTIFIER + '/.mblandroid')
     log('Opened again: %s' % ' | '.join(x.strip() for x in out.splitlines() if x.strip()))
     share, after, shot = green_again(adb, args.serial, a, RETURN_WAIT)
-    crash, pids = new_crashes(a, names)
+    crash, pids = new_crashes(a, names, pid)
     save_screen(args.out and os.path.splitext(args.out)[0] + '-again.png', shot, 'opened again')
     log('Opened again after its stack quit: %.0f%% of the screen is the probe\'s green; process %s (the first: '
         '%s); its processes in the log: %s' % (share * 100, after or 'not running', pid,
