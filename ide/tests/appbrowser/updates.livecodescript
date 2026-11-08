@@ -429,3 +429,39 @@ on TestAppBrowserInToolsMenu
    TestAssert "closing it from the menu runs the plugin's finaliser", \
          the cAppOverview of stack "revPreferences" is false
 end TestAppBrowserInToolsMenu
+
+-- littlenemo asked for white names on the selected rows (openxtalk.org
+-- p=26169; seth's decision of 2026-11-08: in the web IDE). The plugin's
+-- file was saved with cSuspended true, which only Windows clears, so it
+-- painted each selected control's, audio clip's and video clip's name
+-- black on the blue hilite. In the web IDE it is cleared as the plugin
+-- opens; a desktop is left as it was
+on TestAppBrowserHilitedNamesOnTheWeb
+   local tWas
+   __OpenBrowser
+   put the cSuspended of stack kBrowser into tWas
+   lock messages
+   set the cSuspended of stack kBrowser to true
+   unlock messages
+   revIDEAppBrowserHilitedNames kBrowser, false
+   TestAssert "a desktop: cSuspended is left as it is", the cSuspended of stack kBrowser is true
+   if not revEnvironmentIsWeb() then
+      revIDEAppBrowserHilitedNames kBrowser
+      TestAssert "this desktop (no pWeb): cSuspended is left as it is", the cSuspended of stack kBrowser is true
+   end if
+   revIDEAppBrowserHilitedNames kBrowser, true
+   TestAssert "the web IDE: cSuspended is cleared, so selected names are not painted black", \
+         the cSuspended of stack kBrowser is false
+   TestAssert "the plugin is not marked as edited", not revIDEStackIsEdited(kBrowser)
+   lock messages
+   set the cSuspended of stack kBrowser to tWas
+   unlock messages
+
+   -- a user's stack of that name is left alone
+   create stack "OXT Not The App Browser"
+   set the cSuspended of stack "OXT Not The App Browser" to true
+   revIDEAppBrowserHilitedNames "OXT Not The App Browser", true
+   TestAssert "another stack's cSuspended is left as it is", \
+         the cSuspended of stack "OXT Not The App Browser" is true
+   delete stack "OXT Not The App Browser"
+end TestAppBrowserHilitedNamesOnTheWeb
