@@ -1664,11 +1664,13 @@ fails ending them: `--font-scale` sets the font size to 1.3 (`settings
 put system font_scale`, put back after) and the app must go on in the
 same process, still green; `--density` sets the screen's density to 85%
 of its own (`wm density`, reset after), which no manifest can list, and
-the app must start again in a new process and turn green there; and
+the app must start again in a new process and turn green there, and
+again, without a crash, once the density is reset; and
 `--relaunch` presses the back key, which the app probe passes, so its
 stack quits: its process must end within 20 seconds, and the app opened
 again (`am start`) must turn green in a new one. Each fails on a crash or
-an fdsan line of the probe in the device's log, and keeps its screen
+an fdsan line of the probe in the device's log, the process it started
+from counted as the probe's, and keeps its screen
 beside `--out` (`-font-scale.png`, `-density.png`, `-again.png`).
 `ide --device <serial>` does what the IDE's
 Test does for that device. `boot`
@@ -1747,8 +1749,11 @@ the back key quit it. Three things keep the engine to one start:
   in a process whose engine has run, starts it with its own Intent and
   process id and finishes; it ends that process, starts the Intent, which
   Android starts in a new process, and ends its own (the pattern of
-  ProcessPhoenix). Without the declaration (a manifest of the app's own),
-  the activity starts the engine as before.
+  ProcessPhoenix). Until it is destroyed, that activity, which has no
+  engine, passes nothing to one: Android can still call it, as it did
+  with the configuration change of a density's return. Without the
+  declaration (a manifest of the app's own), the activity starts the
+  engine as before.
 - `LiveCodeActivity.onDestroy`, once the engine has finished and the
   activity is finishing (not for a configuration change), ends the
   process, so that the app opened again starts in a new one, as it does
