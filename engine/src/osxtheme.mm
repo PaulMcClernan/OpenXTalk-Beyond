@@ -1155,36 +1155,6 @@ static void MCMacThemeDrawTab(CGContextRef p_context, const MCThemeDrawInfo& p_i
 	CGContextRestoreGState(p_context);
 }
 
-// OXT-Beyond: runs p_draw with p_appearance (a control's own, light or
-// dark) as the current drawing appearance. A control or cell drawn into an
-// image here draws its dynamic colours (a push button's face, a scroller's
-// track) in the current drawing appearance, not the one set on the control,
-// and the current one is whatever the main thread last drew in. A window
-// drawing sets its own, so on the screen they matched; a snapshot drawn
-// with no window drawing (`import snapshot from button` with the IDE in the
-// background) drew in the light appearance in the dark one: a white face
-// under the dark appearance's light label (the IDE tour, rc.6.17 and
-// rc.6.18, 2026-11-07).
-static void MCMacThemeDrawInAppearance(NSAppearance *p_appearance, void (^p_draw)(void))
-{
-	if (p_appearance == nil)
-	{
-		p_draw();
-		return;
-	}
-	if (@available(macOS 11.0, *))
-		[p_appearance performAsCurrentDrawingAppearance:p_draw];
-	else if (@available(macOS 10.14, *))
-	{
-		NSAppearance *t_old = [NSAppearance currentAppearance];
-		[NSAppearance setCurrentAppearance:p_appearance];
-		p_draw();
-		[NSAppearance setCurrentAppearance:t_old];
-	}
-	else
-		p_draw();
-}
-
 void MCMacDrawTheme(MCThemeDrawType p_type, MCThemeDrawInfo& p_info, CGContextRef p_context, bool p_hidpi)
 {
 	CGContextRef t_context = p_context;
@@ -1258,9 +1228,7 @@ void MCMacDrawTheme(MCThemeDrawType p_type, MCThemeDrawInfo& p_info, CGContextRe
 				NSImage *t_image = [[NSImage alloc] initWithSize:t_frame.size];
 				[t_image lockFocus];
 				
-				MCMacThemeDrawInAppearance([t_slider appearance], ^{
-					[[t_slider cell] drawWithFrame:t_draw_rect inView:t_slider];
-				});
+				[[t_slider cell] drawWithFrame:t_draw_rect inView:t_slider];
 				
 				[t_image unlockFocus];
 				
@@ -1412,11 +1380,9 @@ void MCMacDrawTheme(MCThemeDrawType p_type, MCThemeDrawInfo& p_info, CGContextRe
 					
 					// Draw both track and knob
 					NSRect t_draw_rect = NSMakeRect(0, 0, t_frame.size.width, t_frame.size.height);
-					MCMacThemeDrawInAppearance([t_scroller appearance], ^{
-						[t_scroller drawKnobSlotInRect:t_draw_rect highlight:NO];
-						if (t_has_knob)
-							[t_scroller drawKnob];
-					});
+					[t_scroller drawKnobSlotInRect:t_draw_rect highlight:NO];
+					if (t_has_knob)
+						[t_scroller drawKnob];
 					
 					[t_image unlockFocus];
 				
@@ -1505,9 +1471,7 @@ void MCMacDrawTheme(MCThemeDrawType p_type, MCThemeDrawInfo& p_info, CGContextRe
 				
 				// Draw into the image
 				NSRect t_draw_rect = NSMakeRect(0, 0, t_frame.size.width, t_frame.size.height);
-				MCMacThemeDrawInAppearance([t_progress appearance], ^{
-					[t_progress drawRect:t_draw_rect];
-				});
+				[t_progress drawRect:t_draw_rect];
 				
 				[t_image unlockFocus];
 				
@@ -1732,9 +1696,7 @@ void MCMacDrawTheme(MCThemeDrawType p_type, MCThemeDrawInfo& p_info, CGContextRe
 					
 					// Draw into the image with correct orientation
 					NSRect t_draw_rect = NSMakeRect(0, 0, t_frame.size.width, t_frame.size.height);
-					MCMacThemeDrawInAppearance(t_appearance, ^{
-						[[t_control cell] drawWithFrame:t_draw_rect inView:nil];
-					});
+					[[t_control cell] drawWithFrame:t_draw_rect inView:nil];
 					
 					[t_image unlockFocus];
 					

@@ -47,30 +47,6 @@ def read(*parts):
         return f.read()
 
 
-class TheThemeDrawsInTheControlsAppearance(unittest.TestCase):
-    """engine/src/osxtheme.mm: each AppKit control drawn into an image is
-    drawn with its own appearance as the current drawing appearance."""
-
-    def test_every_control_draws_in_its_own_appearance(self):
-        src = read('engine', 'src', 'osxtheme.mm')
-        helper = src[src.index('static void MCMacThemeDrawInAppearance('):]
-        helper = helper[:helper.index('\n}\n')]
-        self.assertIn('[p_appearance performAsCurrentDrawingAppearance:p_draw];', helper)
-        self.assertIn('[NSAppearance setCurrentAppearance:p_appearance];', helper)
-        self.assertIn('[NSAppearance setCurrentAppearance:t_old];', helper)
-        for draw, appearance in (
-                ('[[t_slider cell] drawWithFrame:t_draw_rect inView:t_slider];', '[t_slider appearance]'),
-                ('[t_scroller drawKnobSlotInRect:t_draw_rect highlight:NO];', '[t_scroller appearance]'),
-                ('[t_progress drawRect:t_draw_rect];', '[t_progress appearance]'),
-                ('[[t_control cell] drawWithFrame:t_draw_rect inView:nil];', 't_appearance')):
-            at = src.index(draw)
-            wrap = src.rindex('MCMacThemeDrawInAppearance(', 0, at)
-            self.assertIn('MCMacThemeDrawInAppearance(%s, ^{' % appearance, src[wrap:at], draw)
-            # nothing else between the wrapper and the draw
-            self.assertLess(at - wrap, 120, draw)
-            self.assertEqual(src.count(draw), 1, draw)
-
-
 class TheDefaultLabelInTheBackground(unittest.TestCase):
 
     def setUp(self):
@@ -133,17 +109,51 @@ class TheDefaultLabelInTheBackground(unittest.TestCase):
         # nearer than that one's. Never more than 200
         self.assertIn('create button "Plain"', step)
         self.assertIn('set the label of it to "OK"', step)
-        self.assertIn('put tourBgLabel("OK") into tMeasure', step)
-        self.assertIn('put tourBgLabel("Plain") into tPlain', step)
+        self.assertIn('put tourBgLabel("OK", tCard) into tMeasure', step)
+        self.assertIn('put tourBgLabel("Plain", tCard) into tPlain', step)
         self.assertIn('put min(200, item 4 of tPlain - 30) into tNeed', step)
         self.assertIn('if item 4 of tMeasure < tNeed then', step)
         self.assertIn('if tFails is not empty then throw', step)
-        # in the dark appearance the snapshot draws the faces dark: the
-        # theme draws a control in its own appearance, not the one the app
-        # last drew in (rc.6.17 and rc.6.18 drew them white)
+        # In the dark appearance an ordinary button's face is dark, as it
+        # shows on the card and on the screen. AppKit draws the face there
+        # translucent, and a snapshot of the button alone holds a
+        # translucent pixel's own colour, white: read without its alpha,
+        # rc.6.17's and rc.6.18's faces measured white, and so did #420's
+        # first try, an engine change, which was taken out again
+        self.assertIn('put tourBgScreenAt("30,50") into tCard', step)
+        self.assertLess(step.index('into tCard'), step.index('put tourBgLabel("OK", tCard) into tMeasure'))
+        self.assertIn('put tourBgRawAt(sPixWidth div 6, sPixHeight div 2) into tRaw', step)
+        self.assertLess(step.index('put tourBgLabel("Plain", tCard) into tPlain'), step.index('into tRaw'))
+        self.assertIn('put tourBgScreenAt("80," & (80 + tHeight div 2)) into tScreen', step)
+        self.assertLess(step.index('into tRaw'), step.index('into tScreen'))
         self.assertIn('if $OXT_TOUR_APPEARANCE is "dark" and \\\n'
-                      '            max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 then', step)
+                      '            (max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 or \\\n'
+                      '            max(item 1 of tScreen, item 2 of tScreen, item 3 of tScreen) >= 160) then', step)
         self.assertLess(step.index('$OXT_TOUR_APPEARANCE is "dark"'), step.index('put min(200, item 4 of tPlain - 30)'))
+        # the failure says what was measured: the face on the card, the
+        # snapshot's own colour and alpha, and the screen
+        self.assertIn('"at alpha" && (item 4 of tRaw) & "; on the screen" && tScreen & "), not the dark', step)
+        grab = tour[tour.index('command tourBgGrab'):tour.index('end tourBgGrab')]
+        self.assertIn('put the alphaData of tImage into sBgAlpha', grab)
+        self.assertLess(tour.index('local sBgAlpha'), tour.index('command tourBgGrab'))
+        label = tour[tour.index('function tourBgLabel pButton, pCard'):tour.index('end tourBgLabel')]
+        self.assertIn('put tourBgSeenAt(sPixWidth div 6, sPixHeight div 2, pCard) into tFace', label)
+        self.assertIn('put tourBgSeenAt(tX, tY, pCard) into tRGB', label)
+        self.assertNotIn('tourRgbAt', label)
+        raw = tour[tour.index('function tourBgRawAt pX, pY'):tour.index('end tourBgRawAt')]
+        self.assertIn('byteToNum(byte (pY * sPixWidth + pX + 1) of sBgAlpha)', raw)
+        seen = tour[tour.index('function tourBgSeenAt pX, pY, pCard'):tour.index('end tourBgSeenAt')]
+        # the snapshot's colour over the card's, by its alpha; with no card,
+        # the colour as it is
+        self.assertIn('if pCard is empty then return tourRgbAt(pX, pY)', seen)
+        self.assertIn('put round((item i of tRaw * item 4 of tRaw + item i of pCard * (255 - item 4 of tRaw)) / 255) '
+                      'into item i of tSeen', seen)
+        screen = tour[tour.index('function tourBgScreenAt pPoint'):tour.index('end tourBgScreenAt')]
+        self.assertIn('put globalLoc(pPoint) into tLoc', screen)
+        self.assertIn('import snapshot from rect ((item 1 of tLoc - 4)', screen)
+        # no engine change is claimed for it
+        self.assertNotIn('MCMacThemeDrawInAppearance', read('engine', 'src', 'osxtheme.mm'))
+        self.assertNotIn('performAsCurrentDrawingAppearance', read('engine', 'src', 'osxtheme.mm'))
         grey = tour[tour.index('function tourBgGrey pRGB'):tour.index('end tourBgGrey')]
         self.assertIn('min(item 1 of pRGB, item 2 of pRGB, item 3 of pRGB) <= 24', grey)
         # the snapshot is of the button as drawn now, with the app's state

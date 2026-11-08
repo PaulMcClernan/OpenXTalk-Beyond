@@ -9467,16 +9467,20 @@ end tour_screen_end
 -- background a default button's label is as easy to see as any other
 -- button's. (The dark appearance: on the screen a button is a dark grey
 -- with a light label, but a snapshot taken with the app in the
--- background drew the face of both kinds white, rc.6.17, 2026-11-07: the
--- theme drew a button's face in whichever appearance the app last drew
--- in, not the button's own; engine/src/osxtheme.mm,
--- MCMacThemeDrawInAppearance. In the dark appearance the ordinary
--- button's face must be dark: no channel of it 160 or more.)
+-- background read the face of both kinds white, rc.6.17, 2026-11-07:
+-- AppKit draws a button's face in the dark appearance translucent, a
+-- light grey the card shows through, and the snapshot of a button alone
+-- holds a translucent pixel's own colour, so the face is measured as it
+-- shows on the card: the snapshot's colour over the card's colour on the
+-- screen, by the snapshot's alphaData; #420's first try, an engine change,
+-- measured white with or without it. In the dark appearance the ordinary
+-- button's face must be dark, no channel of it 160 or more, in the
+-- snapshot so measured and on the screen.)
 -- It is the tour's last step, since it leaves the IDE in the
 -- background. The Mac only: elsewhere a default button has no accent
 -- colour.
 on tour_background_default
-   local tDefault, tFace, tTries, tHeight, tMeasure, tPlain, tNeed, tFails, tError
+   local tDefault, tFace, tTries, tHeight, tMeasure, tPlain, tNeed, tFails, tError, tCard, tRaw, tScreen
    if the platform is not "MacOS" then
       tourRecord "INFO background-default: the Mac only"
       exit tour_background_default
@@ -9532,18 +9536,30 @@ on tour_background_default
       delete stack kBackground
       throw tError
    end try
+   -- the card's colour on the screen, beside the buttons, which a
+   -- translucent face lets show through
+   put tourBgScreenAt("30,50") into tCard
+   tourRecord "INFO background-default: the card on the screen" && tCard
    repeat for each item tHeight in "21,26"
       set the rect of button "OK" of stack kBackground to "60,40,180," & (40 + tHeight)
       set the rect of button "Plain" of stack kBackground to "60,80,180," & (80 + tHeight)
-      put tourBgLabel("OK") into tMeasure
-      put tourBgLabel("Plain") into tPlain
+      put tourBgLabel("OK", tCard) into tMeasure
+      put tourBgLabel("Plain", tCard) into tPlain
+      -- the ordinary button's face in its snapshot as it is (colour, then
+      -- alpha) and on the screen, where the step's stack is drawn now
+      put tourBgRawAt(sPixWidth div 6, sPixHeight div 2) into tRaw
+      tourWait 300
+      put tourBgScreenAt("80," & (80 + tHeight div 2)) into tScreen
       tourRecord "INFO background-default: a default button" && tHeight && "points high: the face" && \
             (item 1 to 3 of tMeasure) & ", the label's colour farthest from it" && (item 4 of tMeasure) && \
-            "apart; an ordinary button: the face" && (item 1 to 3 of tPlain) & "," && (item 4 of tPlain) && "apart"
+            "apart; an ordinary button: the face" && (item 1 to 3 of tPlain) & "," && (item 4 of tPlain) && \
+            "apart (in its snapshot" && (item 1 to 3 of tRaw) && "at alpha" && (item 4 of tRaw) & "; on the screen" && tScreen & ")"
       if $OXT_TOUR_APPEARANCE is "dark" and \
-            max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 then
+            (max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 or \
+            max(item 1 of tScreen, item 2 of tScreen, item 3 of tScreen) >= 160) then
          put "in the dark appearance an ordinary button" && tHeight && "points high was drawn with a light face (" & \
-               (item 1 to 3 of tPlain) & "), not the dark appearance's" & return after tFails
+               (item 1 to 3 of tPlain) && "on the card" && tCard & ": in its snapshot" && (item 1 to 3 of tRaw) && \
+               "at alpha" && (item 4 of tRaw) & "; on the screen" && tScreen & "), not the dark appearance's" & return after tFails
       end if
       put min(200, item 4 of tPlain - 30) into tNeed
       if item 4 of tMeasure < tNeed then
@@ -9626,7 +9642,9 @@ command tourInactiveQuit
 end tourInactiveQuit
 
 -- The snapshot of the button pButton of the stack kBackground, as it is
--- drawn now, in sPixWidth, sPixHeight and sPixData
+-- drawn now, in sPixWidth, sPixHeight and sPixData, and its alphaData in
+-- sBgAlpha (a byte a pixel)
+local sBgAlpha
 command tourBgGrab pButton
    local tDefault, tImage
    put the defaultStack into tDefault
@@ -9637,6 +9655,7 @@ command tourBgGrab pButton
    put the width of tImage into sPixWidth
    put the height of tImage into sPixHeight
    put the imageData of tImage into sPixData
+   put the alphaData of tImage into sBgAlpha
    delete tImage
    unlock messages
    set the defaultStack to tDefault
@@ -9659,19 +9678,63 @@ end tourBgGrey
 -- The face of the button pButton and how far the label's colour
 -- farthest from it is (red, green and blue added), within the middle of
 -- the button, where "OK" is drawn: r,g,b,apart
-function tourBgLabel pButton
+function tourBgLabel pButton, pCard
    local tFace, tFarthest, tX, tY, tRGB
-   put tourBgFace(pButton) into tFace
+   tourBgGrab pButton
+   put tourBgSeenAt(sPixWidth div 6, sPixHeight div 2, pCard) into tFace
    put 0 into tFarthest
    repeat with tY = sPixHeight div 4 to (3 * sPixHeight) div 4
       repeat with tX = (35 * sPixWidth) div 100 to (65 * sPixWidth) div 100
-         put tourRgbAt(tX, tY) into tRGB
+         put tourBgSeenAt(tX, tY, pCard) into tRGB
          put max(tFarthest, abs(item 1 of tRGB - item 1 of tFace) + abs(item 2 of tRGB - item 2 of tFace) + \
                abs(item 3 of tRGB - item 3 of tFace)) into tFarthest
       end repeat
    end repeat
    return tFace & comma & tFarthest
 end tourBgLabel
+
+-- The colour at pX, pY of the snapshot tourBgGrab took and its alpha:
+-- r,g,b,alpha
+function tourBgRawAt pX, pY
+   put max(0, min(pX, sPixWidth - 1)) into pX
+   put max(0, min(pY, sPixHeight - 1)) into pY
+   return tourRgbAt(pX, pY) & comma & byteToNum(byte (pY * sPixWidth + pX + 1) of sBgAlpha)
+end tourBgRawAt
+
+-- The colour at pX, pY of the snapshot tourBgGrab took as it shows on a
+-- card of the colour pCard (r,g,b): the snapshot's colour over the
+-- card's, by its alpha. With pCard empty, the snapshot's colour as it is
+function tourBgSeenAt pX, pY, pCard
+   local tRaw, tSeen, i
+   if pCard is empty then return tourRgbAt(pX, pY)
+   put tourBgRawAt(pX, pY) into tRaw
+   repeat with i = 1 to 3
+      put round((item i of tRaw * item 4 of tRaw + item i of pCard * (255 - item 4 of tRaw)) / 255) into item i of tSeen
+   end repeat
+   return tSeen
+end tourBgSeenAt
+
+-- The colour on the screen at the point pPoint of the card of the stack
+-- kBackground (r,g,b): what the screen shows there now, in a snapshot of
+-- the screen around it
+function tourBgScreenAt pPoint
+   local tDefault, tLoc, tImage
+   put the defaultStack into tDefault
+   set the defaultStack to kBackground
+   put globalLoc(pPoint) into tLoc
+   set the defaultStack to "oxt_ui_tour"
+   lock messages
+   import snapshot from rect ((item 1 of tLoc - 4) & comma & (item 2 of tLoc - 4) & comma & \
+         (item 1 of tLoc + 4) & comma & (item 2 of tLoc + 4))
+   put the long id of last image of card 1 of stack "oxt_ui_tour" into tImage
+   put the width of tImage into sPixWidth
+   put the height of tImage into sPixHeight
+   put the imageData of tImage into sPixData
+   delete tImage
+   unlock messages
+   set the defaultStack to tDefault
+   return tourRgbAt(sPixWidth div 2, sPixHeight div 2)
+end tourBgScreenAt
 
 ----------------------------------------------------------------
 -- Helpers
