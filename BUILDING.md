@@ -3418,13 +3418,22 @@ built from, and keeps each folder for 14 days as
 `android-engine-<abi>`. The libraries come from a cache keyed by what
 they are built with, so a change to the engine builds only the engine.
 
-Its "Android engine on the emulator" job then runs the engine. It puts
-the four folders, as one runtime, and this checkout's builder into the
-latest release's IDE:
+Its "Android engine on the emulator" job then runs the engine. It makes
+the four folders one runtime, and puts it and this checkout's builder
+into the latest release's IDE:
 
 ```sh
+python3 tools/ci/android_engine.py merge <runtime> <arm64-v8a> <armeabi-v7a> <x86> <x86_64>
 python3 tools/ci/android_check.py overlay --root <ide> --beyond <runtime>
 ```
+
+`merge` takes each architecture's engine and externals from the one
+folder that has it, and the files beside them from the first folder,
+which every other folder must have the same (the Java layer, which each
+build job compiles apart, with the same files in it whatever their
+dates); nothing else (not `debug/`), and nothing at all when a file is
+missing or differs, so that the runtime the emulators run is made as
+the one a runtimes asset would carry.
 
 `--beyond` puts the runtime beside the release's, as
 `Runtime/Android/Beyond`, where the builder takes it for a stack that asks

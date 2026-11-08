@@ -304,13 +304,24 @@ jobs:
         with:
           persist-credentials: false
 
-      # The four build jobs' folders, merged into one runtime folder
+      # The four build jobs' folders, each in a folder of its own: the next
+      # step makes them one runtime, as the runtimes asset does
       - name: Download the runtime
         uses: actions/download-artifact@v8
         with:
           pattern: android-engine-*
-          merge-multiple: true
-          path: ${{ runner.temp }}/android/engine
+          path: ${{ runner.temp }}/android/parts
+
+      # Each architecture's libraries from its folder, the files beside them
+      # from the first, which every folder must have the same (the Java
+      # layer: the same classes): android_engine.py merge, which
+      # runtimes.yml runs on these folders too
+      - name: Make the four folders one runtime
+        run: |
+          parts="$RUNNER_TEMP/android/parts"
+          python3 tools/ci/android_engine.py merge "$RUNNER_TEMP/android/engine" \
+            "$parts/android-engine-arm64-v8a" "$parts/android-engine-armeabi-v7a" \
+            "$parts/android-engine-x86" "$parts/android-engine-x86_64"
 
       # The IDE whose builder runs, as android.yml takes it: the latest
       # release's, which only runs here (nothing is uploaded to it)
@@ -327,7 +338,6 @@ jobs:
           gh release download "$tag" --repo "$REPO" --pattern "*-$PLATFORM.tar.xz" --dir "$RUNNER_TEMP/dist"
           echo "PACKAGE=$(ls "$RUNNER_TEMP"/dist/*-"$PLATFORM".tar.xz)" >> "$GITHUB_ENV"
           echo "WORK=$RUNNER_TEMP/android" >> "$GITHUB_ENV"
-          ls "$RUNNER_TEMP/android/engine"
 
       # The IDE's runtime libraries and Xvfb, as android.yml installs them
       - name: Install Xvfb and the runtime libraries
