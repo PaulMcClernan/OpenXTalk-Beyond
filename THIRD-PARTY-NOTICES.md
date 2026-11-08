@@ -295,6 +295,7 @@ These are in `ide/Plugins/` and are installed in `Plugins/`.
 | Remastered examples | `ide/Resources/Examples/Remastered/`, built by `tools/examples/` | OXT-Beyond's remakes of examples above, in Home's look; the originals stay as they were, in the repository. A remaster keeps its original's programs, comments, credits, pictures and sounds, and is under its original's terms: Terry Little's Quick Start, Animate Letter and DataGrid Table state the GPL version 3 or later; LiveCode Ltd's Data Grid Tour and SQLite Tour and the Start Center's Balls, BookLibrary and balloon samples are LiveCode Community's (GPLv3); RSS Demo (its script says "via theotherbassist, April 2016"), Scroll Image, Video Player, SQLite Book Library and the two Zip demos (remastered as one, Zip Archives) record no author or terms (see [Still to review](#still-to-review)). What OXT-Beyond added (the window, the new cards and programs, the builders) is under the GPLv3, as the rest of the IDE. |
 | Learn Box2D and Learn Box2Dxt Kit | `ide/Resources/Examples/Remastered/`, built by `tools/examples/` | Made here, in the remasters' look, and under the GPLv3 as the rest of the IDE. Learn Box2Dxt Kit's pictures are Kenney's (https://kenney.nl), CC0 (public domain), from the xTalk Suite's `box2dxt/Spritesheets`, copied to `tools/examples/assets/kenney/`; its GIF was made here from two of those frames. |
 | Nova Rescue's pictures, sounds and font | `tools/web-player/nova-rescue/` (`art/`, `sounds/`, `fonts/kenvector_future.ttf`), inside `tools/web-player/stacks/Nova Rescue.oxtstack`, which the Stack Player, the web IDE and an installed IDE (`Resources/Examples/Showcase/`) carry; some of the pictures and the font are also on the game's page of the web site, `tools/pages/games/nova-rescue/` | Kenney's (https://kenney.nl), CC0 1.0 (public domain), from the packs Space Shooter Redux, Space Shooter Extension, UI Pack: Space Expansion, Digital Audio, Interface Sounds and Music Jingles; each pack's licence is in `licenses/` beside them and `SOURCES.md` names the file each comes from. The pictures were drawn again larger from Kenney's vector sheets, the sounds made WAV files and the title's NOVA drawn from the font, by `make_assets.py` there. The game itself (its builder and script) is under the GPLv3, as the rest. |
+| Wobble Forts' pictures, sounds and font | `tools/web-player/wobble-forts/` (`art/`, `sounds/`, `fonts/kenney_future_narrow.ttf`), inside `tools/web-player/stacks/Wobble Forts.oxtstack`, which the Stack Player, the web IDE and an installed IDE (`Resources/Examples/Showcase/`) carry; some of the pictures and the font are also on the game's page of the web site, `tools/pages/games/wobble-forts/` | Kenney's (https://kenney.nl), CC0 1.0 (public domain), from the packs Physics Assets, Game Icons, Particle Pack, Font Package, Impact Sounds, Interface Sounds, Digital Audio and Music Jingles; each pack's licence is in `licenses/` beside them and `SOURCES.md` names the file each comes from. The pictures were drawn again larger from Kenney's vector sheets, the sounds made WAV files and the title's words drawn from Kenney Blocks (Font Package), by `make_assets.py` there. The game itself (its builder, script and levels) is under the GPLv3, as the rest. |
 | `oxt-respring.zip` | `ide/Resources/MacOs/` | Tom Perry's macOS helper application (an AppleScript applet) that restarts the IDE after an update on macOS. Not used on Windows. |
 | `Default Preferences/livecode7.rev` | `ide/Resources/` | A preferences template from OpenXTalk Lite's installer. |
 | The rest of `ide/Resources/` (object library, sample icons) | | LiveCode Community's (GPLv3). |
@@ -308,6 +309,7 @@ These are in `ide/Plugins/` and are installed in `Plugins/`.
 | `lcideicons.ttf` (icon font generated with Fontello) | `ide/Toolset/resources/supporting_files/fonts/` | not recorded; see [Still to review](#still-to-review) |
 | Droid Sans Mono (`DroidSansMono.ttf`, "Digitized data copyright 2007, Google Corporation", made by Ascender Corporation) | `ide/Documentation/html_viewer/resources/data/api/` (used by the dictionary) | Apache License 2.0, according to the font's own licence field ([licence text](https://www.apache.org/licenses/LICENSE-2.0)). "Droid" is a trademark of Google. |
 | KenVector Future (`kenvector_future.ttf`, Kenney) | `tools/web-player/nova-rescue/fonts/`, inside Nova Rescue's stack, and `tools/pages/games/nova-rescue/` | CC0 1.0 (public domain), with Kenney's UI Pack: Space Expansion (above, "Nova Rescue's pictures, sounds and font") |
+| Kenney Future Narrow (`kenney_future_narrow.ttf`, Kenney) | `tools/web-player/wobble-forts/fonts/`, inside Wobble Forts' stack, and `tools/pages/games/wobble-forts/` | CC0 1.0 (public domain), with Kenney's Font Package (above, "Wobble Forts' pictures, sounds and font") |
 | Glyphicons Halflings (part of Bootstrap 3.3.7) | `ide/Documentation/html_viewer/fonts/` | MIT, with Bootstrap (below) |
 
 ### Documentation viewer
@@ -537,14 +539,15 @@ notices.
 Every package carries standalone runtimes for the other platforms that
 the IDE's standalone builder targets, so that it can build standalones
 for them and not only for its own platform. They come from one release
-asset of this repository, `oxt-runtimes-0.2.7-rc.6.17.zip` (release tag
-`runtimes-0.2.7-rc.6.17`), listed with its SHA-256 in
+asset of this repository, `oxt-runtimes-0.2.7-rc.6.18b.zip` (release tag
+`runtimes-0.2.7-rc.6.18b`), listed with its SHA-256 in
 [`tools/oxt/external-assets.json`](tools/oxt/external-assets.json). The
 "Runtimes asset" workflow made it with
 [`tools/oxt/make_runtimes_asset.py`](tools/oxt/make_runtimes_asset.py)
 `--builds` from the outputs of this repository's CI builds of one
-commit; only the Android runtime is not built here. Its `PROVENANCE.md`,
-installed as `PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md` at the root of the
+commit, and so is the Android runtime's Java layer (`Runtime/Android/Classes`); the
+rest of the Android runtime is not built here. Its `PROVENANCE.md`,
+installed as `PROVENANCE-oxt-runtimes-0.2.7-rc.6.18b.md` at the root of the
 program folder, names that commit and the CI runs and lists every file
 with its size, SHA-256 and the build it comes from. Each package leaves
 out what its own build makes: the Windows and Linux packages their own
@@ -556,22 +559,24 @@ and macOS packages the zoneinfo data (the asset's `exclude`).
 | `Runtime/Windows/x86-32/`, and `Runtime/Windows/x86-64/` in the macOS and Linux packages | Windows standalone engines, `revsecurity.dll` and `revpdfprinter.dll`, the externals, the database drivers and CEF, built from this repository by the Windows workflow's 32-bit and 64-bit jobs: the same components as the Windows package's own files (see [Prebuilt libraries](#prebuilt-libraries) and [Libraries built from `thirdparty/`](#libraries-built-from-thirdparty)). |
 | `Runtime/Linux/x86-64/` in the Windows and macOS packages, and `Runtime/Linux/x86-32/` | Linux standalone engines, support libraries, externals and database drivers, built from this repository by the Linux workflow (x86-64 in its Ubuntu 20.04 container, x86 in its Debian 11 i386 container), with CEF in the x86-64 runtime only: the same components as the Linux package's own files (see [The Linux x86-64 package](#the-linux-x86-64-package)). There are no shared libraries of other projects in them: a Linux standalone uses the system's. |
 | `Extensions/com.livecode.library.timezone/code/<platform>/` and `.../resources/` | The time zone library's native code for Windows x86-32 and x86-64 and Linux x86-32 and x86-64, built from this repository, and its zoneinfo data, compiled by the Linux x86-64 build; the Android code (next row) is 1.15's. |
-| `Runtime/Android/` and `Extensions/com.livecode.library.timezone/code/*-android/` | Carried over unchanged from the earlier asset `oxt-runtimes-1.15`, which holds OpenXTalk Lite 1.15's files: Android standalone engines for four ABIs (version string 9.6.3-rc-3) and support files, of which 31 of 38 are identical to LiveCode's 9.6.3 installer and the others are as Tom Perry shipped them. That asset's provenance is installed as `PROVENANCE-oxt-runtimes-1.15.md`. |
+| `Runtime/Android/Classes` | The Android runtime's Java layer, built by the "Runtimes asset" workflow from this repository's `engine/src/java` at the asset's commit, in place of 1.15's. |
+| the rest of `Runtime/Android/` and `Extensions/com.livecode.library.timezone/code/*-android/` | Carried over unchanged from the earlier asset `oxt-runtimes-1.15`, which holds OpenXTalk Lite 1.15's files: Android standalone engines for four ABIs (version string 9.6.3-rc-3) and support files, of which 31 of these 37 are identical to LiveCode's 9.6.3 installer and the others are as Tom Perry shipped them. That asset's provenance is installed as `PROVENANCE-oxt-runtimes-1.15.md`. |
 
 Licences and corresponding source:
 
-- **Built from this repository** (all but the Android files): as the
+- **Built from this repository** (all but the Android files, the
+  Java layer `Classes` included): as the
   packages' own files of those platforms: GPLv3 with the exception in
   [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md) for OXT-Beyond's code, and
   the third-party components of the sections above (OpenSSL, curl, ICU,
   the libraries of `thirdparty/`, CEF). Source: this repository at the
-  commit that `PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md` names.
+  commit that `PROVENANCE-oxt-runtimes-0.2.7-rc.6.18b.md` names.
 - **Android files identical to LiveCode Community 9.6.3**: GPLv3.
   Source: [livecode/livecode](https://github.com/livecode/livecode), tag
   [`9.6.3`](https://github.com/livecode/livecode/tree/9.6.3). This
   repository's history contains the upstream commits up to that tag.
 - **The other Android files** (the engines that report `9.6.3-rc-3`,
-  `Classes`, `Manifest.xml` and the arm64 `DbMysql`): GPLv3. They are as
+  `Manifest.xml` and the arm64 `DbMysql`): GPLv3. They are as
   Tom Perry shipped them in OpenXTalk Lite; how each one was built is not
   recorded. They may be LiveCode builds (source: tag
   [`9.6.3-rc-3`](https://github.com/livecode/livecode/tree/9.6.3-rc-3)

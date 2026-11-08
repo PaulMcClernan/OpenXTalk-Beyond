@@ -464,7 +464,7 @@ on tour_project_browser
    end if
    tourShot "06-project-browser"
    -- its Refresh button: its own tooltip, and its icon, not a corner of
-   -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.18)
+   -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.19)
    local tProblem
    put tourRefreshProblem(tStack) into tProblem
    -- the names of a selected row are white on its blue hilite, here and
@@ -493,13 +493,14 @@ on tour_project_browser
       end if
       if tProblem is not empty then throw tProblem
    end if
+   tourExtensionStacksNotUsers
 end tour_project_browser
 
 -- The Project Browser's Refresh button (pStack is its stack): empty when
 -- its tooltip names the Project Browser and its icon is revIcons' image,
 -- which no image of another stack in memory shadows; else the problem.
 -- A button's icon is found by its ID in every stack in memory, and the
--- splash's art, which until 0.2.7-rc.6.18 took the ID of revIcons'
+-- splash's art, which until 0.2.7-rc.6.19 took the ID of revIcons'
 -- "dark-refresh", showed in its place while the splash was in memory, as
 -- the web IDE keeps it (littlenemo, openxtalk.org)
 function tourRefreshProblem pStack
@@ -528,6 +529,29 @@ function tourRefreshProblem pStack
    end if
    return empty
 end tourRefreshProblem
+
+-- The stacks the IDE loads from its own Extensions folder are its own, not
+-- the user's: until 0.2.7-rc.6.18 the web IDE's Project Browser and App
+-- Browser listed the layout guides' library,
+-- community.ferruslogic.plugin.devguides (757 lines), first among the
+-- user's stacks (LittleNemo, openxtalk.org p=26169). The desktop IDEs' App
+-- Browsers did not list it. Both browsers take the user's stacks from
+-- revFilterStacksList
+command tourExtensionStacksNotUsers
+   local tUsers, tExtensions, tStackName, tTheirs
+   put revFilterStacksList(the mainStacks) into tUsers
+   tourRecord "INFO the user's stacks:" && tourJoin(tUsers)
+   put revIDESpecialFolderPath("extensions") & slash into tExtensions
+   repeat for each line tStackName in tUsers
+      if the effective filename of stack tStackName begins with tExtensions then
+         put tStackName & return after tTheirs
+      end if
+   end repeat
+   if tTheirs is not empty then
+      throw "the IDE lists its own extensions' stacks among the user's stacks:" && \
+            tourJoin(line 1 to -1 of tTheirs) && "(in" && tExtensions & ")"
+   end if
+end tourExtensionStacksNotUsers
 
 -- A click on the sample's button in browse mode runs its script, which
 -- opens an answer dialog: the click comes from the page, as a user's does

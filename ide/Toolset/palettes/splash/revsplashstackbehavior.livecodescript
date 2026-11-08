@@ -23,7 +23,7 @@ on preOpenStack
    --
    set the filename of image "Splash" to tSplashPath
    -- OXT-Beyond: the image gets an ID no icon of the IDE has, as it did
-   -- from revIcons' ID alone until 0.2.7-rc.6.18. That ID is not always
+   -- from revIcons' ID alone until 0.2.7-rc.6.19. That ID is not always
    -- past revIcons' images: it is 225203, the ID of its "dark-refresh",
    -- the Project Browser's Refresh icon (Tom Perry's, 2024), so while
    -- the splash was in memory the button showed a corner of the splash

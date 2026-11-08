@@ -5835,7 +5835,7 @@ on tour_project_browser
       set the itemDelimiter to comma
    end if
    -- its Refresh button: its own tooltip, and its icon, not a corner of
-   -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.18)
+   -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.19)
    local tProblem
    put tourRefreshProblem(tStack) into tProblem
    close stack tStack
@@ -5846,7 +5846,7 @@ end tour_project_browser
 -- its tooltip names the Project Browser and its icon is revIcons' image,
 -- which no image of another stack in memory shadows; else the problem.
 -- A button's icon is found by its ID in every stack in memory, and the
--- splash's art, which until 0.2.7-rc.6.18 took the ID of revIcons'
+-- splash's art, which until 0.2.7-rc.6.19 took the ID of revIcons'
 -- "dark-refresh", showed in its place while the splash was in memory, as
 -- the web IDE keeps it (littlenemo, openxtalk.org)
 function tourRefreshProblem pStack
@@ -5923,6 +5923,14 @@ on tour_app_browser
       close stack tStack
       throw "the App Browser lists itself among the user's stacks"
    end if
+   -- nor the stacks of the IDE's own extensions: until 0.2.7-rc.6.18 the
+   -- web IDE's listed the layout guides' library (LittleNemo,
+   -- openxtalk.org p=26169; the web tour's tourExtensionStacksNotUsers)
+   get tourExtensionStacksListed(tListed)
+   if it is not empty then
+      close stack tStack
+      throw "the App Browser lists the IDE's own extensions' stacks among the user's stacks:" && it
+   end if
    if the textSize of field "Cards" of card 1 of stack tStack is not 13 or \
          the textSize of field "Controls" of card 1 of stack tStack is not 13 then
       close stack tStack
@@ -5998,6 +6006,19 @@ on tour_app_browser
       throw "the App Browser's names" && tLink && "do not read on its list" && tBack && "(contrast" && tRatio & ")"
    end if
 end tour_app_browser
+
+-- the lines of pListed (stacks' names) whose stacks are in the IDE's own
+-- Extensions folder, joined with commas
+function tourExtensionStacksListed pListed
+   local tExtensions, tStackName, tTheirs
+   put revIDESpecialFolderPath("extensions") & slash into tExtensions
+   repeat for each line tStackName in pListed
+      if there is a stack tStackName and the effective filename of stack tStackName begins with tExtensions then
+         put tStackName & ", " after tTheirs
+      end if
+   end repeat
+   return char 1 to -3 of tTheirs
+end tourExtensionStacksListed
 
 -- The size of the App Browser's icon its property pProp names, as
 -- "<width>x<height>", when it is the icon drawn in its own stack

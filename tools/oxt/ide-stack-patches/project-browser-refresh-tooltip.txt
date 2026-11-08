@@ -1,7 +1,7 @@
 # Project Browser: the Refresh button's tooltip, carried from OpenXTalk
 # Lite, said "Refresh the Application Browser", the name of another window
 # (the App Browser plugin, Tools > Application Browser). It names the
-# window the button is in (littlenemo, openxtalk.org, 0.2.7-rc.6.18).
+# window the button is in (littlenemo, openxtalk.org, 0.2.7-rc.6.19).
 file: Toolset/palettes/project browser/revideprojectbrowser.livecode
 object: button "Refresh" of card "list"
 property: toolTip

@@ -156,6 +156,7 @@ every change, release by release.
 
 | Version | What it brings |
 | --- | --- |
+| [0.2.7-rc.6.18](#027-rc618-the-bug-hunt-round-eighteen) | Two games made for phones in the Stack Player, Nova Rescue and Wobble Forts; Android apps ready for Google Play: target API 36, App Bundles, notifications on Android 13 and newer, pictures saved on Android 10 and newer, the back gesture on Android 16, no more closing on a font size or language change, and the Android runtime's Java layer built from OXT-Beyond's source; a stack's sounds exported as WAV, AIFF or AU files; default buttons that went blank on a Mac; the App Browser back in the Tools menu with sharp icons; a splash image while a web standalone loads; SQLite 3.51.3, and libsodium 1.0.22 and OpenSSL 3.5.9 in the xTalk Suite |
 | [0.2.7-rc.6.17](#027-rc617-the-bug-hunt-round-seventeen) | The round to squash what was left before 0.2.7 is stable: buttons on a coloured card in the web IDE, a dark menu item on Linux, a main window that wouldn't minimize on Windows 11, an App Browser that listed itself (and the Card Navigator), windows that flashed at start, Inclusions in a new order every run, the Responsive Starter's second save, the Phone Starter's pinch and its fit on an iPhone's Home Screen; and Lessons, a course in xTalk, on the website |
 | [0.2.7-rc.6.16](#027-rc616-the-bug-hunt-round-sixteen) | The Responsive Starter lays one stack out for a phone, a tablet and a desktop; phone stacks use touch, sensors, the camera and the share sheet; a stack plays with nothing around it; Android packages install again; the website gets an Extensions page; the Script Editor's black words on grey, a blank Dictionary on Windows and unreadable menu words are fixed |
 | [0.2.7-rc.6.15](#027-rc615-the-bug-hunt-round-fifteen) | The Mobile Web library and the Phone Starter bring stacks to phones; animations that wait 0 ms show in the browser; a Clear button for the Inspector's colours; named tools; the web IDE and the website rest; `write to process` sends text as written |
@@ -201,19 +202,22 @@ Earlier versions, from 0.2.1 to 0.2.5, are described under
   64-bit system; see [Linux (64-bit ARM)](#linux-64-bit-arm)), without
   the browser widget. 32-bit Windows and Linux are built in CI but not
   packaged, for their standalone runtimes.
-- **The Android runtime is still a prebuilt one.** Each package's
+- **The Android engines are still prebuilt ones.** Each package's
   engine, externals and tools are built from this repository (Windows
   x86-64, macOS for Apple Silicon and Intel, Linux x86-64), and so are
   the standalone runtimes that every package carries for Windows
   (x86-64 and x86) and Linux (x86-64 and x86): CI builds the 32-bit
-  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.17.zip`)
+  engines for them, and a release asset (`oxt-runtimes-0.2.7-rc.6.18b.zip`)
   brings each platform's runtimes into the other packages. The web
   engine of HTML5 standalones, which every package carries, is built
-  from this repository too (see [The engine](#the-engine)). The Android
-  runtime, though, is still OpenXTalk Lite 1.15's (stock LiveCode 9.6.3
-  builds as Tom Perry shipped them), carried over unchanged in that
-  asset. Only the macOS package has the macOS runtimes, OXT-Beyond does
-  not support iOS and has no iOS build or runtimes (so the Standalone
+  from this repository too (see [The engine](#the-engine)), and so is
+  the Android runtime's Java layer (`Runtime/Android/Classes`) from
+  0.2.7-rc.6.18 on. The Android engines, though, are still OpenXTalk
+  Lite 1.15's (stock LiveCode 9.6.3 builds as Tom Perry shipped them),
+  carried over unchanged in that asset: the Android engine is built
+  here and checked in CI, but the packages do not carry it yet. Only
+  the macOS package has the macOS runtimes, OXT-Beyond does not support
+  iOS and has no iOS build or runtimes (so the Standalone
   Settings have no iOS card, and a stack set to build for iOS in
   LiveCode builds for its other platforms), and
   32-bit Linux standalones have no browser (CEF's 32-bit
@@ -350,10 +354,11 @@ requirements too.
 Releases whose tags do not start with `v`, such as `prebuilts-v1`,
 `runtimes-1.15`, `runtimes-0.2.5-rc.2`, `runtimes-0.2.7-rc.6.13`,
 `runtimes-0.2.7-rc.6.14`, `runtimes-0.2.7-rc.6.15`,
-`runtimes-0.2.7-rc.6.16b` and `runtimes-0.2.7-rc.6.17`, are not programs. They hold files that the
-build and the packager download: the prebuilt
-third-party libraries of earlier versions and the standalone runtimes
-for other platforms.
+`runtimes-0.2.7-rc.6.16b`, `runtimes-0.2.7-rc.6.17`,
+`runtimes-0.2.7-rc.6.18` and `runtimes-0.2.7-rc.6.18b`, are not
+programs. They hold files that the build and the packager download: the
+prebuilt third-party libraries of earlier versions and the standalone
+runtimes for other platforms.
 
 **Latest development build.** Every successful run of a build workflow
 uploads the same files as an artifact: open the workflow, pick a
@@ -1667,6 +1672,134 @@ undo, and the folders where it keeps copies of stacks before changing
 them are readable by you alone. The Script Editor can tell the bridge
 the line its caret was on. With the bridge off, nothing else differs
 from 0.2.6-rc.1.
+
+#### 0.2.7-rc.6.18: the Bug Hunt, round eighteen
+
+OXT-Beyond 0.2.7-rc.6.18 has everything in 0.2.7-rc.6.17. This round
+puts two games made for phones in the Stack Player, brings Android
+standalones up to what Google Play asks of an app today, gets a stack's
+sounds back out as files, and squashes what the forum found since
+rc.6.17. Here is each change, listed as the bug it squashes:
+
+- **Not enough to play on a phone.** The Stack Player has two new games
+  made for phones. In Nova Rescue you drag a finger to fly, rescue the
+  drifting crews for a growing bonus, dodge meteors and raiders, and
+  beat a mothership every fourth sector. In Wobble Forts, built on
+  Box2DXT, you pull back and fling the round Bloops at the Grumps'
+  wobbly forts of wood, glass, stone, metal and TNT: fifteen forts in
+  three lands, with a boss at the end of each. Both fill a phone's
+  screen upright or turned, use Kenney's CC0 pictures and sounds, are in
+  Home's gallery, and have a page of their own in the website's web
+  stacks gallery, where a phone opens them on the whole screen (#401,
+  #403).
+- **Android apps that Google Play would turn away.** Google Play asks
+  new apps and updates to target Android 16 (API 36), and takes a new
+  app as an App Bundle. A package now targets API 36, and a stack can
+  ask for an App Bundle (.aab) beside its package with the new "App
+  Bundle" box on the Android card of Standalone Settings. The bundle
+  holds what the package holds and is signed with the package's key;
+  the builder warns when that is the debug key, or none, which Google
+  Play refuses. The first bundle build downloads Google's bundletool
+  (checked by its SHA-256) into the IDE's cache folder, and needs aapt2
+  from the Android SDK's build-tools. A stack can pin its target API
+  with its "android,target sdk" setting, from 33 to 36. A stack that
+  never ticks the box is built as before (#395, #397, #400).
+- **An Android runtime from 2019.** Standalones now carry the Android
+  runtime's Java layer built from OXT-Beyond's own source instead of
+  LiveCode 9.6.3's, which is what lets the fixes below reach your apps.
+  The Android engines themselves are still LiveCode 9.6.3's (#393).
+- **Android apps that closed when you changed the font size or the
+  language.** Android makes an app's screen again when the user changes
+  the font size, bold text or the language, attaches a keyboard or
+  resizes the window, and on Android 11 and newer the app closed. It
+  now goes on through those changes. For a change no app can be told
+  of, such as the display size, it starts again instead of closing, and
+  once its stack quits, opening the app again starts it afresh. On
+  Android 10 and older, where those changes started the stack again, it
+  now goes on as it does on newer Android (#405).
+- **Notifications that never showed on Android 12 and newer.**
+  mobileCreateLocalNotification schedules the notification and answers
+  its id there, where it answered nothing. A new "Post Notifications"
+  box among the Application Permissions makes the app ask the user, the
+  first time it schedules one, so that Android 13 and newer show it
+  (#393, #394).
+- **Pictures that wouldn't save on Android 10 and newer.**
+  mobileExportImageToAlbum adds the picture through Android's media
+  store, as Android asks there; writing the file failed on Android 10,
+  and on 11 and newer when another app's picture had the name. On
+  Android 13 and newer, an app that ticks "Write External Storage" gets
+  its external folders and saves to the album again (#394).
+- **The back button on Android 16, and stacks under the bars on 15.**
+  An app that targets API 35 or 36 still gets backKey on Android 16,
+  and its stack is kept out of the status and navigation bars, the
+  camera cutout and the keyboard, so it has the area it had (#395).
+- **Keyboard messages that came late on Android.** keyboardActivated
+  and keyboardDeactivated are sent when the keyboard shows or hides,
+  not at the next event (#393).
+- **A stack's sounds that you couldn't get back out.** `export
+  audioClip "x" to file "x.wav"` writes a clip as a WAV, AIFF or AU
+  file (by `as wave`, `as aiff`, `as ulaw` or the file's extension), so
+  the sounds the HyperCard importer brings in, and any other imported
+  sound, can be got out of a stack again; `export videoClip` writes the
+  file a video clip came from. These lines didn't compile before
+  (OpenXTalkPaul) (#391).
+- **Default buttons that went blank on a Mac.** After a script launched
+  another app, every default button of the stack was white on white:
+  in the background the Mac draws a default button plain, without its
+  accent colour, and its label stayed white. The label is white only
+  while the app is active now, and in the background it has the
+  button's own text colour, as any other button's has (Skids) (#406).
+- **An App Browser that hid in the Plugins menu, with tiny icons.**
+  Tools > Application Browser is back, under Project Browser, and opens
+  and closes it (it stays in Development > Plugins too). Its icons are
+  drawn sharp at 20 points for each stack, card, clip and control, dark
+  grey on a light window and light grey on a dark one, and the
+  triangles that open a stack are triangles on every platform
+  (richmond62) (#390).
+- **A web page that sat blank while it loaded.** An HTML5 standalone
+  can show a splash image while the engine and the stack download and
+  start: the new Splash setting in the Web pane of Standalone Settings
+  puts an image in the middle of the window, on the page's colour, with
+  what is loading under it. A stack without one gets the page it got
+  before (bwmilby) (#398).
+- **A Mobile Web library that kept laying out after a reload.**
+  Unloading the library, as the IDE does when it reloads its extensions,
+  now forgets the stacks `mwResponsive` lays out, as it was meant to
+  (#385).
+- **SQLite 3.51.3.** The SQLite driver and the web engine use SQLite's
+  last 3.51 patch release, with its fix for a database corruption bug
+  when a WAL file is reset. Values come back exactly as before; 3.53
+  and later would change the text scripts get for real numbers, so they
+  aren't used (#396).
+- **Older libsodium and OpenSSL in the xTalk Suite.** SodiumXT carries
+  libsodium 1.0.22 on every platform, and TorrentXT and dataChannelXT
+  carry OpenSSL 3.5.9 on macOS and Linux, as the engine does; their
+  scripts and behaviour are unchanged (#408).
+
+Behind the scenes, about fifty everyday things a person does are
+clicked through the IDE's own windows on every build, light and dark
+(#363); both new games are played on emulated phones, in Chromium and
+in WebKit (Safari's engine), on every build (#401, #403); a draft pull
+request runs its platform builds once it is marked ready (#386); the Android builder's checks keep their emulators awake,
+tap Allow on Android's permission dialogs, check the target API, the
+back key, the bars, the album, a font size and a density change, an app
+opened again after it quits, and App Bundles installed as Google Play
+does, on Android 13 and on Android 16 (#384, #394, #395, #397, #405);
+they answer another app's "isn't responding" dialog and wait out the
+emulator's slower steps (#404); the IDE tour checks the App Bundle box
+(#400), the App Browser's icons and its Tools menu item (#390) and, as
+its last step on a Mac, puts the IDE in the background
+and reads a default button's label there (#406); the Android engine
+itself is built here with a current NDK for all four architectures and
+checked as Android takes it (#402), and it now runs: both probes are
+built with it and run on the Android 13 and 16 KB page emulators, though
+packages still carry LiveCode 9.6.3's engines (#407), and an app built with
+it no longer hangs when Android destroys its activity while a script waits
+or the engine draws (#411); a test pins the text SQLite gives scripts (#396); a
+check finds any handler that uses a script local declared below it
+(#385); and the runtimes that every package carries are rebuilt from
+this release's engine, with the Android Java layer built here (#393,
+#409).
 
 #### 0.2.7-rc.6.17: the Bug Hunt, round seventeen
 
@@ -4182,16 +4315,18 @@ Known limitations, in rough order of importance:
    74 and several older libraries in `thirdparty/`. (OpenSSL, curl,
    ICU, zlib, libpng, giflib, libjpeg and PCRE are current from
    0.2.1-rc.3 on.) Plan: update them too.
-2. The Android standalone runtime is OpenXTalk Lite 1.15's (LiveCode
-   Community 9.6.3 builds), not built from this repository, and it
-   targets Android 13 (API 33), which Google Play no longer takes for new
-   apps and updates. The Android builder is tested automatically
+2. The Android standalone engines are OpenXTalk Lite 1.15's (LiveCode
+   Community 9.6.3 builds), not built from this repository; the Java
+   layer beside them is built here from 0.2.7-rc.6.18 on, and with it a
+   package targets Android 16 (API 36), as Google Play asks of new apps
+   and updates. The Android builder is tested automatically
    (packages built with a real Android SDK, checked, and run on Android 13
    and 16 KB page emulators), the engine itself only as that build runs
    it. The Windows and Linux runtimes are built from this repository from
    0.2.1-rc.3 on, and every package's tests build a standalone from each
-   of them. Plan: build the Android engine here too, then raise the
-   target API.
+   of them. The Android engine is built here and checked as Android takes
+   it, but packages do not carry it yet. Plan: ship the Android engines
+   built here.
 3. The Windows binaries are not code-signed, and the macOS app is signed
    ad hoc, not with an Apple Developer ID, and not notarized. Plan:
    Developer ID signing and notarization for macOS.

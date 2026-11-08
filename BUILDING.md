@@ -849,7 +849,8 @@ differences are:
   code and data) may differ from 1.15's, lack the shared libraries that
   1.15's Linux runtimes bundled in `lib\`, or have new files.
   `Runtime\Android`, carried over unchanged, is still compared byte for
-  byte;
+  byte, but for the Java layer that the asset's record names
+  (`java_layer`), which is built from this repository;
 - with a web runtime, `Runtime\Emscripten\js` is this repository's web
   engine: files that the reference has there and it lacks are intended
   missing, and the files it adds are intended additions.
@@ -991,17 +992,18 @@ asset is one zip archive with a fixed URL, size and SHA-256:
 | `java_layer` | Optional, the runtimes asset only: the Android runtime's Java layer (`Runtime/Android/Classes`) when it was built from the commit `source` names rather than carried over. |
 | `description`, `licence`, `source` | Text for people and reports. |
 
-Today there is one asset, `oxt-runtimes-0.2.7-rc.6.17`: the Windows (x86-64
+Today there is one asset, `oxt-runtimes-0.2.7-rc.6.18b`: the Windows (x86-64
 and x86) and Linux (x86-64 and x86) runtimes and the time zone library's
 code for them and its zoneinfo data, made from this repository's CI
-builds, with the Android runtime and its time zone library code carried
-over unchanged from the earlier asset `oxt-runtimes-1.15` (OpenXTalk
-Lite 1.15's files). Its `PROVENANCE.md` (installed as
-`PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md`) names the commit and the CI
+builds, and the Android runtime's Java layer (`Runtime/Android/Classes`)
+built from the same commit, with the rest of the Android runtime and its
+time zone library code carried over unchanged from the earlier asset
+`oxt-runtimes-1.15` (OpenXTalk Lite 1.15's files). Its `PROVENANCE.md` (installed as
+`PROVENANCE-oxt-runtimes-0.2.7-rc.6.18b.md`) names the commit and the CI
 runs and lists every file; the 1.15 asset's provenance comes with it as
 `PROVENANCE-oxt-runtimes-1.15.md`. It is published as the file
-`oxt-runtimes-0.2.7-rc.6.17.zip` of this repository's release
-`runtimes-0.2.7-rc.6.17`. Each package leaves out the part its own build
+`oxt-runtimes-0.2.7-rc.6.18b.zip` of this repository's release
+`runtimes-0.2.7-rc.6.18b`. Each package leaves out the part its own build
 makes (the entry's `exclude`). The manifest names that release in this
 repository, so a fork downloads it from here too. To package
 without the external assets, for example while a new asset is not
@@ -1753,9 +1755,11 @@ the back key quit it. Three things keep the engine to one start:
 ### Android Java layer
 
 The Android runtime's Java layer (`Runtime/Android/Classes`, a jar that
-the builder dexes into every package as `LiveCode.jar`) is still the one
-LiveCode Community 9.6.3 shipped, carried over from OpenXTalk Lite 1.15
-in the runtimes asset, as is the engine beside it.
+the builder dexes into every package as `LiveCode.jar`) is built from
+this repository's sources in the runtimes asset from
+`oxt-runtimes-0.2.7-rc.6.18` on; until then it was the one LiveCode
+Community 9.6.3 shipped, carried over from OpenXTalk Lite 1.15, and the
+engines beside it still are.
 [`tools/ci/android_java.py`](tools/ci/android_java.py) builds it from
 this checkout's sources (`engine/src/java`, the files
 `engine/engine-sources.gypi` lists) and checks it against that runtime.
@@ -2421,8 +2425,8 @@ build again.
 `cmd /c ..\make.cmd` rather than `..\make.cmd`.
 
 **Packaging fails to download the runtimes asset**
-(`oxt-runtimes-0.2.7-rc.6.17.zip`). The download comes from this
-repository's `runtimes-0.2.7-rc.6.17` release (also in a fork, which needs
+(`oxt-runtimes-0.2.7-rc.6.18b.zip`). The download comes from this
+repository's `runtimes-0.2.7-rc.6.18b` release (also in a fork, which needs
 no copy of its own), so a failure is usually the network:
 a proxy or firewall, or no access to `github.com` and its download
 servers. Copy the file into the cache folder, where it is used without
