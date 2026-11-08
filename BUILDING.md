@@ -1578,9 +1578,13 @@ signature, signed by the debug key or the keystore; none for the other
 two), zipalign, `resources.arsc` stored and aligned, every activity,
 service and receiver with an intent-filter saying `android:exported`,
 the 64-bit engine libraries aligned for 16 KB memory pages, the package
-name and target API (`--target`, 33 unless given; at 36 the manifest must
-keep the stack's orientation on large screens, below it must not say
-so), and the builder's warnings (the `legacy` build must be told that it
+name and target API (`--target`, 33 unless given, or with
+`--target-for <folder>` the one the builder picks for the runtime of the
+IDE installed there: 36 when its Java layer has the classes the builder
+looks for, which one built from this repository's sources has, and 33
+for LiveCode 9.6.3's; at 36 the manifest must keep the stack's
+orientation on large screens, below it must not say so), and the
+builder's warnings (the `legacy` build must be told that it
 has no arm64 build). For the `bundle` build it also checks `bundle.aab`:
 it holds the package's files with the same bytes, in the base module
 where bundletool wants them (bar the manifest, the resource table and
@@ -1701,13 +1705,16 @@ on the 16 KB emulator, as a package and as an App Bundle installed as
 split APKs, in which it also reads the file it carries (`oxt-probe.txt`,
 its standalone settings' `files`) from the base APK's stored assets; the
 release's is only recorded, with what it said. The other builds' App
-Bundle (`bundle.aab`, which targets 33) runs on the Android 13 emulator.
+Bundle (`bundle.aab`) runs on the Android 13 emulator.
 That layer is ready for API 36, so the builder makes the probe target 36
 (`verify --target 36`), and the 16 KB emulator is the first such image
 at API 36 (Android 16) or newer: there Android draws an app that targets
 35 or newer edge to edge, which the Java layer pads, and sends the back
 key of one that targets 36 only to its back callback. The other packages
-target 33, and must stay inside the bars on both emulators too.
+target what the builder picks for the release's runtime (`verify
+--target-for`: 33 with LiveCode 9.6.3's Java layer, which the runtimes
+carried until 0.2.7-rc.6.18, and 36 with one built here), and must stay
+inside the bars on both emulators too.
 LiveCode 9.6.3's `PendingIntent`s throw on Android 12 and newer, and the
 engine clears the exception without a word in the log, so that probe's
 notification call answers no id and the probe turns its fail colour

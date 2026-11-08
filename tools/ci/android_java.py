@@ -140,6 +140,36 @@ KNOWN_CALLS = {
         'mobileControlGet of a native field\'s "keyboardType": as getTextAlign, the engine answers its default',
 }
 
+# compare: the LiveCodeActivity methods that pass nothing to an engine the
+# activity did not start (one that started the app again in a new process,
+# RelaunchActivity), each with the reason: a difference from LiveCode
+# 9.6.3's Classes and from the first Classes built here alike
+RELAUNCH_GUARDS = {
+    'code com/runrev/android/LiveCodeActivity.onRestart:()V':
+        'in an activity that started the app again in a new process (onCreate), which has no engine, it '
+        'passes nothing to one: Android can still call that activity before it is destroyed, as it did '
+        'with the configuration change of a density\'s return, which crashed on the null engine; an '
+        'activity that started the engine does what it did',
+    'code com/runrev/android/LiveCodeActivity.onResume:()V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+    'code com/runrev/android/LiveCodeActivity.onPause:()V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+    'code com/runrev/android/LiveCodeActivity.onNewIntent:(Landroid/content/Intent;)V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+    'code com/runrev/android/LiveCodeActivity.onLowMemory:()V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+    'code com/runrev/android/LiveCodeActivity.onConfigurationChanged:(Landroid/content/res/Configuration;)V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+    'code com/runrev/android/LiveCodeActivity.onBackPressed:()V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+    'code com/runrev/android/LiveCodeActivity.onKeyDown:(ILandroid/view/KeyEvent;)Z':
+        'the same, and the key is Android\'s there (super.onKeyDown)',
+    'code com/runrev/android/LiveCodeActivity.onActivityResult:(IILandroid/content/Intent;)V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+    'code com/runrev/android/LiveCodeActivity.onRequestPermissionsResult:(I[Ljava/lang/String;[I)V':
+        'the same as onRestart: nothing to an engine the activity did not start',
+}
+
 # compare: what a build from this repository's sources does differently
 # from a released runtime's Classes, by the released jar's SHA-256, each
 # with the reason. A key is "class X", "member X.name:descriptor" (gone or
@@ -221,29 +251,7 @@ EXPECTED = {
             'in the same one, its second engine was stopped on Android 11 and newer (fdsan). Not for a '
             'configuration change; and an activity that started the app again in a new process (onCreate) has '
             'no engine to finish',
-        'code com/runrev/android/LiveCodeActivity.onRestart:()V':
-            'in an activity that started the app again in a new process (onCreate), which has no engine, it '
-            'passes nothing to one: Android can still call that activity before it is destroyed, as it did '
-            'with the configuration change of a density\'s return, which crashed on the null engine; an '
-            'activity that started the engine does what it did',
-        'code com/runrev/android/LiveCodeActivity.onResume:()V':
-            'the same as onRestart: nothing to an engine the activity did not start',
-        'code com/runrev/android/LiveCodeActivity.onPause:()V':
-            'the same as onRestart: nothing to an engine the activity did not start',
-        'code com/runrev/android/LiveCodeActivity.onNewIntent:(Landroid/content/Intent;)V':
-            'the same as onRestart: nothing to an engine the activity did not start',
-        'code com/runrev/android/LiveCodeActivity.onLowMemory:()V':
-            'the same as onRestart: nothing to an engine the activity did not start',
-        'code com/runrev/android/LiveCodeActivity.onConfigurationChanged:(Landroid/content/res/Configuration;)V':
-            'the same as onRestart: nothing to an engine the activity did not start',
-        'code com/runrev/android/LiveCodeActivity.onBackPressed:()V':
-            'the same as onRestart: nothing to an engine the activity did not start',
-        'code com/runrev/android/LiveCodeActivity.onKeyDown:(ILandroid/view/KeyEvent;)Z':
-            'the same, and the key is Android\'s there (super.onKeyDown)',
-        'code com/runrev/android/LiveCodeActivity.onActivityResult:(IILandroid/content/Intent;)V':
-            'the same as onRestart: nothing to an engine the activity did not start',
-        'code com/runrev/android/LiveCodeActivity.onRequestPermissionsResult:(I[Ljava/lang/String;[I)V':
-            'the same as onRestart: nothing to an engine the activity did not start',
+        **RELAUNCH_GUARDS,
         'code com/runrev/android/BusyIndicator.showBusyIndicator:(Ljava/lang/String;)V':
             'the busy indicator\'s dialog gets the same back callback on Android 13 and newer (Android 16 sends '
             'an app that targets API 36 no KEYCODE_BACK), which does what its key listener does',
@@ -255,6 +263,12 @@ EXPECTED = {
             'start() calls startGLES(1), whose code is start()\'s with one branch added: for 1 it makes the '
             'same context, OpenGL ES 1 asked for with no attributes, which this engine draws in; startGLES(3) '
             'makes the OpenGL ES 3 context an engine built from this tree asks for (mblandroiddc.cpp)',
+    },
+    # oxt-runtimes-0.2.7-rc.6.18b's Runtime/Android/Classes, built here
+    # (android_java.py build) from commit b970cad06, the first asset with
+    # a Java layer of this repository's: what has changed since
+    'e28f35a674222e798ed824ab2a22b0c6370dc37e86573a34565af0dbd6050360': {
+        **RELAUNCH_GUARDS,
     },
 }
 
