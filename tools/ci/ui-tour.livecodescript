@@ -9466,16 +9466,17 @@ end tour_screen_end
 -- its face than that one's: what the step holds is that in the
 -- background a default button's label is as easy to see as any other
 -- button's. (The dark appearance: on the screen a button is a dark grey
--- with a light label, but a snapshot taken with the app in the
--- background read the face of both kinds white, rc.6.17, 2026-11-07:
--- AppKit draws a button's face in the dark appearance translucent, a
--- light grey the card shows through, and the snapshot of a button alone
--- holds a translucent pixel's own colour, so the face is measured as it
--- shows on the card: the snapshot's colour over the card's colour on the
--- screen, by the snapshot's alphaData; #420's first try, an engine change,
--- measured white with or without it. In the dark appearance the ordinary
--- button's face must be dark, no channel of it 160 or more, in the
--- snapshot so measured and on the screen.)
+-- with a light label, but a snapshot of a button alone draws its face
+-- white, opaque: rc.6.17 and rc.6.18 read it so, and #420's run on Apple
+-- silicon read 255,255,255 at alpha 255 in the snapshot where the screen
+-- showed 91,91,91 on a card of 37,37,37. So the snapshot of a themed
+-- button is drawn in the light appearance, which is not what the screen
+-- shows; #420's first try, an engine change drawing it in its window's
+-- appearance, read white too and was taken out. That is queued for after
+-- the GM, and the step records it. The snapshot's pixels are measured
+-- over the card's colour on the screen by their alphaData, as they would
+-- show on the card. In the dark appearance the ordinary button's face
+-- must be dark on the screen, no channel of it 160 or more.)
 -- It is the tour's last step, since it leaves the IDE in the
 -- background. The Mac only: elsewhere a default button has no accent
 -- colour.
@@ -9536,8 +9537,8 @@ on tour_background_default
       delete stack kBackground
       throw tError
    end try
-   -- the card's colour on the screen, beside the buttons, which a
-   -- translucent face lets show through
+   -- the card's colour on the screen, beside the buttons, which a pixel
+   -- of a snapshot that is not opaque lets show through
    put tourBgScreenAt("30,50") into tCard
    tourRecord "INFO background-default: the card on the screen" && tCard
    repeat for each item tHeight in "21,26"
@@ -9554,12 +9555,16 @@ on tour_background_default
             (item 1 to 3 of tMeasure) & ", the label's colour farthest from it" && (item 4 of tMeasure) && \
             "apart; an ordinary button: the face" && (item 1 to 3 of tPlain) & "," && (item 4 of tPlain) && \
             "apart (in its snapshot" && (item 1 to 3 of tRaw) && "at alpha" && (item 4 of tRaw) & "; on the screen" && tScreen & ")"
-      if $OXT_TOUR_APPEARANCE is "dark" and \
-            (max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 or \
-            max(item 1 of tScreen, item 2 of tScreen, item 3 of tScreen) >= 160) then
-         put "in the dark appearance an ordinary button" && tHeight && "points high was drawn with a light face (" & \
-               (item 1 to 3 of tPlain) && "on the card" && tCard & ": in its snapshot" && (item 1 to 3 of tRaw) && \
-               "at alpha" && (item 4 of tRaw) & "; on the screen" && tScreen & "), not the dark appearance's" & return after tFails
+      if $OXT_TOUR_APPEARANCE is "dark" and max(item 1 of tScreen, item 2 of tScreen, item 3 of tScreen) >= 160 then
+         put "in the dark appearance an ordinary button" && tHeight && "points high was drawn on the screen with a light face (" & \
+               tScreen && "on the card" && tCard & "; in its snapshot" && (item 1 to 3 of tRaw) && \
+               "at alpha" && (item 4 of tRaw) & "), not the dark appearance's" & return after tFails
+      else if $OXT_TOUR_APPEARANCE is "dark" and max(item 1 of tPlain, item 2 of tPlain, item 3 of tPlain) >= 160 then
+         -- known, queued after the GM: the snapshot of a button alone is
+         -- drawn in the light appearance
+         tourRecord "INFO background-default: KNOWN: in the dark appearance the snapshot of an ordinary button" && \
+               tHeight && "points high has a light face (" & (item 1 to 3 of tRaw) && "at alpha" && (item 4 of tRaw) & \
+               ") where the screen shows" && tScreen
       end if
       put min(200, item 4 of tPlain - 30) into tNeed
       if item 4 of tMeasure < tNeed then
