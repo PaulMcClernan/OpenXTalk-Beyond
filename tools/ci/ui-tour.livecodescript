@@ -85,7 +85,7 @@
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,code-font,ide-stacks,screen-end,background-default"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- the card's own colour in the step controls (tourNearCardColour)
@@ -8948,6 +8948,163 @@ on tour_ide_stacks
       throw "the IDE lists its own stacks among the user's:" && char 1 to -3 of tWrong
    end if
 end tour_ide_stacks
+
+-- The IDE's code font. The IDE loads every font file in its fonts folder
+-- as it starts (revIDEInitialiseIDELibrary): Source Code Pro, which the
+-- Script Editor shows code in when it is among the fontNames
+-- (revseutilities, sePrefGet), and its icon fonts. Up to 0.2.7-rc.6.18
+-- on Linux no font a stack loaded was listed or drawn: each load made a
+-- fontconfig configuration of that one file, and Pango kept the one it
+-- first used (engine/src/lnxdc.cpp, libgraphics/src/lnxtext.cpp); on
+-- Windows the collection of loaded fonts could be an old one: DirectWrite
+-- keeps each collection under the bytes of its key, which was the address
+-- of the list of files, so a new list at an old list's address was given
+-- the old list's fonts (libgraphics/src/directwrite-skia.cpp). The step
+-- reads Source Code Pro among the fontNames and measures ten i and ten M
+-- in it, plain and bold: alike only in a monospaced face, so only when
+-- Source Code Pro is what measures them, and unlike in the fallback face
+-- (a font that is not there), which shows the probe can tell. Then it
+-- loads and unloads two font files from the repository (OXT_TOUR_FONT_FILES)
+-- three times over, reading after each step that each loaded file added a
+-- family to the fontNames, that an unloaded one took its family away, and
+-- that every font listed before stayed, and measures Source Code Pro again.
+constant kCodeFontStack = "OXT Tour Code Font"
+constant kCodeFontNone = "OXT Tour No Such Font"
+
+-- "<ten i>,<ten M>" in pFont, pStyle, in the field of kCodeFontStack
+function tourCodeWidths pFont, pStyle
+   set the textFont of field "Code" of stack kCodeFontStack to pFont
+   set the textStyle of field "Code" of stack kCodeFontStack to pStyle
+   return the formattedWidth of line 1 of field "Code" of stack kCodeFontStack & comma & \
+         the formattedWidth of line 2 of field "Code" of stack kCodeFontStack
+end tourCodeWidths
+
+-- Each line of pAfter that is not a line of pBefore
+function tourCodeAdded pBefore, pAfter
+   local tLine, tAdded
+   repeat for each line tLine in pAfter
+      if tLine is not among the lines of pBefore then
+         put tLine & return after tAdded
+      end if
+   end repeat
+   delete the last char of tAdded
+   return tAdded
+end tourCodeAdded
+
+-- Throws unless Source Code Pro measures as a monospaced face, plain and
+-- bold, and the fallback face does not
+command tourCodeMeasure pWhen
+   local tPlain, tBold, tNone
+   put tourCodeWidths("Source Code Pro", "plain") into tPlain
+   put tourCodeWidths("Source Code Pro", "bold") into tBold
+   put tourCodeWidths(kCodeFontNone, "plain") into tNone
+   tourRecord "INFO code-font:" && pWhen & ": ten i and ten M in Source Code Pro" && tPlain & \
+         ", bold" && tBold & "; in the fallback face" && tNone
+   if item 1 of tNone is item 2 of tNone then
+      throw "the fallback face measures ten i as ten M (" & tNone & "): the step cannot tell a monospaced face"
+   end if
+   if item 1 of tPlain is not item 2 of tPlain or item 1 of tBold is not item 2 of tBold then
+      throw pWhen & ", Source Code Pro is not what measures its text: ten i and ten M are" && tPlain & \
+            ", bold" && tBold
+   end if
+end tourCodeMeasure
+
+on tour_code_font
+   local tDefault, tFiles, tBefore, tNow, tGone, tRound, tFile, tIndex, tFamily, tFails, tError
+   if "Source Code Pro" is not among the lines of the fontNames then
+      throw "Source Code Pro, the IDE's code font, is not among the fontNames"
+   end if
+   put the defaultStack into tDefault
+   lock messages
+   if there is a stack kCodeFontStack then delete stack kCodeFontStack
+   create stack kCodeFontStack
+   set the rect of it to "240,160,640,280"
+   set the defaultStack to kCodeFontStack
+   create field "Code"
+   set the rect of it to "20,20,380,100"
+   set the dontWrap of it to true
+   set the textSize of it to 13
+   set the text of it to "iiiiiiiiii" & return & "MMMMMMMMMM"
+   unlock messages
+   set the defaultStack to tDefault
+   try
+      tourCodeMeasure "as the IDE starts"
+      set the textFont of field "Code" of stack kCodeFontStack to "Source Code Pro"
+      set the textStyle of field "Code" of stack kCodeFontStack to "plain"
+      go stack kCodeFontStack
+      tourWait 300
+      tourShotStack kCodeFontStack, "98-code-font"
+
+      put $OXT_TOUR_FONT_FILES into tFiles
+      replace "|" with return in tFiles
+      if the number of lines of tFiles is not 2 then
+         throw "OXT_TOUR_FONT_FILES names" && the number of lines of tFiles && "font files, not 2"
+      end if
+      repeat for each line tFile in tFiles
+         if there is not a file tFile then
+            throw "no font file at" && quote & tFile & quote && "(OXT_TOUR_FONT_FILES)"
+         end if
+      end repeat
+      repeat with tRound = 1 to 3
+         -- each file loaded adds a family, and every font listed stays
+         put the fontNames into tBefore
+         repeat with tIndex = 1 to 2
+            put line tIndex of tFiles into tFile
+            start using font file tFile
+            if the result is not empty then
+               throw "round" && tRound & ":" && tFile && "did not load:" && the result
+            end if
+            put the fontNames into tNow
+            put tourCodeAdded(tNow, tBefore) into tGone
+            if tGone is not empty then
+               put "round" && tRound & ", loading" && tFile && "took away" && tourJoin(tGone) & return after tFails
+            end if
+            put tourCodeAdded(tBefore, tNow) into tFamily[tIndex]
+            if tFamily[tIndex] is empty then
+               put "round" && tRound & ":" && tFile && "loaded and added no family to the fontNames" & \
+                     return after tFails
+            end if
+            put tNow into tBefore
+         end repeat
+         tourRecord "INFO code-font: round" && tRound & ", loaded" && tourJoin(tFamily[1]) && "and" && tourJoin(tFamily[2])
+         -- each file unloaded takes its family away, and every other font stays
+         repeat with tIndex = 1 to 2
+            put line tIndex of tFiles into tFile
+            stop using font file tFile
+            if the result is not empty then
+               throw "round" && tRound & ":" && tFile && "did not unload:" && the result
+            end if
+            put the fontNames into tNow
+            put tourCodeAdded(tNow, tBefore) into tGone
+            if tGone is not tFamily[tIndex] then
+               put "round" && tRound & ", unloading" && tFile && "took away" && \
+                     quote & tourJoin(tGone) & quote && "and not just" && quote & tourJoin(tFamily[tIndex]) & quote & \
+                     return after tFails
+            end if
+            if tourCodeAdded(tBefore, tNow) is not empty then
+               put "round" && tRound & ", unloading" && tFile && "added" && \
+                     tourJoin(tourCodeAdded(tBefore, tNow)) & return after tFails
+            end if
+            put tNow into tBefore
+         end repeat
+         if "Source Code Pro" is not among the lines of the fontNames then
+            put "round" && tRound & ": Source Code Pro is no longer among the fontNames" & return after tFails
+         end if
+      end repeat
+      try
+         tourCodeMeasure "after the font files were loaded and unloaded three times"
+      catch tError
+         put tError & return after tFails
+      end try
+   catch tError
+      delete stack kCodeFontStack
+      throw tError
+   end try
+   delete stack kCodeFontStack
+   if tFails is not empty then
+      throw "the fonts loaded are not the fonts listed:" && tourJoin(char 1 to -2 of tFails)
+   end if
+end tour_code_font
 
 on tour_screen_end
    tourShotScreen "99-screen-end"
