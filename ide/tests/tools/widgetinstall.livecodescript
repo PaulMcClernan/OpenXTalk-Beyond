@@ -92,8 +92,7 @@ private command __SetLook pLook
    end if
 end __SetLook
 
--- The tile a look gives the widget: the modern look names it by its id,
--- the classic look by the id's last part
+-- The tile a look gives the widget, named by its id in either look
 private command __CheckLook pLook, pTile
    if revIDEExtensionProperty(kWidget, "status") is not "installed" then
       TestSkip pLook && "look: the Spinner", "it is not loaded"
@@ -121,7 +120,7 @@ on TestModernLook
 end TestModernLook
 
 on TestClassicLook
-   __CheckLook "classic", "spinner"
+   __CheckLook "classic", kWidget
 end TestClassicLook
 
 -- A palette closed and opened again shows what changed while it was
@@ -137,14 +136,14 @@ on TestWhileClosed
    __Settle
    revIDEOpenPalette "tools"
    __Settle
-   TestAssert "a widget uninstalled while the palette was closed is gone when it opens", __Tile("spinner") is empty
+   TestAssert "a widget uninstalled while the palette was closed is gone when it opens", __Tile(kWidget) is empty
 
    close stack "revTools"
    revIDEExtensionReload kWidget
    __Settle
    revIDEOpenPalette "tools"
    __Settle
-   TestAssert "a widget installed while the palette was closed is there when it opens", __Tile("spinner") is not empty
+   TestAssert "a widget installed while the palette was closed is there when it opens", __Tile(kWidget) is not empty
 end TestWhileClosed
 
 -- Nothing that changes no widget makes the palette again: a library
@@ -156,12 +155,12 @@ on TestLibraryLeavesPalette
       exit TestLibraryLeavesPalette
    end if
    __SetLook "classic"
-   put __Tile("spinner") into tBefore
+   put __Tile(kWidget) into tBefore
    revIDEExtensionUnload kLibrary
    revIDEExtensionReload kLibrary
    __Settle
    TestAssert "a library loaded again leaves the palette as it was", \
-         tBefore is not empty and __Tile("spinner") is tBefore
+         tBefore is not empty and __Tile(kWidget) is tBefore
    dispatch function "toolsWidgetsChanged" to stack "revTools"
    TestAssert "and the palette knows its widgets are those it shows", the result is false
 end TestLibraryLeavesPalette
@@ -206,15 +205,13 @@ on TestBuilderInstallManagerUninstall
       TestSkip "Extension Builder install", "the test widget did not compile (no lc-compile?)"
       exit TestBuilderInstallManagerUninstall
    end if
+   local tHasModern
    dispatch function "tmIsModern" to stack "revTools"
+   put it is "handled" into tHasModern
+   put kBuilt into tTile
    repeat for each item tLook in "modern,classic"
-      if tLook is "modern" and it is not "handled" then next repeat
+      if tLook is "modern" and not tHasModern then next repeat
       __SetLook tLook
-      if tLook is "modern" then
-         put kBuilt into tTile
-      else
-         put "palettewidget" into tTile
-      end if
       revIDEDeveloperExtensionInstall tFolder
       repeat with tTry = 1 to 50
          if revIDEExtensionProperty(kBuilt, "status") is "installed" then exit repeat

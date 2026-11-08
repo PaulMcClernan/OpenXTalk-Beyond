@@ -939,7 +939,7 @@ on tour_tools_widget_install
             put kTourWidgetID into tTile
          else
             tourToolsClassic
-            put "spinner" into tTile
+            put kTourWidgetID into tTile
          end if
          tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: the Spinner is on the palette to start with"
          revIDEExtensionUnload kTourWidgetID
@@ -968,13 +968,13 @@ on tour_tools_widget_install
       tourWidgetBatch
       revIDEOpenPalette "tools"
       tourWait 600
-      tourTmCheck tourTmNamed("spinner") is empty, "a widget uninstalled while the palette was closed is gone when it opens"
+      tourTmCheck tourTmNamed(kTourWidgetID) is empty, "a widget uninstalled while the palette was closed is gone when it opens"
       close stack "revTools"
       revIDEExtensionReload kTourWidgetID
       tourWidgetBatch
       revIDEOpenPalette "tools"
       tourWait 600
-      tourTmCheck tourTmNamed("spinner") is not empty, "a widget installed while the palette was closed is there when it opens"
+      tourTmCheck tourTmNamed(kTourWidgetID) is not empty, "a widget installed while the palette was closed is there when it opens"
    catch tError
       tourTmCheck false, "error:" && tourJoin(tError)
    end try
@@ -1018,7 +1018,7 @@ on tour_tools_widget_builder
             put kTourBuilderWidget into tTile
          else
             tourToolsClassic
-            put "palettewidget" into tTile
+            put kTourBuilderWidget into tTile
          end if
          tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: the test widget is not on the palette before it is installed"
          revIDEDeveloperExtensionInstall tFolder
