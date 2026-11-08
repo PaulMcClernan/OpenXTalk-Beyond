@@ -2628,9 +2628,19 @@ end revIDEPlatformVersion
 -- unreadable on it (bwmilby, openxtalk.org p=25550): black or white,
 -- whichever stands out more (the WCAG relative luminance of the hilite).
 -- macOS and Windows keep revIDEColor("dataView_TextHiliteColor"), as do
--- colours given by name.
-function revIDEHilitedTextColor pHiliteColor
+-- colours given by name. In the web IDE it is white: there the
+-- accentColor is a blue (0,120,215) and the names were blue on the blue
+-- hilite (littlenemo, openxtalk.org p=26169; seth's decision of
+-- 2026-11-08, 0.2.7-rc.6.19). pWeb true answers as the web IDE does, false
+-- as a desktop does; empty asks revEnvironmentIsWeb.
+function revIDEHilitedTextColor pHiliteColor, pWeb
    local tLuminance, tChannel, tValue
+   if pWeb is not among the items of "true,false" then
+      put revEnvironmentIsWeb() is true into pWeb
+   end if
+   if pWeb then
+      return "255,255,255"
+   end if
    if the platform is not "Linux" or the number of items of pHiliteColor is not 3 then
       return revIDEColor("dataView_TextHiliteColor")
    end if
@@ -7330,6 +7340,54 @@ command revIDEAppBrowserText pStack
    end repeat
 end revIDEAppBrowserText
 
+/*
+OXT-Beyond: white names on the App Browser's selected rows, in the web
+IDE.
+
+Description:
+The App Browser plugin paints the names of the selected rows of its
+controls, audio clips and video clips black while its window is
+suspended (its cSuspended, its revHiliteControlLine), so that they read
+on the grey it gives an inactive window on Windows. Only Windows sets
+and clears cSuspended (its suspendStack and resumeStack), and the
+plugin's file was saved with it true, so on every other platform each
+selected row's name was black on the blue hilite. In the web IDE
+(littlenemo, openxtalk.org p=26169; seth's decision of 2026-11-08) it is
+set false as the plugin opens, so the engine draws the selected names
+in the list's background colour, white, as the stacks list already
+does (the plugin's revSelectLine). In memory only: the plugin's file is
+not changed and it is not marked as edited. The desktops are left as
+they were.
+
+Parameters:
+pStack: the App Browser plugin's stack, by its name or its file; any other
+stack is left as it is
+pWeb (boolean): true to act as in the web IDE, false as on a desktop;
+empty asks revEnvironmentIsWeb
+
+References: revIDEOpenPlugin (command), revIDEHilitedTextColor (function)
+*/
+command revIDEAppBrowserHilitedNames pStack, pWeb
+   if pWeb is not among the items of "true,false" then
+      put revEnvironmentIsWeb() is true into pWeb
+   end if
+   if not pWeb then
+      exit revIDEAppBrowserHilitedNames
+   end if
+   if there is not a stack pStack then
+      exit revIDEAppBrowserHilitedNames
+   end if
+   if the short name of stack pStack is not "App Browser" or \
+         not (the effective filename of stack pStack ends with "/App Browser.livecode") then
+      exit revIDEAppBrowserHilitedNames
+   end if
+   if the cSuspended of stack pStack is true then
+      lock messages
+      set the cSuspended of stack pStack to false
+      unlock messages
+   end if
+end revIDEAppBrowserHilitedNames
+
 -- The long id of the card the control pControl (a long id) is on
 function revIDEAppBrowserCardOf pControl
    local tOwner
@@ -7558,10 +7616,12 @@ on revIDEOpenPlugin pName
    end if
    
    -- OXT-Beyond: the App Browser's lists in bigger text, and its icons
-   -- larger, before it draws them
+   -- larger, before it draws them; in the web IDE, white names on its
+   -- selected rows
    if pName is "App Browser" then
       revIDEAppBrowserText tStackPath
       revIDEAppBrowserIcons tStackPath
+      revIDEAppBrowserHilitedNames tStackPath
    end if
    if tMode is "invisible" then
       go invisible stack tStackPath

@@ -268,6 +268,111 @@ class PropertyListeners(unittest.TestCase):
             self.assertIn('set the backgroundColor of tButton to "0,0,200"', step, name)
 
 
+class ProjectBrowserRefresh(unittest.TestCase):
+    """The Project Browser's Refresh button showed a corner of the splash's
+    art in the web IDE, and its tooltip named the Application Browser
+    (littlenemo, openxtalk.org; 0.2.7-rc.6.19). The splash's image took
+    revIcons' ID, which is the ID of revIcons' "dark-refresh", the
+    button's icon, and the web IDE keeps the splash in memory. Both tours'
+    project-browser steps check the button in the IDE (tourRefreshProblem);
+    these hold the pieces to each other."""
+
+    def read(self, *path):
+        with open(os.path.join(REPO, *path), encoding='utf-8') as f:
+            return f.read().lstrip('\ufeff')
+
+    def test_both_tours_check_the_button(self):
+        for name in ('web-ide-tour.livecodescript', 'ui-tour.livecodescript'):
+            tour = self.read('tools', 'ci', name)
+            step = tour.split('\non tour_project_browser\n', 1)[1].split('\nend tour_project_browser', 1)[0]
+            self.assertIn('put tourRefreshProblem(tStack) into tProblem', step, name)
+            self.assertIn('if tProblem is not empty then throw tProblem', step, name)
+            check = tour.split('\nfunction tourRefreshProblem pStack\n', 1)[1].split('\nend tourRefreshProblem', 1)[0]
+            self.assertIn('"Refresh the Project Browser"', check, name)
+            # the release's binary stack (the screenshot jobs' IDE) has the
+            # old tooltip: recorded, not failed; any other text fails
+            self.assertIn('if the toolTip of tButton is "Refresh the Application Browser" then\n      tourRecord "INFO', check, name)
+            self.assertIn('else if the toolTip of tButton is not "Refresh the Project Browser" then\n      return', check, name)
+            # every stack in memory but revIcons, substacks too
+            self.assertIn('repeat for each line tMain in the mainStacks', check, name)
+            self.assertIn('the substacks of stack tMain', check, name)
+            self.assertIn('if there is an image id tIcon of stack tSub then', check, name)
+
+    def test_the_splash_takes_no_icons_id(self):
+        script = self.read('ide', 'Toolset', 'palettes', 'splash', 'revsplashstackbehavior.livecodescript')
+        self.assertIn('set the id of image "Splash" to splashImageId()', script)
+        self.assertNotIn('set the id of image "Splash" to the id of stack "revIcons"', script)
+        taken = script.split('\nprivate function splashIdIsTaken pId\n', 1)[1].split('\nend splashIdIsTaken', 1)[0]
+        self.assertIn('repeat for each item tStack in "revIcons,revGeneralIcons"', taken)
+        self.assertIn('if there is an image id pId of stack tStack then return true', taken)
+        pick = script.split('\nprivate function splashImageId\n', 1)[1].split('\nend splashImageId', 1)[0]
+        # it starts where it did, at revIcons' ID, and steps past what is taken
+        self.assertIn('put the id of stack "revIcons" into tId', pick)
+        self.assertIn('repeat while splashIdIsTaken(tId)', pick)
+
+    def test_the_tooltip_patch(self):
+        patch = self.read('tools', 'oxt', 'ide-stack-patches', 'project-browser-refresh-tooltip.txt')
+        self.assertIn('file: Toolset/palettes/project browser/revideprojectbrowser.livecode', patch)
+        self.assertIn('from: Refresh the Application Browser\nto: Refresh the Project Browser\n', patch)
+        with open(os.path.join(REPO, 'ide', 'Toolset', 'palettes', 'project browser',
+                               'revideprojectbrowser.livecode'), 'rb') as f:
+            stack = f.read()
+        self.assertIn(b'Refresh the Project Browser', stack)
+        self.assertNotIn(b'Refresh the Application Browser', stack)
+
+
+class HilitedNames(unittest.TestCase):
+    """White names on a selected row of the Project Browser and the App
+    Browser, in the web IDE only (littlenemo, openxtalk.org p=26169; seth's
+    decision of 2026-11-08): the Project Browser's were the accentColor, a
+    blue, on its blue hilite, and the App Browser painted its selected
+    controls' names black (its cSuspended, saved true, cleared only on
+    Windows). The web tour's project-browser step checks both in the IDE;
+    these hold the pieces to each other and the desktops to what they did."""
+
+    LIBRARY = ('ide', 'Toolset', 'libraries', 'revidelibrary.8.livecodescript')
+
+    def read(self, *path):
+        with open(os.path.join(REPO, *path), encoding='utf-8') as f:
+            return f.read().lstrip('\ufeff')
+
+    def handler(self, kind, name):
+        text = self.read(*self.LIBRARY)
+        return text.split('\n%s %s ' % (kind, name), 1)[1].split('\nend %s' % name, 1)[0]
+
+    def test_white_on_the_web_only(self):
+        body = self.handler('function', 'revIDEHilitedTextColor')
+        self.assertIn('put revEnvironmentIsWeb() is true into pWeb', body)
+        web = body.index('if pWeb then\n      return "255,255,255"')
+        # the desktops' answers come after it, unchanged
+        self.assertLess(web, body.index('if the platform is not "Linux" or the number of items of pHiliteColor is not 3 then'))
+        self.assertIn('return revIDEColor("dataView_TextHiliteColor")', body[web:])
+
+    def test_the_app_browser_on_the_web_only(self):
+        body = self.handler('command', 'revIDEAppBrowserHilitedNames')
+        self.assertIn('if not pWeb then\n      exit revIDEAppBrowserHilitedNames', body)
+        self.assertIn('ends with "/App Browser.livecode"', body)
+        self.assertIn('set the cSuspended of stack pStack to false', body)
+        self.assertLess(body.index('lock messages'), body.index('set the cSuspended'))
+        opener = self.handler('on', 'revIDEOpenPlugin')
+        self.assertIn('revIDEAppBrowserHilitedNames tStackPath', opener)
+        self.assertLess(opener.index('revIDEAppBrowserHilitedNames tStackPath'), opener.index('go invisible stack'))
+
+    def test_the_web_tour_checks_both(self):
+        tour = self.read('tools', 'ci', 'web-ide-tour.livecodescript')
+        step = tour.split('\non tour_project_browser\n', 1)[1].split('\nend tour_project_browser', 1)[0]
+        self.assertIn('revIDEHilitedTextColor(revIDEColor("dataView_hiliteColor")) is not "255,255,255"', step)
+        self.assertIn('if the cSuspended of stack "App Browser" is true then', step)
+        self.assertIn('close stack "App Browser"', step)
+
+    def test_the_ide_tests(self):
+        hilite = self.read('ide', 'tests', 'projectbrowser', 'hilite.livecodescript')
+        self.assertIn('on TestHilitedNamesAreWhiteOnTheWeb', hilite)
+        self.assertIn('on TestHilitedNamesOnADesktopAreAsBefore', hilite)
+        self.assertIn('on TestAppBrowserHilitedNamesOnTheWeb',
+                      self.read('ide', 'tests', 'appbrowser', 'updates.livecodescript'))
+
+
 class ExtensionStacksNotTheUsers(unittest.TestCase):
     """The stacks the IDE loads from its own Extensions folder are its own:
     until rc.6.18 the web IDE's Project Browser and App Browser listed the
