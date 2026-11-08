@@ -1428,8 +1428,11 @@ class OneSystem(unittest.TestCase):
         invoked = re.search(r'(?s)protected static class BackCallback implements OnBackInvokedCallback\n    {\n(.*?)'
                             r'\n    }\n', activity).group(1)
         self.assertRegex(invoked, r'public void onBackInvoked\(\)\s*{\s*m_activity\.onBackPressed\(\);\s*}')
-        # onBackPressed is the stack's backKey, as before
-        self.assertRegex(activity, r'public void onBackPressed\(\)\s*{\s*s_main_view\.onBackPressed\(\);\s*}')
+        # onBackPressed is the stack's backKey, as before, in an activity
+        # that started the engine (one that started the app again in a new
+        # process has none to pass it to)
+        self.assertRegex(activity, r'public void onBackPressed\(\)\s*{\s*if \(!m_engine_started\)\s+return;\s*'
+                                   r's_main_view\.onBackPressed\(\);\s*}')
         # the busy indicator's dialog: its key listener and its callback do
         # one thing, what the listener did
         busy = read('engine', 'src', 'java', 'com', 'runrev', 'android', 'BusyIndicator.java')
