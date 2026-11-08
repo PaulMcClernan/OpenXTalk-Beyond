@@ -2903,19 +2903,27 @@ end dragDrop
 -- only during one). pDropAt is the char the text is dropped before,
 -- pSelectFrom and pSelectTo the selection being dragged, and pMode
 -- "cut" (a move inside this script) or "copy".
+--
+-- Both edits go into the one undo group "Drag" (textReplace's pDontGroup),
+-- so that one Undo takes back the whole drop. Before, each edit of more
+-- than one char opened a group of its own, and the first Undo after a move
+-- deleted the dropped text, leaving it gone from both places until a
+-- second Undo (rc.6.17 Bug Hunt). A drop onto the selection itself
+-- changes nothing, so it now opens no group: it left an empty one, an
+-- Undo that did nothing.
 command textDropText pDropAt, pSelectFrom, pSelectTo, pDroppedText, pMode
-   lock screen
-   textBeginGroup "Drag"
-   
    if pDropAt >= pSelectFrom and pDropAt <= pSelectTo then
       exit textDropText
    end if
+   
+   lock screen
+   textBeginGroup "Drag"
    
    if pMode is "cut" then
       -- Remove the selection. This will never happen on a drag that started outside the ScriptEditorPane.
       
       -- in this case, we cannot have tFrom > tTo
-      textReplace pSelectFrom, char pSelectFrom to pSelectTo of control "Script" of me, empty
+      textReplace pSelectFrom, char pSelectFrom to pSelectTo of control "Script" of me, empty, , true
       
       if pDropAt > pSelectTo then
          subtract pSelectTo - pSelectFrom + 1 from pDropAt
@@ -2927,7 +2935,7 @@ command textDropText pDropAt, pSelectFrom, pSelectTo, pDroppedText, pMode
    #    delete char -1 of pDroppedText
    #  end if
    
-   textReplace pDropAt, empty, pDroppedText
+   textReplace pDropAt, empty, pDroppedText, , true
    
    textEndGroup
    unlock screen
