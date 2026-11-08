@@ -221,6 +221,29 @@ EXPECTED = {
             'in the same one, its second engine was stopped on Android 11 and newer (fdsan). Not for a '
             'configuration change; and an activity that started the app again in a new process (onCreate) has '
             'no engine to finish',
+        'code com/runrev/android/LiveCodeActivity.onRestart:()V':
+            'in an activity that started the app again in a new process (onCreate), which has no engine, it '
+            'passes nothing to one: Android can still call that activity before it is destroyed, as it did '
+            'with the configuration change of a density\'s return, which crashed on the null engine; an '
+            'activity that started the engine does what it did',
+        'code com/runrev/android/LiveCodeActivity.onResume:()V':
+            'the same as onRestart: nothing to an engine the activity did not start',
+        'code com/runrev/android/LiveCodeActivity.onPause:()V':
+            'the same as onRestart: nothing to an engine the activity did not start',
+        'code com/runrev/android/LiveCodeActivity.onNewIntent:(Landroid/content/Intent;)V':
+            'the same as onRestart: nothing to an engine the activity did not start',
+        'code com/runrev/android/LiveCodeActivity.onLowMemory:()V':
+            'the same as onRestart: nothing to an engine the activity did not start',
+        'code com/runrev/android/LiveCodeActivity.onConfigurationChanged:(Landroid/content/res/Configuration;)V':
+            'the same as onRestart: nothing to an engine the activity did not start',
+        'code com/runrev/android/LiveCodeActivity.onBackPressed:()V':
+            'the same as onRestart: nothing to an engine the activity did not start',
+        'code com/runrev/android/LiveCodeActivity.onKeyDown:(ILandroid/view/KeyEvent;)Z':
+            'the same, and the key is Android\'s there (super.onKeyDown)',
+        'code com/runrev/android/LiveCodeActivity.onActivityResult:(IILandroid/content/Intent;)V':
+            'the same as onRestart: nothing to an engine the activity did not start',
+        'code com/runrev/android/LiveCodeActivity.onRequestPermissionsResult:(I[Ljava/lang/String;[I)V':
+            'the same as onRestart: nothing to an engine the activity did not start',
         'code com/runrev/android/BusyIndicator.showBusyIndicator:(Ljava/lang/String;)V':
             'the busy indicator\'s dialog gets the same back callback on Android 13 and newer (Android 16 sends '
             'an app that targets API 36 no KEYCODE_BACK), which does what its key listener does',
