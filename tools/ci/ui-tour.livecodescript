@@ -85,7 +85,7 @@
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,tools-widget-install,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- the card's own colour in the step controls (tourNearCardColour)
@@ -912,6 +912,99 @@ on tour_tools_modern_default
    tourTmFinish "tools-modern-default"
    tourTmReset
 end tour_tools_modern_default
+
+-- A widget installed or uninstalled shows, or goes, in the Tools palette
+-- at once, in either look (bwmilby, forum, 2026-11-07): up to
+-- 0.2.7-rc.6.18 the palette heard nothing of it, and only a switch of
+-- look or a restart showed it. The Spinner, which no step of the tour
+-- uses, is unloaded and loaded again as the Extension Manager's uninstall
+-- and install do (revIDEExtensionUnload, revIDEExtensionReload), with the
+-- palette open in each look and then while it is closed. A library
+-- loaded again leaves the palette as it is: the tile is the same control
+-- (not made again) afterwards. The Spinner is loaded again whatever fails
+constant kTourWidgetID = "com.livecode.widget.spinner"
+constant kTourWidgetLibrary = "com.livecode.library.diff"
+
+on tour_tools_widget_install
+   local tLook, tTile, tFirst, tError
+   if not tourTmStart("tools-widget-install") then exit tour_tools_widget_install
+   if revIDEExtensionProperty(kTourWidgetID, "status") is not "installed" then
+      throw kTourWidgetID && "is not loaded (" & revIDEExtensionProperty(kTourWidgetID, "status") & ")"
+   end if
+   tourWidgetBatch
+   try
+      repeat for each item tLook in "modern,classic"
+         if tLook is "modern" then
+            if tourToolsModern(empty, false) is not true then throw "the modern look did not turn on"
+            put kTourWidgetID into tTile
+         else
+            tourToolsClassic
+            put "spinner" into tTile
+         end if
+         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: the Spinner is on the palette to start with"
+         revIDEExtensionUnload kTourWidgetID
+         tourWidgetBatch
+         tourTmCheck revIDEExtensionProperty(kTourWidgetID, "status") is not "installed", \
+               tLook && "look: the Spinner unloads (" & revIDEExtensionProperty(kTourWidgetID, "status") & ")"
+         tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: a widget uninstalled goes from the palette at once"
+         revIDEExtensionReload kTourWidgetID
+         tourWidgetBatch
+         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: a widget installed shows on the palette at once"
+         if tLook is "modern" then tourShotStack "revTools", "01-tools-widget-install"
+         -- a library changes nothing the palette shows
+         put tourTmNamed(tTile) into tFirst
+         if revIDEExtensionProperty(kTourWidgetLibrary, "status") is "installed" then
+            revIDEExtensionUnload kTourWidgetLibrary
+            revIDEExtensionReload kTourWidgetLibrary
+            tourWidgetBatch
+            tourTmCheck tFirst is not empty and tourTmNamed(tTile) is tFirst, \
+                  tLook && "look: a library loaded again leaves the palette as it was (" & tFirst && "then" && tourTmNamed(tTile) & ")"
+         end if
+      end repeat
+      -- closed meanwhile (in the classic look): it hears nothing while it
+      -- is closed, and shows what changed when it opens again
+      close stack "revTools"
+      revIDEExtensionUnload kTourWidgetID
+      tourWidgetBatch
+      revIDEOpenPalette "tools"
+      tourWait 600
+      tourTmCheck tourTmNamed("spinner") is empty, "a widget uninstalled while the palette was closed is gone when it opens"
+      close stack "revTools"
+      revIDEExtensionReload kTourWidgetID
+      tourWidgetBatch
+      revIDEOpenPalette "tools"
+      tourWait 600
+      tourTmCheck tourTmNamed("spinner") is not empty, "a widget installed while the palette was closed is there when it opens"
+   catch tError
+      tourTmCheck false, "error:" && tourJoin(tError)
+   end try
+   if revIDEExtensionProperty(kTourWidgetID, "status") is not "installed" then
+      revIDEExtensionReload kTourWidgetID
+      tourWidgetBatch
+   end if
+   if revIDEExtensionProperty(kTourWidgetLibrary, "status") is "unloaded" then
+      revIDEExtensionReload kTourWidgetLibrary
+      tourWidgetBatch
+   end if
+   if there is not a stack "revTools" or the mode of stack "revTools" is 0 then revIDEOpenPalette "tools"
+   tourTmFinish "tools-widget-install"
+   tourTmReset
+end tour_tools_widget_install
+
+-- Waits, at most 10 seconds, for the extension library's batch of changes
+-- (and the ideExtensionsChanged it sends) to be over, then 300 ms more
+command tourWidgetBatch
+   local tLine, tWaiting
+   repeat 100 times
+      wait 100 milliseconds with messages
+      put false into tWaiting
+      repeat for each line tLine in the pendingMessages
+         if item 3 of tLine is among the items of "doExtensionsChanged,doExtensionsChangedBatch" then put true into tWaiting
+      end repeat
+      if not tWaiting then exit repeat
+   end repeat
+   tourWait 300
+end tourWidgetBatch
 
 -- Opens the modern look as a profile with pNames and pSize saved finds it
 command tourToolsDefaultOpen pNames, pSize
