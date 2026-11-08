@@ -19,11 +19,12 @@
 compare them with what another builder made, and run them on a device.
 
   python3 tools/ci/android_check.py extract --package FILE --dest DIR [--platform P] [--env NAME]
-  python3 tools/ci/android_check.py overlay --root DIR [--classes FILE]
+  python3 tools/ci/android_check.py overlay --root DIR [--classes FILE | --engine DIR]
   python3 tools/ci/android_check.py ide (--install DIR | --package FILE | --bin DIR)
       --work DIR [--sdk DIR] [--jdk DIR] [--platform P] [--device SERIAL]
       [--stack FILE] [--builds NAMES] [--no-units] [--probe java] [--timeout SECONDS]
-  python3 tools/ci/android_check.py verify --work DIR --sdk DIR [--jdk DIR] [--builds NAMES] [--target API]
+  python3 tools/ci/android_check.py verify --work DIR --sdk DIR [--jdk DIR] [--builds NAMES]
+      [--target API | --target-for DIR] [--engine DIR]
   python3 tools/ci/android_check.py compare --old DIR --new DIR --sdk DIR
   python3 tools/ci/android_check.py device --apk FILE --serial SERIAL --sdk DIR
       [--out FILE] [--abi ABI] [--timeout SECONDS] [--allow PERMISSION]
@@ -40,7 +41,12 @@ OXT-Beyond (a released one), over the files of the same names, so that the
 release's IDE runs the changed builder, and the comparison is of the
 builders alone, with the same engine and runtimes. --classes also puts a
 Java layer (tools/ci/android_java.py build) in place of the release's
-Runtime/Android/Classes.
+Runtime/Android/Classes. --engine puts a runtime folder that
+tools/ci/build-android.sh wrote (the engine built here with a current NDK)
+in place of the release's Android runtime: each architecture's engine and
+externals over the release's, which must all be there, so that no package
+mixes the two engines, and the Java layer built with them and the files
+beside it.
 
 ide starts the IDE as a user starts it (as tools/ci/web_check.py does, under
 xvfb-run on Linux without a DISPLAY) with tools/ci/android-check.livecodescript
@@ -74,6 +80,16 @@ packages, be signed by the package's signer (the JDK's jarsigner and
 keytool: --jdk, or those on the PATH), and with <work>/bundletool.jar
 (which must be the version the builder pins) say the package name and
 target API in its manifest; no other build may leave an App Bundle.
+The target API is --target's (33 when it is not given), or with
+--target-for DIR the one the builder picks for the runtime of the IDE
+installed in DIR (androidTargetAPI): the newest (36) when that runtime's
+Java layer is ready for it (JAVA_LAYER_READY), 33 when it is not, as for
+LiveCode 9.6.3's, which the runtimes carried until they carried one built
+from this repository's sources (BUILDING.md, "Android Java layer").
+With --engine DIR (the folder overlay --engine took), each package's
+engine must be the one built there for its architecture: the same code
+(the .text section, which the builder's deploy leaves as it is when it
+writes the stack into the .project section).
 
 compare checks that two sets of packages (the released builder's and the
 changed one's, of the same probe stack) hold the same files with the same
@@ -92,7 +108,9 @@ call into the Java layer failed. With --allow PERMISSION the probe must
 ask for that runtime permission: the wait goes on past its green until
 Android's dialog asking for it is in front (dumpsys activity), its Allow
 button is tapped (found in a uiautomator dump), and afterwards the package
-must hold the permission (dumpsys package). The screen is saved as
+must hold the permission (dumpsys package). Another app's "isn't
+responding" dialog over the probe, or over that dialog, is answered with
+its Wait button (at most ANR_TAPS times). The screen is saved as
 a PNG (--out), and the probe's own lines in the device's log are searched
 for its crash (the engine's caught attempt at an SSL library the package
 does not hold is expected, and only then: crash_lines). When it is not
@@ -157,6 +175,14 @@ FAIL_COLOR = (230, 160, 0)
 # it must show within BACK_WAIT seconds of the key
 BACK_COLOR = (40, 90, 200)
 BACK_WAIT = 20
+# kWaitColor and kProbeWait: a probe's mouseUp (a tap) turns its screen
+# WAIT_COLOR and waits PROBE_WAIT seconds with messages, then is green
+# again (device --density-in-wait). The density is changed once that
+# colour is seen, which must be within WAIT_SEEN seconds of the tap, so
+# that the script is still waiting when Android makes the activity again
+WAIT_COLOR = (120, 60, 160)
+PROBE_WAIT = 20
+WAIT_SEEN = 10
 # device --within-bars: how long the screen is taken again, every
 # BARS_INTERVAL seconds, when the first green screen has the probe's green
 # where a system bar is, before that is a failure. On the 16 KB Android 16
@@ -166,10 +192,25 @@ BACK_WAIT = 20
 # drawn over the window is not where the window is
 BARS_WAIT = 8
 BARS_INTERVAL = 1
+# The engine runs once in a process (RelaunchActivity in the Java layer
+# says why): device --font-scale, --density, --density-in-wait and
+# --relaunch. How long the probe is given after a change to show its green
+# again (in the same process, or in a new one; a font size change first has
+# FONT_SETTLE to reach it, so that the green before it is not taken for the
+# green after), and how long its process to end once its stack quits; the
+# font scale and the density each check sets
+RETURN_WAIT = 60
+FONT_SETTLE = 5
+END_WAIT = 20
+FONT_SCALE = '1.3'
+DENSITY_SHARE = 0.85
 # The probes (--probe): the stack file each is saved as
 PROBES = {'app': 'AndroidProbe.livecode', 'java': 'AndroidJavaProbe.livecode'}
 # Where a release's Java layer is (overlay --classes)
 CLASSES = ('Runtime', 'Android', 'Classes')
+# The name the builder gives the engine (a runtime's <abi>/Standalone) in a
+# package (verify --engine)
+PACKAGE_ENGINE = 'librevandroid.so'
 # The API the builder targets with a runtime whose Java layer is not ready
 # for newer (as before), and the newest, which it targets when it is
 # (androidTargetAPI); at 36 the manifest keeps the stack's orientation on
@@ -177,6 +218,11 @@ CLASSES = ('Runtime', 'Android', 'Classes')
 TARGET_SDK = '33'
 NEWEST_TARGET_SDK = '36'
 LARGE_SCREEN_PROPERTY = 'android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY'
+# What makes a runtime's Java layer ready for the newest target: the
+# builder's kJavaLayerReady, the classes it looks for in the runtime's
+# Classes jar (androidJavaLayerHas), byte for byte (verify --target-for)
+JAVA_LAYER_READY = ('com/runrev/android/LiveCodeActivity$BackCallback.class',
+                    'com/runrev/android/LiveCodeActivity$SystemBarsPadding.class')
 # The App Bundle: the bundletool the builder downloads (its
 # kBundletoolVersion and kBundletoolSHA256), and the name ide gives the
 # jar the builder keeps, in the work folder
@@ -224,6 +270,51 @@ EXPECTED_SIGNING = {
 EXPECTED_MANIFEST = {
     'debug': ['receiver PushReceiver: android:exported=true'],
 }
+
+
+# compare: the manifest attributes whose value the change made different on
+# purpose, in every build, and the value the new builder's has (as aapt
+# prints it). The configuration changes the app goes on through
+# (androidConfigChanges): LiveCode's four as before (0x6a0), and those the
+# engine runs through rather than starting again in its process, which
+# Android 11 and newer stop (RelaunchActivity in the Java layer says why)
+EXPECTED_VALUES = {
+    'configChanges': '0x50006fff',
+}
+
+
+def manifest_value(line):
+    """(attribute, value) of an attribute line of aapt's xmltree (aapt's or
+    aapt2's form) whose attribute is one of EXPECTED_VALUES, else None."""
+    m = re.match(r'^\s*A: (?:\S*:)?(\w+)\(0x[0-9a-f]+\)=(?:\(type 0x[0-9a-f]+\))?(\S+)', line)
+    if m and m.group(1) in EXPECTED_VALUES:
+        return m.group(1), m.group(2)
+    return None
+
+
+def expected_values(name, gone, extra):
+    """(problems, notes, gone, extra) of the manifest lines one build's two
+    packages differ by (manifest_lines): a line of an attribute of
+    EXPECTED_VALUES whose new value is the expected one is expected, with
+    the old package's line of that attribute; any other value is a
+    problem. gone and extra come back without the lines explained."""
+    problems, notes = [], []
+    for line in list(extra):
+        got = manifest_value(line)
+        if not got:
+            continue
+        attr, value = got
+        extra.remove(line)
+        old = [x for x in gone if (manifest_value(x) or ('',))[0] == attr]
+        for x in old[:1]:
+            gone.remove(x)
+        was = manifest_value(old[0])[1] if old else 'not set'
+        if value.lower() != EXPECTED_VALUES[attr]:
+            problems.append('%s: android:%s is %s in the new package (the old: %s), not %s' % (
+                name, attr, value, was, EXPECTED_VALUES[attr]))
+        else:
+            notes.append('manifest: android:%s %s, was %s' % (attr, value, was))
+    return problems, notes, gone, extra
 
 
 def expected_manifest(name, old_summary):
@@ -508,6 +599,37 @@ def manifest_components(xmltree):
     for c in components:
         c.pop('depth', None)
     return components
+
+
+def manifest_element(xmltree, kind, name):
+    """The attributes of the element `kind` whose android:name is `name` in
+    aapt's xmltree (aapt's or aapt2's form), attribute to value as aapt
+    prints it (a string unquoted, without its Raw), or None when there is
+    no such element."""
+    found, node = None, None
+    for line in xmltree.splitlines():
+        m = re.match(r'^(\s*)(E|A): (.*)$', line)
+        if not m:
+            continue
+        depth, what, rest = len(m.group(1)), m.group(2), m.group(3)
+        if what == 'E':
+            if node is not None and node.get('name') == name and found is None:
+                found = node
+            node = {'depth': depth} if rest.split()[0] == kind else (
+                node if node is not None and depth > node['depth'] else None)
+            continue
+        if node is None or depth != node['depth'] + 2:
+            continue
+        a = re.match(r'^(?:\S*:)?(\w+)\(0x[0-9a-f]+\)=(?:\(type 0x[0-9a-f]+\))?(.*?)(?: \(Raw: .*\))?$', rest)
+        if a:
+            q = re.match(r'^"([^"]*)"$', a.group(2))
+            node[a.group(1)] = q.group(1) if q else a.group(2)
+    if found is None and node is not None and node.get('name') == name:
+        found = node
+    if found is not None:
+        found = dict(found)
+        found.pop('depth')
+    return found
 
 
 def manifest_properties(xmltree):
@@ -947,14 +1069,81 @@ def overlay(args):
             continue
         shutil.copyfile(os.path.join(REPO, *rel.split('/')), places[0])
         log('%s -> %s' % (rel, os.path.relpath(places[0], root)))
-    if args.classes:
+    if args.classes or args.engine or args.beyond:
         places = [x for x in found.get(CLASSES[-1], [])
                   if tuple(os.path.normpath(x).split(os.sep)[-len(CLASSES):]) == CLASSES]
         if len(places) != 1:
             problems.append('%s: %d files %s, not one' % (root, len(places), '/'.join(CLASSES)))
+        elif args.engine:
+            problems += overlay_engine(os.path.abspath(args.engine), os.path.dirname(places[0]), root)
+        elif args.beyond:
+            problems += beside_engine(os.path.abspath(args.beyond), os.path.dirname(places[0]), root)
         else:
             shutil.copyfile(args.classes, places[0])
             log('%s -> %s' % (args.classes, os.path.relpath(places[0], root)))
+    return problems
+
+
+def overlay_engine(engine, android, root):
+    """Puts the runtime folder ENGINE (tools/ci/build-android.sh's) in place
+    of the release's Runtime/Android (ANDROID): every architecture's engine
+    and externals, each over the release's file of that name, and the files
+    beside them (the Java layer among them). Every architecture of the
+    release must be in ENGINE, and every file there: a package would
+    otherwise mix the two engines, or the runtime built here would lack what
+    the release has."""
+    import android_engine as ae
+    problems, copies = [], []
+    for abi in sorted(ae.ABIS):
+        names = [os.path.join(abi, x) for x in (ae.ENGINE,) + ae.EXTERNALS]
+        if not os.path.isdir(os.path.join(android, abi)):
+            problems.append('%s has no %s folder' % (os.path.relpath(android, root), abi))
+            continue
+        copies += names
+    copies += list(ae.TOP_FILES)
+    for rel in copies:
+        src, dst = os.path.join(engine, rel), os.path.join(android, rel)
+        if not os.path.isfile(src):
+            problems.append('%s has no %s' % (engine, rel.replace(os.sep, '/')))
+        elif not os.path.isfile(dst):
+            problems.append('%s has no %s to put it in place of' % (os.path.relpath(android, root),
+                                                                   rel.replace(os.sep, '/')))
+    if problems:
+        return problems
+    for rel in copies:
+        shutil.copyfile(os.path.join(engine, rel), os.path.join(android, rel))
+        log('%s -> %s' % (os.path.join(engine, rel), os.path.relpath(os.path.join(android, rel), root)))
+    return problems
+
+
+# Where the runtimes carry OXT-Beyond's own Android engine, in the
+# release's Runtime/Android (the builder's androidRuntimeFolder)
+BEYOND = 'Beyond'
+
+
+def beside_engine(engine, android, root):
+    """Puts the runtime folder ENGINE (tools/ci/build-android.sh's) beside
+    the release's Runtime/Android (ANDROID), as ANDROID/BEYOND: every
+    architecture's engine and externals, and the files beside them (the
+    Java layer among them), the release's own runtime left as it is. A
+    stack whose "android,engine" is "beyond" is built from it. Every
+    architecture and file must be in ENGINE, and ANDROID must have no
+    BEYOND yet: a runtime short of a file, or two engines' files mixed,
+    would build an app that the check did not mean."""
+    import android_engine as ae
+    beyond = os.path.join(android, BEYOND)
+    copies = [os.path.join(abi, x) for abi in sorted(ae.ABIS) for x in (ae.ENGINE,) + ae.EXTERNALS]
+    copies += list(ae.TOP_FILES)
+    problems = ['%s has no %s' % (engine, rel.replace(os.sep, '/')) for rel in copies
+                if not os.path.isfile(os.path.join(engine, rel))]
+    if os.path.exists(beyond):
+        problems.append('%s is there already' % os.path.relpath(beyond, root).replace(os.sep, '/'))
+    if problems:
+        return problems
+    for rel in copies:
+        os.makedirs(os.path.dirname(os.path.join(beyond, rel)) or beyond, exist_ok=True)
+        shutil.copyfile(os.path.join(engine, rel), os.path.join(beyond, rel))
+        log('%s -> %s' % (os.path.join(engine, rel), os.path.relpath(os.path.join(beyond, rel), root)))
     return problems
 
 
@@ -1016,7 +1205,8 @@ def ide(args):
                    OXT_ANDROID_ALIAS=KEY_ALIAS, OXT_ANDROID_PASSWORD=KEY_PASSWORD,
                    OXT_ANDROID_DEVICE=args.device or '', OXT_ANDROID_WORK=path(os.path.join(work, 'units')),
                    OXT_ANDROID_UNITS='skip' if args.no_units else '',
-                   OXT_ANDROID_PROBE='java' if args.probe == 'java' else '')
+                   OXT_ANDROID_PROBE='java' if args.probe == 'java' else '',
+                   OXT_ANDROID_ENGINE=args.android_engine or '')
         cmd = [lay.engine, document]
         if p.family == 'linux':
             cef = os.path.join(lay.root, 'Externals') if lay.kind == 'development' else lay.externals
@@ -1129,6 +1319,41 @@ def zipalign_supports_pages(zipalign):
     return '-P' in out
 
 
+# The activity that starts the app again in a new process (the engine runs
+# once in a process), and its name in a package's dex where the Java layer
+# has it
+RELAUNCH_ACTIVITY = 'com.runrev.android.RelaunchActivity'
+RELAUNCH_DEX = b'Lcom/runrev/android/RelaunchActivity;'
+
+
+def relaunch_problems(name, tree, dexes):
+    """The problems of a package's manifest (aapt's xmltree) about the
+    engine's one start in a process: the configuration changes the app
+    goes on through are the builder's (EXPECTED_VALUES); and the activity
+    that starts it again in a new process is declared, in a process of its
+    own and not exported, where the package's Java layer (its dex files)
+    has it, and only there."""
+    problems = []
+    values = dict(v for v in map(manifest_value, tree.splitlines()) if v)
+    for attr, want in sorted(EXPECTED_VALUES.items()):
+        if values.get(attr, '').lower() != want:
+            problems.append('%s: android:%s is %s, not %s' % (name, attr, values.get(attr) or 'not set', want))
+    has = any(RELAUNCH_DEX in d for d in dexes)
+    declared = manifest_element(tree, 'activity', RELAUNCH_ACTIVITY)
+    if has and declared is None:
+        problems.append('%s: its Java layer has %s, and the manifest does not declare it (the app would start '
+                        'its engine twice in a process)' % (name, RELAUNCH_ACTIVITY))
+    elif declared is not None and not has:
+        problems.append('%s: the manifest declares %s, which its Java layer does not have' % (name, RELAUNCH_ACTIVITY))
+    elif declared is not None:
+        if declared.get('process') != ':relaunch':
+            problems.append('%s: %s is not in a process of its own (android:process is %s)'
+                            % (name, RELAUNCH_ACTIVITY, declared.get('process') or 'not set'))
+        if declared.get('exported', '').lower() not in ('0x0', 'false'):
+            problems.append('%s: %s does not say android:exported="false"' % (name, RELAUNCH_ACTIVITY))
+    return problems
+
+
 def verify_apk(name, apk, spec, tools, warnings, target=TARGET_SDK):
     """The problems of one package, and lines saying what was checked:
     target is the API it must target."""
@@ -1239,6 +1464,14 @@ def verify_apk(name, apk, spec, tools, warnings, target=TARGET_SDK):
             elif int(target) < 36 and large is not None:
                 problems.append('%s: the manifest has %s, which is for a package that targets API 36 or newer '
                                 '(this one must target %s)' % (name, LARGE_SCREEN_PROPERTY, target))
+            said = relaunch_problems(name, tree, [z.read(n) for n in infos if re.match(r'^classes\d*\.dex$', n)])
+            problems += said
+            if not said:
+                notes.append('the configuration changes it goes on through (android:configChanges %s), and %s'
+                             % (EXPECTED_VALUES['configChanges'],
+                                'the activity that starts it again in a new process' if
+                                manifest_element(tree, 'activity', RELAUNCH_ACTIVITY) else
+                                'no activity to start it again (its Java layer has none)'))
     # the builder's warnings
     said = warnings.get(name, '')
     for w in spec['warnings']:
@@ -1379,8 +1612,46 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+def release_classes(root):
+    """The Java layer (CLASSES) of the IDE installed in ROOT, and the
+    problems if there is not exactly one"""
+    places = []
+    for folder, _, names in os.walk(root):
+        if CLASSES[-1] in names:
+            place = os.path.join(folder, CLASSES[-1])
+            if tuple(os.path.normpath(place).split(os.sep)[-len(CLASSES):]) == CLASSES:
+                places.append(place)
+    if len(places) != 1:
+        return None, ['%s: %d files %s, not one' % (root, len(places), '/'.join(CLASSES))]
+    return places[0], []
+
+
+def builder_target(root):
+    """The API the builder targets with the runtime of the IDE installed
+    in ROOT, as androidTargetAPI picks it for a stack that pins none: the
+    newest when the runtime's Java layer has every class of
+    JAVA_LAYER_READY (looked for in the jar's bytes, as
+    androidJavaLayerHas does), 33 when it has not. Returns (target, what
+    decided it, problems)"""
+    classes, problems = release_classes(os.path.abspath(root))
+    if problems:
+        return None, None, problems
+    with open(classes, 'rb') as f:
+        jar = f.read()
+    missing = [x for x in JAVA_LAYER_READY if x.encode('utf-8') not in jar]
+    if missing:
+        return TARGET_SDK, '%s has no %s' % (classes, ', '.join(missing)), []
+    return NEWEST_TARGET_SDK, '%s has %s' % (classes, ', '.join(JAVA_LAYER_READY)), []
+
+
 def verify(args):
     work = os.path.abspath(args.work)
+    if args.target_for:
+        target, why, problems = builder_target(args.target_for)
+        if problems:
+            return problems
+        log('The builder targets API %s with that runtime: %s' % (target, why))
+        args.target = target
     tools = find_tools(args.sdk)
     r = ide_results(read_lines(os.path.join(work, LOG_NAME)))
     problems = []
@@ -1406,6 +1677,9 @@ def verify(args):
             problems.append('there is no %s' % apk)
             continue
         p, notes = verify_apk(name, apk, BUILDS[name], tools, r['warnings'], args.target)
+        if args.engine:
+            more, said = verify_engine(name, apk, os.path.abspath(args.engine))
+            p, notes = p + more, notes + said
         log('%s.apk (%.1f MB): %s' % (name, os.path.getsize(apk) / 1e6, '; '.join(notes)))
         for x in p:
             log('  PROBLEM: %s' % x)
@@ -1426,6 +1700,50 @@ def verify(args):
     if leftovers:
         problems.append('the builder left other files beside the packages: %s' % ', '.join(sorted(leftovers)))
     return problems
+
+
+def engine_code(data):
+    """An engine library's code: its .text section, which the builder's
+    deploy (MCDeployToELF) writes out as it was, since it changes only what
+    comes from the .project section on"""
+    import android_engine as ae
+    elf = ae.Elf(data)
+    for s in elf.sections:
+        if s['name'] == '.text' and s['type'] != ae.SHT_NOBITS:
+            if s['offset'] + s['size'] > len(data):
+                raise ae.ElfError('.text runs past the end of the file')
+            return data[s['offset']:s['offset'] + s['size']]
+    raise ae.ElfError('no .text section')
+
+
+def verify_engine(name, apk, engine):
+    """The problems of a package whose engine is not, for each of its
+    architectures, the one in the runtime folder ENGINE (overlay --engine),
+    and a line saying what was checked."""
+    import android_engine as ae
+    problems, abis = [], []
+    with zipfile.ZipFile(apk) as z:
+        for n in sorted(z.namelist()):
+            m = re.match(r'^lib/([^/]+)/%s$' % re.escape(PACKAGE_ENGINE), n)
+            if not m:
+                continue
+            abi = m.group(1)
+            built = os.path.join(engine, abi, ae.ENGINE)
+            try:
+                with open(built, 'rb') as f:
+                    want = engine_code(f.read())
+                have = engine_code(z.read(n))
+            except (OSError, ae.ElfError) as e:
+                problems.append('%s: %s against %s: %s' % (name, n, built, e))
+                continue
+            if have != want:
+                problems.append('%s: %s is not the engine built in %s (its code is not %s/%s\'s)'
+                                % (name, n, engine, abi, ae.ENGINE))
+            else:
+                abis.append(abi)
+    if not abis and not problems:
+        problems.append('%s has no engine (lib/<abi>/%s)' % (name, PACKAGE_ENGINE))
+    return problems, (['the engine built here (%s)' % ', '.join(abis)] if abis and not problems else [])
 
 
 # ---------------------------------------------------------------------------
@@ -1481,6 +1799,9 @@ def compare_apks(name, old, new, aapt=None):
             tn = manifest_lines(run([aapt, 'dump', 'xmltree', new, 'AndroidManifest.xml'], check=True)[1])
             extra = [x for x in tn if x not in to and 'exported' not in x]
             gone = [x for x in to if x not in tn]
+            said, told, gone, extra = expected_values(name, gone, extra)
+            problems += said
+            notes += told
             if extra or gone:
                 problems.append('%s: other manifest lines changed: %s' % (
                     name, '; '.join(['- ' + x.strip() for x in gone] + ['+ ' + x.strip() for x in extra])))
@@ -1678,6 +1999,237 @@ def screen_now(adb, serial):
         return None
 
 
+# How often pid_now asks again when adb itself fails, and how long it
+# waits for the device each time
+PID_TRIES = 3
+DEVICE_WAIT = 60
+
+
+def pid_now(a, tries=None):
+    """The probe's process ids now, as pidof gives them ('' when it is not
+    running). An answer that is not process ids is adb's own failure, not
+    the probe's: in run 42360582880 the 16 KB image's pidof, just before
+    the font size change, answered "adb: device offline", which the check
+    then took for the probe's process. So it waits for the device (adb
+    wait-for-device, at most DEVICE_WAIT s) and asks again, at most
+    `tries` times (PID_TRIES), and then gives adb's answer, which no process
+    id equals. `a` runs adb on the device."""
+    tries = PID_TRIES if tries is None else tries
+    out = ''
+    for _ in range(tries):
+        out = a('shell', 'pidof', IDENTIFIER)[1].strip()
+        if re.fullmatch(r'[\d\s]*', out):
+            return out
+        log('  pidof: %s; waiting for the device' % answer(out))
+        try:
+            a('wait-for-device', timeout=DEVICE_WAIT)
+        except CheckError as e:
+            log('  wait-for-device: %s' % e)
+    return out
+
+
+def green_again(adb, serial, a, seconds, other_than=''):
+    """Waits at most `seconds` for the probe's green, in a process other
+    than other_than when one is given (the probe started again): (the share
+    of the screen that is its green, its process, the screen as width,
+    height, rgba)."""
+    started = time.time()
+    share, pid, shot = 0.0, '', None
+    anr_taps = 0
+    while time.time() - started < seconds:
+        time.sleep(2)
+        pid = pid_now(a)
+        if other_than and pid == other_than:
+            continue
+        got = screen_now(adb, serial)
+        if not got:
+            continue
+        shot = got
+        share = colour_share(got[2], RUN_COLOR)
+        if share >= 0.25 and pid:
+            break
+        if share < 0.25 and anr_taps < ANR_TAPS and answer_other_anr(a):
+            anr_taps += 1
+    return share, pid, shot
+
+
+def save_screen(path, shot, what):
+    if path and shot:
+        with open(path, 'wb') as f:
+            f.write(png_from_rgba(*shot))
+        log('Screen %s: %s' % (what, path))
+
+
+def new_crashes(a, names, before=''):
+    """The probe's crash lines in the device's log since it was last
+    cleared (crash_lines), and its processes there. before: the probe's
+    process before the change, whose lines are the probe's too: it started
+    before the log was cleared, so no "Start proc" line names it, and when
+    Android makes the activity again there and the app starts again in a
+    new process, a crash there was taken for another app's (run
+    42430696858's onConfigurationChanged, unseen until the back key of
+    --relaunch closed its dialog)"""
+    _, logcat = a('logcat', '-d', '-v', 'brief')
+    pids = probe_pids(logcat, ' '.join((pid_now(a), before)))
+    crash, _, _ = crash_lines(logcat, names, pids)
+    fdsan = [x.strip() for x in logcat.splitlines() if 'fdsan:' in x and (log_pid(x) in pids or not pids)]
+    return crash + [x for x in fdsan if x not in crash], pids
+
+
+def stays_through_font_scale(args, adb, a, pid, names):
+    """--font-scale: the probe goes on through a font size change, in its
+    process, still showing its green (the manifest's configChanges lists
+    fontScale; before, Android made the activity again, and the engine's
+    second start in the process was stopped)."""
+    _, before = a('shell', 'settings', 'get', 'system', 'font_scale')
+    before = before.strip()
+    a('logcat', '-c')
+    a('shell', 'settings', 'put', 'system', 'font_scale', FONT_SCALE)
+    try:
+        time.sleep(FONT_SETTLE)
+        share, after, shot = green_again(adb, args.serial, a, RETURN_WAIT)
+    finally:
+        if re.fullmatch(r'\d+(\.\d+)?', before):
+            a('shell', 'settings', 'put', 'system', 'font_scale', before)
+        else:
+            a('shell', 'settings', 'delete', 'system', 'font_scale')
+    crash, _ = new_crashes(a, names, pid)
+    save_screen(args.out and os.path.splitext(args.out)[0] + '-font-scale.png', shot, 'after the font size change')
+    log('After a font size change (font_scale %s, then %s again): %.0f%% of the screen is the probe\'s green; '
+        'process %s (before it: %s)' % (FONT_SCALE, before if re.fullmatch(r'\d+(\.\d+)?', before) else 'unset',
+                                         share * 100, after or 'not running', pid))
+    problems = []
+    if after != pid:
+        problems.append('the app did not go on through a font size change in its process (%s before it, %s after)'
+                        % (pid, after or 'none'))
+    elif share < 0.25:
+        problems.append('after a font size change the screen is not the probe\'s green (%.0f%%)' % (share * 100))
+    if crash:
+        problems.append('the device\'s log across the font size change: %s' % ' | '.join(crash[:6]))
+    return problems
+
+
+def starts_again_for_density(args, adb, a, pid, names, what='density change', suffix='density'):
+    """--density: a change the manifest does not list (the screen's
+    density, the display size setting), for which Android makes the
+    activity again in its process: the app must start again in a new
+    process (RelaunchActivity) and show its green there, without a crash.
+    what and suffix: the change, as the log and the problems name it ("a
+    density change"), and the end of its screen's file name"""
+    _, out = a('shell', 'wm', 'density')
+    m = re.search(r'Physical density:\s*(\d+)', out)
+    if not m:
+        return ['wm density gave no physical density: %s' % (out.strip()[-200:] or 'no answer')]
+    density = str(int(int(m.group(1)) * DENSITY_SHARE))
+    a('logcat', '-c')
+    a('shell', 'wm', 'density', density)
+    try:
+        share, after, shot = green_again(adb, args.serial, a, RETURN_WAIT, other_than=pid)
+        crash, pids = new_crashes(a, names, pid)
+    finally:
+        a('shell', 'wm', 'density', 'reset')
+    save_screen(args.out and os.path.splitext(args.out)[0] + '-%s.png' % suffix, shot, 'after the %s' % what)
+    log('After a %s (%s, from %s): %.0f%% of the screen is the probe\'s green; process %s (before it: '
+        '%s); its processes in the log: %s' % (what, density, m.group(1), share * 100, after or 'not running', pid,
+                                               ', '.join(sorted(pids)) or 'none'))
+    problems = []
+    if not after or after == pid:
+        problems.append('after a %s the app did not start again in a new process (%s before it, %s '
+                        'after)' % (what, pid, after or 'none'))
+    elif share < 0.25:
+        problems.append('after a %s the screen is not the probe\'s green (%.0f%%)' % (what, share * 100))
+    if crash:
+        problems.append('the device\'s log across the %s: %s' % (what, ' | '.join(crash[:6])))
+    if not problems:
+        # back to the screen's own density, which makes the activity again
+        # too, before anything else is asked of the app: the app starts
+        # again in a new process for it as well, and without a crash (the
+        # log holds the change's lines too, which had none)
+        back, again, _ = green_again(adb, args.serial, a, RETURN_WAIT, other_than=after)
+        crash, pids = new_crashes(a, names, after)
+        log('Back at the screen\'s own density: %.0f%% of the screen is the probe\'s green; process %s (before it: '
+            '%s); its processes in the log: %s' % (back * 100, again or 'not running', after,
+                                                   ', '.join(sorted(pids)) or 'none'))
+        if crash:
+            problems.append('the device\'s log across the return to the screen\'s own density after the %s: %s'
+                            % (what, ' | '.join(crash[:6])))
+    return problems
+
+
+def starts_again_for_density_in_wait(args, adb, a, pid, names):
+    """--density-in-wait: --density's change while the probe's script
+    waits. A tap on the probe: its mouseUp turns the screen WAIT_COLOR and
+    waits PROBE_WAIT seconds with messages, and the density is changed once
+    that colour is seen. As Android destroys the activity, the engine, let
+    go on to finish (doDestroy in engine/src/mblandroiddc.cpp), yields to
+    Android's thread again inside the wait: before, that thread then went
+    on to join the engine thread, which was waiting for its turn, and the
+    app hung there for good (on Android 16 in run 42416576870, where the
+    engine yielded in the middle of drawing). The app must start again in
+    a new process, as for --density, once the wait is over."""
+    got = screen_now(adb, args.serial)
+    if not got:
+        return ['no screen of the probe to find where to tap it']
+    a('shell', 'input', 'tap', str(got[0] // 2), str(got[1] // 2))
+    tapped = time.time()
+    share = 0.0
+    while time.time() - tapped < WAIT_SEEN:
+        time.sleep(1)
+        got = screen_now(adb, args.serial)
+        if got:
+            share = colour_share(got[2], WAIT_COLOR)
+            if share >= 0.25:
+                break
+    seen = time.time() - tapped
+    log('After a tap on the probe: %.0f%% of the screen is its wait colour, %.0f s after the tap (it waits %d s)'
+        % (share * 100, seen, PROBE_WAIT))
+    if share < 0.25:
+        return ['a tap did not reach the probe\'s mouseUp: the screen did not turn its wait colour in %d s (%.0f%%)'
+                % (WAIT_SEEN, share * 100)]
+    if seen > WAIT_SEEN:
+        return ['the probe\'s wait colour was seen %.0f s after the tap, too late to change the density while its '
+                'script surely waits (at most %d s)' % (seen, WAIT_SEEN)]
+    return starts_again_for_density(args, adb, a, pid, names, 'density change while the probe\'s script waited',
+                                    'density-in-wait')
+
+
+def opens_again_after_quit(args, adb, a, pid, names):
+    """--relaunch: the back key, which the app probe passes, quits its stack
+    (MCQuit), and the activity finishes; its process must then end
+    (LiveCodeActivity.onDestroy), and the app opened again must show its
+    green in a new process, without a crash. Opened again in the process
+    its engine ran in, the engine's second start was stopped on Android 11
+    and newer."""
+    a('logcat', '-c')
+    a('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    ended = time.time()
+    left = pid
+    while time.time() - ended < END_WAIT:
+        time.sleep(1)
+        left = pid_now(a)
+        if left != pid:
+            break
+    log('After the back key: process %s' % ('%s, still there after %d s' % (pid, END_WAIT) if left == pid
+                                            else left or 'none: it ended'))
+    status, out = a('shell', 'am', 'start', '-W', '-n', IDENTIFIER + '/.mblandroid')
+    log('Opened again: %s' % ' | '.join(x.strip() for x in out.splitlines() if x.strip()))
+    share, after, shot = green_again(adb, args.serial, a, RETURN_WAIT)
+    crash, pids = new_crashes(a, names, pid)
+    save_screen(args.out and os.path.splitext(args.out)[0] + '-again.png', shot, 'opened again')
+    log('Opened again after its stack quit: %.0f%% of the screen is the probe\'s green; process %s (the first: '
+        '%s); its processes in the log: %s' % (share * 100, after or 'not running', pid,
+                                               ', '.join(sorted(pids)) or 'none'))
+    problems = []
+    if left == pid:
+        problems.append('the app\'s process was still there %d s after its stack quit (the back key)' % END_WAIT)
+    if not after or share < 0.25:
+        problems.append('opened again after its stack quit, the app did not show its green (%.0f%%; process %s)'
+                        % (share * 100, after or 'none'))
+    if crash:
+        problems.append('the device\'s log, opened again after its stack quit: %s' % ' | '.join(crash[:6]))
+    return problems
+
+
 def device(args):
     adb = adb_path(args.sdk)
     if not adb:
@@ -1740,6 +2292,11 @@ def device(args):
                     allowed = True
                 else:
                     log('  no Allow button in the dialog yet')
+                    # another app's "isn't responding" dialog can stand
+                    # over it: System UI's on Android 13 in run
+                    # 42376416337, for 90 s, and the probe failed
+                    if anr_taps < ANR_TAPS and answer_other_anr(a):
+                        anr_taps += 1
                 continue
         try:
             proc = subprocess.run([adb, '-s', args.serial, 'exec-out', 'screencap'], stdout=subprocess.PIPE,
@@ -1754,7 +2311,7 @@ def device(args):
             break
         if share < 0.25 and failed < 0.25 and anr_taps < ANR_TAPS and answer_other_anr(a):
             anr_taps += 1
-    _, pid = a('shell', 'pidof', IDENTIFIER)
+    pid = pid_now(a)
     _, logcat = a('logcat', '-d', '-v', 'brief')
     pids = probe_pids(logcat, pid)
     with zipfile.ZipFile(args.apk) as z:
@@ -1825,7 +2382,7 @@ def device(args):
             back = colour_share(brgba, BACK_COLOR)
             if back >= 0.25:
                 break
-        _, after = a('shell', 'pidof', IDENTIFIER)
+        after = pid_now(a)
         if args.out and brgba:
             # the screen after the back key, beside the first
             path = os.path.splitext(args.out)[0] + '-back.png'
@@ -1837,6 +2394,18 @@ def device(args):
         if back < 0.25:
             problems.append('the back key did not reach the stack\'s backKey (%.0f%% of the screen its back colour; '
                             'the app is %s)' % (back * 100, 'running' if after.strip() else 'gone'))
+    # The engine runs once in a process: the app goes on through a change
+    # the manifest lists, starts again in a new process for one it does
+    # not (also while its script waits), and opened again after its stack
+    # quit starts in a new process
+    for wanted, check in ((args.font_scale, stays_through_font_scale), (args.density, starts_again_for_density),
+                          (args.density_in_wait, starts_again_for_density_in_wait),
+                          (args.relaunch, opens_again_after_quit)):
+        if wanted and green and pid.strip():
+            found = check(args, adb, a, pid_now(a), names)
+            problems += found
+            if found:
+                break
     if not pid.strip():
         problems.append('the app is not running')
     if args.allow:
@@ -2255,7 +2824,13 @@ def main(argv=None):
     e.add_argument('--env')
     o = sub.add_parser('overlay')
     o.add_argument('--root', required=True)
-    o.add_argument('--classes', help='a Java layer to put in place of the release\'s Runtime/Android/Classes')
+    what = o.add_mutually_exclusive_group()
+    what.add_argument('--classes', help='a Java layer to put in place of the release\'s Runtime/Android/Classes')
+    what.add_argument('--engine', help='a runtime folder that tools/ci/build-android.sh wrote, to put in place '
+                                       'of the release\'s Runtime/Android')
+    what.add_argument('--beyond', help='a runtime folder that tools/ci/build-android.sh wrote, to put beside the '
+                                       'release\'s Runtime/Android as Runtime/Android/Beyond, where a stack whose '
+                                       '"android,engine" is "beyond" is built from')
     i = sub.add_parser('ide')
     i.add_argument('--bin', dest='bin_dir')
     i.add_argument('--install')
@@ -2268,6 +2843,9 @@ def main(argv=None):
     i.add_argument('--stack')
     i.add_argument('--builds')
     i.add_argument('--no-units', action='store_true')
+    i.add_argument('--android-engine', choices=('beyond',),
+                   help='build the probe with this "android,engine" setting: beyond, OXT-Beyond\'s own engine, '
+                        'which overlay --beyond puts beside the release\'s (9.6.3\'s otherwise)')
     i.add_argument('--probe', choices=sorted(PROBES), default='app',
                    help='java: the Java layer\'s probe (AndroidJavaProbe)')
     i.add_argument('--timeout', type=int, default=1500)
@@ -2276,9 +2854,14 @@ def main(argv=None):
     v.add_argument('--sdk', required=True)
     v.add_argument('--builds')
     v.add_argument('--jdk', help='the JDK whose jarsigner, keytool and java check an App Bundle')
-    v.add_argument('--target', default=TARGET_SDK,
-                   help='the API the packages must target (%s with a runtime whose Java layer is not ready for '
-                        'newer, %s when it is)' % (TARGET_SDK, NEWEST_TARGET_SDK))
+    which = v.add_mutually_exclusive_group()
+    which.add_argument('--target', default=TARGET_SDK,
+                       help='the API the packages must target (%s with a runtime whose Java layer is not ready for '
+                            'newer, %s when it is)' % (TARGET_SDK, NEWEST_TARGET_SDK))
+    which.add_argument('--target-for', metavar='DIR',
+                       help='an installed IDE: the packages must target the API its builder picks for its runtime')
+    v.add_argument('--engine', help='the runtime folder that overlay --engine took: each package\'s engine must be '
+                                    'the one built there')
     c = sub.add_parser('compare')
     c.add_argument('--old', required=True)
     c.add_argument('--new', required=True)
@@ -2300,6 +2883,18 @@ def main(argv=None):
                    help='once green, press the back key: the probe\'s backKey must turn the screen its back colour')
     d.add_argument('--within-bars', action='store_true',
                    help='once green, the screen\'s first and last rows (the system bars) must not be the stack\'s')
+    d.add_argument('--font-scale', action='store_true',
+                   help='once green, change the font size: the app must go on in its process, still green')
+    d.add_argument('--density', action='store_true',
+                   help='once green, change the screen\'s density: the app must start again in a new process '
+                        'and show its green there')
+    d.add_argument('--density-in-wait', action='store_true',
+                   help='once green, tap the probe, whose mouseUp waits %d s with messages, and change the '
+                        'density while it waits: the app must start again in a new process and show its green '
+                        'there (the engine built here; 9.6.3\'s hangs)' % PROBE_WAIT)
+    d.add_argument('--relaunch', action='store_true',
+                   help='once green, press the back key, which the app probe passes, so its stack quits: its '
+                        'process must end, and the app opened again must show its green in a new one')
     d.add_argument('--picture', metavar='NAME',
                    help='the probe exports a picture of this file name: it must be in the shared Pictures '
                         'folder as the package\'s own (MediaStore)')

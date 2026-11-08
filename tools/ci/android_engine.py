@@ -20,6 +20,7 @@ Android plan's phase 2: the engine built here with a current NDK), as
 Android and the IDE's builder will take it:
 
   python3 tools/ci/android_engine.py check RUNTIME [--abi ABI ...]
+  python3 tools/ci/android_engine.py merge OUT FOLDER [FOLDER ...]
 
 For every ABI folder of RUNTIME (arm64-v8a, armeabi-v7a, x86_64, x86), or
 those --abi names (which must then be there):
@@ -33,6 +34,13 @@ those --abi names (which must then be there):
     targets Android 15 (the 32-bit ABIs have no such devices);
   - none has text relocations (DT_TEXTREL, or DF_TEXTREL in DT_FLAGS),
     which Android 6.0 and later refuse to load;
+  - none has anything writable but RELRO in the pages that RELRO
+    (PT_GNU_RELRO) starts and ends in, at the largest page the ABI's
+    devices have (16 KB for the 64-bit ABIs, 4 KB for the others):
+    Android's loader makes those pages read-only whole once it has
+    relocated the library, and the first write to what shares them
+    crashes (the engine built with lld and the old linker script died
+    so, loading, in a static constructor that writes .data);
   - none needs a library that Android does not have, or one that an app
     would have to carry: only the NDK's stable system libraries
     (SYSTEM_LIBRARIES; never libc++_shared.so, since each library links
@@ -53,14 +61,29 @@ those --abi names (which must then be there):
 What crosses JNI between the engine and the Java layer is
 tools/ci/android_java.py jni's to check, on the same folder.
 
+merge puts the folders that build-android.sh wrote for each ABI (the
+artifacts android-engine-<abi> of android-engine.yml) together as one
+runtime folder, OUT, which must not be there yet or be empty: every
+ABI's engine and externals from the one FOLDER that has that ABI, and
+the files beside them from the first FOLDER. Every ABI must be in one
+FOLDER and one only, and every FOLDER must have the same files beside
+them: the same bytes, and for the Java layer, a jar the javac of each
+build wrote apart, the same files in it whatever their dates. Nothing
+else goes in (not debug/), and nothing is written when anything is
+missing or differs, so that the runtime the emulators run and the one
+the runtimes asset carries are made the same way, whichever folder came
+down last.
+
 Exit status 0 when every check passed, 1 otherwise. Only the Python 3
 standard library is used (3.8 or later).
 """
 
 import argparse
 import os
+import shutil
 import struct
 import sys
+import zipfile
 
 # Android's name for each architecture -> (ELF e_machine, 64-bit)
 ABIS = {
@@ -76,6 +99,7 @@ TOP_FILES = ('Classes', 'Manifest.xml', 'livecode_inputcontrol.xml', 'nfc_tech_f
 # The lowest Android the engine is built for (build-android.sh's
 # ANDROID_MIN_API)
 MIN_API = 21
+PAGE_4K = 4096
 PAGE_16K = 16384
 # The NDK's stable system libraries (the NDK's "Native APIs"), which every
 # Android of MIN_API and later has, or has from the API level that an app
@@ -91,9 +115,12 @@ SYSTEM_LIBRARIES = frozenset((
 ET_DYN = 3
 PT_LOAD = 1
 PT_DYNAMIC = 2
+PT_GNU_RELRO = 0x6474e552
 SHT_NOTE = 7
 SHT_NOBITS = 8
+SHF_WRITE = 1
 SHF_ALLOC = 2
+SHF_TLS = 0x400
 DT_NULL = 0
 DT_NEEDED = 1
 DT_STRTAB = 5
@@ -267,6 +294,7 @@ def check_library(path, abi, engine=False):
                                 'does not load it' % (name, ', '.join(str(a) for a in small)))
         if elf.text_relocations():
             problems.append('%s has text relocations, which Android 6.0 and later refuse' % name)
+        problems += check_relro(elf, name, PAGE_16K if is64 else PAGE_4K)
         needed = elf.needed()
         foreign = [n for n in needed if n not in SYSTEM_LIBRARIES]
         if foreign:
@@ -286,7 +314,40 @@ def check_library(path, abi, engine=False):
         name, len(data), 64 if elf.is64 else 32,
         '/'.join(str(a) for a in sorted(set(s['align'] for s in loads))) or 'nothing',
         api, ', '.join(needed) or 'nothing')
+    relro = ['0x%x to 0x%x' % (s['vaddr'], s['vaddr'] + s['memsz'])
+             for s in elf.segments if s['type'] == PT_GNU_RELRO]
+    if relro:
+        seen += '; RELRO %s' % ', '.join(relro)
     return problems, seen
+
+
+def check_relro(elf, name, page):
+    """What Android's loader does with RELRO (bionic's
+    phdr_table_protect_gnu_relro): once it has relocated the library it
+    makes read-only every page from the one PT_GNU_RELRO starts in to the
+    one it ends in, whole. A writable section that is not RELRO but has
+    bytes in those pages goes read-only with it, and the first write to
+    it crashes (SIGSEGV, SEGV_ACCERR). `page` is the largest page of the
+    ABI's devices; a library that passes at it passes at any smaller one.
+    TLS's .tbss is left out: it takes no room in the image (its address
+    only says where its template would go)."""
+    problems = []
+    for r in elf.segments:
+        if r['type'] != PT_GNU_RELRO or not r['memsz']:
+            continue
+        start, end = r['vaddr'], r['vaddr'] + r['memsz']
+        first = start - start % page
+        last = -(-end // page) * page
+        caught = [s['name'] or '(unnamed)' for s in elf.sections
+                  if s['flags'] & SHF_ALLOC and s['flags'] & SHF_WRITE and s['size']
+                  and not (s['flags'] & SHF_TLS and s['type'] == SHT_NOBITS)
+                  and s['addr'] < last and first < s['addr'] + s['size']
+                  and not (start <= s['addr'] and s['addr'] + s['size'] <= end)]
+        if caught:
+            problems.append('%s: RELRO (0x%x to 0x%x) shares its %d KB pages with %s, which is writable and '
+                            'not RELRO: Android makes it read-only with RELRO, and the first write to it '
+                            'crashes' % (name, start, end, page // 1024, ', '.join(caught)))
+    return problems
 
 
 def check_project_section(elf, name):
@@ -351,6 +412,83 @@ def check(runtime, abis=()):
     return problems, seen
 
 
+def jar_files(path):
+    """{name: bytes} of the files in a jar: what two jars must have the
+    same to be the same Java layer, whatever the dates the jar tool gave
+    them."""
+    with zipfile.ZipFile(path) as z:
+        return {i.filename: z.read(i) for i in z.infolist() if not i.filename.endswith('/')}
+
+
+def same_file(a, b, name):
+    """None when the files a and b (both called name) are the same, else
+    how they differ."""
+    if name == 'Classes':
+        try:
+            fa, fb = jar_files(a), jar_files(b)
+        except (zipfile.BadZipFile, OSError) as e:
+            return 'not two jars (%s)' % e
+        if fa == fb:
+            return None
+        diff = sorted(set(fa) ^ set(fb)) + sorted(n for n in set(fa) & set(fb) if fa[n] != fb[n])
+        return 'the files %s in them' % ', '.join(diff[:5] + (['...'] if len(diff) > 5 else []))
+    with open(a, 'rb') as fa, open(b, 'rb') as fb:
+        return None if fa.read() == fb.read() else 'other bytes'
+
+
+def merge(out, folders):
+    """(problems, lines written): see merge in the docstring above."""
+    problems = []
+    if os.path.isdir(out) and os.listdir(out) or os.path.exists(out) and not os.path.isdir(out):
+        problems.append('%s is there already' % out)
+    if not folders:
+        problems.append('no runtime folder to merge')
+    owner = {}
+    for folder in folders:
+        if not os.path.isdir(folder):
+            problems.append('%s is not a folder' % folder)
+            continue
+        for abi in ABIS:
+            if os.path.isdir(os.path.join(folder, abi)):
+                if abi in owner:
+                    problems.append('%s and %s both have %s' % (owner[abi], folder, abi))
+                else:
+                    owner[abi] = folder
+    copies = []
+    for abi in ABIS:
+        if abi not in owner:
+            problems.append('no folder has %s' % abi)
+            continue
+        for name in (ENGINE,) + EXTERNALS:
+            src = os.path.join(owner[abi], abi, name)
+            if os.path.isfile(src):
+                copies.append((src, os.path.join(abi, name)))
+            else:
+                problems.append('%s has no %s/%s' % (owner[abi], abi, name))
+    present = [f for f in folders if os.path.isdir(f)]
+    for name in TOP_FILES:
+        found = [f for f in present if os.path.isfile(os.path.join(f, name))]
+        for f in present:
+            if f not in found:
+                problems.append('%s has no %s' % (f, name))
+        if not found or found[0] != (present or [None])[0]:
+            continue
+        for f in found[1:]:
+            why = same_file(os.path.join(found[0], name), os.path.join(f, name), name)
+            if why:
+                problems.append('%s/%s differs from %s/%s: %s' % (f, name, found[0], name, why))
+        copies.append((os.path.join(found[0], name), name))
+    if problems:
+        return problems, []
+    lines = []
+    for src, rel in copies:
+        dst = os.path.join(out, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(src, dst)
+        lines.append('%s <- %s' % (rel.replace(os.sep, '/'), src))
+    return problems, lines
+
+
 def annotate(kind, msg):
     if os.environ.get('GITHUB_ACTIONS') == 'true':
         print('::%s::%s' % (kind, msg.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')))
@@ -362,7 +500,22 @@ def main(argv=None):
     c = sub.add_parser('check')
     c.add_argument('runtime')
     c.add_argument('--abi', action='append', default=[])
+    m = sub.add_parser('merge')
+    m.add_argument('out')
+    m.add_argument('folders', nargs='+')
     args = ap.parse_args(argv)
+    if args.command == 'merge':
+        problems, lines = merge(args.out, args.folders)
+        for line in lines:
+            print(line)
+        print()
+        for p in problems:
+            print('PROBLEM: %s' % p)
+            annotate('error', 'Android engine merge: %s' % p)
+        if problems:
+            return 1
+        print('One Android runtime in %s, from %s.' % (args.out, ', '.join(args.folders)))
+        return 0
     problems, seen = check(args.runtime, args.abi)
     for line in seen:
         print(line)

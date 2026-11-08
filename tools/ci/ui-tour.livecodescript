@@ -85,7 +85,7 @@
 --    DONE
 -- The script leaves the IDE running; tools/ci/ui_tour.py ends it.
 
-constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
+constant kSteps = "appearance,screen,tools,tooltip-tools,hover-tools,tools-vector,tools-modern,tools-modern-wide,tools-modern-names,tools-modern-large,tools-modern-check,tools-modern-sizes,tools-modern-use,tools-modern-drawn,tools-modern-switch,tools-modern-default,tools-widget-install,tools-widget-builder,menubar,menubar-modern,menubar-mac,menu-marks,menu-words,menu-armed-words,new-stack-sizes,sample,appearance-switch,controls,title-bar,card-border,field-scroll,image-frames,widget-appearance,svg-paths,svg-curves,svg-menu,svg-import,scrollbar-orientation,inspector,inspector-tabs,inspector-text,inspector-scrollbar,inspector-image-id,inspector-gravity,inspector-hypercard,hypercard-disk-image,edit-image-numbers,inspector-graphic,inspector-gradient,inspector-clear-colour,inspector-reset-colour,inspector-clear-button,inspector-clear-pattern,inspector-multiple,tooltip-inspector,player,script-editor,script-editor-search,script-editor-handlers,message-box,project-browser,app-browser,dictionary,guides,text-dictionary,preferences,standalone-settings,ext-mergjson,menu-builder,extension-manager,extensions-theme-pass,extension-builder,message-watcher,error-display,search,object-library,navigator,about,dictionary-online,release-notes,home,kit-dialog,learn,example,academy,home-ways-in,home-places,xtalk-assistant,xtalk-chat,answer,ask,icon-chooser,appearance-message,system-switch,ide-stacks,screen-end,background-default"
 constant kSample = "OXT Tour Sample"
 constant kControls = "OXT Tour Controls"
 -- the card's own colour in the step controls (tourNearCardColour)
@@ -912,6 +912,215 @@ on tour_tools_modern_default
    tourTmFinish "tools-modern-default"
    tourTmReset
 end tour_tools_modern_default
+
+-- A widget installed or uninstalled shows, or goes, in the Tools palette
+-- at once, in either look (bwmilby, forum, 2026-11-07): up to
+-- 0.2.7-rc.6.18 the palette heard nothing of it, and only a switch of
+-- look or a restart showed it. The Spinner, which no step of the tour
+-- uses, is unloaded and loaded again as the Extension Manager's uninstall
+-- and install do (revIDEExtensionUnload, revIDEExtensionReload), with the
+-- palette open in each look and then while it is closed. A library
+-- loaded again leaves the palette as it is: the tile is the same control
+-- (not made again) afterwards. The Spinner is loaded again whatever fails
+constant kTourWidgetID = "com.livecode.widget.spinner"
+constant kTourWidgetLibrary = "com.livecode.library.diff"
+
+on tour_tools_widget_install
+   local tLook, tTile, tFirst, tError, tShowWas
+   if not tourTmStart("tools-widget-install") then exit tour_tools_widget_install
+   if revIDEExtensionProperty(kTourWidgetID, "status") is not "installed" then
+      throw kTourWidgetID && "is not loaded (" & revIDEExtensionProperty(kTourWidgetID, "status") & ")"
+   end if
+   tourWidgetBatch
+   try
+      repeat for each item tLook in "modern,classic"
+         if tLook is "modern" then
+            if tourToolsModern(empty, false) is not true then throw "the modern look did not turn on"
+            put kTourWidgetID into tTile
+         else
+            tourToolsClassic
+            put tourClassicShowWidgets() into tShowWas
+            put kTourWidgetID into tTile
+         end if
+         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: the Spinner is on the palette to start with (" & \
+               revIDEGetPreference("revTools_show") & ")"
+         revIDEExtensionUnload kTourWidgetID
+         tourWidgetBatch
+         tourTmCheck revIDEExtensionProperty(kTourWidgetID, "status") is not "installed", \
+               tLook && "look: the Spinner unloads (" & revIDEExtensionProperty(kTourWidgetID, "status") & ")"
+         tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: a widget uninstalled goes from the palette at once"
+         revIDEExtensionReload kTourWidgetID
+         tourWidgetBatch
+         tourTmCheck revIDEExtensionProperty(kTourWidgetID, "status") is "installed", \
+               tLook && "look: the Spinner loads again (" & revIDEExtensionProperty(kTourWidgetID, "status") & ":" && \
+               revIDEExtensionProperty(kTourWidgetID, "error") & ")"
+         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: a widget installed shows on the palette at once"
+         if tLook is "modern" then tourShotStack "revTools", "01-tools-widget-install"
+         -- a library changes nothing the palette shows
+         put tourTmNamed(tTile) into tFirst
+         if revIDEExtensionProperty(kTourWidgetLibrary, "status") is "installed" then
+            revIDEExtensionUnload kTourWidgetLibrary
+            revIDEExtensionReload kTourWidgetLibrary
+            tourWidgetBatch
+            tourTmCheck tFirst is not empty and tourTmNamed(tTile) is tFirst, \
+                  tLook && "look: a library loaded again leaves the palette as it was (" & tFirst && "then" && tourTmNamed(tTile) & ")"
+         end if
+      end repeat
+      -- closed meanwhile (in the classic look): it hears nothing while it
+      -- is closed, and shows what changed when it opens again
+      close stack "revTools"
+      revIDEExtensionUnload kTourWidgetID
+      tourWidgetBatch
+      revIDEOpenPalette "tools"
+      tourWait 600
+      tourTmCheck tourTmNamed(kTourWidgetID) is empty, "a widget uninstalled while the palette was closed is gone when it opens"
+      close stack "revTools"
+      revIDEExtensionReload kTourWidgetID
+      tourWidgetBatch
+      revIDEOpenPalette "tools"
+      tourWait 600
+      tourTmCheck tourTmNamed(kTourWidgetID) is not empty, "a widget installed while the palette was closed is there when it opens"
+   catch tError
+      tourTmCheck false, "error:" && tourJoin(tError)
+   end try
+   tourClassicShowRestore tShowWas
+   if revIDEExtensionProperty(kTourWidgetID, "status") is not "installed" then
+      revIDEExtensionReload kTourWidgetID
+      tourWidgetBatch
+   end if
+   if revIDEExtensionProperty(kTourWidgetLibrary, "status") is "unloaded" then
+      revIDEExtensionReload kTourWidgetLibrary
+      tourWidgetBatch
+   end if
+   if there is not a stack "revTools" or the mode of stack "revTools" is 0 then revIDEOpenPalette "tools"
+   tourTmFinish "tools-widget-install"
+   tourTmReset
+end tour_tools_widget_install
+
+-- Brian's own way (bwmilby, forum, 2026-11-07): a widget made in the
+-- Extension Builder and put in with its Install button
+-- (revIDEDeveloperExtensionInstall, which packages the folder and installs
+-- the package with revIDEExtensionInstall) shows on the Tools palette at
+-- once, and the Extension Manager's Uninstall (revIDEExtensionUninstall,
+-- which deletes it) takes it away at once, in each look. The widget is
+-- written and compiled here, as the Extension Builder compiles a folder it
+-- opens (revIDEDeveloperExtension); a build with no lc-compile beside the
+-- IDE says so and skips the step
+constant kTourBuilderWidget = "org.openxtalk.tour.palettewidget"
+
+on tour_tools_widget_builder
+   local tFolder, tLook, tTile, tTry, tError, tShowWas
+   if not tourTmStart("tools-widget-builder") then exit tour_tools_widget_builder
+   put tourBuilderWidgetFolder() into tFolder
+   if tFolder is empty then
+      tourRecord "INFO tools-widget-builder: the widget did not compile here (no lc-compile?); skipped"
+      tourTmReset
+      exit tour_tools_widget_builder
+   end if
+   try
+      repeat for each item tLook in "modern,classic"
+         if tLook is "modern" then
+            if tourToolsModern(empty, false) is not true then throw "the modern look did not turn on"
+            put kTourBuilderWidget into tTile
+         else
+            tourToolsClassic
+            put tourClassicShowWidgets() into tShowWas
+            put kTourBuilderWidget into tTile
+         end if
+         tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: the test widget is not on the palette before it is installed"
+         revIDEDeveloperExtensionInstall tFolder
+         repeat with tTry = 1 to 50
+            if revIDEExtensionProperty(kTourBuilderWidget, "status") is "installed" then exit repeat
+            tourWait 100
+         end repeat
+         tourWidgetBatch
+         tourTmCheck revIDEExtensionProperty(kTourBuilderWidget, "status") is "installed", \
+               tLook && "look: the Extension Builder's Install installs it (" & revIDEExtensionProperty(kTourBuilderWidget, "status") & ")"
+         tourTmCheck tourTmNamed(tTile) is not empty, tLook && "look: a widget installed from the Extension Builder shows on the palette at once"
+         if tLook is "modern" then tourShotStack "revTools", "01-tools-widget-builder"
+         revIDEExtensionUninstall kTourBuilderWidget
+         tourWidgetBatch
+         tourTmCheck tourTmNamed(tTile) is empty, tLook && "look: a widget uninstalled in the Extension Manager goes from the palette at once"
+      end repeat
+   catch tError
+      tourTmCheck false, "error:" && tourJoin(tError)
+   end try
+   tourClassicShowRestore tShowWas
+   if revIDEExtensionProperty(kTourBuilderWidget, "status") is not empty then
+      revIDEExtensionUninstall kTourBuilderWidget
+      tourWidgetBatch
+   end if
+   tourTmFinish "tools-widget-builder"
+   tourTmReset
+end tour_tools_widget_builder
+
+-- The classic look shows widgets only when its Show Sections setting
+-- (revTools_show) lists them, and a fresh profile's does not (Home's
+-- default is classic,graphictools,runedit,graphic,paint), so the widget
+-- steps show them for their classic checks and give the setting back
+-- after (tools-modern-check holds it to what it was). Returns the setting
+-- it changed, or empty when it changed nothing
+function tourClassicShowWidgets
+   local tShow
+   put revIDEGetPreference("revTools_show") into tShow
+   if tShow is empty or "widget" is among the items of tShow then return empty
+   revIDESetPreference "revTools_show", "widget," & tShow
+   tourWait 300
+   return tShow
+end tourClassicShowWidgets
+
+command tourClassicShowRestore pShow
+   if pShow is empty then exit tourClassicShowRestore
+   if revIDEGetPreference("revTools_show") is not pShow then
+      revIDESetPreference "revTools_show", pShow
+      tourWait 300
+   end if
+end tourClassicShowRestore
+
+-- A folder with the test widget's source, compiled as the Extension
+-- Builder compiles one, or empty when it did not compile
+function tourBuilderWidgetFolder
+   local tFolder, tSource, tDetails, tError
+   put specialFolderPath("temporary") & "/oxt_tour_palettewidget" into tFolder
+   if there is not a folder tFolder then create folder tFolder
+   put "widget" && kTourBuilderWidget & return & \
+         "use com.livecode.canvas" & return & \
+         "use com.livecode.widget" & return & \
+         "metadata title is " & quote & "Palette Test Widget" & quote & return & \
+         "metadata author is " & quote & "OXT-Beyond tests" & quote & return & \
+         "metadata version is " & quote & "1.0.0" & quote & return & \
+         "metadata svgicon is " & quote & "M0,0L10,0L10,10L0,10Z" & quote & return & \
+         "public handler OnPaint()" & return & \
+         "   fill rectangle [0, 0, 10, 10] on this canvas" & return & \
+         "end handler" & return & \
+         "end widget" & return into tSource
+   put textEncode(tSource, "UTF-8") into URL ("binfile:" & tFolder & "/palettewidget.lcb")
+   try
+      put revIDEDeveloperExtension(tFolder) into tDetails
+   catch tError
+      tourRecord "INFO tools-widget-builder: compiling failed:" && tourJoin(tError)
+      return empty
+   end try
+   if there is not a file (tFolder & "/manifest.xml") then return empty
+   if there is not a file (tFolder & slash & revIDEExtensionBytecodeFilename(true)) and \
+         there is not a file (tFolder & "/module.lcm") then return empty
+   return tFolder
+end tourBuilderWidgetFolder
+
+-- Waits, at most 10 seconds, for the extension library's batch of changes
+-- (and the ideExtensionsChanged it sends) to be over, then 300 ms more
+command tourWidgetBatch
+   local tLine, tWaiting
+   repeat 100 times
+      wait 100 milliseconds with messages
+      put false into tWaiting
+      repeat for each line tLine in the pendingMessages
+         if item 3 of tLine is among the items of "doExtensionsChanged,doExtensionsChangedBatch" then put true into tWaiting
+      end repeat
+      if not tWaiting then exit repeat
+   end repeat
+   tourWait 300
+end tourWidgetBatch
 
 -- Opens the modern look as a profile with pNames and pSize saved finds it
 command tourToolsDefaultOpen pNames, pSize
@@ -5834,10 +6043,56 @@ on tour_project_browser
       end repeat
       set the itemDelimiter to comma
    end if
+   -- its Refresh button: its own tooltip, and its icon, not a corner of
+   -- the splash's art (littlenemo, openxtalk.org; 0.2.7-rc.6.19)
+   local tProblem
+   put tourRefreshProblem(tStack) into tProblem
    close stack tStack
+   if tProblem is not empty then throw tProblem
 end tour_project_browser
 
--- The Application Browser, the App Browser plugin (Tools > Plugins): it
+-- The Project Browser's Refresh button (pStack is its stack): empty when
+-- its tooltip names the Project Browser and its icon is revIcons' image,
+-- which no image of another stack in memory shadows; else the problem.
+-- A button's icon is found by its ID in every stack in memory, and the
+-- splash's art, which until 0.2.7-rc.6.19 took the ID of revIcons'
+-- "dark-refresh", showed in its place while the splash was in memory, as
+-- the web IDE keeps it (littlenemo, openxtalk.org)
+function tourRefreshProblem pStack
+   local tButton, tIcon, tMain, tSub, tHits
+   put the long id of button "Refresh" of card "list" of stack pStack into tButton
+   -- (the tooltip is a property patch of the binary stack, which the
+   -- pull requests' screenshot jobs take from the last release: its old
+   -- tooltip is recorded, not failed; tools/oxt/ide-stack-patch.sh --check
+   -- holds the stack in the repository to the patch)
+   if the toolTip of tButton is "Refresh the Application Browser" then
+      tourRecord "INFO the Project Browser's Refresh tooltip is the release's stack's:" && the toolTip of tButton
+   else if the toolTip of tButton is not "Refresh the Project Browser" then
+      return "the Project Browser's Refresh button's tooltip is" && quote & the toolTip of tButton & quote
+   end if
+   put the icon of tButton into tIcon
+   if there is not a stack "revIcons" or there is not an image id tIcon of stack "revIcons" then
+      return "the Project Browser's Refresh icon" && tIcon && "is not an image of revIcons"
+   end if
+   repeat for each line tMain in the mainStacks
+      repeat for each line tSub in (tMain & return & the substacks of stack tMain)
+         if tSub is empty or tSub is "revIcons" then next repeat
+         try
+            if there is an image id tIcon of stack tSub then
+               put tSub & ": " & the short name of image id tIcon of stack tSub & "; " after tHits
+            end if
+         catch tError
+         end try
+      end repeat
+   end repeat
+   if tHits is not empty then
+      return "the Project Browser's Refresh icon" && tIcon && "is shadowed by an image of the same ID in" && tHits
+   end if
+   return empty
+end tourRefreshProblem
+
+-- The Application Browser, the App Browser plugin (Tools > Application
+-- Browser since 0.2.7-rc.6.18, and Development > Plugins): it
 -- lists the user's stacks and leaves itself out (until 0.2.7-rc.6.17 it
 -- listed itself among them); its lists are in 13 points (richmond62,
 -- openxtalk.org p=26048: they were 11); and its names, links in its
@@ -5883,11 +6138,40 @@ on tour_app_browser
       close stack tStack
       throw "the App Browser lists itself among the user's stacks"
    end if
+   -- nor the stacks of the IDE's own extensions: until 0.2.7-rc.6.18 the
+   -- web IDE's listed the layout guides' library (LittleNemo,
+   -- openxtalk.org p=26169; the web tour's tourExtensionStacksNotUsers)
+   get tourExtensionStacksListed(tListed)
+   if it is not empty then
+      close stack tStack
+      throw "the App Browser lists the IDE's own extensions' stacks among the user's stacks:" && it
+   end if
    if the textSize of field "Cards" of card 1 of stack tStack is not 13 or \
          the textSize of field "Controls" of card 1 of stack tStack is not 13 then
       close stack tStack
       throw "the App Browser's lists are in" && the textSize of field "Cards" of card 1 of stack tStack && \
             "and" && the textSize of field "Controls" of card 1 of stack tStack && "points, not 13"
+   end if
+   -- its icons larger (richmond62 again; until 0.2.7-rc.6.18 bitmaps 9
+   -- to 14 points high): drawn, 20 points for a stack or a control, in
+   -- its own stack, in rows 24 high
+   tourRecord "INFO the App Browser's rows" && the textHeight of field "Cards" of card 1 of stack tStack && \
+         "high; a stack's icon" && tourAppBrowserIcon(tStack, "cMainStackIcon") && \
+         "and a button's" && tourAppBrowserIcon(tStack, "cButtonIcon")
+   if tourAppBrowserIcon(tStack, "cMainStackIcon") is not "20x20" or \
+         tourAppBrowserIcon(tStack, "cButtonIcon") is not "20x20" then
+      close stack tStack
+      throw "the App Browser's icons are not drawn at 20 points"
+   end if
+   if the textHeight of field "Cards" of card 1 of stack tStack is not 24 then
+      close stack tStack
+      throw "the App Browser's rows are" && the textHeight of field "Cards" of card 1 of stack tStack && "high, not 24"
+   end if
+   -- and in the Tools menu again (richmond62, p=26074), checked while
+   -- it is shown
+   if not (tourTmMenuChecked("Application Browser") is true) then
+      close stack tStack
+      throw "Tools > Application Browser is missing, or not checked with the App Browser shown"
    end if
    -- the list's colour, as drawn: the commonest colour inside it (its
    -- left 160 points, without its scroll bars), which its rows' words,
@@ -5937,6 +6221,31 @@ on tour_app_browser
       throw "the App Browser's names" && tLink && "do not read on its list" && tBack && "(contrast" && tRatio & ")"
    end if
 end tour_app_browser
+
+-- the lines of pListed (stacks' names) whose stacks are in the IDE's own
+-- Extensions folder, joined with commas
+function tourExtensionStacksListed pListed
+   local tExtensions, tStackName, tTheirs
+   put revIDESpecialFolderPath("extensions") & slash into tExtensions
+   repeat for each line tStackName in pListed
+      if there is a stack tStackName and the effective filename of stack tStackName begins with tExtensions then
+         put tStackName & ", " after tTheirs
+      end if
+   end repeat
+   return char 1 to -3 of tTheirs
+end tourExtensionStacksListed
+
+-- The size of the App Browser's icon its property pProp names, as
+-- "<width>x<height>", when it is the icon drawn in its own stack
+-- (revIDEAppBrowserIcons); else empty
+function tourAppBrowserIcon pStack, pProp
+   local tId
+   put the pProp of stack pStack into tId
+   if tId is not an integer then return empty
+   if there is not an image id tId of stack pStack then return empty
+   if the short name of image id tId of stack pStack is not ("oxt" & pProp) then return empty
+   return the width of image id tId of stack pStack & "x" & the height of image id tId of stack pStack
+end tourAppBrowserIcon
 
 -- The WCAG contrast ratio of two RGB colours
 function tourContrast pOne, pTwo
@@ -6461,6 +6770,25 @@ on tour_standalone_settings
          if there is not a field "emscriptenTitle" of card "Emscripten" of stack tStack then
             throw "the Web card has no settings for its page"
          end if
+         -- the Splash setting (bwmilby's request, openxtalk.org p=26115):
+         -- its field and buttons in their row, above the pane's text, and
+         -- empty for a stack that has none
+         if there is not a field "emscriptenSplash" of card "Emscripten" of stack tStack or \
+               there is not a button "emscriptenSplashNone" of card "Emscripten" of stack tStack or \
+               there is not a button "emscriptenSplashChoose" of card "Emscripten" of stack tStack then
+            throw "the Web card has no Splash setting"
+         end if
+         if not the visible of field "emscriptenSplash" of card "Emscripten" of stack tStack or \
+               item 4 of the rect of button "emscriptenSplashChoose" of card "Emscripten" of stack tStack > \
+               item 2 of the rect of field "emscriptenDeploymentInfoLabel" of card "Emscripten" of stack tStack then
+            throw "the Splash setting is hidden or under the pane's text:" && \
+                  the rect of button "emscriptenSplashChoose" of card "Emscripten" of stack tStack
+         end if
+         if the text of field "emscriptenSplash" of card "Emscripten" of stack tStack is not empty or \
+               the cRevStandaloneSettings["emscripten,splash"] of stack kSample is not empty then
+            throw "the Splash setting of a stack that has none is not empty:" && \
+                  the text of field "emscriptenSplash" of card "Emscripten" of stack tStack
+         end if
          -- the Fields setting (seth's choice 9A): white, or the card's grey
          if there is not a button "emscriptenFields" of card "Emscripten" of stack tStack then
             throw "the Web card has no Fields setting"
@@ -6935,6 +7263,26 @@ on tour_extension_manager
       throw "the Extension Manager drawn again has its first row's name in" && tourEmFirstInk(tStack) & ", not" && tWant
    end if
    tourShotStack tStack, "17-extension-manager-redrawn"
+   -- the selected row: a dark selection colour under the white name in
+   -- the dark appearance (bwmilby, forum, 2026-11-07, on the Mac), the
+   -- edition's own in the light one
+   local tHilite, tSel, tSum
+   put the viewProp["hilite color"] of group "extensionList" of card "list" of stack tStack into tHilite
+   dispatch function "ideColorGet" to card "list" of stack tStack with "pb_line_selected"
+   put the result into tSel
+   tourRecord "INFO the Extension Manager's selected row is in" && tHilite && "(the selection colour" && tSel & ")"
+   if $OXT_TOUR_APPEARANCE is "light" and tHilite is not tSel then
+      throw "the Extension Manager's selected row is in" && tHilite & ", not the selection colour" && tSel && "(light)"
+   end if
+   if $OXT_TOUR_APPEARANCE is "dark" then
+      if the number of items of tHilite is not 3 then
+         throw "the Extension Manager's selected row is in" && tHilite && "(dark)"
+      end if
+      put item 1 of tHilite + item 2 of tHilite + item 3 of tHilite into tSum
+      if 255 - tSum / 3 <= 150 then
+         throw "the white name cannot be read on the Extension Manager's selected row," && tHilite && "(dark)"
+      end if
+   end if
    close stack tStack
 end tour_extension_manager
 

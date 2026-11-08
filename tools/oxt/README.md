@@ -539,7 +539,7 @@ Intended differences from OXT Lite 1.15:
 | the 3 junk and 2 excluded files | see [Classes](#classes) |
 | `LICENSE`, `LICENSE-EXCEPTION.md`, `THIRD-PARTY-NOTICES.md` | added: OXT-Beyond's licence files |
 | `Ext/mergJSON/**` | added: mergJSON, built from its source in `mergjson/` (the external, its library and the licences of its code) |
-| `PROVENANCE-oxt-runtimes-*.md` | added: provenance of the runtimes asset (`PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md`, and `PROVENANCE-oxt-runtimes-1.15.md` for its Android files) |
+| `PROVENANCE-oxt-runtimes-*.md` | added: provenance of the runtimes asset (`PROVENANCE-oxt-runtimes-0.2.7-rc.6.18b.md`, and `PROVENANCE-oxt-runtimes-1.15.md` for its Android files) |
 | `Runtime/Windows/x86-32/**`, `Runtime/Linux/**`, timezone `code/**` and `resources/**` | with a runtimes asset made from this repository's builds (any but `oxt-runtimes-1.15`), these may differ from 1.15's files, lack what 1.15's Linux runtimes bundled in `lib/` (shared libraries of other projects) and its iOS and macOS 10.9 timezone code, or have new files (the externals lists of the 64-bit Linux runtime, for example); `Runtime/Android/**`, carried over unchanged, is compared byte for byte, apart from the Java layer that such an asset's `java_layer` names (`Runtime/Android/Classes`, built from this repository) |
 | `Extensions/<xTalk folders>/**`, `Extensions/XTALK-EXTENSIONS.txt` | added: the xTalk Suite extensions (class `xtalk`); against a reference that has them they are compared like build outputs, and `--no-xtalk-extensions` makes them intended differences |
 
@@ -775,14 +775,14 @@ xTalk Suite extensions are not assets: see
 {
   "assets": [
     {
-      "id": "oxt-runtimes-0.2.7-rc.6.17",
-      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.17/oxt-runtimes-0.2.7-rc.6.17.zip",
+      "id": "oxt-runtimes-0.2.7-rc.6.18b",
+      "url": "https://github.com/SethMorrowSoftware/OpenXTalk-Beyond/releases/download/runtimes-0.2.7-rc.6.18b/oxt-runtimes-0.2.7-rc.6.18b.zip",
       "sha256": "<64 lowercase hex digits>",
       "size": 123456789,
       "kind": "zip",
       "strip": 1,
       "dest": "",
-      "rename": { "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.17.md" },
+      "rename": { "PROVENANCE.md": "PROVENANCE-oxt-runtimes-0.2.7-rc.6.18b.md" },
       "exclude": { "win-x86_64": ["Runtime/Windows/x86-64/**", "..."], "...": ["..."] },
       "description": "...", "licence": "...", "source": "..."
     }
@@ -821,7 +821,7 @@ xTalk Suite extensions are not assets: see
 The runtimes asset excludes, per platform, what that platform's own build
 makes (`make_runtimes_asset.py` writes these; `OWN_PARTS` there):
 
-| platform | left out of `oxt-runtimes-0.2.7-rc.6.17` | why |
+| platform | left out of `oxt-runtimes-0.2.7-rc.6.18b` | why |
 |---|---|---|
 | `win-x86_64` | `Runtime/Windows/x86-64/**`, timezone `code/x86_64-win32/**` | the build's own runtime and timezone code |
 | `linux-x86_64` | `Runtime/Linux/x86-64/**`, timezone `code/x86_64-linux/**`, timezone `resources/**` | the build's own runtime and timezone code, and the zoneinfo data (tz.gyp `tzdata`, which the Windows builds do not make) |
@@ -969,7 +969,8 @@ build makes (the asset's `exclude` in `external-assets.json`).
 python tools/oxt/make_runtimes_asset.py --builds --label LABEL --out DIR
     --bin win-x86=PATH --bin win-x86_64=PATH --bin linux-x86=PATH --bin linux-x86_64=PATH
     [--carry oxt-runtimes-1.15.zip] [--assets-cache DIR] [--commit SHA]
-    [--run BUILDS=URL]... [--android-classes JAR] [--update-manifest [FILE]]
+    [--run BUILDS=URL]... [--android-classes JAR] [--android-engine DIR]
+    [--update-manifest [FILE]]
 ```
 
 Each `PATH` is a build output folder or the CI archive that holds it
@@ -995,7 +996,21 @@ them the classes the engines and the Android builder name, and every
 PendingIntent it makes must say whether it is mutable; it gets the date of
 the builds' newest file. The manifest entry then names it
 (`"java_layer": "Runtime/Android/Classes"`), and `PROVENANCE.md` says what
-it replaced and how it was checked. Every `.exe`, `.dll`, `.so` and engine
+it replaced and how it was checked. With `--android-engine DIR` the asset
+also carries OXT-Beyond's own Android engine, beside LiveCode 9.6.3's and
+not in its place, as `Runtime/Android/Beyond`: DIR is the runtime folder
+that `tools/ci/android_engine.py merge` made of the four build folders of
+the "Android engine" workflow, and it must pass `android_engine.py check`
+for every architecture, hold nothing but that runtime (the engines and
+externals of the four architectures, the Java layer, the manifest and the
+files beside them) and carry this source tree's engine version in every
+engine. The Android builder takes it from there only for a stack whose
+`"android,engine"` setting is `"beyond"`; the carried runtime, which every
+other stack is built with, is left as it is. Its files get the date of the
+builds' newest file, the manifest entry names the folder
+(`"android_engine": "Runtime/Android/Beyond"`), `--run android-engine=URL`
+records the run that built it, and `PROVENANCE.md` says what it is, how it
+was made and checked, and its licences. Every `.exe`, `.dll`, `.so` and engine
 must be a PE or ELF file of its build's architecture, and every
 `Standalone` must carry this source tree's engine version, or no archive
 is written. The generated `PROVENANCE.md` names the commit and the CI
@@ -1016,7 +1031,11 @@ whose 32-bit and 64-bit builds must have passed. It builds the Java layer
 from that commit and checks it as `android-java.yml` checks a pull
 request's (`android_java.py compare` with the Java layer of the asset
 pinned at that commit, `jni` against its Android engines, and `rules`)
-before it passes it with `--android-classes`; it uploads the result
+before it passes it with `--android-classes`. Given the id of an "Android
+engine" run of the same commit (`android-engine-run`, optional) whose four
+build jobs and emulator job passed, it downloads that run's four folders,
+makes them one runtime with `android_engine.py merge` as the run's emulator
+job did, and passes it with `--android-engine`. It uploads the result
 as the artifact `runtimes-asset` and, with `publish`, creates the
 pre-release `runtimes-<label>` at that commit (which must be on `main`)
 with the zip and its `PROVENANCE.md`. A published asset is never

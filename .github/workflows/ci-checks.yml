@@ -16,9 +16,8 @@
 
 
 # The quick checks of the workflows and of the CI scripts that need no build,
-# on every pull request and push to main, in a minute or two on one Linux
-# runner, so that a mistake in them shows before (or instead of) the hour of
-# building:
+# on every pull request and push to main, on one Linux runner, so that a
+# mistake in them shows before (or instead of) the hour of building:
 #
 #   - actionlint checks every workflow: syntax, expressions, job and step
 #     references, the inputs of reusable workflows and actions (the shell
@@ -66,7 +65,10 @@ jobs:
   checks:
     name: Workflows and CI scripts
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # The unit tests alone took 584 s here in November 2026 (1716 tests),
+    # and a limit of 10 minutes cancelled a run whose tests had all
+    # passed: twice what they take, so a slower runner is not a failure
+    timeout-minutes: 20
     steps:
       # (the whole history: the runtimes' provenance step looks back to
       # the commit the runtimes asset was built from)
@@ -112,7 +114,8 @@ jobs:
   other-os:
     name: CI scripts on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # macos-15 took 14 of the 15 minutes this had in November 2026
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

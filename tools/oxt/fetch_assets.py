@@ -54,6 +54,11 @@ archive with a fixed URL, size and SHA-256:
                    commit "source" names, not carried over
                    (make_runtimes_asset.py --android-classes); package.py
                    --compare and tools/ci/runtimes_provenance.py read it
+    "android_engine": optional, the runtimes asset only: the folder of
+                   OXT-Beyond's own Android engine, built from the commit
+                   "source" names, beside the carried Android runtime
+                   (make_runtimes_asset.py --android-engine); package.py
+                   --compare and tools/ci/runtimes_provenance.py read it
     "description", "licence", "source": text for people and reports
   }
 

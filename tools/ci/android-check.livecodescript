@@ -73,6 +73,8 @@ along with OXT-Beyond.  If not see <http://www.gnu.org/licenses/>.  */
 --    OXT_ANDROID_DEVICE    the serial of the device for Test (optional)
 --    OXT_ANDROID_WORK      a folder for the units' made-up SDKs
 --    OXT_ANDROID_PROBE     "java" for the Java layer's probe (see below)
+--    OXT_ANDROID_ENGINE    the probe's "android,engine" setting ("beyond"
+--                          for OXT-Beyond's own engine; none when empty)
 --
 -- The Java layer's probe, AndroidJavaProbe, is the probe with more to do
 -- before it turns green: it asks the Java layer of the runtime for what
@@ -118,6 +120,12 @@ constant kRunColor = "31,158,90"
 constant kFailColor = "230,160,0"
 -- kBackColor: the Java layer's probe got backKey
 constant kBackColor = "40,90,200"
+-- kWaitColor: a probe's mouseUp (a tap) is waiting kProbeWait seconds
+-- with messages, after which it is green again: android_check.py device
+-- --density-in-wait changes the density while it waits, as Android makes
+-- the activity again then (the engine's doDestroy, which hung there)
+constant kWaitColor = "120,60,160"
+constant kProbeWait = 20
 constant kIdentifier = "org.openxtalk.check.androidprobe"
 -- The Java layer's probe's picture: one pixel, a PNG, as base64
 constant kProbePicture = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -231,6 +239,8 @@ private command androidUnits
    unitDebugKeystore
    unitJavaHome tWork
    unitTargetAPI tWork
+   unitRelaunch tWork
+   unitEngine
    unitAppBundle tWork
    androidUnit "required-sdk", deployCall("deployRequiredSDK") is "Android 13 (API 33) or newer", \
          "deployRequiredSDK() is" && deployCall("deployRequiredSDK")
@@ -284,6 +294,89 @@ private command unitTargetAPI pWork
          "    <property android:name=" & quote & "android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY" & quote && \
          "android:value=" & quote & "true" & quote && "/>" & return & "  </application>" & return & "</manifest>", tAnswer
 end unitTargetAPI
+
+-- The Android engine a build takes (androidRuntimeFolder): LiveCode
+-- 9.6.3's, Runtime/Android, for a stack that names none or "9.6.3", and
+-- OXT-Beyond's own, which the runtimes carry beside it in
+-- Runtime/Android/Beyond, for a stack whose "android,engine" is "beyond";
+-- asked of runtimes without it, or for an engine of another name, the
+-- build stops and says why. The release's runtimes have no Beyond folder
+-- (android.yml), so the unit makes one for its "beyond" answers, and takes
+-- it away again; one that is there already it leaves as it is
+private command unitEngine
+   local tSettings, tRuntime, tBeyond, tMade, tError, tName
+   put builderCall("revMobileRuntimeFolder", "build") into tRuntime
+   put tRuntime & "/Beyond" into tBeyond
+   androidUnit "engine-default", builderCall("androidRuntimeFolder", "build", tSettings) is tRuntime, \
+         builderCall("androidRuntimeFolder", "build", tSettings)
+   put "9.6.3" into tSettings["android,engine"]
+   androidUnit "engine-9.6.3", builderCall("androidRuntimeFolder", "build", tSettings) is tRuntime, \
+         builderCall("androidRuntimeFolder", "build", tSettings)
+   put "beyond" into tSettings["android,engine"]
+   put there is not a folder tBeyond into tMade
+   if tMade then
+      put empty into tError
+      try
+         get builderCall("androidRuntimeFolder", "build", tSettings)
+      catch tError
+      end try
+      androidUnit "engine-beyond-missing", tError contains "these runtimes do not have it:" && tBeyond, \
+            "answered" && it & ", threw" && tError
+      revSBEnsureFolder tBeyond
+   end if
+   androidUnit "engine-beyond", builderCall("androidRuntimeFolder", "build", tSettings) is tBeyond, \
+         builderCall("androidRuntimeFolder", "build", tSettings)
+   if tMade then
+      removeTree tBeyond
+   end if
+   repeat for each item tName in "beyond2,9.6,oxt-beyond"
+      put tName into tSettings["android,engine"]
+      put empty into tError
+      try
+         get builderCall("androidRuntimeFolder", "build", tSettings)
+      catch tError
+      end try
+      androidUnit "engine-unknown-" & tName, tError contains "Unknown Android engine" && quote & tName & quote, \
+            "answered" && it & ", threw" && tError
+   end repeat
+end unitEngine
+
+-- The engine runs once in a process: the configuration changes the app
+-- goes on through (LiveCode's four first, as before, and not the density,
+-- for which it starts again), and the activity that starts it again in a
+-- new process, declared once in the application where the runtime's Java
+-- layer has it and not otherwise (9.6.3's has not), on made-up runtimes
+private command unitRelaunch pWork
+   local tRuntime, tAnswer, tManifest, tWanted
+   put builderCall("androidConfigChanges") into tAnswer
+   set the itemDelimiter to "|"
+   androidUnit "config-changes", item 1 to 4 of tAnswer is "keyboardHidden|orientation|uiMode|screenSize" and \
+         "fontScale" is among the items of tAnswer and "locale" is among the items of tAnswer and \
+         "smallestScreenSize" is among the items of tAnswer and "density" is not among the items of tAnswer, tAnswer
+   set the itemDelimiter to comma
+   put "<manifest>" & return & "  <application>" & return & "  </application>" & return & "</manifest>" into tManifest
+   put pWork & "/relaunch-runtime" into tRuntime
+   removeTree tRuntime
+   revSBEnsureFolder tRuntime
+   androidUnit "relaunch-no-java-layer", builderCall("androidDeclareRelaunch", tManifest, tRuntime) is tManifest, \
+         builderCall("androidDeclareRelaunch", tManifest, tRuntime)
+   put textEncode("PK" & "com/runrev/android/LiveCodeActivity.class", "UTF-8") into url ("binfile:" & tRuntime & "/Classes")
+   androidUnit "relaunch-java-layer-without-it", builderCall("androidDeclareRelaunch", tManifest, tRuntime) is tManifest, \
+         builderCall("androidDeclareRelaunch", tManifest, tRuntime)
+   put textEncode("PK" & "com/runrev/android/LiveCodeActivity.class" & numToByte(0) & \
+         "com/runrev/android/RelaunchActivity.class", "UTF-8") into url ("binfile:" & tRuntime & "/Classes")
+   put builderCall("androidDeclareRelaunch", tManifest, tRuntime) into tAnswer
+   put "<manifest>" & return & "  <application>" & return & \
+         "    <activity android:name=" & quote & "com.runrev.android.RelaunchActivity" & quote & return & \
+         "      android:process=" & quote & ":relaunch" & quote & return & \
+         "      android:theme=" & quote & "@android:style/Theme.Translucent.NoTitleBar" & quote & return & \
+         "      android:excludeFromRecents=" & quote & "true" & quote & return & \
+         "      android:noHistory=" & quote & "true" & quote & return & \
+         "      android:exported=" & quote & "false" & quote && "/>" & return & \
+         "  </application>" & return & "</manifest>" into tWanted
+   androidUnit "relaunch-declared", tAnswer is tWanted, tAnswer
+   removeTree tRuntime
+end unitRelaunch
 
 -- The App Bundle: its name beside the package, where each file of the
 -- package goes in the bundle's base module, bundletool's settings, a
@@ -744,6 +837,12 @@ private function probeScript
    end if
    put "   set the backgroundColor of me to" && quote & kRunColor & quote & return & \
          "end openStack" after tScript
+   -- a tap: a script waiting (kWaitColor), then green again
+   put return & "on mouseUp" & return & \
+         "   set the backgroundColor of me to" && quote & kWaitColor & quote & return & \
+         "   wait" && kProbeWait && "seconds with messages" & return & \
+         "   set the backgroundColor of me to" && quote & kRunColor & quote & return & \
+         "end mouseUp" after tScript
    if probeName() is "AndroidJavaProbe" then
       -- the back key, not passed (see the header)
       put return & "on backKey" & return & \
@@ -791,6 +890,11 @@ private function buildSettings pName
    put probeName() into tSettings["name"]
    put kIdentifier into tSettings["android,identifier"]
    put "Android Probe" into tSettings["android,label"]
+   -- the engine the probe is built with: OXT-Beyond's own (android_check.py
+   -- ide --android-engine beyond), or 9.6.3's as a stack that names none
+   if $OXT_ANDROID_ENGINE is not empty then
+      put $OXT_ANDROID_ENGINE into tSettings["android,engine"]
+   end if
    repeat for each item tArch in "armv7,arm64,x86,x86_64"
       delete variable tSettings["android," & tArch]
    end repeat

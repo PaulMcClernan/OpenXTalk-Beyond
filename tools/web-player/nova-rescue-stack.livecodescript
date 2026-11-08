@@ -2407,7 +2407,11 @@ on nrResized
       end repeat
       repeat with i = 1 to sCount["Foe"]
          add tShift to sFoe[i]["x"]
-         add tShift to sFoe[i]["base"]
+         -- a weaver's base is the x it weaves about; a ufo's is the y it
+         -- bobs about, which a column moved sideways leaves as it was
+         if sFoe[i]["kind"] is "weaver" then
+            add tShift to sFoe[i]["base"]
+         end if
       end repeat
       repeat with i = 1 to sCount["Pod"]
          add tShift to sPod[i]["x"]

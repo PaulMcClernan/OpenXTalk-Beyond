@@ -305,7 +305,10 @@ class ManifestEntry(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # The whole tool, on made-up builds and a made-up carried asset
 
-class Builds(Temp):
+class BuildsBase(Temp):
+    """Made-up builds and a made-up carried asset, for the whole tool
+    (test_runtimes_android_engine.py runs it on them too)"""
+
     def setUp(self):
         super().setUp()
         # one file per build, dated (even seconds: a zip's dates have two
@@ -366,6 +369,8 @@ class Builds(Temp):
         with zipfile.ZipFile(os.path.join(out, 'oxt-runtimes-x.zip')) as z:
             return {i.filename: (z.read(i), i.date_time, i.external_attr >> 16) for i in z.infolist()}
 
+
+class Builds(BuildsBase):
     def test_the_java_layer_replaces_the_carried_one(self):
         jar = write_jar(self.path('java', 'Classes'), layer_classes())
         with open(jar, 'rb') as f:
@@ -444,7 +449,7 @@ class Builds(Temp):
         with self.assertRaises(SystemExit) as cm, contextlib.redirect_stderr(io.StringIO()) as err:
             mra.main([self.tmp, '--out', self.tmp, '--android-classes', 'Classes'])
         self.assertEqual(cm.exception.code, 2)
-        self.assertIn('--android-classes go with --builds', err.getvalue())
+        self.assertIn('--android-classes and --android-engine go with --builds', err.getvalue())
 
 
 # ---------------------------------------------------------------------------

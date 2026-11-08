@@ -582,6 +582,42 @@ on TestTurningThePhonePausesTheRun
          item 1 of the rect of graphic "Bar Back" of card "Space" of stack kStack
 end TestTurningThePhonePausesTheRun
 
+-- After the turn, raiders go on from where they were: a weaver weaves
+-- about an x, which moves with the column, and a ufo bobs about a y,
+-- which a column moved sideways leaves as it was (until 2026-11-07 it
+-- moved the ufo down by as much as the column moved across)
+on TestTurningThePhoneKeepsTheRaidersCourses
+   local tColumn, tShift, tWeaver, tUfo, tNow
+   windowSize 390, 760
+   if the width of stack kStack is not 390 then
+      TestSkip "turning the phone", "the window could not be made that size here"
+      exit TestTurningThePhoneKeepsTheRaidersCourses
+   end if
+   newRun
+   put1 "weaver", 195, 200
+   put1 "ufo"
+   step 1/60
+   TestAssert "a weaver and a ufo", st("foes") is 2
+   put st("column") into tColumn
+   put the loc of button "Foe 1" of card "Space" of stack kStack into tWeaver
+   put the loc of button "Foe 2" of card "Space" of stack kStack into tUfo
+   windowSize 844, 390
+   if the width of stack kStack is not 844 then
+      TestSkip "turning the phone", "the window could not be made that size here"
+      exit TestTurningThePhoneKeepsTheRaidersCourses
+   end if
+   put item 1 of st("column") - item 1 of tColumn into tShift
+   TestAssert "the column moved", tShift > 0
+   press "Resume"
+   step 1/60
+   put the loc of button "Foe 1" of card "Space" of stack kStack into tNow
+   TestAssert "the weaver goes on across with the column", \
+         abs(item 1 of tNow - item 1 of tWeaver - tShift) <= 4 and abs(item 2 of tNow - item 2 of tWeaver) <= 4
+   put the loc of button "Foe 2" of card "Space" of stack kStack into tNow
+   TestAssert "the ufo goes on across with the column", abs(item 1 of tNow - item 1 of tUfo - tShift) <= 4
+   TestAssert "and at the height it was", abs(item 2 of tNow - item 2 of tUfo) <= 4
+end TestTurningThePhoneKeepsTheRaidersCourses
+
 ----------------------------------------------------------------------
 -- Numbers
 
