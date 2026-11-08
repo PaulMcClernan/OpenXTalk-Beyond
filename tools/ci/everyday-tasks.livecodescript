@@ -1141,10 +1141,22 @@ on ed_debug_breakpoint
          "   add 1 to tCount" & return & "   set the cResult of me to tCount" & return & "end mouseUp"
    set the cResult of tButton to empty
    put edOpenScript(tButton) into tSE
+   -- (the Script Editor fills its field a moment after it opens: on the
+   -- Intel Mac, in the dark tour of main at fe83adb58 and of #409, line 4
+   -- was measured as 163,81,163,102, no width at the field's top, so in a
+   -- field that did not hold the script yet, and the click set no
+   -- breakpoint; so the click waits for the line it aims at)
+   if not edWaitFor("the text of pAx contains " & quote & "add 1 to tCount" & quote, 5000, edSeField(tSE)) then
+      throw "the Script Editor did not show the button's script:" && edJoin(the text of edSeField(tSE))
+   end if
    edGutterClick tSE, 4
    put the breakpoints into sDebug["breakpoints"]
    edRecord "INFO the breakpoints:" && edJoin(sDebug["breakpoints"])
-   if sDebug["breakpoints"] is empty then throw "the Script Editor set no breakpoint"
+   -- (the IDE's own stacks keep breakpoints of their own, so the list is
+   -- not empty when the click set none: the button's line 4 is looked for)
+   if not edHasBreakpoint(sDebug["breakpoints"], tButton, 4) then
+      throw "the Script Editor set no breakpoint at line 4 of the button:" && edJoin(sDebug["breakpoints"])
+   end if
    edToolTile "com.livecode.tool.Browse"
    dispatch "revSetTestEnvironment" to stack "Home" with false
    put empty into sDebug["seen"]
@@ -1165,6 +1177,20 @@ on ed_debug_breakpoint
    if the cResult of tButton is not 6 then throw "the handler did not run to its end after Run (cResult" && the cResult of tButton & ")"
    edCloseScriptEditors
 end ed_debug_breakpoint
+
+-- whether the breakpoints pBreakpoints (the breakpoints' lines: an
+-- object's long id, a comma and a line number) hold the line pLine of
+-- the object pObject. The object is matched by its type and id, not its
+-- whole long id, whose stack path the engine may spell another way
+-- (/private/var for /var on a Mac)
+function edHasBreakpoint pBreakpoints, pObject, pLine
+   local tBreakpoint
+   repeat for each line tBreakpoint in pBreakpoints
+      if word 1 to 3 of tBreakpoint is (word 1 of the name of pObject && "id" && the id of pObject) and \
+            item -1 of tBreakpoint is pLine then return true
+   end repeat
+   return false
+end edHasBreakpoint
 
 -- a click in the Script Editor's gutter beside the line pLine
 command edGutterClick pSE, pLine

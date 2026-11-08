@@ -464,7 +464,31 @@ on tour_project_browser
    end if
    tourShot "06-project-browser"
    close stack tStack
+   tourExtensionStacksNotUsers
 end tour_project_browser
+
+-- The stacks the IDE loads from its own Extensions folder are its own, not
+-- the user's: until 0.2.7-rc.6.18 the web IDE's Project Browser and App
+-- Browser listed the layout guides' library,
+-- community.ferruslogic.plugin.devguides (757 lines), first among the
+-- user's stacks (LittleNemo, openxtalk.org p=26169). The desktop IDEs' App
+-- Browsers did not list it. Both browsers take the user's stacks from
+-- revFilterStacksList
+command tourExtensionStacksNotUsers
+   local tUsers, tExtensions, tStackName, tTheirs
+   put revFilterStacksList(the mainStacks) into tUsers
+   tourRecord "INFO the user's stacks:" && tourJoin(tUsers)
+   put revIDESpecialFolderPath("extensions") & slash into tExtensions
+   repeat for each line tStackName in tUsers
+      if the effective filename of stack tStackName begins with tExtensions then
+         put tStackName & return after tTheirs
+      end if
+   end repeat
+   if tTheirs is not empty then
+      throw "the IDE lists its own extensions' stacks among the user's stacks:" && \
+            tourJoin(line 1 to -1 of tTheirs) && "(in" && tExtensions & ")"
+   end if
+end tourExtensionStacksNotUsers
 
 -- A click on the sample's button in browse mode runs its script, which
 -- opens an answer dialog: the click comes from the page, as a user's does
