@@ -26,6 +26,9 @@ files it is made from, without a browser or an engine:
   SOURCES.md names each file
 - every level names only pieces the game knows, in a land the game has
 - no statement of the game is too long for an iPhone's Safari
+- in a browser, its sound mixer (run in node against a stand-in for Web
+  Audio) starts no more than six sounds at once, and a sound that ends
+  makes room for another
 - the game is offered: in the Stack Player's samples with its picture,
   and in Home's gallery with an icon
 - its phone check calls only handlers its stack has and asks for, runs in
@@ -37,9 +40,12 @@ files it is made from, without a browser or an engine:
   python3 -m unittest discover -s tools/ci/tests
 """
 
+import json
 import os
 import re
+import shutil
 import struct
+import subprocess
 import sys
 import unittest
 
@@ -311,6 +317,72 @@ def mobile_web_check_test():
     sys.path.insert(0, HERE)
     import test_mobile_web_check
     return test_mobile_web_check.FitsAnIPhonesStack()
+
+
+def mixer_script():
+    """The JavaScript wfAudioScript() returns: its string literals joined,
+    as the engine joins them (no escapes in an xTalk string)"""
+    script = game_script()
+    start = script.index('private function wfAudioScript')
+    body = script[start:script.index('end wfAudioScript', start)]
+    return ''.join(re.findall(r'"([^"\n]*)"', body))
+
+
+# A stand-in for Web Audio: every buffer decodes at once, a source records
+# its start, and the test ends a source by calling its onended
+MIXER_HARNESS = r'''
+var started = [], listeners = {};
+function Context() { this.state = 'running'; this.currentTime = 0; this.destination = {}; }
+Context.prototype.resume = function () {};
+Context.prototype.decodeAudioData = function (data, ok) { ok({bytes: data.byteLength}); };
+Context.prototype.createGain = function () { return {gain: {value: 1}, connect: function () {}}; };
+Context.prototype.createBufferSource = function () {
+  return {playbackRate: {value: 1}, onended: null, connect: function () {},
+          start: function () { started.push(this); }};
+};
+var window = {AudioContext: Context, addEventListener: function (e, f) { listeners[e] = f; }};
+eval(MIXER);
+var A = window.wfAudio, out = {};
+for (var i = 0; i < 20; i++) A.add('s' + i, btoa('RIFF'));
+listeners.pointerup();
+// a fort falls: twenty different sounds in one tick
+for (var i = 0; i < 20; i++) A.play('s' + i, 1, 1);
+out.burst = started.length;
+// three of them end; later, three more ask to play
+for (var i = 0; i < 3 && i < started.length; i++) if (started[i].onended) started[i].onended();
+A.c.currentTime = 1;
+for (var i = 0; i < 20; i++) A.play('s' + i, 1, 1);
+out.after = started.length;
+out.everyStartedEnds = started.every(function (s) { return typeof s.onended === 'function'; });
+console.log(JSON.stringify(out));
+'''
+
+
+@unittest.skipUnless(shutil.which('node'), 'node is not installed')
+class Mixer(unittest.TestCase):
+    """The browser's mixer caps the sounds playing at once. #403's check in
+    Linux WebKit (which plays Web Audio through GStreamer) hung for about
+    30 seconds, twice, just after a burst of sounds; capping the burst is
+    a guess at that cause, and keeps a phone's speaker from twenty
+    knocks at once either way."""
+
+    def run_mixer(self):
+        script = MIXER_HARNESS.replace('eval(MIXER)', 'eval(%s)' % json.dumps(mixer_script()))
+        out = subprocess.run([shutil.which('node'), '-e', script], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return json.loads(out.stdout)
+
+    def test_the_harness_reads_the_mixer(self):
+        self.assertIn('window.wfAudio', mixer_script())
+        self.assertIn('createBufferSource', mixer_script())
+
+    def test_no_more_than_six_sounds_at_once(self):
+        self.assertEqual(self.run_mixer()['burst'], 6)
+
+    def test_a_sound_that_ends_makes_room(self):
+        result = self.run_mixer()
+        self.assertEqual(result['after'], result['burst'] + 3)
+        self.assertTrue(result['everyStartedEnds'])
 
 
 class Offered(unittest.TestCase):

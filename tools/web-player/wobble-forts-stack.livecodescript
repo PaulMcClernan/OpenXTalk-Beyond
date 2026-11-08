@@ -452,11 +452,17 @@ end wfAudioStart
 
 -- The mixer, made once a page: wfAudio.add(name, base64 of a WAV),
 -- wfAudio.play(name, volume, rate). The same sound is not started twice
--- in 60 milliseconds (a falling wall would say wood twenty times at once)
+-- in 60 milliseconds (a falling wall would say wood twenty times at once),
+-- and no more than six sound at once: a sound asked for while six play is
+-- dropped, and each one that ends makes room (onended). A fort falling
+-- asks for many different sounds in one tick, and Linux's WebKit, which
+-- plays Web Audio through GStreamer, hung for about 30 seconds just after
+-- such a burst in #403's check, twice (the cap is a guess at that cause;
+-- six knocks at once is plenty on a phone's speaker either way)
 private function wfAudioScript
    return "(function(){if(window.wfAudio)return;" & \
          "var C=window.AudioContext||window.webkitAudioContext;" & \
-         "var A=window.wfAudio={c:null,raw:{},buf:{},last:{}};" & \
+         "var A=window.wfAudio={c:null,raw:{},buf:{},last:{},live:0};" & \
          "A.decode=function(n){var c=A.c;if(!c||A.buf[n]||!A.raw[n])return;A.buf[n]='wait';" & \
          "var s=atob(A.raw[n]),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);" & \
          "var ok=function(b){A.buf[n]=b;},no=function(){A.buf[n]=null;};" & \
@@ -466,9 +472,9 @@ private function wfAudioScript
          "if(A.c.state==='suspended')A.c.resume();for(var n in A.raw)A.decode(n);};" & \
          "['touchend','pointerup','mousedown','keydown'].forEach(function(e){window.addEventListener(e,A.unlock,true);});" & \
          "A.play=function(n,v,r){var c=A.c,b=A.buf[n];if(!c||c.state!=='running'||!b||b==='wait')return;" & \
-         "var t=c.currentTime;if(A.last[n]&&t-A.last[n]<0.06)return;A.last[n]=t;" & \
+         "var t=c.currentTime;if(A.last[n]&&t-A.last[n]<0.06)return;if(A.live>=6)return;A.last[n]=t;" & \
          "var s=c.createBufferSource(),g=c.createGain();s.buffer=b;g.gain.value=v;if(r)s.playbackRate.value=r;" & \
-         "s.connect(g);g.connect(c.destination);s.start(0);};})();"
+         "s.connect(g);g.connect(c.destination);s.onended=function(){A.live--;};s.start(0);A.live++;};})();"
 end wfAudioScript
 
 -- A sound at a volume (0 to 1) and, in a browser, a speed (1 as it is:
